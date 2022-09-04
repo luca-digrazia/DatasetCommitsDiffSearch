@@ -83,7 +83,6 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -291,14 +290,11 @@ public class BazelRepositoryModule extends BlazeModule {
       }
 
       if (repoOptions.repositoryOverrides != null) {
-        // To get the usual latest-wins semantics, we need a mutable map, as the builder
-        // of an immutable map does not allow redefining the values of existing keys.
-        // We use a LinkedHashMap to preserve the iteration order.
-        Map<RepositoryName, PathFragment> overrideMap = new LinkedHashMap<>();
+        ImmutableMap.Builder<RepositoryName, PathFragment> builder = ImmutableMap.builder();
         for (RepositoryOverride override : repoOptions.repositoryOverrides) {
-          overrideMap.put(override.repositoryName(), override.path());
+          builder.put(override.repositoryName(), override.path());
         }
-        ImmutableMap<RepositoryName, PathFragment> newOverrides = ImmutableMap.copyOf(overrideMap);
+        ImmutableMap<RepositoryName, PathFragment> newOverrides = builder.build();
         if (!Maps.difference(overrides, newOverrides).areEqual()) {
           overrides = newOverrides;
         }
@@ -353,9 +349,6 @@ public class BazelRepositoryModule extends BlazeModule {
         // Nevertheless, we need to provide a default value for other commands.
         PrecomputedValue.injected(
             RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-            RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY),
-        PrecomputedValue.injected(
-            RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_CONFIGURING,
             RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY));
   }
 

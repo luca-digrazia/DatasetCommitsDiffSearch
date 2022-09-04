@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
@@ -75,9 +74,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
       new Precomputed<>(
           PrecomputedValue.Key.create("dependency_for_unconditional_repository_fetching"));
 
-  public static final Precomputed<String> DEPENDENCY_FOR_UNCONDITIONAL_CONFIGURING =
-      new Precomputed<>(PrecomputedValue.Key.create("dependency_for_unconditional_configuring"));
-
   public static final Precomputed<Optional<RootedPath>> RESOLVED_FILE_FOR_VERIFICATION =
       new Precomputed<>(
           PrecomputedValue.Key.create("resolved_file_for_external_repository_verification"));
@@ -126,54 +122,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     this.managedDirectoriesKnowledge = managedDirectoriesKnowledge;
   }
 
-  public static RepositoryDirectoryValue.Builder symlink(
-      Path source, PathFragment destination, String userDefinedPath, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
-    try {
-      source.createSymbolicLink(destination);
-    } catch (IOException e) {
-      throw new RepositoryFunctionException(
-          new IOException(
-              String.format(
-                  "Could not create symlink to repository \"%s\" (absolute path: \"%s\"): %s",
-                  userDefinedPath, destination, e.getMessage()),
-              e),
-          Transience.TRANSIENT);
-    }
-    FileValue repositoryValue = RepositoryFunction.getRepositoryDirectory(source, env);
-    if (repositoryValue == null) {
-      // TODO(bazel-team): If this returns null, we unnecessarily recreate the symlink above on the
-      // second execution.
-      return null;
-    }
-
-    if (!repositoryValue.isDirectory()) {
-      throw new RepositoryFunctionException(
-          new IOException(
-              String.format(
-                  "The repository's path is \"%s\" (absolute: \"%s\") "
-                      + "but this directory does not exist.",
-                  userDefinedPath, destination)),
-          Transience.PERSISTENT);
-    }
-
-    // Check that the repository contains a WORKSPACE file.
-    // It's important to check the real path, otherwise this looks under the "external/[repo]" path
-    // and cause a Skyframe cycle in the lookup.
-    FileValue workspaceFileValue =
-        LocalRepositoryFunction.getWorkspaceFile(repositoryValue.realRootedPath(), env);
-    if (workspaceFileValue == null) {
-      return null;
-    }
-
-    if (!workspaceFileValue.exists()) {
-      throw new RepositoryFunctionException(
-          new IOException("No WORKSPACE file found in " + source), Transience.PERSISTENT);
-    }
-
-    return RepositoryDirectoryValue.builder().setPath(source);
-  }
-
   private void setupRepositoryRoot(Path repoRoot) throws RepositoryFunctionException {
     try {
       repoRoot.deleteTree();
@@ -191,15 +139,12 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     Map<RepositoryName, PathFragment> overrides = REPOSITORY_OVERRIDES.get(env);
     boolean doNotFetchUnconditionally =
         DONT_FETCH_UNCONDITIONALLY.equals(DEPENDENCY_FOR_UNCONDITIONAL_FETCHING.get(env));
-    boolean needsConfiguring = false;
 
     Path repoRoot = RepositoryFunction.getExternalRepositoryDirectory(directories)
         .getRelative(repositoryName.strippedName());
 
     if (Preconditions.checkNotNull(overrides).containsKey(repositoryName)) {
-      DigestWriter.clearMarkerFile(directories, repositoryName);
-      return setupOverride(
-          overrides.get(repositoryName), env, repoRoot, repositoryName.strippedName());
+      return setupOverride(overrides.get(repositoryName), env, repoRoot);
     }
 
     Rule rule;
@@ -218,11 +163,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
       return RepositoryDirectoryValue.NO_SUCH_REPOSITORY_VALUE;
     }
 
-    if (handler.isConfigure(rule)) {
-      needsConfiguring =
-          !DONT_FETCH_UNCONDITIONALLY.equals(DEPENDENCY_FOR_UNCONDITIONAL_CONFIGURING.get(env));
-    }
-
+    byte[] ruleSpecificData = handler.getRuleSpecificMarkerData(rule, env);
     if (env.valuesMissing()) {
       return null;
     }
@@ -233,6 +174,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
             directories,
             repositoryName,
             rule,
+            Preconditions.checkNotNull(ruleSpecificData),
             managedDirectories);
 
     // Local repositories are fetched regardless of the marker file because the operation is
@@ -243,11 +185,10 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
         && managedDirectoriesExist(directories.getWorkspace(), managedDirectories)) {
       // For the non-local repositories, check if they are already up-to-date:
       // 1) unconditional fetching is not enabled, AND
-      // 2) unconditional syncing is not enabled or the rule is not a configure rule, AND
-      // 3) repository directory exists, AND
-      // 4) marker file correctly describes the current repository state, AND
-      // 5) managed directories, mapped to the repository, exist
-      if (!needsConfiguring && doNotFetchUnconditionally && repoRoot.exists()) {
+      // 2) repository directory exists, AND
+      // 3) marker file correctly describes the current repository state, AND
+      // 4) managed directories, mapped to the repository, exist
+      if (doNotFetchUnconditionally && repoRoot.exists()) {
         byte[] markerHash = digestWriter.areRepositoryAndMarkerFileConsistent(handler, env);
         if (env.valuesMissing()) {
           return null;
@@ -378,10 +319,11 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
   }
 
   private RepositoryDirectoryValue setupOverride(
-      PathFragment sourcePath, Environment env, Path repoRoot, String pathAttr)
+      PathFragment sourcePath, Environment env, Path repoRoot)
       throws RepositoryFunctionException, InterruptedException {
     setupRepositoryRoot(repoRoot);
-    RepositoryDirectoryValue.Builder directoryValue = symlink(repoRoot, sourcePath, pathAttr, env);
+    RepositoryDirectoryValue.Builder directoryValue =
+        LocalRepositoryFunction.symlink(repoRoot, sourcePath, env);
     if (directoryValue == null) {
       return null;
     }
@@ -434,8 +376,9 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
         BlazeDirectories directories,
         RepositoryName repositoryName,
         Rule rule,
+        byte[] ruleSpecificData,
         ImmutableSet<PathFragment> managedDirectories) {
-      ruleKey = computeRuleKey(rule);
+      ruleKey = computeRuleKey(rule, ruleSpecificData);
       markerPath = getMarkerPath(directories, repositoryName.strippedName());
       this.rule = rule;
       markerData = Maps.newHashMap();
@@ -541,9 +484,10 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
       return markerRuleKey;
     }
 
-    private String computeRuleKey(Rule rule) {
+    private String computeRuleKey(Rule rule, byte[] ruleSpecificData) {
       return new Fingerprint()
           .addBytes(RuleFormatter.serializeRule(rule).build().toByteArray())
+          .addBytes(ruleSpecificData)
           .addInt(MARKER_FILE_VERSION)
           .hexDigestAndReset();
     }
@@ -551,15 +495,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     private static Path getMarkerPath(BlazeDirectories directories, String ruleName) {
       return RepositoryFunction.getExternalRepositoryDirectory(directories)
           .getChild("@" + ruleName + ".marker");
-    }
-
-    static void clearMarkerFile(BlazeDirectories directories, RepositoryName repoName)
-        throws RepositoryFunctionException {
-      try {
-        getMarkerPath(directories, repoName.strippedName()).delete();
-      } catch (IOException e) {
-        throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-      }
     }
   }
 
