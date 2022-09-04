@@ -734,9 +734,7 @@ public final class PackageFactory {
               String.format("licenses for exported file '%s' declared twice",
                   inputFile.getName()));
         }
-        if (env.getSemantics().checkThirdPartyTargetsHaveLicenses()
-            && license == null
-            && !pkgBuilder.getDefaultLicense().isSpecified()
+        if (license == null && !pkgBuilder.getDefaultLicense().isSpecified()
             && RuleClass.isThirdPartyPackage(pkgBuilder.getPackageIdentifier())) {
           throw new EvalException(ast.getLocation(),
               "third-party file '" + inputFile.getName() + "' lacks a license declaration "
@@ -896,6 +894,14 @@ public final class PackageFactory {
       if (attr.getName().equals("distribs")) {
         // attribute distribs: cannot represent type class java.util.Collections$SingletonSet
         // in Skylark: [INTERNAL].
+        continue;
+      }
+
+      // TODO(brandjon): Remove this hack before flipping
+      // --experimental_better_python_version_mixing. Issue #7071.
+      if (attr.getName().equals("python_version")) {
+        // python_version is guarded by experimental flags, which breaks the use case of copying
+        // targets around using native.existing_rules. See #7071 and (Google-internal) b/122596733.
         continue;
       }
 
