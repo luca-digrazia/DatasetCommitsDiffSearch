@@ -782,27 +782,8 @@ public final class SkyframeActionExecutor {
     }
     actionExecutionContext.getEventHandler().post(new ScanningActionEvent(action));
     try {
-      Iterable<Artifact> artifacts = action.discoverInputs(actionExecutionContext);
-
-      // Input discovery may have been affected by lost inputs. If an action filesystem is used, it
-      // may know whether inputs were lost. We should fail fast if any were; rewinding may be able
-      // to fix it.
-      checkActionFileSystemForLostInputs(actionExecutionContext, action, outputService);
-
-      return artifacts;
+      return action.discoverInputs(actionExecutionContext);
     } catch (ActionExecutionException e) {
-
-      // Input discovery failures may be caused by lost inputs. Lost input failures have higher
-      // priority because rewinding may be able to restore what was lost and allow the action to
-      // complete without error.
-      if (!(e instanceof LostInputsActionExecutionException)) {
-        try {
-          checkActionFileSystemForLostInputs(actionExecutionContext, action, outputService);
-        } catch (LostInputsActionExecutionException lostInputsException) {
-          e = lostInputsException;
-        }
-      }
-
       if (e instanceof LostInputsActionExecutionException) {
         // If inputs were lost during input discovery, then enrich the exception, informing action
         // rewinding machinery that these lost inputs are now Skyframe deps of the action.
@@ -1038,24 +1019,7 @@ public final class SkyframeActionExecutor {
       ActionContinuationOrResult nextActionContinuationOrResult;
       try (SilentCloseable c = profiler.profile(ProfilerTask.INFO, "ActionContinuation.execute")) {
         nextActionContinuationOrResult = actionContinuation.execute();
-
-        // An action's result (or intermediate state) may have been affected by lost inputs. If an
-        // action filesystem is used, it may know whether inputs were lost. We should fail fast if
-        // any were; rewinding may be able to fix it.
-        checkActionFileSystemForLostInputs(actionExecutionContext, action, outputService);
       } catch (ActionExecutionException e) {
-
-        // Action failures may be caused by lost inputs. Lost input failures have higher priority
-        // because rewinding may be able to restore what was lost and allow the action to complete
-        // without error.
-        if (!(e instanceof LostInputsActionExecutionException)) {
-          try {
-            checkActionFileSystemForLostInputs(actionExecutionContext, action, outputService);
-          } catch (LostInputsActionExecutionException lostInputsException) {
-            e = lostInputsException;
-          }
-        }
-
         boolean isLostInputsException = e instanceof LostInputsActionExecutionException;
         if (isLostInputsException) {
           ((LostInputsActionExecutionException) e).setActionStartedEventAlreadyEmitted();
@@ -1414,20 +1378,6 @@ public final class SkyframeActionExecutor {
     }
 
     reporter.handle(Event.error(action.getOwner().getLocation(), errorMessage));
-  }
-
-  /**
-   * Validates that all action input contents were not lost if they were read, and if an action file
-   * system was used. Throws a {@link LostInputsActionExecutionException} describing the lost inputs
-   * if any were.
-   */
-  private static void checkActionFileSystemForLostInputs(
-      ActionExecutionContext context, Action action, OutputService outputService)
-      throws LostInputsActionExecutionException {
-    FileSystem actionFileSystem = context.getActionFileSystem();
-    if (actionFileSystem != null) {
-      outputService.checkActionFileSystemForLostInputs(actionFileSystem, action);
-    }
   }
 
   /**

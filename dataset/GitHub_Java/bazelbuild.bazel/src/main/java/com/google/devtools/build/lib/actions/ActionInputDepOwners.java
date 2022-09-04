@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.collect.ImmutableSet;
+import java.util.Collection;
 
 /**
  * Association between {@link ActionInput}s and the {@link Artifact}s, directly or indirectly
@@ -25,8 +25,8 @@ import com.google.common.collect.ImmutableSet;
 public interface ActionInputDepOwners {
 
   /**
-   * Returns the set of {@link Artifact}s associated with {@code input}. The collection is empty if
-   * no such association exists.
+   * Returns the collection of {@link Artifact}s associated with {@code input}. The collection is
+   * empty if no such association exists.
    */
-  ImmutableSet<Artifact> getDepOwners(ActionInput input);
+  Collection<Artifact> getDepOwners(ActionInput input);
 }
