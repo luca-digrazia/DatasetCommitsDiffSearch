@@ -20,11 +20,10 @@
 
 package graylog2;
 
+
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Properties;
-
-// TODO: indizes richtig setzen
 
 /**
  *
@@ -57,7 +56,7 @@ public class Main {
         }
 
         // Define required configuration fields.
-        ArrayList<String> requiredConfigFields = new ArrayList<String>();
+        ArrayList requiredConfigFields = new ArrayList();
         requiredConfigFields.add("syslog_listen_port");
         requiredConfigFields.add("mongodb_user");
         requiredConfigFields.add("mongodb_password");

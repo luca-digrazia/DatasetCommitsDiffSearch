@@ -24,7 +24,7 @@
 
 package graylog2;
 
-import graylog2.database.MongoBridge;
+import graylog2.database.MongoMapper;
 import org.productivity.java.syslog4j.server.SyslogServerEventHandlerIF;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
@@ -34,6 +34,7 @@ public class SyslogEventHandler implements SyslogServerEventHandlerIF {
     @Override public void event(SyslogServerIF syslogServer, SyslogServerEventIF event) {
         if (Main.debugMode) {
             Log.info("Received message: " + event.getMessage());
+            Log.info("Date: " + event.getDate());
             Log.info("Host: " + event.getHost());
             Log.info("Facility: " + event.getFacility() + " (" + Tools.syslogFacilityToReadable(event.getFacility()) + ")");
             Log.info("Level: " + event.getLevel() + " (" + Tools.syslogLevelToReadable(event.getLevel()) + ")");
@@ -42,15 +43,13 @@ public class SyslogEventHandler implements SyslogServerEventHandlerIF {
 
          // Insert into database.
         try {
-            // Connect to database.
-            MongoBridge m = new MongoBridge(
+            MongoMapper m = new MongoMapper(
                     Main.masterConfig.getProperty("mongodb_user"),
                     Main.masterConfig.getProperty("mongodb_password"),
                     Main.masterConfig.getProperty("mongodb_host"),
                     Main.masterConfig.getProperty("mongodb_database"),
                     Integer.valueOf(Main.masterConfig.getProperty("mongodb_port"))
             );
-
 
             m.insert(event);
         } catch (Exception e) {
