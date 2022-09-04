@@ -24,8 +24,6 @@ import javax.lang.model.element.ExecutableElement;
 import org.androidannotations.annotations.UiThread;
 import org.androidannotations.helper.APTCodeModelHelper;
 
-import android.os.Looper;
-
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
@@ -36,13 +34,8 @@ import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
-import com.sun.codemodel.JOp;
 
 public class UiThreadProcessor implements DecoratingElementProcessor {
-
-	private static final String METHOD_CUR_THREAD = "currentThread";
-	private static final String METHOD_MAIN_LOOPER = "getMainLooper";
-	private static final String METHOD_GET_THREAD = "getThread";
 
 	private final APTCodeModelHelper helper = new APTCodeModelHelper();
 
@@ -71,7 +64,12 @@ public class UiThreadProcessor implements DecoratingElementProcessor {
 				holder.handler = holder.generatedClass.field(JMod.PRIVATE, handlerClass, "handler_", JExpr._new(handlerClass));
 			}
 
-			addUIThreadCheck(delegatingMethod, codeModel);
+			JExpression jx = JExpr.direct("java.lang.Thread.currentThread() == android.os.Looper.getMainLooper().getThread()");
+
+			JConditional con = delegatingMethod.body()._if(jx);
+			JBlock block = con._then();
+			block.add(JExpr._super().invoke(delegatingMethod));
+			block._return();
 
 			if (delay == 0) {
 				delegatingMethod.body().invoke(holder.handler, "post").arg(_new(anonymousRunnableClass));
@@ -82,26 +80,4 @@ public class UiThreadProcessor implements DecoratingElementProcessor {
 
 	}
 
-	/**
-	 * Add the pre-check to see if we are already in the UI thread.
-	 * 
-	 * @param delegatingMethod
-	 * @param codeModel
-	 * @throws JClassAlreadyExistsException
-	 */
-	private void addUIThreadCheck(JMethod delegatingMethod, JCodeModel codeModel) throws JClassAlreadyExistsException {
-		// Get the Thread and Looper class.
-		JClass tClass = codeModel.ref(Thread.class);
-		JClass lClass = codeModel.ref(Looper.class);
-
-		// invoke the methods.
-		JExpression lhs = tClass.staticInvoke(METHOD_CUR_THREAD);
-		JExpression rhs = lClass.staticInvoke(METHOD_MAIN_LOOPER).invoke(METHOD_GET_THREAD);
-
-		// create the conditional and the block.
-		JConditional con = delegatingMethod.body()._if(JOp.eq(lhs, rhs));
-		JBlock block = con._then();
-		block.add(JExpr._super().invoke(delegatingMethod));
-		block._return();
-	}
 }
