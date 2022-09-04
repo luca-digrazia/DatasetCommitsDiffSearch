@@ -332,8 +332,10 @@ public final class BuildOptions implements Cloneable, Serializable {
    *
    * @param parsingResult any options that are being modified
    * @return the new options after applying the parsing result to the original options
+   * @throws OptionsParsingException if a value in the parsing result cannot in fact be parsed
    */
-  public BuildOptions applyParsingResult(OptionsParsingResult parsingResult) {
+  public BuildOptions applyParsingResult(OptionsParsingResult parsingResult)
+      throws OptionsParsingException {
     Map<Class<? extends FragmentOptions>, FragmentOptions> modifiedFragments =
         toModifiedFragments(parsingResult);
 
@@ -359,7 +361,7 @@ public final class BuildOptions implements Cloneable, Serializable {
   }
 
   private Map<Class<? extends FragmentOptions>, FragmentOptions> toModifiedFragments(
-      OptionsParsingResult parsingResult) {
+      OptionsParsingResult parsingResult) throws OptionsParsingException {
     Map<Class<? extends FragmentOptions>, FragmentOptions> replacedOptions = new HashMap<>();
     for (ParsedOptionDescription parsedOption : parsingResult.asListOfExplicitOptions()) {
       OptionDefinition optionDefinition = parsedOption.getOptionDefinition();
@@ -380,9 +382,7 @@ public final class BuildOptions implements Cloneable, Serializable {
               fragmentOptionClass,
               (Class<? extends FragmentOptions> k) -> originalFragment.clone());
       try {
-        Object value =
-            parsingResult.getOptionValueDescription(optionDefinition.getOptionName()).getValue();
-        optionDefinition.getField().set(newOptions, value);
+        optionDefinition.getField().set(newOptions, parsedOption.getConvertedValue());
       } catch (IllegalAccessException e) {
         throw new IllegalStateException("Couldn't set " + optionDefinition.getField(), e);
       }
@@ -471,14 +471,11 @@ public final class BuildOptions implements Cloneable, Serializable {
     }
 
     /**
-     * Adds a new {@link FragmentOptions} instance to the builder.
-     *
-     * <p>Overrides previous instances of the exact same subclass of {@code FragmentOptions}.
-     *
-     * <p>The options get preprocessed with {@link FragmentOptions#getNormalized}.
+     * Adds a new FragmentOptions instance to the builder. Overrides previous instances of the exact
+     * same subclass of FragmentOptions.
      */
     public <T extends FragmentOptions> Builder addFragmentOptions(T options) {
-      fragmentOptions.put(options.getClass(), options.getNormalized());
+      fragmentOptions.put(options.getClass(), options);
       return this;
     }
 
