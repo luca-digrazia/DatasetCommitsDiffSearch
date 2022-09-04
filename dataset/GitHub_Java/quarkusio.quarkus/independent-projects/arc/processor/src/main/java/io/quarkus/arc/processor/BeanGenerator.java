@@ -1635,8 +1635,9 @@ public class BeanGenerator extends AbstractGenerator {
 
     protected void implementHashCode(BeanInfo bean, ClassCreator beanCreator) {
         MethodCreator hashCode = beanCreator.getMethodCreator("hashCode", int.class).setModifiers(ACC_PUBLIC);
-        final ResultHandle constantHashCodeResult = hashCode.load(bean.getIdentifier().hashCode());
-        hashCode.returnValue(constantHashCodeResult);
+        // return identifier.hashCode()
+        hashCode.returnValue(
+                hashCode.invokeVirtualMethod(MethodDescriptors.OBJECT_HASH_CODE, hashCode.load(bean.getIdentifier())));
     }
 
     /**
