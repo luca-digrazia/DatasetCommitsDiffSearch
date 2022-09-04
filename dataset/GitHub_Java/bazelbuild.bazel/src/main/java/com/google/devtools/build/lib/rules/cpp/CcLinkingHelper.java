@@ -36,12 +36,13 @@ import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext.Linkstamp;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.rules.cpp.Link.Picness;
+import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LinkingInfoApi;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -341,8 +342,8 @@ public final class CcLinkingHelper {
     return ccLinkingOutputs;
   }
 
-  public CcLinkingContext buildCcLinkingContextFromLibrariesToLink(
-      ImmutableCollection<LibraryToLink> libraryToLinks,
+  public CcLinkingContext buildCcLinkingContextFromLibraryToLinkWrappers(
+      ImmutableCollection<LibraryToLinkWrapper> libraryToLinkWrappers,
       CcCompilationContext ccCompilationContext) {
     NestedSetBuilder<Linkstamp> linkstampBuilder = NestedSetBuilder.stableOrder();
     for (Artifact linkstamp : linkstamps.build()) {
@@ -366,7 +367,9 @@ public final class CcLinkingHelper {
                           CcLinkingContext.LinkOptions.of(
                               linkopts, ruleContext.getSymbolGenerator())))
               .addLibraries(
-                  NestedSetBuilder.<LibraryToLink>linkOrder().addAll(libraryToLinks).build())
+                  NestedSetBuilder.<LibraryToLinkWrapper>linkOrder()
+                      .addAll(libraryToLinkWrappers)
+                      .build())
               .addNonCodeInputs(
                   NestedSetBuilder.<Artifact>linkOrder().addAll(nonCodeLinkerInputs).build())
               .addLinkstamps(linkstampBuilder.build())
@@ -400,7 +403,7 @@ public final class CcLinkingHelper {
         staticLinkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER,
         "can only handle static links");
 
-    LibraryToLink.Builder libraryToLinkBuilder = LibraryToLink.builder();
+    LibraryToLinkWrapper.Builder libraryToLinkBuilder = LibraryToLinkWrapper.builder();
     boolean usePicForBinaries = CppHelper.usePicForBinaries(ccToolchain, featureConfiguration);
     boolean usePicForDynamicLibs = ccToolchain.usePicForDynamicLibraries(featureConfiguration);
 
@@ -479,7 +482,7 @@ public final class CcLinkingHelper {
   }
 
   private void createNoPicAndPicStaticLibraries(
-      LibraryToLink.Builder libraryToLinkBuilder,
+      LibraryToLinkWrapper.Builder libraryToLinkBuilder,
       boolean usePicForBinaries,
       boolean usePicForDynamicLibs,
       String libraryIdentifier,
@@ -516,7 +519,7 @@ public final class CcLinkingHelper {
     }
 
     if (createNoPicAction) {
-      LinkerInputs.LibraryToLink staticLibrary =
+      LibraryToLink staticLibrary =
           registerActionForStaticLibrary(
                   staticLinkType, ccOutputs, /* usePic= */ false, libraryIdentifier)
               .getOutputLibrary();
@@ -541,7 +544,7 @@ public final class CcLinkingHelper {
                 ? LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY
                 : LinkTargetType.PIC_STATIC_LIBRARY;
       }
-      LinkerInputs.LibraryToLink picStaticLibrary =
+      LibraryToLink picStaticLibrary =
           registerActionForStaticLibrary(
                   linkTargetTypeUsedForNaming, ccOutputs, /* usePic= */ true, libraryIdentifier)
               .getOutputLibrary();
@@ -581,7 +584,7 @@ public final class CcLinkingHelper {
 
   private boolean createDynamicLibrary(
       CcLinkingOutputs.Builder ccLinkingOutputs,
-      LibraryToLink.Builder libraryToLinkBuilder,
+      LibraryToLinkWrapper.Builder libraryToLinkBuilder,
       boolean usePic,
       String libraryIdentifier,
       CcCompilationOutputs ccOutputs)
@@ -667,8 +670,8 @@ public final class CcLinkingHelper {
 
     if (shouldLinkTransitively) {
       CcLinkingContext ccLinkingContext = CcLinkingContext.merge(ccLinkingContexts);
-      List<LinkerInputs.LibraryToLink> libraries =
-          LibraryToLink.convertLibraryToLinkListToLibraryToLinkList(
+      List<LibraryToLink> libraries =
+          LibraryToLinkWrapper.convertLibraryToLinkWrapperListToLibraryToLinkList(
               ccLinkingContext.getLibraries(),
               linkingMode != LinkingMode.DYNAMIC,
               dynamicLinkType.isDynamicLibrary());
@@ -707,8 +710,8 @@ public final class CcLinkingHelper {
     ccLinkingOutputs.addLinkActionInputs(dynamicLinkAction.getInputs());
     actionConstructionContext.registerAction(dynamicLinkAction);
 
-    LinkerInputs.LibraryToLink dynamicLibrary = dynamicLinkAction.getOutputLibrary();
-    LinkerInputs.LibraryToLink interfaceLibrary = dynamicLinkAction.getInterfaceOutputLibrary();
+    LibraryToLink dynamicLibrary = dynamicLinkAction.getOutputLibrary();
+    LibraryToLink interfaceLibrary = dynamicLinkAction.getInterfaceOutputLibrary();
 
     // If shared library has neverlink=1, then leave it untouched. Otherwise,
     // create a mangled symlink for it and from now on reference it through

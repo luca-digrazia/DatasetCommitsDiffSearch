@@ -57,8 +57,8 @@ import com.google.devtools.build.lib.rules.cpp.CppDebugFileProvider;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Exports;
@@ -212,18 +212,18 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
         ccLinkingHelper.emitInterfaceSharedLibraries(true);
       }
 
-      ImmutableList<LibraryToLink> libraryToLink = ImmutableList.of();
+      ImmutableList<LibraryToLinkWrapper> libraryToLinkWrapper = ImmutableList.of();
       if (!ccCompilationOutputs.isEmpty()) {
         CcLinkingOutputs ccLinkingOutputs = ccLinkingHelper.link(ccCompilationOutputs);
         if (!ccLinkingOutputs.isEmpty()) {
-          libraryToLink = ImmutableList.of(ccLinkingOutputs.getLibraryToLink());
+          libraryToLinkWrapper = ImmutableList.of(ccLinkingOutputs.getLibraryToLink());
         }
       }
       CcNativeLibraryProvider ccNativeLibraryProvider =
-          CppHelper.collectNativeCcLibraries(deps, libraryToLink);
+          CppHelper.collectNativeCcLibraries(deps, libraryToLinkWrapper);
       CcLinkingContext ccLinkingContext =
-          ccLinkingHelper.buildCcLinkingContextFromLibrariesToLink(
-              libraryToLink, compilationInfo.getCcCompilationContext());
+          ccLinkingHelper.buildCcLinkingContextFromLibraryToLinkWrappers(
+              libraryToLinkWrapper, compilationInfo.getCcCompilationContext());
 
       CppDebugFileProvider cppDebugFileProvider =
           CcCompilationHelper.buildCppDebugFileProvider(
@@ -243,8 +243,8 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               CcCompilationHelper.buildOutputGroups(compilationInfo.getCcCompilationOutputs()));
       // On Windows, dynamic library is not built by default, so don't add them to filesToBuild.
 
-      if (!libraryToLink.isEmpty()) {
-        LibraryToLink artifactsToBuild = libraryToLink.get(0);
+      if (!libraryToLinkWrapper.isEmpty()) {
+        LibraryToLinkWrapper artifactsToBuild = libraryToLinkWrapper.get(0);
         if (artifactsToBuild.getStaticLibrary() != null) {
           filesBuilder.add(artifactsToBuild.getStaticLibrary());
         }
@@ -308,7 +308,8 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
                   toolchain.getFdoContext())
               .addCcCompilationContexts(CppHelper.getCompilationContextsFromDeps(deps))
               .addCcCompilationContexts(
-                  ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)));
+                  ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)))
+              .addQuoteIncludeDirs(cppSemantics.getQuoteIncludes(ruleContext));
       // Don't instrument the generated C++ files even when --collect_code_coverage is set.
       helper.setCodeCoverageEnabled(false);
       return helper;
