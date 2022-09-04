@@ -16,13 +16,16 @@
 
 package smile.math;
 
+import java.io.Serializable;
+
 /**
  * A resizeable, array-backed list of double primitives.
  *
  * @author Haifeng Li
  */
 
-public final class DoubleArrayList {
+public final class DoubleArrayList implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     /**
      * The data of the list.
@@ -35,15 +38,10 @@ public final class DoubleArrayList {
     private int size;
 
     /**
-     * The default capacity for new lists.
-     */
-    private static final int DEFAULT_CAPACITY = 10;
-
-    /**
      * Constructs an empty list.
      */
     public DoubleArrayList() {
-        this(DEFAULT_CAPACITY);
+        this(10);
     }
 
     /**
@@ -62,7 +60,7 @@ public final class DoubleArrayList {
      * @param values the initial values of array list.
      */
     public DoubleArrayList(double[] values) {
-        this(Math.max(values.length, DEFAULT_CAPACITY));
+        this(Math.max(values.length, 10));
         add(values);
     }
 
