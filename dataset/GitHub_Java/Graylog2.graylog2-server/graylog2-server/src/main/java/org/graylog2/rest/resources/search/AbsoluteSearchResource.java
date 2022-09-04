@@ -26,7 +26,6 @@ import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.rest.documentation.annotations.*;
-import org.graylog2.rest.resources.search.responses.SearchResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,11 +46,11 @@ public class AbsoluteSearchResource extends SearchResource {
     @ApiOperation(value = "Message search with absolute timerange.",
             notes = "Search for messages using an absolute timerange, specified as from/to " +
                     "with format yyyy-MM-dd HH-mm-ss.SSS or yyyy-MM-dd HH-mm-ss.")
-    @Produces({ MediaType.APPLICATION_JSON, "text/csv" })
+    @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Invalid timerange parameters provided.")
     })
-    public SearchResponse searchAbsolute(
+    public String searchAbsolute(
             @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
             @ApiParam(title = "from", description = "Timerange start. See description for date format", required = true) @QueryParam("from") String from,
             @ApiParam(title = "to", description = "Timerange end. See description for date format", required = true) @QueryParam("to") String to,
@@ -61,19 +60,19 @@ public class AbsoluteSearchResource extends SearchResource {
         checkQuery(query);
 
         try {
-            SearchResponse searchResponse;
+            Map<String, Object> searchResult;
 
             if (filter == null) {
-                searchResponse = buildSearchResponse(
+                searchResult = buildSearchResult(
                         core.getIndexer().searches().search(query, buildAbsoluteTimeRange(from, to), limit, offset)
                 );
             } else {
-                searchResponse = buildSearchResponse(
+                searchResult = buildSearchResult(
                         core.getIndexer().searches().search(query, filter, buildAbsoluteTimeRange(from, to), limit, offset)
                 );
             }
 
-            return searchResponse;
+            return json(searchResult);
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
             throw new WebApplicationException(400);
@@ -173,15 +172,14 @@ public class AbsoluteSearchResource extends SearchResource {
             @ApiParam(title = "field", description = "Field of whose values to get the histogram of", required = true) @QueryParam("field") String field,
             @ApiParam(title = "interval", description = "Histogram interval / bucket size. (year, quarter, month, week, day, hour or minute)", required = true) @QueryParam("interval") String interval,
             @ApiParam(title = "from", description = "Timerange start. See search method description for date format", required = true) @QueryParam("from") String from,
-            @ApiParam(title = "to", description = "Timerange end. See search method description for date format", required = true) @QueryParam("to") String to,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) {
+            @ApiParam(title = "to", description = "Timerange end. See search method description for date format", required = true) @QueryParam("to") String to) {
         checkQueryAndInterval(query, interval);
         interval = interval.toUpperCase();
         validateInterval(interval);
         checkStringSet(field);
 
         try {
-            return json(buildHistogramResult(fieldHistogram(field, query, interval, filter, buildAbsoluteTimeRange(from, to))));
+            return json(buildHistogramResult(fieldHistogram(field, query, interval, buildAbsoluteTimeRange(from, to))));
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
             throw new WebApplicationException(400);
