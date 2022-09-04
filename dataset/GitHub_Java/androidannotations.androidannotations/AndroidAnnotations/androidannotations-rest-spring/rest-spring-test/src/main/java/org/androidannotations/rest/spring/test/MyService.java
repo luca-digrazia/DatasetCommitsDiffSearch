@@ -25,7 +25,6 @@ import org.androidannotations.rest.spring.annotations.Field;
 import org.androidannotations.rest.spring.annotations.Get;
 import org.androidannotations.rest.spring.annotations.Head;
 import org.androidannotations.rest.spring.annotations.Options;
-import org.androidannotations.rest.spring.annotations.Part;
 import org.androidannotations.rest.spring.annotations.Path;
 import org.androidannotations.rest.spring.annotations.Post;
 import org.androidannotations.rest.spring.annotations.Put;
@@ -159,12 +158,6 @@ public interface MyService {
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
 	void addEventWithParameters(String date, @Field String parameter, @Field String otherParameter);
-
-	@Post("/events/{date}")
-	@RequiresHeader("SomeFancyHeader")
-	@RequiresCookie("myCookie")
-	@RequiresCookieInUrl("myCookieInUrl")
-	void addEventWithParts(String date, @Part String parameter, @Part String otherParameter);
 
 	@Post("/events/{date}")
 	@RequiresHeader("SomeFancyHeader")
