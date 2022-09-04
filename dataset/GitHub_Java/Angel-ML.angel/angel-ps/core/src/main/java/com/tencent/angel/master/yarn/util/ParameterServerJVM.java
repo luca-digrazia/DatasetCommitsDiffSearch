@@ -1,20 +1,18 @@
 /*
  * Tencent is pleased to support the open source community by making Angel available.
  *
- * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2017 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
+ * Licensed under the BSD 3-Clause License (the "License"); you may not use this file except in
  * compliance with the License. You may obtain a copy of the License at
  *
- * https://opensource.org/licenses/Apache-2.0
+ * https://opensource.org/licenses/BSD-3-Clause
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
- *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is
+ * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 
 package com.tencent.angel.master.yarn.util;
 
@@ -53,23 +51,23 @@ public class ParameterServerJVM {
   }
 
   private static String getChildLogLevel(Configuration conf) {
-    return conf.get(AngelConf.ANGEL_PS_LOG_LEVEL, AngelConf.DEFAULT_ANGEL_PS_LOG_LEVEL);
+    return conf.get(AngelConf.ANGEL_PS_LOG_LEVEL,
+        AngelConf.DEFAULT_ANGEL_PS_LOG_LEVEL);
   }
 
   /**
    * Set environment variables of ps attempt process
-   *
    * @param environment environment variables of ps attempt process
-   * @param conf        application configuration
+   * @param conf application configuration
    */
   public static void setVMEnv(Map<String, String> environment, Configuration conf) {
     // Add the env variables passed by the user
     String setEnv = getChildEnv(conf);
-    try {
+    try{
       Apps.setEnvFromInputString(environment, setEnv);
     } catch (Exception x) {
       LOG.error("set ps env faile.", x);
-    }
+    }    
 
     // Set logging level in the environment.
     environment.put("HADOOP_ROOT_LOGGER", getChildLogLevel(conf) + ",CLA");
@@ -94,7 +92,7 @@ public class ParameterServerJVM {
   }
 
   private static String getChildJavaOpts(Configuration jobConf, ApplicationId appid,
-    PSAttemptId psAttemptId) {
+      PSAttemptId psAttemptId) {
     String userOpts = null;
     userOpts = jobConf.get(AngelConf.ANGEL_PS_JAVA_OPTS);
     if (userOpts == null) {
@@ -105,50 +103,43 @@ public class ParameterServerJVM {
   }
 
   private static String generateDefaultJVMParameters(Configuration conf, ApplicationId appid,
-    PSAttemptId psAttemptId) {
+      PSAttemptId psAttemptId) {
     int psMemSizeInMB =
-      conf.getInt(AngelConf.ANGEL_PS_MEMORY_GB, AngelConf.DEFAULT_ANGEL_PS_MEMORY_GB) * 1024;
+        conf.getInt(AngelConf.ANGEL_PS_MEMORY_GB,
+            AngelConf.DEFAULT_ANGEL_PS_MEMORY_GB) * 1024;
 
-    if (psMemSizeInMB < 2048) {
+    if(psMemSizeInMB < 2048) {
       psMemSizeInMB = 2048;
     }
 
-    boolean isUseDirect = conf
-      .getBoolean(AngelConf.ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER,
-        AngelConf.DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER);
-
-    float directFatorUseDirectBuff = conf
-      .getFloat(AngelConf.ANGEL_PS_JVM_DIRECT_FACTOR_USE_DIRECT_BUFF,
-        AngelConf.DEFAULT_ANGEL_PS_JVM_DIRECT_FACTOR_USE_DIRECT_BUFF);
-
-    float directFatorUseHeapBuff = conf.getFloat(AngelConf.ANGEL_PS_JVM_DIRECT_FACTOR_USE_HEAP_BUFF,
-      AngelConf.DEFAULT_ANGEL_PS_JVM_DIRECT_FACTOR_USE_HEAP_BUFF);
-
-    float youngFator = conf
-      .getFloat(AngelConf.ANGEL_PS_JVM_YOUNG_FACTOR, AngelConf.DEFAULT_ANGEL_PS_JVM_YOUNG_FACTOR);
+    boolean isUseDirect = conf.getBoolean(AngelConf.ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER,
+      AngelConf.DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER);
 
     int useMax = psMemSizeInMB - 512;
     int directRegionSize = 0;
-    if (isUseDirect) {
-      directRegionSize = (int) (useMax * directFatorUseDirectBuff);
+    if(isUseDirect) {
+      directRegionSize = (int) (useMax * 0.45);
     } else {
-      directRegionSize = (int) (useMax * directFatorUseHeapBuff);
+      directRegionSize = (int) (useMax * 0.25);
     }
 
     int heapMax = useMax - directRegionSize;
-    int youngRegionSize = (int) (heapMax * youngFator);
+    int youngRegionSize = (int) (heapMax * 0.4);
     int survivorRatio = 4;
 
-    String ret = new StringBuilder().append(" -Xmx").append(heapMax).append("M").append(" -Xmn")
-      .append(youngRegionSize).append("M").append(" -XX:MaxDirectMemorySize=")
-      .append(directRegionSize).append("M").append(" -XX:SurvivorRatio=").append(survivorRatio)
-      .append(" -XX:PermSize=100M -XX:MaxPermSize=200M").append(" -XX:+AggressiveOpts")
-      .append(" -XX:+UseLargePages").append(" -XX:+UseConcMarkSweepGC")
-      .append(" -XX:CMSInitiatingOccupancyFraction=70")
-      .append(" -XX:+UseCMSInitiatingOccupancyOnly").append(" -XX:+CMSScavengeBeforeRemark")
-      .append(" -XX:+UseCMSCompactAtFullCollection").append(" -verbose:gc")
-      .append(" -XX:+PrintGCDateStamps").append(" -XX:+PrintGCDetails")
-      .append(" -Xloggc:<LOG_DIR>/gc.log").toString();
+    String ret =
+        new StringBuilder().append(" -Xmx").append(heapMax).append("M").append(" -Xmn")
+            .append(youngRegionSize).append("M").append(" -XX:MaxDirectMemorySize=")
+            .append(directRegionSize).append("M").append(" -XX:SurvivorRatio=")
+            .append(survivorRatio).append(" -XX:PermSize=100M -XX:MaxPermSize=200M")
+            .append(" -XX:+AggressiveOpts").append(" -XX:+UseLargePages")
+            .append(" -XX:+UseConcMarkSweepGC")
+            .append(" -XX:CMSInitiatingOccupancyFraction=70")
+            .append(" -XX:+UseCMSInitiatingOccupancyOnly").append(" -XX:+CMSScavengeBeforeRemark")
+            .append(" -XX:+UseCMSCompactAtFullCollection").append(" -verbose:gc")
+            .append(" -XX:+PrintGCDateStamps").append(" -XX:+PrintGCDetails")
+            .append(" -XX:+PrintCommandLineFlags").append(" -XX:+PrintTenuringDistribution")
+            .append(" -XX:+PrintAdaptiveSizePolicy").append(" -Xloggc:<LOG_DIR>/gc.log").toString();;
 
     return ret;
   }
@@ -160,14 +151,13 @@ public class ParameterServerJVM {
 
   /**
    * Generate ps attempt jvm command
-   *
-   * @param conf        application configuration
-   * @param appid       application id
+   * @param conf application configuration
+   * @param appid application id
    * @param psAttemptId ps attempt id
    * @return ps attempt jvm command
    */
   public static List<String> getVMCommand(Configuration conf, ApplicationId appid,
-    PSAttemptId psAttemptId) {
+      PSAttemptId psAttemptId) {
 
     Vector<String> vargs = new Vector<String>(8);
     vargs.add(Environment.JAVA_HOME.$() + "/bin/java");
@@ -186,7 +176,8 @@ public class ParameterServerJVM {
     setupLog4jProperties(conf, vargs, logSize);
 
     // Add main class and its arguments
-    String psClassName = conf.get(AngelConf.ANGEL_PS_CLASS, AngelConf.DEFAULT_ANGEL_PS_CLASS);
+    String psClassName =
+        conf.get(AngelConf.ANGEL_PS_CLASS, AngelConf.DEFAULT_ANGEL_PS_CLASS);
     vargs.add(psClassName); // main of Child
 
     // Finally add the jvmID
