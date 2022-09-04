@@ -96,10 +96,8 @@ public class SubsamplingScaleImageView extends View {
     public static final int SCALE_TYPE_CENTER_INSIDE = 1;
     /** Scale the image uniformly so that both dimensions of the image will be equal to or larger than the corresponding dimension of the view. The image is then centered in the view. */
     public static final int SCALE_TYPE_CENTER_CROP = 2;
-    /** Scale the image so that both dimensions of the image will be equal to or less than the maxScale and equal to or larger than minScale. The image is then centered in the view. */
-    public static final int SCALE_TYPE_CUSTOM = 3;
 
-    private static final List<Integer> VALID_SCALE_TYPES = Arrays.asList(SCALE_TYPE_CENTER_CROP, SCALE_TYPE_CENTER_INSIDE, SCALE_TYPE_CUSTOM);
+    private static final List<Integer> VALID_SCALE_TYPES = Arrays.asList(SCALE_TYPE_CENTER_CROP, SCALE_TYPE_CENTER_INSIDE);
 
     // Overlay tile boundaries and other info
     private boolean debug = false;
@@ -109,9 +107,6 @@ public class SubsamplingScaleImageView extends View {
 
     // Max scale allowed (prevent infinite zoom)
     private float maxScale = 2F;
-
-    // Min scale allowed (prevent infinite zoom)
-    private float minScale = minScale();
 
     // Density to reach before loading higher resolution tiles
     private int minimumTileDpi = -1;
@@ -188,7 +183,6 @@ public class SubsamplingScaleImageView extends View {
     // Paint objects created once and reused for efficiency
     private Paint bitmapPaint;
     private Paint debugPaint;
-    private Paint tileBgPaint;
 
     public SubsamplingScaleImageView(Context context, AttributeSet attr) {
         super(context, attr);
@@ -220,9 +214,6 @@ public class SubsamplingScaleImageView extends View {
             }
             if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_zoomEnabled)) {
                 setZoomEnabled(typedAttr.getBoolean(styleable.SubsamplingScaleImageView_zoomEnabled, true));
-            }
-            if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_tileBackgroundColor)) {
-                setTileBackgroundColor(typedAttr.getColor(styleable.SubsamplingScaleImageView_tileBackgroundColor, Color.argb(0, 0, 0, 0)));
             }
         }
     }
@@ -692,9 +683,6 @@ public class SubsamplingScaleImageView extends View {
                 for (Tile tile : tileMapEntry.getValue()) {
                     Rect vRect = convertRect(sourceToViewRect(tile.sRect));
                     if (!tile.loading && tile.bitmap != null) {
-                        if (tileBgPaint != null) {
-                            canvas.drawRect(vRect, tileBgPaint);
-                        }
                         canvas.drawBitmap(tile.bitmap, null, vRect, bitmapPaint);
                         if (debug) {
                             canvas.drawRect(vRect, debugPaint);
@@ -1347,8 +1335,6 @@ public class SubsamplingScaleImageView extends View {
     private float minScale() {
         if (minimumScaleType == SCALE_TYPE_CENTER_INSIDE) {
             return Math.min(getWidth() / (float) sWidth(), getHeight() / (float) sHeight());
-        } else if (minimumScaleType == SCALE_TYPE_CUSTOM) {
-            return minScale;
         } else {
             return Math.max(getWidth() / (float) sWidth(), getHeight() / (float) sHeight());
         }
@@ -1452,11 +1438,10 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
-     * Set the minimum scale allowed. A value of 1 means 1:1 pixels at minimum scale. You may wish to set this according
-     * to screen density. Consider using {@link #setMaximumDpi(int)}, which is density aware.
+     * Returns the maximum allowed scale.
      */
-    public final void setMinScale(float minScale) {
-        this.minScale = minScale;
+    public float getMaxScale() {
+        return maxScale;
     }
 
     /**
@@ -1469,24 +1454,6 @@ public class SubsamplingScaleImageView extends View {
         DisplayMetrics metrics = getResources().getDisplayMetrics();
         float averageDpi = (metrics.xdpi + metrics.ydpi)/2;
         setMaxScale(averageDpi/dpi);
-    }
-
-    /**
-     * This is a screen density aware alternative to {@link #setMinScale(float)}; it allows you to express the minimum
-     * allowed scale in terms of the maximum pixel density.
-     * @param dpi Source image pixel density at minimum zoom.
-     */
-    public final void setMaximumDpi(int dpi) {
-        DisplayMetrics metrics = getResources().getDisplayMetrics();
-        float averageDpi = (metrics.xdpi + metrics.ydpi)/2;
-        setMinScale(averageDpi/dpi);
-    }
-
-    /**
-     * Returns the maximum allowed scale.
-     */
-    public float getMaxScale() {
-        return maxScale;
     }
 
     /**
@@ -1650,21 +1617,6 @@ public class SubsamplingScaleImageView extends View {
                 invalidate();
             }
         }
-    }
-
-    /**
-     * Set a solid color to render behind tiles, useful for displaying transparent PNGs.
-     * @param tileBgColor Background color for tiles.
-     */
-    public final void setTileBackgroundColor(int tileBgColor) {
-        if (Color.alpha(tileBgColor) == 0) {
-            tileBgPaint = null;
-        } else {
-            tileBgPaint = new Paint();
-            tileBgPaint.setStyle(Style.FILL);
-            tileBgPaint.setColor(tileBgColor);
-        }
-        invalidate();
     }
 
     /**
