@@ -21,12 +21,10 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.StrictDepsMode;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.analysis.starlark.annotations.StarlarkConfigurationField;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -40,7 +38,6 @@ import javax.annotation.Nullable;
 
 /** A java compiler configuration containing the flags required for compilation. */
 @Immutable
-@RequiresOptions(options = {JavaOptions.class, PlatformOptions.class})
 public final class JavaConfiguration extends Fragment implements JavaConfigurationApi {
 
   /** Values for the --java_classpath option */
@@ -118,8 +115,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   // TODO(dmarting): remove once we have a proper solution for #2539
   private final boolean useLegacyBazelJavaTest;
 
-  public JavaConfiguration(BuildOptions buildOptions) throws InvalidConfigurationException {
-    JavaOptions javaOptions = buildOptions.get(JavaOptions.class);
+  JavaConfiguration(JavaOptions javaOptions) throws InvalidConfigurationException {
     this.commandLineJavacFlags =
         ImmutableList.copyOf(JavaHelper.tokenizeJavaOptions(javaOptions.javacOpts));
     this.javaLauncherLabel = javaOptions.javaLauncher;

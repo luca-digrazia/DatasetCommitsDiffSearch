@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.java;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.EmptyToNullLabelConverter;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelListConverter;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelMapConverter;
@@ -334,7 +333,7 @@ public class JavaOptions extends FragmentOptions {
   @Option(
       name = "host_java_launcher",
       defaultValue = "null",
-      converter = EmptyToNullLabelConverter.class,
+      converter = LabelConverter.class,
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "The Java launcher used by tools that are executed during a build.")
@@ -343,7 +342,7 @@ public class JavaOptions extends FragmentOptions {
   @Option(
       name = "java_launcher",
       defaultValue = "null",
-      converter = EmptyToNullLabelConverter.class,
+      converter = LabelConverter.class,
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =

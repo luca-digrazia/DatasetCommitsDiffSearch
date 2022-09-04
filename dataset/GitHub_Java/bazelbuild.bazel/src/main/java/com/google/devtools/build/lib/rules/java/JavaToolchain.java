@@ -135,6 +135,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             javacSupportsWorkers,
             javacSupportsMultiplexWorkers,
             bootclasspath,
+            javac,
             tools,
             javabuilder,
             headerCompiler,
