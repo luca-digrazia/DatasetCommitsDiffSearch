@@ -8,104 +8,65 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.gradle.api.GradleException;
+import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.ModuleDependency;
+import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.attributes.Category;
+import org.gradle.api.internal.artifacts.dependencies.DefaultDependencyArtifact;
+import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
 import org.gradle.api.plugins.JavaPlugin;
+import org.gradle.api.tasks.Internal;
 
 import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.devtools.messagewriter.MessageWriter;
 import io.quarkus.devtools.project.QuarkusProject;
-import io.quarkus.devtools.project.QuarkusProjectHelper;
 import io.quarkus.devtools.project.buildfile.BuildFile;
 import io.quarkus.devtools.project.buildfile.GradleGroovyProjectBuildFile;
 import io.quarkus.devtools.project.buildfile.GradleKotlinProjectBuildFile;
-import io.quarkus.maven.ArtifactCoords;
-import io.quarkus.platform.tools.ToolsUtils;
-import io.quarkus.registry.ExtensionCatalogResolver;
-import io.quarkus.registry.catalog.ExtensionCatalog;
+import io.quarkus.platform.descriptor.CombinedQuarkusPlatformDescriptor;
+import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
+import io.quarkus.platform.descriptor.resolver.json.QuarkusJsonPlatformDescriptorResolver;
 
 public abstract class QuarkusPlatformTask extends QuarkusTask {
-
-    private static boolean isEnableRegistryClient() {
-        final String value = System.getProperty("enableRegistryClient");
-        return value == null ? System.getProperties().containsKey("enableRegistryClient") : Boolean.parseBoolean(value);
-    }
 
     QuarkusPlatformTask(String description) {
         super(description);
     }
 
-    private ExtensionCatalog extensionsCatalog(boolean limitExtensionsToImportedPlatforms, MessageWriter log) {
-        final List<ArtifactCoords> platforms = importedPlatforms();
-        final ExtensionCatalogResolver catalogResolver = isEnableRegistryClient() ? QuarkusProjectHelper.getCatalogResolver(log)
-                : ExtensionCatalogResolver.empty();
-        if (catalogResolver.hasRegistries()) {
-            try {
-                return limitExtensionsToImportedPlatforms ? catalogResolver.resolveExtensionCatalog(platforms)
-                        : catalogResolver.resolveExtensionCatalog(quarkusCoreVersion());
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to resolve extensions catalog", e);
-            }
-        }
-        return ToolsUtils.mergePlatforms(platforms, extension().getAppModelResolver());
-    }
+    protected QuarkusPlatformDescriptor platformDescriptor() {
 
-    protected List<ArtifactCoords> importedPlatforms() {
-        final List<Dependency> bomDeps = boms();
-        if (bomDeps.isEmpty()) {
+        final List<Dependency> boms = boms();
+        if (boms.isEmpty()) {
             throw new GradleException("No platforms detected in the project");
         }
 
-        final Configuration boms = getProject().getConfigurations()
-                .detachedConfiguration(bomDeps.toArray(new org.gradle.api.artifacts.Dependency[0]));
-        final Set<AppArtifactKey> processedKeys = new HashSet<>(1);
+        final QuarkusJsonPlatformDescriptorResolver platformResolver = QuarkusJsonPlatformDescriptorResolver.newInstance()
+                .setArtifactResolver(extension().getAppModelResolver())
+                .setMessageWriter(new GradleMessageWriter(getProject().getLogger()));
 
-        List<ArtifactCoords> platforms = new ArrayList<>();
-        boms.getResolutionStrategy().eachDependency(d -> {
-            if (!d.getTarget().getName().endsWith(BootstrapConstants.PLATFORM_DESCRIPTOR_ARTIFACT_ID_SUFFIX)
-                    || !processedKeys.add(new AppArtifactKey(d.getTarget().getGroup(), d.getTarget().getName()))) {
-                return;
-            }
-            final ArtifactCoords platform = new ArtifactCoords(d.getTarget().getGroup(), d.getTarget().getName(),
-                    d.getTarget().getVersion(), "json", d.getTarget().getVersion());
-            platforms.add(platform);
-        });
-        boms.getResolvedConfiguration();
+        final QuarkusPlatformDescriptor platform = resolvePlatformDescriptor(platformResolver, getProject(), boms);
+        if (platform != null) {
+            return platform;
+        }
 
+        final List<QuarkusPlatformDescriptor> platforms = resolveLegacyPlatforms(platformResolver, boms);
         if (platforms.isEmpty()) {
-            throw new RuntimeException("No Quarkus platforms found in the project");
+            throw new GradleException("Failed to determine the Quarkus platform for the project");
         }
-        return platforms;
-    }
-
-    protected String quarkusCoreVersion() {
-        final List<Dependency> bomDeps = boms();
-        if (bomDeps.isEmpty()) {
-            throw new GradleException("No platforms detected in the project");
+        if (platforms.size() == 1) {
+            return platforms.get(0);
         }
 
-        final Configuration boms = getProject().getConfigurations()
-                .detachedConfiguration(bomDeps.toArray(new org.gradle.api.artifacts.Dependency[0]));
-
-        final AtomicReference<String> quarkusVersionRef = new AtomicReference<>();
-        boms.getResolutionStrategy().eachDependency(d -> {
-            if (quarkusVersionRef.get() == null && d.getTarget().getName().equals("quarkus-core")
-                    && d.getTarget().getGroup().equals("io.quarkus")) {
-                quarkusVersionRef.set(d.getTarget().getVersion());
-            }
-        });
-        boms.getResolvedConfiguration();
-        final String quarkusCoreVersion = quarkusVersionRef.get();
-        if (quarkusCoreVersion == null) {
-            throw new IllegalStateException("Failed to determine the Quarkus core version for the project");
+        final CombinedQuarkusPlatformDescriptor.Builder builder = CombinedQuarkusPlatformDescriptor.builder();
+        for (QuarkusPlatformDescriptor descriptor : platforms) {
+            builder.addPlatform(descriptor);
         }
-        return quarkusCoreVersion;
+        return builder.build();
     }
 
     private List<Dependency> boms() {
@@ -127,10 +88,104 @@ public abstract class QuarkusPlatformTask extends QuarkusTask {
         return boms;
     }
 
-    protected QuarkusProject getQuarkusProject(boolean limitExtensionsToImportedPlatforms) {
+    private List<QuarkusPlatformDescriptor> resolveLegacyPlatforms(
+            QuarkusJsonPlatformDescriptorResolver platformResolver,
+            List<Dependency> boms) {
+        List<QuarkusPlatformDescriptor> platforms = new ArrayList<>(2);
+        boms.forEach(bom -> {
+            try {
+                platforms
+                        .add(platformResolver.resolveFromBom(bom.getGroup(), bom.getName(), bom.getVersion()));
+            } catch (Exception e) {
+                // not a platform
+            }
+        });
+        return platforms;
+    }
 
-        final GradleMessageWriter log = messageWriter();
-        final ExtensionCatalog catalog = extensionsCatalog(limitExtensionsToImportedPlatforms, log);
+    private QuarkusPlatformDescriptor resolvePlatformDescriptor(QuarkusJsonPlatformDescriptorResolver descriptorResolver,
+            Project project, List<Dependency> bomDeps) {
+        final Configuration boms = project.getConfigurations()
+                .detachedConfiguration(bomDeps.toArray(new org.gradle.api.artifacts.Dependency[0]));
+        final Set<AppArtifactKey> processedKeys = new HashSet<>(1);
+
+        final List<Dependency> descriptorDeps = new ArrayList<>();
+        final AtomicInteger quarkusBomIndex = new AtomicInteger(-1);
+        final AtomicInteger quarkusUniverseBomIndex = new AtomicInteger(-1);
+        boms.getResolutionStrategy().eachDependency(d -> {
+            final String name = d.getTarget().getName();
+            if (!name.endsWith(BootstrapConstants.PLATFORM_DESCRIPTOR_ARTIFACT_ID_SUFFIX)
+                    || !processedKeys.add(new AppArtifactKey(d.getTarget().getGroup(), name))) {
+                return;
+            }
+
+            if (name.startsWith("quarkus-bom")) {
+                if (quarkusBomIndex.get() < 0) {
+                    quarkusBomIndex.set(descriptorDeps.size());
+                } else {
+                    // the first one wins
+                    return;
+                }
+            } else if (name.startsWith("quarkus-universe-bom")) {
+                if (quarkusUniverseBomIndex.get() < 0) {
+                    quarkusUniverseBomIndex.set(descriptorDeps.size());
+                } else {
+                    // the first one wins
+                    return;
+                }
+            }
+
+            final DefaultDependencyArtifact dep = new DefaultDependencyArtifact();
+            dep.setExtension("json");
+            dep.setType("json");
+            dep.setClassifier(d.getTarget().getVersion());
+            dep.setName(name);
+
+            final DefaultExternalModuleDependency gradleDep = new DefaultExternalModuleDependency(
+                    d.getTarget().getGroup(), name, d.getTarget().getVersion(), null);
+            gradleDep.addArtifact(dep);
+            descriptorDeps.add(gradleDep);
+        });
+        boms.getResolvedConfiguration();
+
+        if (descriptorDeps.isEmpty()) {
+            return null;
+        }
+
+        final List<ResolvedArtifact> resolvedDescriptors = new ArrayList<>(descriptorDeps.size());
+        for (int i = 0; i < descriptorDeps.size(); ++i) {
+            if (quarkusBomIndex.get() == i && quarkusUniverseBomIndex.get() >= 0) {
+                continue;
+            }
+            final Dependency descriptor = descriptorDeps.get(i);
+            try {
+                for (ResolvedArtifact a : project.getConfigurations().detachedConfiguration(descriptor)
+                        .getResolvedConfiguration().getResolvedArtifacts()) {
+                    if (a.getName().equals(descriptor.getName())) {
+                        resolvedDescriptors.add(a);
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                // ignore for now
+            }
+        }
+
+        if (resolvedDescriptors.size() == 1) {
+            return descriptorResolver.resolveFromJson(resolvedDescriptors.get(0).getFile().toPath());
+        }
+
+        final CombinedQuarkusPlatformDescriptor.Builder builder = CombinedQuarkusPlatformDescriptor.builder();
+        for (ResolvedArtifact platformArtifact : resolvedDescriptors) {
+            builder.addPlatform(descriptorResolver.resolveFromJson(platformArtifact.getFile().toPath()));
+        }
+        return builder.build();
+    }
+
+    @Internal
+    protected QuarkusProject getQuarkusProject() {
+
+        final QuarkusPlatformDescriptor platformDescriptor = platformDescriptor();
 
         final Path projectDirPath = getProject().getProjectDir().toPath();
         final Path rootProjectPath = getProject().getParent() != null ? getProject().getRootProject().getProjectDir().toPath()
@@ -138,19 +193,15 @@ public abstract class QuarkusPlatformTask extends QuarkusTask {
         final BuildFile buildFile;
         if (Files.exists(rootProjectPath.resolve("settings.gradle.kts"))
                 && Files.exists(projectDirPath.resolve("build.gradle.kts"))) {
-            buildFile = new GradleKotlinProjectBuildFile(getProject(), catalog);
+            buildFile = new GradleKotlinProjectBuildFile(getProject(), platformDescriptor);
         } else if (Files.exists(rootProjectPath.resolve("settings.gradle"))
                 && Files.exists(projectDirPath.resolve("build.gradle"))) {
-            buildFile = new GradleGroovyProjectBuildFile(getProject(), catalog);
+            buildFile = new GradleGroovyProjectBuildFile(getProject(), platformDescriptor);
         } else {
             throw new GradleException(
                     "Mixed DSL is not supported. Both build and settings file need to use either Kotlin or Groovy DSL");
         }
-        return QuarkusProjectHelper.getProject(getProject().getProjectDir().toPath(), catalog, buildFile, log);
-    }
-
-    protected GradleMessageWriter messageWriter() {
-        return new GradleMessageWriter(getProject().getLogger());
+        return QuarkusProject.of(getProject().getProjectDir().toPath(), platformDescriptor, buildFile);
     }
 
     protected static URL toURL(String url) {
