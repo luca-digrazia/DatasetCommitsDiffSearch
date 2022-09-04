@@ -1,12 +1,11 @@
 package io.quarkus.it.resteasy.mutiny;
 
 import static io.restassured.RestAssured.get;
+import static org.awaitility.Awaitility.await;
 import static org.hamcrest.CoreMatchers.is;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
@@ -15,12 +14,11 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.sse.SseEventSource;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
-import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.subscription.UniEmitter;
 
 @QuarkusTest
 public class MutinyTest {
@@ -82,35 +80,27 @@ public class MutinyTest {
     }
 
     @Test
+    @Disabled("https://github.com/quarkusio/quarkus/issues/11687")
     public void testSSE() {
         Client client = ClientBuilder.newClient();
         WebTarget target = client.target("http://localhost:" + RestAssured.port + "/mutiny/pets");
-        try (SseEventSource eventSource = SseEventSource.target(target).build()) {
-            Uni<List<Pet>> petList = Uni.createFrom().emitter(new Consumer<UniEmitter<? super List<Pet>>>() {
-                @Override
-                public void accept(UniEmitter<? super List<Pet>> uniEmitter) {
-                    List<Pet> pets = new CopyOnWriteArrayList<>();
-                    eventSource.register(event -> {
-                        Pet pet = event.readData(Pet.class, MediaType.APPLICATION_JSON_TYPE);
-                        pets.add(pet);
-                        if (pets.size() == 5) {
-                            uniEmitter.complete(pets);
-                        }
-                    }, ex -> {
-                        uniEmitter.fail(new IllegalStateException("SSE failure", ex));
-                    });
-                    eventSource.open();
-
-                }
+        SseEventSource source = SseEventSource.target(target).build();
+        List<Pet> pets = new CopyOnWriteArrayList<>();
+        try (SseEventSource eventSource = source) {
+            eventSource.register(event -> {
+                Pet pet = event.readData(Pet.class, MediaType.APPLICATION_JSON_TYPE);
+                pets.add(pet);
+            }, ex -> {
+                throw new IllegalStateException("SSE failure", ex);
             });
-            List<Pet> pets = petList.await().atMost(Duration.ofMinutes(1));
-            Assertions.assertEquals(5, pets.size());
-            Assertions.assertEquals("neo", pets.get(0).getName());
-            Assertions.assertEquals("indy", pets.get(1).getName());
-            Assertions.assertEquals("plume", pets.get(2).getName());
-            Assertions.assertEquals("titi", pets.get(3).getName());
-            Assertions.assertEquals("rex", pets.get(4).getName());
+            eventSource.open();
+            await().until(() -> pets.size() == 5);
         }
+        Assertions.assertEquals("neo", pets.get(0).getName());
+        Assertions.assertEquals("indy", pets.get(1).getName());
+        Assertions.assertEquals("plume", pets.get(2).getName());
+        Assertions.assertEquals("titi", pets.get(3).getName());
+        Assertions.assertEquals("rex", pets.get(4).getName());
     }
 
     @Test
