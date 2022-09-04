@@ -18,9 +18,10 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.android.DataResourceXml;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -44,7 +45,7 @@ public class Namespaces implements Iterable<Map.Entry<String, String>> {
 
   /** Collects prefix and uri pairs from elements. */
   public static class Collector {
-    private Map<String, String> prefixToUri = new LinkedHashMap<>();
+    private Map<String, String> prefixToUri = new HashMap<>();
 
     public Namespaces toNamespaces() {
       return Namespaces.from(prefixToUri);
@@ -64,7 +65,7 @@ public class Namespaces implements Iterable<Map.Entry<String, String>> {
       Iterator<Attribute> attributes = XmlResourceValues.iterateAttributesFrom(start);
       Iterator<Namespace> localNamespaces = XmlResourceValues.iterateNamespacesFrom(start);
       // Collect the local prefixes to make sure a prefix isn't declared locally.
-      Set<String> prefixes = new LinkedHashSet<>();
+      Set<String> prefixes = new HashSet<>();
       while (localNamespaces.hasNext()) {
         prefixes.add(localNamespaces.next().getPrefix());
       }
