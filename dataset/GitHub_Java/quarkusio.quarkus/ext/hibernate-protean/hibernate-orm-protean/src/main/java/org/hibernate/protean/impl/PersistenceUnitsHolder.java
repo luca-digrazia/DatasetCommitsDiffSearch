@@ -15,21 +15,16 @@ import org.hibernate.protean.recording.RecordedState;
 
 public final class PersistenceUnitsHolder {
 
-	// Populated by Shamrock's runtime phase from Shamrock deployment info
 	private static volatile PUStatus COMPACT_UNITS = null;
 
 	private static final Object NO_NAME_TOKEN = new Object();
 
 	/**
-	 * Initialize JPA for use in Shamrock.
-	 * In a native image. This must be called from within a static init method.
+	 * Initialized JPA for use in a native image. This must be called from within a static init method.
 	 *
-	 * In general the <code>parsedPersistenceXmlDescriptors</code> will be provided by calling {@link #loadOriginalXMLParsedDescriptors()}
-	 * In Shamrock this is done in Shamrock's JPA ResourceProcessor
+	 * In general the <code>parsedPersistenceXmlDescriptors</code> will be provided by caling {@link #loadOriginalXMLParsedDescriptors()}.
 	 *
 	 * The scanner may be null to use to default scanner, or a custom scanner can be used to stop hibernate scanning
-     * It is expected that the scanner will be provided by Shamrock via it's hold of Jandex info.
-	 *
 	 * @param parsedPersistenceXmlDescriptors
 	 * @param scanner
 	 */
@@ -51,9 +46,6 @@ public final class PersistenceUnitsHolder {
 		}
 	}
 
-	/**
-	 * Used by Shamrock's JPA ResourceProcessor to load the descriptors.
-	 */
 	public static List<ParsedPersistenceXmlDescriptor> loadOriginalXMLParsedDescriptors() {
 		//Enforce the persistence.xml configuration to be interpreted literally without allowing runtime overrides;
 		//(check for the runtime provided properties to be empty as well)
@@ -75,18 +67,14 @@ public final class PersistenceUnitsHolder {
 	}
 
 	static RecordedState getMetadata(String persistenceUnitName) {
-		checkJPAInitialization();
+		if(COMPACT_UNITS == null) {
+			throw new RuntimeException("JPA not initialized yet");
+		}
 		Object key = persistenceUnitName;
 		if ( persistenceUnitName == null ) {
 			key = NO_NAME_TOKEN;
 		}
 		return COMPACT_UNITS.metadata.get( key );
-	}
-
-	private static void checkJPAInitialization() {
-		if(COMPACT_UNITS == null) {
-			throw new RuntimeException("JPA not initialized yet by Shamrock: this is likely a bug.");
-		}
 	}
 
 	private static Object unitName(PersistenceUnitDescriptor unit) {
@@ -104,7 +92,9 @@ public final class PersistenceUnitsHolder {
 
 	// Not a public contract but used by Shamrock
 	public static List<PersistenceUnitDescriptor> getPersistenceUnitDescriptors() {
-		checkJPAInitialization();
+		if(COMPACT_UNITS == null) {
+			throw new RuntimeException("JPA not initialized yet");
+		}
 		return COMPACT_UNITS.units;
 	}
 

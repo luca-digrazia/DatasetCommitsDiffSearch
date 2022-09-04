@@ -14,6 +14,7 @@ import org.hibernate.boot.CacheRegionDefinition;
 import org.hibernate.boot.MetadataBuilder;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.archive.scan.internal.StandardScanOptions;
+import org.hibernate.boot.archive.scan.spi.Scanner;
 import org.hibernate.boot.internal.MetadataImpl;
 import org.hibernate.boot.model.IdentifierGeneratorDefinition;
 import org.hibernate.boot.model.process.spi.ManagedResources;
@@ -31,6 +32,7 @@ import org.hibernate.cfg.Environment;
 import org.hibernate.cfg.beanvalidation.BeanValidationIntegrator;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.jdbc.dialect.spi.DialectFactory;
+import org.hibernate.engine.transaction.jta.platform.internal.JBossStandAloneJtaPlatform;
 import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
 import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatformResolver;
 import org.hibernate.id.factory.spi.MutableIdentifierGeneratorFactory;
@@ -86,7 +88,7 @@ class FastBootMetadataBuilder {
 	private final MetadataBuilderImplementor metamodelBuilder;
 	private final Object validatorFactory;
 
-	FastBootMetadataBuilder(final PersistenceUnitDescriptor persistenceUnit) {
+	FastBootMetadataBuilder(final PersistenceUnitDescriptor persistenceUnit, Scanner scanner) {
 		this.persistenceUnit = persistenceUnit;
 		final ClassLoaderService providedClassLoaderService = FlatClassLoaderService.INSTANCE;
 
@@ -117,6 +119,9 @@ class FastBootMetadataBuilder {
 		addPUManagedClassNamesToMetadataSources(persistenceUnit, metadataSources);
 
 		this.metamodelBuilder = (MetadataBuilderImplementor) metadataSources.getMetadataBuilder( standardServiceRegistry );
+		if( scanner != null ) {
+			this.metamodelBuilder.applyScanner( scanner );
+		}
 		populate( metamodelBuilder, mergedSettings, standardServiceRegistry );
 
 		this.managedResources = MetadataBuildingProcess.prepare(
@@ -167,6 +172,9 @@ class FastBootMetadataBuilder {
 	private MergedSettings mergeSettings(PersistenceUnitDescriptor persistenceUnit) {
 		final MergedSettings mergedSettings = new MergedSettings();
 
+		if(persistenceUnit.getJtaDataSource() != null) {
+			mergedSettings.configurationValues.put("hibernate.connection.datasource", persistenceUnit.getJtaDataSource());
+		}
 		// Protean specific!
 		mergedSettings.configurationValues.put( "hibernate.temp.use_jdbc_metadata_defaults", "false" );
 
@@ -268,8 +276,9 @@ class FastBootMetadataBuilder {
 	}
 
 	private JtaPlatform extractJtaPlatform() {
-		JtaPlatformResolver service = standardServiceRegistry.getService( JtaPlatformResolver.class );
-		return service.resolveJtaPlatform( this.configurationValues, (ServiceRegistryImplementor) standardServiceRegistry );
+		return new JBossStandAloneJtaPlatform();
+//		JtaPlatformResolver service = standardServiceRegistry.getService( JtaPlatformResolver.class );
+//		return service.resolveJtaPlatform( this.configurationValues, (ServiceRegistryImplementor) standardServiceRegistry );
 	}
 
 	private Dialect extractDialect() {
@@ -416,9 +425,11 @@ class FastBootMetadataBuilder {
 		else {
 			if ( txnType == PersistenceUnitTransactionType.JTA ) {
 				ssrBuilder.applySetting( TRANSACTION_COORDINATOR_STRATEGY, JtaTransactionCoordinatorBuilderImpl.class );
+				configurationValues.put(TRANSACTION_COORDINATOR_STRATEGY, JtaTransactionCoordinatorBuilderImpl.class);
 			}
 			else if ( txnType == PersistenceUnitTransactionType.RESOURCE_LOCAL ) {
 				ssrBuilder.applySetting( TRANSACTION_COORDINATOR_STRATEGY, JdbcResourceLocalTransactionCoordinatorBuilderImpl.class );
+				configurationValues.put(TRANSACTION_COORDINATOR_STRATEGY, JdbcResourceLocalTransactionCoordinatorBuilderImpl.class);
 			}
 		}
 	}

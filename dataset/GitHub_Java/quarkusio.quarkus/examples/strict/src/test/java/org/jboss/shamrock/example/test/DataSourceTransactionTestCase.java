@@ -14,8 +14,12 @@ public class DataSourceTransactionTestCase {
     public void testTransactionalAnnotation() {
         Assert.assertEquals("PASSED", URLTester.relative("rest/datasource/txninterceptor0").invokeURL().asString());
 
-        URLResponse resp = URLTester.relative("rest/datasource/txninterceptor1").invokeURL();
-        Assert.assertTrue(resp.exception() != null);
+        try {
+            URLResponse resp = URLTester.relative("rest/datasource/txninterceptor1").invokeURL();
+            Assert.fail(resp.asString());
+        } catch (RuntimeException expected) {
+
+        }
         Assert.assertEquals("PASSED", URLTester.relative("rest/datasource/txninterceptor2").invokeURL().asString());
 
 
