@@ -317,8 +317,7 @@ final class Types {
                     typedClasses.add(type.name());
                 }
                 for (Iterator<Type> iterator = types.iterator(); iterator.hasNext();) {
-                    Type nextType = iterator.next();
-                    if (!typedClasses.contains(nextType.name()) && !DotNames.OBJECT.equals(nextType.name())) {
+                    if (!typedClasses.contains(iterator.next().name())) {
                         iterator.remove();
                     }
                 }
