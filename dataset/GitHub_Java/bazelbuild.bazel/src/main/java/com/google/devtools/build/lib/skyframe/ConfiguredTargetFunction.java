@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget.DuplicateException;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -250,6 +249,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
                   env,
                   rule.toString(),
                   requiredToolchains,
+                  configuration,
                   configuredTargetKey.getConfigurationKey());
           if (env.valuesMissing()) {
             return null;
@@ -258,7 +258,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       }
 
       // Calculate the dependencies of this target.
-      OrderedSetMultimap<Attribute, ConfiguredTargetAndData> depValueMap =
+      OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> depValueMap =
           computeDependencies(
               env,
               resolver,
@@ -382,7 +382,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
    *     the host configuration as early as possible and pass this reference to all consumers
    */
   @Nullable
-  static OrderedSetMultimap<Attribute, ConfiguredTargetAndData> computeDependencies(
+  static OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> computeDependencies(
       Environment env,
       SkyframeDependencyResolver resolver,
       TargetAndConfiguration ctgValue,
@@ -404,9 +404,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               hostConfiguration,
               aspects,
               configConditions,
-              toolchainContext == null
-                  ? ImmutableSet.of()
-                  : toolchainContext.getResolvedToolchainLabels(),
+              toolchainContext,
               transitiveLoadingRootCauses);
     } catch (EvalException e) {
       // EvalException can only be thrown by computed Skylark attributes in the current rule.
@@ -434,7 +432,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     }
 
     // Resolve configured target dependencies and handle errors.
-    Map<SkyKey, ConfiguredTargetAndData> depValues =
+    Map<SkyKey, ConfiguredTargetAndTarget> depValues =
         resolveConfiguredTargetDependencies(
             env,
             depValueNames.values(),
@@ -524,7 +522,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     }
     configValueNames = staticConfigs.build();
 
-    Map<SkyKey, ConfiguredTargetAndData> configValues =
+    Map<SkyKey, ConfiguredTargetAndTarget> configValues =
         resolveConfiguredTargetDependencies(
             env,
             configValueNames,
@@ -557,12 +555,12 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
   /**
    * Resolves the targets referenced in depValueNames and returns their {@link
-   * ConfiguredTargetAndData} instances.
+   * ConfiguredTargetAndTarget} instances.
    *
    * <p>Returns null if not all instances are available yet.
    */
   @Nullable
-  private static Map<SkyKey, ConfiguredTargetAndData> resolveConfiguredTargetDependencies(
+  private static Map<SkyKey, ConfiguredTargetAndTarget> resolveConfiguredTargetDependencies(
       Environment env,
       Collection<Dependency> deps,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution,
@@ -584,7 +582,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
                 deps, input -> PackageValue.key(input.getLabel().getPackageIdentifier())));
     Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> depValuesOrExceptions =
             env.getValuesOrThrow(depKeys, ConfiguredValueCreationException.class);
-    Map<SkyKey, ConfiguredTargetAndData> result = Maps.newHashMapWithExpectedSize(deps.size());
+    Map<SkyKey, ConfiguredTargetAndTarget> result = Maps.newHashMapWithExpectedSize(deps.size());
     Set<SkyKey> aliasPackagesToFetch = new HashSet<>();
     List<Dependency> aliasDepsToRedo = new ArrayList<>();
     Map<SkyKey, SkyValue> aliasPackageValues = null;
@@ -631,10 +629,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
             try {
               result.put(
                   key,
-                  new ConfiguredTargetAndData(
+                  new ConfiguredTargetAndTarget(
                       depValue.getConfiguredTarget(),
-                      pkgValue.getPackage().getTarget(depLabel.getName()),
-                      depValue.getConfiguredTarget().getConfiguration()));
+                      pkgValue.getPackage().getTarget(depLabel.getName())));
             } catch (NoSuchTargetException e) {
               throw new IllegalStateException("Target already verified for " + dep, e);
             }
@@ -679,7 +676,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       Environment env,
       Target target,
       BuildConfiguration configuration,
-      OrderedSetMultimap<Attribute, ConfiguredTargetAndData> depValueMap,
+      OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> depValueMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       @Nullable ToolchainContext toolchainContext,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution)
@@ -702,19 +699,14 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     }
 
     Preconditions.checkNotNull(depValueMap);
-    ConfiguredTarget configuredTarget;
-    try {
-      configuredTarget =
-          view.createConfiguredTarget(
-              target,
-              configuration,
-              analysisEnvironment,
-              depValueMap,
-              configConditions,
-              toolchainContext);
-    } catch (ActionConflictException e) {
-      throw new ConfiguredTargetFunctionException(e);
-    }
+    ConfiguredTarget configuredTarget =
+        view.createConfiguredTarget(
+            target,
+            configuration,
+            analysisEnvironment,
+            depValueMap,
+            configConditions,
+            toolchainContext);
 
     events.replayOn(env.getListener());
     if (events.hasErrors()) {
@@ -734,34 +726,24 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     analysisEnvironment.disable(target);
     Preconditions.checkNotNull(configuredTarget, target);
 
-    if (configuredTarget instanceof RuleConfiguredTarget) {
-      RuleConfiguredTarget ruleConfiguredTarget = (RuleConfiguredTarget) configuredTarget;
-      return new RuleConfiguredTargetValue(
-          ruleConfiguredTarget,
-          transitivePackagesForPackageRootResolution == null
-              ? null
-              : transitivePackagesForPackageRootResolution.build(),
-          removeActionsAfterEvaluation.get());
-    } else {
-      GeneratingActions generatingActions;
-      // Check for conflicting actions within this configured target (that indicates a bug in the
-      // rule implementation).
-      try {
-        generatingActions =
-            Actions.filterSharedActionsAndThrowActionConflict(
-                analysisEnvironment.getActionKeyContext(),
-                analysisEnvironment.getRegisteredActions());
-      } catch (ActionConflictException e) {
-        throw new ConfiguredTargetFunctionException(e);
-      }
-      return new NonRuleConfiguredTargetValue(
-          configuredTarget,
-          generatingActions,
-          transitivePackagesForPackageRootResolution == null
-              ? null
-              : transitivePackagesForPackageRootResolution.build(),
-          removeActionsAfterEvaluation.get());
+    GeneratingActions generatingActions;
+    // Check for conflicting actions within this configured target (that indicates a bug in the
+    // rule implementation).
+    try {
+      generatingActions =
+          Actions.filterSharedActionsAndThrowActionConflict(
+              analysisEnvironment.getActionKeyContext(),
+              analysisEnvironment.getRegisteredActions());
+    } catch (ActionConflictException e) {
+      throw new ConfiguredTargetFunctionException(e);
     }
+    return new ConfiguredTargetValue(
+        configuredTarget,
+        generatingActions,
+        transitivePackagesForPackageRootResolution == null
+            ? null
+            : transitivePackagesForPackageRootResolution.build(),
+        removeActionsAfterEvaluation.get());
   }
 
   /**

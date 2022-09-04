@@ -71,6 +71,7 @@ import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
+import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options.ConfigsMode;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
@@ -182,6 +183,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected TimestampGranularityMonitor tsgm;
   protected BlazeDirectories directories;
   protected ActionKeyContext actionKeyContext;
+  protected BinTools binTools;
 
   // Note that these configurations are virtual (they use only VFS)
   protected BuildConfigurationCollection masterConfig;
@@ -212,6 +214,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             rootDirectory,
             analysisMock.getProductName());
     actionKeyContext = new ActionKeyContext();
+    binTools = BinTools.forUnitTesting(directories, analysisMock.getEmbeddedTools());
     mockToolsConfig = new MockToolsConfig(rootDirectory, false);
     analysisMock.setupMockClient(mockToolsConfig);
     analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());

@@ -54,7 +54,6 @@ import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
 import com.google.devtools.build.lib.analysis.AspectCollection;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
@@ -341,7 +340,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         this,
         (ConfiguredRuleClassProvider) ruleClassProvider);
     this.artifactFactory.set(skyframeBuildView.getArtifactFactory());
-    this.externalFilesHelper = ExternalFilesHelper.create(
+    this.externalFilesHelper = new ExternalFilesHelper(
         pkgLocator, this.externalFileAction, directories);
     this.crossRepositoryLabelViolationStrategy = crossRepositoryLabelViolationStrategy;
     this.buildFilesByPriority = buildFilesByPriority;
@@ -453,7 +452,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             actionKeyContext, artifactFactory, buildInfoFactories, removeActionsAfterEvaluation));
     map.put(
         SkyFunctions.BUILD_INFO,
-        new WorkspaceStatusFunction(removeActionsAfterEvaluation, this::makeWorkspaceStatusAction));
+        new WorkspaceStatusFunction(
+            actionKeyContext, removeActionsAfterEvaluation, this::makeWorkspaceStatusAction));
     map.put(
         SkyFunctions.COVERAGE_REPORT,
         new CoverageReportFunction(actionKeyContext, removeActionsAfterEvaluation));
@@ -592,8 +592,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       throw new IllegalStateException(errorInfo.toString());
     }
   }
-
-  public abstract ActionGraphContainer getActionGraphContainer();
 
   class BuildViewProvider {
     /**
