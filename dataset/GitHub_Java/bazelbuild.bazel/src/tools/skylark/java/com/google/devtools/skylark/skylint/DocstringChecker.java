@@ -53,7 +53,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       issues.add(new Issue("file has no module docstring", range));
     } else {
       List<DocstringParseError> errors = new ArrayList<>();
-      DocstringUtils.parseDocstring(moduleDocstring, errors);
+      parseDocstring(moduleDocstring, errors);
       for (DocstringParseError error : errors) {
         issues.add(docstringParseErrorToIssue(moduleDocstring, error));
       }
@@ -83,7 +83,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       return;
     }
     List<DocstringParseError> errors = new ArrayList<>();
-    DocstringInfo info = DocstringUtils.parseDocstring(functionDocstring, errors);
+    DocstringInfo info = parseDocstring(functionDocstring, errors);
     for (DocstringParseError error : errors) {
       issues.add(docstringParseErrorToIssue(functionDocstring, error));
     }
@@ -91,6 +91,12 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       checkMultilineFunctionDocstring(
           node, functionDocstring, info, containsReturnWithValue, issues);
     }
+  }
+
+  private static DocstringInfo parseDocstring(
+      StringLiteral functionDocstring, List<DocstringParseError> errors) {
+    int indentation = functionDocstring.getLocation().getStartLineAndColumn().getColumn() - 1;
+    return DocstringUtils.parseDocstring(functionDocstring.getValue(), indentation, errors);
   }
 
   private static void checkMultilineFunctionDocstring(

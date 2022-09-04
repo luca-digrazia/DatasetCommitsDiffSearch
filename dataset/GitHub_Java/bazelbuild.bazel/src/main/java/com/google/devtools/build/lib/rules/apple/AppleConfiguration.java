@@ -590,10 +590,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     if (!appleSplitCpu.isEmpty()) {
       components.add(applePlatformType.toString().toLowerCase());
       components.add(appleSplitCpu);
-
-      if (!isMandatoryMinimumVersion() || options.isMinimumOsVersionExplicitlySet()) {
-        components.add("min" + getMinimumOsForPlatformType(applePlatformType));
-      }
+      components.add("min" + getMinimumOsForPlatformType(applePlatformType));
     }
     if (shouldDistinguishOutputDirectory()) {
       components.add(configurationDistinguisher.getFileSystemName());
