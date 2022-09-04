@@ -18,108 +18,71 @@
 
 package com.tencent.angel.ps.server.data.request;
 
-import com.tencent.angel.common.ByteBufSerdeUtils;
 import com.tencent.angel.common.Serialize;
 import com.tencent.angel.ps.server.data.TransportMethod;
 import io.netty.buffer.ByteBuf;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Base class of rpc request from PSAgent to PS.
  */
-public class Request implements Serialize {
+public abstract class Request implements Serialize {
+  /**
+   * User requset id
+   */
+  private final int userRequestId;
+
+  /**
+   * Sub-request sequence id
+   */
+  private volatile int seqId;
+
   private final static AtomicInteger r = new AtomicInteger(0);
-  private final transient int hashCode = r.incrementAndGet();
-
-  /**
-   * Request meta
-   */
-  private RequestHeader header;
-
-  /**
-   * Request data
-   */
-  private RequestData data;
+  private final int hashCode = r.incrementAndGet();
 
   /**
    * request context
    */
-  private transient RequestContext context;
-
-  /**
-   * serialized request data
-   */
-  private transient ByteBuf in;
+  private RequestContext context;
 
   /**
    * Create a new Request.
    *
-   * @param header Request header
+   * @param context request context
+   */
+  public Request(RequestContext context) {
+    this(-1, context);
+  }
+
+  /**
+   * Create a new Request.
+   *
+   * @param userRequestId user request id
    * @param context       request context
    */
-  public Request(RequestHeader header, RequestData data, RequestContext context) {
-    this.header = header;
-    this.data = data;
+  public Request(int userRequestId, RequestContext context) {
+    this.userRequestId = userRequestId;
     this.context = context;
-  }
-
-  public Request(RequestHeader header, RequestData data) {
-    this(header, data, null);
-  }
-
-  public Request(RequestHeader header) {
-    this(header, null, null);
   }
 
   /**
    * Create a new Request.
    */
-  public Request(ByteBuf in) {
-    this(null, null, null);
-    this.in = in;
+  public Request() {
+    this(null);
   }
 
   @Override public void serialize(ByteBuf buf) {
-    serializeHeader(buf);
-    serializeData(buf);
+
   }
 
   @Override public void deserialize(ByteBuf buf) {
-    deserializeHeader(buf);
-    deserializeData(buf);
-  }
 
-  public void serializeHeader(ByteBuf buf) {
-    header.serialize(buf);
-  }
-
-  public void serializeData(ByteBuf buf) {
-    if(data != null) {
-      ByteBufSerdeUtils.serializeBoolean(buf, true);
-      data.serialize(buf);
-    } else {
-      ByteBufSerdeUtils.serializeBoolean(buf, false);
-    }
-  }
-
-  public void deserializeHeader(ByteBuf buf) {
-    header = new RequestHeader();
-    header.deserialize(buf);
-  }
-
-  public void deserializeData(ByteBuf buf) {
-    if(ByteBufSerdeUtils.deserializeBoolean(buf)) {
-      data = RequestFactory.createEmptyRequestData(TransportMethod.valueOf(header.methodId));
-      data.deserialize(buf);
-    }
   }
 
   @Override public int bufferLen() {
-    int len = header.bufferLen() + ByteBufSerdeUtils.BOOLEN_LENGTH;
-    if(data != null) {
-      len += data.bufferLen();
-    }
-    return len;
+    return 0;
   }
 
   /**
@@ -137,7 +100,7 @@ public class Request implements Serialize {
    * @return user request id
    */
   public int getUserRequestId() {
-    return header.userRequestId;
+    return userRequestId;
   }
 
   /**
@@ -146,7 +109,7 @@ public class Request implements Serialize {
    * @return sub request sequence id
    */
   public int getSeqId() {
-    return header.seqId;
+    return seqId;
   }
 
   /**
@@ -155,43 +118,22 @@ public class Request implements Serialize {
    * @param seqId sub request sequence id
    */
   public void setSeqId(int seqId) {
-    header.seqId = seqId;
+    this.seqId = seqId;
   }
 
   /**
-   * Get how many elements handled by this rpc
-   * @return need handle element number
-   */
-  public int getHandleElementNum() {
-    return header.handleElemNum;
-  }
-
-  /**
-   * Get token number
+   * Get request estimated serialize data size
    *
-   * @return token number
+   * @return request estimated serialize data size
    */
-  public int getTokenNum() {
-    return header.token;
-  }
-
-  /**
-   * Set token number
-   *
-   * @param tokenNum token number
-   */
-  public void setTokenNum(int tokenNum) {
-    header.token = tokenNum;
-  }
+  public abstract int getEstimizeDataSize();
 
   /**
    * Get request type
    *
    * @return request type
    */
-  public TransportMethod getType() {
-    return TransportMethod.valueOf(header.methodId);
-  }
+  public abstract TransportMethod getType();
 
   @Override
   public boolean equals(Object o) {
@@ -201,38 +143,5 @@ public class Request implements Serialize {
   @Override
   public int hashCode() {
     return hashCode;
-  }
-
-  public boolean timeoutEnable() {
-    return true;
-  }
-
-  @Override
-  public String toString() {
-    return "Request{" +
-        "hashCode=" + hashCode +
-        ", header=" + header +
-        ", context=" + context +
-        '}';
-  }
-
-  public RequestHeader getHeader() {
-    return header;
-  }
-
-  public void setHeader(RequestHeader header) {
-    this.header = header;
-  }
-
-  public RequestData getData() {
-    return data;
-  }
-
-  public void setData(RequestData data) {
-    this.data = data;
-  }
-
-  public void setContext(RequestContext context) {
-    this.context = context;
   }
 }
