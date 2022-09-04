@@ -221,14 +221,13 @@ public class MongoProbe {
                 storageEngine = ServerStatus.StorageEngine.create(storageEngineMap.getString("name"));
             }
 
-            final int uptime = serverStatusResult.getInt("uptime", 0);
             serverStatus = ServerStatus.create(
                     serverStatusResult.getString("host"),
                     serverStatusResult.getString("version"),
                     serverStatusResult.getString("process"),
-                    serverStatusResult.getLong("pid", 0),
-                    uptime,
-                    serverStatusResult.getLong("uptimeMillis", uptime * 1000L),
+                    serverStatusResult.getLong("pid"),
+                    serverStatusResult.getInt("uptime"),
+                    serverStatusResult.getLong("uptimeMillis"),
                     serverStatusResult.getInt("uptimeEstimate"),
                     new DateTime(serverStatusResult.getDate("localTime")),
                     connections,
