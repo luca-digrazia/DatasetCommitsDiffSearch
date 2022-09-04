@@ -64,18 +64,9 @@ public final class PrevalidatedQuarkusMetadata implements MetadataImplementor {
     // New helpers on this Quarkus specific metadata; these are useful to boot and manage the recorded state:
 
     public SessionFactoryOptionsBuilder buildSessionFactoryOptionsBuilder() {
-        SessionFactoryOptionsBuilder builder = new SessionFactoryOptionsBuilder(
+        return new SessionFactoryOptionsBuilder(
                 metadata.getMetadataBuildingOptions().getServiceRegistry(),
                 metadata.getBootstrapContext());
-        // This would normally be done by the constructor of SessionFactoryBuilderImpl,
-        // but we don't use a builder to create the session factory, for some reason.
-        Map<String, SQLFunction> sqlFunctions = metadata.getSqlFunctionMap();
-        if (sqlFunctions != null) {
-            for (Map.Entry<String, SQLFunction> entry : sqlFunctions.entrySet()) {
-                builder.applySqlFunction(entry.getKey(), entry.getValue());
-            }
-        }
-        return builder;
     }
 
     //Relevant overrides:
