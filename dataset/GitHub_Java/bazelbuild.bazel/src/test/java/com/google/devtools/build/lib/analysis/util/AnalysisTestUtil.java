@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
+import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -42,15 +42,14 @@ import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Options;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.shell.Command;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.TestConstants;
-import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -66,8 +65,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-import javax.annotation.Nullable;
-import net.starlark.java.eval.StarlarkSemantics;
 
 /**
  * Utilities for analysis phase tests.
@@ -203,7 +200,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ActionLookupKey getOwner() {
+    public ActionLookupValue.ActionLookupKey getOwner() {
       return original.getOwner();
     }
 
@@ -233,8 +230,7 @@ public final class AnalysisTestUtil {
       super(
           ActionOwner.SYSTEM_ACTION_OWNER,
           NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-          ImmutableSet.of(stableStatus, volatileStatus),
-          "workspace status");
+          ImmutableSet.of(stableStatus, volatileStatus));
       this.stableStatus = stableStatus;
       this.volatileStatus = volatileStatus;
     }
@@ -248,8 +244,7 @@ public final class AnalysisTestUtil {
         FileSystemUtils.writeContent(
             actionExecutionContext.getInputPath(volatileStatus), new byte[] {});
       } catch (IOException e) {
-        throw new ActionExecutionException(
-            e, this, true, CrashFailureDetails.detailedExitCodeForThrowable(e));
+        throw new ActionExecutionException(e, this, true);
       }
       return ActionResult.EMPTY;
     }
@@ -260,10 +255,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public void computeKey(
-        ActionKeyContext actionKeyContext,
-        @Nullable Artifact.ArtifactExpander artifactExpander,
-        Fingerprint fp) {}
+    public void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {}
 
     @Override
     public Artifact getVolatileStatus() {
@@ -327,14 +319,8 @@ public final class AnalysisTestUtil {
 
   /** An AnalysisEnvironment with stubbed-out methods. */
   public static class StubAnalysisEnvironment implements AnalysisEnvironment {
-    private static final ActionLookupKey DUMMY_KEY =
-        new ActionLookupKey() {
-          @Nullable
-          @Override
-          public Label getLabel() {
-            return null;
-          }
-
+    private static final ActionLookupValue.ActionLookupKey DUMMY_KEY =
+        new ActionLookupValue.ActionLookupKey() {
           @Override
           public SkyFunctionName functionName() {
             return null;
@@ -396,7 +382,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public StarlarkSemantics getStarlarkSemantics() {
+    public StarlarkSemantics getStarlarkSemantics() throws InterruptedException {
       return null;
     }
 
@@ -434,7 +420,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ActionLookupKey getOwner() {
+    public ActionLookupValue.ActionLookupKey getOwner() {
       return DUMMY_KEY;
     }
 
@@ -452,7 +438,7 @@ public final class AnalysisTestUtil {
     public ActionKeyContext getActionKeyContext() {
       return null;
     }
-  }
+  };
 
   /**
    * Matches the output path prefix contributed by a C++ configuration fragment.
@@ -507,11 +493,7 @@ public final class AnalysisTestUtil {
     for (Artifact artifact : artifacts) {
       ArtifactRoot root = artifact.getRoot();
       if (root.isSourceRoot()) {
-        if (root.isExternalSourceRoot()) {
-          files.add("src(external) " + artifact.getRootRelativePath());
-        } else {
-          files.add("src " + artifact.getRootRelativePath());
-        }
+        files.add("src " + artifact.getRootRelativePath());
       } else {
         String name = rootMap.getOrDefault(root.getRoot().toString(), "/");
         files.add(name + " " + artifact.getRootRelativePath());

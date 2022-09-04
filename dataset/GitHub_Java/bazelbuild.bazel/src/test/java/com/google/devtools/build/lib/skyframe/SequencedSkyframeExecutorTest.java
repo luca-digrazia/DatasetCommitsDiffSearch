@@ -121,7 +121,6 @@ import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.TestUtils;
-import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -1163,8 +1162,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     }
 
     @Override
-    public String getKey(
-        ActionKeyContext actionKeyContext, @Nullable Artifact.ArtifactExpander artifactExpander) {
+    public String getKey(ActionKeyContext actionKeyContext) {
       Fingerprint fp = new Fingerprint();
       fp.addPath(inputArtifact.getPath());
       fp.addPath(outputArtifact.getPath());
@@ -1449,10 +1447,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     }
 
     @Override
-    protected void computeKey(
-        ActionKeyContext actionKeyContext,
-        @Nullable Artifact.ArtifactExpander artifactExpander,
-        Fingerprint fp) {
+    protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
       fp.addString(warningText);
       fp.addPath(getPrimaryOutput().getExecPath());
     }
@@ -1464,8 +1459,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
       try {
         FileSystemUtils.createEmptyFile(actionExecutionContext.getInputPath(getPrimaryOutput()));
       } catch (IOException e) {
-        throw new ActionExecutionException(
-            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
+        throw new ActionExecutionException(e, this, false);
       }
       return ActionResult.EMPTY;
     }
@@ -1879,22 +1873,18 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Artifact failedOutput =
         new Artifact.DerivedArtifact(
             ArtifactRoot.asDerivedRoot(root, "out"), execPath.getRelative("failed"), failedKey);
-    AtomicReference<Action> failedActionReference = new AtomicReference<>();
-    Action failedAction =
+    final AtomicReference<Action> failedActionReference = new AtomicReference<>();
+    final Action failedAction =
         new TestAction(
             new Callable<Void>() {
               @Override
               public Void call() throws ActionExecutionException {
                 throw new ActionExecutionException(
-                    "typical non-catastrophic user failure",
-                    failedActionReference.get(),
-                    /*catastrophe=*/ false,
-                    USER_DETAILED_EXIT_CODE);
+                    new Exception(), failedActionReference.get(), /*catastrophe=*/ false);
               }
             },
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             ImmutableSet.of(failedOutput));
-    failedActionReference.set(failedAction);
     ConfiguredTargetValue failedTarget = createConfiguredTargetValue(failedAction, failedKey);
 
     // And an action that throws a catastrophic exception when it is executed,

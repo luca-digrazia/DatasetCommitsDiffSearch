@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,54 +14,30 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Contains options which control the set of artifacts to build for top-level targets.
- */
+/** Contains options which control the set of artifacts to build for top-level targets. */
 @Immutable
+@AutoCodec
 public final class TopLevelArtifactContext {
-
-  public static final TopLevelArtifactContext DEFAULT = new TopLevelArtifactContext(
-      "", /*compileOnly=*/false, /*compilationPrerequisitesOnly*/false,
-      /*runTestsExclusively=*/false, /*outputGroups=*/ImmutableSet.<String>of(),
-      /*shouldRunTests=*/false);
-
-  private final String buildCommand;
-  private final boolean compileOnly;
-  private final boolean compilationPrerequisitesOnly;
   private final boolean runTestsExclusively;
-  private final ImmutableSet<String> outputGroups;
-  private final boolean shouldRunTests;
+  private final boolean expandFilesets;
+  private final boolean fullyResolveFilesetSymlinks;
+  private final ImmutableSortedSet<String> outputGroups;
 
-  public TopLevelArtifactContext(String buildCommand, boolean compileOnly,
-      boolean compilationPrerequisitesOnly, boolean runTestsExclusively,
-      ImmutableSet<String> outputGroups, boolean shouldRunTests) {
-    this.buildCommand = buildCommand;
-    this.compileOnly = compileOnly;
-    this.compilationPrerequisitesOnly = compilationPrerequisitesOnly;
+  public TopLevelArtifactContext(
+      boolean runTestsExclusively,
+      boolean expandFilesets,
+      boolean fullyResolveFilesetSymlinks,
+      ImmutableSortedSet<String> outputGroups) {
     this.runTestsExclusively = runTestsExclusively;
+    this.expandFilesets = expandFilesets;
+    this.fullyResolveFilesetSymlinks = fullyResolveFilesetSymlinks;
     this.outputGroups = outputGroups;
-    this.shouldRunTests = shouldRunTests;
-  }
-
-  /** Returns the build command as a string. */
-  public String buildCommand() {
-    return buildCommand;
-  }
-
-  /** Returns the value of the --compile_only flag. */
-  public boolean compileOnly() {
-    return compileOnly;
-  }
-
-  /** Returns the value of the --compilation_prerequisites_only flag. */
-  public boolean compilationPrerequisitesOnly() {
-    return compilationPrerequisitesOnly;
   }
 
   /** Whether to run tests in exclusive mode. */
@@ -69,28 +45,30 @@ public final class TopLevelArtifactContext {
     return runTestsExclusively;
   }
 
+  public boolean expandFilesets() {
+    return expandFilesets;
+  }
+
+  public boolean fullyResolveFilesetSymlinks() {
+    return fullyResolveFilesetSymlinks;
+  }
+
   /** Returns the value of the --output_groups flag. */
   public Set<String> outputGroups() {
     return outputGroups;
   }
 
-  /** Whether the top-level request command may run tests. */
-  public boolean shouldRunTests() {
-    return shouldRunTests;
-  }
-  
+
   // TopLevelArtifactContexts are stored in maps in BuildView,
   // so equals() and hashCode() need to work.
   @Override
   public boolean equals(Object other) {
     if (other instanceof TopLevelArtifactContext) {
       TopLevelArtifactContext otherContext = (TopLevelArtifactContext) other;
-      return buildCommand.equals(otherContext.buildCommand)
-          && compileOnly == otherContext.compileOnly
-          && compilationPrerequisitesOnly == otherContext.compilationPrerequisitesOnly
-          && runTestsExclusively == otherContext.runTestsExclusively
-          && outputGroups.equals(otherContext.outputGroups)
-          && shouldRunTests == otherContext.shouldRunTests;
+      return runTestsExclusively == otherContext.runTestsExclusively
+          && expandFilesets == otherContext.expandFilesets
+          && fullyResolveFilesetSymlinks == otherContext.fullyResolveFilesetSymlinks
+          && outputGroups.equals(otherContext.outputGroups);
     } else {
       return false;
     }
@@ -98,7 +76,7 @@ public final class TopLevelArtifactContext {
 
   @Override
   public int hashCode() {
-    return Objects.hash(buildCommand, compileOnly, compilationPrerequisitesOnly,
-        runTestsExclusively, outputGroups, shouldRunTests);
+    return Objects.hash(
+        runTestsExclusively, expandFilesets, fullyResolveFilesetSymlinks, outputGroups);
   }
 }
