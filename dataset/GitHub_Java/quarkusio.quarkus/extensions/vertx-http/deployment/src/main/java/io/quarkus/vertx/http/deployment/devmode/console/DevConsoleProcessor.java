@@ -49,7 +49,6 @@ import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.deployment.builditem.LogHandlerBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
@@ -102,8 +101,9 @@ import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.impl.Http1xServerConnection;
-import io.vertx.core.impl.EventLoopContext;
+import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.impl.VertxHandler;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -159,37 +159,25 @@ public class DevConsoleProcessor {
                 .childHandler(new ChannelInitializer<VirtualChannel>() {
                     @Override
                     public void initChannel(VirtualChannel ch) throws Exception {
-                        // Vert.x 4 Migration: Verify this behavior
-                        EventLoopContext context = vertx.createEventLoopContext();
-
-                        //                                ContextInternal context = (ContextInternal) vertx
-                        //                                        .createEventLoopContext(null, null, new JsonObject(),
-                        //                                                Thread.currentThread().getContextClassLoader());
-                        VertxHandler<Http1xServerConnection> handler = VertxHandler.create(chctx -> {
-                            Http1xServerConnection connection = new Http1xServerConnection(
-                                    () -> context,
+                        ContextInternal context = (ContextInternal) vertx
+                                .createEventLoopContext(null, null, new JsonObject(),
+                                        Thread.currentThread().getContextClassLoader());
+                        VertxHandler<Http1xServerConnection> handler = VertxHandler.create(context, chctx -> {
+                            Http1xServerConnection conn = new Http1xServerConnection(
+                                    context.owner(),
                                     null,
                                     new HttpServerOptions(),
                                     chctx,
                                     context,
                                     "localhost",
                                     null);
-
-                            //                                    Http1xServerConnection conn = new Http1xServerConnection(
-                            //                                            context.owner(),
-                            //                                            null,
-                            //                                            new HttpServerOptions(),
-                            //                                            chctx,
-                            //                                            context,
-                            //                                            "localhost",
-                            //                                            null);
-                            connection.handler(new Handler<HttpServerRequest>() {
+                            conn.handler(new Handler<HttpServerRequest>() {
                                 @Override
                                 public void handle(HttpServerRequest event) {
                                     mainRouter.handle(event);
                                 }
                             });
-                            return connection;
+                            return conn;
                         });
                         ch.pipeline().addLast("handler", handler);
                     }
@@ -234,7 +222,7 @@ public class DevConsoleProcessor {
                 .handler(new DevConsole(engine, httpRootPath, frameworkRootPath));
         mainRouter = Router.router(devConsoleVertx);
         mainRouter.errorHandler(500, errorHandler);
-        mainRouter.route(nonApplicationRootPathBuildItem.resolvePath("dev*")).subRouter(router);
+        mainRouter.route(nonApplicationRootPathBuildItem.resolvePath("dev/*")).subRouter(router);
     }
 
     @BuildStep(onlyIf = IsDevelopment.class)
@@ -337,8 +325,7 @@ public class DevConsoleProcessor {
             NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
             LaunchModeBuildItem launchModeBuildItem,
             ShutdownContextBuildItem shutdownContext,
-            BuildProducer<RouteBuildItem> routeBuildItemBuildProducer,
-            LiveReloadBuildItem liveReloadBuildItem) throws IOException {
+            BuildProducer<RouteBuildItem> routeBuildItemBuildProducer) throws IOException {
         if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
             return;
         }
@@ -347,8 +334,7 @@ public class DevConsoleProcessor {
         AppArtifact devConsoleResourcesArtifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, "io.quarkus",
                 "quarkus-vertx-http-deployment");
 
-        Path devConsoleStaticResourcesDeploymentPath = WebJarUtil.copyResourcesForDevOrTest(liveReloadBuildItem,
-                curateOutcomeBuildItem,
+        Path devConsoleStaticResourcesDeploymentPath = WebJarUtil.copyResourcesForDevOrTest(curateOutcomeBuildItem,
                 launchModeBuildItem,
                 devConsoleResourcesArtifact, STATIC_RESOURCES_PATH);
 
