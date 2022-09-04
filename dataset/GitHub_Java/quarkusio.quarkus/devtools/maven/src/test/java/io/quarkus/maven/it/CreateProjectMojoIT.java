@@ -62,15 +62,14 @@ public class CreateProjectMojoIT extends MojoTestBase {
 
         assertThat(new File(testDir, "pom.xml")).isFile();
         assertThat(new File(testDir, "src/main/java")).isDirectory();
-        assertThat(new File(testDir, "src/main/resources/application.properties")).isFile();
+        assertThat(new File(testDir, "src/main/resources/META-INF/microprofile-config.properties")).isFile();
 
         String config = Files
-                .asCharSource(new File(testDir, "src/main/resources/application.properties"), Charsets.UTF_8)
+                .asCharSource(new File(testDir, "src/main/resources/META-INF/microprofile-config.properties"), Charsets.UTF_8)
                 .read();
         assertThat(config).contains("key = value");
 
-        assertThat(new File(testDir, "src/main/docker/Dockerfile.native")).isFile();
-        assertThat(new File(testDir, "src/main/docker/Dockerfile.jvm")).isFile();
+        assertThat(new File(testDir, "src/main/docker/Dockerfile")).isFile();
 
         Model model = load(testDir);
         final DependencyManagement dependencyManagement = model.getDependencyManagement();
@@ -81,7 +80,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
                 && d.getType().equalsIgnoreCase("pom"))).isTrue();
 
         assertThat(
-                model.getDependencies().stream().anyMatch(d -> d.getArtifactId().equalsIgnoreCase("quarkus-resteasy")
+                model.getDependencies().stream().anyMatch(d -> d.getArtifactId().equalsIgnoreCase("quarkus-resteasy-deployment")
                         && d.getVersion() == null)).isTrue();
 
         assertThat(model.getProfiles()).hasSize(1);
@@ -110,7 +109,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
                 .contains(MojoUtils.getPluginGroupId(), MojoUtils.QUARKUS_VERSION_PROPERTY, MojoUtils.getPluginGroupId());
         assertThat(new File(testDir, "src/main/java")).isDirectory();
 
-        assertThat(new File(testDir, "src/main/resources/application.properties")).exists();
+        assertThat(new File(testDir, "src/main/resources/META-INF/microprofile-config.properties")).exists();
         assertThat(new File(testDir, "src/main/resources/META-INF/resources/index.html")).exists();
 
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
@@ -186,7 +185,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
         check(new File(testDir, "src/main/java/org/acme/MyResource.java"), "package org.acme;");
 
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
-                .contains("quarkus-resteasy", "quarkus-smallrye-metrics").doesNotContain("missing");
+                .contains("quarkus-resteasy-deployment", "quarkus-smallrye-metrics-deployment").doesNotContain("missing");
 
         Model model = load(testDir);
         assertThat(model.getDependencyManagement().getDependencies().stream()
@@ -196,11 +195,11 @@ public class CreateProjectMojoIT extends MojoTestBase {
                         && d.getType().equalsIgnoreCase("pom"))).isTrue();
 
         assertThat(
-                model.getDependencies().stream().anyMatch(d -> d.getArtifactId().equalsIgnoreCase("quarkus-resteasy")
+                model.getDependencies().stream().anyMatch(d -> d.getArtifactId().equalsIgnoreCase("quarkus-resteasy-deployment")
                         && d.getVersion() == null)).isTrue();
 
         assertThat(model.getDependencies().stream()
-                .anyMatch(d -> d.getArtifactId().equalsIgnoreCase("quarkus-smallrye-metrics")
+                .anyMatch(d -> d.getArtifactId().equalsIgnoreCase("quarkus-smallrye-metrics-deployment")
                         && d.getVersion() == null)).isTrue();
     }
 
@@ -232,7 +231,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
                         && d.getType().equalsIgnoreCase("pom"))).isTrue();
 
         assertThat(
-                model.getDependencies().stream().anyMatch(d -> d.getArtifactId().equalsIgnoreCase("quarkus-resteasy")
+                model.getDependencies().stream().anyMatch(d -> d.getArtifactId().equalsIgnoreCase("quarkus-resteasy-deployment")
                         && d.getVersion() == null)).isTrue();
 
         assertThat(model.getDependencies().stream().anyMatch(d -> d.getArtifactId().equalsIgnoreCase("commons-io")
@@ -254,7 +253,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
     }
 
     /**
-     * Reproducer for https://github.com/quarkusio/quarkus/issues/671
+     * Reproducer for https://github.com/jbossas/quarkus/issues/671
      */
     @Test
     public void testThatDefaultPackageAreReplaced() throws Exception {
@@ -271,7 +270,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
     }
 
     /**
-     * Reproducer for https://github.com/quarkusio/quarkus/issues/673
+     * Reproducer for https://github.com/jbossas/quarkus/issues/673
      */
     @Test
     public void testThatGenerationFailedWhenTheUserPassGAVonExistingPom() throws Exception {

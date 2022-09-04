@@ -1,9 +1,6 @@
 package io.quarkus.cli.commands;
 
-import static io.quarkus.maven.utilities.MojoUtils.QUARKUS_VERSION_PROPERTY;
-import static io.quarkus.maven.utilities.MojoUtils.getBomArtifactId;
-import static io.quarkus.maven.utilities.MojoUtils.getPluginArtifactId;
-import static io.quarkus.maven.utilities.MojoUtils.getPluginGroupId;
+import static io.quarkus.maven.utilities.MojoUtils.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
@@ -58,7 +55,7 @@ public class CreateProjectTest {
         assertThat(new File(testDir, "src/main/java")).isDirectory();
         assertThat(new File(testDir, "src/test/java")).isDirectory();
 
-        assertThat(new File(testDir, "src/main/resources/application.properties")).exists();
+        assertThat(new File(testDir, "src/main/resources/META-INF/microprofile-config.properties")).exists();
         assertThat(new File(testDir, "src/main/resources/META-INF/resources/index.html")).isFile();
         assertThat(new File(testDir, "src/main/java")).isDirectory().matches(f -> {
             String[] list = f.list();
@@ -89,17 +86,18 @@ public class CreateProjectTest {
         MojoUtils.write(model, pom);
         final CreateProject createProject = new CreateProject(testDir).groupId("something.is")
                 .artifactId("wrong")
-                .className("org.foo.MyResource")
                 .version("1.0.0-SNAPSHOT");
 
-        Assertions.assertTrue(createProject.doCreateProject(new HashMap<>()));
+        Map<String, Object> ctxt = new HashMap<>();
+        ctxt.put("className", "org.foo.MyResource");
+        Assertions.assertTrue(createProject.doCreateProject(ctxt));
 
         assertThat(FileUtils.readFileToString(pom, "UTF-8"))
                 .contains(getPluginArtifactId(), QUARKUS_VERSION_PROPERTY, getPluginGroupId());
         assertThat(new File(testDir, "src/main/java")).isDirectory();
         assertThat(new File(testDir, "src/test/java")).isDirectory();
 
-        assertThat(new File(testDir, "src/main/resources/application.properties")).exists();
+        assertThat(new File(testDir, "src/main/resources/META-INF/microprofile-config.properties")).exists();
         assertThat(new File(testDir, "src/main/resources/META-INF/resources/index.html")).exists();
         assertThat(new File(testDir, "src/main/java")).isDirectory();
         assertThat(new File(testDir, "src/main/java/org/foo/MyResource.java")).isFile();
@@ -128,7 +126,6 @@ public class CreateProjectTest {
         Assertions.assertTrue(new CreateProject(testDir).groupId("org.acme")
                 .artifactId("acme")
                 .version("1.0.0-SNAPSHOT")
-                .className("org.acme.MyResource")
                 .doCreateProject(properties));
 
         assertThat(new File(testDir, "pom.xml")).isFile();
@@ -140,7 +137,7 @@ public class CreateProjectTest {
         assertThat(new File(testDir, "src/main/java")).isDirectory();
         assertThat(new File(testDir, "src/test/java")).isDirectory();
 
-        assertThat(new File(testDir, "src/main/resources/application.properties")).exists();
+        assertThat(new File(testDir, "src/main/resources/META-INF/microprofile-config.properties")).exists();
         assertThat(new File(testDir, "src/main/resources/META-INF/resources/index.html")).exists();
 
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))

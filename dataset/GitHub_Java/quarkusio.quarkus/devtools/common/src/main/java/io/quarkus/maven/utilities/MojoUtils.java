@@ -29,7 +29,6 @@ import java.util.*;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
-import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.apache.maven.project.MavenProject;
@@ -48,7 +47,6 @@ import io.quarkus.dependencies.Extension;
 public class MojoUtils {
 
     public static final String JAVA_EXTENSION = ".java";
-    public static final String KOTLIN_EXTENSION = ".kt";
 
     private static final String PLUGIN_VERSION_PROPERTY_NAME = "quarkus.version";
     public static final String QUARKUS_VERSION_PROPERTY = "${" + PLUGIN_VERSION_PROPERTY_NAME + "}";
@@ -83,14 +81,6 @@ public class MojoUtils {
 
     public static String getBomArtifactId() {
         return get("bom-artifactId");
-    }
-
-    public static String getProposedMavenVersion() {
-        return get("proposed-maven-version");
-    }
-
-    public static String getMavenWrapperVersion() {
-        return get("maven-wrapper-version");
     }
 
     private static void loadProperties() {
@@ -253,21 +243,6 @@ public class MojoUtils {
 
     public static String credentials(final Dependency d) {
         return String.format("%s:%s", d.getGroupId(), d.getArtifactId());
-    }
-
-    public static boolean checkProjectForMavenBuildPlugin(MavenProject project) {
-        for (Plugin plugin : project.getBuildPlugins()) {
-            if (plugin.getGroupId().equals(MojoUtils.getPluginGroupId())
-                    && plugin.getArtifactId().equals(MojoUtils.getPluginArtifactId())) {
-                for (PluginExecution pluginExecution : plugin.getExecutions()) {
-                    if (pluginExecution.getGoals().contains("build")) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
     }
 
     /**
