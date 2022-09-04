@@ -47,9 +47,6 @@ import org.graylog2.plugin.lookup.LookupCachePurge;
 import org.graylog2.plugin.lookup.LookupDataAdapter;
 import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
 import org.graylog2.plugin.lookup.LookupResult;
-import org.graylog2.system.urlwhitelist.UrlNotWhitelistedException;
-import org.graylog2.system.urlwhitelist.UrlWhitelistNotificationService;
-import org.graylog2.system.urlwhitelist.UrlWhitelistService;
 import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,8 +75,6 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
     private final Config config;
     private final Engine templateEngine;
     private final OkHttpClient httpClient;
-    private final UrlWhitelistService urlWhitelistService;
-    private final UrlWhitelistNotificationService urlWhitelistNotificationService;
 
     private final Timer httpRequestTimer;
     private final Meter httpRequestErrors;
@@ -90,15 +85,15 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
     private Headers headers;
 
     @Inject
-    protected HTTPJSONPathDataAdapter(@Assisted("dto") DataAdapterDto dto, Engine templateEngine, OkHttpClient httpClient, UrlWhitelistService urlWhitelistService,
-            UrlWhitelistNotificationService urlWhitelistNotificationService, MetricRegistry metricRegistry) {
+    protected HTTPJSONPathDataAdapter(@Assisted("dto") DataAdapterDto dto,
+                                      Engine templateEngine,
+                                      OkHttpClient httpClient,
+                                      MetricRegistry metricRegistry) {
         super(dto, metricRegistry);
         this.config = (Config) dto.config();
         this.templateEngine = templateEngine;
         // TODO Add config options: caching, timeouts, custom headers, basic auth (See: https://github.com/square/okhttp/wiki/Recipes)
         this.httpClient = httpClient.newBuilder().build(); // Copy HTTP client to be able to modify it
-        this.urlWhitelistService = urlWhitelistService;
-        this.urlWhitelistNotificationService = urlWhitelistNotificationService;
 
         this.httpRequestTimer = metricRegistry.timer(MetricRegistry.name(getClass(), "httpRequestTime"));
         this.httpRequestErrors = metricRegistry.meter(MetricRegistry.name(getClass(), "httpRequestErrors"));
@@ -158,22 +153,10 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
             encodedKey = String.valueOf(key);
         }
         final String urlString = templateEngine.transform(config.url(), ImmutableMap.of("key", encodedKey));
-
-        if (!urlWhitelistService.isWhitelisted(urlString)) {
-            LOG.error("URL <{}> is not whitelisted. Aborting lookup request.", urlString);
-            publishSystemNotificationForWhitelistFailure();
-            setError(UrlNotWhitelistedException.forUrl(urlString));
-            return getErrorResult();
-        } else {
-            // we use this kind of error reporting mechanism only for whitelist errors, so we can safely clear the
-            // error here
-            clearError();
-        }
-
         final HttpUrl url = HttpUrl.parse(urlString);
 
         if (url == null) {
-            LOG.error("Couldn't parse URL <{}> - returning empty result", urlString);
+            LOG.error("Couldn't parse URL <%s> - returning empty result", urlString);
             httpURLErrors.mark();
             return getErrorResult();
         }
@@ -327,13 +310,11 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
         }
 
         @Override
-        public Optional<Multimap<String, String>> validate(LookupDataAdapterValidationContext validationContext) {
+        public Optional<Multimap<String, String>> validate() {
             final ArrayListMultimap<String, String> errors = ArrayListMultimap.create();
 
             if (HttpUrl.parse(url()) == null) {
                 errors.put("url", "Invalid URL.");
-            } else if (!validationContext.getUrlWhitelistService().isWhitelisted(url())) {
-                errors.put("url", "URL <" + url() + "> is not whitelisted.");
             }
 
             try {
@@ -377,13 +358,5 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
 
             public abstract Config build();
         }
-    }
-
-    private synchronized void publishSystemNotificationForWhitelistFailure() {
-        final String description =
-                "A \"HTTP JSONPath\" lookup adapter is trying to access a URL which is not whitelisted. Please " +
-                        "check your configuration. [adapter name: \"" + name() + "\", url: \"" + config.url() +
-                        "\"]";
-        urlWhitelistNotificationService.publishWhitelistFailure(description);
     }
 }

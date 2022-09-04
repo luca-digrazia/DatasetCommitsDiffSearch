@@ -28,7 +28,6 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.google.inject.assistedinject.Assisted;
 import org.apache.commons.collections4.CollectionUtils;
@@ -325,9 +324,8 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
                 multiValueResults.put(PtrDnsAnswer.FIELD_DNS_TTL, dnsResponse.dnsTTL());
 
                 final LookupResult.Builder builder = LookupResult.builder()
-                        .single(dnsResponse.fullDomain())
-                        .multiValue(multiValueResults)
-                        .stringListValue(ImmutableList.of(dnsResponse.fullDomain()));
+                                                                 .single(dnsResponse.fullDomain())
+                                                                 .multiValue(multiValueResults);
 
                 if (config.hasOverrideTTL()) {
                     builder.cacheTTL(config.getCacheTTLOverrideMillis());
