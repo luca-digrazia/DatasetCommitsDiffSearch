@@ -86,7 +86,7 @@ public final class JavaCompilationHelper {
     this.hostJavabase = Preconditions.checkNotNull(hostJavabase);
     this.attributes = attributes;
     this.customJavacOpts = javacOpts;
-    this.customJavacJvmOpts = javaToolchain.getJavabuilderJvmOptions();
+    this.customJavacJvmOpts = javaToolchain.getJvmOptions();
     this.semantics = semantics;
     this.additionalJavaBaseInputs = additionalJavaBaseInputs;
     this.strictJavaDeps =
