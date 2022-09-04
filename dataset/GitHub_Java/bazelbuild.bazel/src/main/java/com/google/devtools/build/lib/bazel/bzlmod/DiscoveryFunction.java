@@ -16,7 +16,6 @@
 package com.google.devtools.build.lib.bazel.bzlmod;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.bazel.bzlmod.ModuleFileValue.RootModuleFileValue;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -40,12 +39,11 @@ public class DiscoveryFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws SkyFunctionException, InterruptedException {
-    RootModuleFileValue root =
-        (RootModuleFileValue) env.getValue(ModuleFileValue.keyForRootModule());
+    ModuleFileValue root = (ModuleFileValue) env.getValue(ModuleFileValue.keyForRootModule());
     if (root == null) {
       return null;
     }
-    ModuleKey rootModuleKey = ModuleKey.create(root.getModule().getName(), Version.EMPTY);
+    ModuleKey rootModuleKey = ModuleKey.create(root.getModule().getName(), "");
     ImmutableMap<String, ModuleOverride> overrides = root.getOverrides();
     Map<ModuleKey, Module> depGraph = new HashMap<>();
     depGraph.put(
@@ -88,13 +86,13 @@ public class DiscoveryFunction implements SkyFunction {
       Module module, ImmutableMap<String, ModuleOverride> overrides, String rootModuleName) {
     return module.withDepKeysTransformed(
         depKey -> {
-          Version newVersion = depKey.getVersion();
+          String newVersion = depKey.getVersion();
 
           @Nullable ModuleOverride override = overrides.get(depKey.getName());
           if (override instanceof NonRegistryOverride || rootModuleName.equals(depKey.getName())) {
-            newVersion = Version.EMPTY;
+            newVersion = "";
           } else if (override instanceof SingleVersionOverride) {
-            Version overrideVersion = ((SingleVersionOverride) override).getVersion();
+            String overrideVersion = ((SingleVersionOverride) override).getVersion();
             if (!overrideVersion.isEmpty()) {
               newVersion = overrideVersion;
             }
