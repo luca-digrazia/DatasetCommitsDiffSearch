@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -55,7 +55,6 @@ public class AndroidManifestFinderTest {
 
 		Object[] gradleManifestFoundInManifests = { GRADLE_GEN_FOLDER, "build/intermediates/manifests/full/debug", true };
 		Object[] gradleManifestFoundInBundles = { GRADLE_GEN_FOLDER, "build/intermediates/bundles/debug", true };
-		Object[] gradleManifestFoundInManifestsAapt = { GRADLE_GEN_FOLDER, "build/intermediates/manifests/aapt/debug", true };
 
 		Object[] mavenManifestFoundInTarget = { MAVEN_GEN_FOLDER, "target", true };
 		Object[] mavenManifestFoundInSrc = { MAVEN_GEN_FOLDER, "src/main", true };
@@ -71,8 +70,7 @@ public class AndroidManifestFinderTest {
 
 		Object[] noGeneratedFolderFound = { "", "", false };
 
-		return Arrays.asList(gradleManifestFoundInManifests, gradleManifestFoundInBundles, gradleManifestFoundInManifestsAapt,
-				mavenManifestFoundInTarget, mavenManifestFoundInSrc, mavenManifestFoundInRoot, eclipseManifestFound,
+		return Arrays.asList(gradleManifestFoundInManifests, gradleManifestFoundInBundles, mavenManifestFoundInTarget, mavenManifestFoundInSrc, mavenManifestFoundInRoot, eclipseManifestFound,
 				gradleManifestNotFound, mavenManifestNotFound, eclipseManifestNotFound, noGeneratedFolderFound);
 	}
 
