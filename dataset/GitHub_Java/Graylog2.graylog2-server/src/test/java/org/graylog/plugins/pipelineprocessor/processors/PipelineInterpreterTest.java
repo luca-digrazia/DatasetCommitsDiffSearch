@@ -20,19 +20,17 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.eventbus.EventBus;
-import com.google.common.util.concurrent.Uninterruptibles;
 import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
-import org.graylog.plugins.pipelineprocessor.db.PipelineSourceService;
-import org.graylog.plugins.pipelineprocessor.db.PipelineStreamAssignmentService;
-import org.graylog.plugins.pipelineprocessor.db.RuleSourceService;
-import org.graylog.plugins.pipelineprocessor.events.PipelinesChangedEvent;
-import org.graylog.plugins.pipelineprocessor.functions.StringCoercion;
+import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
+import org.graylog.plugins.pipelineprocessor.db.PipelineService;
+import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
+import org.graylog.plugins.pipelineprocessor.db.RuleDao;
+import org.graylog.plugins.pipelineprocessor.db.RuleService;
+import org.graylog.plugins.pipelineprocessor.functions.conversion.StringConversion;
 import org.graylog.plugins.pipelineprocessor.functions.messages.CreateMessage;
 import org.graylog.plugins.pipelineprocessor.parser.FunctionRegistry;
 import org.graylog.plugins.pipelineprocessor.parser.PipelineRuleParser;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineSource;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineStreamAssignment;
-import org.graylog.plugins.pipelineprocessor.rest.RuleSource;
+import org.graylog.plugins.pipelineprocessor.rest.PipelineConnections;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Messages;
 import org.graylog2.plugin.Tools;
@@ -42,7 +40,6 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static org.junit.Assert.assertEquals;
@@ -53,59 +50,66 @@ public class PipelineInterpreterTest {
 
     @Test
     public void testCreateMessage() {
-        final RuleSourceService ruleSourceService = mock(RuleSourceService.class);
-        when(ruleSourceService.loadAll()).thenReturn(Collections.singleton(
-                RuleSource.create("abc",
-                                  "title",
-                                  "description",
-                                  "rule \"creates message\"\n" +
-                                          "when string(message.`message`) == \"original message\"\n" +
-                                          "then\n" +
-                                          "  create_message(\"derived message\");\n" +
-                                          "end",
-                                  Tools.nowUTC(),
-                                  null)
+        final RuleService ruleService = mock(RuleService.class);
+        when(ruleService.loadAll()).thenReturn(Collections.singleton(
+                RuleDao.create("abc",
+                               "title",
+                               "description",
+                               "rule \"creates message\"\n" +
+                                       "when to_string($message.message) == \"original message\"\n" +
+                                       "then\n" +
+                                       "  create_message(\"derived message\");\n" +
+                                       "end",
+                               Tools.nowUTC(),
+                               null)
         ));
 
-        final PipelineSourceService pipelineSourceService = mock(PipelineSourceService.class);
-        when(pipelineSourceService.loadAll()).thenReturn(Collections.singleton(
-                PipelineSource.create("cde", "title", "description",
-                                      "pipeline \"pipeline\"\n" +
-                                              "stage 0 match all\n" +
-                                              "    rule \"creates message\";\n" +
-                                              "end\n",
-                                      Tools.nowUTC(),
-                                      null)
+        final PipelineService pipelineService = mock(PipelineService.class);
+        when(pipelineService.loadAll()).thenReturn(Collections.singleton(
+                PipelineDao.create("cde", "title", "description",
+                                   "pipeline \"pipeline\"\n" +
+                                           "stage 0 match all\n" +
+                                           "    rule \"creates message\";\n" +
+                                           "end\n",
+                                   Tools.nowUTC(),
+                                   null)
         ));
+
+        final PipelineStreamConnectionsService pipelineStreamConnectionsService = mock(PipelineStreamConnectionsService.class);
+        final PipelineConnections pipelineConnections = PipelineConnections.create(null,
+                                                                                                  "default",
+                                                                                                  newHashSet("cde"));
+        when(pipelineStreamConnectionsService.loadAll()).thenReturn(
+                newHashSet(pipelineConnections)
+        );
 
         final Map<String, Function<?>> functions = Maps.newHashMap();
         functions.put(CreateMessage.NAME, new CreateMessage());
-        functions.put(StringCoercion.NAME, new StringCoercion());
+        functions.put(StringConversion.NAME, new StringConversion());
 
-        final FunctionRegistry functionRegistry = new FunctionRegistry(functions);
-        final PipelineRuleParser parser = new PipelineRuleParser(functionRegistry);
-
-        final PipelineStreamAssignmentService pipelineStreamAssignmentService = mock(PipelineStreamAssignmentService.class);
-        final PipelineStreamAssignment pipelineStreamAssignment = PipelineStreamAssignment.create(null,
-                                                                                                  "default",
-                                                                                                  newHashSet("cde"));
-        when(pipelineStreamAssignmentService.loadAll()).thenReturn(
-                newHashSet(pipelineStreamAssignment))
-        ;
+        final PipelineRuleParser parser = setupParser(functions);
 
         final PipelineInterpreter interpreter = new PipelineInterpreter(
-                ruleSourceService, pipelineSourceService, pipelineStreamAssignmentService, parser, mock(Journal.class), mock(MetricRegistry.class),
-                Executors.newSingleThreadScheduledExecutor(), mock(EventBus.class)
+                ruleService,
+                pipelineService,
+                pipelineStreamConnectionsService,
+                parser,
+                mock(Journal.class),
+                new MetricRegistry(),
+                Executors.newScheduledThreadPool(1),
+                mock(EventBus.class)
         );
-        interpreter.handlePipelineChanges(PipelinesChangedEvent.create(Collections.emptySet(),Collections.emptySet()));
-        Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
-        interpreter.handlePipelineAssignmentChanges(pipelineStreamAssignment);
 
         Message msg = new Message("original message", "test", Tools.nowUTC());
         final Messages processed = interpreter.process(msg);
 
         final Message[] messages = Iterables.toArray(processed, Message.class);
         assertEquals(2, messages.length);
+    }
+
+    private PipelineRuleParser setupParser(Map<String, Function<?>> functions) {
+        final FunctionRegistry functionRegistry = new FunctionRegistry(functions);
+        return new PipelineRuleParser(functionRegistry);
     }
 
 }
