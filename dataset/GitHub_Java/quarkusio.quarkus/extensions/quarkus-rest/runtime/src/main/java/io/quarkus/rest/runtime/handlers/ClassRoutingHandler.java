@@ -1,8 +1,10 @@
 package io.quarkus.rest.runtime.handlers;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -15,13 +17,14 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
+import io.quarkus.rest.runtime.headers.MediaTypeHeaderDelegate;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestResponseBuilder;
 import io.quarkus.rest.runtime.mapping.RequestMapper;
 import io.quarkus.rest.runtime.mapping.RuntimeResource;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
+import io.quarkus.runtime.LaunchMode;
+import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpMethod;
-import io.vertx.core.http.HttpServerResponse;
-import io.vertx.ext.web.RoutingContext;
 
 public class ClassRoutingHandler implements RestHandler {
     private final Map<String, RequestMapper<RuntimeResource>> mappers;
@@ -34,7 +37,6 @@ public class ClassRoutingHandler implements RestHandler {
 
     @Override
     public void handle(QuarkusRestRequestContext requestContext) throws Exception {
-        RoutingContext event = requestContext.getContext();
         RequestMapper<RuntimeResource> mapper = mappers.get(requestContext.getMethod());
         if (mapper == null) {
             String requestMethod = requestContext.getMethod();
@@ -50,9 +52,7 @@ public class ClassRoutingHandler implements RestHandler {
                 }
                 allowedMethods.add(HttpMethod.OPTIONS.name());
                 allowedMethods.add(HttpMethod.HEAD.name());
-                HttpServerResponse vertxResponse = event.response();
-                vertxResponse.putHeader(HttpHeaders.ALLOW, allowedMethods);
-                vertxResponse.end();
+                requestContext.getHttpServerResponse().putHeader(HttpHeaders.ALLOW, allowedMethods).end();
                 return;
             }
             if (mapper == null) {
@@ -68,7 +68,8 @@ public class ClassRoutingHandler implements RestHandler {
                                 new QuarkusRestResponseBuilder().status(Response.Status.METHOD_NOT_ALLOWED).build());
                     }
                 }
-                throw new NotFoundException();
+                throwNotFound(requestContext);
+                return;
             }
         }
         String remaining = getRemaining(requestContext);
@@ -95,15 +96,21 @@ public class ClassRoutingHandler implements RestHandler {
                                 new QuarkusRestResponseBuilder().status(Response.Status.METHOD_NOT_ALLOWED).build());
                     }
                 }
-                throw new NotFoundException();
+                throwNotFound(requestContext);
+                return;
             }
         }
 
+        // use vert.x headers wherever we need header checking because we really don't want to
+        // copy headers as it's a performance killer
+        MultiMap vertxHeaders = requestContext.getContext().request().headers();
+
         // according to the spec we need to return HTTP 415 when content-type header doesn't match what is specified in @Consumes
+
         if (!target.value.getConsumes().isEmpty()) {
-            String contentType = requestContext.getContext().request().headers().get(HttpHeaders.CONTENT_TYPE);
+            String contentType = vertxHeaders.get(HttpHeaders.CONTENT_TYPE);
             if (contentType != null) {
-                if (MediaTypeHelper.getBestMatch(
+                if (MediaTypeHelper.getFirstMatch(
                         target.value.getConsumes(),
                         Collections.singletonList(MediaType.valueOf(contentType))) == null) {
                     throw new NotSupportedException();
@@ -112,11 +119,31 @@ public class ClassRoutingHandler implements RestHandler {
         }
         // according to the spec we need to return HTTP 406 when Accept header doesn't match what is specified in @Produces
         if (target.value.getProduces() != null) {
-            String accepts = requestContext.getContext().request().headers().get(HttpHeaders.ACCEPT);
-            if (accepts != null) {
-                if (MediaTypeHelper.getBestMatch(Arrays.asList(target.value.getProduces().getSortedMediaTypes()),
-                        requestContext.getHttpHeaders().getModifiableAcceptableMediaTypes()) == null) {
-                    throw new NotAcceptableException();
+            String accepts = vertxHeaders.get(HttpHeaders.ACCEPT);
+            if ((accepts != null) && !accepts.equals(MediaType.WILDCARD)) {
+                if (!accepts.contains(",") && target.value.getProduces().getSortedMediaTypes().length == 1) { // the point of this branch is to eliminate the list creation and sorting
+                    MediaType acceptsMediaType = MediaType.valueOf(accepts.trim());
+                    MediaType providedMediaType = target.value.getProduces().getSortedMediaTypes()[0];
+                    if (!providedMediaType.isCompatible(acceptsMediaType)) {
+                        throw new NotAcceptableException();
+                    }
+                } else {
+                    // don't use any of the JAX-RS stuff from the various MediaType helper as we want to be as performant as possible
+                    List<MediaType> acceptsMediaTypes;
+                    if (accepts.contains(",")) {
+                        String[] parts = accepts.split(",");
+                        acceptsMediaTypes = new ArrayList<>(parts.length);
+                        for (int i = 0; i < parts.length; i++) {
+                            String part = parts[i];
+                            acceptsMediaTypes.add(toMediaType(part.trim()));
+                        }
+                    } else {
+                        acceptsMediaTypes = Collections.singletonList(toMediaType(accepts));
+                    }
+                    if (MediaTypeHelper.getFirstMatch(Arrays.asList(target.value.getProduces().getSortedMediaTypes()),
+                            acceptsMediaTypes) == null) {
+                        throw new NotAcceptableException();
+                    }
                 }
             }
         }
@@ -130,6 +157,18 @@ public class ClassRoutingHandler implements RestHandler {
             }
             requestContext.setPathParamValue(i + parameterOffset, pathParamValue);
         }
+    }
+
+    private MediaType toMediaType(String mediaTypeStr) {
+        return MediaTypeHeaderDelegate.parse(mediaTypeStr);
+    }
+
+    private void throwNotFound(QuarkusRestRequestContext requestContext) {
+        if (LaunchMode.current() == LaunchMode.DEVELOPMENT) {
+            // the NotFoundExceptionHandler needs access to request scoped beans, so make sure we have the context
+            requestContext.requireCDIRequestScope();
+        }
+        throw new NotFoundException();
     }
 
     private String getRemaining(QuarkusRestRequestContext requestContext) {

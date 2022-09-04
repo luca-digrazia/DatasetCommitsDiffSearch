@@ -8,6 +8,7 @@ import java.util.Map;
 
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -31,7 +32,7 @@ public class MediaTypeHelper {
                     float rtn = Float.valueOf(val);
                     if (rtn > 1.0F)
                         throw new WebApplicationException("Media type q greated than 1" + type.toString(),
-                                HttpResponseCodes.SC_BAD_REQUEST);
+                                Response.Status.BAD_REQUEST);
                     return rtn;
                 }
             } catch (NumberFormatException e) {
@@ -65,7 +66,7 @@ public class MediaTypeHelper {
         return (isCompositeWildcardSubtype(subtype) || isWildcardCompositeSubtype(subtype));
     }
 
-    private static class MediaTypeComparator implements Comparator<MediaType>, Serializable {
+    public static class MediaTypeComparator implements Comparator<MediaType>, Serializable {
 
         private static final long serialVersionUID = -5828700121582498092L;
 
@@ -146,6 +147,10 @@ public class MediaTypeHelper {
     public static MediaType getBestMatch(List<MediaType> desired, List<MediaType> provided) {
         sortByWeight(desired);
         sortByWeight(provided);
+        return getFirstMatch(desired, provided);
+    }
+
+    public static MediaType getFirstMatch(List<MediaType> desired, List<MediaType> provided) {
         boolean emptyDesired = desired == null || desired.size() == 0;
         boolean emptyProvided = provided == null || provided.size() == 0;
 
@@ -156,10 +161,12 @@ public class MediaTypeHelper {
         if (emptyProvided)
             return desired.get(0);
 
-        for (MediaType desire : desired) {
-            for (MediaType provide : provided) {
-                if (provide.isCompatible(desire))
+        for (int i = 0; i < desired.size(); i++) {
+            for (int j = 0; j < provided.size(); j++) {
+                MediaType provide = provided.get(j);
+                if (provide.isCompatible(desired.get(i))) {
                     return provide;
+                }
             }
         }
         return null;
@@ -259,5 +266,12 @@ public class MediaTypeHelper {
 
     public static boolean isBlacklisted(MediaType mediaType) {
         return "application".equals(mediaType.getType()) && "signed-exchange".equals(mediaType.getSubtype());
+    }
+
+    public static boolean isUnsupportedWildcardSubtype(MediaType mediaType) {
+        if (mediaType.isWildcardSubtype()) {
+            return !mediaType.isWildcardType() && !"application".equals(mediaType.getType());
+        }
+        return false;
     }
 }
