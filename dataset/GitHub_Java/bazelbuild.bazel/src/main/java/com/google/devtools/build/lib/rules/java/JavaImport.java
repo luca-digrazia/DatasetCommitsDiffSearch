@@ -155,7 +155,12 @@ public class JavaImport implements RuleConfiguredTargetFactory {
         JavaSourceJarsProvider.create(transitiveJavaSourceJars, srcJars);
     JavaCompilationArgsProvider compilationArgsProvider =
         JavaCompilationArgsProvider.create(javaCompilationArgs, recursiveJavaCompilationArgs);
-    common.addTransitiveInfoProviders(ruleBuilder, filesToBuild, null);
+    JavaSkylarkApiProvider.Builder skylarkApiProvider =
+        JavaSkylarkApiProvider.builder()
+            .setRuleOutputJarsProvider(ruleOutputJarsProvider)
+            .setSourceJarsProvider(sourceJarsProvider)
+            .setCompilationArgsProvider(compilationArgsProvider);
+    common.addTransitiveInfoProviders(ruleBuilder, skylarkApiProvider, filesToBuild, null);
     JavaProvider javaProvider = JavaProvider.Builder.create()
         .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
@@ -163,8 +168,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
         .build();
     return ruleBuilder
         .setFilesToBuild(filesToBuild)
-        .addSkylarkTransitiveInfo(
-            JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
+        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider.build())
         .addNativeDeclaredProvider(javaProvider)
         .addProvider(JavaProvider.class, javaProvider)
         .add(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
@@ -173,7 +177,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
             new JavaRuntimeJarProvider(javaArtifacts.getRuntimeJars()))
         .add(JavaNeverlinkInfoProvider.class, new JavaNeverlinkInfoProvider(neverLink))
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
-        .addNativeDeclaredProvider(new CcLinkParamsProvider(ccLinkParamsStore))
+        .add(CcLinkParamsProvider.class, new CcLinkParamsProvider(ccLinkParamsStore))
         .add(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .add(
             JavaNativeLibraryProvider.class,
