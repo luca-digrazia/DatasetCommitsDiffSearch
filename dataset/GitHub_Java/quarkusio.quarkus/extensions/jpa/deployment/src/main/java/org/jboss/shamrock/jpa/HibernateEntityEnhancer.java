@@ -16,6 +16,9 @@
 
 package org.jboss.shamrock.jpa;
 
+import java.net.URLClassLoader;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.function.BiFunction;
 
 import org.hibernate.bytecode.enhance.spi.DefaultEnhancementContext;
@@ -93,10 +96,6 @@ public final class HibernateEntityEnhancer implements BiFunction<String, ClassVi
     private byte[] hibernateEnhancement(final String className, final byte[] originalBytes) {
         final byte[] enhanced = enhancer.enhance(className, originalBytes);
         return enhanced == null ? originalBytes : enhanced;
-    }
-
-    public byte[] enhance(String className, byte[] bytes) {
-        return enhancer.enhance(className, bytes);
     }
 
 }
