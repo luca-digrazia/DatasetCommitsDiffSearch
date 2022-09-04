@@ -125,11 +125,12 @@ public interface MemoizingEvaluator {
    * <p>This method should mainly be used by tests that need to verify the presence of a value in
    * the graph after an {@link #evaluate} call.
    */
+  @VisibleForTesting
   @Nullable
   SkyValue getExistingValue(SkyKey key) throws InterruptedException;
 
   @Nullable
-  NodeEntry getExistingEntryAtCurrentlyEvaluatingVersion(SkyKey key) throws InterruptedException;
+  NodeEntry getExistingEntryAtLatestVersion(SkyKey key) throws InterruptedException;
 
   /**
    * Returns an error if and only if an earlier call to {@link #evaluate} created it; null
@@ -138,7 +139,6 @@ public interface MemoizingEvaluator {
    * <p>This method should only be used by tests that need to verify the presence of an error in the
    * graph after an {@link #evaluate} call.
    */
-  @SuppressWarnings("VisibleForTestingMisused") // Only exists for testing.
   @VisibleForTesting
   @Nullable
   ErrorInfo getExistingErrorForTesting(SkyKey key) throws InterruptedException;
