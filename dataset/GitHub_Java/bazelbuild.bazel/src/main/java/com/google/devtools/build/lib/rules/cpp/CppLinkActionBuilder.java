@@ -190,7 +190,6 @@ public class CppLinkActionBuilder {
   
   private final List<VariablesExtension> variablesExtensions = new ArrayList<>();
   private final NestedSetBuilder<Artifact> linkActionInputs = NestedSetBuilder.stableOrder();
-  private final ImmutableList.Builder<Artifact> linkActionOutputs = ImmutableList.builder();
 
   /**
    * Creates a builder that builds {@link CppLinkAction} instances.
@@ -594,7 +593,7 @@ public class CppLinkActionBuilder {
       actionOutputs =
           constructOutputs(
               output,
-              Iterables.concat(linkstampMap.values(), linkActionOutputs.build()),
+              linkstampMap.values(),
               interfaceOutputLibrary == null ? null : interfaceOutputLibrary.getArtifact(),
               symbolCounts);
     }
@@ -854,7 +853,7 @@ public class CppLinkActionBuilder {
   }
 
   private static ImmutableList<Artifact> constructOutputs(
-      Artifact primaryOutput, Iterable<Artifact> outputList, Artifact... outputs) {
+      Artifact primaryOutput, Collection<Artifact> outputList, Artifact... outputs) {
     return new ImmutableList.Builder<Artifact>()
         .add(primaryOutput)
         .addAll(outputList)
@@ -1248,12 +1247,6 @@ public class CppLinkActionBuilder {
    */
   public CppLinkActionBuilder addTransitiveActionInputs(NestedSet<Artifact> inputs) {
     this.linkActionInputs.addTransitive(inputs);
-    return this;
-  }
-
-  /** Adds an extra output artifact to the link action. */
-  public CppLinkActionBuilder addActionOutput(Artifact output) {
-    this.linkActionOutputs.add(output);
     return this;
   }
 
