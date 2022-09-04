@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
@@ -25,8 +24,6 @@ import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.artifacts.ResolvedConfiguration;
 import org.gradle.api.file.RegularFile;
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier;
-import org.gradle.api.internal.artifacts.dependencies.DefaultDependencyArtifact;
-import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
 import org.gradle.api.provider.Provider;
 import org.gradle.jvm.tasks.Jar;
 
@@ -52,11 +49,6 @@ public class AppModelGradleResolver implements AppModelResolver {
     }
 
     @Override
-    public String getLatestVersionFromRange(AppArtifact appArtifact, String range) throws AppModelResolverException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String getNextVersion(AppArtifact arg0, String fromVersion, boolean fromVersionIncluded, String arg1, boolean arg2)
             throws AppModelResolverException {
         throw new UnsupportedOperationException();
@@ -75,31 +67,7 @@ public class AppModelGradleResolver implements AppModelResolver {
     @Override
     public Path resolve(AppArtifact appArtifact) throws AppModelResolverException {
         if (!appArtifact.isResolved()) {
-
-            final DefaultDependencyArtifact dep = new DefaultDependencyArtifact();
-            dep.setExtension(appArtifact.getType());
-            dep.setType(appArtifact.getType());
-            dep.setName(appArtifact.getArtifactId());
-
-            final DefaultExternalModuleDependency gradleDep = new DefaultExternalModuleDependency(appArtifact.getGroupId(),
-                    appArtifact.getArtifactId(), appArtifact.getVersion(), null);
-            gradleDep.addArtifact(dep);
-
-            final Configuration detachedConfig = project.getConfigurations().detachedConfiguration(gradleDep);
-
-            final ResolvedConfiguration rc = detachedConfig.getResolvedConfiguration();
-            Set<ResolvedArtifact> resolvedArtifacts = rc.getResolvedArtifacts();
-            for (ResolvedArtifact a : resolvedArtifacts) {
-                if (appArtifact.getArtifactId().equals(a.getName())
-                        && appArtifact.getType().equals(a.getType())
-                        && appArtifact.getGroupId().equals(a.getModuleVersion().getId().getGroup())) {
-                    appArtifact.setPath(a.getFile().toPath());
-                }
-            }
-
-            if (!appArtifact.isResolved()) {
-                throw new AppModelResolverException("Failed to resolve " + appArtifact);
-            }
+            throw new AppModelResolverException("Artifact has not been resolved: " + appArtifact);
         }
         return appArtifact.getPath();
     }
@@ -157,6 +125,17 @@ public class AppModelGradleResolver implements AppModelResolver {
             }
         }
 
+        /*
+         * System.out.println("USER APP DEPENDENCIES");
+         * for (AppDependency dep : userDeps) {
+         * System.out.println(" " + dep);
+         * }
+         * System.out.println("DEPLOYMENT DEPENDENCIES");
+         * for (AppDependency dep : deploymentDeps) {
+         * System.out.println(" " + dep);
+         * }
+         */
+
         // In the case of quarkusBuild (which is the primary user of this),
         // it's not necessary to actually resolve the original application JAR
         if (!appArtifact.isResolved()) {
@@ -207,7 +186,7 @@ public class AppModelGradleResolver implements AppModelResolver {
         String value = extProps.getProperty(BootstrapConstants.PROP_DEPLOYMENT_ARTIFACT);
         final String[] split = value.split(":");
 
-        return new DefaultExternalModuleDependency(split[0], split[1], split[2], null);
+        return new QuarkusExtDependency(split[0], split[1], split[2], null);
     }
 
     private Properties resolveDescriptor(final Path path) {
