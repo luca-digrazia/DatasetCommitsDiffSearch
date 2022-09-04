@@ -24,9 +24,9 @@ import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
-import com.google.devtools.build.lib.query2.query.output.OutputFormatter;
-import com.google.devtools.build.lib.query2.query.output.QueryOptions;
-import com.google.devtools.build.lib.query2.query.output.QueryOutputUtils;
+import com.google.devtools.build.lib.query2.output.OutputFormatter;
+import com.google.devtools.build.lib.query2.output.QueryOptions;
+import com.google.devtools.build.lib.query2.output.QueryOutputUtils;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
@@ -150,8 +150,7 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
               !streamResults,
               queryOptions.universeScope,
               options.getOptions(LoadingPhaseThreadsOption.class).threads,
-              settings,
-              queryOptions.useForkJoinPool)) {
+              settings)) {
         result =
             doQuery(
                 query, env, queryOptions, streamResults, formatter, queryEnv, queryRuntimeHelper);
@@ -193,14 +192,9 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
       AbstractBlazeQueryEnvironment<Target> queryEnv,
       QueryRuntimeHelper queryRuntimeHelper);
 
-  public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(
-      CommandEnvironment env,
-      boolean keepGoing,
-      boolean orderedResults,
-      List<String> universeScope,
-      int loadingPhaseThreads,
-      Set<Setting> settings,
-      boolean useForkJoinPool) {
+  public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(CommandEnvironment env,
+      boolean keepGoing, boolean orderedResults, List<String> universeScope,
+      int loadingPhaseThreads, Set<Setting> settings) {
 
     WalkableGraph walkableGraph =
         SkyframeExecutorWrappingWalkableGraph.of(env.getSkyframeExecutor());
@@ -234,7 +228,6 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
             settings,
             env.getRuntime().getQueryFunctions(),
             env.getPackageManager().getPackagePath(),
-            /*blockUniverseEvaluationErrors=*/ false,
-            useForkJoinPool);
+            /*blockUniverseEvaluationErrors=*/ false);
   }
 }

@@ -18,8 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
@@ -28,10 +26,10 @@ import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryUtil;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
-import com.google.devtools.build.lib.query2.query.output.OutputFormatter;
-import com.google.devtools.build.lib.query2.query.output.OutputFormatter.StreamedFormatter;
-import com.google.devtools.build.lib.query2.query.output.QueryOptions;
-import com.google.devtools.build.lib.query2.query.output.QueryOutputUtils;
+import com.google.devtools.build.lib.query2.output.OutputFormatter;
+import com.google.devtools.build.lib.query2.output.OutputFormatter.StreamedFormatter;
+import com.google.devtools.build.lib.query2.output.QueryOptions;
+import com.google.devtools.build.lib.query2.output.QueryOutputUtils;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -73,7 +71,7 @@ public final class QueryCommand extends QueryEnvironmentBasedCommand {
       AbstractBlazeQueryEnvironment<Target> queryEnv,
       QueryRuntimeHelper queryRuntimeHelper) {
     QueryExpression expr;
-    try (SilentCloseable closeable = Profiler.instance().profile("QueryExpression.parse")) {
+    try {
       expr = QueryExpression.parse(query, queryEnv);
     } catch (QueryException e) {
       env.getReporter()
@@ -114,7 +112,7 @@ public final class QueryCommand extends QueryEnvironmentBasedCommand {
 
     QueryEvalResult result;
     boolean catastrophe = true;
-    try (SilentCloseable closeable = Profiler.instance().profile("queryEnv.evaluateQuery")) {
+    try {
       result = queryEnv.evaluateQuery(expr, callback);
       catastrophe = false;
     } catch (QueryException e) {
@@ -152,7 +150,7 @@ public final class QueryCommand extends QueryEnvironmentBasedCommand {
     }
     if (!streamResults) {
       disableAnsiCharactersFiltering(env);
-      try (SilentCloseable closeable = Profiler.instance().profile("QueryOutputUtils.output")) {
+      try {
         Set<Target> targets =
             ((AggregateAllOutputFormatterCallback<Target, ?>) callback).getResult();
         QueryOutputUtils.output(
@@ -196,13 +194,7 @@ public final class QueryCommand extends QueryEnvironmentBasedCommand {
   public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(CommandEnvironment env,
       boolean keepGoing, boolean orderedResults, int loadingPhaseThreads,
       Set<Setting> settings) {
-    return newQueryEnvironment(
-        env,
-        keepGoing,
-        orderedResults,
-        ImmutableList.<String>of(),
-        loadingPhaseThreads,
-        settings,
-        /* useForkJoinPool= */ false);
+    return newQueryEnvironment(env, keepGoing, orderedResults, ImmutableList.<String>of(),
+        loadingPhaseThreads, settings);
   }
 }
