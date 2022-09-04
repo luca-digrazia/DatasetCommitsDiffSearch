@@ -22,13 +22,12 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
+import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.LoadStatement;
-import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
@@ -46,11 +45,12 @@ import org.junit.runners.JUnit4;
 public class ASTFileLookupFunctionTest extends BuildViewTestCase {
 
   private class MockFileSystem extends InMemoryFileSystem {
-    PathFragment throwIOExceptionFor = null;
+    boolean statThrowsIoException;
 
     @Override
     public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
-      if (throwIOExceptionFor != null && path.asFragment().equals(throwIOExceptionFor)) {
+      if (statThrowsIoException
+          && path.asFragment().getPathString().equals("/workspace/" + preludeLabelRelativePath)) {
         throw new IOException("bork");
       }
       return super.statIfFound(path, followSymlinks);
@@ -58,6 +58,8 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
   }
 
   private MockFileSystem mockFS;
+  String preludeLabelRelativePath =
+      getRuleClassProvider().getPreludeLabel().toPathFragment().toString();
 
   @Override
   protected FileSystem createFileSystem() {
@@ -67,16 +69,10 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
 
   @Test
   public void testPreludeASTFileIsNotMandatory() throws Exception {
-    Label preludeLabel = getRuleClassProvider().getPreludeLabel();
-    if (preludeLabel == null) {
-      // No prelude, no need to test
-      return;
-    }
-
     reporter.removeHandler(failFastHandler);
     scratch.file(
         "foo/BUILD", "genrule(name = 'foo',", "  outs = ['out.txt'],", "  cmd = 'echo hello >@')");
-    scratch.deleteFile(preludeLabel.toPathFragment().getPathString());
+    scratch.deleteFile(preludeLabelRelativePath);
     invalidatePackages();
 
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//foo"));
@@ -93,7 +89,7 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
     scratch.file("/workspace/tools/build_rules/BUILD");
     scratch.file(
         "foo/BUILD", "genrule(name = 'foo',", "  outs = ['out.txt'],", "  cmd = 'echo hello >@')");
-    mockFS.throwIOExceptionFor = PathFragment.create("/workspace/foo/BUILD");
+    mockFS.statThrowsIoException = true;
     invalidatePackages(/*alsoConfigs=*/false); // We don't want to fail early on config creation.
 
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//foo"));
@@ -110,6 +106,7 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
 
   @Test
   public void testLoadFromBuildFileInRemoteRepo() throws Exception {
+    scratch.deleteFile(preludeLabelRelativePath);
     scratch.overwriteFile("WORKSPACE",
         "local_repository(",
         "    name = 'a_remote_repo',",
@@ -133,6 +130,7 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
 
   @Test
   public void testLoadFromSkylarkFileInRemoteRepo() throws Exception {
+    scratch.deleteFile(preludeLabelRelativePath);
     scratch.overwriteFile("WORKSPACE",
         "local_repository(",
         "    name = 'a_remote_repo',",
@@ -155,7 +153,7 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
     assertThat(loads).containsExactly(":ext2.bzl");
   }
 
-  private static List<String> getLoads(StarlarkFile file) {
+  private static List<String> getLoads(BuildFileAST file) {
     List<String> loads = Lists.newArrayList();
     for (Statement stmt : file.getStatements()) {
       if (stmt instanceof LoadStatement) {

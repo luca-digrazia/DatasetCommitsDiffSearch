@@ -56,11 +56,11 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.GlobValue.InvalidGlobPatternException;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.SkylarkImportFailedException;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupValue.SkylarkImportLookupKey;
+import com.google.devtools.build.lib.syntax.BuildFileAST;
+import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.ParserInput;
-import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -548,7 +548,7 @@ public class PackageFunction implements SkyFunction {
       RootedPath buildFilePath,
       PackageIdentifier packageId,
       ImmutableMap<RepositoryName, RepositoryName> repoMapping,
-      StarlarkFile file,
+      BuildFileAST file,
       int workspaceChunk,
       Environment env,
       SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining)
@@ -1165,11 +1165,13 @@ public class PackageFunction implements SkyFunction {
           // If control flow reaches here, we're in territory that is deliberately unsound.
           // See the javadoc for ActionOnIOExceptionReadingBuildFile.
         }
-        input = ParserInput.create(buildFileBytes, inputFile.asFragment());
+        input =
+            ParserInput.create(
+                FileSystemUtils.convertFromLatin1(buildFileBytes), inputFile.asFragment());
         StoredEventHandler astParsingEventHandler = new StoredEventHandler();
-        StarlarkFile ast =
+        BuildFileAST ast =
             PackageFactory.parseBuildFile(
-                packageId, input, preludeStatements, astParsingEventHandler);
+                packageId, input, preludeStatements, repositoryMapping, astParsingEventHandler);
         astParseResult = new AstParseResult(ast, astParsingEventHandler);
         astCache.put(packageId, astParseResult);
       }
