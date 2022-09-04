@@ -22,7 +22,6 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -74,6 +73,7 @@ import com.google.devtools.build.lib.rules.java.OneVersionCheckActionBuilder;
 import com.google.devtools.build.lib.rules.java.ProguardHelper;
 import com.google.devtools.build.lib.rules.java.ProguardHelper.ProguardOutput;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -244,7 +244,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
               resourceDeps,
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
-              ResourceFilterFactory.fromRuleContext(ruleContext),
+              ResourceFilter.fromRuleContext(ruleContext),
               ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"),
               ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
               ProguardHelper.getProguardConfigArtifact(ruleContext, ""),
@@ -515,13 +515,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       if (proguardOutput.getMapping() != null) {
         finalProguardMap =
             ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_MAP);
-        Artifact finalRexPackageMap =
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.REX_OUTPUT_PACKAGE_MAP);
+        Artifact finalRexPackageMap = getDxArtifact(ruleContext, "rex_output_package.map");
         rexActionBuilder
             .addInput(proguardOutput.getMapping())
             .addOutput(finalProguardMap)
             .addOutput(finalRexPackageMap);
-        filesBuilder.add(finalRexPackageMap);
         commandLine
             .addExecPath("--proguard_input_map", proguardOutput.getMapping())
             .addExecPath("--proguard_output_map", finalProguardMap)
@@ -909,7 +907,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               .withPrimary(resourceApk.getPrimaryResource())
               .withDependencies(resourceApk.getResourceDependencies())
               .setTargetAaptVersion(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
-              .setResourceFilterFactory(ResourceFilterFactory.fromRuleContext(ruleContext))
+              .setResourceFilter(ResourceFilter.fromRuleContext(ruleContext))
               .setUncompressedExtensions(
                   ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"))
               .build();
@@ -1504,7 +1502,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   public static boolean shouldRegenerate(RuleContext ruleContext,
       ResourceDependencies resourceDeps) {
     return Iterables.size(resourceDeps.getResourceContainers()) > 1
-        || ResourceFilterFactory.hasFilters(ruleContext)
+        || ResourceFilter.hasFilters(ruleContext)
         || ruleContext.attributes().isAttributeValueExplicitlySpecified("nocompress_extensions");
   }
 
