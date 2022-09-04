@@ -329,7 +329,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Object unusedInputsList,
       Object executableUnchecked,
       Object toolsUnchecked,
-      Sequence<?> arguments,
+      Object arguments,
       Object mnemonicUnchecked,
       Object progressMessage,
       Boolean useDefaultShellEnv,
@@ -340,9 +340,10 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Object shadowedActionUnchecked)
       throws EvalException {
     context.checkMutable("actions.run");
-
     StarlarkAction.Builder builder = new StarlarkAction.Builder();
-    buildCommandLine(builder, arguments);
+
+    Sequence<?> argumentsList = ((Sequence) arguments);
+    buildCommandLine(builder, argumentsList);
     if (executableUnchecked instanceof Artifact) {
       Artifact executable = (Artifact) executableUnchecked;
       FilesToRunProvider provider = context.getExecutableRunfiles(executable);
@@ -416,7 +417,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Sequence<?> outputs,
       Object inputs,
       Object toolsUnchecked,
-      Sequence<?> arguments,
+      Object arguments,
       Object mnemonicUnchecked,
       Object commandUnchecked,
       Object progressMessage,
@@ -430,8 +431,9 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     context.checkMutable("actions.run_shell");
     RuleContext ruleContext = getRuleContext();
 
+    Sequence<?> argumentList = (Sequence) arguments;
     StarlarkAction.Builder builder = new StarlarkAction.Builder();
-    buildCommandLine(builder, arguments);
+    buildCommandLine(builder, argumentList);
 
     if (commandUnchecked instanceof String) {
       Map<String, String> executionInfo =
@@ -462,7 +464,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
                 + " set --incompatible_run_shell_command_string=false.");
       }
       Sequence<?> commandList = (Sequence) commandUnchecked;
-      if (!arguments.isEmpty()) {
+      if (argumentList.size() > 0) {
         throw Starlark.errorf("'arguments' must be empty if 'command' is a sequence of strings");
       }
       List<String> command = Sequence.cast(commandList, String.class, "command");
@@ -472,7 +474,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
           "expected string or list of strings for command instead of %s",
           Starlark.type(commandUnchecked));
     }
-    if (!arguments.isEmpty()) {
+    if (argumentList.size() > 0) {
       // When we use a shell command, add an empty argument before other arguments.
       //   e.g.  bash -c "cmd" '' 'arg1' 'arg2'
       // bash will use the empty argument as the value of $0 (which we don't care about).

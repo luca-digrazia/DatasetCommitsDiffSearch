@@ -67,7 +67,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.StarlarkSemantics;
@@ -466,39 +465,11 @@ public final class AnalysisTestUtil {
     }
   }
 
-  /** Matches the output path prefix contributed by a C++ configuration fragment. */
-  private static final Pattern OUTPUT_PATH_CPP_PREFIX_PATTERN =
-      Pattern.compile("(?<=" + TestConstants.PRODUCT_NAME + "-out/)gcc[^/]*-grte-\\w+-");
-
-  /** Matches the output path prefix contributed by an Android configuration fragment. */
-  private static final Pattern OUTPUT_PATH_ANDROID_PREFIX_PATTERN =
-      Pattern.compile("(?<=" + TestConstants.PRODUCT_NAME + "-out/)android-");
-
   /**
-   * Apply {@code function} to the path string of the given ArtifactRoot. If the root path matches
-   * {@link OUTPUT_PATH_CPP_PREFIX_PATTERN} or {@link OUTPUT_PATH_ANDROID_PREFIX_PATTERN}, also use
-   * those to update the path and invoke {@code function} again.
-   *
-   * @return the result of {@code function} from the most specific root path
+   * Matches the output path prefix contributed by a C++ configuration fragment.
    */
-  private static <U> U computeRootPaths(ArtifactRoot artifactRoot, Function<String, U> function) {
-    String rootPath = artifactRoot.getRoot().toString();
-    U result = function.apply(rootPath);
-    // The output paths that bin, genfiles, etc. refer to may or may not include the C++-contributed
-    // pieces. e.g. they may be bazel-out/gcc-X-glibc-Y-k8-fastbuild/ or they may be
-    // bazel-out/fastbuild/. This code adds support for the non-C++ case, too.
-    String cppReplacedPath = OUTPUT_PATH_CPP_PREFIX_PATTERN.matcher(rootPath).replaceFirst("");
-    if (!rootPath.equals(cppReplacedPath)) {
-      result = function.apply(cppReplacedPath);
-    }
-    // Also handle Android output paths in the same way.
-    String androidReplacedPath =
-        OUTPUT_PATH_ANDROID_PREFIX_PATTERN.matcher(rootPath).replaceFirst("");
-    if (!rootPath.equals(androidReplacedPath)) {
-      result = function.apply(androidReplacedPath);
-    }
-    return result;
-  }
+  public static final Pattern OUTPUT_PATH_CPP_PREFIX_PATTERN =
+      Pattern.compile("(?<=" + TestConstants.PRODUCT_NAME + "-out/)gcc[^/]*-grte-\\w+-");
 
   /**
    * Given a collection of Artifacts, returns a corresponding set of strings of the form "{root}
@@ -525,26 +496,36 @@ public final class AnalysisTestUtil {
       BuildConfiguration hostConfiguration,
       Iterable<? extends Artifact> artifacts) {
     Map<String, String> rootMap = new HashMap<>();
-    computeRootPaths(
-        targetConfiguration.getBinDirectory(RepositoryName.MAIN), path -> rootMap.put(path, "bin"));
+    rootMap.put(
+        targetConfiguration.getBinDirectory(RepositoryName.MAIN).getRoot().toString(), "bin");
     // In preparation for merging genfiles/ and bin/, we don't differentiate them in tests anymore
-    computeRootPaths(
-        targetConfiguration.getGenfilesDirectory(RepositoryName.MAIN),
-        path -> rootMap.put(path, "bin"));
-    computeRootPaths(
-        targetConfiguration.getMiddlemanDirectory(RepositoryName.MAIN),
-        path -> rootMap.put(path, "internal"));
+    rootMap.put(
+        targetConfiguration.getGenfilesDirectory(RepositoryName.MAIN).getRoot().toString(), "bin");
+    rootMap.put(
+        targetConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getRoot().toString(),
+        "internal");
 
-    computeRootPaths(
-        hostConfiguration.getBinDirectory(RepositoryName.MAIN),
-        path -> rootMap.put(path, "bin(host)"));
+    rootMap.put(
+        hostConfiguration.getBinDirectory(RepositoryName.MAIN).getRoot().toString(), "bin(host)");
     // In preparation for merging genfiles/ and bin/, we don't differentiate them in tests anymore
-    computeRootPaths(
-        hostConfiguration.getGenfilesDirectory(RepositoryName.MAIN),
-        path -> rootMap.put(path, "bin(host)"));
-    computeRootPaths(
-        hostConfiguration.getMiddlemanDirectory(RepositoryName.MAIN),
-        path -> rootMap.put(path, "internal(host)"));
+    rootMap.put(
+        hostConfiguration.getGenfilesDirectory(RepositoryName.MAIN).getRoot().toString(),
+        "bin(host)");
+    rootMap.put(
+        hostConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getRoot().toString(),
+        "internal(host)");
+
+    // The output paths that bin, genfiles, etc. refer to may or may not include the C++-contributed
+    // pieces. e.g. they may be bazel-out/gcc-X-glibc-Y-k8-fastbuild/ or they may be
+    // bazel-out/fastbuild/. This code adds support for the non-C++ case, too.
+    Map<String, String> prunedRootMap = new HashMap<>();
+    for (Map.Entry<String, String> root : rootMap.entrySet()) {
+      prunedRootMap.put(
+          OUTPUT_PATH_CPP_PREFIX_PATTERN.matcher(root.getKey()).replaceFirst(""),
+          root.getValue()
+      );
+    }
+    rootMap.putAll(prunedRootMap);
 
     Set<String> files = new LinkedHashSet<>();
     for (Artifact artifact : artifacts) {
@@ -552,8 +533,7 @@ public final class AnalysisTestUtil {
       if (root.isSourceRoot()) {
         files.add("src " + artifact.getExecPath());
       } else {
-        // Find the most specific mapping.
-        String name = computeRootPaths(root, path -> rootMap.getOrDefault(path, "/"));
+        String name = rootMap.getOrDefault(root.getRoot().toString(), "/");
         files.add(name + " " + artifact.getRootRelativePath());
       }
     }

@@ -175,7 +175,6 @@ import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -195,7 +194,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.StarlarkSemantics;
 import org.junit.Before;
@@ -1213,31 +1211,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Check that configuration of the target named 'ruleName' in the specified BUILD file fails with
-   * an error message matching 'expectedErrorPattern'.
-   *
-   * @param packageName the package name of the generated BUILD file
-   * @param ruleName the rule name for the rule in the generated BUILD file
-   * @param expectedErrorPattern a regex that matches the expected error.
-   * @param lines the text of the rule.
-   * @return the found error.
-   */
-  protected Event checkError(
-      String packageName, String ruleName, Pattern expectedErrorPattern, String... lines)
-      throws Exception {
-    eventCollector.clear();
-    reporter.removeHandler(failFastHandler); // expect errors
-    ConfiguredTarget target = scratchConfiguredTarget(packageName, ruleName, lines);
-    if (target != null) {
-      assertWithMessage(
-              "Rule '" + "//" + packageName + ":" + ruleName + "' did not contain an error")
-          .that(view.hasErrors(target))
-          .isTrue();
-    }
-    return assertContainsEvent(expectedErrorPattern);
-  }
-
-  /**
    * Check that configuration of the target named 'label' fails with an error message containing
    * 'expectedErrorMessage'.
    *
@@ -1373,14 +1346,16 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected final Artifact.DerivedArtifact getDerivedArtifact(
       PathFragment rootRelativePath, ArtifactRoot root, ArtifactOwner owner) {
     if ((owner instanceof ActionLookupKey)) {
-      SkyValue skyValue;
+      ActionLookupValue actionLookupValue;
       try {
-        skyValue = skyframeExecutor.getEvaluatorForTesting().getExistingValue((SkyKey) owner);
+        actionLookupValue =
+            (ActionLookupValue)
+                skyframeExecutor.getEvaluatorForTesting().getExistingValue((SkyKey) owner);
       } catch (InterruptedException e) {
         throw new IllegalStateException(e);
       }
-      if (skyValue instanceof ActionLookupValue) {
-        for (ActionAnalysisMetadata action : ((ActionLookupValue) skyValue).getActions()) {
+      if (actionLookupValue != null) {
+        for (ActionAnalysisMetadata action : actionLookupValue.getActions()) {
           for (Artifact output : action.getOutputs()) {
             if (output.getRootRelativePath().equals(rootRelativePath)
                 && output.getRoot().equals(root)) {
@@ -1391,7 +1366,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       }
     }
     // Fall back: some tests don't actually need an artifact with an owner.
-    // TODO(janakr): the tests that are passing in nonsense here should be changed.
     return view.getArtifactFactory().getDerivedArtifact(rootRelativePath, root, owner);
   }
 

@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.DYNAMIC_LINKING_MODE;
-import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.IS_CC_TEST_FEATURE_NAME;
-import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.LEGACY_IS_CC_TEST_FEATURE_NAME;
 import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.STATIC_LINKING_MODE;
 
 import com.google.auto.value.AutoValue;
@@ -380,19 +378,13 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     requestedFeaturesBuilder
         .addAll(ruleContext.getFeatures())
         .add(linkingMode == Link.LinkingMode.DYNAMIC ? DYNAMIC_LINKING_MODE : STATIC_LINKING_MODE);
-    ImmutableSet.Builder<String> disabledFeaturesBuilder = new ImmutableSet.Builder<>();
-    disabledFeaturesBuilder.addAll(ruleContext.getDisabledFeatures());
-    if (TargetUtils.isTestRule(ruleContext.getRule()) && cppConfiguration.useCcTestFeature()) {
-      requestedFeaturesBuilder.add(IS_CC_TEST_FEATURE_NAME);
-      disabledFeaturesBuilder.add(LEGACY_IS_CC_TEST_FEATURE_NAME);
-    }
 
     FdoContext fdoContext = common.getFdoContext();
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(
             ruleContext,
             requestedFeaturesBuilder.build(),
-            /* unsupportedFeatures= */ disabledFeaturesBuilder.build(),
+            /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
             ccToolchain,
             semantics);
 

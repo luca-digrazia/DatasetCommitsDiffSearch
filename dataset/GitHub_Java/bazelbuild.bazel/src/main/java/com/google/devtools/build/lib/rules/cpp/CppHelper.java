@@ -186,17 +186,6 @@ public class CppHelper {
     return result;
   }
 
-  /** Returns the linkopts for the rule context. */
-  public static ImmutableList<String> getLinkopts(RuleContext ruleContext) {
-    if (ruleContext.attributes().has("linkopts", Type.STRING_LIST)) {
-      Iterable<String> linkopts = ruleContext.attributes().get("linkopts", Type.STRING_LIST);
-      if (linkopts != null) {
-        return ImmutableList.copyOf(expandLinkopts(ruleContext, "linkopts", linkopts));
-      }
-    }
-    return ImmutableList.of();
-  }
-
   public static NestedSet<Pair<String, String>> getCoverageEnvironmentIfNeeded(
       RuleContext ruleContext, CppConfiguration cppConfiguration, CcToolchainProvider toolchain)
       throws RuleErrorException {
@@ -205,13 +194,12 @@ public class CppHelper {
       if (llvmCov == null) {
         llvmCov = "";
       }
-      String gcov = toolchain.getToolPathStringOrNull(Tool.GCOV);
-      if (gcov == null) {
-        gcov = "";
-      }
       NestedSetBuilder<Pair<String, String>> coverageEnvironment =
           NestedSetBuilder.<Pair<String, String>>stableOrder()
-              .add(Pair.of("COVERAGE_GCOV_PATH", gcov))
+              .add(
+                  Pair.of(
+                      "COVERAGE_GCOV_PATH",
+                      toolchain.getToolPathFragment(Tool.GCOV, ruleContext).getPathString()))
               .add(Pair.of("LLVM_COV", llvmCov))
               .add(Pair.of("GENERATE_LLVM_LCOV", cppConfiguration.generateLlvmLCov() ? "1" : "0"));
       if (cppConfiguration.getFdoInstrument() != null) {
