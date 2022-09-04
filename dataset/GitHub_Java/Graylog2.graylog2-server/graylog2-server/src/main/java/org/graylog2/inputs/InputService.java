@@ -35,8 +35,6 @@ public interface InputService extends PersistedService {
 
     Input create(Map<String, Object> fields);
 
-    String update(Input model) throws ValidationException;
-
     Input find(String id) throws NotFoundException;
 
     Input findForThisNode(String nodeId, String id) throws NotFoundException;
