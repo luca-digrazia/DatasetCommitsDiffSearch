@@ -16,10 +16,10 @@
 package com.googlecode.androidannotations.processing;
 
 import java.util.HashMap;
+import java.util.Map;
 
 import com.googlecode.androidannotations.annotations.EBean;
 import com.googlecode.androidannotations.annotations.EViewGroup;
-import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -49,12 +49,13 @@ public class EBeanHolder {
 
 	public JMethod cast;
 
+	private Map<String, JClass> loadedClasses = new HashMap<String, JClass>();
 	public JFieldVar handler;
 
 	public JSwitch onOptionsItemSelectedSwitch;
 	public JVar onOptionsItemSelectedItem;
 
-	public JMethod restoreSavedInstanceStateMethod;
+	public JBlock restoreInstanceStateBlock;
 	public JBlock saveInstanceStateBlock;
 
 	public JExpression contextRef;
@@ -75,37 +76,25 @@ public class EBeanHolder {
 	 */
 	public JFieldVar intentField;
 
-	/**
-	 * Only defined in activities
-	 */
-	public NonConfigurationHolder nonConfigurationHolder;
-
-	/**
-	 * TextWatchers by idRef
-	 */
-	public HashMap<String, TextWatcherHolder> textWatchers = new HashMap<String, TextWatcherHolder>();
-
-	public JMethod findNativeFragmentById;
-	public JMethod findSupportFragmentById;
-	public JMethod findNativeFragmentByTag;
-	public JMethod findSupportFragmentByTag;
-
-	private EBeansHolder eBeansHolder;
-
-	public EBeanHolder(EBeansHolder eBeansHolder) {
-		this.eBeansHolder = eBeansHolder;
-	}
-
-	public Classes classes() {
-		return eBeansHolder.classes();
-	}
-
-	public JCodeModel codeModel() {
-		return eBeansHolder.codeModel();
-	}
-
 	public JClass refClass(String fullyQualifiedClassName) {
-		return eBeansHolder.refClass(fullyQualifiedClassName);
+
+		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
+
+		if (refClass == null) {
+			JCodeModel codeModel = eBean.owner();
+			try {
+				refClass = codeModel.ref(fullyQualifiedClassName);
+			} catch (NoClassDefFoundError ignored) {
+				refClass = codeModel.directClass(fullyQualifiedClassName);
+			}
+			loadedClasses.put(fullyQualifiedClassName, refClass);
+		}
+
+		return refClass;
+	}
+
+	public JClass refClass(Class<?> clazz) {
+		return eBean.owner().ref(clazz);
 	}
 
 }
