@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
+import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import java.util.List;
 import java.util.Map;
@@ -122,11 +123,12 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
                     ruleContext,
                     childToolchainConfig,
                     protosToAvoid,
+                    ImmutableList.<ProtoInfo>of(),
                     objcProtoProviders,
                     ProtobufSupport.getTransitivePortableProtoFilters(objcProtoProviders),
                     childToolchain)
-                .registerGenerationAction()
-                .registerCompilationAction();
+                .registerGenerationActions()
+                .registerCompilationActions();
 
         protosObjcProvider = protoSupport.getObjcProvider();
       } else {
@@ -240,7 +242,9 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
       Iterable<ObjcProtoProvider> avoidedProviders) {
     NestedSetBuilder<Artifact> avoidArtifacts = NestedSetBuilder.stableOrder();
     for (ObjcProtoProvider avoidProvider : avoidedProviders) {
-      avoidArtifacts.addTransitive(avoidProvider.getProtoFiles());
+      for (NestedSet<Artifact> avoidProviderOutputGroup : avoidProvider.getProtoGroups()) {
+        avoidArtifacts.addTransitive(avoidProviderOutputGroup);
+      }
     }
     return avoidArtifacts.build();
   }
