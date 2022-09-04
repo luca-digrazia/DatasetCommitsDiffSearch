@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.configuration;
 
@@ -48,12 +48,6 @@ public class ElasticsearchClientConfiguration {
     @Parameter(value = "elasticsearch_idle_timeout")
     Duration elasticsearchIdleTimeout = Duration.seconds(-1L);
 
-    @Parameter(value = "elasticsearch_version_probe_attempts", validators = {PositiveIntegerValidator.class})
-    int elasticsearchVersionProbeAttempts = 0;
-
-    @Parameter(value = "elasticsearch_version_probe_delay", validators = {PositiveDurationValidator.class})
-    Duration elasticsearchVersionProbeDelay = Duration.seconds(5L);
-
     @Parameter(value = "elasticsearch_max_total_connections", validators = {PositiveIntegerValidator.class})
     int elasticsearchMaxTotalConnections = 200;
 
@@ -86,7 +80,4 @@ public class ElasticsearchClientConfiguration {
 
     @Parameter(value = "elasticsearch_use_expect_continue")
     boolean useExpectContinue = true;
-
-    @Parameter(value = "elasticsearch_mute_deprecation_warnings")
-    private boolean muteDeprecationWarnings = false;
 }
