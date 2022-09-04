@@ -1,7 +1,9 @@
 package com.yammer.dropwizard.migrations;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Joiner;
 import com.yammer.dropwizard.config.Configuration;
+import com.yammer.dropwizard.db.ConfigurationStrategy;
 import liquibase.Liquibase;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -9,6 +11,7 @@ import net.sourceforge.argparse4j.inf.Subparser;
 
 import java.io.OutputStreamWriter;
 import java.util.Date;
+import java.util.List;
 
 public class DbRollbackCommand<T extends Configuration> extends AbstractLiquibaseCommand<T> {
     public DbRollbackCommand(ConfigurationStrategy<T> strategy, Class<T> configurationClass) {
@@ -36,6 +39,10 @@ public class DbRollbackCommand<T extends Configuration> extends AbstractLiquibas
                  .dest("count")
                  .type(Integer.class)
                  .help("Rollback the specified number of change sets");
+        subparser.addArgument("-i", "--include")
+                 .action(Arguments.append())
+                 .dest("contexts")
+                 .help("include change sets from the given context");
     }
 
     @Override
@@ -45,6 +52,7 @@ public class DbRollbackCommand<T extends Configuration> extends AbstractLiquibas
         final Integer count = namespace.getInt("count");
         final Date date = (Date) namespace.get("date");
         final Boolean dryRun = namespace.getBoolean("dry-run");
+        final String context = getContext(namespace);
 
         if (((count == null) && (tag == null) && (date == null)) ||
                 (((count != null) && (tag != null)) ||
@@ -55,22 +63,30 @@ public class DbRollbackCommand<T extends Configuration> extends AbstractLiquibas
 
         if (count != null) {
             if (dryRun) {
-                liquibase.rollback(count, "", new OutputStreamWriter(System.out, Charsets.UTF_8));
+                liquibase.rollback(count, context, new OutputStreamWriter(System.out, Charsets.UTF_8));
             } else {
-                liquibase.rollback(count, "");
+                liquibase.rollback(count, context);
             }
         } else if (tag != null) {
             if (dryRun) {
-                liquibase.rollback(tag, null, new OutputStreamWriter(System.out, Charsets.UTF_8));
+                liquibase.rollback(tag, context, new OutputStreamWriter(System.out, Charsets.UTF_8));
             } else {
-                liquibase.rollback(tag, "");
+                liquibase.rollback(tag, context);
             }
         } else {
             if (dryRun) {
-                liquibase.rollback(date, null, new OutputStreamWriter(System.out, Charsets.UTF_8));
+                liquibase.rollback(date, context, new OutputStreamWriter(System.out, Charsets.UTF_8));
             } else {
-                liquibase.rollback(date, "");
+                liquibase.rollback(date, context);
             }
         }
+    }
+
+    private String getContext(Namespace namespace) {
+        final List<Object> contexts = namespace.getList("contexts");
+        if (contexts == null) {
+            return "";
+        }
+        return Joiner.on(',').join(contexts);
     }
 }

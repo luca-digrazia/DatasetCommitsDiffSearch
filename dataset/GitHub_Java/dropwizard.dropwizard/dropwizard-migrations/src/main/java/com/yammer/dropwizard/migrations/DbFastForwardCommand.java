@@ -12,9 +12,12 @@ import net.sourceforge.argparse4j.inf.Subparser;
 import java.io.OutputStreamWriter;
 import java.util.List;
 
-public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibaseCommand<T> {
-    public DbMigrateCommand(ConfigurationStrategy<T> strategy, Class<T> configurationClass) {
-        super("migrate", "Apply all pending change sets.", strategy, configurationClass);
+public class DbFastForwardCommand<T extends Configuration> extends AbstractLiquibaseCommand<T> {
+    protected DbFastForwardCommand(ConfigurationStrategy<T> strategy, Class<T> configurationClass) {
+        super("fast-forward",
+              "Mark the next pending change set as applied without running it",
+              strategy,
+              configurationClass);
     }
 
     @Override
@@ -27,10 +30,11 @@ public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibase
                  .setDefault(Boolean.FALSE)
                  .help("output the DDL to stdout, don't run it");
 
-        subparser.addArgument("-c", "--count")
-                 .type(Integer.class)
-                 .dest("count")
-                 .help("only apply the next N change sets");
+        subparser.addArgument("-a", "--all")
+                 .action(Arguments.storeTrue())
+                 .dest("all")
+                 .setDefault(Boolean.FALSE)
+                 .help("mark all pending change sets as applied");
 
         subparser.addArgument("-i", "--include")
                  .action(Arguments.append())
@@ -40,21 +44,20 @@ public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibase
 
     @Override
     @SuppressWarnings("UseOfSystemOutOrSystemErr")
-    public void run(Namespace namespace, Liquibase liquibase) throws Exception {
+    public void run(Namespace namespace,
+                    Liquibase liquibase) throws Exception {
         final String context = getContext(namespace);
-        final Integer count = namespace.getInt("count");
-        final Boolean dryRun = namespace.getBoolean("dry-run");
-        if (count != null) {
-            if (dryRun) {
-                liquibase.update(count, context, new OutputStreamWriter(System.out, Charsets.UTF_8));
+        if (namespace.getBoolean("all")) {
+            if (namespace.getBoolean("dry-run")) {
+                liquibase.changeLogSync(context, new OutputStreamWriter(System.out, Charsets.UTF_8));
             } else {
-                liquibase.update(count, context);
+                liquibase.changeLogSync(context);
             }
         } else {
-            if (dryRun) {
-                liquibase.update(context, new OutputStreamWriter(System.out, Charsets.UTF_8));
+            if (namespace.getBoolean("dry-run")) {
+                liquibase.markNextChangeSetRan(context, new OutputStreamWriter(System.out, Charsets.UTF_8));
             } else {
-                liquibase.update(context);
+                liquibase.markNextChangeSetRan(context);
             }
         }
     }
