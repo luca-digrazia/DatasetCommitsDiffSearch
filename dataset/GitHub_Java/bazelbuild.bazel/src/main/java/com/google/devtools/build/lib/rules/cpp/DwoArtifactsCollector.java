@@ -13,13 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.util.Preconditions;
 
 /**
  * Provides generic functionality for collecting the .dwo artifacts produced by any target
@@ -38,11 +38,13 @@ public class DwoArtifactsCollector {
    */
   private final NestedSet<Artifact> picDwoArtifacts;
 
-  /**
-   * Instantiates a "real" collector on meaningful data.
-   */
-  private DwoArtifactsCollector(CcCompilationOutputs compilationOutputs,
-        Iterable<TransitiveInfoCollection> deps) {
+  /** Instantiates a "real" collector on meaningful data. */
+  private DwoArtifactsCollector(
+      CcCompilationOutputs compilationOutputs,
+      Iterable<TransitiveInfoCollection> deps,
+      boolean generateDwo,
+      boolean ltoBackendArtifactsUsePic,
+      Iterable<LtoBackendArtifacts> ltoBackendArtifacts) {
 
     Preconditions.checkNotNull(compilationOutputs);
     Preconditions.checkNotNull(deps);
@@ -55,6 +57,18 @@ public class DwoArtifactsCollector {
 
     dwoBuilder.addAll(compilationOutputs.getDwoFiles());
     picDwoBuilder.addAll(compilationOutputs.getPicDwoFiles());
+
+    // If we are generating .dwo, add any generated for LtoBackendArtifacts.
+    if (generateDwo && ltoBackendArtifacts != null) {
+      for (LtoBackendArtifacts ltoBackendArtifact : ltoBackendArtifacts) {
+        Artifact dwoFile = ltoBackendArtifact.getDwoFile();
+        if (ltoBackendArtifactsUsePic) {
+          picDwoBuilder.add(dwoFile);
+        } else {
+          dwoBuilder.add(dwoFile);
+        }
+      }
+    }
 
     for (TransitiveInfoCollection info : deps) {
       CppDebugFileProvider provider = info.getProvider(CppDebugFileProvider.class);
@@ -82,9 +96,18 @@ public class DwoArtifactsCollector {
    * @param compilationOutputs the output compilation context for the owning target
    * @param deps which of the target's transitive info collections should be visited
    */
-  public static DwoArtifactsCollector transitiveCollector(CcCompilationOutputs compilationOutputs,
-      Iterable<TransitiveInfoCollection> deps) {
-    return new DwoArtifactsCollector(compilationOutputs, deps);
+  public static DwoArtifactsCollector transitiveCollector(
+      CcCompilationOutputs compilationOutputs,
+      Iterable<TransitiveInfoCollection> deps,
+      boolean generateDwo,
+      boolean ltoBackendArtifactsUsePic,
+      Iterable<LtoBackendArtifacts> ltoBackendArtifacts) {
+    return new DwoArtifactsCollector(
+        compilationOutputs,
+        deps,
+        generateDwo,
+        ltoBackendArtifactsUsePic,
+        ltoBackendArtifacts);
   }
 
   /**
@@ -92,9 +115,17 @@ public class DwoArtifactsCollector {
    *
    * @param compilationOutputs the output compilation context for the owning target
    */
-  public static DwoArtifactsCollector directCollector(CcCompilationOutputs compilationOutputs) {
-      return new DwoArtifactsCollector(
-          compilationOutputs, ImmutableList.<TransitiveInfoCollection>of());
+  public static DwoArtifactsCollector directCollector(
+      CcCompilationOutputs compilationOutputs,
+      boolean generateDwo,
+      boolean ltoBackendArtifactsUsePic,
+      Iterable<LtoBackendArtifacts> ltoBackendArtifacts) {
+    return new DwoArtifactsCollector(
+        compilationOutputs,
+        ImmutableList.<TransitiveInfoCollection>of(),
+        generateDwo,
+        ltoBackendArtifactsUsePic,
+        ltoBackendArtifacts);
   }
 
   /**
