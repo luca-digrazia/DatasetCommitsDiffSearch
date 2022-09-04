@@ -255,7 +255,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    srcs = ['banana1', 'banana2'])",
         "cc_toolchain(",
         "    name = 'b',",
-        "    toolchain_identifier = 'toolchain-identifier-k8',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
         "    ar_files = ':empty',",
@@ -402,12 +401,9 @@ public class CcToolchainTest extends BuildViewTestCase {
 
   @Test
   public void testModuleMapAttribute() throws Exception {
-    scratchConfiguredTarget(
-        "modules/map",
-        "c",
+    scratchConfiguredTarget("modules/map", "c",
         "cc_toolchain(",
         "    name = 'c',",
-        "    toolchain_identifier = 'toolchain-identifier-k8',",
         "    module_map = 'map',",
         "    cpu = 'cherry',",
         "    ar_files = 'ar-cherry',",
@@ -425,12 +421,9 @@ public class CcToolchainTest extends BuildViewTestCase {
   
   @Test
   public void testModuleMapAttributeOptional() throws Exception {
-    scratchConfiguredTarget(
-        "modules/map",
-        "c",
+    scratchConfiguredTarget("modules/map", "c",
         "cc_toolchain(",
         "    name = 'c',",
-        "    toolchain_identifier = 'toolchain-identifier-k8',",
         "    cpu = 'cherry',",
         "    ar_files = 'ar-cherry',",
         "    as_files = 'as-cherry',",
@@ -441,19 +434,15 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    objcopy_files = 'objcopy-cherry',",
         "    all_files = ':every-file',",
         "    dynamic_runtime_libs = ['dynamic-runtime-libs-cherry'],",
-        "    static_runtime_libs = ['static-runtime-libs-cherry'])");
+        "    static_runtime_libs = ['static-runtime-libs-cherry'])");    
   }
 
   @Test
   public void testFailWithMultipleModuleMaps() throws Exception {
-    checkError(
-        "modules/multiple",
-        "c",
-        "expected a single artifact",
+    checkError("modules/multiple", "c", "expected a single artifact",
         "filegroup(name = 'multiple-maps', srcs = ['a.cppmap', 'b.cppmap'])",
         "cc_toolchain(",
         "    name = 'c',",
-        "    toolchain_identifier = 'toolchain-identifier-k8',",
         "    module_map = ':multiple-maps',",
         "    cpu = 'cherry',",
         "    ar_files = 'ar-cherry',",
@@ -526,7 +515,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "   name='empty')",
         "cc_toolchain(",
         "    name = 'b',",
-        "    toolchain_identifier = 'toolchain-identifier-k8',",
         "    cpu = 'banana',",
         "    all_files = ':empty',",
         "    ar_files = ':empty',",
@@ -621,6 +609,7 @@ public class CcToolchainTest extends BuildViewTestCase {
     useConfiguration(
         "--cpu=k8",
         "--experimental_enable_cc_toolchain_config_info",
+        "--incompatible_disable_late_bound_option_defaults",
         "--incompatible_disable_cc_configuration_make_variables");
 
     ConfiguredTarget target = getConfiguredTarget("//a:b");
@@ -642,6 +631,7 @@ public class CcToolchainTest extends BuildViewTestCase {
     useConfiguration(
         "--cpu=k8",
         "--experimental_enable_cc_toolchain_config_info",
+        "--incompatible_disable_late_bound_option_defaults",
         "--incompatible_disable_cc_configuration_make_variables");
 
     ConfiguredTarget target = getConfiguredTarget("//a:b");
@@ -670,7 +660,8 @@ public class CcToolchainTest extends BuildViewTestCase {
       assertThat(e)
           .hasMessageThat()
           .contains(
-              "--incompatible_disable_cc_configuration_make_variables must be set to true in "
+              "--incompatible_disable_late_bound_option_defaults and "
+                  + "--incompatible_disable_cc_configuration_make_variables must be set to true in "
                   + "order to configure the C++ toolchain from Starlark.");
     }
   }
@@ -872,25 +863,6 @@ public class CcToolchainTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testSysroot_fromCrosstool_unset() throws Exception {
-    scratch.file("a/BUILD", "cc_toolchain_alias(name = 'b')");
-    scratch.file("libc1/BUILD", "filegroup(name = 'everything', srcs = ['header1.h'])");
-    scratch.file("libc1/header1.h", "#define FOO 1");
-
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            CrosstoolConfig.CToolchain.newBuilder().clearDefaultGrteTop().buildPartial());
-    useConfiguration();
-    ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider =
-        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
-
-    assertThat(toolchainProvider.getSysroot()).isEqualTo("/usr/grte/v1");
-  }
-
-  @Test
   public void testSysroot_fromCrosstool() throws Exception {
     scratch.file("a/BUILD", "cc_toolchain_alias(name = 'b')");
     scratch.file("libc1/BUILD", "filegroup(name = 'everything', srcs = ['header1.h'])");
@@ -907,25 +879,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
 
     assertThat(toolchainProvider.getSysroot()).isEqualTo("libc1");
-  }
-
-  @Test
-  public void testSysroot_fromCrosstool_disabled() throws Exception {
-    scratch.file("a/BUILD", "cc_toolchain_alias(name = 'b')");
-    scratch.file("libc1/BUILD", "filegroup(name = 'everything', srcs = ['header1.h'])");
-    scratch.file("libc1/header1.h", "#define FOO 1");
-
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            CrosstoolConfig.CToolchain.newBuilder().setDefaultGrteTop("//libc1").buildPartial());
-    useConfiguration("--incompatible_disable_sysroot_from_configuration");
-    ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider =
-        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
-
-    assertThat(toolchainProvider.getSysroot()).isEqualTo("/usr/grte/v1");
   }
 
   @Test
@@ -974,56 +927,5 @@ public class CcToolchainTest extends BuildViewTestCase {
         (CcToolchainProvider) target.get(CcToolchainProvider.PROVIDER);
 
     assertThat(ccToolchainProvider.getSysroot()).isEqualTo("libc2");
-  }
-
-  @Test
-  public void testSysroot_fromFlag() throws Exception {
-    scratch.file(
-        "a/BUILD",
-        "filegroup(",
-        "    name='empty')",
-        "cc_toolchain(",
-        "    name = 'b',",
-        "    cpu = 'banana',",
-        "    all_files = ':empty',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
-        "    compiler_files = ':empty',",
-        "    dwp_files = ':empty',",
-        "    linker_files = ':empty',",
-        "    strip_files = ':empty',",
-        "    objcopy_files = ':empty',",
-        "    dynamic_runtime_libs = [':empty'],",
-        "    static_runtime_libs = [':empty'],",
-        "    proto = \"\"\"",
-        "      toolchain_identifier: \"a\"",
-        "      host_system_name: \"a\"",
-        "      target_system_name: \"a\"",
-        "      target_cpu: \"a\"",
-        "      target_libc: \"a\"",
-        "      compiler: \"a\"",
-        "      abi_version: \"a\"",
-        "      abi_libc_version: \"a\"",
-        "\"\"\",",
-        "    libc_top = '//libc2:everything')");
-    scratch.file("libc1/BUILD", "filegroup(name = 'everything', srcs = ['header.h'])");
-    scratch.file("libc1/header.h", "#define FOO 1");
-    scratch.file("libc2/BUILD", "filegroup(name = 'everything', srcs = ['header.h'])");
-    scratch.file("libc2/header.h", "#define FOO 2");
-    scratch.file("libc3/BUILD", "filegroup(name = 'everything', srcs = ['header.h'])");
-    scratch.file("libc3/header.h", "#define FOO 3");
-
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            CrosstoolConfig.CToolchain.newBuilder().setDefaultGrteTop("//libc1").buildPartial());
-    useConfiguration(
-        "--cpu=k8", "--grte_top=//libc3", "--incompatible_disable_sysroot_from_configuration");
-    ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider ccToolchainProvider =
-        (CcToolchainProvider) target.get(CcToolchainProvider.PROVIDER);
-
-    assertThat(ccToolchainProvider.getSysroot()).isEqualTo("libc3");
   }
 }

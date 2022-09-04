@@ -26,16 +26,11 @@ import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.LicensesProvider.TargetLicense;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.bazel.LicenseCheckingModule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
-import com.google.devtools.build.lib.packages.RawAttributeMapper;
-import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.util.MockCcSupport;
-import com.google.devtools.build.lib.syntax.Type;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -456,12 +451,10 @@ public class LicensingTests extends BuildViewTestCase {
 
   @Test
   public void testCcToolchainLicenseOverride() throws Exception {
-    scratch.file(
-        "c/BUILD",
+    scratch.file("c/BUILD",
         "filegroup(name = 'dynamic-runtime-libs-cherry', srcs = [], licenses = ['restricted'])",
         "cc_toolchain(",
         "    name = 'c',",
-        "    toolchain_identifier = 'toolchain-identifier-k8',",
         "    output_licenses = ['notice'],",
         "    cpu = 'cherry',",
         "    ar_files = 'ar-cherry',",
@@ -473,9 +466,9 @@ public class LicensingTests extends BuildViewTestCase {
         "    strip_files = ':every-file',",
         "    objcopy_files = 'objcopy-cherry',",
         "    all_files = ':every-file',",
-        "    dynamic_runtime_lib = 'dynamic-runtime-libs-cherry',",
-        "    static_runtime_lib = 'static-runtime-libs-cherry')");
-    scratch.file("c/CROSSTOOL", MockCcSupport.EMPTY_CROSSTOOL);
+        "    dynamic_runtime_libs = ['dynamic-runtime-libs-cherry'],",
+        "    static_runtime_libs = ['static-runtime-libs-cherry'])");
+    scratch.file("c/CROSSTOOL", AnalysisMock.get().ccSupport().readCrosstoolFile());
 
     ConfiguredTarget target = getConfiguredTarget("//c:c");
     Map<Label, License> expected = licenses("//c:c", "notice");
@@ -556,13 +549,8 @@ public class LicensingTests extends BuildViewTestCase {
         Maps.filterKeys(getTransitiveLicenses(used), AnalysisMock.get().ccSupport().labelFilter());
     Label usedLabel = Label.parseAbsolute("//used", ImmutableMap.of());
     License license = usedActual.get(usedLabel);
-    LicenseCheckingModule.checkCompatibility(
-        license,
-        EnumSet.of(DistributionType.CLIENT),
-        getTarget("//user"),
-        usedLabel,
-        reporter,
-        false);
+    license.checkCompatibility(EnumSet.of(DistributionType.CLIENT),
+        getTarget("//user"), usedLabel, reporter, false);
     assertNoEvents();
   }
 
@@ -585,13 +573,8 @@ public class LicensingTests extends BuildViewTestCase {
         Maps.filterKeys(getTransitiveLicenses(used), AnalysisMock.get().ccSupport().labelFilter());
     Label usedLabel = Label.parseAbsolute("//used", ImmutableMap.of());
     License license = usedActual.get(usedLabel);
-    LicenseCheckingModule.checkCompatibility(
-        license,
-        EnumSet.of(DistributionType.CLIENT),
-        getTarget("//user"),
-        usedLabel,
-        reporter,
-        false);
+    license.checkCompatibility(EnumSet.of(DistributionType.CLIENT),
+        getTarget("//user"), usedLabel, reporter, false);
     assertNoEvents();
   }
 
@@ -684,28 +667,6 @@ public class LicensingTests extends BuildViewTestCase {
             new TargetLicense(label2, unencumbered),
             new TargetLicense(label2, unencumbered))
         .testEquals();
-  }
-
-  /** Regression fix for https://github.com/bazelbuild/bazel/issues/7194. */
-  @Test
-  public void testStarlarkLicensesAttributeCanUseUseCustomDefault() throws Exception {
-    scratch.file(
-        "foo/rules.bzl",
-        "def _myrule_impl(ctx):",
-        "    return []",
-        "",
-        "myrule = rule(",
-        "    implementation = _myrule_impl,",
-        "    attrs = {",
-        "        'licenses': attr.string(default = 'custom_licenses_default'),",
-        "    }",
-        ")");
-
-    scratch.file("foo/BUILD", "load('//foo:rules.bzl', 'myrule')", "myrule(name = 'hi')");
-
-    assertThat(RawAttributeMapper.of((Rule) getTarget("//foo:hi")).get("licenses", Type.STRING))
-        .isEqualTo("custom_licenses_default");
-    assertNoEvents();
   }
 
   /**
