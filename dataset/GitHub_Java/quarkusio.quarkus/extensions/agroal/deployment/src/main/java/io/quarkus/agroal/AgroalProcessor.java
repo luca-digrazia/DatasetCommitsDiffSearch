@@ -151,13 +151,7 @@ class AgroalProcessor {
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    void configureRuntimeProperties(AgroalTemplate template,
-            BuildProducer<DataSourceInitializedBuildItem> dataSourceInitialized) {
-        if (!agroalBuildTimeConfig.defaultDataSource.driver.isPresent() && agroalBuildTimeConfig.namedDataSources.isEmpty()) {
-            // No datasource has been configured so bail out
-            return;
-        }
-
+    DataSourceInitializedBuildItem configureRuntimeProperties(AgroalTemplate template) {
         // TODO @dmlloyd
         // Here we have the first issue:
         // - things are working well for the default database
@@ -165,7 +159,7 @@ class AgroalProcessor {
         // - as mentioned above, it doesn't seem to be an issue for the build time config I use in the above method...
         template.configureRuntimeProperties(agroalRuntimeConfig);
 
-        dataSourceInitialized.produce(new DataSourceInitializedBuildItem());
+        return new DataSourceInitializedBuildItem();
     }
 
     @BuildStep
