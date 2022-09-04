@@ -21,14 +21,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionsBase;
@@ -36,13 +34,11 @@ import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -174,6 +170,15 @@ public final class BuildOptions implements Cloneable, Serializable {
     return result.build();
   }
 
+  ImmutableList<String> getDefaultsRules() {
+    ImmutableList.Builder<String> result = ImmutableList.builder();
+    for (FragmentOptions fragment : fragmentOptionsMap.values()) {
+      result.addAll(fragment.getDefaultsRules());
+    }
+
+    return result.build();
+  }
+
   /**
    * Returns true if actions should be enabled for this configuration.
    */
@@ -197,10 +202,6 @@ public final class BuildOptions implements Cloneable, Serializable {
       keyBuilder.append(options.cacheKey());
     }
     return keyBuilder.toString();
-  }
-
-  public String computeChecksum() {
-    return Fingerprint.md5Digest(computeCacheKey());
   }
 
   /**
@@ -299,13 +300,9 @@ public final class BuildOptions implements Cloneable, Serializable {
     this.fragmentOptionsMap = fragmentOptionsMap;
   }
 
-  public BuildOptions applyDiff(OptionsDiffForReconstruction optionsDiff) {
+  BuildOptions applyDiff(OptionsDiffForReconstruction optionsDiff) {
     if (optionsDiff.isEmpty()) {
       return this;
-    }
-    maybeInitializeFingerprintAndHashCode();
-    if (!Arrays.equals(fingerprint, optionsDiff.baseFingerprint)) {
-      throw new IllegalArgumentException("Can not reconstruct BuildOptions with a different base.");
     }
     Builder builder = builder();
     for (FragmentOptions options : fragmentOptionsMap.values()) {
@@ -352,32 +349,13 @@ public final class BuildOptions implements Cloneable, Serializable {
     }
   }
 
-  /** Returns the difference between two BuildOptions in a new {@link BuildOptions.OptionsDiff}. */
-  public static OptionsDiff diff(@Nullable BuildOptions first, @Nullable BuildOptions second) {
-    return diff(new OptionsDiff(), first, second);
-  }
-
-  /**
-   * Returns the difference between two BuildOptions in a pre-existing {@link
-   * BuildOptions.OptionsDiff}.
-   *
-   * <p>In a single pass through this method, the method can only compare a single "first" {@link
-   * BuildOptions} and single "second" BuildOptions; but an OptionsDiff instance can store the diff
-   * between a single "first" BuildOptions and multiple "second" BuildOptions. Being able to
-   * maintain a single OptionsDiff over multiple calls to diff is useful for, for example,
-   * aggregating the difference between a single BuildOptions and the results of applying a {@link
-   * com.google.devtools.build.lib.analysis.config.transitions.SplitTransition}) to it.
-   */
-  public static OptionsDiff diff(
-      OptionsDiff diff, @Nullable BuildOptions first, @Nullable BuildOptions second) {
-    if (first == null || second == null) {
-      throw new IllegalArgumentException("Cannot diff null BuildOptions");
-    }
+  /** Returns the difference between two BuildOptions in a {@link BuildOptions.OptionsDiff}. */
+  public static OptionsDiff diff(BuildOptions first, BuildOptions second) {
+    OptionsDiff diff = new OptionsDiff();
     if (first.equals(second)) {
       return diff;
     }
-    // Check and report if either class has been trimmed of an options class that exists in the
-    // other.
+    // Check if either class has been trimmed of an options class that exists in the other.
     ImmutableSet<Class<? extends FragmentOptions>> firstOptionClasses =
         first.getOptions()
             .stream()
@@ -421,53 +399,36 @@ public final class BuildOptions implements Cloneable, Serializable {
       BuildOptions first, BuildOptions second) {
     OptionsDiff diff = diff(first, second);
     if (diff.areSame()) {
-      return OptionsDiffForReconstruction.getEmpty(first.fingerprint, second.computeChecksum());
+      return OptionsDiffForReconstruction.EMPTY;
     }
-    HashMap<Class<? extends FragmentOptions>, Map<String, Object>> differingOptions =
-        new HashMap<>(diff.differingOptions.keySet().size());
+    ImmutableMap.Builder<Class<? extends FragmentOptions>, ImmutableMap<String, Object>>
+        differingOptionsBuilder =
+            ImmutableMap.builderWithExpectedSize(diff.differingOptions.keySet().size());
     for (Class<? extends FragmentOptions> clazz : diff.differingOptions.keySet()) {
       Collection<OptionDefinition> fields = diff.differingOptions.get(clazz);
-      HashMap<String, Object> valueMap = new HashMap<>(fields.size());
+      ImmutableMap.Builder<String, Object> valuesMapBuilder =
+          ImmutableMap.builderWithExpectedSize(fields.size());
       for (OptionDefinition optionDefinition : fields) {
-        Object secondValue;
-        try {
-          secondValue = Iterables.getOnlyElement(diff.second.get(optionDefinition));
-        } catch (IllegalArgumentException e) {
-          // TODO(janakr): Currently this exception should never be thrown since diff is never
-          // constructed using the diff method that takes in a preexisting OptionsDiff. If this
-          // changes, add a test verifying this error catching works properly.
-          throw new IllegalStateException(
-              "OptionsDiffForReconstruction can only handle a single first BuildOptions and a "
-                  + "single second BuildOptions and has encountered multiple second BuildOptions");
-        }
-        valueMap.put(optionDefinition.getField().getName(), secondValue);
+        valuesMapBuilder.put(
+            optionDefinition.getField().getName(), diff.second.get(optionDefinition));
       }
-      differingOptions.put(clazz, valueMap);
+      differingOptionsBuilder.put(clazz, valuesMapBuilder.build());
     }
-    first.maybeInitializeFingerprintAndHashCode();
     return new OptionsDiffForReconstruction(
-        differingOptions,
+        differingOptionsBuilder.build(),
         ImmutableSet.copyOf(diff.extraFirstFragments),
-        ImmutableList.copyOf(diff.extraSecondFragments),
-        first.fingerprint,
-        second.computeChecksum());
+        ImmutableList.copyOf(diff.extraSecondFragments));
   }
 
   /**
-   * A diff class for BuildOptions. Fields are meant to be populated and returned by {@link
-   * BuildOptions#diff}
+   * A diff class for BuildOptions. Fields are meant to be populated and returned by
+   * {@link BuildOptions#diff}
    */
   public static class OptionsDiff{
     private final Multimap<Class<? extends FragmentOptions>, OptionDefinition> differingOptions =
         ArrayListMultimap.create();
-    // The keyset for the {@link first} and {@link second} maps are identical and indicate which
-    // specific options differ between the first and second built options.
-    private final Map<OptionDefinition, Object> first = new LinkedHashMap<>();
-    // Since this class can be used to track the result of transitions, {@link second} is a multimap
-    // to be able to handle [@link SplitTransition}s.
-    private final Multimap<OptionDefinition, Object> second = OrderedSetMultimap.create();
-    // List of "extra" fragments for each BuildOption aka fragments that were trimmed off one
-    // BuildOption but not the other.
+    private final Map<OptionDefinition, Object> first = new HashMap<>();
+    private final Map<OptionDefinition, Object> second = new HashMap<>();
     private final Set<Class<? extends FragmentOptions>> extraFirstFragments = new HashSet<>();
     private final Set<FragmentOptions> extraSecondFragments = new HashSet<>();
 
@@ -493,7 +454,7 @@ public final class BuildOptions implements Cloneable, Serializable {
       return first;
     }
 
-    public Multimap<OptionDefinition, Object> getSecond() {
+    public Map<OptionDefinition, Object> getSecond() {
       return second;
     }
 
@@ -521,19 +482,16 @@ public final class BuildOptions implements Cloneable, Serializable {
 
     public String prettyPrint() {
       StringBuilder toReturn = new StringBuilder();
-      for (String diff : getPrettyPrintList()) {
-        toReturn.append(diff).append(System.lineSeparator());
+      for (Map.Entry<OptionDefinition, Object> firstOption : first.entrySet()) {
+        toReturn
+            .append(firstOption.getKey().getOptionName())
+            .append(":")
+            .append(firstOption.getValue())
+            .append(" -> ")
+            .append(second.get(firstOption.getKey()))
+            .append(System.lineSeparator());
       }
       return toReturn.toString();
-    }
-
-    public List<String> getPrettyPrintList() {
-      List<String> toReturn = new ArrayList<>();
-        first.forEach(
-            (option, value) ->
-                toReturn.add(
-                    option.getOptionName() + ":" + value + " -> " + second.get(option)));
-      return toReturn;
     }
   }
 
@@ -543,41 +501,35 @@ public final class BuildOptions implements Cloneable, Serializable {
    * omitted, and the values of any fields that should be changed.
    */
   @AutoCodec
-  public static class OptionsDiffForReconstruction {
-    private final Map<Class<? extends FragmentOptions>, Map<String, Object>> differingOptions;
+  static class OptionsDiffForReconstruction {
+    @AutoCodec
+    static final OptionsDiffForReconstruction EMPTY =
+        new OptionsDiffForReconstruction(ImmutableMap.of(), ImmutableSet.of(), ImmutableList.of());
+
+    private final ImmutableMap<Class<? extends FragmentOptions>, ImmutableMap<String, Object>>
+        differingOptions;
     private final ImmutableSet<Class<? extends FragmentOptions>> extraFirstFragmentClasses;
     private final ImmutableList<FragmentOptions> extraSecondFragments;
-    private final byte[] baseFingerprint;
-    private final String checksum;
 
     @AutoCodec.VisibleForSerialization
     OptionsDiffForReconstruction(
-        Map<Class<? extends FragmentOptions>, Map<String, Object>> differingOptions,
+        ImmutableMap<Class<? extends FragmentOptions>, ImmutableMap<String, Object>>
+            differingOptions,
         ImmutableSet<Class<? extends FragmentOptions>> extraFirstFragmentClasses,
-        ImmutableList<FragmentOptions> extraSecondFragments,
-        byte[] baseFingerprint,
-        String checksum) {
+        ImmutableList<FragmentOptions> extraSecondFragments) {
       this.differingOptions = differingOptions;
       this.extraFirstFragmentClasses = extraFirstFragmentClasses;
       this.extraSecondFragments = extraSecondFragments;
-      this.baseFingerprint = baseFingerprint;
-      this.checksum = checksum;
-    }
-
-    private static OptionsDiffForReconstruction getEmpty(byte[] baseFingerprint, String checksum) {
-      return new OptionsDiffForReconstruction(
-          ImmutableMap.of(), ImmutableSet.of(), ImmutableList.of(), baseFingerprint, checksum);
     }
 
     @Nullable
-    @VisibleForTesting
-    FragmentOptions transformOptions(FragmentOptions input) {
+    private FragmentOptions transformOptions(FragmentOptions input) {
       Class<? extends FragmentOptions> clazz = input.getClass();
       if (extraFirstFragmentClasses.contains(clazz)) {
         return null;
       }
       Map<String, Object> changedOptions = differingOptions.get(clazz);
-      if (changedOptions == null || changedOptions.isEmpty()) {
+      if (changedOptions.isEmpty()) {
         return input;
       }
       FragmentOptions newOptions = input.clone();
@@ -589,10 +541,6 @@ public final class BuildOptions implements Cloneable, Serializable {
         }
       }
       return newOptions;
-    }
-
-    public String getChecksum() {
-      return checksum;
     }
 
     private boolean isEmpty() {
