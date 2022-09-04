@@ -20,6 +20,7 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.Sets;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
@@ -32,6 +33,7 @@ import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.QueryStringQueryBuilder;
+import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
@@ -39,7 +41,8 @@ import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuil
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogram;
 import org.elasticsearch.search.aggregations.bucket.missing.Missing;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
-import org.elasticsearch.search.aggregations.metrics.cardinality.Cardinality;
+import org.elasticsearch.search.aggregations.metrics.max.Max;
+import org.elasticsearch.search.aggregations.metrics.min.Min;
 import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
 import org.elasticsearch.search.sort.SortOrder;
 import org.graylog2.Configuration;
@@ -58,7 +61,11 @@ import org.graylog2.indexer.results.TermsResult;
 import org.graylog2.indexer.results.TermsStatsResult;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRanges;
+import org.graylog2.plugin.Tools;
+import org.joda.time.DateTime;
 import org.joda.time.Period;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,7 +91,6 @@ public class Searches {
     public static final String AGG_FILTER = "gl2_filter";
     public static final String AGG_HISTOGRAM = "gl2_histogram";
     public static final String AGG_EXTENDED_STATS = "gl2_extended_stats";
-    public static final String AGG_CARDINALITY = "gl2_field_cardinality";
 
     public enum TermsStatsOrder {
         TERM,
@@ -235,9 +241,7 @@ public class Searches {
     }
 
     public SearchResult search(SearchesConfig config) {
-        Set<IndexRange> indices = IndexHelper.determineAffectedIndicesWithRanges(indexRangeService,
-                                                                                 deflector,
-                                                                                 config.range());
+        Set<IndexRange> indices = IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, deflector, config.range());
 
         Set<String> indexNames = Sets.newHashSet();
         for (IndexRange index : indices) {
@@ -383,12 +387,6 @@ public class Searches {
     }
 
     public FieldStatsResult fieldStats(String field, String query, String filter, TimeRange range) throws FieldTypeException {
-        // by default include the cardinality aggregation, as well.
-        return fieldStats(field, query, filter, range, true, false);
-    }
-
-    public FieldStatsResult fieldStats(String field, String query, String filter, TimeRange range, boolean includeCardinality, boolean onlyCardinality)
-            throws FieldTypeException {
         SearchRequestBuilder srb;
 
         if (filter == null) {
@@ -398,13 +396,8 @@ public class Searches {
         }
 
         FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
-                .filter(standardFilters(range, filter));
-        if (!onlyCardinality) {
-            builder.subAggregation(AggregationBuilders.extendedStats(AGG_EXTENDED_STATS).field(field));
-        }
-        if (includeCardinality) {
-            builder.subAggregation(AggregationBuilders.cardinality(AGG_CARDINALITY).field(field));
-        }
+                .filter(standardFilters(range, filter))
+                .subAggregation(AggregationBuilders.extendedStats(AGG_EXTENDED_STATS).field(field));
 
         srb.addAggregation(builder);
 
@@ -421,7 +414,6 @@ public class Searches {
         final Filter f = r.getAggregations().get(AGG_FILTER);
         return new FieldStatsResult(
                 (ExtendedStats) f.getAggregations().get(AGG_EXTENDED_STATS),
-                (Cardinality) f.getAggregations().get(AGG_CARDINALITY),
                 r.getHits(),
                 query,
                 request.source(),
@@ -581,6 +573,10 @@ public class Searches {
         }
 
         return srb;
+    }
+
+    private SearchRequestBuilder filteredSearchRequest(String query, String filter, Set<String> indices) {
+        return filteredSearchRequest(query, filter, indices, 0, 0, null, null);
     }
 
     private SearchRequestBuilder filteredSearchRequest(String query, String filter, Set<String> indices, TimeRange range) {
