@@ -95,9 +95,7 @@ public abstract class DataSupport {
 	/**
 	 * Deletes all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL DELETE statement and sends
-	 * it to the database.<br>
-	 * Note that this method won't delete the referenced data in other tables.
-	 * You should remove those values by your own.
+	 * it to the database.
 	 * 
 	 * @param modelClass
 	 *            Which table to delete from by class.
@@ -119,9 +117,7 @@ public abstract class DataSupport {
 	/**
 	 * Deletes all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL DELETE statement and sends
-	 * it to the database.<br>
-	 * Note that this method won't delete the referenced data in other tables.
-	 * You should remove those values by your own.
+	 * it to the database.
 	 * 
 	 * @param tableName
 	 *            Which table to delete from.
