@@ -168,9 +168,9 @@ public class AndroidResourceValidatorAction {
           assets,
           generatedSources,
           options.packagePath,
-          /* proguardOut= */ null,
-          /* mainDexProguardOut= */ null,
-          /* publicResourcesOut= */ null);
+          null, /* proguardOut */
+          null, /* mainDexProguardOut */
+          null /* publicResourcesOut */);
       logger.fine(String.format("aapt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       AndroidResourceOutputs.copyRToOutput(
