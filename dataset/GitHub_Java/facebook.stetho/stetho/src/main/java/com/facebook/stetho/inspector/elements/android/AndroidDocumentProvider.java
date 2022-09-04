@@ -14,7 +14,6 @@ import android.app.Application;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Rect;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -45,8 +44,6 @@ final class AndroidDocumentProvider extends ThreadBoundProxy
   private static final int INSPECT_OVERLAY_COLOR = 0x40FFFFFF;
   private static final int INSPECT_HOVER_COLOR = 0x404040ff;
 
-  private final Rect mHighlightingBoundsRect = new Rect();
-
   private final Application mApplication;
   private final DescriptorMap mDescriptorMap;
   private final AndroidDocumentRoot mDocumentRoot;
@@ -56,9 +53,8 @@ final class AndroidDocumentProvider extends ThreadBoundProxy
 
   // We don't yet have an an implementation for reliably detecting fine-grained changes in the
   // View tree. So, for now at least, we have a timer that runs every so often and just reports
-  // that we changed. Our listener will then read the entire Document from us and transmit the
-  // changes to Chrome. Detecting, reporting, and traversing fine-grained changes is a future work
-  // item (see Issue #210).
+  // that we changed. Our listener will then read the entire DOM from us and transmit the changes to
+  // Chrome. Detecting, reporting, and traversing fine-grained changes is a future work item.
   private static final long REPORT_CHANGED_INTERVAL_MS = 1000;
   private boolean mIsReportChangesTimerPosted = false;
   private final Runnable mReportChangesTimer = new Runnable() {
@@ -141,15 +137,11 @@ final class AndroidDocumentProvider extends ThreadBoundProxy
   public void highlightElement(Object element, int color) {
     verifyThreadAccess();
 
-    mHighlightingBoundsRect.setEmpty();
-    final View highlightingView = getHighlightingView(element, mHighlightingBoundsRect);
+    View highlightingView = getHighlightingView(element);
     if (highlightingView == null) {
       mHighlighter.clearHighlight();
     } else {
-      mHighlighter.setHighlightedView(
-          highlightingView,
-          mHighlightingBoundsRect,
-          color);
+      mHighlighter.setHighlightedView(highlightingView, color);
     }
   }
 
@@ -203,8 +195,7 @@ final class AndroidDocumentProvider extends ThreadBoundProxy
 
   // AndroidDescriptorHost implementation
   @Override
-  @Nullable
-  public View getHighlightingView(@Nullable Object element, Rect bounds) {
+  public View getHighlightingView(Object element) {
     if (element == null) {
       return null;
     }
@@ -219,8 +210,7 @@ final class AndroidDocumentProvider extends ThreadBoundProxy
       }
 
       if (descriptor != lastDescriptor && descriptor instanceof HighlightableDescriptor) {
-        highlightingView =
-            ((HighlightableDescriptor) descriptor).getViewAndBoundsForHighlighting(element, bounds);
+        highlightingView = ((HighlightableDescriptor) descriptor).getViewForHighlighting(element);
       }
 
       lastDescriptor = descriptor;
@@ -257,7 +247,7 @@ final class AndroidDocumentProvider extends ThreadBoundProxy
     private final Predicate<View> mViewSelector = new Predicate<View>() {
       @Override
       public boolean apply(View view) {
-        return !(view instanceof DocumentHiddenView);
+        return !(view instanceof DOMHiddenView);
       }
     };
 
@@ -309,7 +299,7 @@ final class AndroidDocumentProvider extends ThreadBoundProxy
       mOverlays = null;
     }
 
-    private final class OverlayView extends DocumentHiddenView {
+    private final class OverlayView extends DOMHiddenView {
       public OverlayView(Context context) {
         super(context);
       }
@@ -328,7 +318,7 @@ final class AndroidDocumentProvider extends ThreadBoundProxy
 
           if (event.getAction() != MotionEvent.ACTION_CANCEL) {
             if (view != null) {
-              mHighlighter.setHighlightedView(view, null, INSPECT_HOVER_COLOR);
+              mHighlighter.setHighlightedView(view, INSPECT_HOVER_COLOR);
 
               if (event.getAction() == MotionEvent.ACTION_UP) {
                 if (mListener != null) {
