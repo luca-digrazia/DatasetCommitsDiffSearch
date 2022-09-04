@@ -14,11 +14,11 @@
 package com.google.devtools.build.lib.analysis.select;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -58,15 +58,5 @@ public class NonconfigurableAttributeMapperTest extends AbstractAttributeMapperT
     assertThat(e)
         .hasMessageThat()
         .isEqualTo("Attribute 'linkstatic' is potentially configurable - not allowed here");
-  }
-
-  @Test
-  public void testGet_nonexistentAttribute() throws Exception {
-    IllegalArgumentException e =
-        assertThrows(
-            "Expected NonconfigurableAttributeMapper to fail on nonexistent attribute name",
-            IllegalArgumentException.class,
-            () -> NonconfigurableAttributeMapper.of(rule).get("nonexistent-attr", Type.STRING));
-    assertThat(e).hasMessageThat().contains("No such attribute nonexistent-attr in cc_binary");
   }
 }

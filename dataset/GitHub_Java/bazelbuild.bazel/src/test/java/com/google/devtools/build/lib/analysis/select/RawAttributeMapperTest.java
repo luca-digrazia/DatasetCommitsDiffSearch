@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.analysis.select;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -68,9 +68,9 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
             () -> rawMapper.get("srcs", BuildType.LABEL_LIST));
     assertThat(e)
         .hasMessageThat()
-        .contains(
-            "Unexpected configurable attribute \"srcs\" in sh_binary rule //x:myrule: "
-                + "expected list(label), is select");
+        .isEqualTo(
+            "wrong type for attribute \"srcs\" in sh_binary rule //x:myrule: "
+                + "expected list(label), is SelectorList");
   }
 
   @Override
@@ -102,9 +102,9 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
             () -> rawMapper.visitLabels());
     assertThat(e)
         .hasMessageThat()
-        .contains(
-            "Unexpected configurable attribute \"srcs\" in sh_binary rule //x:myrule: "
-                + "expected list(label), is select");
+        .isEqualTo(
+            "wrong type for attribute \"srcs\" in sh_binary rule //x:myrule: "
+                + "expected list(label), is SelectorList");
   }
 
   @Test

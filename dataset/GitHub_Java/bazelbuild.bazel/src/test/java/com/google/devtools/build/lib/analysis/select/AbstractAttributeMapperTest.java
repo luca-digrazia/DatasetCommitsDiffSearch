@@ -14,16 +14,18 @@
 package com.google.devtools.build.lib.analysis.select;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AbstractAttributeMapper;
+import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.syntax.Type;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.junit.Before;
@@ -39,8 +41,9 @@ public class AbstractAttributeMapperTest extends BuildViewTestCase {
   protected AbstractAttributeMapper mapper;
 
   private static class TestMapper extends AbstractAttributeMapper {
-    public TestMapper(Rule rule) {
-      super(rule);
+    public TestMapper(Package pkg, RuleClass ruleClass, Label ruleLabel,
+        AttributeContainer attributes) {
+      super(pkg, ruleClass, ruleLabel, attributes);
     }
   }
 
@@ -49,7 +52,9 @@ public class AbstractAttributeMapperTest extends BuildViewTestCase {
     rule = scratchRule("p", "myrule",
         "cc_binary(name = 'myrule',",
         "          srcs = ['a', 'b', 'c'])");
-    mapper = new TestMapper(rule);
+    RuleClass ruleClass = rule.getRuleClassObject();
+    mapper =
+        new TestMapper(rule.getPackage(), ruleClass, rule.getLabel(), rule.getAttributeContainer());
   }
 
   @Test
