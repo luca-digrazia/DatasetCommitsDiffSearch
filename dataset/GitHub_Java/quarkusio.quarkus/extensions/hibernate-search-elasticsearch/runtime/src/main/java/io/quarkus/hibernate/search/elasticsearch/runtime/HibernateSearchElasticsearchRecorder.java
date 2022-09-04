@@ -53,7 +53,6 @@ public class HibernateSearchElasticsearchRecorder {
 
         @Override
         public void contributeBootProperties(BiConsumer<String, Object> propertyCollector) {
-            // Use the radical only as a workaround for https://hibernate.atlassian.net/browse/HSEARCH-3734
             addConfig(propertyCollector, HibernateOrmMapperSpiSettings.Radicals.REFLECTION_STRATEGY,
                     HibernateOrmReflectionStrategyName.JAVA_LANG_REFLECT);
 
@@ -86,16 +85,16 @@ public class HibernateSearchElasticsearchRecorder {
         @Override
         public void contributeRuntimeProperties(BiConsumer<String, Object> propertyCollector) {
             addConfig(propertyCollector,
-                    HibernateOrmMapperSettings.AUTOMATIC_INDEXING_SYNCHRONIZATION_STRATEGY,
-                    runtimeConfig.automaticIndexing.synchronization.strategy);
+                    HibernateOrmMapperSettings.Radicals.AUTOMATIC_INDEXING_SYNCHRONIZATION_STRATEGY,
+                    runtimeConfig.automaticIndexing.synchronizationStrategy);
             addConfig(propertyCollector,
-                    HibernateOrmMapperSettings.AUTOMATIC_INDEXING_ENABLE_DIRTY_CHECK,
+                    HibernateOrmMapperSettings.Radicals.AUTOMATIC_INDEXING_ENABLE_DIRTY_CHECK,
                     runtimeConfig.automaticIndexing.enableDirtyCheck);
             addConfig(propertyCollector,
-                    HibernateOrmMapperSettings.QUERY_LOADING_CACHE_LOOKUP_STRATEGY,
-                    runtimeConfig.queryLoading.cacheLookup.strategy);
+                    HibernateOrmMapperSettings.Radicals.QUERY_LOADING_CACHE_LOOKUP_STRATEGY,
+                    runtimeConfig.queryLoading.cacheLookupStrategy);
             addConfig(propertyCollector,
-                    HibernateOrmMapperSettings.QUERY_LOADING_FETCH_SIZE,
+                    HibernateOrmMapperSettings.Radicals.QUERY_LOADING_FETCH_SIZE,
                     runtimeConfig.queryLoading.fetchSize);
 
             contributeBackendRuntimeProperties(propertyCollector, DEFAULT_BACKEND, runtimeConfig.defaultBackend);
@@ -113,7 +112,7 @@ public class HibernateSearchElasticsearchRecorder {
                     elasticsearchBackendConfig.version);
             addBackendConfig(propertyCollector, backendName,
                     ElasticsearchBackendSettings.ANALYSIS_CONFIGURER,
-                    elasticsearchBackendConfig.analysis.configurer,
+                    elasticsearchBackendConfig.analysisConfigurer,
                     Optional::isPresent, c -> c.get().getName());
         }
 

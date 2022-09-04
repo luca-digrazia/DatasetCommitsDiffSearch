@@ -107,6 +107,12 @@ public class HibernateSearchElasticsearchRuntimeConfig {
          */
         @ConfigItem
         LifecycleConfig lifecycle;
+
+        /**
+         * Defines if the indexes should be refreshed after writes.
+         */
+        @ConfigItem
+        Optional<Boolean> refreshAfterWrite;
     }
 
     @ConfigGroup
