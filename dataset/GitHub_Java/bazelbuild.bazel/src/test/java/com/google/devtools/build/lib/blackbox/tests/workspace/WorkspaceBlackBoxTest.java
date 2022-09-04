@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.blackbox.framework.BuilderRunner;
 import com.google.devtools.build.lib.blackbox.framework.PathUtils;
-import com.google.devtools.build.lib.blackbox.framework.ProcessResult;
 import com.google.devtools.build.lib.blackbox.junit.AbstractBlackBoxTest;
 import com.google.devtools.build.lib.util.OS;
 import java.nio.file.Files;
@@ -185,71 +184,11 @@ public class WorkspaceBlackBoxTest extends AbstractBlackBoxTest {
   }
 
   @Test
-  public void testNoPackageLoadingOnBenignWorkspaceChanges() throws Exception {
-    Path repo = context().getTmpDir().resolve(testName.getMethodName());
-    new RepoWithRuleWritingTextGenerator(repo).withOutputText("hi").setupRepository();
-
-    context()
-        .write(
-            WORKSPACE,
-            String.format(
-                "local_repository(name = 'ext', path = '%s',)",
-                PathUtils.pathForStarlarkFile(repo)));
-
-    BuilderRunner bazel =
-        WorkspaceTestUtils.bazel(context())
-            // This combination of flags ensures all progress events get into stdout
-            // and Bazel recognizes that there is a terminal, so progress events will be displayed
-            .withFlags("--experimental_ui_debug_all_events", "--curses=yes");
-
-    final String progressMessage = "PROGRESS <no location>: Loading package: @ext//";
-
-    ProcessResult result = bazel.query("@ext//:all");
-    assertThat(result.outString()).contains(progressMessage);
-
-    result = bazel.query("@ext//:all");
-    assertThat(result.outString()).doesNotContain(progressMessage);
-
-    Path workspaceFile = context().getWorkDir().resolve(WORKSPACE);
-    PathUtils.append(workspaceFile, "# comment");
-
-    result = bazel.query("@ext//:all");
-    assertThat(result.outString()).doesNotContain(progressMessage);
-  }
-
-  @Test
   public void testPathWithSpace() throws Exception {
     context().write("a b/WORKSPACE");
     BuilderRunner bazel = WorkspaceTestUtils.bazel(context());
     bazel.info();
     bazel.help();
-  }
-
-  @Test
-  public void testWorkspaceFileIsSymlink() throws Exception {
-    if (isWindows()) {
-      // Do not test file symlinks on Windows.
-      return;
-    }
-    Path repo = context().getTmpDir().resolve(testName.getMethodName());
-    new RepoWithRuleWritingTextGenerator(repo).withOutputText("hi").setupRepository();
-
-    Path workspaceFile = context().getWorkDir().resolve(WORKSPACE);
-    assertThat(workspaceFile.toFile().delete()).isTrue();
-
-    Path tempWorkspace = Files.createTempFile(context().getTmpDir(), WORKSPACE, "");
-    PathUtils.writeFile(
-        tempWorkspace,
-        "workspace(name = 'abc')",
-        String.format(
-            "local_repository(name = 'ext', path = '%s',)", PathUtils.pathForStarlarkFile(repo)));
-    Files.createSymbolicLink(workspaceFile, tempWorkspace);
-
-    BuilderRunner bazel = WorkspaceTestUtils.bazel(context());
-    bazel.build("@ext//:all");
-    PathUtils.append(workspaceFile, "# comment");
-    // At this point, there is already some cache workspace file/file state value.
-    bazel.build("@ext//:all");
   }
 
   private boolean isWindows() {

@@ -180,7 +180,7 @@ public class SkylarkRepositoryContext
             fromPath.toString(), toPath.toString(), rule.getLabel().toString(), location);
     env.getListener().post(w);
     try {
-      checkInOutputDirectory("write", toPath);
+      checkInOutputDirectory(toPath);
       makeDirectories(toPath.getPath());
       toPath.getPath().createSymbolicLink(fromPath.getPath());
     } catch (IOException e) {
@@ -192,38 +192,30 @@ public class SkylarkRepositoryContext
     }
   }
 
-  private void checkInOutputDirectory(String operation, SkylarkPath path)
-      throws RepositoryFunctionException {
+  private void checkInOutputDirectory(SkylarkPath path) throws RepositoryFunctionException {
     if (!path.getPath().getPathString().startsWith(outputDirectory.getPathString())) {
       throw new RepositoryFunctionException(
           new EvalException(
               Location.fromFile(path.getPath()),
-              "Cannot " + operation + " outside of the repository directory for path " + path),
+              "Cannot write outside of the repository directory for path " + path),
           Transience.PERSISTENT);
     }
   }
 
   @Override
-  public void createFile(
-      Object path, String content, Boolean executable, Boolean legacyUtf8, Location location)
+  public void createFile(Object path, String content, Boolean executable, Location location)
       throws RepositoryFunctionException, EvalException, InterruptedException {
     SkylarkPath p = getPath("file()", path);
-    byte[] contentBytes;
-    if (legacyUtf8) {
-      contentBytes = content.getBytes(StandardCharsets.UTF_8);
-    } else {
-      contentBytes = content.getBytes(StandardCharsets.ISO_8859_1);
-    }
     WorkspaceRuleEvent w =
         WorkspaceRuleEvent.newFileEvent(
             p.toString(), content, executable, rule.getLabel().toString(), location);
     env.getListener().post(w);
     try {
-      checkInOutputDirectory("write", p);
+      checkInOutputDirectory(p);
       makeDirectories(p.getPath());
       p.getPath().delete();
       try (OutputStream stream = p.getPath().getOutputStream()) {
-        stream.write(contentBytes);
+        stream.write(content.getBytes(StandardCharsets.UTF_8));
       }
       if (executable) {
         p.getPath().setExecutable(true);
@@ -253,7 +245,7 @@ public class SkylarkRepositoryContext
             location);
     env.getListener().post(w);
     try {
-      checkInOutputDirectory("write", p);
+      checkInOutputDirectory(p);
       makeDirectories(p.getPath());
       String tpl = FileSystemUtils.readContent(t.getPath(), StandardCharsets.UTF_8);
       for (Map.Entry<String, String> substitution : substitutions.entrySet()) {
@@ -267,21 +259,6 @@ public class SkylarkRepositoryContext
       if (executable) {
         p.getPath().setExecutable(true);
       }
-    } catch (IOException e) {
-      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-    }
-  }
-
-  @Override
-  public String readFile(Object path, Location location)
-      throws RepositoryFunctionException, EvalException, InterruptedException {
-    SkylarkPath p = getPath("read()", path);
-    WorkspaceRuleEvent w =
-        WorkspaceRuleEvent.newReadEvent(p.toString(), rule.getLabel().toString(), location);
-    env.getListener().post(w);
-    try {
-      checkInOutputDirectory("read", p);
-      return FileSystemUtils.readContent(p.getPath(), StandardCharsets.ISO_8859_1);
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
@@ -405,14 +382,9 @@ public class SkylarkRepositoryContext
 
   @Override
   public StructImpl download(
-      Object url,
-      Object output,
-      String sha256,
-      Boolean executable,
-      Boolean allowFail,
-      Location location)
+      Object url, Object output, String sha256, Boolean executable, Location location)
       throws RepositoryFunctionException, EvalException, InterruptedException {
-    List<URL> urls = getUrls(url, /* ensureNonEmpty= */ !allowFail);
+    List<URL> urls = getUrls(url);
     RepositoryFunctionException sha256Validation = validateSha256(sha256, location);
     if (sha256Validation != null) {
       warnAboutSha256Error(urls, sha256);
@@ -425,7 +397,7 @@ public class SkylarkRepositoryContext
     env.getListener().post(w);
     Path downloadedPath;
     try {
-      checkInOutputDirectory("write", outputPath);
+      checkInOutputDirectory(outputPath);
       makeDirectories(outputPath.getPath());
       downloadedPath =
           httpDownloader.download(
@@ -443,12 +415,7 @@ public class SkylarkRepositoryContext
       throw new RepositoryFunctionException(
           new IOException("thread interrupted"), Transience.TRANSIENT);
     } catch (IOException e) {
-      if (allowFail) {
-        SkylarkDict<String, Object> dict = SkylarkDict.of(null, "success", false);
-        return StructProvider.STRUCT.createStruct(dict, null);
-      } else {
-        throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-      }
+      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
     if (sha256Validation != null) {
       throw sha256Validation;
@@ -462,7 +429,7 @@ public class SkylarkRepositoryContext
               "Couldn't hash downloaded file (" + downloadedPath.getPathString() + ")", e),
           Transience.PERSISTENT);
     }
-    SkylarkDict<String, Object> dict = SkylarkDict.of(null, "sha256", finalSha256, "success", true);
+    SkylarkDict<String, Object> dict = SkylarkDict.of(null, "sha256", finalSha256);
     return StructProvider.STRUCT.createStruct(dict, null);
   }
 
@@ -470,17 +437,7 @@ public class SkylarkRepositoryContext
   public void extract(Object archive, Object output, String stripPrefix, Location location)
       throws RepositoryFunctionException, InterruptedException, EvalException {
     SkylarkPath archivePath = getPath("extract()", archive);
-
-    if (!archivePath.exists()) {
-      throw new RepositoryFunctionException(
-          new EvalException(
-              Location.fromFile(archivePath.getPath()),
-              String.format("Archive path '%s' does not exist.", archivePath.toString())),
-          Transience.TRANSIENT);
-    }
-
     SkylarkPath outputPath = getPath("extract()", output);
-    checkInOutputDirectory("write", outputPath);
 
     WorkspaceRuleEvent w =
         WorkspaceRuleEvent.newExtractEvent(
@@ -503,15 +460,9 @@ public class SkylarkRepositoryContext
 
   @Override
   public StructImpl downloadAndExtract(
-      Object url,
-      Object output,
-      String sha256,
-      String type,
-      String stripPrefix,
-      Boolean allowFail,
-      Location location)
+      Object url, Object output, String sha256, String type, String stripPrefix, Location location)
       throws RepositoryFunctionException, InterruptedException, EvalException {
-    List<URL> urls = getUrls(url, /* ensureNonEmpty= */ !allowFail);
+    List<URL> urls = getUrls(url);
     RepositoryFunctionException sha256Validation = validateSha256(sha256, location);
     if (sha256Validation != null) {
       warnAboutSha256Error(urls, sha256);
@@ -530,7 +481,7 @@ public class SkylarkRepositoryContext
 
     // Download to outputDirectory and delete it after extraction
     SkylarkPath outputPath = getPath("download_and_extract()", output);
-    checkInOutputDirectory("write", outputPath);
+    checkInOutputDirectory(outputPath);
     createDirectory(outputPath.getPath());
 
     Path downloadedPath;
@@ -550,12 +501,7 @@ public class SkylarkRepositoryContext
           new IOException("thread interrupted"), Transience.TRANSIENT);
     } catch (IOException e) {
       env.getListener().post(w);
-      if (allowFail) {
-        SkylarkDict<String, Object> dict = SkylarkDict.of(null, "success", false);
-        return StructProvider.STRUCT.createStruct(dict, null);
-      } else {
-        throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-      }
+      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
     if (sha256Validation != null) {
       throw sha256Validation;
@@ -588,7 +534,7 @@ public class SkylarkRepositoryContext
               "Couldn't delete temporary file (" + downloadedPath.getPathString() + ")", e),
           Transience.TRANSIENT);
     }
-    SkylarkDict<String, Object> dict = SkylarkDict.of(null, "sha256", finalSha256, "success", true);
+    SkylarkDict<String, Object> dict = SkylarkDict.of(null, "sha256", finalSha256);
     return StructProvider.STRUCT.createStruct(dict, null);
   }
 
@@ -636,18 +582,13 @@ public class SkylarkRepositoryContext
 
   private static List<URL> getUrls(Object urlOrList)
       throws RepositoryFunctionException, EvalException {
-    return getUrls(urlOrList, /* ensureNonEmpty= */ true);
-  }
-
-  private static List<URL> getUrls(Object urlOrList, boolean ensureNonEmpty)
-      throws RepositoryFunctionException, EvalException {
     List<String> urlStrings;
     if (urlOrList instanceof String) {
       urlStrings = ImmutableList.of((String) urlOrList);
     } else {
       urlStrings = checkAllUrls((Iterable<?>) urlOrList);
     }
-    if (ensureNonEmpty && urlStrings.isEmpty()) {
+    if (urlStrings.isEmpty()) {
       throw new RepositoryFunctionException(new IOException("urls not set"), Transience.PERSISTENT);
     }
     List<URL> urls = new ArrayList<>();
