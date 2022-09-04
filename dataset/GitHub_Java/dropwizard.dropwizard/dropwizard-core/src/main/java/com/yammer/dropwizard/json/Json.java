@@ -428,12 +428,12 @@ public class Json {
      * @throws IOException if there is an error mapping {@code src} to {@code T}
      */
     public <T> T readValue(ByteBuffer src, Class<T> valueType) throws IOException {
-        final int bufLength = src.limit() - src.position();
+        int bufLength = src.limit() - src.position();
 
         if (src.hasArray()) {
             return readValue(src.array(), src.arrayOffset(), bufLength, valueType);
         } else {
-            final byte[] bytes = new byte[bufLength];
+            byte[] bytes = new byte[bufLength];
             src.get(bytes);
             return readValue(bytes, 0, bufLength, valueType);
         }
@@ -449,12 +449,12 @@ public class Json {
      * @throws IOException if there is an error parsing {@code src}
      */
     public <T> T readValue(ByteBuffer src, TypeReference<T> valueTypeRef) throws IOException {
-        final int bufLength = src.limit() - src.position();
+        int bufLength = src.limit() - src.position();
 
         if (src.hasArray()) {
             return readValue(src.array(), src.arrayOffset(), bufLength, valueTypeRef);
         } else {
-            final byte[] bytes = new byte[bufLength];
+            byte[] bytes = new byte[bufLength];
             src.get(bytes);
             return readValue(bytes, 0, bufLength, valueTypeRef);
         }
