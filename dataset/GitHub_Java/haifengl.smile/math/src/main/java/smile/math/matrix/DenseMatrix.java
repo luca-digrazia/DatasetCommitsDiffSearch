@@ -465,7 +465,7 @@ public abstract class DenseMatrix implements Matrix, LinearSolver, MatrixMultipl
             throw new UnsupportedOperationException("The Lanczos algorithm of eigen value decomposition only works for symmetric matrices");
         }
 
-        if (eigen == null || eigen.getEigenVectors().nrows() < k) {
+        if (eigen == null || eigen.getEigenVectors().nrows() != k) {
             eigen = Lanczos.eigen(this, k);
         }
 
@@ -476,20 +476,9 @@ public abstract class DenseMatrix implements Matrix, LinearSolver, MatrixMultipl
      * Returns the singular value decomposition.
      */
     public SingularValueDecomposition svd() {
-        if (svd == null || svd.getV().ncols() < ncols()) {
+        if (svd == null) {
             svd = new SingularValueDecomposition(this);
             rank = svd.rank();
-        }
-
-        return svd;
-    }
-
-    /**
-     * Returns the singular value decomposition.
-     */
-    public SingularValueDecomposition svd(int k) {
-        if (svd == null || svd.getV().ncols() < k) {
-            svd = Lanczos.svd(this, k);
         }
 
         return svd;
