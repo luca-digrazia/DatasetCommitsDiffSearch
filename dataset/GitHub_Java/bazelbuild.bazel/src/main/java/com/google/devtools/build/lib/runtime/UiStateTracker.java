@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransportClosedEvent;
 import com.google.devtools.build.lib.buildtool.ExecutionProgressReceiver;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
+import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressReceiverAvailableEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
 import com.google.devtools.build.lib.clock.Clock;
@@ -69,22 +70,21 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
 /** An experimental state tracker for the new experimental UI. */
-final class UiStateTracker {
-
+class UiStateTracker {
   enum ProgressMode {
     OLDEST_ACTIONS,
     MNEMONIC_HISTOGRAM
   }
 
-  private static final long SHOW_TIME_THRESHOLD_SECONDS = 3;
-  private static final String ELLIPSIS = "...";
-  private static final String FETCH_PREFIX = "    Fetching ";
-  private static final String AND_MORE = " ...";
-  private static final String NO_STATUS = "-----";
-  private static final int STATUS_LENGTH = 5;
+  static final long SHOW_TIME_THRESHOLD_SECONDS = 3;
+  static final String ELLIPSIS = "...";
+  static final String FETCH_PREFIX = "    Fetching ";
+  static final String AND_MORE = " ...";
+  static final String NO_STATUS = "-----";
+  static final int STATUS_LENGTH = 5;
 
-  private static final int NANOS_PER_SECOND = 1000000000;
-  private static final String URL_PROTOCOL_SEP = "://";
+  static final int NANOS_PER_SECOND = 1000000000;
+  static final String URL_PROTOCOL_SEP = "://";
 
   private ProgressMode progressMode = ProgressMode.OLDEST_ACTIONS;
   private int sampleSize = 3;
@@ -108,23 +108,23 @@ final class UiStateTracker {
    */
   @ThreadSafe
   @VisibleForTesting
-  static final class StrategyIds {
+  static class StrategyIds {
     /** Fallback name in case we exhaust our space for IDs. */
-    static final String FALLBACK_NAME = "unknown";
+    public static final String FALLBACK_NAME = "unknown";
 
     /** Counter of unique strategies seen so far. */
-    private final AtomicInteger counter = new AtomicInteger(0);
+    private AtomicInteger counter = new AtomicInteger(0);
 
     /** Mapping of strategy names to their unique IDs. */
-    private final Map<String, Integer> strategyIds = new ConcurrentHashMap<>();
+    private Map<String, Integer> strategyIds = new ConcurrentHashMap<>();
 
     /** Mapping of strategy unique IDs to their names. */
-    private final Map<Integer, String> strategyNames = new ConcurrentHashMap<>();
+    private Map<Integer, String> strategyNames = new ConcurrentHashMap<>();
 
-    final Integer fallbackId;
+    public final Integer fallbackId;
 
     /** Constructs a new collection of strategy IDs. */
-    StrategyIds() {
+    public StrategyIds() {
       fallbackId = getId(FALLBACK_NAME);
     }
 
@@ -146,7 +146,7 @@ final class UiStateTracker {
     }
 
     /** Flattens a bitmap of strategy IDs into a human-friendly string. */
-    String formatNames(int bitmap) {
+    public String formatNames(int bitmap) {
       StringBuilder builder = new StringBuilder();
       int mask = 0x1;
       while (bitmap != 0) {
@@ -173,7 +173,7 @@ final class UiStateTracker {
    * <p>We cannot make assumptions on the order in which action state events come in, so this class
    * takes care of always "advancing" the state of an action.
    */
-  private static final class ActionState {
+  private static class ActionState {
     /**
      * The action this state belongs to.
      *
@@ -212,6 +212,15 @@ final class UiStateTracker {
     ActionState(ActionExecutionMetadata action, long nanoStartTime) {
       this.action = action;
       this.nanoStartTime = nanoStartTime;
+    }
+
+    /** Creates a deep copy of this action state. */
+    synchronized ActionState deepCopy() {
+      ActionState other = new ActionState(action, nanoStartTime);
+      other.scanning = scanning;
+      other.schedulingStrategiesBitmap = schedulingStrategiesBitmap;
+      other.runningStrategiesBitmap = runningStrategiesBitmap;
+      return other;
     }
 
     /** Computes the weight of this action for the global active actions counter. */
@@ -321,7 +330,7 @@ final class UiStateTracker {
   private ConfiguredTargetProgressReceiver configuredTargetProgressReceiver;
 
   // Set of build event protocol transports that need yet to be closed.
-  private final Set<BuildEventTransport> bepOpenTransports = new HashSet<>();
+  private Set<BuildEventTransport> bepOpenTransports = new HashSet<>();
   // The point in time when closing of BEP transports was started.
   private long bepTransportClosingStartTimeMillis;
 
@@ -348,7 +357,7 @@ final class UiStateTracker {
     this.sampleSize = Math.max(1, sampleSize);
   }
 
-  void buildStarted() {
+  void buildStarted(BuildStartingEvent event) {
     status = "Loading";
     additionalMessage = "";
   }
@@ -368,7 +377,7 @@ final class UiStateTracker {
     if (count == 1) {
       additionalMessage = "target " + Iterables.getOnlyElement(event.getLabels());
     } else {
-      additionalMessage = count + " targets";
+      additionalMessage = "" + count + " targets";
     }
   }
 
@@ -401,7 +410,7 @@ final class UiStateTracker {
     defaultActivity = "checking cached actions";
   }
 
-  void buildComplete(BuildCompleteEvent event) {
+  void buildComplete(BuildCompleteEvent event, String additionalInfo) {
     buildComplete = true;
     // Build event protocol transports are closed right after the build complete event.
     bepTransportClosingStartTimeMillis = clock.currentTimeMillis();
@@ -411,13 +420,15 @@ final class UiStateTracker {
       int actionsCompleted = this.actionsCompleted.get();
       if (failedTests == 0) {
         additionalMessage =
-            "Build completed successfully, "
+            additionalInfo
+                + "Build completed successfully, "
                 + actionsCompleted
                 + " total action"
                 + (actionsCompleted == 1 ? "" : "s");
       } else {
         additionalMessage =
-            "Build completed, "
+            additionalInfo
+                + "Build completed, "
                 + failedTests
                 + " test"
                 + (failedTests == 1 ? "" : "s")
@@ -429,8 +440,12 @@ final class UiStateTracker {
     } else {
       ok = false;
       status = "FAILED";
-      additionalMessage = "Build did NOT complete successfully";
+      additionalMessage = additionalInfo + "Build did NOT complete successfully";
     }
+  }
+
+  void buildComplete(BuildCompleteEvent event) {
+    buildComplete(event, "");
   }
 
   synchronized void downloadProgress(FetchProgress event) {
@@ -557,7 +572,7 @@ final class UiStateTracker {
    * If possible come up with a human-readable description of the label that fits within the given
    * width; a non-positive width indicates not no restriction at all.
    */
-  private static String shortenedLabelString(Label label, int width) {
+  private String shortenedLabelString(Label label, int width) {
     if (width <= 0) {
       return label.toString();
     }
@@ -581,7 +596,7 @@ final class UiStateTracker {
     return label.toString();
   }
 
-  private static String shortenedString(String s, int maxWidth) {
+  private String shortenedString(String s, int maxWidth) {
     if (maxWidth <= 3 * ELLIPSIS.length() || s.length() <= maxWidth) {
       return s;
     }
@@ -597,8 +612,8 @@ final class UiStateTracker {
     // Leave enough room for at least 3 samples of run times, each 4 characters
     // (a digit, 's', comma, and space).
     int labelWidth = desiredWidth - prefix.length() - labelSep.length() - postfix.length() - 12;
-    StringBuilder message =
-        new StringBuilder(prefix).append(shortenedLabelString(owner, labelWidth)).append(labelSep);
+    StringBuffer message =
+        new StringBuffer(prefix).append(shortenedLabelString(owner, labelWidth)).append(labelSep);
 
     // Compute the remaining width for the sample times, but if the desired width is too small
     // anyway, then show at least one sample.
@@ -758,9 +773,9 @@ final class UiStateTracker {
     if (actionsCount == 1) {
       return " 1 action running";
     } else if (actionsCount == executingActionsCount) {
-      return actionsCount + " actions running";
+      return "" + actionsCount + " actions running";
     } else {
-      return actionsCount + " actions, " + executingActionsCount + " running";
+      return "" + actionsCount + " actions, " + executingActionsCount + " running";
     }
   }
 
@@ -783,8 +798,7 @@ final class UiStateTracker {
     List<Multiset.Entry<String>> sorted =
         mnemonicHistogram.entrySet().stream()
             .collect(
-                Comparators.greatest(
-                    sampleSize, Comparator.comparingLong(Multiset.Entry::getCount)));
+                Comparators.greatest(sampleSize, Comparator.comparingLong((e) -> e.getCount())));
     for (Multiset.Entry<String> entry : sorted) {
       terminalWriter.newline().append("    " + entry.getElement() + " " + entry.getCount());
     }
@@ -840,7 +854,7 @@ final class UiStateTracker {
     }
   }
 
-  synchronized void testFilteringComplete(TestFilteringCompleteEvent event) {
+  public synchronized void testFilteringComplete(TestFilteringCompleteEvent event) {
     if (event.getTestTargets() != null) {
       totalTests = event.getTestTargets().size();
       for (ConfiguredTarget target : event.getTestTargets()) {
@@ -890,7 +904,10 @@ final class UiStateTracker {
     if (status != null) {
       return false;
     }
-    return !activeActions.isEmpty();
+    if (activeActions.size() >= 1) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -922,17 +939,19 @@ final class UiStateTracker {
     }
   }
 
-  private static String shortenUrl(String url, int width) {
+  private String shortenUrl(String url, int width) {
+
     if (url.length() < width) {
       return url;
     }
 
     // Try to shorten to the form prot://host/.../rest/path/filename
+    String prefix = "";
     int protocolIndex = url.indexOf(URL_PROTOCOL_SEP);
     if (protocolIndex > 0) {
-      String prefix = url.substring(0, protocolIndex + URL_PROTOCOL_SEP.length() + 1);
+      prefix = url.substring(0, protocolIndex + URL_PROTOCOL_SEP.length() + 1);
       url = url.substring(protocolIndex + URL_PROTOCOL_SEP.length() + 1);
-      int hostIndex = url.indexOf('/');
+      int hostIndex = url.indexOf("/");
       if (hostIndex > 0) {
         prefix = prefix + url.substring(0, hostIndex + 1);
         url = url.substring(hostIndex + 1);
@@ -941,7 +960,7 @@ final class UiStateTracker {
         // significantly longer (twice as long) as the ellipsis symbol introduced
         if (targetLength > 3 * ELLIPSIS.length()) {
           String shortPath = suffix(url, targetLength - ELLIPSIS.length());
-          int slashPos = shortPath.indexOf('/');
+          int slashPos = shortPath.indexOf("/");
           if (slashPos >= 0) {
             return prefix + ELLIPSIS + shortPath.substring(slashPos);
           } else {
@@ -969,13 +988,13 @@ final class UiStateTracker {
     long downloadSeconds = nanoDownloadTime / NANOS_PER_SECOND;
 
     String progress = download.getProgress();
-    if (!progress.isEmpty()) {
+    if (progress.length() > 0) {
       postfix = postfix + " " + progress;
     }
     if (downloadSeconds > SHOW_TIME_THRESHOLD_SECONDS) {
       postfix = postfix + " " + downloadSeconds + "s";
     }
-    if (!postfix.isEmpty()) {
+    if (postfix.length() > 0) {
       postfix = ";" + postfix;
     }
     url = shortenUrl(url, Math.max(width - postfix.length(), 3 * ELLIPSIS.length()));
@@ -1069,7 +1088,7 @@ final class UiStateTracker {
           terminalWriter.append(", " + configuredTargetProgressReceiver.getProgressString());
         }
         terminalWriter.append(")");
-        if (!progress.getSecond().isEmpty() && !shortVersion) {
+        if (progress.getSecond().length() > 0 && !shortVersion) {
           terminalWriter.newline().append("    " + progress.getSecond());
         }
       }
@@ -1082,7 +1101,7 @@ final class UiStateTracker {
     if (packageProgressReceiver != null) {
       Pair<String, String> progress = packageProgressReceiver.progressState();
       terminalWriter.okStatus().append("Loading:").normal().append(" " + progress.getFirst());
-      if (!progress.getSecond().isEmpty()) {
+      if (progress.getSecond().length() > 0) {
         terminalWriter.newline().append("    " + progress.getSecond());
       }
       if (!shortVersion) {
@@ -1100,7 +1119,7 @@ final class UiStateTracker {
     if (completedTests > 0) {
       terminalWriter.normal().append(" " + completedTests + " / " + totalTests + " tests");
       if (failedTests > 0) {
-        terminalWriter.append(", ").failStatus().append(failedTests + " failed").normal();
+        terminalWriter.append(", ").failStatus().append("" + failedTests + " failed").normal();
       }
       terminalWriter.append(";");
     }
