@@ -77,7 +77,7 @@ public final class GELF {
      * The standard value of the _facility field.
      * https://github.com/Graylog2/graylog2-docs/wiki/GELF
      */
-    public static final String STANDARD_FACILITY_VALUE = "unknown";
+    public static final String STANDARD_FACILITY_VALUE = "GELF";
 
     /**
      * The standard value of the _level field.
