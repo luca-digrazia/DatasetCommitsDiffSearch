@@ -6,20 +6,17 @@ import com.example.helloworld.core.User;
 import io.dropwizard.auth.AuthDynamicFeature;
 import io.dropwizard.auth.AuthValueFactoryProvider;
 import io.dropwizard.auth.basic.BasicCredentialAuthFilter;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
-import io.dropwizard.testing.junit5.ResourceExtension;
-import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
-import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-
+import io.dropwizard.testing.junit.ResourceTestRule;
 import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.core.HttpHeaders;
+import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
+import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
+import org.junit.ClassRule;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
-@ExtendWith(DropwizardExtensionsSupport.class)
 public final class ProtectedClassResourceTest {
 
     private static final BasicCredentialAuthFilter<User> BASIC_AUTH_HANDLER =
@@ -30,7 +27,8 @@ public final class ProtectedClassResourceTest {
             .setRealm("SUPER SECRET STUFF")
             .buildAuthFilter();
 
-    public static final ResourceExtension RULE = ResourceExtension.builder()
+    @ClassRule
+    public static final ResourceTestRule RULE = ResourceTestRule.builder()
         .addProvider(RolesAllowedDynamicFeature.class)
         .addProvider(new AuthDynamicFeature(BASIC_AUTH_HANDLER))
         .addProvider(new AuthValueFactoryProvider.Binder<>(User.class))
@@ -40,7 +38,7 @@ public final class ProtectedClassResourceTest {
 
     @Test
     public void testProtectedAdminEndpoint() {
-        String secret = RULE.target("/protected/admin").request()
+        String secret = RULE.getJerseyTest().target("/protected/admin").request()
             .header(HttpHeaders.AUTHORIZATION, "Basic Y2hpZWYtd2l6YXJkOnNlY3JldA==")
             .get(String.class);
         assertThat(secret).startsWith("Hey there, chief-wizard. It looks like you are an admin.");
@@ -48,7 +46,7 @@ public final class ProtectedClassResourceTest {
 
     @Test
     public void testProtectedBasicUserEndpoint() {
-        String secret = RULE.target("/protected").request()
+        String secret = RULE.getJerseyTest().target("/protected").request()
             .header(HttpHeaders.AUTHORIZATION, "Basic Z29vZC1ndXk6c2VjcmV0")
             .get(String.class);
         assertThat(secret).startsWith("Hey there, good-guy. You seem to be a basic user.");
@@ -56,7 +54,7 @@ public final class ProtectedClassResourceTest {
 
     @Test
     public void testProtectedBasicUserEndpointAsAdmin() {
-        String secret = RULE.target("/protected").request()
+        String secret = RULE.getJerseyTest().target("/protected").request()
             .header(HttpHeaders.AUTHORIZATION, "Basic Y2hpZWYtd2l6YXJkOnNlY3JldA==")
             .get(String.class);
         assertThat(secret).startsWith("Hey there, chief-wizard. You seem to be a basic user.");
@@ -64,7 +62,7 @@ public final class ProtectedClassResourceTest {
 
     @Test
     public void testProtectedGuestEndpoint() {
-        String secret = RULE.target("/protected/guest").request()
+        String secret = RULE.getJerseyTest().target("/protected/guest").request()
             .header(HttpHeaders.AUTHORIZATION, "Basic Z3Vlc3Q6c2VjcmV0")
             .get(String.class);
         assertThat(secret).startsWith("Hey there, guest. You know the secret!");
@@ -72,11 +70,14 @@ public final class ProtectedClassResourceTest {
 
     @Test
     public void testProtectedBasicUserEndpointPrincipalIsNotAuthorized403() {
-        assertThatExceptionOfType(ForbiddenException.class)
-            .isThrownBy(() -> RULE.target("/protected").request()
+        try {
+            RULE.getJerseyTest().target("/protected").request()
             .header(HttpHeaders.AUTHORIZATION, "Basic Z3Vlc3Q6c2VjcmV0")
-            .get(String.class))
-            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(403));
+            .get(String.class);
+            failBecauseExceptionWasNotThrown(ForbiddenException.class);
+        } catch (ForbiddenException e) {
+            assertThat(e.getResponse().getStatus()).isEqualTo(403);
+        }
     }
 
 }
