@@ -101,7 +101,7 @@ public interface Stream extends Persisted {
 
     void setIndexSetId(String indexSetId);
 
-    static boolean isDefaultStreamId(String id) {
+    static boolean isDefaultStream(String id) {
         return DEFAULT_STREAM_ID.equals(id) || DEFAULT_EVENT_STREAM_IDS.contains(id);
     }
 }

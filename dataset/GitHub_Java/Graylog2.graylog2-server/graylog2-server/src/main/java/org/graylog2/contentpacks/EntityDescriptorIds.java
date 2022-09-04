@@ -19,7 +19,6 @@ package org.graylog2.contentpacks;
 import com.google.common.collect.ImmutableMap;
 import org.graylog2.contentpacks.exceptions.ContentPackException;
 import org.graylog2.contentpacks.model.ModelType;
-import org.graylog2.contentpacks.model.ModelTypes;
 import org.graylog2.contentpacks.model.entities.EntityDescriptor;
 import org.graylog2.plugin.streams.Stream;
 
@@ -47,19 +46,15 @@ public class EntityDescriptorIds {
     public static EntityDescriptorIds of(Collection<EntityDescriptor> entityDescriptors) {
         final ImmutableMap<EntityDescriptor, String> descriptorIds = entityDescriptors.stream()
                 .collect(ImmutableMap.toImmutableMap(Function.identity(), d -> {
-                    // use the hardcoded IDs for default streams
-                    if (isDefaultStreamDescriptor(d)) {
-                        return d.id().id();
+                    final String id = d.id().id();
+                    if (Stream.isDefaultStream(id)) {
+                        return id;
                     } else {
                         return UUID.randomUUID().toString();
                     }
                 }));
 
         return new EntityDescriptorIds(descriptorIds);
-    }
-
-    public static boolean isDefaultStreamDescriptor(EntityDescriptor descriptor) {
-        return ModelTypes.STREAM_V1.equals(descriptor.type()) && Stream.isDefaultStream(descriptor.id().id());
     }
 
     private EntityDescriptorIds(ImmutableMap<EntityDescriptor, String> descriptorIds) {

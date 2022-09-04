@@ -55,6 +55,7 @@ import org.graylog2.contentpacks.model.entities.NativeEntityDescriptor;
 import org.graylog2.contentpacks.model.entities.references.ValueReference;
 import org.graylog2.contentpacks.model.entities.references.ValueType;
 import org.graylog2.contentpacks.model.parameters.Parameter;
+import org.graylog2.plugin.streams.Stream;
 import org.graylog2.utilities.Graphs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -361,8 +362,7 @@ public class ContentPackService {
 
         final ImmutableSet.Builder<Entity> entities = ImmutableSet.builder();
         for (EntityDescriptor entityDescriptor : resolvedEntities) {
-            // don't export default streams
-            if (EntityDescriptorIds.isDefaultStreamDescriptor(entityDescriptor)) {
+            if (entityDescriptor.type().name().equals("stream") && Stream.isDefaultStream(entityDescriptor.id().id())) {
                 continue;
             }
             final EntityFacade<?> facade = entityFacades.getOrDefault(entityDescriptor.type(), UnsupportedEntityFacade.INSTANCE);
