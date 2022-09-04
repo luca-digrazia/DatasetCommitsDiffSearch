@@ -316,8 +316,7 @@ public interface FilesetTraversalParams {
         EventHandler handler,
         Location location,
         ArtifactPathResolver pathResolver,
-        ArtifactExpander artifactExpander,
-        MetadataProvider metadataProvider)
+        ArtifactExpander artifactExpander)
         throws IOException;
 
     void fingerprint(Fingerprint fp);
