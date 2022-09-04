@@ -343,17 +343,9 @@ public class ServerLongDoubleRow extends ServerDoubleRow {
    */
   public boolean exist(long index) {
     if(useIntKey) {
-      if(row.isSparse()) {
-        return ((IntDoubleVector) row).getStorage().hasKey((int)(index - startCol));
-      } else {
-        return ((IntDoubleVector) row).getStorage().get((int)(index - startCol)) != 0.0;
-      }
+      return ((IntDoubleVector) row).getStorage().hasKey((int)(index - startCol));
     } else {
-      if(row.isSparse()) {
-        return ((LongDoubleVector) row).getStorage().hasKey(index - startCol);
-      } else {
-        return ((LongDoubleVector) row).getStorage().get(index - startCol) != 0.0;
-      }
+      return ((LongDoubleVector) row).getStorage().hasKey(index - startCol);
     }
   }
 

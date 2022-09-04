@@ -24,16 +24,12 @@ import com.tencent.angel.psagent.matrix.transport.adapter.IndicesView;
 import com.tencent.angel.psagent.matrix.transport.adapter.IntIndicesView;
 import io.netty.buffer.ByteBuf;
 
-import java.util.Random;
-
 public class IndexPartGetRowRequest extends PartitionRequest {
   private int matrixId;
   private int rowId;
   private final IndicesView colIds;
   private final ValueType valueType;
   private InitFunc func;
-  private final int hashCode;
-  private static final Random r = new Random();
 
   public IndexPartGetRowRequest(int userRequestId, int matrixId, int rowId, PartitionKey partKey,
     IndicesView colIds, ValueType valueType, InitFunc func) {
@@ -43,7 +39,6 @@ public class IndexPartGetRowRequest extends PartitionRequest {
     this.colIds = colIds;
     this.valueType = valueType;
     this.func = func;
-    hashCode = r.nextInt();
   }
 
   public IndexPartGetRowRequest() {
@@ -141,13 +136,5 @@ public class IndexPartGetRowRequest extends PartitionRequest {
       handleElemSize = colIds.endPos - colIds.startPos;
     }
     return handleElemSize;
-  }
-
-  @Override public boolean equals(Object o) {
-    return false;
-  }
-
-  @Override public int hashCode() {
-    return hashCode;
   }
 }
