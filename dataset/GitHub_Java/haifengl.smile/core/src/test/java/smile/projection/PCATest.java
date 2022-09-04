@@ -21,7 +21,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  *
@@ -170,8 +170,8 @@ public class PCATest {
         };
         PCA pca = new PCA(USArrests);
         pca.setProjection(4);
-        assertTrue(MathEx.equals(prop, pca.getVarianceProportion(), 1E-7));
-        assertTrue(MathEx.equals(cumprop, pca.getCumulativeVarianceProportion(), 1E-7));
+        assertTrue(Math.equals(prop, pca.getVarianceProportion(), 1E-7));
+        assertTrue(Math.equals(cumprop, pca.getCumulativeVarianceProportion(), 1E-7));
 
         for (int i = 0; i < loadings.length; i++) {
             for (int j = 0; j < loadings[i].length; j++) {
@@ -256,8 +256,8 @@ public class PCATest {
 
         PCA pca = new PCA(USArrests, true);
         pca.setProjection(4);
-        assertTrue(MathEx.equals(prop, pca.getVarianceProportion(), 1E-7));
-        assertTrue(MathEx.equals(cumprop, pca.getCumulativeVarianceProportion(), 1E-7));
+        assertTrue(Math.equals(prop, pca.getVarianceProportion(), 1E-7));
+        assertTrue(Math.equals(cumprop, pca.getCumulativeVarianceProportion(), 1E-7));
 
         for (int i = 0; i < loadings.length; i++) {
             for (int j = 0; j < loadings[i].length; j++) {
