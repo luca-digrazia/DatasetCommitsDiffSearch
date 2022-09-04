@@ -1,10 +1,7 @@
 package io.quarkus.vertx.http.runtime;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpMethod;
@@ -184,41 +181,33 @@ public class ResumingRouter implements Router {
 
     @Override
     public Route patchWithRegex(String regex) {
-        return new ResumingRoute(delegate.patchWithRegex(regex));
+        return delegate.patchWithRegex(regex);
     }
 
     @Override
     public List<Route> getRoutes() {
-        return Optional.ofNullable(delegate.getRoutes())
-                .map(List::stream)
-                .orElseGet(Stream::empty)
-                .map(ResumingRoute::new)
-                .collect(Collectors.toList());
+        return delegate.getRoutes();
     }
 
     @Override
     public Router clear() {
-        delegate.clear();
-        return this;
+        return delegate.clear();
     }
 
     @Override
     public Router mountSubRouter(String mountPoint, Router subRouter) {
-        delegate.mountSubRouter(mountPoint, subRouter);
-        return this;
+        return delegate.mountSubRouter(mountPoint, subRouter);
     }
 
     @Override
     @Deprecated
     public Router exceptionHandler(Handler<Throwable> exceptionHandler) {
-        delegate.exceptionHandler(exceptionHandler);
-        return this;
+        return delegate.exceptionHandler(exceptionHandler);
     }
 
     @Override
     public Router errorHandler(int statusCode, Handler<RoutingContext> errorHandler) {
-        delegate.errorHandler(statusCode, errorHandler);
-        return this;
+        return delegate.errorHandler(statusCode, errorHandler);
     }
 
     @Override
@@ -232,9 +221,9 @@ public class ResumingRouter implements Router {
     }
 
     @Override
+
     public Router modifiedHandler(Handler<Router> handler) {
-        delegate.modifiedHandler(handler);
-        return this;
+        return delegate.modifiedHandler(handler);
     }
 
     @Override
@@ -251,98 +240,82 @@ public class ResumingRouter implements Router {
 
         @Override
         public Route method(HttpMethod method) {
-            route.method(method);
-            return this;
+            return route.method(method);
         }
 
         @Override
         public Route path(String path) {
-            route.path(path);
-            return this;
+            return route.path(path);
         }
 
         @Override
         public Route pathRegex(String path) {
-            route.pathRegex(path);
-            return this;
+            return route.pathRegex(path);
         }
 
         @Override
         public Route produces(String contentType) {
-            route.produces(contentType);
-            return this;
+            return route.produces(contentType);
         }
 
         @Override
         public Route consumes(String contentType) {
-            route.consumes(contentType);
-            return this;
+            return route.consumes(contentType);
         }
 
         @Override
         public Route order(int order) {
-            route.order(order);
-            return this;
+            return route.order(order);
         }
 
         @Override
         public Route last() {
-            route.last();
-            return this;
+            return route.last();
         }
 
         @Override
         public Route handler(Handler<RoutingContext> requestHandler) {
-            route.handler(new ResumeHandler(requestHandler));
-            return this;
+            return route.handler(new ResumeHandler(requestHandler));
         }
 
         @Override
         public Route blockingHandler(Handler<RoutingContext> requestHandler) {
-            route.blockingHandler(new ResumeHandler(requestHandler));
-            return this;
+            return route.blockingHandler(new ResumeHandler(requestHandler));
         }
 
         @Override
         public Route subRouter(Router subRouter) {
-            route.subRouter(subRouter);
-            return this;
+            return route.subRouter(subRouter);
         }
 
         @Override
         public Route blockingHandler(Handler<RoutingContext> requestHandler, boolean ordered) {
-            route.blockingHandler(new ResumeHandler(requestHandler), ordered);
-            return this;
+            return route.blockingHandler(new ResumeHandler(requestHandler), ordered);
         }
 
         @Override
         public Route failureHandler(Handler<RoutingContext> failureHandler) {
-            route.failureHandler(new ResumeHandler(failureHandler));
-            return this;
+            return route.failureHandler(new ResumeHandler(failureHandler));
         }
 
         @Override
         public Route remove() {
-            route.remove();
-            return this;
+            return route.remove();
         }
 
         @Override
         public Route disable() {
-            route.disable();
-            return this;
+            return route.disable();
         }
 
         @Override
         public Route enable() {
-            route.enable();
-            return this;
+            return route.enable();
         }
 
         @Override
         public Route useNormalisedPath(boolean useNormalisedPath) {
-            route.useNormalisedPath(useNormalisedPath);
-            return this;
+            return route.useNormalisedPath(useNormalisedPath);
         }
 
         @Override
@@ -362,8 +335,7 @@ public class ResumingRouter implements Router {
 
         @Override
         public Route setRegexGroupsNames(List<String> groups) {
-            route.setRegexGroupsNames(groups);
-            return this;
+            return route.setRegexGroupsNames(groups);
         }
     }
 }
