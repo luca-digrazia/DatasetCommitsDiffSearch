@@ -211,7 +211,6 @@ public class NinjaLexerStep {
   }
 
   public boolean tryReadEscapedLiteral() {
-    Preconditions.checkState('$' == fragment.byteAt(position));
     if (checkForward(1, '$', ':', ' ')) {
       // Escaped literal.
       end = position + 2;
