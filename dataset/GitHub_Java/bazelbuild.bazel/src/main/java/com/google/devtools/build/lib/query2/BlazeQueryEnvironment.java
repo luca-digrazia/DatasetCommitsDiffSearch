@@ -35,7 +35,7 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.TargetEdgeObserver;
-import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
+import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.query2.engine.Callback;
@@ -71,8 +71,7 @@ import java.util.Set;
 public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   private static final int MAX_DEPTH_FULL_SCAN_LIMIT = 20;
   private final Map<String, Set<Target>> resolvedTargetPatterns = new HashMap<>();
-  private final TargetPatternPreloader targetPatternPreloader;
-  private final PathFragment relativeWorkingDirectory;
+  private final TargetPatternEvaluator targetPatternEvaluator;
   private final TransitivePackageLoader transitivePackageLoader;
   private final TargetProvider targetProvider;
   private final CachingPackageLocator cachingPackageLocator;
@@ -99,8 +98,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       TransitivePackageLoader transitivePackageLoader,
       TargetProvider targetProvider,
       CachingPackageLocator cachingPackageLocator,
-      TargetPatternPreloader targetPatternPreloader,
-      PathFragment relativeWorkingDirectory,
+      TargetPatternEvaluator targetPatternEvaluator,
       boolean keepGoing,
       boolean strictScope,
       int loadingPhaseThreads,
@@ -109,8 +107,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       Set<Setting> settings,
       Iterable<QueryFunction> extraFunctions) {
     super(keepGoing, strictScope, labelFilter, eventHandler, settings, extraFunctions);
-    this.targetPatternPreloader = targetPatternPreloader;
-    this.relativeWorkingDirectory = relativeWorkingDirectory;
+    this.targetPatternEvaluator = targetPatternEvaluator;
     this.transitivePackageLoader = transitivePackageLoader;
     this.targetProvider = targetProvider;
     this.cachingPackageLocator = cachingPackageLocator;
@@ -444,8 +441,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       // being called from within a SkyFunction.
       resolvedTargetPatterns.putAll(
           Maps.transformValues(
-              targetPatternPreloader.preloadTargetPatterns(
-                  eventHandler, relativeWorkingDirectory, patterns, keepGoing),
+              targetPatternEvaluator.preloadTargetPatterns(eventHandler, patterns, keepGoing),
               ResolvedTargets::getTargets));
     }
   }
