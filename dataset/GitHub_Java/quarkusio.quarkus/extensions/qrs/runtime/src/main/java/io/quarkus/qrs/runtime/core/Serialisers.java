@@ -2,7 +2,6 @@ package io.quarkus.qrs.runtime.core;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.lang.annotation.Annotation;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,12 +41,7 @@ public class Serialisers {
     private MultivaluedMap<Class<?>, ResourceReader> readers = new MultivaluedHashMap<>();
 
     public static final List<MediaType> WILDCARD_LIST = Collections.singletonList(MediaType.WILDCARD_TYPE);
-
-    public static final MessageBodyWriter<?>[] NO_WRITER = new MessageBodyWriter[0];
-    public static final MessageBodyReader<?>[] NO_READER = new MessageBodyReader[0];
-    public static final Annotation[] NO_ANNOTATION = new Annotation[0];
-    public static final MultivaluedMap<String, Object> EMPTY_MULTI_MAP = new MultivaluedHashMap<>();
-
+    public static final MessageBodyWriter[] EMPTY = new MessageBodyWriter[0];
     private final ConcurrentMap<Class<?>, List<ResourceWriter>> noMediaTypeClassCache = new ConcurrentHashMap<>();
     private Function<Class<?>, List<ResourceWriter>> mappingFunction = new Function<Class<?>, List<ResourceWriter>>() {
         @Override
@@ -273,7 +267,7 @@ public class Serialisers {
                 }
             }
         }
-        return new NoMediaTypeResult(finalResult.toArray(NO_WRITER), selected);
+        return new NoMediaTypeResult(finalResult.toArray(EMPTY), selected);
     }
 
     public static class NoMediaTypeResult {

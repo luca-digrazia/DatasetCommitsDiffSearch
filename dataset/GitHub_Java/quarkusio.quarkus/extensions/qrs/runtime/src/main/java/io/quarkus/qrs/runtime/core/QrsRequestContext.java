@@ -31,13 +31,13 @@ import io.quarkus.qrs.runtime.jaxrs.QrsRequest;
 import io.quarkus.qrs.runtime.jaxrs.QrsUriInfo;
 import io.quarkus.qrs.runtime.mapping.RuntimeResource;
 import io.quarkus.qrs.runtime.mapping.URITemplate;
+import io.quarkus.qrs.runtime.spi.BeanFactory;
 import io.quarkus.qrs.runtime.util.EmptyInputStream;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.vertx.core.net.impl.ConnectionBase;
 import io.vertx.ext.web.RoutingContext;
 
 public class QrsRequestContext implements Runnable, Closeable {
-    public static final String CURRENT_REQUEST_KEY = QrsRequestContext.class.getName();
     private static final Logger log = Logger.getLogger(QrsRequestContext.class);
     public static final Object[] EMPTY_ARRAY = new Object[0];
     private final QrsDeployment deployment;
@@ -70,7 +70,7 @@ public class QrsRequestContext implements Runnable, Closeable {
     /**
      * The endpoint to invoke
      */
-    private Object endpointInstance;
+    private BeanFactory.BeanInstance<Object> endpointInstance;
     /**
      * The result of the invocation
      */
@@ -341,10 +341,13 @@ public class QrsRequestContext implements Runnable, Closeable {
     }
 
     public Object getEndpointInstance() {
-        return endpointInstance;
+        if (endpointInstance == null) {
+            return null;
+        }
+        return endpointInstance.getInstance();
     }
 
-    public QrsRequestContext setEndpointInstance(Object endpointInstance) {
+    public QrsRequestContext setEndpointInstance(BeanFactory.BeanInstance<Object> endpointInstance) {
         this.endpointInstance = endpointInstance;
         return this;
     }
@@ -426,7 +429,10 @@ public class QrsRequestContext implements Runnable, Closeable {
 
     @Override
     public void close() {
-        //TODO: do we even have any resources to close?
+        // FIXME: close filter instances somehow?
+        if (endpointInstance != null) {
+            endpointInstance.close();
+        }
     }
 
     public Response getResponse() {
