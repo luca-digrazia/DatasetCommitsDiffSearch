@@ -49,15 +49,8 @@ class GELFClientHandlerBase {
 
     protected GELFClientHandlerBase() { }
 
-    protected boolean parse() {
-        JSONObject json;
-
-        try {
-         json = getJSON(this.clientMessage);
-        } catch (Exception e) {
-            json = null;
-        }
-
+    protected boolean parse() throws Exception{
+        JSONObject json = this.getJSON(this.clientMessage);
         if (json == null) {
             LOG.warn("JSON is null/could not be parsed (invalid JSON) - clientMessage was: " + this.clientMessage);
             return false;
@@ -119,7 +112,7 @@ class GELFClientHandlerBase {
         return true;
     }
 
-    protected JSONObject getJSON(String value) {
+    protected JSONObject getJSON(String value) throws Exception {
         if (value != null) {
             Object obj = JSONValue.parse(value);
             if (obj != null) {
