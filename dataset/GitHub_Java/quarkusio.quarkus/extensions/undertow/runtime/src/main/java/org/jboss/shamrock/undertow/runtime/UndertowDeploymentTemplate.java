@@ -16,7 +16,6 @@
 
 package org.jboss.shamrock.undertow.runtime;
 
-import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
@@ -50,7 +49,6 @@ import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.server.handlers.resource.CachingResourceManager;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.server.handlers.resource.PathResourceManager;
-import io.undertow.server.handlers.resource.ResourceManager;
 import io.undertow.server.session.SessionIdGenerator;
 import io.undertow.servlet.ServletExtension;
 import io.undertow.servlet.Servlets;
@@ -89,7 +87,7 @@ public class UndertowDeploymentTemplate {
     private static volatile Undertow undertow;
     private static volatile HttpHandler currentRoot = ResponseCodeHandler.HANDLE_404;
 
-    public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories, LaunchMode launchMode, ShutdownContext context) {
+    public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories) {
         DeploymentInfo d = new DeploymentInfo();
         d.setSessionIdGenerator(new ShamrockSessionIdGenerator());
         d.setClassLoader(getClass().getClassLoader());
@@ -102,36 +100,18 @@ public class UndertowDeploymentTemplate {
             };
         }
         d.setClassLoader(cl);
-        //TODO: we need better handling of static resources
+        //TODO: this is a big hack
+        //TODO: caching configuration once the new config model is in place
         String resourcesDir = System.getProperty(RESOURCES_PROP);
-        ResourceManager resourceManager;
         if (resourcesDir == null) {
-            resourceManager = new KnownPathResourceManager(knownFile, knownDirectories, new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources"));
+            d.setResourceManager(new CachingResourceManager(1000, 0, null, new KnownPathResourceManager(knownFile, knownDirectories, new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources")), 2000));
         } else {
-            resourceManager = new PathResourceManager(Paths.get(resourcesDir));
+            d.setResourceManager(new CachingResourceManager(1000, 0, null, new PathResourceManager(Paths.get(resourcesDir)), 2000));
         }
-        if(launchMode == LaunchMode.NORMAL) {
-            //todo: cache configuration
-            resourceManager = new CachingResourceManager(1000, 0, null, resourceManager, 2000);
-        }
-
-        d.setResourceManager(resourceManager);
-
-
         d.addWelcomePages("index.html", "index.htm");
 
         d.addServlet(new ServletInfo(ServletPathMatches.DEFAULT_SERVLET_NAME, DefaultServlet.class).setAsyncSupported(true));
 
-        context.addShutdownTask(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    d.getResourceManager().close();
-                } catch (IOException e) {
-                    log.error("Failed to close Servlet ResourceManager", e);
-                }
-            }
-        });
         return new RuntimeValue<>(d);
     }
 
@@ -255,7 +235,7 @@ public class UndertowDeploymentTemplate {
      */
     public static void startUndertowEagerly(HttpConfig config, HandlerWrapper hotDeploymentWrapper, LaunchMode launchMode) throws ServletException {
         if (undertow == null) {
-            int port = launchMode == LaunchMode.TEST ? config.testPort : config.port;
+            int port = config.determinePort(launchMode);
             log.debugf("Starting Undertow on port %d", port);
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
             if (hotDeploymentWrapper != null) {
@@ -267,15 +247,13 @@ public class UndertowDeploymentTemplate {
                     .setHandler(rootHandler);
             if (config.ioThreads.isPresent()) {
                 builder.setIoThreads(config.ioThreads.getAsInt());
-            } else if(launchMode == LaunchMode.TEST
-                    || launchMode == LaunchMode.DEVELOPMENT) {
-                //we limit the numner of IO and worker threads in development and testing mode
+            } else if(launchMode.isDevOrTest()) {
+                //we limit the number of IO and worker threads in development and testing mode
                 builder.setIoThreads(2);
             }
             if (config.workerThreads.isPresent()) {
                 builder.setWorkerThreads(config.workerThreads.getAsInt());
-            } else if(launchMode == LaunchMode.TEST
-                    || launchMode == LaunchMode.DEVELOPMENT) {
+            } else if(launchMode.isDevOrTest()) {
                 builder.setWorkerThreads(6);
             }
             undertow = builder

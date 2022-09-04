@@ -107,7 +107,6 @@ import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildI
 import org.jboss.shamrock.deployment.recording.RecorderContext;
 import org.jboss.shamrock.runtime.LaunchMode;
 import org.jboss.shamrock.runtime.RuntimeValue;
-import org.jboss.shamrock.runtime.ShutdownContext;
 import org.jboss.shamrock.runtime.annotations.ConfigItem;
 import org.jboss.shamrock.undertow.runtime.HttpConfig;
 import org.jboss.shamrock.undertow.runtime.ServletSecurityInfoProxy;
@@ -155,7 +154,7 @@ public class UndertowBuildStep {
                 config, wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()),
                 launchMode.getLaunchMode());
         undertowProducer.accept(new UndertowBuildItem(ut));
-        serverProducer.accept(new HttpServerBuiltItem(config.host, launchMode.getLaunchMode() == LaunchMode.TEST ? config.testPort : config.port));
+        serverProducer.accept(new HttpServerBuiltItem(config.host, config.determinePort(launchMode.getLaunchMode())));
         return new ServiceStartBuildItem("undertow");
     }
 
@@ -186,9 +185,7 @@ public class UndertowBuildStep {
                                             InjectionFactoryBuildItem injectionFactory,
                                             InjectionFactoryBuildItem bc,
                                             BuildProducer<ObjectSubstitutionBuildItem> substitutions,
-                                            Consumer<ReflectiveClassBuildItem> reflectiveClasses,
-                                            LaunchModeBuildItem launchMode,
-                                            ShutdownContextBuildItem shutdownContext) throws Exception {
+                                            Consumer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
 
         ObjectSubstitutionBuildItem.Holder holder = new ObjectSubstitutionBuildItem.Holder(ServletSecurityInfo.class, ServletSecurityInfoProxy.class, ServletSecurityInfoSubstitution.class);
         substitutions.produce(new ObjectSubstitutionBuildItem(holder));
@@ -219,7 +216,7 @@ public class UndertowBuildStep {
             }
         }
 
-        RuntimeValue<DeploymentInfo> deployment = template.createDeployment("test", knownFiles, knownDirectories, launchMode.getLaunchMode(), shutdownContext);
+        RuntimeValue<DeploymentInfo> deployment = template.createDeployment("test", knownFiles, knownDirectories);
 
         WebMetaData result;
         Path webXml = applicationArchivesBuildItem.getRootArchive().getChildPath(WEB_XML);
