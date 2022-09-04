@@ -53,13 +53,13 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 	private JBlock onViewChangedBody;
 	private JBlock onViewChangedBodyBeforeFindViews;
 	private JVar onViewChangedHasViewsParam;
-	protected Map<String, FoundHolder> foundHolders = new HashMap<>();
+	protected Map<String, FoundHolder> foundHolders = new HashMap<String, FoundHolder>();
 	protected JMethod findNativeFragmentById;
 	protected JMethod findSupportFragmentById;
 	protected JMethod findNativeFragmentByTag;
 	protected JMethod findSupportFragmentByTag;
-	private Map<String, TextWatcherHolder> textWatcherHolders = new HashMap<>();
-	private Map<String, OnSeekBarChangeListenerHolder> onSeekBarChangeListenerHolders = new HashMap<>();
+	private Map<String, TextWatcherHolder> textWatcherHolders = new HashMap<String, TextWatcherHolder>();
+	private Map<String, OnSeekBarChangeListenerHolder> onSeekBarChangeListenerHolders = new HashMap<String, OnSeekBarChangeListenerHolder>();
 
 	public EComponentWithViewSupportHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
 		super(processHolder, annotatedElement);
@@ -102,10 +102,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 		JInvocation findViewById = invoke(getOnViewChangedHasViewsParam(), "findViewById");
 		findViewById.arg(idRef);
 		return findViewById;
-	}
-
-	public void processViewById(JFieldRef idRef, JClass viewClass, JFieldRef fieldRef) {
-		assignFindViewById(idRef, viewClass, fieldRef);
 	}
 
 	public void assignFindViewById(JFieldRef idRef, JClass viewClass, JFieldRef fieldRef) {
@@ -256,7 +252,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 		JBlock onViewChangedBody = getOnViewChangedBody().block();
 		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
 		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
-		.invoke(viewVariable, "addTextChangedListener").arg(_new(onTextChangeListenerClass));
+				.invoke(viewVariable, "addTextChangedListener").arg(_new(onTextChangeListenerClass));
 
 		return new TextWatcherHolder(this, viewVariable, onTextChangeListenerClass);
 	}
@@ -278,7 +274,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 		JBlock onViewChangedBody = getOnViewChangedBody().block();
 		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
 		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
-		.invoke(viewVariable, "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
+				.invoke(viewVariable, "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
 
 		return new OnSeekBarChangeListenerHolder(this, onSeekbarChangeListenerClass);
 	}

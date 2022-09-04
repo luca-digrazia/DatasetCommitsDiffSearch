@@ -25,7 +25,6 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.PreferenceChange;
-import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.HasPreferences;
 import org.androidannotations.model.AnnotationElements;
@@ -38,11 +37,10 @@ import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
+import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
 public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
-
-	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public PreferenceChangeHandler(ProcessingEnvironment processingEnvironment) {
 		super(PreferenceChange.class, processingEnvironment);
@@ -57,9 +55,14 @@ public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
-		validatorHelper.param.hasNoOtherParameterThanPreferenceOrObjectOrSetOrStringOrBoolean(executableElement, valid);
-		validatorHelper.param.hasZeroOrOnePreferenceParameter(executableElement, valid);
-		validatorHelper.param.hasAtMostOneStringOrSetOrBooleanOrObjectParameter(executableElement, valid);
+		validatorHelper.param.anyOrder() //
+				.extendsType(CanonicalNameConstants.PREFERENCE).optional() //
+				.anyOfTypes(CanonicalNameConstants.OBJECT, CanonicalNameConstants.STRING_SET, CanonicalNameConstants.STRING, //
+						CanonicalNameConstants.BOOLEAN, boolean.class.getName(), //
+						CanonicalNameConstants.INTEGER, int.class.getName(), //
+						CanonicalNameConstants.LONG, long.class.getName(), //
+						CanonicalNameConstants.FLOAT, float.class.getName()).optional() //
+				.validate(executableElement, valid);
 	}
 
 	@Override
@@ -79,13 +82,23 @@ public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 		JVar newValueParam = listenerMethod.param(classes().OBJECT, "newValue");
 
 		for (VariableElement variableElement : userParameters) {
-			if (variableElement.asType().toString().equals(CanonicalNameConstants.PREFERENCE)) {
-				call.arg(preferenceParam);
-			} else if (variableElement.asType().toString().equals(CanonicalNameConstants.OBJECT)) {
+			String type = variableElement.asType().toString();
+			if (isTypeOrSubclass(CanonicalNameConstants.PREFERENCE, variableElement)) {
+				call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.PREFERENCE, preferenceParam, variableElement));
+			} else if (type.equals(CanonicalNameConstants.OBJECT)) {
 				call.arg(newValueParam);
+			} else if (type.equals(CanonicalNameConstants.INTEGER) || type.equals(int.class.getName()) || //
+					type.equals(CanonicalNameConstants.FLOAT) || type.equals(float.class.getName()) || //
+					type.equals(CanonicalNameConstants.LONG) || type.equals(long.class.getName())) {
+				JClass wrapperClass = type.startsWith("java") ? holder.refClass(type) : JType.parse(holder.codeModel(), type.replace(".class", "")).boxify();
+				call.arg(wrapperClass.staticInvoke("valueOf").arg(JExpr.cast(holder.classes().STRING, newValueParam)));
 			} else {
 				JClass userParamClass = codeModelHelper.typeMirrorToJClass(variableElement.asType(), holder);
 				call.arg(JExpr.cast(userParamClass, newValueParam));
+
+				if (type.equals(CanonicalNameConstants.STRING_SET)) {
+					codeModelHelper.addSuppressWarnings(listenerMethod, "unchecked");
+				}
 			}
 		}
 	}
@@ -104,5 +117,4 @@ public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 	protected JClass getListenerClass() {
 		return classes().PREFERENCE_CHANGE_LISTENER;
 	}
-
 }

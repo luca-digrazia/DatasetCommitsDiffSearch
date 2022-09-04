@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,25 +15,29 @@
  */
 package org.androidannotations.handler;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import org.androidannotations.annotations.Background;
-import org.androidannotations.api.BackgroundExecutor;
-import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.holder.EComponentHolder;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr.lit;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr.lit;
+import org.androidannotations.annotations.Background;
+import org.androidannotations.api.BackgroundExecutor;
+import org.androidannotations.holder.EComponentHolder;
+
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCatchBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JStatement;
+import com.sun.codemodel.JTryBlock;
+import com.sun.codemodel.JVar;
 
 public class BackgroundHandler extends AbstractRunnableHandler {
-
-	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public BackgroundHandler(ProcessingEnvironment processingEnvironment) {
 		super(Background.class, processingEnvironment);
@@ -43,22 +47,35 @@ public class BackgroundHandler extends AbstractRunnableHandler {
 	public void process(Element element, EComponentHolder holder) throws Exception {
 		ExecutableElement executableElement = (ExecutableElement) element;
 
-		holder.generateApiClass(element, BackgroundExecutor.class);
-
 		JMethod delegatingMethod = codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
-		JDefinedClass anonymousRunnableClass = codeModelHelper.createDelegatingAnonymousRunnableClass(holder, delegatingMethod);
+
+		JBlock previousMethodBody = codeModelHelper.removeBody(delegatingMethod);
+
+		JDefinedClass anonymousTaskClass = codeModel().anonymousClass(BackgroundExecutor.Task.class);
+
+		JMethod executeMethod = anonymousTaskClass.method(JMod.PUBLIC, codeModel().VOID, "execute");
+		executeMethod.annotate(Override.class);
+
+		// Catch exception in user code
+		JTryBlock tryBlock = executeMethod.body()._try();
+		tryBlock.body().add(previousMethodBody);
+		JCatchBlock catchBlock = tryBlock._catch(holder.classes().THROWABLE);
+		JVar caughtException = catchBlock.param("e");
+		JStatement uncaughtExceptionCall = holder.classes().THREAD //
+				.staticInvoke("getDefaultUncaughtExceptionHandler") //
+				.invoke("uncaughtException") //
+				.arg(holder.classes().THREAD.staticInvoke("currentThread")) //
+				.arg(caughtException);
+		catchBlock.body().add(uncaughtExceptionCall);
 
 		Background annotation = element.getAnnotation(Background.class);
-		long delay = annotation.delay();
+		String id = annotation.id();
+		int delay = annotation.delay();
+		String serial = annotation.serial();
 
-		JClass backgroundExecutorClass = holder.refClass(BackgroundExecutor.class);
-		JInvocation executeCall;
-
-		if (delay == 0) {
-			executeCall = backgroundExecutorClass.staticInvoke("execute").arg(_new(anonymousRunnableClass));
-		} else {
-			executeCall = backgroundExecutorClass.staticInvoke("executeDelayed").arg(_new(anonymousRunnableClass)).arg(lit(delay));
-		}
+		JClass backgroundExecutorClass = refClass(BackgroundExecutor.class);
+		JInvocation newTask = _new(anonymousTaskClass).arg(lit(id)).arg(lit(delay)).arg(lit(serial));
+		JInvocation executeCall = backgroundExecutorClass.staticInvoke("execute").arg(newTask);
 
 		delegatingMethod.body().add(executeCall);
 	}

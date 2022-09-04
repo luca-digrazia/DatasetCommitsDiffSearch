@@ -1,28 +1,48 @@
+/**
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package org.androidannotations.handler;
-
-import com.sun.codemodel.*;
-import org.androidannotations.annotations.Transactional;
-import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.holder.EComponentHolder;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.validation.IsValid;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 
-public class TransactionalHandler extends BaseAnnotationHandler<EComponentHolder> {
+import org.androidannotations.annotations.Transactional;
+import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.IsValid;
 
-	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCatchBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JTryBlock;
+import com.sun.codemodel.JVar;
+
+public class TransactionalHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 	public TransactionalHandler(ProcessingEnvironment processingEnvironment) {
 		super(Transactional.class, processingEnvironment);
 	}
 
 	@Override
-	public boolean validate(Element element, AnnotationElements validatedElements) {
-		IsValid valid = new IsValid();
-
+	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
 		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(element, validatedElements, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
@@ -33,9 +53,10 @@ public class TransactionalHandler extends BaseAnnotationHandler<EComponentHolder
 
 		validatorHelper.isNotFinal(element, valid);
 
-		validatorHelper.param.hasOneOrTwoParametersAndFirstIsDb(executableElement, valid);
-
-		return valid.isValid();
+		validatorHelper.param.inOrder() //
+				.type(CanonicalNameConstants.SQLITE_DATABASE) //
+				.anyType().multiple().optional() //
+				.validate(executableElement, valid);
 	}
 
 	@Override
@@ -43,7 +64,7 @@ public class TransactionalHandler extends BaseAnnotationHandler<EComponentHolder
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		String returnTypeName = executableElement.getReturnType().toString();
-		JClass returnType = holder.refClass(returnTypeName);
+		JClass returnType = refClass(returnTypeName);
 
 		JMethod method = codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
 		codeModelHelper.removeBody(method);
@@ -73,13 +94,13 @@ public class TransactionalHandler extends BaseAnnotationHandler<EComponentHolder
 			tryBody._return(result);
 		}
 
-		JCatchBlock catchBlock = tryBlock._catch(holder.refClass(RuntimeException.class));
+		JCatchBlock catchBlock = tryBlock._catch(refClass(RuntimeException.class));
 
 		JVar exceptionParam = catchBlock.param("e");
 
 		JBlock catchBody = catchBlock.body();
 
-		JInvocation errorInvoke = catchBody.staticInvoke(holder.classes().LOG, "e");
+		JInvocation errorInvoke = catchBody.staticInvoke(classes().LOG, "e");
 
 		errorInvoke.arg(holder.getGeneratedClass().name());
 		errorInvoke.arg("Error in transaction");

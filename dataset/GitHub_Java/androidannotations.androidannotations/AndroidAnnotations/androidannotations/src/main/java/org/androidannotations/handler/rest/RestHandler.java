@@ -1,34 +1,55 @@
+/**
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package org.androidannotations.handler.rest;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JFieldVar;
-import org.androidannotations.annotations.rest.Rest;
-import org.androidannotations.handler.BaseAnnotationHandler;
-import org.androidannotations.handler.GeneratingAnnotationHandler;
-import org.androidannotations.helper.AnnotationHelper;
-import org.androidannotations.holder.RestHolder;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.ProcessHolder;
-import org.androidannotations.validation.IsValid;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JExpr.lit;
+import static org.androidannotations.helper.CanonicalNameConstants.ARRAYLIST;
+import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_REQUEST_INTERCEPTOR;
+
+import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
-import java.util.List;
 
-import static com.sun.codemodel.JExpr.*;
-import static org.androidannotations.helper.CanonicalNameConstants.ARRAYLIST;
-import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_REQUEST_INTERCEPTOR;
+import org.androidannotations.annotations.rest.Rest;
+import org.androidannotations.handler.BaseGeneratingAnnotationHandler;
+import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.helper.AnnotationHelper;
+import org.androidannotations.holder.RestHolder;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.IsValid;
+import org.androidannotations.process.ProcessHolder;
 
-public class RestHandler extends BaseAnnotationHandler<RestHolder> implements GeneratingAnnotationHandler<RestHolder> {
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+
+public class RestHandler extends BaseGeneratingAnnotationHandler<RestHolder> {
 
 	private final AnnotationHelper annotationHelper;
 
 	public RestHandler(ProcessingEnvironment processingEnvironment) {
 		super(Rest.class, processingEnvironment);
 		annotationHelper = new AnnotationHelper(processingEnv);
+		codeModelHelper = new APTCodeModelHelper();
 	}
 
 	@Override
@@ -37,8 +58,8 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 	}
 
 	@Override
-	public boolean validate(Element element, AnnotationElements validatedElements) {
-		IsValid valid = new IsValid();
+	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+		super.validate(element, validatedElements, valid);
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -50,7 +71,7 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 
 		validatorHelper.isTopLevel(typeElement, valid);
 
-		validatorHelper.doesNotExtendOtherInterfaces(typeElement, valid);
+		validatorHelper.doesNotExtendInvalidInterfaces(typeElement, valid);
 
 		validatorHelper.unannotatedMethodReturnsRestTemplate(typeElement, valid);
 
@@ -58,9 +79,9 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 
 		validatorHelper.validateInterceptors(element, valid);
 
-		validatorHelper.hasInternetPermission(typeElement, androidManifest, valid);
+		validatorHelper.validateRequestFactory(element, valid);
 
-		return valid.isValid();
+		validatorHelper.hasInternetPermission(typeElement, androidManifest, valid);
 	}
 
 	@Override
@@ -68,6 +89,7 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 		setRootUrl(element, holder);
 		setConverters(element, holder);
 		setInterceptors(element, holder);
+		setRequestFactory(element, holder);
 	}
 
 	private void setRootUrl(Element element, RestHolder holder) {
@@ -80,25 +102,34 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 		List<DeclaredType> converters = annotationHelper.extractAnnotationClassArrayParameter(element, getTarget(), "converters");
 		JFieldVar restTemplateField = holder.getRestTemplateField();
 		JBlock init = holder.getInit().body();
+		init.add(invoke(restTemplateField, "getMessageConverters").invoke("clear"));
 		for (DeclaredType converterType : converters) {
-			JClass converterClass = holder.refClass(converterType.toString());
-			init.add(invoke(restTemplateField, "getMessageConverters").invoke("add").arg(_new(converterClass)));
+			JInvocation newConverter = codeModelHelper.newBeanOrEBean(holder, converterType, holder.getInitContextParam());
+			init.add(invoke(restTemplateField, "getMessageConverters").invoke("add").arg(newConverter));
 		}
 	}
 
 	private void setInterceptors(Element element, RestHolder holder) {
 		List<DeclaredType> interceptors = annotationHelper.extractAnnotationClassArrayParameter(element, getTarget(), "interceptors");
 		if (interceptors != null) {
-			JClass listClass = holder.refClass(ARRAYLIST);
-			JClass clientInterceptorClass = holder.refClass(CLIENT_HTTP_REQUEST_INTERCEPTOR);
+			JClass listClass = refClass(ARRAYLIST);
+			JClass clientInterceptorClass = refClass(CLIENT_HTTP_REQUEST_INTERCEPTOR);
 			listClass = listClass.narrow(clientInterceptorClass);
 			JFieldVar restTemplateField = holder.getRestTemplateField();
 			JBlock init = holder.getInit().body();
 			init.add(invoke(restTemplateField, "setInterceptors").arg(_new(listClass)));
 			for (DeclaredType interceptorType : interceptors) {
-				JClass interceptorClass = holder.refClass(interceptorType.toString());
-				init.add(invoke(restTemplateField, "getInterceptors").invoke("add").arg(_new(interceptorClass)));
+				JInvocation newInterceptor = codeModelHelper.newBeanOrEBean(holder, interceptorType, holder.getInitContextParam());
+				init.add(invoke(restTemplateField, "getInterceptors").invoke("add").arg(newInterceptor));
 			}
+		}
+	}
+
+	private void setRequestFactory(Element element, RestHolder holder) {
+		DeclaredType requestFactoryType = annotationHelper.extractAnnotationClassParameter(element, getTarget(), "requestFactory");
+		if (requestFactoryType != null) {
+			JInvocation requestFactory = codeModelHelper.newBeanOrEBean(holder, requestFactoryType, holder.getInitContextParam());
+			holder.getInit().body().add(invoke(holder.getRestTemplateField(), "setRequestFactory").arg(requestFactory));
 		}
 	}
 }
