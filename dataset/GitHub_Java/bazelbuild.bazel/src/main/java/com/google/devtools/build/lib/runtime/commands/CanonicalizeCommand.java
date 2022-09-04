@@ -17,7 +17,6 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
-import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.BlazeCommandUtils;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
@@ -55,6 +54,7 @@ public final class CanonicalizeCommand implements BlazeCommand {
     @Option(
       name = "for_command",
       defaultValue = "build",
+      category = "misc",
       documentationCategory = OptionDocumentationCategory.GENERIC_INPUTS,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.TERMINAL_OUTPUT},
       help = "The command for which the options should be canonicalized."
@@ -127,7 +127,7 @@ public final class CanonicalizeCommand implements BlazeCommand {
   }
 
   @Override
-  public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
+  public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
     BlazeRuntime runtime = env.getRuntime();
     Options canonicalizeOptions = options.getOptions(Options.class);
     String commandName = canonicalizeOptions.forCommand;
@@ -135,7 +135,7 @@ public final class CanonicalizeCommand implements BlazeCommand {
     if (command == null) {
       env.getReporter().handle(Event.error("Not a valid command: '" + commandName
           + "' (should be one of " + Joiner.on(", ").join(runtime.getCommandMap().keySet()) + ")"));
-      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+      return ExitCode.COMMAND_LINE_ERROR;
     }
     Collection<Class<? extends OptionsBase>> optionsClasses =
         ImmutableList.<Class<? extends OptionsBase>>builder()
@@ -175,9 +175,9 @@ public final class CanonicalizeCommand implements BlazeCommand {
       }
     } catch (OptionsParsingException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
-      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+      return ExitCode.COMMAND_LINE_ERROR;
     }
-    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+    return ExitCode.SUCCESS;
   }
 
   @Override
