@@ -20,10 +20,8 @@
 package org.graylog2.inputs.extractors;
 
 import org.graylog2.ConfigurationException;
-import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,14 +29,13 @@ import java.util.Map;
  */
 public class ExtractorFactory {
 
-    public static Extractor factory(String id, String title, Extractor.CursorStrategy cursorStrategy, Extractor.Type type, String sourceField, String targetField, Map<String, Object> extractorConfig, String creatorUserId, List<Converter> converters)
+    public static Extractor factory(String id, String title, Extractor.CursorStrategy cursorStrategy, Extractor.Type type, String sourceField, String targetField, Map<String, Object> extractorConfig, String creatorUserId)
             throws NoSuchExtractorException, Extractor.ReservedFieldException, ConfigurationException {
-
         switch (type) {
             case REGEX:
-                return new RegexExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters);
+                return new RegexExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId);
             case SUBSTRING:
-                return new SubstringExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters);
+                return new SubstringExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId);
             default:
                 throw new NoSuchExtractorException();
         }

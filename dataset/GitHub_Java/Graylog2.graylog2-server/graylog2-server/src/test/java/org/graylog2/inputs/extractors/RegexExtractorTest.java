@@ -19,17 +19,13 @@
  */
 package org.graylog2.inputs.extractors;
 
-import com.google.common.collect.Lists;
 import org.graylog2.ConfigurationException;
-import org.graylog2.GraylogServerStub;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
 import org.junit.Test;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static junit.framework.Assert.assertNull;
@@ -47,8 +43,8 @@ public class RegexExtractorTest {
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.COPY, "somefield", "our_result", config("id:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.COPY, "somefield", "our_result", config("id:(\\d+)"), "foo");
+        x.run(msg);
 
         assertNotNull(msg.getField("our_result"));
         assertEquals("<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001", msg.getField("somefield"));
@@ -61,12 +57,24 @@ public class RegexExtractorTest {
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "our_result", config("id:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "our_result", config("id:(\\d+)"), "foo");
+        x.run(msg);
 
         assertNotNull(msg.getField("our_result"));
         assertEquals("<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:", msg.getField("somefield"));
         assertEquals("9001", msg.getField("our_result"));
+    }
+
+    @Test
+    public void testBasicExtractionWithCutStrategyDoesNotCutStandardFields() throws Exception {
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
+
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "source", "our_result", config("Test(.*)"), "foo");
+        x.run(msg);
+
+        assertNotNull(msg.getField("our_result"));
+        assertEquals("TestUnit", msg.getField("sourcre"));
+        assertEquals("Unit", msg.getField("our_result"));
     }
 
     @Test
@@ -75,8 +83,8 @@ public class RegexExtractorTest {
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.COPY, "somefield", "our_result", config("nothing:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.COPY, "somefield", "our_result", config("nothing:(\\d+)"), "foo");
+        x.run(msg);
 
         assertNull(msg.getField("our_result"));
         assertEquals("<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001", msg.getField("somefield"));
@@ -88,8 +96,8 @@ public class RegexExtractorTest {
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "our_result", config("nothing:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "our_result", config("nothing:(\\d+)"), "foo");
+        x.run(msg);
 
         assertNull(msg.getField("our_result"));
         assertEquals("<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001", msg.getField("somefield"));
@@ -101,8 +109,8 @@ public class RegexExtractorTest {
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001 lolwut");
 
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.COPY, "somefield", "our_result", config("id:(\\d+).*(lolwut)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.COPY, "somefield", "our_result", config("id:(\\d+).*(lolwut)"), "foo");
+        x.run(msg);
 
         assertNotNull(msg.getField("our_result"));
         assertEquals("<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001 lolwut", msg.getField("somefield"));
@@ -113,8 +121,8 @@ public class RegexExtractorTest {
     public void testDoesNotFailOnNonExistentSourceField() throws Exception {
         Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "LOLIDONTEXIST", "our_result", config("id:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "LOLIDONTEXIST", "our_result", config("id:(\\d+)"), "foo");
+        x.run(msg);
     }
 
     @Test
@@ -123,8 +131,8 @@ public class RegexExtractorTest {
 
         msg.addField("somefield", 9001);
 
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "our_result", config("id:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "our_result", config("id:(\\d+)"), "foo");
+        x.run(msg);
     }
 
     @Test
@@ -133,61 +141,36 @@ public class RegexExtractorTest {
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "our_result", config("(.*)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
+        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "our_result", config("(.*)"), "foo");
+        x.run(msg);
 
         assertNotNull(msg.getField("our_result"));
         assertEquals("fullyCutByExtractor", msg.getField("somefield"));
     }
 
+    @Test(expected = Extractor.ReservedFieldException.class)
+    public void testDoesNotRunAgainstReservedFields() throws Exception {
+        new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "source", config("id:(\\d+)"), "foo");
+    }
+
     @Test(expected = ConfigurationException.class)
     public void testDoesNotInitializeOnNullConfigMap() throws Exception {
-        new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "somefield", null, "foo", noConverters(), Extractor.ConditionType.NONE, null);
+        new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "somefield", null, "foo");
     }
 
     @Test(expected = ConfigurationException.class)
     public void testDoesNotInitializeOnNullRegexValue() throws Exception {
-        new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "somefield", config(null), "foo", noConverters(), Extractor.ConditionType.NONE, null);
+        new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "somefield", config(null), "foo");
     }
 
     @Test(expected = ConfigurationException.class)
     public void testDoesNotInitializeOnEmptyRegexValue() throws Exception {
-        new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "somefield", config(""), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-    }
-
-    @Test
-    public void testDoesNotRunWhenRegexConditionFails() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
-
-        msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
-
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.COPY, "somefield", "our_result", config("id:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.REGEX, "^XXX");
-        x.runExtractor(new GraylogServerStub(), msg);
-
-        assertNull(msg.getField("our_result"));
-        assertEquals("<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001", msg.getField("somefield"));
-    }
-
-    @Test
-    public void testDoesNotRunWhenStringConditionFails() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
-
-        msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
-
-        RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.COPY, "somefield", "our_result", config("id:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.STRING, "FOOBAR");
-        x.runExtractor(new GraylogServerStub(), msg);
-
-        assertNull(msg.getField("our_result"));
-        assertEquals("<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001", msg.getField("somefield"));
+        new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "somefield", "somefield", config(""), "foo");
     }
 
     public static Map<String, Object> config(final String regex) {
         return new HashMap<String, Object>() {{
             put("regex_value", regex);
         }};
-    }
-
-    public static List<Converter> noConverters() {
-        return Lists.newArrayList();
     }
 }
