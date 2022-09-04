@@ -16,13 +16,14 @@
 
 package smile.nd4j;
 
+import smile.math.matrix.Cholesky;
 import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.LU;
+import smile.math.matrix.QR;
 import smile.math.matrix.SVD;
 import smile.math.matrix.EVD;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
-import org.nd4j.linalg.indexing.INDArrayIndex;
-import org.nd4j.linalg.indexing.NDArrayIndex;
 import org.nd4j.linalg.inverse.InvertMatrix;
 
 /**
@@ -33,15 +34,6 @@ import org.nd4j.linalg.inverse.InvertMatrix;
 public class NDMatrix implements DenseMatrix {
     private static final long serialVersionUID = 1L;
 
-    static {
-        // ND4J allows INDArrays to be backed by either float
-        // or double-precision values. The default is single-precision
-        // (float). Here we set the order globally to double precision.
-        // Alternatively, we can set the property when launching the JVM:
-        // -Ddtype=double
-        Nd4j.setDataType(org.nd4j.linalg.api.buffer.DataBuffer.Type.DOUBLE);
-    }
-
     /**
      * The matrix storage.
      */
@@ -50,12 +42,6 @@ public class NDMatrix implements DenseMatrix {
      * True if the matrix is symmetric.
      */
     private boolean symmetric = false;
-
-    private static char RowOrder = 'e'; // CblasRowMajor
-    private static char ColOrder = 'f'; // CblasColMajor
-    private static char NoTranspose = 'N';
-    private static char Transpose   = 'T';
-    private static char ConjugateTranspose = 'C';
 
     /**
      * Constructor.
@@ -157,115 +143,42 @@ public class NDMatrix implements DenseMatrix {
 
     @Override
     public LU lu() {
-        INDArray r = Nd4j.getNDArrayFactory().lapack().getrf(A);
-        int[] piv = new int[(int) r.length()];
-        for (int i = 0; i < piv.length; i++) {
-            piv[i] = r.getInt(i);
-        }
-        // Nd4j doesn't report if the matrix is singular.
-        return new LU(this, piv, false);
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Cholesky cholesky() {
-        if (nrows() != ncols()) {
-            throw new UnsupportedOperationException("Cholesky decomposition on non-square matrix");
-        }
-
-        Nd4j.getNDArrayFactory().lapack().potrf(A, true);
-        return new Cholesky(this);
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public QR qr() {
-        double[] tau = new double[Math.min(nrows(), ncols())];
-        INDArray R = Nd4j.create(ncols(), ncols());
-        Nd4j.getNDArrayFactory().lapack().geqrf(A, R);
-        for (int i = 0; i < tau.length; i++) {
-            tau[i] = R.getDouble(i, i);
-        }
-        // Nd4j doesn't report if the matrix is singular.
-        return new QR(this, tau, false);
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public SVD svd() {
-        int m = nrows();
-        int n = ncols();
-        int mn = Math.min(m, n);
-
-        INDArray S = Nd4j.create(mn);
-        INDArray U = Nd4j.create(m, m);
-        INDArray Vt = Nd4j.create(n, n);
-        Nd4j.getNDArrayFactory().lapack().gesvd(A, S, U, Vt);
-
-        double[] s = new double[mn];
-        for (int i = 0; i < mn; i++) {
-            s[i] = S.getDouble(i);
-        }
-        return new SVD(new NDMatrix(U), new NDMatrix(Vt.transpose()), s);
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public double[] eig() {
-        if (nrows() != ncols()) {
-            throw new UnsupportedOperationException("Eigen decomposition on non-square matrix");
-        }
-
-        int n = nrows();
-        INDArray V = Nd4j.create(n);
-
-        if (symmetric) {
-            Nd4j.getNDArrayFactory().lapack().syev('N', 'L', A, V);
-        } else {
-            throw new UnsupportedOperationException("Nd4j doesn't support eigen decomposition of asymmetric matrix");
-        }
-
-        // LAPACK returns eigen values in ascending order.
-        // In contrast, JMatrix returns eigen values in descending order.
-        // Reverse the array to match JMatrix.
-        double[] d = new double[n];
-        for (int i = 0; i < n; i++) {
-            d[i] = V.getDouble(n - i - 1);
-        }
-        return d;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public EVD eigen() {
-        if (nrows() != ncols()) {
-            throw new UnsupportedOperationException("Eigen decomposition on non-square matrix");
-        }
-
-        int n = nrows();
-        INDArray V = Nd4j.create(n);
-
-        if (symmetric) {
-            Nd4j.getNDArrayFactory().lapack().syev('V', 'L', A, V);
-        } else {
-            throw new UnsupportedOperationException("Nd4j doesn't support eigen decomposition of asymmetric matrix");
-        }
-
-        // LAPACK returns eigen values in ascending order.
-        // In contrast, JMatrix returns eigen values in descending order.
-        // Reverse the array to match JMatrix.
-        INDArray a = Nd4j.create(n, n);
-        double[] d = new double[n];
-        for (int i = 0; i < n; i++) {
-            d[i] = V.getDouble(n - i - 1);
-            INDArrayIndex[] col = {NDArrayIndex.all(), NDArrayIndex.point(i)};
-            a.put(col, A.get(NDArrayIndex.all(), NDArrayIndex.point(n - i - 1)));
-        }
-        return new EVD(new NDMatrix(a), d);
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public double[] ax(double[] x, double[] y) {
+        // Nd4j.getBlasWrapper().level2().gemv() crashes.
+        // Use gemm for now.
         int m = nrows();
         int n = ncols();
         INDArray ndx = Nd4j.create(x, new int[]{n, 1});
-        INDArray ndy = Nd4j.create(m, 1);
-        Nd4j.getBlasWrapper().level2().gemv(ColOrder, NoTranspose, 1.0, A, ndx, 0.0, ndy);
+        INDArray ndy = Nd4j.gemm(A, ndx, false, false);
         for (int i = 0; i < m; i++) {
             y[i] = ndy.getDouble(i);
         }
@@ -275,13 +188,14 @@ public class NDMatrix implements DenseMatrix {
 
     @Override
     public double[] axpy(double[] x, double[] y) {
+        // Nd4j.getBlasWrapper().level2().gemv() crashes.
+        // Use gemm for now.
         int m = nrows();
         int n = ncols();
         INDArray ndx = Nd4j.create(x, new int[]{n, 1});
-        INDArray ndy = Nd4j.create(y, new int[]{m, 1});
-        Nd4j.getBlasWrapper().level2().gemv(ColOrder, NoTranspose, 1.0, A, ndx, 1.0, ndy);
+        INDArray ndy = Nd4j.gemm(A, ndx, false, false);
         for (int i = 0; i < m; i++) {
-            y[i] = ndy.getDouble(i);
+            y[i] += ndy.getDouble(i);
         }
 
         return y;
@@ -289,13 +203,14 @@ public class NDMatrix implements DenseMatrix {
 
     @Override
     public double[] axpy(double[] x, double[] y, double b) {
+        // Nd4j.getBlasWrapper().level2().gemv() crashes.
+        // Use gemm for now.
         int m = nrows();
         int n = ncols();
         INDArray ndx = Nd4j.create(x, new int[]{n, 1});
-        INDArray ndy = Nd4j.create(y, new int[]{m, 1});
-        Nd4j.getBlasWrapper().level2().gemv(ColOrder, NoTranspose, 1.0, A, ndx, b, ndy);
+        INDArray ndy = Nd4j.gemm(A, ndx, false, false);
         for (int i = 0; i < m; i++) {
-            y[i] = ndy.getDouble(i);
+            y[i] = b * y[i] + ndy.getDouble(i);
         }
 
         return y;
@@ -303,11 +218,12 @@ public class NDMatrix implements DenseMatrix {
 
     @Override
     public double[] atx(double[] x, double[] y) {
+        // Nd4j.getBlasWrapper().level2().gemv() crashes.
+        // Use gemm for now.
         int m = nrows();
         int n = ncols();
         INDArray ndx = Nd4j.create(x, new int[]{m, 1});
-        INDArray ndy = Nd4j.create(n, 1);
-        Nd4j.getBlasWrapper().level2().gemv(ColOrder, Transpose, 1.0, A, ndx, 0.0, ndy);
+        INDArray ndy = Nd4j.gemm(A, ndx, true, false);
         for (int i = 0; i < n; i++) {
             y[i] = ndy.getDouble(i);
         }
@@ -317,13 +233,14 @@ public class NDMatrix implements DenseMatrix {
 
     @Override
     public double[] atxpy(double[] x, double[] y) {
+        // Nd4j.getBlasWrapper().level2().gemv() crashes.
+        // Use gemm for now.
         int m = nrows();
         int n = ncols();
         INDArray ndx = Nd4j.create(x, new int[]{m, 1});
-        INDArray ndy = Nd4j.create(y, new int[]{n, 1});
-        Nd4j.getBlasWrapper().level2().gemv(ColOrder, Transpose, 1.0, A, ndx, 1.0, ndy);
+        INDArray ndy = Nd4j.gemm(A, ndx, true, false);
         for (int i = 0; i < n; i++) {
-            y[i] = ndy.getDouble(i);
+            y[i] += ndy.getDouble(i);
         }
 
         return y;
@@ -331,13 +248,14 @@ public class NDMatrix implements DenseMatrix {
 
     @Override
     public double[] atxpy(double[] x, double[] y, double b) {
+        // Nd4j.getBlasWrapper().level2().gemv() crashes.
+        // Use gemm for now.
         int m = nrows();
         int n = ncols();
         INDArray ndx = Nd4j.create(x, new int[]{m, 1});
-        INDArray ndy = Nd4j.create(y, new int[]{n, 1});
-        Nd4j.getBlasWrapper().level2().gemv(ColOrder, Transpose, 1.0, A, ndx, b, ndy);
+        INDArray ndy = Nd4j.gemm(A, ndx, true, false);
         for (int i = 0; i < n; i++) {
-            y[i] = ndy.getDouble(i);
+            y[i] = b * y[i] + ndy.getDouble(i);
         }
 
         return y;
@@ -404,17 +322,7 @@ public class NDMatrix implements DenseMatrix {
             return new NDMatrix(Nd4j.gemm(A, b.A, true, false));
         }
 
-        throw new IllegalArgumentException("NDMatrix.atbmm() parameter must be NDMatrix");
-    }
-
-    @Override
-    public NDMatrix atbtmm(DenseMatrix B) {
-        if (B instanceof NDMatrix) {
-            NDMatrix b = (NDMatrix) B;
-            return new NDMatrix(Nd4j.gemm(A, b.A, true, true));
-        }
-
-        throw new IllegalArgumentException("NDMatrix.atbtmm() parameter must be NDMatrix");
+        throw new IllegalArgumentException("NDMatrix.abtmm() parameter must be NDMatrix");
     }
 
     @Override

@@ -18,7 +18,7 @@ package smile.math.matrix;
 
 import java.util.Arrays;
 import smile.math.Complex;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * A pure Java implementation of DenseMatrix whose data is stored in a single 1D array of
@@ -1144,11 +1144,11 @@ public class JMatrix implements DenseMatrix {
                 flag = true;
                 for (l = k; l >= 0; l--) {
                     nm = l - 1;
-                    if (l == 0 || Math.abs(rv1[l]) <= MathEx.EPSILON * anorm) {
+                    if (l == 0 || Math.abs(rv1[l]) <= Math.EPSILON * anorm) {
                         flag = false;
                         break;
                     }
-                    if (Math.abs(w[nm]) <= MathEx.EPSILON * anorm) {
+                    if (Math.abs(w[nm]) <= Math.EPSILON * anorm) {
                         break;
                     }
                 }
@@ -1159,7 +1159,7 @@ public class JMatrix implements DenseMatrix {
                     for (i = l; i < k + 1; i++) {
                         f = s * rv1[i];
                         rv1[i] = c * rv1[i];
-                        if (Math.abs(f) <= MathEx.EPSILON * anorm) {
+                        if (Math.abs(f) <= Math.EPSILON * anorm) {
                             break;
                         }
                         g = w[i];
@@ -1604,7 +1604,7 @@ public class JMatrix implements DenseMatrix {
             tst1 = Math.max(tst1, Math.abs(d[l]) + Math.abs(e[l]));
             int m = l;
             for (; m < n; m++) {
-                if (Math.abs(e[m]) <= MathEx.EPSILON * tst1) {
+                if (Math.abs(e[m]) <= Math.EPSILON * tst1) {
                     break;
                 }
             }
@@ -1660,7 +1660,7 @@ public class JMatrix implements DenseMatrix {
                     d[l] = c * p;
 
                     // Check for convergence.
-                } while (Math.abs(e[l]) > MathEx.EPSILON * tst1);
+                } while (Math.abs(e[l]) > Math.EPSILON * tst1);
             }
             d[l] = d[l] + f;
             e[l] = 0.0;
@@ -1716,7 +1716,7 @@ public class JMatrix implements DenseMatrix {
             tst1 = Math.max(tst1, Math.abs(d[l]) + Math.abs(e[l]));
             int m = l;
             for (; m < n; m++) {
-                if (Math.abs(e[m]) <= MathEx.EPSILON * tst1) {
+                if (Math.abs(e[m]) <= Math.EPSILON * tst1) {
                     break;
                 }
             }
@@ -1779,7 +1779,7 @@ public class JMatrix implements DenseMatrix {
                     d[l] = c * p;
 
                     // Check for convergence.
-                } while (Math.abs(e[l]) > MathEx.EPSILON * tst1);
+                } while (Math.abs(e[l]) > Math.EPSILON * tst1);
             }
             d[l] = d[l] + f;
             e[l] = 0.0;
@@ -1813,7 +1813,7 @@ public class JMatrix implements DenseMatrix {
      * unaffected by this procedure.
      */
     private static double[] balance(DenseMatrix A) {
-        double sqrdx = MathEx.RADIX * MathEx.RADIX;
+        double sqrdx = Math.RADIX * Math.RADIX;
 
         int n = A.nrows();
 
@@ -1834,16 +1834,16 @@ public class JMatrix implements DenseMatrix {
                     }
                 }
                 if (c != 0.0 && r != 0.0) {
-                    double g = r / MathEx.RADIX;
+                    double g = r / Math.RADIX;
                     double f = 1.0;
                     double s = c + r;
                     while (c < g) {
-                        f *= MathEx.RADIX;
+                        f *= Math.RADIX;
                         c *= sqrdx;
                     }
-                    g = r * MathEx.RADIX;
+                    g = r * Math.RADIX;
                     while (c > g) {
-                        f /= MathEx.RADIX;
+                        f /= Math.RADIX;
                         c /= sqrdx;
                     }
                     if ((c + r) / f < 0.95 * s) {
@@ -1971,7 +1971,7 @@ public class JMatrix implements DenseMatrix {
                     if (s == 0.0) {
                         s = anorm;
                     }
-                    if (Math.abs(A.get(l, l - 1)) <= MathEx.EPSILON * s) {
+                    if (Math.abs(A.get(l, l - 1)) <= Math.EPSILON * s) {
                         A.set(l, l - 1, 0.0);
                         break;
                     }
@@ -2030,7 +2030,7 @@ public class JMatrix implements DenseMatrix {
                             }
                             u = Math.abs(A.get(m, m - 1)) * (Math.abs(q) + Math.abs(r));
                             v = Math.abs(p) * (Math.abs(A.get(m - 1, m - 1)) + Math.abs(z) + Math.abs(A.get(m + 1, m + 1)));
-                            if (u <= MathEx.EPSILON * v) {
+                            if (u <= Math.EPSILON * v) {
                                 break;
                             }
                         }
@@ -2126,7 +2126,7 @@ public class JMatrix implements DenseMatrix {
                     if (s == 0.0) {
                         s = anorm;
                     }
-                    if (Math.abs(A.get(l, l - 1)) <= MathEx.EPSILON * s) {
+                    if (Math.abs(A.get(l, l - 1)) <= Math.EPSILON * s) {
                         A.set(l, l - 1, 0.0);
                         break;
                     }
@@ -2211,7 +2211,7 @@ public class JMatrix implements DenseMatrix {
                             }
                             u = Math.abs(A.get(m, m - 1)) * (Math.abs(q) + Math.abs(r));
                             v = Math.abs(p) * (Math.abs(A.get(m - 1, m - 1)) + Math.abs(z) + Math.abs(A.get(m + 1, m + 1)));
-                            if (u <= MathEx.EPSILON * v) {
+                            if (u <= Math.EPSILON * v) {
                                 break;
                             }
                         }
@@ -2307,13 +2307,13 @@ public class JMatrix implements DenseMatrix {
                             if (e[i] == 0.0) {
                                 t = w;
                                 if (t == 0.0) {
-                                    t = MathEx.EPSILON * anorm;
+                                    t = Math.EPSILON * anorm;
                                 }
                                 A.set(i, nn, -r / t);
                             } else {
                                 x = A.get(i, i + 1);
                                 y = A.get(i + 1, i);
-                                q = MathEx.sqr(d[i] - p) + MathEx.sqr(e[i]);
+                                q = Math.sqr(d[i] - p) + Math.sqr(e[i]);
                                 t = (x * s - z * r) / q;
                                 A.set(i, nn, t);
                                 if (Math.abs(x) > Math.abs(z)) {
@@ -2323,7 +2323,7 @@ public class JMatrix implements DenseMatrix {
                                 }
                             }
                             t = Math.abs(A.get(i, nn));
-                            if (MathEx.EPSILON * t * t > 1) {
+                            if (Math.EPSILON * t * t > 1) {
                                 for (j = i; j <= nn; j++) {
                                     A.div(j, nn, t);
                                 }
@@ -2337,8 +2337,8 @@ public class JMatrix implements DenseMatrix {
                         A.set(na, nn, -(A.get(nn, nn) - p) / A.get(nn, na));
                     } else {
                         Complex temp = cdiv(0.0, -A.get(na, nn), A.get(na, na) - p, q);
-                        A.set(na, na, temp.re);
-                        A.set(na, nn, temp.im);
+                        A.set(na, na, temp.re());
+                        A.set(na, nn, temp.im());
                     }
                     A.set(nn, na, 0.0);
                     A.set(nn, nn, 1.0);
@@ -2357,31 +2357,31 @@ public class JMatrix implements DenseMatrix {
                             m = i;
                             if (e[i] == 0.0) {
                                 Complex temp = cdiv(-ra, -sa, w, q);
-                                A.set(i, na, temp.re);
-                                A.set(i, nn, temp.im);
+                                A.set(i, na, temp.re());
+                                A.set(i, nn, temp.im());
                             } else {
                                 x = A.get(i, i + 1);
                                 y = A.get(i + 1, i);
-                                vr = MathEx.sqr(d[i] - p) + MathEx.sqr(e[i]) - q * q;
+                                vr = Math.sqr(d[i] - p) + Math.sqr(e[i]) - q * q;
                                 vi = 2.0 * q * (d[i] - p);
                                 if (vr == 0.0 && vi == 0.0) {
-                                    vr = MathEx.EPSILON * anorm * (Math.abs(w) + Math.abs(q) + Math.abs(x) + Math.abs(y) + Math.abs(z));
+                                    vr = Math.EPSILON * anorm * (Math.abs(w) + Math.abs(q) + Math.abs(x) + Math.abs(y) + Math.abs(z));
                                 }
                                 Complex temp = cdiv(x * r - z * ra + q * sa, x * s - z * sa - q * ra, vr, vi);
-                                A.set(i, na, temp.re);
-                                A.set(i, nn, temp.im);
+                                A.set(i, na, temp.re());
+                                A.set(i, nn, temp.im());
                                 if (Math.abs(x) > Math.abs(z) + Math.abs(q)) {
                                     A.set(i + 1, na, (-ra - w * A.get(i, na) + q * A.get(i, nn)) / x);
                                     A.set(i + 1, nn, (-sa - w * A.get(i, nn) - q * A.get(i, na)) / x);
                                 } else {
                                     temp = cdiv(-r - y * A.get(i, na), -s - y * A.get(i, nn), z, q);
-                                    A.set(i + 1, na, temp.re);
-                                    A.set(i + 1, nn, temp.im);
+                                    A.set(i + 1, na, temp.re());
+                                    A.set(i + 1, nn, temp.im());
                                 }
                             }
                         }
                         t = Math.max(Math.abs(A.get(i, na)), Math.abs(A.get(i, nn)));
-                        if (MathEx.EPSILON * t * t > 1) {
+                        if (Math.EPSILON * t * t > 1) {
                             for (j = i; j <= nn; j++) {
                                 A.div(j, na, t);
                                 A.div(j, nn, t);

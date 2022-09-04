@@ -1,24 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.math.matrix;
 
 import java.util.Arrays;
-import smile.math.MathEx;
 
 /**
  * A band matrix is a sparse matrix, whose non-zero entries are confined to
@@ -130,25 +128,6 @@ public class BandMatrix implements Matrix, LinearSolver {
         this.m1 = m1;
         this.m2 = m2;
         A = new double[n][m1+m2+1];
-    }
-
-    @Override
-    public BandMatrix clone() {
-        BandMatrix copy = new BandMatrix(n, m1, m2);
-        for (int i = 0; i < n; i++) {
-            System.arraycopy(A[i], 0, copy.A[i], 0, A[i].length);
-        }
-
-        copy.symmetric = symmetric;
-
-        if (au != null) {
-            copy.au = MathEx.clone(au);
-            copy.al = MathEx.clone(al);
-            copy.index = index.clone();
-            copy.d = d;
-        }
-
-        return copy;
     }
 
     @Override
