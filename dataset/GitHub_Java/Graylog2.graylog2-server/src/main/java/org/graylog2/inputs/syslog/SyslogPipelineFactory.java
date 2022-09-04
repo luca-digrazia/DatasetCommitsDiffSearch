@@ -26,6 +26,10 @@ import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
 
 /**
+ * SyslogPipelineFactory.java: 30.04.2012 00:12:09
+ *
+ * Describe me.
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class SyslogPipelineFactory implements ChannelPipelineFactory {
@@ -38,7 +42,7 @@ public class SyslogPipelineFactory implements ChannelPipelineFactory {
 
     @Override
     public ChannelPipeline getPipeline() throws Exception {
-        return Channels.pipeline(new SyslogDispatcher(server));
+        return Channels.pipeline(new SyslogUDPDispatcher(server));
     }
 
 }

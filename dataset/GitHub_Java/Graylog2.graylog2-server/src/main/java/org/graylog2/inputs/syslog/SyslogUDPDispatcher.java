@@ -20,17 +20,16 @@
 
 package org.graylog2.inputs.syslog;
 
+import com.yammer.metrics.Metrics;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
+import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
 import org.graylog2.GraylogServer;
 import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelHandler;
-import org.jboss.netty.handler.codec.frame.FrameDecoder;
 
 /**
  * SyslogUDPDispatcher.java: 30.04.2012 00:13:02
@@ -44,13 +43,17 @@ public class SyslogUDPDispatcher extends SimpleChannelHandler {
     private static final Logger LOG = Logger.getLogger(SyslogUDPDispatcher.class);
 
     private SyslogProcessor processor;
+    private GraylogServer server;
 
     public SyslogUDPDispatcher(GraylogServer server) {
         this.processor = new SyslogProcessor(server);
+        this.server = server;
     }
 
     @Override
     public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
+        Metrics.newMeter(SyslogUDPDispatcher.class, "ReceivedMessages", "messages", TimeUnit.SECONDS).mark();
+
         InetSocketAddress remoteAddress = (InetSocketAddress) e.getRemoteAddress();
 
         ChannelBuffer buffer = (ChannelBuffer) e.getMessage();
