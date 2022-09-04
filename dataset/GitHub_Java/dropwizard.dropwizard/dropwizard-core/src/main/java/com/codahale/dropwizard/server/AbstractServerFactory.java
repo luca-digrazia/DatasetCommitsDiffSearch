@@ -198,18 +198,13 @@ public abstract class AbstractServerFactory implements ServerFactory {
             jersey.addProvider(new JacksonMessageBodyProvider(objectMapper, validator));
             handler.addServlet(new NonblockingServletHolder(jerseyContainer), jersey.getUrlPattern());
         }
-        final InstrumentedHandler instrumented = new InstrumentedHandler(metricRegistry);
-        instrumented.setHandler(handler);
-        return instrumented;
+        return new InstrumentedHandler(metricRegistry, handler);
     }
 
     protected ThreadPool createThreadPool(MetricRegistry metricRegistry) {
         final BlockingQueue<Runnable> queue = new BlockingArrayQueue<>(minThreads, maxThreads, maxQueuedRequests);
-        final InstrumentedQueuedThreadPool threadPool =
-                new InstrumentedQueuedThreadPool(metricRegistry, maxThreads, minThreads,
-                                                 (int) idleThreadTimeout.toMilliseconds(), queue);
-        threadPool.setName("dw");
-        return threadPool;
+        return new InstrumentedQueuedThreadPool(metricRegistry, "dw", maxThreads, minThreads,
+                                                (int) idleThreadTimeout.toMilliseconds(), queue);
     }
 
     protected Server buildServer(LifecycleEnvironment lifecycle, ThreadPool threadPool) {
@@ -225,8 +220,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
     protected Handler addGzipAndRequestLog(Handler handler, String name) {
         final Handler gzipHandler = gzip.wrapHandler(handler);
         if (requestLog.isEnabled()) {
-            final RequestLogHandler requestLogHandler = new RequestLogHandler();
-            requestLogHandler.setRequestLog(requestLog.build(name));
+            final RequestLogHandler requestLogHandler = requestLog.build(name);
             requestLogHandler.setHandler(gzipHandler);
             return requestLogHandler;
         }
