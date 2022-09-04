@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
@@ -74,8 +73,7 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
   }
 
   protected void checkCanWriteNonExecutableFile() throws Exception {
-    ActionResult actionResult = action.execute(context);
-    assertThat(actionResult.spawnResults()).isEmpty();
+    action.execute(context);
     String content = new String(FileSystemUtils.readContentAsLatin1(output));
     assertThat(content).isEqualTo("Hello World");
     assertThat(output.isExecutable()).isFalse();
@@ -85,8 +83,7 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
     Artifact outputArtifact = getBinArtifactWithNoOwner("hello");
     Path output = outputArtifact.getPath();
     Action action = createAction(NULL_ACTION_OWNER, outputArtifact, "echo 'Hello World'", true);
-    ActionResult actionResult = action.execute(context);
-    assertThat(actionResult.spawnResults()).isEmpty();
+    action.execute(context);
     String content = new String(FileSystemUtils.readContentAsLatin1(output));
     assertThat(content).isEqualTo("echo 'Hello World'");
     assertThat(output.isExecutable()).isTrue();

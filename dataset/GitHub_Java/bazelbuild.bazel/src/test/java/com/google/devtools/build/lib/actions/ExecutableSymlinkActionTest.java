@@ -67,8 +67,7 @@ public class ExecutableSymlinkActionTest {
     Artifact input = new Artifact(inputFile, inputRoot);
     Artifact output = new Artifact(outputFile, outputRoot);
     ExecutableSymlinkAction action = new ExecutableSymlinkAction(NULL_ACTION_OWNER, input, output);
-    ActionResult actionResult = action.execute(createContext());
-    assertThat(actionResult.spawnResults()).isEmpty();
+    action.execute(createContext());
     assertThat(outputFile.resolveSymbolicLinks()).isEqualTo(inputFile);
   }
 
