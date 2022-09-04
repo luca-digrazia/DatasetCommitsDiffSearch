@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -893,7 +892,7 @@ public class CppCompileAction extends AbstractAction
     }
     // Need to do dir/package matching: first try a quick exact lookup.
     PathFragment includeDir = input.getRootRelativePath().getParentDirectory();
-    if (includeDir.isEmpty() || declaredIncludeDirs.contains(includeDir)) {
+    if (includeDir.segmentCount() == 0 || declaredIncludeDirs.contains(includeDir)) {
       return true;  // OK: quick exact match.
     }
     // Not found in the quick lookup: try the wildcards.
@@ -905,16 +904,16 @@ public class CppCompileAction extends AbstractAction
       }
     }
     // Still not found: see if it is in a subdir of a declared package.
-    Root root = input.getRoot().getRoot();
+    Path root = input.getRoot().getPath();
     for (Path dir = input.getPath().getParentDirectory();;) {
       if (dir.getRelative(BUILD_PATH_FRAGMENT).exists()) {
         return false;  // Bad: this is a sub-package, not a subdir of a declared package.
       }
       dir = dir.getParentDirectory();
-      if (dir.equals(root.asPath())) {
+      if (dir.equals(root)) {
         return false;  // Bad: at the top, give up.
       }
-      if (declaredIncludeDirs.contains(root.relativize(dir))) {
+      if (declaredIncludeDirs.contains(dir.relativeTo(root))) {
         return true;  // OK: found under a declared dir.
       }
     }
