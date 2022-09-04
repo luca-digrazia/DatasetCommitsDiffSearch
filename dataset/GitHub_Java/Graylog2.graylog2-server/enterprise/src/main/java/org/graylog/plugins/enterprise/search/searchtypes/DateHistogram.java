@@ -2,7 +2,6 @@ package org.graylog.plugins.enterprise.search.searchtypes;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
@@ -37,9 +36,9 @@ public abstract class DateHistogram implements SearchType {
     }
 
     @Override
-    public SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state) {
-        if (state.hasNonNull("interval")) {
-            final String interval = state.path("interval").asText();
+    public SearchType applyExecutionContext(ObjectMapper objectMapper, Map<String, Object> state) {
+        if (state.containsKey("interval")) {
+            final String interval = (String) state.get("interval");
             final Builder builder = toBuilder()
                     .interval(Searches.DateHistogramInterval.valueOf(interval.toUpperCase(Locale.ENGLISH)));
             return builder.build();

@@ -16,6 +16,7 @@ import com.google.common.collect.Maps;
 import org.graylog.plugins.enterprise.search.engine.BackendQuery;
 import org.graylog.plugins.enterprise.search.engine.EmptyTimeRange;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.mongojack.Id;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +40,7 @@ public abstract class Query {
     @JsonIgnore
     private ImmutableMap<String, SearchType> searchTypesIndex;
 
+    @Id
     @JsonProperty
     public abstract String id();
 
@@ -127,6 +129,7 @@ public abstract class Query {
     @AutoValue.Builder
     @JsonPOJOBuilder(withPrefix = "")
     public abstract static class Builder {
+        @Id
         @JsonProperty
         public abstract Builder id(String id);
 

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
@@ -14,6 +13,7 @@ import org.graylog.plugins.enterprise.search.SearchType;
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @AutoValue
 @JsonTypeName(Aggregation.NAME)
@@ -52,7 +52,7 @@ public abstract class Aggregation implements SearchType {
     }
 
     @Override
-    public SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state) {
+    public SearchType applyExecutionContext(ObjectMapper objectMapper, Map<String, Object> state) {
         return this;
     }
 

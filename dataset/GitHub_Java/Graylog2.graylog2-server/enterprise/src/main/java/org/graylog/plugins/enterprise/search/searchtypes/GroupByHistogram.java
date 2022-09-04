@@ -3,7 +3,6 @@ package org.graylog.plugins.enterprise.search.searchtypes;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
@@ -67,7 +66,7 @@ public abstract class GroupByHistogram implements SearchType {
     }
 
     @Override
-    public SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state) {
+    public SearchType applyExecutionContext(ObjectMapper objectMapper, Map<String, Object> state) {
         return this;
     }
 
