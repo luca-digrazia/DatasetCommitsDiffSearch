@@ -28,9 +28,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
-
-import smile.data.formula.Term;
 import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
 import smile.data.type.*;
@@ -302,21 +301,21 @@ class DataFrameImpl implements DataFrame {
         StructField[] fields = schema.fields();
         this.columns = new ArrayList<>(fields.length);
 
-        Term[] terms = formula.terms();
+        smile.data.formula.Factor[] factors = formula.factors();
         for (int j = 0; j < fields.length; j++) {
             StructField field = fields[j];
-            if (terms[j].isVariable()) {
+            if (factors[j].isColumn()) {
                 columns.add(df.column(field.name));
             }
         }
 
         // We are done if all factors are raw columns.
-        if (columns.size() == terms.length) return;
+        if (columns.size() == factors.length) return;
 
         List<Tuple> data = df.stream().map(formula::apply).collect(Collectors.toList());
         for (int j = 0; j < fields.length; j++) {
             StructField field = fields[j];
-            if (formula.terms()[j].isVariable()) {
+            if (formula.factors()[j].isColumn()) {
                 continue;
             }
 
@@ -522,12 +521,6 @@ class DataFrameImpl implements DataFrame {
 
     @Override
     public DataFrame merge(DataFrame... dataframes) {
-        for (DataFrame df : dataframes) {
-            if (df.size() != size()) {
-                throw new IllegalArgumentException("Merge data frames with different size: " + size() + " vs " + df.size());
-            }
-        }
-
         List<BaseVector> all = new ArrayList<>(columns);
         for (DataFrame df : dataframes) {
             for (int i = 0; i < df.ncols(); i++) {
@@ -546,12 +539,6 @@ class DataFrameImpl implements DataFrame {
 
     @Override
     public DataFrame merge(BaseVector... vectors) {
-        for (BaseVector vector : vectors) {
-            if (vector.size() != size()) {
-                throw new IllegalArgumentException("Merge data frames with different size: " + size() + " vs " + vector.size());
-            }
-        }
-
         List<BaseVector> columns = new ArrayList<>(this.columns);
         Collections.addAll(columns, vectors);
         DataFrameImpl df = new DataFrameImpl(columns);

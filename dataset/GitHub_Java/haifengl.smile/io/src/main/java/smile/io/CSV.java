@@ -51,9 +51,7 @@ public class CSV {
     /** Regex for boolean. */
     private static Pattern booleanPattern = Pattern.compile("(true|false)", Pattern.CASE_INSENSITIVE);
     /** Regex for integer. */
-    private static Pattern intPattern = Pattern.compile("[-+]?\\d{1,9}");
-    /** Regex for long. */
-    private static Pattern longPattern = Pattern.compile("[-+]?\\d{1,19}");
+    private static Pattern intPattern = Pattern.compile("[-+]?\\d+");
     /** Regex for double. */
     private static Pattern doublePattern = Pattern.compile("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
     /** Regex for date. */
@@ -119,16 +117,53 @@ public class CSV {
             for (CSVRecord record : parser) {
                 Object[] row = new Object[fields.length];
                 for (int i = 0; i < fields.length; i++) {
-                    String s = record.get(i).trim();
-                    if (!s.isEmpty()) {
-                        row[i] = fields[i].type.valueOf(s);
-                    }
+                    row[i] = fields[i].type.valueOf(record.get(i).trim());
                 }
                 rows.add(Tuple.of(row, schema));
                 if (rows.size() >= limit) break;
             }
 
-            schema.boxed(rows);
+            for (StructField field : schema.fields()) {
+                if (field.type.isPrimitive()) {
+                    int i = schema.fieldIndex(field.name);
+                    boolean missing = false;
+                    for (Tuple row : rows) {
+                        if (row.isNullAt(i)) {
+                            missing = true;
+                            break;
+                        }
+                    }
+
+                    if (missing) {
+                        switch (field.type.id()) {
+                            case Boolean:
+                                schema.fields()[i] = new StructField(field.name, DataTypes.BooleanObjectType);
+                                break;
+                            case Byte:
+                                schema.fields()[i] = new StructField(field.name, DataTypes.ByteObjectType);
+                                break;
+                            case Char:
+                                schema.fields()[i] = new StructField(field.name, DataTypes.CharObjectType);
+                                break;
+                            case Short:
+                                schema.fields()[i] = new StructField(field.name, DataTypes.ShortObjectType);
+                                break;
+                            case Integer:
+                                schema.fields()[i] = new StructField(field.name, DataTypes.IntegerObjectType);
+                                break;
+                            case Long:
+                                schema.fields()[i] = new StructField(field.name, DataTypes.LongObjectType);
+                                break;
+                            case Float:
+                                schema.fields()[i] = new StructField(field.name, DataTypes.FloatObjectType);
+                                break;
+                            case Double:
+                                schema.fields()[i] = new StructField(field.name, DataTypes.DoubleObjectType);
+                                break;
+                        }
+                    }
+                }
+            }
             return DataFrame.of(rows);
         }
     }
@@ -191,7 +226,6 @@ public class CSV {
         if (match(datePattern, s)) return DataTypes.DateType;
         if (match(timePattern, s)) return DataTypes.TimeType;
         if (match(intPattern, s)) return DataTypes.IntegerType;
-        if (match(longPattern, s)) return DataTypes.LongType;
         if (match(doublePattern, s)) return DataTypes.DoubleType;
         if (match(booleanPattern, s)) return DataTypes.BooleanType;
         return DataTypes.StringType;
@@ -232,13 +266,8 @@ public class CSV {
     /** Writes a data frame to a file with given charset. */
     public void write(DataFrame df, Path path, Charset charset) throws IOException {
         int p = df.schema().length();
-        String[] header = new String[p];
-        for (int i = 0; i < p; i++) {
-            header[i] = df.schema().field(i).name;
-        }
-
         List<String> record = new ArrayList<>(p);
-        try (CSVPrinter printer = format.withHeader(header).print(path, charset)) {
+        try (CSVPrinter printer = format.print(path, charset)) {
             for (int i = 0; i < df.size(); i++) {
                 Tuple row = df.get(i);
                 for (int j = 0; j < p; j++) record.add(row.getString(j));
