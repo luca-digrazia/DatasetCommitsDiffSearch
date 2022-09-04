@@ -290,7 +290,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         GSYVideoManager.instance().setPlayTag(mPlayTag);
         GSYVideoManager.instance().setPlayPosition(mPlayPosition);
         mAudioManager.requestAudioFocus(onAudioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-        ((Activity) getActivityContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        ((Activity) getContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         mBackUpPlayingBufferState = -1;
         GSYVideoManager.instance().prepare(mUrl, mMapHeadData, mLooping, mSpeed);
         setStateAndUi(CURRENT_STATE_PREPAREING);
@@ -354,14 +354,9 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      */
     public boolean setUp(String url, boolean cacheWithPlay, File cachePath, Map<String, String> mapHeadData, String title) {
         if (setUp(url, cacheWithPlay, cachePath, title)) {
-            if (this.mMapHeadData != null) {
-                this.mMapHeadData.clear();
-            } else {
-                this.mMapHeadData = new HashMap<>();
-            }
-            if (mapHeadData != null) {
+            this.mMapHeadData.clear();
+            if (mapHeadData != null)
                 this.mMapHeadData.putAll(mapHeadData);
-            }
             return true;
         }
         return false;
@@ -534,7 +529,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         if (!mIfCurrentIsFullscreen)
             GSYVideoManager.instance().setLastListener(null);
         mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
-        ((Activity) getActivityContext()).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        ((Activity) getContext()).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         releaseNetWorkState();
 
@@ -563,7 +558,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         GSYVideoManager.instance().setCurrentVideoWidth(0);
 
         mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
-        ((Activity) getActivityContext()).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        ((Activity) getContext()).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         releaseNetWorkState();
 
