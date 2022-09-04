@@ -33,6 +33,9 @@ import java.util.concurrent.TimeUnit;
 
 import static org.graylog2.restclient.lib.Configuration.apiTimeout;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class IndexService {
 
     private final ApiClient api;
@@ -59,20 +62,17 @@ public class IndexService {
 
     public DeflectorInformationResponse getDeflectorInfo() throws APIException, IOException {
         return api.path(routes.DeflectorResource().deflector(), DeflectorInformationResponse.class)
-                .timeout(apiTimeout("deflector_info", 20, TimeUnit.SECONDS))
                 .execute();
     }
 
     public DeflectorConfigResponse getDeflectorConfig() throws APIException, IOException {
         return api.path(routes.DeflectorResource().config(), DeflectorConfigResponse.class)
-                .timeout(apiTimeout("deflector_config", 60, TimeUnit.SECONDS))
                 .onlyMasterNode()
                 .execute();
     }
 
     public ClosedIndicesResponse getClosedIndices() throws APIException, IOException {
         return api.path(routes.IndicesResource().closed(), ClosedIndicesResponse.class)
-                .timeout(apiTimeout("closed_indices", 60, TimeUnit.SECONDS))
                 .execute();
     }
 
