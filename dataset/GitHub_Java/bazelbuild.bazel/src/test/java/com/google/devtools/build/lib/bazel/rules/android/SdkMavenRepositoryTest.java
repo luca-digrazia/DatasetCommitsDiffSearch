@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.Path;
 import org.junit.Before;
 import org.junit.Test;
@@ -95,7 +95,7 @@ public class SdkMavenRepositoryTest extends BuildViewTestCase {
     sdkMavenRepository.writeBuildFiles(workspaceDir);
 
     Path groupIdPath = scratch.resolve("com.google.android");
-    assertThat(workspaceDir.getDirectoryEntries()).containsAtLeast(repoPath, groupIdPath);
+    assertThat(workspaceDir.getDirectoryEntries()).containsAllOf(repoPath, groupIdPath);
 
     Path buildFilePath = groupIdPath.getRelative("BUILD");
     assertThat(groupIdPath.getDirectoryEntries()).containsExactly(buildFilePath);
@@ -105,7 +105,7 @@ public class SdkMavenRepositoryTest extends BuildViewTestCase {
   public void testGeneratedAarImport() throws Exception {
     sdkMavenRepository.writeBuildFiles(workspaceDir);
     Rule aarImport =
-        getConfiguredTargetAndData("//com.google.android:bar-1.0.0")
+        getConfiguredTargetAndTarget("//com.google.android:bar-1.0.0")
             .getTarget()
             .getAssociatedRule();
     assertThat(aarImport.getRuleClass()).isEqualTo("aar_import");
@@ -120,7 +120,7 @@ public class SdkMavenRepositoryTest extends BuildViewTestCase {
   public void testGeneratedJavaImport() throws Exception {
     sdkMavenRepository.writeBuildFiles(workspaceDir);
     Rule javaImport =
-        getConfiguredTargetAndData("//com.google.android:foo-1.0.0")
+        getConfiguredTargetAndTarget("//com.google.android:foo-1.0.0")
             .getTarget()
             .getAssociatedRule();
     assertThat(javaImport.getRuleClass()).isEqualTo("java_import");
@@ -134,7 +134,7 @@ public class SdkMavenRepositoryTest extends BuildViewTestCase {
   public void testGeneratedRuleForInvalidPackaging() throws Exception {
     sdkMavenRepository.writeBuildFiles(workspaceDir);
     Rule invalidPackagingGenrule =
-        getConfiguredTargetAndData("//com.google.android:baz-1.0.0")
+        getConfiguredTargetAndTarget("//com.google.android:baz-1.0.0")
             .getTarget()
             .getAssociatedRule();
     assertThat(invalidPackagingGenrule.getRuleClass()).isEqualTo("genrule");

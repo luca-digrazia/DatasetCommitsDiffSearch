@@ -31,7 +31,7 @@ import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryLoaderFunction;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -142,7 +142,7 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
             .add("repo(name='foo', path='/repo2')")
             .build());
     invalidatePackages();
-    ConfiguredTargetAndData target = getConfiguredTargetAndData("@foo//:bar");
+    ConfiguredTargetAndTarget target = getConfiguredTargetAndTarget("@foo//:bar");
     Object path = target.getTarget().getAssociatedRule().getAttributeContainer().getAttr("path");
     assertThat(path).isEqualTo("foo");
   }
@@ -170,7 +170,7 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
             .add("repo(name='foo')")
             .build());
     invalidatePackages();
-    ConfiguredTargetAndData target = getConfiguredTargetAndData("@foo//:bar");
+    ConfiguredTargetAndTarget target = getConfiguredTargetAndTarget("@foo//:bar");
     Object path = target.getTarget().getAssociatedRule().getAttributeContainer().getAttr("path");
     assertThat(path).isEqualTo("foo");
   }
@@ -199,7 +199,7 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
             .add("repo(name='foo')")
             .build());
     invalidatePackages();
-    ConfiguredTargetAndData target = getConfiguredTargetAndData("@foo//:bar");
+    ConfiguredTargetAndTarget target = getConfiguredTargetAndTarget("@foo//:bar");
     Object path = target.getTarget().getAssociatedRule().getAttributeContainer().getAttr("path");
     assertThat(path).isEqualTo("foo");
   }
@@ -229,7 +229,7 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
             .add("repo(name='foobar')")
             .build());
     invalidatePackages();
-    ConfiguredTargetAndData target = getConfiguredTargetAndData("@foobar//:bar");
+    ConfiguredTargetAndTarget target = getConfiguredTargetAndTarget("@foobar//:bar");
     Object path = target.getTarget().getAssociatedRule().getAttributeContainer().getAttr("path");
     assertThat(path).isEqualTo("foobar");
   }
@@ -284,7 +284,7 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testCycleErrorInWorkspaceFileWithExternalRepo() throws Exception {
-    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(/* append= */ true)) {
+    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(true /* append */)) {
       output.write((
           "\nload('//foo:bar.bzl', 'foobar')"
               + "\ngit_repository(name = 'git_repo')").getBytes(StandardCharsets.UTF_8));
@@ -432,7 +432,7 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
     invalidatePackages();
     getConfiguredTarget("//:x");
     assertContainsEvent(
-        "target '//external:zlib' is not visible from target '//:x'. "
+        "Target '//external:zlib' is not visible from target '//:x'. "
             + "Check the visibility declaration of the former target if you think the "
             + "dependency is legitimate");
   }

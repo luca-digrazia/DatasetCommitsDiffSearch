@@ -81,7 +81,7 @@ import com.google.devtools.build.lib.pkgcache.PackageManager.PackageManagerStati
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.CoverageReportValue;
 import com.google.devtools.build.lib.skyframe.SkyframeAnalysisResult;
@@ -95,6 +95,7 @@ import com.google.devtools.build.lib.syntax.SkylarkImports.SkylarkImportSyntaxEx
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.RegexFilter;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import com.google.devtools.common.options.Converter;
@@ -518,26 +519,15 @@ public class BuildView {
       int delimiterPosition = aspect.indexOf('%');
       if (delimiterPosition >= 0) {
         // TODO(jfield): For consistency with Skylark loads, the aspect should be specified
-        // as an absolute label.
-        // We convert it for compatibility reasons (this will be removed in the future).
+        // as an absolute path. Also, we probably need to do at least basic validation of
+        // path well-formedness here.
         String bzlFileLoadLikeString = aspect.substring(0, delimiterPosition);
         if (!bzlFileLoadLikeString.startsWith("//") && !bzlFileLoadLikeString.startsWith("@")) {
           // "Legacy" behavior of '--aspects' parameter.
-          if (bzlFileLoadLikeString.startsWith("/")) {
-            bzlFileLoadLikeString = bzlFileLoadLikeString.substring(1);
-          }
-          int lastSlashPosition = bzlFileLoadLikeString.lastIndexOf('/');
-          if (lastSlashPosition >= 0) {
-            bzlFileLoadLikeString =
-                "//"
-                    + bzlFileLoadLikeString.substring(0, lastSlashPosition)
-                    + ":"
-                    + bzlFileLoadLikeString.substring(lastSlashPosition + 1);
-          } else {
-            bzlFileLoadLikeString = "//:" + bzlFileLoadLikeString;
-          }
-          if (!bzlFileLoadLikeString.endsWith(".bzl")) {
-            bzlFileLoadLikeString = bzlFileLoadLikeString + ".bzl";
+          bzlFileLoadLikeString = PathFragment.create("/" + bzlFileLoadLikeString).toString();
+          if (bzlFileLoadLikeString.endsWith(".bzl")) {
+            bzlFileLoadLikeString = bzlFileLoadLikeString.substring(0,
+                bzlFileLoadLikeString.length() - ".bzl".length());
           }
         }
         SkylarkImport skylarkImport;
@@ -967,7 +957,7 @@ public class BuildView {
                 getDirectPrerequisiteDependenciesForTesting(
                         eventHandler, ct, configurations, /*toolchainContext=*/ null)
                     .values())),
-        ConfiguredTargetAndData::getConfiguredTarget);
+        ConfiguredTargetAndTarget::getConfiguredTarget);
   }
 
   @VisibleForTesting
@@ -1080,7 +1070,7 @@ public class BuildView {
     return ImmutableMap.copyOf(keys);
   }
 
-  private OrderedSetMultimap<Attribute, ConfiguredTargetAndData> getPrerequisiteMapForTesting(
+  private OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> getPrerequisiteMapForTesting(
       final ExtendedEventHandler eventHandler,
       ConfiguredTarget target,
       BuildConfigurationCollection configurations,
@@ -1091,11 +1081,11 @@ public class BuildView {
         getDirectPrerequisiteDependenciesForTesting(
             eventHandler, target, configurations, toolchainContext);
 
-    ImmutableMultimap<Dependency, ConfiguredTargetAndData> cts =
+    ImmutableMultimap<Dependency, ConfiguredTargetAndTarget> cts =
         skyframeExecutor.getConfiguredTargetMapForTesting(
             eventHandler, target.getConfiguration(), ImmutableSet.copyOf(depNodeNames.values()));
 
-    OrderedSetMultimap<Attribute, ConfiguredTargetAndData> result = OrderedSetMultimap.create();
+    OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> result = OrderedSetMultimap.create();
     for (Map.Entry<Attribute, Dependency> entry : depNodeNames.entries()) {
       result.putAll(entry.getKey(), cts.get(entry.getValue()));
     }
@@ -1144,7 +1134,7 @@ public class BuildView {
   }
 
   @VisibleForTesting
-  public ConfiguredTargetAndData getConfiguredTargetAndTargetForTesting(
+  public ConfiguredTargetAndTarget getConfiguredTargetAndTargetForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration config) {
     return skyframeExecutor.getConfiguredTargetAndTargetForTesting(eventHandler, label, config);
   }
@@ -1200,7 +1190,7 @@ public class BuildView {
     ToolchainContext toolchainContext =
         skyframeExecutor.getToolchainContextForTesting(
             requiredToolchains, targetConfig, eventHandler);
-    OrderedSetMultimap<Attribute, ConfiguredTargetAndData> prerequisiteMap =
+    OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> prerequisiteMap =
         getPrerequisiteMapForTesting(
             eventHandler, configuredTarget, configurations, toolchainContext);
     toolchainContext.resolveToolchains(prerequisiteMap);
@@ -1239,11 +1229,11 @@ public class BuildView {
       BuildConfigurationCollection configurations)
       throws EvalException, InvalidConfigurationException, InterruptedException,
              InconsistentAspectOrderException {
-    Collection<ConfiguredTargetAndData> configuredTargets =
+    Collection<ConfiguredTargetAndTarget> configuredTargets =
         getPrerequisiteMapForTesting(
                 eventHandler, dependentTarget, configurations, /*toolchainContext=*/ null)
             .values();
-    for (ConfiguredTargetAndData ct : configuredTargets) {
+    for (ConfiguredTargetAndTarget ct : configuredTargets) {
       if (ct.getTarget().getLabel().equals(desiredTarget)) {
         return ct.getConfiguredTarget();
       }

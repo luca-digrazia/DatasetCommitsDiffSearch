@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,11 +34,6 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link AndroidInstrumentationTest}. */
 @RunWith(JUnit4.class)
 public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
-
-  @Before
-  public void setupCcToolchain() throws Exception {
-    getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
-  }
 
   @Before
   public void setup() throws Exception {
@@ -123,8 +118,8 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testTestExecutableRunfiles() throws Exception {
-    ConfiguredTargetAndData androidInstrumentationTest =
-        getConfiguredTargetAndData("//javatests/com/app/ait");
+    ConfiguredTargetAndTarget androidInstrumentationTest =
+        getConfiguredTargetAndTarget("//javatests/com/app/ait");
     NestedSet<Artifact> runfiles =
         androidInstrumentationTest
             .getConfiguredTarget()
@@ -132,19 +127,19 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
             .getDefaultRunfiles()
             .getAllArtifacts();
     assertThat(runfiles)
-        .containsAtLeastElementsIn(
+        .containsAllIn(
             getHostConfiguredTarget("//tools/android/emulated_device:nexus_6")
                 .getProvider(RunfilesProvider.class)
                 .getDefaultRunfiles()
                 .getAllArtifacts());
     assertThat(runfiles)
-        .containsAtLeastElementsIn(
+        .containsAllIn(
             getHostConfiguredTarget("//java/com/server")
                 .getProvider(RunfilesProvider.class)
                 .getDefaultRunfiles()
                 .getAllArtifacts());
     assertThat(runfiles)
-        .containsAtLeastElementsIn(
+        .containsAllIn(
             getHostConfiguredTarget(
                     androidInstrumentationTest
                         .getTarget()

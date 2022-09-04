@@ -1193,7 +1193,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         packageRelativePath,
         owner
             .getConfiguration()
-            .getGenfilesDirectory(owner.getLabel().getPackageIdentifier().getRepository()),
+            .getGenfilesDirectory(
+                owner.getTarget().getLabel().getPackageIdentifier().getRepository()),
         (AspectValue.AspectKey)
             AspectValue.createAspectKey(
                     owner.getLabel(),
@@ -1972,13 +1973,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       ConfiguredTarget target,
       BuildConfiguration configuration,
       SafeImplicitOutputsFunction outputFunction) {
-    Rule rule;
-    try {
-      rule = (Rule) skyframeExecutor.getPackageManager().getTarget(reporter, target.getLabel());
-    } catch (NoSuchPackageException | NoSuchTargetException | InterruptedException e) {
-      throw new IllegalStateException(e);
-    }
-    Rule associatedRule = rule.getAssociatedRule();
+    Rule associatedRule = target.getTarget().getAssociatedRule();
     RepositoryName repository = associatedRule.getRepository();
 
     ArtifactRoot root;
@@ -1987,13 +1982,15 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     } else {
       root = configuration.getGenfilesDirectory(repository);
     }
-    ArtifactOwner owner = ConfiguredTargetKey.of(target.getLabel(), target.getConfiguration());
+    ArtifactOwner owner =
+        ConfiguredTargetKey.of(target.getTarget().getLabel(), target.getConfiguration());
 
     RawAttributeMapper attr = RawAttributeMapper.of(associatedRule);
 
     String path = Iterables.getOnlyElement(outputFunction.getImplicitOutputs(eventCollector, attr));
 
     return view.getArtifactFactory()
-        .getDerivedArtifact(target.getLabel().getPackageFragment().getRelative(path), root, owner);
+        .getDerivedArtifact(
+            target.getTarget().getLabel().getPackageFragment().getRelative(path), root, owner);
   }
 }

@@ -39,7 +39,7 @@ import com.google.devtools.build.lib.rules.android.deployinfo.AndroidDeployInfoO
 import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -134,14 +134,11 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     Preconditions.checkNotNull(target);
     final AndroidResourcesInfo info = target.get(AndroidResourcesInfo.PROVIDER);
     assertThat(info).named("No android resources exported from the target.").isNotNull();
-    ValidatedAndroidData validated =
-        getOnlyElement(
-            transitive ? info.getTransitiveAndroidResources() : info.getDirectAndroidResources());
-    assertThat(validated).isInstanceOf(ResourceContainer.class);
-    return (ResourceContainer) validated;
+    return getOnlyElement(
+        transitive ? info.getTransitiveAndroidResources() : info.getDirectAndroidResources());
   }
 
-  protected Artifact getResourceClassJar(final ConfiguredTargetAndData target) {
+  protected Artifact getResourceClassJar(final ConfiguredTargetAndTarget target) {
     JavaRuleOutputJarsProvider jarProvider =
         JavaInfo.getProvider(JavaRuleOutputJarsProvider.class, target.getConfiguredTarget());
     assertThat(jarProvider).isNotNull();
@@ -385,31 +382,5 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
             actionsTestUtil()
                 .getActionForArtifactEndingWith(getFilesToBuild(binary), "_proguard.jar"))
         .isNull();
-  }
-
-  /**
-   * Creates a mock SDK with aapt2.
-   *
-   * <p>You'll need to use a configuration pointing to it, such as "--android_sdk=//sdk:sdk", to use
-   * it.
-   */
-  void mockAndroidSdkWithAapt2() throws Exception {
-    scratch.file(
-        "sdk/BUILD",
-        "android_sdk(",
-        "    name = 'sdk',",
-        "    aapt = 'aapt',",
-        "    aapt2 = 'aapt2',",
-        "    adb = 'adb',",
-        "    aidl = 'aidl',",
-        "    android_jar = 'android.jar',",
-        "    apksigner = 'apksigner',",
-        "    dx = 'dx',",
-        "    framework_aidl = 'framework_aidl',",
-        "    main_dex_classes = 'main_dex_classes',",
-        "    main_dex_list_creator = 'main_dex_list_creator',",
-        "    proguard = 'proguard',",
-        "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign')");
   }
 }
