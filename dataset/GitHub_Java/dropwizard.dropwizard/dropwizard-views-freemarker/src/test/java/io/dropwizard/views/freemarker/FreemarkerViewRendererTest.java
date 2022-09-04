@@ -1,7 +1,6 @@
 package io.dropwizard.views.freemarker;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.ImmutableList;
 import com.sun.jersey.api.client.UniformInterfaceException;
 import com.sun.jersey.api.core.DefaultResourceConfig;
 import com.sun.jersey.test.framework.AppDescriptor;
@@ -9,7 +8,6 @@ import com.sun.jersey.test.framework.JerseyTest;
 import com.sun.jersey.test.framework.LowLevelAppDescriptor;
 import io.dropwizard.logging.LoggingFactory;
 import io.dropwizard.views.ViewMessageBodyWriter;
-import io.dropwizard.views.ViewRenderer;
 import org.junit.Test;
 
 import javax.ws.rs.GET;
@@ -49,8 +47,7 @@ public class FreemarkerViewRendererTest extends JerseyTest {
     @Override
     protected AppDescriptor configure() {
         final DefaultResourceConfig config = new DefaultResourceConfig();
-        final ViewRenderer renderer = new FreemarkerViewRenderer();
-        config.getSingletons().add(new ViewMessageBodyWriter(new MetricRegistry(), ImmutableList.of(renderer)));
+        config.getSingletons().add(new ViewMessageBodyWriter(new MetricRegistry()));
         config.getSingletons().add(new ExampleResource());
         return new LowLevelAppDescriptor.Builder(config).build();
     }
