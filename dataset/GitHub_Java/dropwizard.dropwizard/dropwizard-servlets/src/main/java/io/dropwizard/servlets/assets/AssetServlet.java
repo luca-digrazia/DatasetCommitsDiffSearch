@@ -237,9 +237,7 @@ public class AssetServlet extends HttpServlet {
             resp.setDateHeader(LAST_MODIFIED, cachedAsset.getLastModifiedTime());
             resp.setHeader(ETAG, cachedAsset.getETag());
 
-            final String requestUri = req.getRequestURI();
-            final String mediaType = Optional.ofNullable(req.getServletContext().getMimeType(
-                    indexFile != null && requestUri.endsWith("/") ? requestUri + indexFile : requestUri))
+            final String mediaType = Optional.ofNullable(req.getServletContext().getMimeType(req.getRequestURI()))
                     .orElse(defaultMediaType);
             if (mediaType.startsWith("video") || mediaType.startsWith("audio") || usingRanges) {
                 resp.addHeader(ACCEPT_RANGES, "bytes");
