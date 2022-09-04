@@ -13,22 +13,22 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.HasDigest;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
+import com.google.devtools.build.lib.actions.cache.MetadataInjector;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationConstant;
-import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -49,36 +49,19 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 public class TreeArtifactValue implements HasDigest, SkyValue {
 
-  /** Returns an empty {@link TreeArtifactValue}. */
-  public static TreeArtifactValue empty() {
-    return EMPTY;
-  }
-
-  /**
-   * Returns a new {@link Builder} for the given parent tree artifact.
-   *
-   * <p>The returned builder only supports adding children under this parent. To build multiple tree
-   * artifacts at once, use {@link MultiBuilder}.
-   */
-  public static Builder newBuilder(SpecialArtifact parent) {
-    return new Builder(parent);
-  }
-
   /** Builder for constructing multiple instances of {@link TreeArtifactValue} at once. */
   public interface MultiBuilder {
     /**
      * Puts a child tree file into this builder under its {@linkplain TreeFileArtifact#getParent
      * parent}.
-     *
-     * @return {@code this} for convenience
      */
-    MultiBuilder putChild(TreeFileArtifact child, FileArtifactValue metadata);
+    void putChild(TreeFileArtifact child, FileArtifactValue metadata);
 
     /**
      * For each unique parent seen by this builder, passes the aggregated metadata to {@link
-     * TreeArtifactInjector#injectTree}.
+     * MetadataInjector#injectDirectory}.
      */
-    void injectTo(TreeArtifactInjector treeInjector);
+    void injectTo(MetadataInjector metadataInjector);
   }
 
   /** Returns a new {@link MultiBuilder}. */
@@ -102,13 +85,42 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
   private final ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> childData;
   private final boolean entirelyRemote;
 
-  private TreeArtifactValue(
+  @AutoCodec.VisibleForSerialization
+  TreeArtifactValue(
       byte[] digest,
       ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> childData,
       boolean entirelyRemote) {
     this.digest = digest;
     this.childData = childData;
     this.entirelyRemote = entirelyRemote;
+  }
+
+  /**
+   * Returns a TreeArtifactValue out of the given Artifact-relative path fragments and their
+   * corresponding FileArtifactValues.
+   */
+  static TreeArtifactValue create(Map<TreeFileArtifact, FileArtifactValue> childFileValues) {
+    if (childFileValues.isEmpty()) {
+      return EMPTY;
+    }
+    Map<String, FileArtifactValue> digestBuilder =
+        Maps.newHashMapWithExpectedSize(childFileValues.size());
+    boolean entirelyRemote = true;
+    for (Map.Entry<TreeFileArtifact, ? extends FileArtifactValue> e : childFileValues.entrySet()) {
+      TreeFileArtifact child = e.getKey();
+      FileArtifactValue value = e.getValue();
+      Preconditions.checkState(
+          !FileArtifactValue.OMITTED_FILE_MARKER.equals(value),
+          "Cannot construct TreeArtifactValue because child %s was omitted",
+          child);
+      // Tolerate a tree artifact having a mix of local and remote children (b/152496153#comment80).
+      entirelyRemote &= value.isRemote();
+      digestBuilder.put(child.getParentRelativePath().getPathString(), value);
+    }
+    return new TreeArtifactValue(
+        DigestUtils.fromMetadata(digestBuilder),
+        ImmutableSortedMap.copyOf(childFileValues),
+        entirelyRemote);
   }
 
   FileArtifactValue getMetadata() {
@@ -121,6 +133,7 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
         .collect(toImmutableSet());
   }
 
+  @Nullable
   @Override
   public byte[] getDigest() {
     return digest.clone();
@@ -164,7 +177,7 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(this)
+    return MoreObjects.toStringHelper(TreeArtifactValue.class)
         .add("digest", digest)
         .add("childData", childData)
         .toString();
@@ -261,7 +274,7 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
    *     artifact directory, or if {@link TreeArtifactVisitor#visit} throws {@link IOException}
    */
   public static void visitTree(Path parentDir, TreeArtifactVisitor visitor) throws IOException {
-    visitTree(parentDir, PathFragment.EMPTY_FRAGMENT, checkNotNull(visitor));
+    visitTree(parentDir, PathFragment.EMPTY_FRAGMENT, Preconditions.checkNotNull(visitor));
   }
 
   private static void visitTree(Path parentDir, PathFragment subdir, TreeArtifactVisitor visitor)
@@ -314,82 +327,20 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
     }
   }
 
-  /** Builder for a {@link TreeArtifactValue}. */
-  public static final class Builder {
-    private final ImmutableSortedMap.Builder<TreeFileArtifact, FileArtifactValue> childData =
-        ImmutableSortedMap.naturalOrder();
-    private final SpecialArtifact parent;
-
-    Builder(SpecialArtifact parent) {
-      checkArgument(parent.isTreeArtifact(), "%s is not a tree artifact", parent);
-      this.parent = parent;
-    }
-
-    /**
-     * Adds a child to this builder.
-     *
-     * <p>The child's {@linkplain TreeFileArtifact#getParent parent} <em>must</em> match the parent
-     * with which this builder was initialized.
-     *
-     * <p>Children may be added in any order. The children are sorted prior to constructing the
-     * final {@link TreeArtifactValue}.
-     *
-     * <p>It is illegal to call this method with {@link FileArtifactValue.OMITTED_FILE_MARKER}. When
-     * children are omitted, use {@link TreeArtifactValue#OMITTED_TREE_MARKER}.
-     *
-     * @return {@code this} for convenience
-     */
-    public Builder putChild(TreeFileArtifact child, FileArtifactValue metadata) {
-      checkArgument(
-          child.getParent().equals(parent),
-          "While building TreeArtifactValue for %s, got %s with parent %s",
-          parent,
-          child,
-          child.getParent());
-      checkArgument(
-          !FileArtifactValue.OMITTED_FILE_MARKER.equals(metadata),
-          "Cannot construct TreeArtifactValue for %s because child %s was omitted",
-          parent,
-          child);
-      childData.put(child, metadata);
-      return this;
-    }
-
-    /** Builds the final {@link TreeArtifactValue}. */
-    public TreeArtifactValue build() {
-      ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> finalChildData = childData.build();
-      if (finalChildData.isEmpty()) {
-        return EMPTY;
-      }
-
-      Fingerprint fingerprint = new Fingerprint();
-      boolean entirelyRemote = true;
-
-      for (Map.Entry<TreeFileArtifact, FileArtifactValue> childData : finalChildData.entrySet()) {
-        // Digest will be deterministic because children are sorted.
-        fingerprint.addPath(childData.getKey().getParentRelativePath());
-        childData.getValue().addTo(fingerprint);
-
-        // Tolerate a mix of local and remote children (b/152496153#comment80).
-        entirelyRemote &= childData.getValue().isRemote();
-      }
-
-      return new TreeArtifactValue(fingerprint.digestAndReset(), finalChildData, entirelyRemote);
-    }
-  }
-
   private static final class BasicMultiBuilder implements MultiBuilder {
-    private final Map<SpecialArtifact, Builder> map = new HashMap<>();
+    private final Map<
+            SpecialArtifact, ImmutableSortedMap.Builder<TreeFileArtifact, FileArtifactValue>>
+        map = new HashMap<>();
 
     @Override
-    public MultiBuilder putChild(TreeFileArtifact child, FileArtifactValue metadata) {
-      map.computeIfAbsent(child.getParent(), Builder::new).putChild(child, metadata);
-      return this;
+    public void putChild(TreeFileArtifact child, FileArtifactValue metadata) {
+      map.computeIfAbsent(child.getParent(), parent -> ImmutableSortedMap.naturalOrder())
+          .put(child, metadata);
     }
 
     @Override
-    public void injectTo(TreeArtifactInjector treeInjector) {
-      map.forEach((parent, builder) -> treeInjector.injectTree(parent, builder.build()));
+    public void injectTo(MetadataInjector metadataInjector) {
+      map.forEach((parent, builder) -> metadataInjector.injectDirectory(parent, builder.build()));
     }
   }
 
@@ -399,20 +350,14 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
         map = new ConcurrentHashMap<>();
 
     @Override
-    public MultiBuilder putChild(TreeFileArtifact child, FileArtifactValue metadata) {
+    public void putChild(TreeFileArtifact child, FileArtifactValue metadata) {
       map.computeIfAbsent(child.getParent(), parent -> new ConcurrentHashMap<>())
           .put(child, metadata);
-      return this;
     }
 
     @Override
-    public void injectTo(TreeArtifactInjector treeInjector) {
-      map.forEach(
-          (parent, children) -> {
-            Builder builder = new Builder(parent);
-            children.forEach(builder::putChild);
-            treeInjector.injectTree(parent, builder.build());
-          });
+    public void injectTo(MetadataInjector metadataInjector) {
+      map.forEach(metadataInjector::injectDirectory);
     }
   }
 }
