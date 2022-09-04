@@ -17,6 +17,7 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
@@ -293,6 +294,22 @@ public class CppOptions extends FragmentOptions {
     help = "If set, '-static' options in the linkopts of cc_* rules will be ignored."
   )
   public boolean forceIgnoreDashStatic;
+
+  @Option(
+    name = "experimental_skip_static_outputs",
+    defaultValue = "false",
+    category = "semantics",
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+    help =
+        "This flag is experimental and may go away at any time.  "
+            + "If true, linker output for mostly-static C++ executables is a tiny amount of "
+            + "dummy dependency information, and NOT a usable binary.  Kludge, but can reduce "
+            + "network and disk I/O load (and thus, continuous build cycle times) by a lot.  "
+            + "NOTE: use of this flag REQUIRES --distinct_host_configuration."
+  )
+  public boolean skipStaticOutputs;
 
   @Option(
     name = "process_headers_in_dependencies",
@@ -891,7 +908,7 @@ public class CppOptions extends FragmentOptions {
   }
 
   @Override
-  public Map<String, Set<Label>> getDefaultsLabels() {
+  public Map<String, Set<Label>> getDefaultsLabels(BuildConfiguration.Options commonOptions) {
     Set<Label> crosstoolLabels = new LinkedHashSet<>();
     crosstoolLabels.add(crosstoolTop);
     if (hostCrosstoolTop != null) {
