@@ -1,120 +1,205 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.system.inputs;
 
 import com.codahale.metrics.annotation.Timed;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.Maps;
-import com.sun.jersey.api.core.ResourceConfig;
-import org.bson.types.ObjectId;
-import org.graylog2.Core;
-import org.graylog2.database.ValidationException;
-import org.graylog2.inputs.Inputs;
-import org.graylog2.inputs.NoSuchInputTypeException;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.graylog2.audit.AuditEventTypes;
+import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.inputs.Input;
+import org.graylog2.inputs.InputService;
+import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
+import org.graylog2.plugin.configuration.fields.ConfigurationField;
+import org.graylog2.plugin.configuration.fields.TextField;
+import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.MessageInputConfiguration;
-import org.graylog2.plugin.inputs.MessageInputConfigurationException;
-import org.graylog2.rest.resources.RestResource;
-import org.graylog2.rest.resources.system.inputs.requests.InputLaunchRequest;
-import org.graylog2.streams.StreamImpl;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
+import org.graylog2.rest.models.system.inputs.requests.InputCreateRequest;
+import org.graylog2.rest.models.system.inputs.responses.InputCreated;
+import org.graylog2.rest.models.system.inputs.responses.InputSummary;
+import org.graylog2.rest.models.system.inputs.responses.InputsList;
+import org.graylog2.shared.inputs.InputDescription;
+import org.graylog2.shared.inputs.MessageInputFactory;
+import org.graylog2.shared.inputs.NoSuchInputTypeException;
+import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.shared.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.*;
-import javax.ws.rs.core.Context;
+import javax.inject.Inject;
+import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
+import javax.ws.rs.BadRequestException;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.NotFoundException;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.io.IOException;
-import java.net.BindException;
+import java.net.URI;
+import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
+@RequiresAuthentication
+@Api(value = "System/Inputs", description = "Message inputs")
 @Path("/system/inputs")
-public class InputsResource extends RestResource {
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class InputsResource extends AbstractInputsResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(InputsResource.class);
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final InputService inputService;
+    private final MessageInputFactory messageInputFactory;
 
-    @Context
-    ResourceConfig rc;
+    @Inject
+    public InputsResource(InputService inputService, MessageInputFactory messageInputFactory) {
+        super(messageInputFactory.getAvailableInputs());
+        this.inputService = inputService;
+        this.messageInputFactory = messageInputFactory;
+    }
+
+    @GET
+    @Timed
+    @ApiOperation(value = "Get information of a single input on this node")
+    @Path("/{inputId}")
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "No such input.")
+    })
+    public InputSummary get(@ApiParam(name = "inputId", required = true)
+                            @PathParam("inputId") String inputId) throws org.graylog2.database.NotFoundException {
+        checkPermission(RestPermissions.INPUTS_READ, inputId);
+
+        final Input input = inputService.find(inputId);
+
+        return getInputSummary(input);
+    }
+
+    @GET
+    @Timed
+    @ApiOperation(value = "Get all inputs")
+    public InputsList list() {
+        final Set<InputSummary> inputs = inputService.all().stream()
+                .filter(input -> isPermitted(RestPermissions.INPUTS_READ, input.getId()))
+                .map(this::getInputSummary)
+                .collect(Collectors.toSet());
+
+        return InputsList.create(inputs);
+    }
 
     @POST
     @Timed
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response create(String body, @QueryParam("pretty") boolean prettyPrint) {
-        Core core = (Core) rc.getProperty("core");
-
-        InputLaunchRequest lr;
+    @ApiOperation(
+            value = "Launch input on this node",
+            response = InputCreated.class
+    )
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "No such input type registered"),
+            @ApiResponse(code = 400, message = "Missing or invalid configuration"),
+            @ApiResponse(code = 400, message = "Type is exclusive and already has input running")
+    })
+    @RequiresPermissions(RestPermissions.INPUTS_CREATE)
+    @AuditEvent(type = AuditEventTypes.MESSAGE_INPUT_CREATE)
+    public Response create(@ApiParam(name = "JSON body", required = true)
+                           @Valid @NotNull InputCreateRequest lr) throws ValidationException {
         try {
-            lr = objectMapper.readValue(body, InputLaunchRequest.class);
-        } catch(IOException e) {
-            LOG.error("Error while parsing JSON", e);
-            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
-        }
+            // TODO Configuration type values need to be checked. See ConfigurationMapConverter.convertValues()
+            final MessageInput messageInput = messageInputFactory.create(lr, getCurrentUser().getName(), lr.node());
 
-        // Build a proper configuration from POST data.
-        MessageInputConfiguration inputConfig = new MessageInputConfiguration();
+            messageInput.checkConfiguration();
+            final Input input = this.inputService.create(messageInput.asMap());
+            final String newId = inputService.save(input);
+            final URI inputUri = getUriBuilderToSelf().path(InputsResource.class)
+                    .path("{inputId}")
+                    .build(newId);
 
-        // Build input.
-        MessageInput input = null;
-        try {
-            input = Inputs.factory(lr.type);
-            input.configure(inputConfig, core);
+            return Response.created(inputUri).entity(InputCreated.create(newId)).build();
         } catch (NoSuchInputTypeException e) {
             LOG.error("There is no such input type registered.", e);
-            throw new WebApplicationException(e, Response.Status.NOT_FOUND);
-        } catch (MessageInputConfigurationException e) {
+            throw new NotFoundException("There is no such input type registered.", e);
+        } catch (ConfigurationException e) {
             LOG.error("Missing or invalid input configuration.", e);
-            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+            throw new BadRequestException("Missing or invalid input configuration.", e);
         }
 
-        // Launch input.
-        String inputId;
-        try {
-            inputId = core.inputs().launch(input);
-        } catch (Exception e) {
-            LOG.error("Could not launch new input.", e);
-            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
-        }
-
-        // Persist input.
-        ObjectId id;
-        /*StreamImpl stream = new StreamImpl(streamData, core);
-        try {
-            id = stream.save();
-        } catch (ValidationException e) {
-            LOG.error("Validation error.", e);
-            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
-        }*/
-
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("input_id", inputId);
-        //result.put("persist_id", id.toStringMongod());
-
-        return Response.status(Response.Status.ACCEPTED).entity(json(result, prettyPrint)).build();
     }
 
+    @DELETE
+    @Timed
+    @Path("/{inputId}")
+    @ApiOperation(value = "Terminate input on this node")
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "No such input on this node.")
+    })
+    @AuditEvent(type = AuditEventTypes.MESSAGE_INPUT_DELETE)
+    public void terminate(@ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) throws org.graylog2.database.NotFoundException {
+        checkPermission(RestPermissions.INPUTS_TERMINATE, inputId);
+        final Input input = inputService.find(inputId);
+        inputService.destroy(input);
+    }
+
+    @PUT
+    @Timed
+    @Path("/{inputId}")
+    @ApiOperation(
+            value = "Update input on this node",
+            response = InputCreated.class
+    )
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "No such input on this node."),
+            @ApiResponse(code = 400, message = "Missing or invalid input configuration.")
+    })
+    @AuditEvent(type = AuditEventTypes.MESSAGE_INPUT_UPDATE)
+    public Response update(@ApiParam(name = "JSON body", required = true) @Valid @NotNull InputCreateRequest lr,
+                           @ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) throws org.graylog2.database.NotFoundException, NoSuchInputTypeException, ConfigurationException, ValidationException {
+        checkPermission(RestPermissions.INPUTS_EDIT, inputId);
+
+        final Input input = inputService.find(inputId);
+
+        final Map<String, Object> mergedInput = input.getFields();
+        final MessageInput messageInput = messageInputFactory.create(lr, getCurrentUser().getName(), lr.node());
+
+        messageInput.checkConfiguration();
+
+        mergedInput.putAll(messageInput.asMap());
+
+        final Input newInput = inputService.create(input.getId(), mergedInput);
+        inputService.update(newInput);
+
+        final URI inputUri = getUriBuilderToSelf().path(InputsResource.class)
+                .path("{inputId}")
+                .build(input.getId());
+
+        return Response.created(inputUri).entity(InputCreated.create(input.getId())).build();
+    }
 }
