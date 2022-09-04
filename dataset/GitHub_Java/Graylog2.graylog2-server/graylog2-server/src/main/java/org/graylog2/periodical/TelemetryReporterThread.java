@@ -37,7 +37,6 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.graylog2.Configuration;
 import org.graylog2.ServerVersion;
-import org.graylog2.metrics.MetricUtils;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.periodical.Periodical;
 import org.slf4j.Logger;
@@ -84,7 +83,7 @@ public class TelemetryReporterThread extends Periodical {
             report.put("token", configuration.getTelemetryServiceToken());
             report.put("anon_id", DigestUtils.sha256Hex(serverStatus.getNodeId().toString()));
             report.put("server_version", ServerVersion.VERSION.toString());
-            report.put("metrics", MetricUtils.mapAll(metricRegistry.getMetrics()));
+            report.put("metrics", metricRegistry.getMetrics());
 
             String json = objectMapper.writeValueAsString(report);
 
