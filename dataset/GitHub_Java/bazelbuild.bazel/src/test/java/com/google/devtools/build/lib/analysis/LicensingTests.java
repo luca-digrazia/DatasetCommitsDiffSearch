@@ -13,11 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -29,11 +26,16 @@ import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.LicensesProvider.TargetLicense;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.bazel.LicenseCheckingModule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
+import com.google.devtools.build.lib.packages.RawAttributeMapper;
+import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.util.MockCcSupport;
+import com.google.devtools.build.lib.syntax.Type;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -137,7 +139,7 @@ public class LicensingTests extends BuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//a:a");
     License license = getTarget(target.getLabel()).getLicense();
-    assertEquals(License.parseLicense(Arrays.asList("restricted", "reciprocal")), license);
+    assertThat(license).isEqualTo(License.parseLicense(Arrays.asList("restricted", "reciprocal")));
   }
 
   @Test
@@ -197,7 +199,7 @@ public class LicensingTests extends BuildViewTestCase {
         kablamMap);
 
     License cLicense = getTarget(cTarget.getLabel()).getLicense();
-    assertEquals(License.parseLicense(Arrays.asList("restricted", "reciprocal")), cLicense);
+    assertThat(cLicense).isEqualTo(License.parseLicense(Arrays.asList("restricted", "reciprocal")));
   }
 
   @Test
@@ -213,11 +215,10 @@ public class LicensingTests extends BuildViewTestCase {
     License aLicense = getTarget(aTarget.getLabel()).getLicense();
     License bLicense = getTarget(bTarget.getLabel()).getLicense();
     License cLicense = getTarget(cTarget.getLabel()).getLicense();
-    assertFalse(aLicense.equals(bLicense));
-    assertEquals(License.parseLicense(Arrays.asList("unencumbered")), aLicense);
-    assertEquals(License.parseLicense(Arrays.asList("restricted","reciprocal")),
-        bLicense);
-    assertEquals(License.parseLicense(Arrays.asList("unencumbered")), cLicense);
+    assertThat(aLicense.equals(bLicense)).isFalse();
+    assertThat(aLicense).isEqualTo(License.parseLicense(Arrays.asList("unencumbered")));
+    assertThat(bLicense).isEqualTo(License.parseLicense(Arrays.asList("restricted", "reciprocal")));
+    assertThat(cLicense).isEqualTo(License.parseLicense(Arrays.asList("unencumbered")));
   }
 
   @Test
@@ -455,20 +456,26 @@ public class LicensingTests extends BuildViewTestCase {
 
   @Test
   public void testCcToolchainLicenseOverride() throws Exception {
-    scratch.file("c/BUILD",
+    scratch.file(
+        "c/BUILD",
         "filegroup(name = 'dynamic-runtime-libs-cherry', srcs = [], licenses = ['restricted'])",
         "cc_toolchain(",
         "    name = 'c',",
+        "    toolchain_identifier = 'toolchain-identifier-k8',",
         "    output_licenses = ['notice'],",
         "    cpu = 'cherry',",
+        "    ar_files = 'ar-cherry',",
+        "    as_files = 'as-cherry',",
         "    compiler_files = 'compile-cherry',",
         "    dwp_files = 'dwp-cherry',",
+        "    coverage_files = 'gcov-cherry',",
         "    linker_files = 'link-cherry',",
         "    strip_files = ':every-file',",
         "    objcopy_files = 'objcopy-cherry',",
         "    all_files = ':every-file',",
-        "    dynamic_runtime_libs = ['dynamic-runtime-libs-cherry'],",
-        "    static_runtime_libs = ['static-runtime-libs-cherry'])");
+        "    dynamic_runtime_lib = 'dynamic-runtime-libs-cherry',",
+        "    static_runtime_lib = 'static-runtime-libs-cherry')");
+    scratch.file("c/CROSSTOOL", MockCcSupport.EMPTY_CROSSTOOL);
 
     ConfiguredTarget target = getConfiguredTarget("//c:c");
     Map<Label, License> expected = licenses("//c:c", "notice");
@@ -484,9 +491,10 @@ public class LicensingTests extends BuildViewTestCase {
         "reciprocal", "exception=//a:a"));
     License l3 = License.parseLicense(Arrays.asList("by_exception_only",
         "reciprocal", "exception=//a:a", "exception=//b:b"));
-    assertEquals("[restricted] with exceptions [//a:a]", l1.toString());
-    assertEquals("[restricted, reciprocal] with exceptions [//a:a]",l2.toString());
-    assertEquals("[by_exception_only, reciprocal] with exceptions [//a:a, //b:b]", l3.toString());
+    assertThat(l1.toString()).isEqualTo("[restricted] with exceptions [//a:a]");
+    assertThat(l2.toString()).isEqualTo("[restricted, reciprocal] with exceptions [//a:a]");
+    assertThat(l3.toString())
+        .isEqualTo("[by_exception_only, reciprocal] with exceptions [//a:a, //b:b]");
   }
 
   /**
@@ -497,10 +505,10 @@ public class LicensingTests extends BuildViewTestCase {
   protected static Map<Label, License> licenses(String... strings)
       throws LicenseParsingException, LabelSyntaxException {
     Map<Label, License> result = new HashMap<>();
-    for (int i=0; i < strings.length; i += 2) {
+    for (int i = 0; i < strings.length; i += 2) {
       String labelStr = strings[i];
-      String licStr = strings[i+1];
-      Label label = Label.parseAbsolute(labelStr);
+      String licStr = strings[i + 1];
+      Label label = Label.parseAbsolute(labelStr, ImmutableMap.of());
       List<String> splitLicenses =
           licStr.isEmpty() ? Arrays.<String>asList() : Arrays.asList(licStr.split(","));
       License license = License.parseLicense(splitLicenses);
@@ -525,7 +533,9 @@ public class LicensingTests extends BuildViewTestCase {
       V expectedValue = expected.get(key);
       V actualValue = actual.get(key);
       assertWithMessage("Key '%s'", key).that(actualValue).isNotNull();
-      assertEquals("Values for key '" + key + "' should match", expectedValue, actualValue);
+      assertWithMessage("Values for key '" + key + "' should match")
+          .that(actualValue)
+          .isEqualTo(expectedValue);
     }
   }
 
@@ -544,10 +554,15 @@ public class LicensingTests extends BuildViewTestCase {
     ConfiguredTarget used = getConfiguredTarget("//used");
     Map<Label, License> usedActual =
         Maps.filterKeys(getTransitiveLicenses(used), AnalysisMock.get().ccSupport().labelFilter());
-    Label usedLabel = Label.parseAbsolute("//used");
+    Label usedLabel = Label.parseAbsolute("//used", ImmutableMap.of());
     License license = usedActual.get(usedLabel);
-    license.checkCompatibility(EnumSet.of(DistributionType.CLIENT),
-        getTarget("//user"), usedLabel, reporter, false);
+    LicenseCheckingModule.checkCompatibility(
+        license,
+        EnumSet.of(DistributionType.CLIENT),
+        getTarget("//user"),
+        usedLabel,
+        reporter,
+        false);
     assertNoEvents();
   }
 
@@ -568,10 +583,15 @@ public class LicensingTests extends BuildViewTestCase {
     ConfiguredTarget used = getConfiguredTarget("//used");
     Map<Label, License> usedActual =
         Maps.filterKeys(getTransitiveLicenses(used), AnalysisMock.get().ccSupport().labelFilter());
-    Label usedLabel = Label.parseAbsolute("//used");
+    Label usedLabel = Label.parseAbsolute("//used", ImmutableMap.of());
     License license = usedActual.get(usedLabel);
-    license.checkCompatibility(EnumSet.of(DistributionType.CLIENT),
-        getTarget("//user"), usedLabel, reporter, false);
+    LicenseCheckingModule.checkCompatibility(
+        license,
+        EnumSet.of(DistributionType.CLIENT),
+        getTarget("//user"),
+        usedLabel,
+        reporter,
+        false);
     assertNoEvents();
   }
 
@@ -618,9 +638,39 @@ public class LicensingTests extends BuildViewTestCase {
   }
 
   @Test
+  public void testJavaToolchainOutputLicense() throws Exception {
+    scratch.file("java/a/BUILD",
+        "java_toolchain(",
+        "  name = 'toolchain',",
+        "  licenses = ['restricted'],",
+        "  output_licenses = ['unencumbered'],",
+        "  source_version = '8',",
+        "  target_version = '8',",
+        "  bootclasspath = [':bcp'],",
+        "  extclasspath = [':ecp'],",
+        "  javac = [':langtools'],",
+        "  javabuilder = ['javabuilder'],",
+        "  header_compiler = ['header_compiler'],",
+        "  singlejar = ['singlejar'],",
+        "  genclass = ['genclass'],",
+        "  ijar = ['ijar'])",
+        "java_binary(",
+        "  name = 'a',",
+        "  srcs = ['a.java'])");
+
+    useConfiguration("--java_toolchain=//java/a:toolchain", "--check_licenses");
+
+    ConfiguredTarget bin = getConfiguredTarget("//java/a:a");
+    Map<Label, License> licenses = getTransitiveLicenses(bin);
+    License toolchainLicense = licenses.get(Label.parseAbsoluteUnchecked("//java/a:toolchain"));
+    assertThat(toolchainLicense).isNotEqualTo(License.parseLicense(ImmutableList.of("restricted")));
+    assertThat(toolchainLicense).isEqualTo(License.parseLicense(ImmutableList.of("unencumbered")));
+  }
+
+  @Test
   public void testTargetLicenseEquality() throws Exception {
-    Label label1 = Label.parseAbsolute("//foo");
-    Label label2 = Label.parseAbsolute("//bar");
+    Label label1 = Label.parseAbsolute("//foo", ImmutableMap.of());
+    Label label2 = Label.parseAbsolute("//bar", ImmutableMap.of());
     License restricted = License.parseLicense(ImmutableList.of("restricted"));
     License unencumbered = License.parseLicense(ImmutableList.of("unencumbered"));
     new EqualsTester()
@@ -634,6 +684,28 @@ public class LicensingTests extends BuildViewTestCase {
             new TargetLicense(label2, unencumbered),
             new TargetLicense(label2, unencumbered))
         .testEquals();
+  }
+
+  /** Regression fix for https://github.com/bazelbuild/bazel/issues/7194. */
+  @Test
+  public void testStarlarkLicensesAttributeCanUseUseCustomDefault() throws Exception {
+    scratch.file(
+        "foo/rules.bzl",
+        "def _myrule_impl(ctx):",
+        "    return []",
+        "",
+        "myrule = rule(",
+        "    implementation = _myrule_impl,",
+        "    attrs = {",
+        "        'licenses': attr.string(default = 'custom_licenses_default'),",
+        "    }",
+        ")");
+
+    scratch.file("foo/BUILD", "load('//foo:rules.bzl', 'myrule')", "myrule(name = 'hi')");
+
+    assertThat(RawAttributeMapper.of((Rule) getTarget("//foo:hi")).get("licenses", Type.STRING))
+        .isEqualTo("custom_licenses_default");
+    assertNoEvents();
   }
 
   /**
