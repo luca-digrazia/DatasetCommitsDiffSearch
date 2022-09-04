@@ -90,9 +90,10 @@ public class DeserializationContext {
     deserializer.registerInitialValue(initialValue);
   }
 
+  @SuppressWarnings("unchecked")
   public <T> T getDependency(Class<T> type) {
     Preconditions.checkNotNull(type);
-    return type.cast(dependencies.get(type));
+    return (T) dependencies.get(type);
   }
 
   /**

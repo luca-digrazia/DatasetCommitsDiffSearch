@@ -179,10 +179,10 @@ public abstract class ValueWithMetadata implements SkyValue {
   /**
    * Implementation of {@link ValueWithMetadata} for the error case.
    *
-   * <p>Mark NotComparableSkyValue because it's unlikely that re-evaluation gives the same error.
+   * ErorInfo does not override equals(), so it may as well be marked NotComparableSkyValue.
    */
   private static final class ErrorInfoValue extends ValueWithMetadata
-      implements NotComparableSkyValue {
+          implements NotComparableSkyValue {
 
     private final ErrorInfo errorInfo;
     private final NestedSet<TaggedEvents> transitiveEvents;

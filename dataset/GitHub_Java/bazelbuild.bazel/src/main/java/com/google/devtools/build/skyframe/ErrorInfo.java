@@ -39,7 +39,7 @@ public class ErrorInfo {
     Exception rootCauseException = skyFunctionException.getCause();
     return new ErrorInfo(
         NestedSetBuilder.create(Order.STABLE_ORDER, rootCauseSkyKey),
-        Preconditions.checkNotNull(rootCauseException, "Cause is null"),
+        Preconditions.checkNotNull(rootCauseException, "Cause null %s", rootCauseException),
         rootCauseSkyKey,
         /*cycles=*/ ImmutableList.<CycleInfo>of(),
         skyFunctionException.isTransient(),
@@ -62,8 +62,7 @@ public class ErrorInfo {
   /** Create an ErrorInfo from a collection of existing errors. */
   public static ErrorInfo fromChildErrors(SkyKey currentValue, Collection<ErrorInfo> childErrors) {
     Preconditions.checkNotNull(currentValue, "currentValue must not be null");
-    Preconditions.checkState(
-        !childErrors.isEmpty(), "childErrors may not be empty %s", currentValue);
+    Preconditions.checkState(!childErrors.isEmpty(), "childErrors may not be empty");
 
     NestedSetBuilder<SkyKey> rootCausesBuilder = NestedSetBuilder.stableOrder();
     ImmutableList.Builder<CycleInfo> cycleBuilder = ImmutableList.builder();
@@ -203,10 +202,10 @@ public class ErrorInfo {
   /**
    * The root causes of a value that failed to build are its descendant values that failed to build.
    * If a value's descendants all built successfully, but it failed to, its root cause will be
-   * itself. If a value depends on a cycle, but has no other errors, this method will return the
-   * empty set.
+   * itself. If a value depends on a cycle, but has no other errors, this method will return
+   * the empty set.
    */
-  public NestedSet<SkyKey> getRootCauses() {
+  public Iterable<SkyKey> getRootCauses() {
     return rootCauses;
   }
 
