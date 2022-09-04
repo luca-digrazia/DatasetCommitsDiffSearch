@@ -9,8 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.jandex.IndexView;
@@ -31,10 +29,8 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
@@ -100,29 +96,9 @@ public class SmallRyeGraphQLProcessor {
     private static final String UI_LINE_TO_UPDATE = "const ui = '";
     private static final String UI_LINE_FORMAT = UI_LINE_TO_UPDATE + "%s';";
 
-    // Branding files to monitor for changes
-    private static final String BRANDING_DIR = "META-INF/branding/";
-    private static final String BRANDING_LOGO_GENERAL = BRANDING_DIR + "logo.png";
-    private static final String BRANDING_LOGO_MODULE = BRANDING_DIR + "smallrye-graphql-ui-graphiql.png";
-    private static final String BRANDING_STYLE_GENERAL = BRANDING_DIR + "style.css";
-    private static final String BRANDING_STYLE_MODULE = BRANDING_DIR + "smallrye-graphql-ui-graphiql.css";
-    private static final String BRANDING_FAVICON_GENERAL = BRANDING_DIR + "favicon.ico";
-    private static final String BRANDING_FAVICON_MODULE = BRANDING_DIR + "smallrye-graphql-ui-graphiql.ico";
-
     @BuildStep
     void feature(BuildProducer<FeatureBuildItem> featureProducer) {
         featureProducer.produce(new FeatureBuildItem(Feature.SMALLRYE_GRAPHQL));
-    }
-
-    @BuildStep
-    List<HotDeploymentWatchedFileBuildItem> brandingFiles() {
-        return Stream.of(BRANDING_LOGO_GENERAL,
-                BRANDING_STYLE_GENERAL,
-                BRANDING_FAVICON_GENERAL,
-                BRANDING_LOGO_MODULE,
-                BRANDING_STYLE_MODULE,
-                BRANDING_FAVICON_MODULE).map(HotDeploymentWatchedFileBuildItem::new)
-                .collect(Collectors.toList());
     }
 
     @BuildStep
@@ -472,8 +448,7 @@ public class SmallRyeGraphQLProcessor {
             NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
             CurateOutcomeBuildItem curateOutcomeBuildItem,
             LaunchModeBuildItem launchMode,
-            SmallRyeGraphQLConfig graphQLConfig,
-            LiveReloadBuildItem liveReloadBuildItem) throws Exception {
+            SmallRyeGraphQLConfig graphQLConfig) throws Exception {
 
         if (shouldInclude(launchMode, graphQLConfig)) {
 
@@ -500,11 +475,6 @@ public class SmallRyeGraphQLProcessor {
                 notFoundPageDisplayableEndpointProducer
                         .produce(new NotFoundPageDisplayableEndpointBuildItem(graphQLUiPath + "/", "MicroProfile GraphQL UI"));
 
-                // Handle live reload of branding files
-                if (liveReloadBuildItem.isLiveReload() && !liveReloadBuildItem.getChangedResources().isEmpty()) {
-                    WebJarUtil.hotReloadBrandingChanges(curateOutcomeBuildItem, launchMode, artifact,
-                            liveReloadBuildItem.getChangedResources());
-                }
             } else {
                 Map<String, byte[]> files = WebJarUtil.copyResourcesForProduction(curateOutcomeBuildItem, artifact,
                         GRAPHQL_UI_WEBJAR_PREFIX);
