@@ -28,6 +28,8 @@ import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.EnumMap;
 
+import javax.annotation.Nullable;
+
 /**
  * Output {@link PhaseSummaryStatistics}, {@link PhaseStatistics} and {@link PhaseVfsStatistics}
  * in HTML format.
@@ -38,7 +40,6 @@ public final class PhaseHtml extends HtmlPrinter {
   private final EnumMap<ProfilePhase, PhaseStatistics> phaseStatistics;
   private final Optional<CriticalPathStatistics> criticalPathStatistics;
   private final int vfsStatsLimit;
-  private final Optional<Integer> missingActionsCount;
 
   /**
    * @param vfsStatsLimit maximum number of VFS statistics to print, or -1 for no limit.
@@ -48,13 +49,11 @@ public final class PhaseHtml extends HtmlPrinter {
       PhaseSummaryStatistics phaseSummaryStats,
       EnumMap<ProfilePhase, PhaseStatistics> phaseStatistics,
       Optional<CriticalPathStatistics> critPathStats,
-      Optional<Integer> missingActionsCount,
       int vfsStatsLimit) {
     super(out);
     this.phaseSummaryStats = phaseSummaryStats;
     this.phaseStatistics = phaseStatistics;
     this.criticalPathStatistics = critPathStats;
-    this.missingActionsCount = missingActionsCount;
     this.vfsStatsLimit = vfsStatsLimit;
   }
 
@@ -68,7 +67,6 @@ public final class PhaseHtml extends HtmlPrinter {
         summaryStatistics,
         summaryPhaseStatistics,
         Optional.<CriticalPathStatistics>absent(),
-        Optional.<Integer>absent(),
         vfsStatsLimit);
   }
 
@@ -160,10 +158,8 @@ public final class PhaseHtml extends HtmlPrinter {
       }
     }
 
-    long graphTime = execPhase.getTotalDurationNanos(ProfilerTask.ACTION_GRAPH);
-    long execTime = execPhase.getPhaseDurationNanos() - graphTime;
+    long execTime = execPhase.getPhaseDurationNanos();
 
-    printTwoColumnStatistic("Action dependency map creation", graphTime);
     printTwoColumnStatistic("Actual execution time", execTime);
 
     CriticalPathHtml criticalPaths = null;
@@ -177,16 +173,6 @@ public final class PhaseHtml extends HtmlPrinter {
 
     if (criticalPathStatistics.isPresent()) {
       criticalPaths.printCriticalPaths();
-    }
-
-    if (missingActionsCount.isPresent() && missingActionsCount.get() > 0) {
-      lnOpen("p");
-      lnPrint(missingActionsCount.get());
-      print(
-          " action(s) are present in the"
-              + " action graph but missing instrumentation data. Most likely the profile file"
-              + " has been created during a failed or aborted build.");
-      lnClose();
     }
 
     printVfsStatistics(execPhase.getVfsStatistics());
@@ -223,8 +209,8 @@ public final class PhaseHtml extends HtmlPrinter {
    * by descending duration. If multiple of the same VFS operation were logged for the same path,
    * print the total duration.
    */
-  private void printVfsStatistics(PhaseVfsStatistics stats) {
-    if (vfsStatsLimit == 0 || stats.isEmpty()) {
+  private void printVfsStatistics(@Nullable PhaseVfsStatistics stats) {
+    if (vfsStatsLimit == 0 || stats == null || stats.isEmpty()) {
       return;
     }
 
