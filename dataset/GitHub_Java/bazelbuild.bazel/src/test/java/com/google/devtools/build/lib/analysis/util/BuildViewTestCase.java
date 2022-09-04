@@ -216,17 +216,14 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     configurationFactory =
         analysisMock.createConfigurationFactory(ruleClassProvider.getConfigurationFragments());
 
-    ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues = ImmutableList.of(
-        PrecomputedValue.injected(
-            RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
-            ImmutableMap.<RepositoryName, PathFragment>of()));
     pkgFactory =
         analysisMock
-            .getPackageFactoryBuilderForTesting()
-            .setExtraPrecomputeValues(extraPrecomputedValues)
-            .setEnvironmentExtensions(getEnvironmentExtensions())
-            .setPlatformSetRegexps(getPlatformSetRegexps())
-            .build(ruleClassProvider, scratch.getFileSystem());
+            .getPackageFactoryForTesting()
+            .create(
+                ruleClassProvider,
+                getPlatformSetRegexps(),
+                getEnvironmentExtensions(),
+                scratch.getFileSystem());
     tsgm = new TimestampGranularityMonitor(BlazeClock.instance());
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
@@ -243,7 +240,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             analysisMock.getProductName(),
             CrossRepositoryLabelViolationStrategy.ERROR,
             ImmutableList.of(BuildFileName.BUILD_DOT_BAZEL, BuildFileName.BUILD));
-    skyframeExecutor.injectExtraPrecomputedValues(extraPrecomputedValues);
+    skyframeExecutor.injectExtraPrecomputedValues(ImmutableList.of(PrecomputedValue.injected(
+        RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
+        ImmutableMap.<RepositoryName, PathFragment>of())));
     packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
     packageCacheOptions.showLoadingProgress = true;
     packageCacheOptions.globbingThreads = 7;
@@ -1433,16 +1432,16 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return target.getProvider(FilesToRunProvider.class).getExecutable();
   }
 
-  protected NestedSet<Artifact> getFilesToRun(TransitiveInfoCollection target) {
+  protected ImmutableList<Artifact> getFilesToRun(TransitiveInfoCollection target) {
     return target.getProvider(FilesToRunProvider.class).getFilesToRun();
   }
 
-  protected NestedSet<Artifact> getFilesToRun(Label label) throws Exception {
+  protected ImmutableList<Artifact> getFilesToRun(Label label) throws Exception {
     return getConfiguredTarget(label, targetConfig)
         .getProvider(FilesToRunProvider.class).getFilesToRun();
   }
 
-  protected NestedSet<Artifact> getFilesToRun(String label) throws Exception {
+  protected ImmutableList<Artifact> getFilesToRun(String label) throws Exception {
     return getConfiguredTarget(label).getProvider(FilesToRunProvider.class).getFilesToRun();
   }
 

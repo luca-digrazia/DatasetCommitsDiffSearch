@@ -1137,7 +1137,6 @@ public final class BuildConfiguration implements BuildEvent {
 
   private final ImmutableMap<Class<? extends Fragment>, Fragment> fragments;
   private final ImmutableMap<String, Class<? extends Fragment>> skylarkVisibleFragments;
-  private final RepositoryName mainRepositoryName;
 
 
   /**
@@ -1208,21 +1207,21 @@ public final class BuildConfiguration implements BuildEvent {
     }
 
     Root getRoot(
-        RepositoryName repositoryName, String outputDirName, BlazeDirectories directories,
-        RepositoryName mainRepositoryName) {
+        RepositoryName repositoryName, String outputDirName, BlazeDirectories directories) {
       // e.g., execroot/repo1
-      Path execRoot = directories.getExecRoot(mainRepositoryName.strippedName());
+      Path execRoot = directories.getExecRoot();
       // e.g., execroot/repo1/bazel-out/config/bin
       Path outputDir = execRoot.getRelative(directories.getRelativeOutputPath())
           .getRelative(outputDirName);
       if (middleman) {
-        return INTERNER.intern(Root.middlemanRoot(execRoot, outputDir,
-            repositoryName.equals(mainRepositoryName)));
+        return INTERNER.intern(Root.middlemanRoot(execRoot, outputDir, repositoryName.isMain()));
       }
       // e.g., [[execroot/repo1]/bazel-out/config/bin]
       return INTERNER.intern(
-          Root.asDerivedRoot(execRoot, outputDir.getRelative(nameFragment),
-              repositoryName.equals(mainRepositoryName)));
+          Root.asDerivedRoot(
+              execRoot,
+              outputDir.getRelative(nameFragment),
+              repositoryName.isMain()));
     }
   }
 
@@ -1447,8 +1446,7 @@ public final class BuildConfiguration implements BuildEvent {
    */
   public BuildConfiguration(BlazeDirectories directories,
       Map<Class<? extends Fragment>, Fragment> fragmentsMap,
-      BuildOptions buildOptions,
-      String repositoryName) {
+      BuildOptions buildOptions) {
     this.directories = directories;
     this.fragments = ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter);
 
@@ -1457,7 +1455,6 @@ public final class BuildConfiguration implements BuildEvent {
     this.buildOptions = buildOptions.clone();
     this.actionsEnabled = buildOptions.enableActions();
     this.options = buildOptions.get(Options.class);
-    this.mainRepositoryName = RepositoryName.createFromValidStrippedName(repositoryName);
 
     Map<String, String> testEnv = new TreeMap<>();
     for (Map.Entry<String, String> entry : this.options.testEnvironment) {
@@ -1482,26 +1479,19 @@ public final class BuildConfiguration implements BuildEvent {
         ? options.outputDirectoryName : mnemonic;
 
     this.outputDirectoryForMainRepository =
-        OutputDirectory.OUTPUT.getRoot(
-            RepositoryName.MAIN, outputDirName, directories, mainRepositoryName);
+        OutputDirectory.OUTPUT.getRoot(RepositoryName.MAIN, outputDirName, directories);
     this.binDirectoryForMainRepository =
-        OutputDirectory.BIN.getRoot(
-            RepositoryName.MAIN, outputDirName, directories, mainRepositoryName);
+        OutputDirectory.BIN.getRoot(RepositoryName.MAIN, outputDirName, directories);
     this.includeDirectoryForMainRepository =
-        OutputDirectory.INCLUDE.getRoot(
-            RepositoryName.MAIN, outputDirName, directories, mainRepositoryName);
+        OutputDirectory.INCLUDE.getRoot(RepositoryName.MAIN, outputDirName, directories);
     this.genfilesDirectoryForMainRepository =
-        OutputDirectory.GENFILES.getRoot(
-            RepositoryName.MAIN, outputDirName, directories, mainRepositoryName);
+        OutputDirectory.GENFILES.getRoot(RepositoryName.MAIN, outputDirName, directories);
     this.coverageDirectoryForMainRepository =
-        OutputDirectory.COVERAGE.getRoot(
-            RepositoryName.MAIN, outputDirName, directories, mainRepositoryName);
+        OutputDirectory.COVERAGE.getRoot(RepositoryName.MAIN, outputDirName, directories);
     this.testlogsDirectoryForMainRepository =
-        OutputDirectory.TESTLOGS.getRoot(
-            RepositoryName.MAIN, outputDirName, directories, mainRepositoryName);
+        OutputDirectory.TESTLOGS.getRoot(RepositoryName.MAIN, outputDirName, directories);
     this.middlemanDirectoryForMainRepository =
-        OutputDirectory.MIDDLEMAN.getRoot(
-            RepositoryName.MAIN, outputDirName, directories, mainRepositoryName);
+        OutputDirectory.MIDDLEMAN.getRoot(RepositoryName.MAIN, outputDirName, directories);
 
     this.platformName = buildPlatformName();
 
@@ -1550,8 +1540,8 @@ public final class BuildConfiguration implements BuildEvent {
     }
     BuildOptions options = buildOptions.trim(
         getOptionsClasses(fragmentsMap.keySet(), ruleClassProvider));
-    BuildConfiguration newConfig = new BuildConfiguration(
-        directories, fragmentsMap, options, mainRepositoryName.strippedName());
+    BuildConfiguration newConfig =
+        new BuildConfiguration(directories, fragmentsMap, options);
     newConfig.setConfigurationTransitions(this.transitions);
     return newConfig;
   }
@@ -2127,10 +2117,9 @@ public final class BuildConfiguration implements BuildEvent {
    * Returns the output directory for this build configuration.
    */
   public Root getOutputDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
+    return repositoryName.equals(RepositoryName.MAIN)
         ? outputDirectoryForMainRepository
-        : OutputDirectory.OUTPUT.getRoot(
-            repositoryName, outputDirName, directories, mainRepositoryName);
+        : OutputDirectory.OUTPUT.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2149,10 +2138,9 @@ public final class BuildConfiguration implements BuildEvent {
    * repositories (external) but will need to be fixed.
    */
   public Root getBinDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
+    return repositoryName.equals(RepositoryName.MAIN)
         ? binDirectoryForMainRepository
-        : OutputDirectory.BIN.getRoot(
-            repositoryName, outputDirName, directories, mainRepositoryName);
+        : OutputDirectory.BIN.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2166,10 +2154,9 @@ public final class BuildConfiguration implements BuildEvent {
    * Returns the include directory for this build configuration.
    */
   public Root getIncludeDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
+    return repositoryName.equals(RepositoryName.MAIN)
         ? includeDirectoryForMainRepository
-        : OutputDirectory.INCLUDE.getRoot(
-            repositoryName, outputDirName, directories, mainRepositoryName);
+        : OutputDirectory.INCLUDE.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2182,10 +2169,9 @@ public final class BuildConfiguration implements BuildEvent {
   }
 
   public Root getGenfilesDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
+    return repositoryName.equals(RepositoryName.MAIN)
         ? genfilesDirectoryForMainRepository
-        : OutputDirectory.GENFILES.getRoot(
-            repositoryName, outputDirName, directories, mainRepositoryName);
+        : OutputDirectory.GENFILES.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2194,20 +2180,18 @@ public final class BuildConfiguration implements BuildEvent {
    * needed for Jacoco's coverage reporting tools.
    */
   public Root getCoverageMetadataDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
+    return repositoryName.equals(RepositoryName.MAIN)
         ? coverageDirectoryForMainRepository
-        : OutputDirectory.COVERAGE.getRoot(
-            repositoryName, outputDirName, directories, mainRepositoryName);
+        : OutputDirectory.COVERAGE.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
    * Returns the testlogs directory for this build configuration.
    */
   public Root getTestLogsDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
+    return repositoryName.equals(RepositoryName.MAIN)
         ? testlogsDirectoryForMainRepository
-        : OutputDirectory.TESTLOGS.getRoot(
-            repositoryName, outputDirName, directories, mainRepositoryName);
+        : OutputDirectory.TESTLOGS.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2234,10 +2218,9 @@ public final class BuildConfiguration implements BuildEvent {
    * Returns the internal directory (used for middlemen) for this build configuration.
    */
   public Root getMiddlemanDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
+    return repositoryName.equals(RepositoryName.MAIN)
         ? middlemanDirectoryForMainRepository
-        : OutputDirectory.MIDDLEMAN.getRoot(
-            repositoryName, outputDirName, directories, mainRepositoryName);
+        : OutputDirectory.MIDDLEMAN.getRoot(repositoryName, outputDirName, directories);
   }
 
   public boolean getAllowRuntimeDepsOnNeverLink() {
@@ -2250,10 +2233,6 @@ public final class BuildConfiguration implements BuildEvent {
 
   public List<Label> getPlugins() {
     return options.pluginList;
-  }
-
-  public String getMainRepositoryName() {
-    return mainRepositoryName.strippedName();
   }
 
   /**
@@ -2356,14 +2335,14 @@ public final class BuildConfiguration implements BuildEvent {
    * (Fragments, in particular the Google C++ support, can set variables through the
    * command line.)
    */
-  public ImmutableMap<String, String> getCommandLineBuildVariables() {
+  public Map<String, String> getCommandLineBuildVariables() {
     return commandLineBuildVariables;
   }
 
   /**
    * Returns the global defaults for this configuration for the Make environment.
    */
-  public ImmutableMap<String, String> getGlobalMakeEnvironment() {
+  public Map<String, String> getGlobalMakeEnvironment() {
     return globalMakeEnv;
   }
 
