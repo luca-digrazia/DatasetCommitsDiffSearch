@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Interner;
+import com.google.common.collect.Interners;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MutableClassToInstanceMap;
@@ -588,20 +589,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
     )
     public boolean experimentalJavaCoverage;
 
-    @Option(
-        name = "experimental_cc_coverage",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-        effectTags = {
-          OptionEffectTag.CHANGES_INPUTS,
-          OptionEffectTag.AFFECTS_OUTPUTS,
-          OptionEffectTag.LOADING_AND_ANALYSIS
-        },
-        metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-        help =
-            "If specified, Bazel will use gcov to collect code coverage for C++ test targets. "
-                + "This option only works for gcc compilation.")
-    public boolean useGcovCoverage;
+
 
     @Option(
       name = "build_runfile_manifests",
@@ -903,6 +891,18 @@ public class BuildConfiguration implements BuildConfigurationApi {
     public TriState enableRunfiles;
 
     @Option(
+      name = "windows_exe_launcher",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = { OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS },
+      deprecationWarning = "This flag is no longer supported and will go away soon.",
+      help =
+          "Build a Windows exe launcher for sh_binary rule, "
+              + "it has no effect on other platforms than Windows"
+    )
+    public boolean windowsExeLauncher;
+
+    @Option(
         name = "modify_execution_info",
         converter = ExecutionInfoModifier.Converter.class,
         documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
@@ -937,6 +937,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
       host.isHost = true;
       host.configsMode = configsMode;
       host.enableRunfiles = enableRunfiles;
+      host.windowsExeLauncher = windowsExeLauncher;
       host.executionInfoModifier = executionInfoModifier;
       host.commandLineBuildVariables = commandLineBuildVariables;
       host.enforceConstraints = enforceConstraints;
@@ -1054,15 +1055,20 @@ public class BuildConfiguration implements BuildConfigurationApi {
       Path outputDir = execRoot.getRelative(directories.getRelativeOutputPath())
           .getRelative(outputDirName);
       if (middleman) {
-        return ArtifactRoot.middlemanRoot(execRoot, outputDir);
+        return INTERNER.intern(ArtifactRoot.middlemanRoot(execRoot, outputDir));
       }
       // e.g., [[execroot/repo1]/bazel-out/config/bin]
-      return ArtifactRoot.asDerivedRoot(execRoot, outputDir.getRelative(nameFragment));
+      return INTERNER.intern(
+          ArtifactRoot.asDerivedRoot(execRoot, outputDir.getRelative(nameFragment)));
     }
   }
 
   private final BlazeDirectories directories;
   private final String outputDirName;
+
+  // We intern the roots for non-main repositories, so we don't keep around thousands of copies of
+  // the same root.
+  private static Interner<ArtifactRoot> INTERNER = Interners.newWeakInterner();
 
   // We precompute the roots for the main repository, since that's the common case.
   private final ArtifactRoot outputDirectoryForMainRepository;
@@ -1732,10 +1738,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
     return options.experimentalJavaCoverage;
   }
 
-  public boolean useGcovCoverage() {
-    return options.useGcovCoverage;
-  }
-
   public RunUnder getRunUnder() {
     return options.runUnder;
   }
@@ -1833,6 +1835,10 @@ public class BuildConfiguration implements BuildConfigurationApi {
       default:
         return OS.getCurrent() != OS.WINDOWS;
     }
+  }
+
+  public boolean enableWindowsExeLauncher() {
+    return options.windowsExeLauncher;
   }
 
   /**

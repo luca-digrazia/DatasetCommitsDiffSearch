@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ArtifactNameP
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Feature;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainConfigInfoApi;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationModeFlags;
@@ -171,7 +171,8 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
     this.hasDynamicLinkingModeFlags = hasDynamicLinkingModeFlags;
   }
 
-  public static CcToolchainConfigInfo fromToolchain(CToolchain toolchain) throws EvalException {
+  public static CcToolchainConfigInfo fromToolchain(CToolchain toolchain)
+      throws InvalidConfigurationException {
 
     ImmutableList.Builder<ActionConfig> actionConfigBuilder = ImmutableList.builder();
     for (CToolchain.ActionConfig actionConfig : toolchain.getActionConfigList()) {
