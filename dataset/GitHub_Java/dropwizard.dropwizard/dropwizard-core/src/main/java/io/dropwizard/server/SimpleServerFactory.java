@@ -12,11 +12,11 @@ import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.ThreadPool;
 import org.hibernate.validator.constraints.NotEmpty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
+
+// TODO: 5/15/13 <coda> -- add tests for SimpleServerFactory
 
 /**
  * A single-connector implementation of {@link ServerFactory}, suitable for PaaS deployments
@@ -54,9 +54,6 @@ import javax.validation.constraints.NotNull;
  */
 @JsonTypeName("simple")
 public class SimpleServerFactory extends AbstractServerFactory {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(SimpleServerFactory.class);
-
     @Valid
     @NotNull
     private ConnectorFactory connector = HttpConnectorFactory.application();
@@ -103,7 +100,6 @@ public class SimpleServerFactory extends AbstractServerFactory {
         final ThreadPool threadPool = createThreadPool(environment.metrics());
         final Server server = buildServer(environment.lifecycle(), threadPool);
 
-        LOGGER.info("Registering jersey handler with root path prefix: {}", applicationContextPath);
         environment.getApplicationContext().setContextPath(applicationContextPath);
         final Handler applicationHandler = createAppServlet(server,
                                                             environment.jersey(),
@@ -113,7 +109,6 @@ public class SimpleServerFactory extends AbstractServerFactory {
                                                             environment.getJerseyServletContainer(),
                                                             environment.metrics());
 
-        LOGGER.info("Registering admin handler with root path prefix: {}", adminContextPath);
         environment.getAdminContext().setContextPath(adminContextPath);
         final Handler adminHandler = createAdminServlet(server,
                                                         environment.getAdminContext(),

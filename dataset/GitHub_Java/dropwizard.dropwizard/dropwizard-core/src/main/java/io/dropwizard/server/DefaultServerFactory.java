@@ -15,9 +15,6 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.component.ContainerLifeCycle;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ThreadPool;
-import org.hibernate.validator.constraints.NotEmpty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.validation.Valid;
 import javax.validation.constraints.Min;
@@ -68,7 +65,6 @@ import java.util.Map;
  */
 @JsonTypeName("default")
 public class DefaultServerFactory extends AbstractServerFactory {
-    private static final Logger LOGGER = LoggerFactory.getLogger(DefaultServerFactory.class);
     @Valid
     @NotNull
     private List<ConnectorFactory> applicationConnectors =
@@ -84,12 +80,6 @@ public class DefaultServerFactory extends AbstractServerFactory {
 
     @Min(1)
     private int adminMinThreads = 1;
-
-    @NotEmpty
-    private String applicationContextPath = "/";
-
-    @NotEmpty
-    private String adminContextPath = "/";
 
     @JsonProperty
     public List<ConnectorFactory> getApplicationConnectors() {
@@ -131,34 +121,11 @@ public class DefaultServerFactory extends AbstractServerFactory {
         this.adminMinThreads = adminMinThreads;
     }
 
-    @JsonProperty
-    public String getApplicationContextPath() {
-        return applicationContextPath;
-    }
-
-    @JsonProperty
-    public void setApplicationContextPath(final String applicationContextPath) {
-        this.applicationContextPath = applicationContextPath;
-    }
-
-    @JsonProperty
-    public String getAdminContextPath() {
-        return adminContextPath;
-    }
-
-    @JsonProperty
-    public void setAdminContextPath(final String adminContextPath) {
-        this.adminContextPath = adminContextPath;
-    }
-
     @Override
     public Server build(Environment environment) {
         printBanner(environment.getName());
         final ThreadPool threadPool = createThreadPool(environment.metrics());
         final Server server = buildServer(environment.lifecycle(), threadPool);
-
-        LOGGER.info("Registering jersey handler with root path prefix: {}", applicationContextPath);
-        environment.getApplicationContext().setContextPath(applicationContextPath);
         final Handler applicationHandler = createAppServlet(server,
                                                             environment.jersey(),
                                                             environment.getObjectMapper(),
@@ -166,9 +133,6 @@ public class DefaultServerFactory extends AbstractServerFactory {
                                                             environment.getApplicationContext(),
                                                             environment.getJerseyServletContainer(),
                                                             environment.metrics());
-
-        LOGGER.info("Registering admin handler with root path prefix: {}", adminContextPath);
-        environment.getAdminContext().setContextPath(adminContextPath);
         final Handler adminHandler = createAdminServlet(server,
                                                         environment.getAdminContext(),
                                                         environment.metrics(),
