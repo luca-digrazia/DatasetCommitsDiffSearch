@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.distance;
 
@@ -51,9 +51,8 @@ public class ManhattanDistance implements Metric<double[]> {
      */
     public ManhattanDistance(double[] weight) {
         for (int i = 0; i < weight.length; i++) {
-            if (weight[i] < 0) {
+            if (weight[i] < 0)
                 throw new IllegalArgumentException(String.format("Weight has to be nonnegative: %f", weight[i]));
-            }
         }
 
         this.weight = weight;
@@ -61,11 +60,10 @@ public class ManhattanDistance implements Metric<double[]> {
 
     @Override
     public String toString() {
-        if (weight != null) {
+        if (weight != null)
             return String.format("Weighted Manhattan Distance(%s)", Arrays.toString(weight));
-        } else {
+        else
             return "Manhattan Distance";
-        }
     }
 
     /**

@@ -46,12 +46,20 @@ public class ClassLabels implements Serializable {
     public final int[] ni;
     /** The estimated priori probabilities. */
     public final double[] priori;
+    /** The optional meta data of response variable. */
+    public final StructField field;
 
     /** Constructor. */
     public ClassLabels(int k, int[] y, IntSet labels) {
+        this(k, y, labels, null);
+    }
+
+    /** Constructor. */
+    public ClassLabels(int k, int[] y, IntSet labels, StructField field) {
         this.k = k;
         this.y = y;
         this.labels = labels;
+        this.field = field;
         this.ni = count(y, k);
 
         priori = new double[k];
@@ -83,6 +91,13 @@ public class ClassLabels implements Serializable {
      * Learns the class label mapping from samples.
      */
     public static ClassLabels fit(int[] y) {
+        return fit(y, null);
+    }
+
+    /**
+     * Learns the class label mapping from samples.
+     */
+    public static ClassLabels fit(int[] y, StructField field) {
         int[] labels = MathEx.unique(y);
         Arrays.sort(labels);
         int k = labels.length;
@@ -93,9 +108,9 @@ public class ClassLabels implements Serializable {
 
         IntSet encoder = new IntSet(labels);
         if (labels[0] == 0 && labels[k-1] == k-1) {
-            return new ClassLabels(k, y, encoder);
+            return new ClassLabels(k, y, encoder, field);
         } else {
-            return new ClassLabels(k, Arrays.stream(y).map(yi -> encoder.indexOf(yi)).toArray(), encoder);
+            return new ClassLabels(k, Arrays.stream(y).map(yi -> encoder.indexOf(yi)).toArray(), encoder, field);
         }
     }
 
@@ -113,10 +128,10 @@ public class ClassLabels implements Serializable {
             int k = scale.size();
             int[] labels = IntStream.range(0, k).toArray();
             IntSet encoder = new IntSet(labels);
-            return new ClassLabels(k, y, encoder);
+            return new ClassLabels(k, y, encoder, field);
         }
 
-        return fit(y);
+        return fit(y, field);
     }
 
     /**

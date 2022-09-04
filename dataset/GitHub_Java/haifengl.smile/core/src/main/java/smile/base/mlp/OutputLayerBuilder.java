@@ -22,7 +22,7 @@ package smile.base.mlp;
  *
  * @author Haifeng Li
  */
-public class OutputLayerBuilder extends LayerBuilder {
+class OutputLayerBuilder extends LayerBuilder {
 
     /** The output function. */
     private OutputFunction f;

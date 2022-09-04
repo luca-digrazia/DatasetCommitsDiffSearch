@@ -19,7 +19,6 @@ package smile.interpolation.variogram;
 
 /**
  * Exponential variogram.
- * <p>
  * <pre>
  *     v(r) = c + b * (1 - e<sup>-3r/a</sup>)
  * </pre>

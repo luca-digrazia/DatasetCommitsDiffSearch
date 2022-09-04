@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,16 +13,22 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.base.cart;
 
 import smile.data.Tuple;
+import smile.data.measure.DiscreteMeasure;
 import smile.data.measure.NominalScale;
 import smile.data.type.StructField;
 import smile.data.type.StructType;
+import smile.data.measure.Measure;
+import smile.math.MathEx;
 
+import java.math.BigInteger;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**

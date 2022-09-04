@@ -20,6 +20,8 @@ package smile.math.matrix;
 /**
  * The matrix of A' * A. For SVD, we compute eigen decomposition of A' * A
  * when m >= n, or that of A * A' when m < n.
+ *
+ * @author Haifeng Li
  */
 class ATA implements Matrix {
 
@@ -27,6 +29,7 @@ class ATA implements Matrix {
     private Matrix AtA;
     double[] buf;
 
+    /** Constructor. */
     public ATA(Matrix A) {
         this.A = A;
 
@@ -43,6 +46,20 @@ class ATA implements Matrix {
                 AtA = A.aat();
             }
         }
+    }
+
+    /** Private constructor for clone(). */
+    private ATA() {
+
+    }
+
+    @Override
+    public ATA clone() {
+        ATA copy = new ATA();
+        copy.A = A;
+        copy.AtA = AtA;
+        copy.buf = buf.clone();
+        return copy;
     }
 
     @Override

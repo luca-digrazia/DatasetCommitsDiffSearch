@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.distance;
 
@@ -55,19 +55,16 @@ public class JaccardDistance<T> implements Distance<T[]> {
         Set<T> union = new HashSet<>();
         Set<T> intersection = new HashSet<>();
 
-        for (int i = 0; i < b.length; i++) {
+        for (int i = 0; i < b.length; i++)
             union.add(b[i]);
-        }
 
-        for (int i = 0; i < a.length; i++) {
+        for (int i = 0; i < a.length; i++)
             intersection.add(a[i]);
-        }
 
         intersection.retainAll(union);
 
-        for (int i = 0; i < a.length; i++) {
+        for (int i = 0; i < a.length; i++)
             union.add(a[i]);
-        }
 
         return 1.0 - (double) intersection.size() / union.size();
     }

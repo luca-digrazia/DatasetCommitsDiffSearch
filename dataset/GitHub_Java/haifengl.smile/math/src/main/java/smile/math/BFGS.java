@@ -69,7 +69,6 @@ public interface BFGS {
 
     /**
      * This method solves the unconstrained minimization problem
-     * <p>
      * <pre>
      *     min f(x),    x = (x1,x2,...,x_n),
      * </pre>
@@ -244,7 +243,6 @@ public interface BFGS {
 
     /**
      * This method solves the unconstrained minimization problem
-     * <p>
      * <pre>
      *     min f(x),    x = (x1,x2,...,x_n),
      * </pre>
@@ -408,7 +406,6 @@ public interface BFGS {
      * endpoints <code>stx</code> and <code>sty</code>. The interval of
      * uncertainty is initially chosen so that it contains a
      * minimizer of the modified function
-     * <p>
      * <pre>
      *      f(x+stp*s) - f(x) - ftol*stp*(gradf(x)'s).
      * </pre>
@@ -419,12 +416,10 @@ public interface BFGS {
      * <p>
      * The algorithm is designed to find a step which satisfies
      * the sufficient decrease condition
-     * <p>
      * <pre>
      *       f(x+stp*s) &lt;= f(X) + ftol*stp*(gradf(x)'s),
      * </pre>
      * and the curvature condition
-     * <p>
      * <pre>
      *       abs(gradf(x+stp*s)'s)) &lt;= gtol*abs(gradf(x)'s).
      * </pre>

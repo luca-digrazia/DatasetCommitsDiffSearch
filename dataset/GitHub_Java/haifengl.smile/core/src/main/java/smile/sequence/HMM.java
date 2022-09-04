@@ -21,6 +21,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.function.ToIntFunction;
 import smile.math.MathEx;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 import smile.util.Strings;
 
@@ -50,11 +51,11 @@ public class HMM implements Serializable {
     /**
      * State transition probabilities.
      */
-    private Matrix a;
+    private DenseMatrix a;
     /**
      * Symbol emission probabilities.
      */
-    private Matrix b;
+    private DenseMatrix b;
 
     /**
      * Constructor.
@@ -65,7 +66,7 @@ public class HMM implements Serializable {
      * @param b the symbol emission probabilities, of which b[i][j]
      *          is P(o_j | s_i).
      */
-    public HMM(double[] pi, Matrix a, Matrix b) {
+    public HMM(double[] pi, DenseMatrix a, DenseMatrix b) {
         if (pi.length == 0) {
             throw new IllegalArgumentException("Invalid initial state probabilities.");
         }
@@ -93,14 +94,14 @@ public class HMM implements Serializable {
     /**
      * Returns the state transition probabilities.
      */
-    public Matrix getStateTransitionProbabilities() {
+    public DenseMatrix getStateTransitionProbabilities() {
         return a;
     }
 
     /**
      * Returns the symbol emission probabilities.
      */
-    public Matrix getSymbolEmissionProbabilities() {
+    public DenseMatrix getSymbolEmissionProbabilities() {
         return b;
     }
 
@@ -349,7 +350,7 @@ public class HMM implements Serializable {
             MathEx.unitize1(b[i]);
         }
 
-        return new HMM(pi, new Matrix(a), new Matrix(b));
+        return new HMM(pi, Matrix.of(a), Matrix.of(b));
     }
 
     /**

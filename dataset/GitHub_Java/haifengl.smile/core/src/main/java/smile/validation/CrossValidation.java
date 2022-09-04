@@ -17,17 +17,14 @@
 
 package smile.validation;
 
-import java.util.Arrays;
 import java.util.function.BiFunction;
-import java.util.stream.IntStream;
 import smile.classification.Classifier;
 import smile.classification.DataFrameClassifier;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.math.MathEx;
-import smile.regression.Regression;
 import smile.regression.DataFrameRegression;
-import smile.sort.QuickSort;
+import smile.regression.Regression;
 
 /**
  * Cross-validation is a technique for assessing how the results of a
@@ -43,25 +40,36 @@ import smile.sort.QuickSort;
  *
  * @author Haifeng Li
  */
-public interface CrossValidation {
+public class CrossValidation {
     /**
-     * Creates a k-fold cross validation.
-     * @param n the number of samples.
-     * @param k the number of rounds of cross validation.
-     * @return k-fold data splits.
+     * The number of rounds of cross validation.
      */
-    static Split[] of(int n, int k) {
-        return of(n, k, true);
-    }
+    public final int k;
+    /**
+     * The index of training instances.
+     */
+    public final int[][] train;
+    /**
+     * The index of testing instances.
+     */
+    public final int[][] test;
 
     /**
-     * Creates a k-fold cross validation.
+     * Constructor.
      * @param n the number of samples.
      * @param k the number of rounds of cross validation.
-     * @param shuffle whether to shuffle samples before splitting.
-     * @return k-fold data splits.
      */
-    static Split[] of(int n, int k, boolean shuffle) {
+    public CrossValidation(int n, int k) {
+        this(n, k, true);
+    }
+    
+    /**
+     * Constructor.
+     * @param n the number of samples.
+     * @param k the number of rounds of cross validation.
+     * @param permutate determiner of index permutation
+     */
+    public CrossValidation(int n, int k, boolean permutate) {
         if (n < 0) {
             throw new IllegalArgumentException("Invalid sample size: " + n);
         }
@@ -70,12 +78,21 @@ public interface CrossValidation {
             throw new IllegalArgumentException("Invalid number of CV rounds: " + k);
         }
 
-        Split[] splits = new Split[k];
+        this.k = k;
 
-        int[] index = IntStream.range(0, n).toArray();
-        if (shuffle){
-            MathEx.permutate(index);
+        int[] index;
+        if (permutate){
+            index = MathEx.permutate(n);
         }
+        else{
+            index = new int[n];
+            for (int i = 0; i < n; i++) {
+                index[i] = i;
+            }
+        }
+
+        train = new int[k][];
+        test = new int[k][];
 
         int chunk = n / k;
         for (int i = 0; i < k; i++) {
@@ -83,141 +100,128 @@ public interface CrossValidation {
             int end = chunk * (i + 1);
             if (i == k-1) end = n;
 
-            int[] train = new int[n - end + start];
-            int[] test = new int[end - start];
+            train[i] = new int[n - end + start];
+            test[i] = new int[end - start];
             for (int j = 0, p = 0, q = 0; j < n; j++) {
                 if (j >= start && j < end) {
-                    test[p++] = index[j];
+                    test[i][p++] = index[j];
                 } else {
-                    train[q++] = index[j];
+                    train[i][q++] = index[j];
                 }
             }
-
-            splits[i] = new Split(train, test);
         }
-
-        return splits;
     }
 
     /**
-     * Cross validation with non-overlapping groups.
-     * The same group will not appear in two different folds (the number
-     * of distinct groups has to be at least equal to the number of folds).
-     * The folds are approximately balanced in the sense that the number
-     * of distinct groups is approximately the same in each fold.
-     * <p>
-     * This is useful when the i.i.d. assumption is known to be broken by
-     * the underlying process generating the data. For example, when we have
-     * multiple samples by the same user and want to make sure that the model
-     * doesn't learn user-specific features that don't generalize to unseen
-     * users, this approach could be used.
-     *
-     * @param group the group labels for the samples in [0, g), where g
-     *              is the number of groups.
-     * @param k the number of folds.
+     * Runs cross validation tests.
+     * @return the predictions.
      */
-    static Split[] group(int[] group, int k) {
-        if (k < 0) {
-            throw new IllegalArgumentException("Invalid number of folds: " + k);
-        }
+    public <T> int[] classification(T[] x, int[] y, BiFunction<T[], int[], Classifier<T>> trainer) {
+        int[] prediction = new int[x.length];
 
-        int[] unique = MathEx.unique(group);
-        int g = unique.length;
-
-        if (k > g) {
-            throw new IllegalArgumentException("k-fold must be not greater than the than number of groups");
-        }
-
-        Arrays.sort(unique);
-        for (int i = 0; i < g; i++) {
-            if (unique[i] != i) {
-                throw new IllegalArgumentException("Group indices between [0, numGroups) have to exist");
-            }
-        }
-
-        // sort the groups by number of samples so that we can distribute
-        // test samples from largest groups first
-        int[] ni = new int[g];
-        for (int i : group) ni[i]++;
-
-        int[] index = QuickSort.sort(ni);
-
-        // distribute test samples into k folds one group at a time,
-        // from the largest to the smallest group,
-        // always putting test samples into the fold with the fewest samples
-        int[] foldSize = new int[k];
-        int[] group2Fold = new int[g];
-
-        for (int i = g - 1; i >= 0; i--) {
-            int smallestFold = MathEx.whichMin(foldSize);
-            foldSize[smallestFold] += ni[i];
-            group2Fold[index[i]] = smallestFold;
-        }
-
-        int n = group.length;
-        Split[] splits = new Split[k];
         for (int i = 0; i < k; i++) {
-            int[] train = new int[n - foldSize[i]];
-            int[] test = new int[foldSize[i]];
-            splits[i] = new Split(train, test);
+            T[] trainx = MathEx.slice(x, train[i]);
+            int[] trainy = MathEx.slice(y, train[i]);
 
-            for (int j = 0, trainIndex = 0, testIndex = 0; j < n; j++) {
-                if (group2Fold[group[j]] == i) {
-                    test[testIndex++] = j;
-                } else {
-                    train[trainIndex++] = j;
-                }
+            Classifier<T> model = trainer.apply(trainx, trainy);
+
+            for (int j : test[i]) {
+                prediction[j] = model.predict(x[j]);
             }
         }
 
-        return splits;
+        return prediction;
     }
 
     /**
-     * Runs classification cross validation.
-     * @param k k-fold cross validation.
-     * @param x the samples.
-     * @param y the sample labels.
-     * @param trainer the lambda to train a model.
-     * @return the validation results.
+     * Runs cross validation tests.
+     * @return the predictions.
      */
-    static <T, M extends Classifier<T>> ClassificationValidations<M> classification(int k, T[] x, int[] y, BiFunction<T[], int[], M> trainer) {
-        return ClassificationValidation.of(of(x.length, k), x, y, trainer);
+    public int[] classification(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
+        int[] prediction = new int[data.size()];
+
+        for (int i = 0; i < k; i++) {
+            DataFrameClassifier model = trainer.apply(formula, data.of(train[i]));
+            for (int j : test[i]) {
+                prediction[j] = model.predict(data.get(j));
+            }
+        }
+
+        return prediction;
     }
 
     /**
-     * Runs classification cross validation.
-     * @param k k-fold cross validation.
-     * @param formula the model specification.
-     * @param data the training/validation data.
-     * @param trainer the lambda to train a model.
-     * @return the validation results.
+     * Runs cross validation tests.
+     * @return the predictions.
      */
-    static <M extends DataFrameClassifier> ClassificationValidations<M> classification(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {
-        return ClassificationValidation.of(of(data.size(), k), formula, data, trainer);
+    public <T> double[] regression(T[] x, double[] y, BiFunction<T[], double[], Regression<T>> trainer) {
+        double[] prediction = new double[x.length];
+
+        for (int i = 0; i < k; i++) {
+            T[] trainx = MathEx.slice(x, train[i]);
+            double[] trainy = MathEx.slice(y, train[i]);
+
+            Regression<T> model = trainer.apply(trainx, trainy);
+
+            for (int j : test[i]) {
+                prediction[j] = model.predict(x[j]);
+            }
+        }
+
+        return prediction;
     }
 
     /**
-     * Runs regression cross validation.
-     * @param k k-fold cross validation.
-     * @param x the samples.
-     * @param y the response variable.
-     * @param trainer the lambda to train a model.
-     * @return the validation results.
+     * Runs cross validation tests.
+     * @return the predictions.
      */
-    static <T, M extends Regression<T>> RegressionValidations<M> regression(int k, T[] x, double[] y, BiFunction<T[], double[], M> trainer) {
-        return RegressionValidation.of(of(x.length, k), x, y, trainer);
+    public double[] regression(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameRegression> trainer) {
+        double[] prediction = new double[data.size()];
+
+        for (int i = 0; i < k; i++) {
+            DataFrameRegression model = trainer.apply(formula, data.of(train[i]));
+
+            for (int j : test[i]) {
+                prediction[j] = model.predict(data.get(j));
+            }
+        }
+
+        return prediction;
     }
 
     /**
-     * Runs regression cross validation.
-     * @param k k-fold cross validation.
-     * @param formula the model specification.
-     * @param data the training/validation data.
-     * @param trainer the lambda to train a model.
-     * @return the validation results.
+     * Runs cross validation tests.
+     * @return the predictions.
      */
-    static <M extends DataFrameRegression> RegressionValidations<M> regression(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {
-        return RegressionValidation.of(of(data.size(), k), formula, data, trainer);
+    public static <T> int[] classification(int k, T[] x, int[] y, BiFunction<T[], int[], Classifier<T>> trainer) {
+        CrossValidation cv = new CrossValidation(x.length, k);
+        return cv.classification(x, y, trainer);
+    }
+
+    /**
+     * Runs cross validation tests.
+     * @return the predictions.
+     */
+    public static int[] classification(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
+        CrossValidation cv = new CrossValidation(data.size(), k);
+        return cv.classification(formula, data, trainer);
+    }
+
+    /**
+     * Runs cross validation tests.
+     * @return the predictions.
+     */
+    public static <T> double[] regression(int k, T[] x, double[] y, BiFunction<T[], double[], Regression<T>> trainer) {
+        CrossValidation cv = new CrossValidation(x.length, k);
+        return cv.regression(x, y, trainer);
+    }
+
+    /**
+     * Runs cross validation tests.
+     * @return the predictions.
+     */
+    public static double[] regression(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameRegression> trainer) {
+        CrossValidation cv = new CrossValidation(data.size(), k);
+        return cv.regression(formula, data, trainer);
     }
 }

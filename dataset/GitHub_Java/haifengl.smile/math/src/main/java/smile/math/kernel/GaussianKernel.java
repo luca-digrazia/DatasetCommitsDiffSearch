@@ -20,8 +20,7 @@ package smile.math.kernel;
 import smile.math.MathEx;
 
 /**
- * The Gaussian Kernel.
- * <p>
+ * The Gaussian Mercer Kernel.
  * <pre>
  *     k(u, v) = e<sup>-||u-v||<sup>2</sup> / (2 * &sigma;<sup>2</sup>)</sup>
  * </pre>

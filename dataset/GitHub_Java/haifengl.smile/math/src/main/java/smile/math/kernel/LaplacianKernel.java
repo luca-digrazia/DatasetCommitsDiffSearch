@@ -21,7 +21,6 @@ import smile.math.MathEx;
 
 /**
  * The Laplacian Kernel.
- * <p>
  * <pre>
  *     k(u, v) = e<sup>-||u-v|| / &sigma;</sup>
  * </pre>

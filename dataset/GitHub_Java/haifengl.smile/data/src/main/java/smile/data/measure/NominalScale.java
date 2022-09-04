@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.data.measure;
 
@@ -35,7 +35,7 @@ import java.util.List;
  *
  * @author Haifeng Li
  */
-public class NominalScale extends CategoricalMeasure {
+public class NominalScale extends DiscreteMeasure {
     /**
      * Constructor.
      * @param levels the levels of nominal values.

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ ******************************************************************************/
 
 package smile.gap;
 
@@ -23,6 +23,8 @@ import java.util.Arrays;
 
 /**
  * The way to select chromosomes from the population as parents to crossover.
+ *
+ * @author Haifeng Li
  */
 public interface Selection {
 
@@ -145,6 +147,7 @@ public interface Selection {
     static Selection Tournament(int size, double probability) {
         return new Selection() {
             @Override
+            @SuppressWarnings("unchecked")
             public <T extends Chromosome> T apply(T[] population) {
                 Chromosome[] pool = new Chromosome[size];
                 for (int i = 0; i < size; i++) {

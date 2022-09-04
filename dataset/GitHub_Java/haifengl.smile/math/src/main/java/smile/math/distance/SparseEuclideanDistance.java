@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.distance;
 
@@ -47,9 +47,8 @@ public class SparseEuclideanDistance implements Metric<SparseArray> {
      */
     public SparseEuclideanDistance(double[] weight) {
         for (int i = 0; i < weight.length; i++) {
-            if (weight[i] < 0) {
+            if (weight[i] < 0)
                 throw new IllegalArgumentException(String.format("Weight has to be nonnegative: %f", weight[i]));
-            }
         }
 
         this.weight = weight;
@@ -57,22 +56,19 @@ public class SparseEuclideanDistance implements Metric<SparseArray> {
 
     @Override
     public String toString() {
-        if (weight != null) {
-            return String.format("Weighted Euclidean Distance(%s)", Arrays.toString(weight));
-        } else {
+        if (weight != null)
+            return String.format("Weighted Euclidean Distance(%s)",Arrays.toString(weight));
+        else
             return "Euclidean Distance";
-        }
     }
 
     @Override
     public double d(SparseArray x, SparseArray y) {
-        if (x.isEmpty()) {
+        if (x.isEmpty())
             throw new IllegalArgumentException("List x is empty.");
-        }
 
-        if (y.isEmpty()) {
+        if (y.isEmpty())
             throw new IllegalArgumentException("List y is empty.");
-        }
 
         Iterator<SparseArray.Entry> iterX = x.iterator();
         Iterator<SparseArray.Entry> iterY = y.iterator();

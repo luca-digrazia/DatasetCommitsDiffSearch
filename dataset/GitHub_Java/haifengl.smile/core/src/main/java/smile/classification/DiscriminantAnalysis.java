@@ -18,7 +18,7 @@
 package smile.classification;
 
 import smile.math.MathEx;
-import smile.math.blas.UPLO;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 import smile.util.IntSet;
 
@@ -135,12 +135,12 @@ class DiscriminantAnalysis {
     }
 
     /** Computes the covariance matrix of all samples. */
-    public static Matrix St(double[][] x, double[] mean, int k, double tol) {
+    public static DenseMatrix St(double[][] x, double[] mean, int k, double tol) {
         int n = x.length;
         int p = x[0].length;
 
-        Matrix St = new Matrix(p, p);
-        St.uplo(UPLO.LOWER);
+        DenseMatrix St = Matrix.zeros(p, p);
+        St.setSymmetric(true);
 
         for (int i = 0; i < n; i++) {
             double[] xi = x[i];
@@ -167,24 +167,24 @@ class DiscriminantAnalysis {
     }
 
     /** Computes the covariance matrix of each class. */
-    public static Matrix[] cov(double[][] x, int[] y, double[][] mu, int[] ni) {
+    public static DenseMatrix[] cov(double[][] x, int[] y, double[][] mu, int[] ni) {
         int n = x.length;
         int p = x[0].length;
         int k = mu.length;
 
-        Matrix[] cov = new Matrix[k];
+        DenseMatrix[] cov = new DenseMatrix[k];
 
         for (int i = 0; i < k; i++) {
             if (ni[i] <= p) {
                 throw new IllegalArgumentException(String.format("The sample size of class %d is too small.", i));
             }
 
-            cov[i] = new Matrix(p, p);
-            cov[i].uplo(UPLO.LOWER);
+            cov[i] = Matrix.zeros(p, p);
+            cov[i].setSymmetric(true);
         }
 
         for (int i = 0; i < n; i++) {
-            Matrix v = cov[y[i]];
+            DenseMatrix v = cov[y[i]];
             double[] mui = mu[y[i]];
             double[] xi = x[i];
             for (int j = 0; j < p; j++) {
@@ -195,7 +195,7 @@ class DiscriminantAnalysis {
         }
 
         for (int i = 0; i < k; i++) {
-            Matrix v = cov[i];
+            DenseMatrix v = cov[i];
             int m = ni[i] - 1;
             for (int j = 0; j < p; j++) {
                 for (int l = 0; l <= j; l++) {

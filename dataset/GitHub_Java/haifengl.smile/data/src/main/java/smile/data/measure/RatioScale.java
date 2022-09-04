@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,11 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.data.measure;
 
 import java.text.NumberFormat;
+import java.util.Arrays;
 
 /**
  * The ratio scale allows for both difference and ratio of two values.
@@ -40,7 +41,7 @@ import java.text.NumberFormat;
  *
  * @author Haifeng Li
  */
-public class RatioScale extends NumericalMeasure {
+public class RatioScale extends ContinuousMeasure {
 
     /** Constructor. */
     public RatioScale(NumberFormat format) {

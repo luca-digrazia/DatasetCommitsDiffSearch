@@ -18,7 +18,10 @@
 package smile.math;
 
 import java.util.Arrays;
+
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.SVD;
 
 /**
  * The Levenberg–Marquardt algorithm.
@@ -118,7 +121,7 @@ public class LevenbergMarquardt {
         double[] norm = new double[d];
         Arrays.fill(norm, 1.0);
 
-        Matrix J = new Matrix(n, d);
+        DenseMatrix J = Matrix.zeros(n, d);
 
         double epsLlast = 1;
         double[] epstab = {0.1, 1, 1e2, 1e4, 1e6};
@@ -160,12 +163,12 @@ public class LevenbergMarquardt {
                 }
             }
 
-            Matrix.SVD svd = J.svd(true, true);
-            double[] s = svd.s;
+            SVD svd = J.svd();
+            double[] s = svd.getSingularValues();
             double s2 = MathEx.dot(s, s);
-            Matrix U = svd.U;
-            Matrix V = svd.V;
-            U.tv(r, g);
+            DenseMatrix U = svd.getU();
+            DenseMatrix V = svd.getV();
+            U.atx(r, g);
 
             for (int k = 0; k < epstab.length; k++) {
                 double epsL = Math.max(epsLlast * epstab[k], 1e-7);
@@ -174,7 +177,7 @@ public class LevenbergMarquardt {
                     gse[j] = g[j] / se;
                 }
 
-                V.mv(gse, chg);
+                V.ax(gse, chg);
 
                 for (int j = 0; j < d; j++) {
                     chg[j] *= norm[j];
@@ -280,7 +283,7 @@ public class LevenbergMarquardt {
         double[] norm = new double[d];
         Arrays.fill(norm, 1.0);
 
-        Matrix J = new Matrix(n, d);
+        DenseMatrix J = Matrix.zeros(n, d);
 
         double epsLlast = 1;
         double[] epstab = {0.1, 1, 1e2, 1e4, 1e6};
@@ -322,12 +325,12 @@ public class LevenbergMarquardt {
                 }
             }
 
-            Matrix.SVD svd = J.svd(true, true);
-            double[] s = svd.s;
+            SVD svd = J.svd();
+            double[] s = svd.getSingularValues();
             double s2 = MathEx.dot(s, s);
-            Matrix U = svd.U;
-            Matrix V = svd.V;
-            U.tv(r, g);
+            DenseMatrix U = svd.getU();
+            DenseMatrix V = svd.getV();
+            U.atx(r, g);
 
             for (int k = 0; k < epstab.length; k++) {
                 double epsL = Math.max(epsLlast * epstab[k], 1e-7);
@@ -336,7 +339,7 @@ public class LevenbergMarquardt {
                     gse[j] = g[j] / se;
                 }
 
-                V.mv(gse, chg);
+                V.ax(gse, chg);
 
                 for (int j = 0; j < d; j++) {
                     chg[j] *= norm[j];

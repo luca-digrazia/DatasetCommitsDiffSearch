@@ -63,7 +63,8 @@ public class MultiProbeHash extends Hash {
      * @return the bucket of hash table for given vector x.
      */
     private int mphash(double[] x) {
-        double[] h = a.mv(x);
+        double[] h = new double[k];
+        a.ax(x, h);
 
         long g = 0;
         for (int i = 0; i < k; i++) {
