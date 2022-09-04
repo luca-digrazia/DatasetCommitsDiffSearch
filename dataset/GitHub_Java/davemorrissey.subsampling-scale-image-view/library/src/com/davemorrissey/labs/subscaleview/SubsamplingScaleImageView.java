@@ -886,7 +886,19 @@ public class SubsamplingScaleImageView extends View {
                             if (tileBgPaint != null) {
                                 canvas.drawRect(tile.vRect, tileBgPaint);
                             }
-                            canvas.drawBitmap(tile.bitmap, null, tile.vRect, bitmapPaint);
+                            if (matrix == null) { matrix = new Matrix(); }
+                            matrix.reset();
+                            matrix.postScale(scale * tile.sampleSize, scale * tile.sampleSize);
+                            matrix.postRotate(getRequiredRotation());
+                            matrix.postTranslate(tile.vRect.left, tile.vRect.top);
+                            if (getRequiredRotation() == ORIENTATION_180) {
+                                matrix.postTranslate(scale * tile.sRect.width(), scale * tile.sRect.height());
+                            } else if (getRequiredRotation() == ORIENTATION_90) {
+                                matrix.postTranslate(scale * tile.sRect.width(), 0);
+                            } else if (getRequiredRotation() == ORIENTATION_270) {
+                                matrix.postTranslate(0, scale * tile.sRect.height());
+                            }
+                            canvas.drawBitmap(tile.bitmap, matrix, bitmapPaint);
                             if (debug) {
                                 canvas.drawRect(tile.vRect, debugPaint);
                             }
@@ -1401,14 +1413,7 @@ public class SubsamplingScaleImageView extends View {
                         if (view.sRegion != null) {
                             tile.fileSRect.offset(view.sRegion.left, view.sRegion.top);
                         }
-                        Bitmap bitmap = decoder.decodeRegion(tile.fileSRect, tile.sampleSize);
-                        int rotation = view.getRequiredRotation();
-                        if (rotation != 0) {
-                            Matrix matrix = new Matrix();
-                            matrix.postRotate(rotation);
-                            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                        }
-                        return bitmap;
+                        return decoder.decodeRegion(tile.fileSRect, tile.sampleSize);
                     }
                 } else if (tile != null) {
                     tile.loading = false;
@@ -1646,7 +1651,7 @@ public class SubsamplingScaleImageView extends View {
             try {
                 int maxWidth = (Integer)Canvas.class.getMethod("getMaximumBitmapWidth").invoke(canvas);
                 int maxHeight = (Integer)Canvas.class.getMethod("getMaximumBitmapHeight").invoke(canvas);
-                return new Point(Math.min(2048, maxWidth), Math.min(2048, maxHeight));
+                return new Point(maxWidth, maxHeight);
             } catch (Exception e) {
                 // Return default
             }
