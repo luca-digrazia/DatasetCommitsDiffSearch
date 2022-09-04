@@ -442,7 +442,6 @@ public final class BlazeRuntime {
     } catch (IOException e) {
       env.getReporter().handle(Event.error("Error while writing profile file: " + e.getMessage()));
     }
-    env.getReporter().clearEventBus();
   }
 
   // Make sure we keep a strong reference to this logger, so that the

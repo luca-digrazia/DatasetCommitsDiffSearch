@@ -13,8 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.server;
 
-import com.google.devtools.build.lib.clock.Clock;
-import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher;
+import com.google.devtools.build.lib.runtime.CommandExecutor;
+import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 
@@ -28,14 +28,8 @@ public interface RPCServer {
    * Present so that we don't need to invoke a constructor with multiple arguments by reflection.
    */
   interface Factory {
-    RPCServer create(
-        BlazeCommandDispatcher dispatcher,
-        Clock clock,
-        int port,
-        Path serverDirectory,
-        int maxIdleSeconds,
-        boolean idleServerTasks)
-        throws IOException;
+    RPCServer create(CommandExecutor commandExecutor, Clock clock, int port,
+        Path workspace, Path serverDirectory, int maxIdleSeconds) throws IOException;
   }
 
   /**
