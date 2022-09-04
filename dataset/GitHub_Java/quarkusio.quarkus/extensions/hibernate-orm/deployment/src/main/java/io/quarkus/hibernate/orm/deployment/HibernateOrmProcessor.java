@@ -8,7 +8,6 @@ import static org.hibernate.cfg.AvailableSettings.USE_QUERY_CACHE;
 import static org.hibernate.cfg.AvailableSettings.USE_SECOND_LEVEL_CACHE;
 
 import java.io.IOException;
-import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,7 +15,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,32 +33,23 @@ import javax.persistence.spi.PersistenceUnitTransactionType;
 
 import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.MetricType;
-import org.hibernate.annotations.Proxy;
 import org.hibernate.boot.archive.scan.spi.ClassDescriptor;
-import org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.dialect.DerbyTenSevenDialect;
 import org.hibernate.dialect.MariaDB103Dialect;
 import org.hibernate.dialect.MySQL8Dialect;
 import org.hibernate.dialect.SQLServer2012Dialect;
 import org.hibernate.integrator.spi.Integrator;
-import org.hibernate.internal.util.collections.ArrayHelper;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.loader.BatchFetchStyle;
-import org.hibernate.proxy.HibernateProxy;
-import org.hibernate.proxy.pojo.bytebuddy.ByteBuddyProxyHelper;
 import org.hibernate.service.spi.ServiceContributor;
 import org.hibernate.tool.hbm2ddl.MultipleLinesSqlCommandExtractor;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
-import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
-import org.jboss.logging.Logger;
-import org.jboss.logmanager.Level;
 
 import io.quarkus.agroal.deployment.JdbcDataSourceBuildItem;
 import io.quarkus.agroal.deployment.JdbcDataSourceSchemaReadyBuildItem;
@@ -82,7 +71,6 @@ import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LogCategoryBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -104,11 +92,8 @@ import io.quarkus.hibernate.orm.runtime.boot.scan.QuarkusScanner;
 import io.quarkus.hibernate.orm.runtime.dialect.QuarkusH2Dialect;
 import io.quarkus.hibernate.orm.runtime.dialect.QuarkusPostgreSQL10Dialect;
 import io.quarkus.hibernate.orm.runtime.metrics.HibernateCounter;
-import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.smallrye.metrics.deployment.spi.MetricBuildItem;
-import net.bytebuddy.description.type.TypeDescription;
-import net.bytebuddy.dynamic.DynamicType;
 
 /**
  * Simulacrum of JPA bootstrap.
@@ -121,7 +106,6 @@ import net.bytebuddy.dynamic.DynamicType;
  */
 public final class HibernateOrmProcessor {
 
-    private static final Logger LOG = Logger.getLogger(HibernateOrmProcessor.class);
     private static final String HIBERNATE_ORM_CONFIG_PREFIX = "quarkus.hibernate-orm.";
     private static final String NO_SQL_LOAD_SCRIPT_FILE = "no-file";
 
@@ -178,7 +162,6 @@ public final class HibernateOrmProcessor {
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<JpaEntitiesBuildItem> domainObjectsProducer,
             BuildProducer<BeanContainerListenerBuildItem> beanContainerListener,
-            BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer,
             List<HibernateOrmIntegrationBuildItem> integrations,
             LaunchModeBuildItem launchMode) throws Exception {
 
@@ -271,105 +254,9 @@ public final class HibernateOrmProcessor {
                     .add((Class<? extends ServiceContributor>) recorderContext.classProxy(serviceContributorClassName));
         }
 
-        Set<String> entitiesToGenerateProxiesFor = new HashSet<>(domainObjects.getEntityClassNames());
-        for (ParsedPersistenceXmlDescriptor unit : allDescriptors) {
-            entitiesToGenerateProxiesFor.addAll(unit.getManagedClassNames());
-        }
-        PreGeneratedProxies proxyDefinitions;
-        try {
-            proxyDefinitions = generatedProxies(entitiesToGenerateProxiesFor, compositeIndex,
-                    generatedClassBuildItemBuildProducer);
-        } catch (Throwable t) {
-            //TODO: DELETE THIS
-            //this is just like any other bug
-            //it will likely never happened
-            //only added against my better judgement as this is a very late change
-            proxyDefinitions = new PreGeneratedProxies();
-            LOG.error(
-                    "Failed to generate build time Hibernate proxy definitions. This is a bug, please file an issue at https://github.com/quarkusio/quarkus/issues and this stack trace.",
-                    t);
-        }
-
         beanContainerListener
                 .produce(new BeanContainerListenerBuildItem(
-                        recorder.initMetadata(allDescriptors, scanner, integratorClasses, serviceContributorClasses,
-                                proxyDefinitions)));
-    }
-
-    private PreGeneratedProxies generatedProxies(Set<String> entityClassNames, IndexView combinedIndex,
-            BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer) {
-        //create a map of entity to proxy type
-        PreGeneratedProxies preGeneratedProxies = new PreGeneratedProxies();
-        Map<String, String> proxyAnnotations = new HashMap<>();
-        for (AnnotationInstance i : combinedIndex.getAnnotations(DotName.createSimple(Proxy.class.getName()))) {
-            AnnotationValue proxyClass = i.value("proxyClass");
-            if (proxyClass == null) {
-                continue;
-            }
-            proxyAnnotations.put(i.target().asClass().name().toString(), proxyClass.asClass().name().toString());
-        }
-        try {
-
-            final BytecodeProviderImpl bytecodeProvider = new BytecodeProviderImpl();
-            final ByteBuddyProxyHelper byteBuddyProxyHelper = bytecodeProvider.getByteBuddyProxyHelper();
-
-            for (String entity : entityClassNames) {
-                Set<Class<?>> proxyInterfaces = new HashSet<>();
-                proxyInterfaces.add(HibernateProxy.class); //always added
-                Class<?> mappedClass = Class.forName(entity, false, Thread.currentThread().getContextClassLoader());
-                String proxy = proxyAnnotations.get(entity);
-                if (proxy != null) {
-                    proxyInterfaces.add(Class.forName(proxy, false, Thread.currentThread().getContextClassLoader()));
-                } else if (!isProxiable(mappedClass)) {
-                    //if there is no @Proxy we need to make sure the actual class is proxiable
-                    continue;
-                }
-                for (ClassInfo subclass : combinedIndex.getAllKnownSubclasses(DotName.createSimple(entity))) {
-                    String subclassName = subclass.name().toString();
-                    if (!entityClassNames.contains(subclassName)) {
-                        //not an entity
-                        continue;
-                    }
-                    proxy = proxyAnnotations.get(subclassName);
-                    if (proxy != null) {
-                        proxyInterfaces.add(Class.forName(proxy, false, Thread.currentThread().getContextClassLoader()));
-                    }
-                }
-                DynamicType.Unloaded<?> proxyDef = byteBuddyProxyHelper.buildUnloadedProxy(mappedClass,
-                        toArray(proxyInterfaces));
-
-                for (Entry<TypeDescription, byte[]> i : proxyDef.getAllTypes().entrySet()) {
-                    generatedClassBuildItemBuildProducer
-                            .produce(new GeneratedClassBuildItem(true, i.getKey().getName(), i.getValue()));
-                }
-                preGeneratedProxies.getProxies().put(entity,
-                        new PreGeneratedProxies.ProxyClassDetailsHolder(proxyDef.getTypeDescription().getName(),
-                                proxyInterfaces.stream().map(Class::getName).collect(Collectors.toSet())));
-            }
-
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-        return preGeneratedProxies;
-    }
-
-    private boolean isProxiable(Class<?> mappedClass) {
-        if (Modifier.isFinal(mappedClass.getModifiers())) {
-            return false;
-        }
-        try {
-            mappedClass.getDeclaredConstructor();
-        } catch (NoSuchMethodException e) {
-            return false;
-        }
-        return true;
-    }
-
-    private static Class[] toArray(final Set<Class<?>> interfaces) {
-        if (interfaces == null) {
-            return ArrayHelper.EMPTY_CLASS_ARRAY;
-        }
-        return interfaces.toArray(new Class[interfaces.size()]);
+                        recorder.initMetadata(allDescriptors, scanner, integratorClasses, serviceContributorClasses)));
     }
 
     @BuildStep
@@ -826,13 +713,6 @@ public final class HibernateOrmProcessor {
                                 + "If you use persistence.xml remove all " + HIBERNATE_ORM_CONFIG_PREFIX
                                 + "* properties from the Quarkus config file.");
             }
-        }
-    }
-
-    @BuildStep
-    public void produceLoggingCategories(BuildProducer<LogCategoryBuildItem> categories) {
-        if (hibernateConfig.log.bindParam) {
-            categories.produce(new LogCategoryBuildItem("org.hibernate.type.descriptor.sql.BasicBinder", Level.TRACE));
         }
     }
 
