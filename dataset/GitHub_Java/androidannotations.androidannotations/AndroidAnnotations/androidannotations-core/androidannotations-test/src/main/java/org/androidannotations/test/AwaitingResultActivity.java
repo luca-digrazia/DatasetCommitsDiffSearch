@@ -1,5 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -31,6 +32,8 @@ public class AwaitingResultActivity extends Activity {
 	static final int SECOND_REQUEST = 22;
 	static final int THIRD_REQUEST = 33;
 	static final int FORTH_REQUEST = 44;
+	static final int FIFTH_REQUEST = 55;
+	static final int SIXTH_REQUEST = 66;
 	boolean onResultCalled = false;
 	boolean onResultWithDataCalled = false;
 	boolean onActivityResultWithResultCodeAndDataCalled = false;
@@ -38,6 +41,8 @@ public class AwaitingResultActivity extends Activity {
 	boolean onResultWithIntResultCodeCalled = false;
 	boolean onResultWithIntegerResultCodeCalled = false;
 	boolean onResultWithResultExtraCodeCalled = false;
+	Intent originalIntent;
+	Intent extraIntent;
 
 	@OnActivityResult(FIRST_REQUEST)
 	void onResult() {
@@ -77,4 +82,14 @@ public class AwaitingResultActivity extends Activity {
 	}
 
 	// CHECKSTYLE:ON
+
+	@OnActivityResult(FIFTH_REQUEST)
+	void onResultWithIntentExtras(Intent originalIntent, @OnActivityResult.Extra Intent extraIntent) {
+		this.originalIntent = originalIntent;
+		this.extraIntent = extraIntent;
+	}
+
+	@OnActivityResult(SIXTH_REQUEST)
+	void onResultWithIntentExtras(@OnActivityResult.Extra byte bytee, @OnActivityResult.Extra byte[] bytes) {
+	}
 }
