@@ -17,9 +17,11 @@ package com.google.devtools.build.lib.starlarkbuildapi.cpp;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.starlarkbuildapi.apple.AppleBitcodeModeApi;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
 
 /** The C++ configuration fragment. */
@@ -85,4 +87,44 @@ public interface CppConfigurationApi<InvalidConfigurationExceptionT extends Exce
       documented = false,
       doc = "Accessor for <code>--incompatible_macos_set_install_name</code>.")
   boolean macosSetInstallName();
+
+  @StarlarkMethod(name = "force_pic", documented = false, useStarlarkThread = true)
+  boolean forcePicStarlark(StarlarkThread thread) throws EvalException;
+
+  @StarlarkMethod(name = "generate_llvm_lcov", documented = false, useStarlarkThread = true)
+  boolean generateLlvmLcovStarlark(StarlarkThread thread) throws EvalException;
+
+  @StarlarkMethod(name = "fdo_instrument", documented = false, useStarlarkThread = true)
+  String fdoInstrumentStarlark(StarlarkThread thread) throws EvalException;
+
+  @StarlarkMethod(
+      name = "process_headers_in_dependencies",
+      documented = false,
+      useStarlarkThread = true)
+  boolean processHeadersInDependenciesStarlark(StarlarkThread thread) throws EvalException;
+
+  @StarlarkMethod(name = "save_feature_state", documented = false, useStarlarkThread = true)
+  boolean saveFeatureStateStarlark(StarlarkThread thread) throws EvalException;
+
+  @StarlarkMethod(
+      name = "fission_active_for_current_compilation_mode",
+      documented = false,
+      useStarlarkThread = true)
+  boolean fissionActiveForCurrentCompilationModeStarlark(StarlarkThread thread)
+      throws EvalException;
+
+  @StarlarkMethod(
+      name = "apple_bitcode_mode",
+      doc =
+          "Returns the Bitcode mode to use for compilation steps.<p>This field is only valid for"
+              + " Apple, and only for device builds; for simulator builds, it always returns "
+              + "<code>'none'</code>.",
+      structField = true)
+  AppleBitcodeModeApi getAppleBitcodeMode();
+
+  @StarlarkMethod(
+      name = "apple_generate_dsym",
+      doc = "Whether to generate Apple debug symbol(.dSYM) artifacts.",
+      structField = true)
+  boolean appleGenerateDsym();
 }
