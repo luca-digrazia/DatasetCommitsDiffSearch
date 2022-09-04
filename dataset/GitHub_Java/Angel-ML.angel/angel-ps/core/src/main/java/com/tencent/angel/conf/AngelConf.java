@@ -811,14 +811,6 @@ public class AngelConf extends Configuration {
   public static final String DEFAULT_ANGEL_PS_PARTITION_SOURCE_CLASS =
     PartitionSourceMap.class.getName();
 
-  /**
-   * partitionClass for matrix
-   */
-
-  public static final String Angel_PS_PARTITION_CLASS =
-      ANGEL_PS_PREFIX + "partition.class";
-
-
   public static final String ANGEL_PS_MAX_LOCK_WAITTIME_MS = ANGEL_PS_PREFIX + "max.lock.waittime";
   public static final int DEFAULT_ANGEL_PS_MAX_LOCK_WAITTIME_MS = 10000;
 
@@ -1068,13 +1060,6 @@ public class AngelConf extends Configuration {
   public static final String ANGEL_MATRIXTRANSFER_RETRY_INTERVAL_MS =
     ANGEL_PREFIX + "matrixtransfer.retry.interval.ms";
   public static final int DEFAULT_ANGEL_MATRIXTRANSFER_RETRY_INTERVAL_MS = 10000;
-
-  /**
-   * Max retry number for a PS-RPC
-   */
-  public static final String ANGEL_MATRIXTRANSFER_MAX_TRY_COUNTER =
-      ANGEL_PREFIX + "matrixtransfer.max.retry.counter";
-  public static final int DEFAULT_ANGEL_MATRIXTRANSFER_MAX_TRY_COUNTER = 1;
 
   /**
    * Weather we need use direct buffer in netty client.
