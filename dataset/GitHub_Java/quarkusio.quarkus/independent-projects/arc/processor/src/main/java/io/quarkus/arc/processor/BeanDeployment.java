@@ -1003,7 +1003,7 @@ public class BeanDeployment {
                         hasQualifier = false;
                     }
                 }
-                if (hasQualifier && beanResolver.matches(disposer.getDisposedParameterType(), beanType)) {
+                if (hasQualifier && beanResolver.matches(beanType, disposer.getDisposedParameterType())) {
                     found.add(disposer);
                 }
             }

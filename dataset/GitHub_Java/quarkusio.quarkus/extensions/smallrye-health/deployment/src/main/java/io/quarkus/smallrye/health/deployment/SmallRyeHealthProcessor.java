@@ -70,8 +70,11 @@ import io.quarkus.smallrye.health.runtime.SmallRyeLivenessHandler;
 import io.quarkus.smallrye.health.runtime.SmallRyeReadinessHandler;
 import io.quarkus.smallrye.health.runtime.SmallRyeWellnessHandler;
 import io.quarkus.smallrye.openapi.deployment.spi.AddToOpenAPIDefinitionBuildItem;
+import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
+import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
+import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
 import io.smallrye.health.SmallRyeHealthReporter;
 import io.smallrye.health.api.HealthGroup;
 import io.smallrye.health.api.HealthGroups;
@@ -95,8 +98,7 @@ class SmallRyeHealthProcessor {
     private static final String HEALTH_UI_WEBJAR_ARTIFACT_ID = "smallrye-health-ui";
     private static final String HEALTH_UI_WEBJAR_PREFIX = "META-INF/resources/health-ui/";
     private static final String HEALTH_UI_FINAL_DESTINATION = "META-INF/health-ui-files";
-    private static final String JS_FILE_TO_UPDATE = "healthui.js";
-    private static final String INDEX_FILE_TO_UPDATE = "index.html";
+    private static final String FILE_TO_UPDATE = "healthui.js";
 
     // Branding files to monitor for changes 
     private static final String BRANDING_DIR = "META-INF/branding/";
@@ -149,10 +151,29 @@ class SmallRyeHealthProcessor {
     void build(SmallRyeHealthRecorder recorder,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<AdditionalBeanBuildItem> additionalBean,
-            BuildProducer<BeanDefiningAnnotationBuildItem> beanDefiningAnnotation)
+            BuildProducer<BeanDefiningAnnotationBuildItem> beanDefiningAnnotation,
+            BuildProducer<NotFoundPageDisplayableEndpointBuildItem> displayableEndpoints,
+            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
+            LaunchModeBuildItem launchMode,
+            SmallRyeHealthConfig healthConfig)
             throws IOException, ClassNotFoundException {
 
         feature.produce(new FeatureBuildItem(Feature.SMALLRYE_HEALTH));
+
+        // add health endpoints to not found page
+        if (launchMode.getLaunchMode().isDevOrTest()) {
+            String basePath = nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath);
+            displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem(basePath));
+            String subcontextBasePath = adjustSubcontextBasePath(basePath);
+            displayableEndpoints
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(subcontextBasePath + healthConfig.livenessPath));
+            displayableEndpoints
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(subcontextBasePath + healthConfig.readinessPath));
+            displayableEndpoints
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(subcontextBasePath + healthConfig.groupPath));
+            displayableEndpoints
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(subcontextBasePath + healthConfig.wellnessPath));
+        }
 
         // Discover the beans annotated with @Health, @Liveness, @Readiness, @HealthGroup,
         // @HealthGroups and @Wellness even if no scope is defined
@@ -189,7 +210,6 @@ class SmallRyeHealthProcessor {
     @BuildStep
     public void defineHealthRoutes(BuildProducer<RouteBuildItem> routes,
             BeanArchiveIndexBuildItem beanArchiveIndex,
-            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
             SmallRyeHealthConfig healthConfig) {
         IndexView index = beanArchiveIndex.getIndex();
 
@@ -200,31 +220,29 @@ class SmallRyeHealthProcessor {
         warnIfJaxRsPathUsed(index, WELLNESS);
 
         // Register the health handler
-        routes.produce(nonApplicationRootPathBuildItem.routeBuilder()
+        routes.produce(new RouteBuildItem.Builder()
                 .route(healthConfig.rootPath)
-                .routeConfigKey("quarkus.smallrye-health.root-path")
                 .handler(new SmallRyeHealthHandler())
-                .requiresLegacyRedirect()
-                .displayOnNotFoundPage()
                 .blockingRoute()
+                .nonApplicationRoute()
                 .build());
 
+        String subcontextBasePath = adjustSubcontextBasePath(healthConfig.rootPath);
+
         // Register the liveness handler
-        routes.produce(nonApplicationRootPathBuildItem.routeBuilder()
-                .nestedRoute(healthConfig.rootPath, healthConfig.livenessPath)
+        routes.produce(new RouteBuildItem.Builder()
+                .route(subcontextBasePath + healthConfig.livenessPath)
                 .handler(new SmallRyeLivenessHandler())
-                .requiresLegacyRedirect()
-                .displayOnNotFoundPage()
                 .blockingRoute()
+                .nonApplicationRoute()
                 .build());
 
         // Register the readiness handler
-        routes.produce(nonApplicationRootPathBuildItem.routeBuilder()
-                .nestedRoute(healthConfig.rootPath, healthConfig.readinessPath)
+        routes.produce(new RouteBuildItem.Builder()
+                .route(subcontextBasePath + healthConfig.readinessPath)
                 .handler(new SmallRyeReadinessHandler())
-                .requiresLegacyRedirect()
-                .displayOnNotFoundPage()
                 .blockingRoute()
+                .nonApplicationRoute()
                 .build());
 
         // Find all health groups
@@ -241,32 +259,29 @@ class SmallRyeHealthProcessor {
         }
 
         // Register the health group handlers
-        routes.produce(nonApplicationRootPathBuildItem.routeBuilder()
-                .nestedRoute(healthConfig.rootPath, healthConfig.groupPath)
+        routes.produce(new RouteBuildItem.Builder()
+                .route(subcontextBasePath + healthConfig.groupPath)
                 .handler(new SmallRyeHealthGroupHandler())
-                .requiresLegacyRedirect()
-                .displayOnNotFoundPage()
                 .blockingRoute()
+                .nonApplicationRoute()
                 .build());
 
         SmallRyeIndividualHealthGroupHandler handler = new SmallRyeIndividualHealthGroupHandler();
         for (String healthGroup : healthGroups) {
-            routes.produce(nonApplicationRootPathBuildItem.routeBuilder()
-                    .nestedRoute(healthConfig.rootPath, healthConfig.groupPath + "/" + healthGroup)
+            routes.produce(new RouteBuildItem.Builder()
+                    .route(subcontextBasePath + healthConfig.groupPath + "/" + healthGroup)
                     .handler(handler)
-                    .requiresLegacyRedirect()
-                    .displayOnNotFoundPage()
                     .blockingRoute()
+                    .nonApplicationRoute()
                     .build());
         }
 
         // Register the wellness handler
-        routes.produce(nonApplicationRootPathBuildItem.routeBuilder()
-                .nestedRoute(healthConfig.rootPath, healthConfig.wellnessPath)
+        routes.produce(new RouteBuildItem.Builder()
+                .route(subcontextBasePath + healthConfig.wellnessPath)
                 .handler(new SmallRyeWellnessHandler())
-                .requiresLegacyRedirect()
-                .displayOnNotFoundPage()
                 .blockingRoute()
+                .nonApplicationRoute()
                 .build());
 
     }
@@ -274,17 +289,17 @@ class SmallRyeHealthProcessor {
     @BuildStep(onlyIf = OpenAPIIncluded.class)
     public void includeInOpenAPIEndpoint(BuildProducer<AddToOpenAPIDefinitionBuildItem> openAPIProducer,
             NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
+            HttpRootPathBuildItem httpRootPath,
             Capabilities capabilities,
             SmallRyeHealthConfig healthConfig) {
 
         // Add to OpenAPI if OpenAPI is available
         if (capabilities.isPresent(Capability.SMALLRYE_OPENAPI)) {
-            String healthRootPath = nonApplicationRootPathBuildItem.resolvePath(healthConfig.rootPath);
-
-            HealthOpenAPIFilter filter = new HealthOpenAPIFilter(healthRootPath,
-                    nonApplicationRootPathBuildItem.resolveNestedPath(healthRootPath, healthConfig.livenessPath),
-                    nonApplicationRootPathBuildItem.resolveNestedPath(healthRootPath, healthConfig.readinessPath));
-
+            String basePath = httpRootPath.adjustPath(nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath));
+            String subcontextBasePath = adjustSubcontextBasePath(basePath);
+            HealthOpenAPIFilter filter = new HealthOpenAPIFilter(basePath,
+                    subcontextBasePath + healthConfig.livenessPath,
+                    subcontextBasePath + healthConfig.readinessPath);
             openAPIProducer.produce(new AddToOpenAPIDefinitionBuildItem(filter));
         }
     }
@@ -313,17 +328,21 @@ class SmallRyeHealthProcessor {
     }
 
     @BuildStep
-    public void kubernetes(NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
+    public void kubernetes(HttpBuildTimeConfig httpConfig, NonApplicationRootPathBuildItem frameworkRootPath,
             SmallRyeHealthConfig healthConfig,
             BuildProducer<KubernetesHealthLivenessPathBuildItem> livenessPathItemProducer,
             BuildProducer<KubernetesHealthReadinessPathBuildItem> readinessPathItemProducer) {
 
+        String subcontextBasePath = adjustSubcontextBasePath(healthConfig.rootPath);
+
         livenessPathItemProducer.produce(
                 new KubernetesHealthLivenessPathBuildItem(
-                        nonApplicationRootPathBuildItem.resolveNestedPath(healthConfig.rootPath, healthConfig.livenessPath)));
+                        httpConfig
+                                .adjustPath(frameworkRootPath.adjustPath(subcontextBasePath + healthConfig.livenessPath))));
         readinessPathItemProducer.produce(
                 new KubernetesHealthReadinessPathBuildItem(
-                        nonApplicationRootPathBuildItem.resolveNestedPath(healthConfig.rootPath, healthConfig.readinessPath)));
+                        httpConfig
+                                .adjustPath(frameworkRootPath.adjustPath(subcontextBasePath + healthConfig.readinessPath))));
     }
 
     @BuildStep
@@ -389,7 +408,9 @@ class SmallRyeHealthProcessor {
     void registerUiExtension(
             BuildProducer<GeneratedResourceBuildItem> generatedResourceProducer,
             BuildProducer<NativeImageResourceBuildItem> nativeImageResourceProducer,
+            BuildProducer<NotFoundPageDisplayableEndpointBuildItem> notFoundPageDisplayableEndpointProducer,
             BuildProducer<SmallRyeHealthBuildItem> smallRyeHealthBuildProducer,
+            HttpRootPathBuildItem httpRootPath,
             NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
             SmallRyeHealthConfig healthConfig,
             CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -403,21 +424,24 @@ class SmallRyeHealthProcessor {
                         "quarkus.smallrye-health.root-path-ui was set to \"/\", this is not allowed as it blocks the application from serving anything else.");
             }
 
-            String healthPath = nonApplicationRootPathBuildItem.resolvePath(healthConfig.rootPath);
-            String healthUiPath = nonApplicationRootPathBuildItem.resolvePath(healthConfig.ui.rootPath);
+            String healthPath = httpRootPath.adjustPath(nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath));
+            String healthUiPath = httpRootPath.adjustPath(nonApplicationRootPathBuildItem.adjustPath(healthConfig.ui.rootPath));
 
             AppArtifact artifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, HEALTH_UI_WEBJAR_GROUP_ID,
                     HEALTH_UI_WEBJAR_ARTIFACT_ID);
 
             if (launchMode.getLaunchMode().isDevOrTest()) {
-                Path tempPath = WebJarUtil.copyResourcesForDevOrTest(liveReloadBuildItem, curateOutcomeBuildItem, launchMode,
-                        artifact,
+                Path tempPath = WebJarUtil.copyResourcesForDevOrTest(curateOutcomeBuildItem, launchMode, artifact,
                         HEALTH_UI_WEBJAR_PREFIX);
-                updateApiUrl(tempPath.resolve(JS_FILE_TO_UPDATE), healthPath);
-                updateApiUrl(tempPath.resolve(INDEX_FILE_TO_UPDATE), healthPath);
+                updateApiUrl(tempPath.resolve(FILE_TO_UPDATE), healthPath);
 
                 smallRyeHealthBuildProducer
                         .produce(new SmallRyeHealthBuildItem(tempPath.toAbsolutePath().toString(), healthUiPath));
+
+                notFoundPageDisplayableEndpointProducer
+                        .produce(new NotFoundPageDisplayableEndpointBuildItem(
+                                nonApplicationRootPathBuildItem
+                                        .adjustPath(healthConfig.ui.rootPath + "/")));
 
                 // Handle live reload of branding files
                 if (liveReloadBuildItem.isLiveReload() && !liveReloadBuildItem.getChangedResources().isEmpty()) {
@@ -432,7 +456,7 @@ class SmallRyeHealthProcessor {
 
                     String fileName = file.getKey();
                     byte[] content = file.getValue();
-                    if (fileName.endsWith(JS_FILE_TO_UPDATE) || fileName.endsWith(INDEX_FILE_TO_UPDATE)) {
+                    if (fileName.endsWith(FILE_TO_UPDATE)) {
                         content = updateApiUrl(new String(content, StandardCharsets.UTF_8), healthPath)
                                 .getBytes(StandardCharsets.UTF_8);
                     }
@@ -454,44 +478,42 @@ class SmallRyeHealthProcessor {
             SmallRyeHealthRecorder recorder,
             SmallRyeHealthRuntimeConfig runtimeConfig,
             SmallRyeHealthBuildItem smallRyeHealthBuildItem,
-            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
             LaunchModeBuildItem launchMode,
             SmallRyeHealthConfig healthConfig) throws Exception {
 
         if (shouldInclude(launchMode, healthConfig)) {
             Handler<RoutingContext> handler = recorder.uiHandler(smallRyeHealthBuildItem.getHealthUiFinalDestination(),
                     smallRyeHealthBuildItem.getHealthUiPath(), runtimeConfig);
-
-            routeProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
+            routeProducer.produce(new RouteBuildItem.Builder()
                     .route(healthConfig.ui.rootPath)
-                    .routeConfigKey("quarkus.smallrye-health.ui.root-path")
-                    .displayOnNotFoundPage("Health UI")
-                    .requiresLegacyRedirect()
                     .handler(handler)
+                    .nonApplicationRoute()
                     .build());
-            routeProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
+            routeProducer.produce(new RouteBuildItem.Builder()
                     .route(healthConfig.ui.rootPath + "/*")
-                    .requiresLegacyRedirect()
                     .handler(handler)
+                    .nonApplicationRoute()
                     .build());
         }
     }
 
-    private void updateApiUrl(Path fileToUpdate, String healthPath) throws IOException {
-        String content = new String(Files.readAllBytes(fileToUpdate), StandardCharsets.UTF_8);
+    private void updateApiUrl(Path healthUiJs, String healthPath) throws IOException {
+        String content = new String(Files.readAllBytes(healthUiJs), StandardCharsets.UTF_8);
         String result = updateApiUrl(content, healthPath);
         if (result != null) {
-            Files.write(fileToUpdate, result.getBytes(StandardCharsets.UTF_8));
+            Files.write(healthUiJs, result.getBytes(StandardCharsets.UTF_8));
         }
     }
 
-    // Replace health URL in static files
     public String updateApiUrl(String original, String healthPath) {
-        return original.replace("url = \"/health\";", "url = \"" + healthPath + "\";")
-                .replace("placeholder=\"/health\"", "placeholder=\"" + healthPath + "\"");
+        return original.replace("url = \"/health\";", "url = \"" + healthPath + "\";");
     }
 
     private static boolean shouldInclude(LaunchModeBuildItem launchMode, SmallRyeHealthConfig healthConfig) {
         return launchMode.getLaunchMode().isDevOrTest() || healthConfig.ui.alwaysInclude;
+    }
+
+    private String adjustSubcontextBasePath(String basePath) {
+        return basePath.equals("/") ? "" : basePath;
     }
 }
