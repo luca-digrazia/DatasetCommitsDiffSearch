@@ -71,7 +71,6 @@ import org.graylog2.audit.AuditEventSender;
 import org.graylog2.indexer.ElasticsearchException;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.IndexMappingFactory;
-import org.graylog2.indexer.IndexMappingTemplate;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.cluster.jest.JestUtils;
@@ -361,8 +360,8 @@ public class Indices {
     public void ensureIndexTemplate(IndexSet indexSet) {
         final IndexSetConfig indexSetConfig = indexSet.getConfig();
         final String templateName = indexSetConfig.indexTemplateName();
-        final IndexMappingTemplate indexMapping = indexMappingFactory.createIndexMapping(indexSetConfig.indexTemplateType().orElse(IndexSetConfig.DEFAULT_INDEX_TEMPLATE_TYPE));
-        final Map<String, Object> template = indexMapping.toTemplate(indexSetConfig, indexSet.getIndexWildcard(), -1);
+        final IndexMapping indexMapping = indexMappingFactory.createIndexMapping();
+        final Map<String, Object> template = indexMapping.messageTemplate(indexSet.getIndexWildcard(), indexSetConfig.indexAnalyzer(), -1);
 
         final PutTemplate request = new PutTemplate.Builder(templateName, template).build();
 
@@ -381,8 +380,9 @@ public class Indices {
      */
     public Map<String, Object> getIndexTemplate(IndexSet indexSet) {
         final String indexWildcard = indexSet.getIndexWildcard();
+        final String analyzer = indexSet.getConfig().indexAnalyzer();
 
-        return indexMappingFactory.createIndexMapping(indexSet.getConfig().indexTemplateType().orElse(IndexSetConfig.DEFAULT_INDEX_TEMPLATE_TYPE)).toTemplate(indexSet.getConfig(), indexWildcard);
+        return indexMappingFactory.createIndexMapping().messageTemplate(indexWildcard, analyzer);
     }
 
     public void deleteIndexTemplate(IndexSet indexSet) {
@@ -716,7 +716,7 @@ public class Indices {
         final FilterAggregationBuilder builder = AggregationBuilders.filter("agg", QueryBuilders.existsQuery(Message.FIELD_TIMESTAMP))
                 .subAggregation(AggregationBuilders.min("ts_min").field(Message.FIELD_TIMESTAMP))
                 .subAggregation(AggregationBuilders.max("ts_max").field(Message.FIELD_TIMESTAMP))
-                .subAggregation(AggregationBuilders.terms("streams").size(Integer.MAX_VALUE).field(Message.FIELD_STREAMS));
+                .subAggregation(AggregationBuilders.terms("streams").field(Message.FIELD_STREAMS));
         final String query = searchSource()
                 .aggregation(builder)
                 .size(0)
