@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
 import java.util.Collection;
@@ -88,17 +87,13 @@ public final class CanonicalizeCommand implements BlazeCommand {
    * are undocumented no-ops, and are not to be used by anything outside of that test.
    */
   public static class FlagClashCanaryOptions extends OptionsBase {
-    @Option(
-      name = "flag_clash_canary",
-      defaultValue = "false",
-      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
-    )
+    @Option(name = "flag_clash_canary", defaultValue = "false", category = "undocumented")
     public boolean flagClashCanary;
 
     @Option(
       name = "flag_clash_canary_expander1",
       defaultValue = "null",
-      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+      category = "undocumented",
       expansion = {"--flag_clash_canary=1"}
     )
     public Void flagClashCanaryExpander1;
@@ -106,7 +101,7 @@ public final class CanonicalizeCommand implements BlazeCommand {
     @Option(
       name = "flag_clash_canary_expander2",
       defaultValue = "null",
-      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+      category = "undocumented",
       expansion = {"--flag_clash_canary=0"}
     )
     public Void flagClashCanaryExpander2;
