@@ -290,10 +290,6 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     return ruleContext;
   }
 
-  public RuleContext getRuleContext() {
-    return ruleContext;
-  }
-
   @Override
   public void runShell(
       SkylarkList outputs,
