@@ -14,8 +14,8 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
-import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -35,7 +35,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidCcLinkParamsProviderApi<T extends CcInfoApi> extends StructApi {
   /** Name of this info object. */
-  String NAME = "AndroidCcLinkParamsInfo";
+  public static String NAME = "AndroidCcLinkParamsInfo";
 
   /** Returns the cc link params. */
   @SkylarkCallable(name = "link_params", structField = true, doc = "", documented = false)
@@ -48,7 +48,7 @@ public interface AndroidCcLinkParamsProviderApi<T extends CcInfoApi> extends Str
           "Do not use this module. It is intended for migration purposes only. If you depend on "
               + "it, you will be broken when it is removed.",
       documented = false)
-  interface Provider<T extends CcInfoApi> extends ProviderApi {
+  public interface Provider<T extends CcInfoApi> extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
@@ -66,6 +66,6 @@ public interface AndroidCcLinkParamsProviderApi<T extends CcInfoApi> extends Str
     @SkylarkConstructor(
         objectType = AndroidCcLinkParamsProviderApi.class,
         receiverNameForDoc = NAME)
-    AndroidCcLinkParamsProviderApi<T> createInfo(T store) throws EvalException;
+    public AndroidCcLinkParamsProviderApi<T> createInfo(T store) throws EvalException;
   }
 }
