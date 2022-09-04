@@ -65,8 +65,7 @@ public class InterceptorGenerator extends BeanGenerator {
         }
         ClassInfo providerClass = interceptor.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();
-        String targetPackage = DotNames.packageName(providerType.name());
-        String generatedName = targetPackage.replace(".", "/") + "/" + baseName + BEAN_SUFFIX;
+        String generatedName = DotNames.packageName(providerType.name()).replace(".", "/") + "/" + baseName + BEAN_SUFFIX;
 
         ResourceClassOutput classOutput = new ResourceClassOutput(name -> name.equals(generatedName) ? SpecialType.INTERCEPTOR_BEAN : null);
 
@@ -85,17 +84,17 @@ public class InterceptorGenerator extends BeanGenerator {
         createProviderFields(interceptorCreator, interceptor, injectionPointToProviderField, interceptorToProviderField);
         createConstructor(classOutput, interceptorCreator, interceptor, baseName, injectionPointToProviderField, interceptorToProviderField,
                 bindings.getFieldDescriptor());
-        implementCreate(classOutput, interceptorCreator, interceptor, providerTypeName, baseName, injectionPointToProviderField, interceptorToProviderField,
-                reflectionRegistration, targetPackage);
-        implementGet(interceptor, interceptorCreator, providerTypeName);
-        implementGetTypes(interceptorCreator, beanTypes.getFieldDescriptor());
+        createCreate(classOutput, interceptorCreator, interceptor, providerTypeName, baseName, injectionPointToProviderField, interceptorToProviderField,
+                reflectionRegistration);
+        createGet(interceptor, interceptorCreator, providerTypeName);
+        createGetTypes(interceptorCreator, beanTypes.getFieldDescriptor());
         // Interceptors are always @Dependent and have always default qualifiers
 
         // InjectableInterceptor methods
-        implementGetInterceptorBindings(interceptorCreator, bindings.getFieldDescriptor());
-        implementIntercepts(interceptorCreator, interceptor);
-        implementIntercept(interceptorCreator, interceptor, providerTypeName, reflectionRegistration);
-        implementGetPriority(interceptorCreator, interceptor);
+        createGetInterceptorBindings(interceptorCreator, bindings.getFieldDescriptor());
+        createIntercepts(interceptorCreator, interceptor);
+        createIntercept(interceptorCreator, interceptor, providerTypeName, reflectionRegistration);
+        createGetPriority(interceptorCreator, interceptor);
 
         interceptorCreator.close();
         return classOutput.getResources();
@@ -126,7 +125,7 @@ public class InterceptorGenerator extends BeanGenerator {
      *
      * @see InjectableInterceptor#getInterceptorBindings()
      */
-    protected void implementGetInterceptorBindings(ClassCreator creator, FieldDescriptor bindingsField) {
+    protected void createGetInterceptorBindings(ClassCreator creator, FieldDescriptor bindingsField) {
         MethodCreator getBindings = creator.getMethodCreator("getInterceptorBindings", Set.class).setModifiers(ACC_PUBLIC);
         getBindings.returnValue(getBindings.readInstanceField(bindingsField, getBindings.getThis()));
     }
@@ -135,7 +134,7 @@ public class InterceptorGenerator extends BeanGenerator {
      *
      * @see InjectableInterceptor#getPriority()
      */
-    protected void implementGetPriority(ClassCreator creator, InterceptorInfo interceptor) {
+    protected void createGetPriority(ClassCreator creator, InterceptorInfo interceptor) {
         MethodCreator getPriority = creator.getMethodCreator("getPriority", int.class).setModifiers(ACC_PUBLIC);
         getPriority.returnValue(getPriority.load(interceptor.getPriority()));
     }
@@ -145,7 +144,7 @@ public class InterceptorGenerator extends BeanGenerator {
      * @return the method
      * @see InjectableInterceptor#intercepts(javax.enterprise.inject.spi.InterceptionType)
      */
-    protected void implementIntercepts(ClassCreator creator, InterceptorInfo interceptor) {
+    protected void createIntercepts(ClassCreator creator, InterceptorInfo interceptor) {
         MethodCreator intercepts = creator.getMethodCreator("intercepts", boolean.class, InterceptionType.class).setModifiers(ACC_PUBLIC);
         addIntercepts(interceptor, InterceptionType.AROUND_INVOKE, intercepts);
         addIntercepts(interceptor, InterceptionType.POST_CONSTRUCT, intercepts);
@@ -168,8 +167,7 @@ public class InterceptorGenerator extends BeanGenerator {
      *
      * @see InjectableInterceptor#intercept(InterceptionType, Object, javax.interceptor.InvocationContext)
      */
-    protected void implementIntercept(ClassCreator creator, InterceptorInfo interceptor, String providerTypeName,
-            ReflectionRegistration reflectionRegistration) {
+    protected void createIntercept(ClassCreator creator, InterceptorInfo interceptor, String providerTypeName, ReflectionRegistration reflectionRegistration) {
         MethodCreator intercept = creator.getMethodCreator("intercept", Object.class, InterceptionType.class, Object.class, InvocationContext.class)
                 .setModifiers(ACC_PUBLIC).addException(Exception.class);
 

@@ -10,14 +10,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.function.BiFunction;
 
-import javax.enterprise.context.control.ActivateRequestContext;
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
 import javax.inject.Named;
 
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
@@ -25,9 +25,6 @@ import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.jboss.logging.Logger;
-import org.jboss.protean.arc.ActivateRequestContextInterceptor;
-import org.jboss.protean.arc.processor.BuildProcessor.BuildContext;
-import org.jboss.protean.arc.processor.DeploymentEnhancer.DeploymentContext;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource.SpecialType;
 
@@ -57,78 +54,24 @@ public class BeanProcessor {
 
     private final ReflectionRegistration reflectionRegistration;
 
-    private final Collection<DotName> resourceAnnotations;
-
-    private final List<AnnotationsTransformer> annotationTransformers;
-
-    private final List<BeanRegistrar> beanRegistrars;
+    private final List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers;
 
     private BeanProcessor(String name, IndexView index, Collection<DotName> additionalBeanDefiningAnnotations, ResourceOutput output,
-            boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration, List<AnnotationsTransformer> annotationTransformers,
-            Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars, List<DeploymentEnhancer> deploymentEnhancers) {
+            boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration,
+            List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers) {
         this.reflectionRegistration = reflectionRegistration;
         Objects.requireNonNull(output);
         this.name = name;
+        this.index = index;
         this.additionalBeanDefiningAnnotations = additionalBeanDefiningAnnotations;
         this.output = output;
         this.sharedAnnotationLiterals = sharedAnnotationLiterals;
         this.annotationTransformers = annotationTransformers;
-        this.resourceAnnotations = resourceAnnotations;
-
-        // Initialize all build processors
-        ConcurrentMap<String, Object> data = new ConcurrentHashMap<>();
-        BuildContext buildContext = new BuildContext() {
-            @Override
-            public IndexView getIndex() {
-                return index;
-            }
-
-            @Override
-            public Map<String, Object> getContextData() {
-                return data;
-            }
-        };
-        for (AnnotationsTransformer transformer : annotationTransformers) {
-            transformer.initialize(buildContext);
-        }
-        for (DeploymentEnhancer enhancer : deploymentEnhancers) {
-            enhancer.initialize(buildContext);
-        }
-        for (BeanRegistrar registrar : beanRegistrars) {
-            registrar.initialize(buildContext);
-        }
-
-        if (!deploymentEnhancers.isEmpty()) {
-            Indexer indexer = new Indexer();
-            DeploymentContext deploymentContext = new DeploymentContext() {
-
-                @Override
-                public void addClass(String className) {
-                    index(indexer, className);
-                }
-
-                @Override
-                public void addClass(Class<?> clazz) {
-                    index(indexer, clazz.getName());
-                }
-            };
-            deploymentEnhancers.sort(BuildProcessor::compare);
-            for (DeploymentEnhancer enhancer : deploymentEnhancers) {
-                enhancer.enhance(deploymentContext);
-            }
-            this.index = CompositeIndex.create(index, indexer.complete());
-        } else {
-            this.index = index;
-        }
-
-        beanRegistrars.sort(BuildProcessor::compare);
-        this.beanRegistrars = beanRegistrars;
     }
 
     public BeanDeployment process() throws IOException {
 
-        BeanDeployment beanDeployment = new BeanDeployment(new IndexWrapper(index), additionalBeanDefiningAnnotations, annotationTransformers,
-                resourceAnnotations, beanRegistrars);
+        BeanDeployment beanDeployment = new BeanDeployment(new IndexWrapper(index), additionalBeanDefiningAnnotations, annotationTransformers);
         beanDeployment.init();
 
         AnnotationLiteralProcessor annotationLiterals = new AnnotationLiteralProcessor(name, sharedAnnotationLiterals);
@@ -148,7 +91,7 @@ public class BeanProcessor {
 
         // Generate interceptors
         for (InterceptorInfo interceptor : beanDeployment.getInterceptors()) {
-            for (Resource resource : interceptorGenerator.generate(interceptor, reflectionRegistration)) {
+            for (Resource resource : interceptorGenerator.generate(interceptor, annotationLiterals, reflectionRegistration)) {
                 resources.add(resource);
                 if (SpecialType.INTERCEPTOR_BEAN.equals(resource.getSpecialType())) {
                     interceptorToGeneratedName.put(interceptor, resource.getName());
@@ -195,22 +138,19 @@ public class BeanProcessor {
         for (Resource resource : resources) {
             output.writeResource(resource);
         }
-        LOGGER.infof("%s resources generated/written in %s ms", resources.size(), System.currentTimeMillis() - start);
+        LOGGER.infof("%s resources written in %s ms", resources.size(), System.currentTimeMillis() - start);
         return beanDeployment;
     }
 
-    private static IndexView addBuiltinClasses(IndexView index) {
-        Indexer indexer = new Indexer();
-        // Add builtin interceptors and bindings
-        index(indexer, ActivateRequestContext.class.getName());
-        index(indexer, ActivateRequestContextInterceptor.class.getName());
-        // Add builtin qualifiers if needed
+    private static IndexView addBuiltinQualifiersIfNeeded(IndexView index) {
         if (index.getClassByName(DotNames.ANY) == null) {
+            Indexer indexer = new Indexer();
             index(indexer, Default.class.getName());
             index(indexer, Any.class.getName());
             index(indexer, Named.class.getName());
+            return CompositeIndex.create(index, indexer.complete());
         }
-        return CompositeIndex.create(index, indexer.complete());
+        return index;
     }
 
     private static void index(Indexer indexer, String className) {
@@ -235,11 +175,7 @@ public class BeanProcessor {
 
         private ReflectionRegistration reflectionRegistration = ReflectionRegistration.NOOP;
 
-        private final List<DotName> resourceAnnotations = new ArrayList<>();
-
-        private final List<AnnotationsTransformer> annotationTransformers = new ArrayList<>();
-        private final List<BeanRegistrar> beanRegistrars = new ArrayList<>();
-        private final List<DeploymentEnhancer> deploymentEnhancers = new ArrayList<>();
+        private final List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers = new ArrayList<>();
 
         public Builder setName(String name) {
             this.name = name;
@@ -271,29 +207,14 @@ public class BeanProcessor {
             return this;
         }
 
-        public Builder addAnnotationTransformer(AnnotationsTransformer transformer) {
+        public Builder addAnnotationTransformer(BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>> transformer) {
             this.annotationTransformers.add(transformer);
             return this;
         }
 
-        public Builder addResourceAnnotations(Collection<DotName> resourceAnnotations) {
-            this.resourceAnnotations.addAll(resourceAnnotations);
-            return this;
-        }
-
-        public Builder addBeanRegistrar(BeanRegistrar registrar) {
-            this.beanRegistrars.add(registrar);
-            return this;
-        }
-
-        public Builder addDeploymentEnhancer(DeploymentEnhancer enhancer) {
-            this.deploymentEnhancers.add(enhancer);
-            return this;
-        }
-
         public BeanProcessor build() {
-            return new BeanProcessor(name, addBuiltinClasses(index), additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
-                    reflectionRegistration, annotationTransformers, resourceAnnotations, beanRegistrars, deploymentEnhancers);
+            return new BeanProcessor(name, addBuiltinQualifiersIfNeeded(index), additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
+                    reflectionRegistration, annotationTransformers);
         }
 
     }

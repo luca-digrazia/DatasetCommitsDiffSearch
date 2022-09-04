@@ -324,20 +324,7 @@ class BeanInfo {
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append(getType());
-        builder.append(" bean [types=");
-        builder.append(types);
-        builder.append(", qualifiers=");
-        builder.append(qualifiers);
-        builder.append(", target=");
-        builder.append(target);
-        if (declaringBean != null) {
-            builder.append(", declaringBean=");
-            builder.append(declaringBean.target);
-        }
-        builder.append("]");
-        return builder.toString();
+        return getType() + " bean [types=" + types + ", qualifiers=" + qualifiers + ", target=" + target + "]";
     }
 
 }
