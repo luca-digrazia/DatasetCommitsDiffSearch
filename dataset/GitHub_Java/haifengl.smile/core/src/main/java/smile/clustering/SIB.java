@@ -64,12 +64,7 @@ public class SIB extends CentroidClustering<double[], SparseArray> {
      * Constructor.
      */
     public SIB(double distortion, double[][] centroids, int[] y) {
-        super(distortion, centroids, y);
-    }
-
-    @Override
-    public double distance(double[] x, SparseArray y) {
-        return MathEx.JensenShannonDivergence(x, y);
+        super(distortion, centroids, y, MathEx::JensenShannonDivergence);
     }
 
     /**

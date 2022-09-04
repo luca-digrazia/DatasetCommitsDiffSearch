@@ -18,7 +18,7 @@
 package smile.clustering;
 
 import java.util.stream.IntStream;
-import smile.classification.ClassLabels;
+import smile.classification.ClassLabel;
 import smile.math.MathEx;
 import smile.math.distance.HammingDistance;
 
@@ -47,12 +47,7 @@ public class KModes extends CentroidClustering<int[], int[]> {
      * @param y the cluster labels.
      */
     public KModes(double distortion, int[][] centroids, int[] y) {
-        super(distortion, centroids, y);
-    }
-
-    @Override
-    public double distance(int[] x, int[] y) {
-        return HammingDistance.d(x, y);
+        super(distortion, centroids, y, HammingDistance::d);
     }
 
     /**
@@ -82,11 +77,11 @@ public class KModes extends CentroidClustering<int[], int[]> {
         int n = data.length;
         int d = data[0].length;
 
-        ClassLabels[] codec = IntStream.range(0, d).parallel().mapToObj(j -> {
+        ClassLabel.Result[] codec = IntStream.range(0, d).parallel().mapToObj(j -> {
             int[] x = new int[n];
             for (int i = 0; i < n; i++) x[i] = data[i][j];
-            return ClassLabels.fit(x);
-        }).toArray(ClassLabels[]::new);
+            return ClassLabel.fit(x);
+        }).toArray(ClassLabel.Result[]::new);
 
         int[] y = new int[n];
         int[][] medoids = new int[k][];
@@ -117,7 +112,7 @@ public class KModes extends CentroidClustering<int[], int[]> {
     /**
      * Calculates the new centroids in the new clusters.
      */
-    private static void updateCentroids(int[][] centroids, int[][] data, int[] y, ClassLabels[] codec) {
+    private static void updateCentroids(int[][] centroids, int[][] data, int[] y, ClassLabel.Result[] codec) {
         int n = data.length;
         int k = centroids.length;
         int d = centroids[0].length;
@@ -132,7 +127,7 @@ public class KModes extends CentroidClustering<int[], int[]> {
                         count[x[i]]++;
                     }
                 }
-                centroid[j] = codec[j].labels.valueOf(MathEx.whichMax(count));
+                centroid[j] = codec[j].labels.label(MathEx.whichMax(count));
             }
         });
     }

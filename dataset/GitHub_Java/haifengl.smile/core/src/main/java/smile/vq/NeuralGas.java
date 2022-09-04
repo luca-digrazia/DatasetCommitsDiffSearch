@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.vq;
 
@@ -106,7 +106,7 @@ public class NeuralGas implements VectorQuantizer {
     /**
      * The lifetime of connections.
      */
-    private TimeFunction lifetime;
+    private int lifetime;
     /**
      * The distance between a new observation to neurons.
      */
@@ -115,7 +115,7 @@ public class NeuralGas implements VectorQuantizer {
      * The current iteration.
      */
     private int t = 0;
-    /*
+    /**
      * The threshold to update neuron if alpha * theta > eps.
      */
     private double eps = 1E-7;
@@ -128,7 +128,7 @@ public class NeuralGas implements VectorQuantizer {
      * @param lifetime the neuron connection lifetime, usually the number of
      *                 iterations for one or two epochs.
      */
-    public NeuralGas(double[][] neurons, TimeFunction alpha, TimeFunction theta, TimeFunction lifetime) {
+    public NeuralGas(double[][] neurons, TimeFunction alpha, TimeFunction theta, int lifetime) {
         this.neurons = IntStream.range(0, neurons.length).mapToObj(i -> new Neuron(i, neurons[i].clone())).toArray(Neuron[]::new);
         this.alpha = alpha;
         this.theta = theta;
@@ -163,7 +163,6 @@ public class NeuralGas implements VectorQuantizer {
      * Returns the network of neurons.
      */
     public Graph network() {
-        double lifetime = this.lifetime.apply(t);
         for (int i = 0; i < neurons.length; i++) {
             for (Edge e : graph.getEdges(i)) {
                 if (t - e.weight > lifetime) {
@@ -183,10 +182,9 @@ public class NeuralGas implements VectorQuantizer {
         IntStream.range(0, neurons.length).parallel().forEach(i -> dist[i] = MathEx.distance(neurons[i].w, x));
         QuickSort.sort(dist, neurons);
 
-        double alpha = this.alpha.apply(t);
-        double theta = this.theta.apply(t);
+        double rate = alpha.of(t);
         for (int i = 0; i < k; i++) {
-            double delta = alpha * Math.exp(-i/theta);
+            double delta = rate * Math.exp(-i/theta.of(t));
             if (delta > eps) {
                 double[] w = neurons[i].w;
                 for (int j = 0; j < d; j++) {
