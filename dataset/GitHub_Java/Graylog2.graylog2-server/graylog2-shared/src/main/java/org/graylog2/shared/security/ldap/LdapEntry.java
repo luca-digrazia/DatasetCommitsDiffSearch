@@ -21,7 +21,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import java.util.Collection;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -50,11 +49,11 @@ public class LdapEntry {
     }
 
     public String get(String key) {
-        return attributes.get(key.toLowerCase(Locale.ENGLISH));
+        return attributes.get(key.toLowerCase());
     }
 
     public String put(String key, String value) {
-        return attributes.put(key.toLowerCase(Locale.ENGLISH), value);
+        return attributes.put(key.toLowerCase(), value);
     }
 
     public void addGroups(Collection<String> groups) {
