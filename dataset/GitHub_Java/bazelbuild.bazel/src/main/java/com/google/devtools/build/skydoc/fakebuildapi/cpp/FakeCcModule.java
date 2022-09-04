@@ -50,8 +50,8 @@ public class FakeCcModule
         CcCompilationContextApi,
         CcCompilationOutputsApi<FileApi>,
         CcLinkingOutputsApi<FileApi>,
-        LibraryToLinkApi<FileApi>,
-        CcLinkingContextApi<FileApi, LibraryToLinkApi<FileApi>>,
+        CcLinkingContextApi,
+        LibraryToLinkApi,
         CcToolchainVariablesApi,
         CcToolchainConfigInfoApi> {
 
@@ -179,37 +179,29 @@ public class FakeCcModule
       SkylarkList<FileApi> privateHeaders,
       SkylarkList<String> includes,
       SkylarkList<String> quoteIncludes,
-      SkylarkList<String> defines,
       SkylarkList<String> systemIncludes,
       SkylarkList<String> userCompileFlags,
       SkylarkList<CcCompilationContextApi> ccCompilationContexts,
       String name,
       boolean disallowPicOutputs,
-      boolean disallowNopicOutputs,
-      Location location,
-      Environment environment)
+      boolean disallowNopicOutputs)
       throws EvalException, InterruptedException {
     return null;
   }
 
   @Override
-  public Tuple<Object> createLinkingContextFromCompilationOutputs(
+  public CcLinkingContextApi createLinkingContextFromCompilationOutputs(
       SkylarkActionFactoryApi skylarkActionFactoryApi,
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
       CcCompilationOutputsApi<FileApi> compilationOutputs,
       SkylarkList<String> userLinkFlags,
-      SkylarkList<CcLinkingContextApi<FileApi, LibraryToLinkApi<FileApi>>> ccLinkingContextApis,
       String name,
       String language,
       boolean alwayslink,
       SkylarkList<FileApi> nonCodeInputs,
       boolean disallowStaticLibraries,
-      boolean disallowDynamicLibraries,
-      Object grepIncludes,
-      Location location,
-      Environment environment,
-      StarlarkContext starlarkContext)
+      boolean disallowDynamicLibraries)
       throws InterruptedException, EvalException {
     return null;
   }
@@ -219,17 +211,14 @@ public class FakeCcModule
       SkylarkActionFactoryApi skylarkActionFactoryApi,
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
-      CcCompilationOutputsApi<FileApi> compilationOutputs,
+      Object compilationOutputs,
       SkylarkList<String> userLinkFlags,
-      SkylarkList<CcLinkingContextApi<FileApi, LibraryToLinkApi<FileApi>>> linkingContexts,
+      SkylarkList<CcLinkingContextApi> linkingContexts,
       String name,
       String language,
       String outputType,
       boolean linkDepsStatically,
-      SkylarkList<FileApi> additionalInputs,
-      Location location,
-      Environment environment,
-      StarlarkContext starlarkContext)
+      SkylarkList<FileApi> nonCodeInputs)
       throws InterruptedException, EvalException {
     return null;
   }

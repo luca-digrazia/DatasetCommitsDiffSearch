@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkApi;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -62,7 +61,7 @@ public abstract class LibraryToLink implements LibraryToLinkApi<Artifact> {
   }
 
   /** Structure of CcLinkingContext. */
-  public static class CcLinkingContext implements CcLinkingContextApi<Artifact> {
+  public static class CcLinkingContext implements CcLinkingContextApi {
     public static final CcLinkingContext EMPTY = builder().build();
 
     /** A list of link options contributed by a single configured target/aspect. */
@@ -290,12 +289,8 @@ public abstract class LibraryToLink implements LibraryToLinkApi<Artifact> {
     }
 
     @Override
-    public Object getSkylarkLibrariesToLink(Environment environment) {
-      if (environment.getSemantics().incompatibleDepsetForLibrariesToLinkGetter()) {
-        return SkylarkNestedSet.of(LibraryToLink.class, libraries);
-      } else {
-        return SkylarkList.createImmutable(libraries.toList());
-      }
+    public SkylarkList<LibraryToLinkApi> getSkylarkLibrariesToLink() {
+      return SkylarkList.createImmutable(libraries.toList());
     }
 
     @Override
@@ -448,7 +443,6 @@ public abstract class LibraryToLink implements LibraryToLinkApi<Artifact> {
   public abstract Artifact getDynamicLibrary();
 
   @Nullable
-  @Override
   public abstract Artifact getResolvedSymlinkDynamicLibrary();
 
   @Nullable
@@ -456,7 +450,6 @@ public abstract class LibraryToLink implements LibraryToLinkApi<Artifact> {
   public abstract Artifact getInterfaceLibrary();
 
   @Nullable
-  @Override
   public abstract Artifact getResolvedSymlinkInterfaceLibrary();
 
   @Override

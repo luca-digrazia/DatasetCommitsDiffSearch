@@ -33,8 +33,10 @@ import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.SplitTransitionProviderApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -92,7 +94,9 @@ public class StarlarkAttributeTransitionProvider
       LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
       for (String attribute : attributeMap.getAttributeNames()) {
         Object val = attributeMap.get(attribute, attributeMap.getAttributeType(attribute));
-        attributes.put(Attribute.getSkylarkName(attribute), Starlark.fromJava(val, null));
+        attributes.put(
+            Attribute.getSkylarkName(attribute),
+            val == null ? Runtime.NONE : SkylarkType.convertToSkylark(val, (Environment) null));
       }
       attrObject = StructProvider.STRUCT.create(attributes, ERROR_MESSAGE_FOR_NO_ATTR);
     }

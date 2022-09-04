@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
     name = "cc_common",
     doc = "Utilities for C++ compilation, linking, and command line generation.")
 public interface CcModuleApi<
-    SkylarkActionFactoryT extends SkylarkActionFactoryApi,
     FileT extends FileApi,
     CcToolchainProviderT extends CcToolchainProviderApi,
     FeatureConfigurationT extends FeatureConfigurationApi,
@@ -45,8 +44,7 @@ public interface CcModuleApi<
     LibraryToLinkT extends LibraryToLinkApi,
     CcToolchainVariablesT extends CcToolchainVariablesApi,
     SkylarkRuleContextT extends SkylarkRuleContextApi,
-    CcToolchainConfigInfoT extends CcToolchainConfigInfoApi,
-    CompilationOutputsT extends CcCompilationOutputsApi<FileT>> {
+    CcToolchainConfigInfoT extends CcToolchainConfigInfoApi> {
 
   @SkylarkCallable(
       name = "CcToolchainInfo",

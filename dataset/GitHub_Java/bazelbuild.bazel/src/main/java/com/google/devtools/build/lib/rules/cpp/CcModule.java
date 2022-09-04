@@ -1027,7 +1027,7 @@ public class CcModule
     ImmutableList<String> flags = getStringListFromSkylarkProviderField(flagGroupStruct, "flags");
     for (String flag : flags) {
       StringValueParser parser = new StringValueParser(flag);
-      expandableBuilder.add(Flag.create(parser.getChunks()));
+      expandableBuilder.add(new Flag(parser.getChunks()));
     }
 
     ImmutableList<SkylarkInfo> flagGroups =
