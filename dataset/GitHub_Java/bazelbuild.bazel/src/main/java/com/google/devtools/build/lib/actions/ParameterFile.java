@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.GccParamFileEscaper;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -43,8 +42,10 @@ import java.nio.charset.StandardCharsets;
  */
 public class ParameterFile {
 
-  /** Different styles of parameter files. */
-  public enum ParameterFileType {
+  /**
+   * Different styles of parameter files.
+   */
+  public static enum ParameterFileType {
     /**
      * A parameter file with every parameter on a separate line. This format
      * cannot handle newlines in parameters. It is currently used for most
@@ -95,16 +96,15 @@ public class ParameterFile {
   public static void writeParameterFile(
       OutputStream out, Iterable<String> arguments, ParameterFileType type, Charset charset)
       throws IOException {
-    OutputStream bufferedOut = new BufferedOutputStream(out);
     switch (type) {
       case SHELL_QUOTED:
-        writeContent(bufferedOut, ShellEscaper.escapeAll(arguments), charset);
+        writeContent(out, ShellEscaper.escapeAll(arguments), charset);
         break;
       case GCC_QUOTED:
-        writeContent(bufferedOut, GccParamFileEscaper.escapeAll(arguments), charset);
+        writeContent(out, GccParamFileEscaper.escapeAll(arguments), charset);
         break;
       case UNQUOTED:
-        writeContent(bufferedOut, arguments, charset);
+        writeContent(out, arguments, charset);
         break;
     }
   }
