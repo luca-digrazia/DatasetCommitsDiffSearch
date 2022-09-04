@@ -934,8 +934,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     Artifact actoolZipOut = getBinArtifact("x" + artifactName(".actool.zip"),
         getConfiguredTarget("//x:x"));
     Artifact actoolPartialInfoplist =
-        getBinArtifact(
-            "x" + artifactName(".actool-PartialInfo.plist"), getConfiguredTarget("//x:x"));
+        getBinArtifact("x" + artifactName(".actool-PartialInfo.plist"), "//x:x");
     SpawnAction actoolZipAction = (SpawnAction) getGeneratingAction(actoolZipOut);
     assertThat(actoolZipAction.getArguments())
         .containsExactly(
