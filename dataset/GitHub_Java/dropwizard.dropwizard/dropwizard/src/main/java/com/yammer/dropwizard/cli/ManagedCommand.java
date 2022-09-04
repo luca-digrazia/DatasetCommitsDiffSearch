@@ -1,7 +1,6 @@
 package com.yammer.dropwizard.cli;
 
 import com.yammer.dropwizard.AbstractService;
-import com.yammer.dropwizard.Module;
 import com.yammer.dropwizard.config.Configuration;
 import com.yammer.dropwizard.config.Environment;
 import com.yammer.dropwizard.config.LoggingFactory;
@@ -12,15 +11,13 @@ import org.slf4j.LoggerFactory;
 public abstract class ManagedCommand<T extends Configuration> extends ConfiguredCommand<T> {
     private static final Logger LOGGER = LoggerFactory.getLogger(ManagedCommand.class);
 
-    protected ManagedCommand(Class<T> configurationClass,
-                             String name) {
-        super(configurationClass, name);
+    protected ManagedCommand(String name) {
+        super(name);
     }
 
-    protected ManagedCommand(Class<T> configurationClass,
-                             String name,
+    protected ManagedCommand(String name,
                              String description) {
-        super(configurationClass, name, description);
+        super(name, description);
     }
 
     @Override
@@ -29,10 +26,7 @@ public abstract class ManagedCommand<T extends Configuration> extends Configured
                              CommandLine params) throws Exception {
         new LoggingFactory(configuration.getLoggingConfiguration()).configure();
         final Environment environment = new Environment();
-        for (Module module : service.getModules()) {
-            module.initialize(environment);
-        }
-        service.initialize(configuration, environment);
+        service.initializeWithModules(configuration, environment);
         LOGGER.info("Starting " + service.getName());
         environment.start();
         try {
