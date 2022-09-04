@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpanderImpl;
+import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
@@ -55,6 +56,9 @@ import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.StarlarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.skylark.util.BazelEvaluationTestCase;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -72,9 +76,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import net.starlark.java.annot.Param;
-import net.starlark.java.annot.StarlarkGlobalLibrary;
-import net.starlark.java.annot.StarlarkMethod;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -84,7 +85,7 @@ import org.junit.runners.JUnit4;
 
 /** Tests for Starlark functions relating to rule implementation. */
 @RunWith(JUnit4.class)
-@StarlarkGlobalLibrary // needed for CallUtils.getBuiltinCallable, sadly
+@SkylarkGlobalLibrary // needed for CallUtils.getBuiltinCallable, sadly
 public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
   private final EvaluationTestCase ev = new BazelEvaluationTestCase();
@@ -97,7 +98,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   @Rule public ExpectedException thrown = ExpectedException.none();
 
   // def mock(mandatory, optional=None, *, mandatory_key, optional_key='x')
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "mock",
       documented = false,
       parameters = {
@@ -685,7 +686,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     RunfilesSupplier runfilesSupplier =
         CompositeRunfilesSupplier.fromSuppliers(
             (List<RunfilesSupplier>) ev.lookup("input_manifests"));
-    assertThat(runfilesSupplier.getMappings()).hasSize(1);
+    assertThat(runfilesSupplier.getMappings(ArtifactPathResolver.IDENTITY)).hasSize(1);
   }
 
   @Test
@@ -761,7 +762,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     RunfilesSupplier runfilesSupplier =
         CompositeRunfilesSupplier.fromSuppliers(
             (List<RunfilesSupplier>) ev.lookup("input_manifests"));
-    assertThat(runfilesSupplier.getMappings()).hasSize(1);
+    assertThat(runfilesSupplier.getMappings(ArtifactPathResolver.IDENTITY)).hasSize(1);
 
     SpawnAction action =
         (SpawnAction)
@@ -945,7 +946,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
             "  symlinks = {'sym1': ruleContext.files.srcs[1]})");
     Runfiles runfiles = (Runfiles) result;
     reporter.removeHandler(failFastHandler); // So it doesn't throw an exception.
-    runfiles.getRunfilesInputs(reporter, null);
+    runfiles.getRunfilesInputs(reporter, null, ArtifactPathResolver.IDENTITY);
     assertContainsEvent("ERROR <no location>: overwrote runfile");
   }
 
@@ -1885,7 +1886,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     }
   }
 
-  @StarlarkMethod(name = "throw1", documented = false)
+  @SkylarkCallable(name = "throw1", documented = false)
   public Object throw1() throws Exception {
     class ThereIsNoMessageException extends EvalException {
       ThereIsNoMessageException() {
@@ -1907,7 +1908,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
         "There Is No Message: StarlarkRuleImplementationFunctionsTest", "throw1()");
   }
 
-  @StarlarkMethod(name = "throw2", documented = false)
+  @SkylarkCallable(name = "throw2", documented = false)
   public Object throw2() throws Exception {
     throw new InterruptedException();
   }

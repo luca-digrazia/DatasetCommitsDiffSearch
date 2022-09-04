@@ -2387,6 +2387,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
           "check_placeholders('foo', [])",
           "action(command = 'foo', outputs = [file])",
           "file_action(file, 'foo')",
+          "template_action(template = file, output = file, substitutions = {})",
           "runfiles()",
           "resolve_command(command = 'foo')",
           "resolve_tools()");
@@ -2487,9 +2488,12 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
   private static final List<String> deprecatedActionsApi =
       ImmutableList.of(
           "new_file('foo.txt')",
+          "experimental_new_directory('foo.txt')",
           "new_file(file, 'foo.txt')",
           "action(command = 'foo', outputs = [file])",
-          "file_action(file, 'foo')");
+          "file_action(file, 'foo')",
+          "template_action(template = file, output = file, substitutions = {})"
+      );
 
   @Test
   public void testIncompatibleNewActionsApi() throws Exception {
