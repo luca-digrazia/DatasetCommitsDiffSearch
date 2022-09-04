@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.RunningActionEvent;
 import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy;
 import com.google.devtools.build.lib.actions.SchedulingActionEvent;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnExecutedEvent;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.Spawns;
@@ -50,7 +49,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.SortedMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
@@ -124,9 +122,6 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
       } else {
         // Actual execution.
         spawnResult = spawnRunner.execAsync(spawn, context).get();
-        actionExecutionContext
-            .getEventHandler()
-            .post(new SpawnExecutedEvent(spawn, spawnResult, Instant.now()));
         if (cacheHandle.willStore()) {
           cacheHandle.store(spawnResult);
         }
@@ -303,11 +298,6 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
         default:
           break;
       }
-    }
-
-    @Override
-    public boolean isRewindingEnabled() {
-      return actionExecutionContext.isRewindingEnabled();
     }
 
     @Override
