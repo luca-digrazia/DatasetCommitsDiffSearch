@@ -24,7 +24,6 @@ import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
 import org.apache.shiro.authz.permission.WildcardPermission;
 import org.bson.types.ObjectId;
-import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.grn.GRNTypes;
 import org.graylog.security.GrantPermissionResolver;
@@ -87,8 +86,8 @@ public class UserServiceImplTest {
     public void setUp() throws Exception {
         this.mongoConnection = mongodb.mongoConnection();
         this.configuration = new Configuration();
+        this.userFactory = new UserImplFactory(configuration);
         this.permissions = new Permissions(ImmutableSet.of(new RestPermissions()));
-        this.userFactory = new UserImplFactory(configuration, permissions);
         this.userService = new UserServiceImpl(mongoConnection, configuration, roleService, accessTokenService,
                 userFactory, permissionsResolver, serverEventBus, GRNRegistry.createWithBuiltinTypes(), grantPermissionResolver);
 
@@ -158,14 +157,12 @@ public class UserServiceImplTest {
         assertThat(userService.count()).isEqualTo(4L);
     }
 
-    public static class UserImplFactory implements UserImpl.Factory {
+    class UserImplFactory implements UserImpl.Factory {
         private final Configuration configuration;
-        private final Permissions permissions;
         private final PasswordAlgorithmFactory passwordAlgorithmFactory;
 
-        public UserImplFactory(Configuration configuration, Permissions permissions) {
+        public UserImplFactory(Configuration configuration) {
             this.configuration = configuration;
-            this.permissions = permissions;
             this.passwordAlgorithmFactory = new PasswordAlgorithmFactory(Collections.<String, PasswordAlgorithm>emptyMap(),
                     new SHA1HashPasswordAlgorithm("TESTSECRET"));
         }
@@ -197,7 +194,7 @@ public class UserServiceImplTest {
 
     @Test
     public void testGetRoleNames() throws Exception {
-        final UserImplFactory factory = new UserImplFactory(new Configuration(), permissions);
+        final UserImplFactory factory = new UserImplFactory(new Configuration());
         final UserImpl user = factory.create(new HashMap<>());
         final Role role = createRole("Foo");
 
@@ -223,7 +220,7 @@ public class UserServiceImplTest {
                 accessTokenService, userFactory, permissionResolver,
                 serverEventBus, grnRegistry, grantPermissionResolver);
 
-        final UserImplFactory factory = new UserImplFactory(new Configuration(), permissions);
+        final UserImplFactory factory = new UserImplFactory(new Configuration());
         final UserImpl user = factory.create(new HashMap<>());
         user.setName("user");
         final Role role = createRole("Foo");
@@ -233,18 +230,13 @@ public class UserServiceImplTest {
 
         when(permissionResolver.resolveStringPermission(role.getId())).thenReturn(Collections.singleton("foo:bar"));
         final GRNPermission ownerShipPermission = GRNPermission.create(RestPermissions.ENTITY_OWN, grnRegistry.newGRN(GRNTypes.DASHBOARD, "1234"));
-        final GRN userGRN = grnRegistry.newGRN(GRNTypes.USER, "user");
-        when(grantPermissionResolver.resolvePermissionsForPrincipal(userGRN))
+        when(grantPermissionResolver.resolvePermissionsForPrincipal(grnRegistry.newGRN(GRNTypes.USER, "user")))
                 .thenReturn(ImmutableSet.of(
                         new WildcardPermission("perm:from:grant"),
                         ownerShipPermission));
 
-        final String roleId = "12345";
-        when(grantPermissionResolver.resolveRolesForPrincipal(userGRN)).thenReturn(ImmutableSet.of(roleId));
-        when(permissionResolver.resolveStringPermission(roleId)).thenReturn(ImmutableSet.of("perm:from:role"));
-
         assertThat(userService.getPermissionsForUser(user).stream().map(p -> p instanceof WildcardPermission ? p.toString() : p ).collect(Collectors.toSet()))
                 .containsExactlyInAnyOrder( "users:passwordchange:user", "users:edit:user", "foo:bar", "hello:world", "users:tokenlist:user",
-                        "users:tokencreate:user", "users:tokenremove:user", "perm:from:grant", ownerShipPermission, "perm:from:role");
+                        "users:tokencreate:user", "users:tokenremove:user", "perm:from:grant", ownerShipPermission);
     }
 }
