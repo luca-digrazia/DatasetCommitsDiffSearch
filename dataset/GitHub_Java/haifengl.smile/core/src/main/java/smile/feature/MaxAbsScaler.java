@@ -43,7 +43,7 @@ public class MaxAbsScaler implements FeatureTransform {
     /**
      * Scaling factor.
      */
-    private final double[] scale;
+    private double[] scale;
 
     /**
      * Constructor.
@@ -78,7 +78,7 @@ public class MaxAbsScaler implements FeatureTransform {
     }
 
     /**
-     * Learns transformation parameters from a dataset.
+     * Fits the transformation parameters.
      * @param data The training data.
      * @return the model.
      */
@@ -106,7 +106,7 @@ public class MaxAbsScaler implements FeatureTransform {
     }
 
     /**
-     * Learns transformation parameters from a dataset.
+     * Fits the transformation parameters.
      * @param data The training data.
      * @return the model.
      */
@@ -114,9 +114,9 @@ public class MaxAbsScaler implements FeatureTransform {
         int p = data[0].length;
         double[] scale = new double[p];
 
-        for (double[] datum : data) {
+        for (int i = 0; i < data.length; i++) {
             for (int j = 0; j < p; j++) {
-                scale[j] = Math.max(scale[j], Math.abs(datum[j]));
+                scale[j] = Math.max(scale[j], Math.abs(data[i][j]));
             }
         }
 

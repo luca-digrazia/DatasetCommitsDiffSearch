@@ -266,7 +266,7 @@ public class GaussianProcessRegression<T> implements Regression<T> {
         Matrix Kx = kernel.K(samples);
         Matrix Kt = kernel.K(samples, regressors);
 
-        Matrix Kv = Kt.transpose(false);
+        Matrix Kv = Kt.transpose().clone();
         cholesky.solve(Kv);
         Matrix cov = Kx.sub(Kt.mm(Kv));
         cov.mul(sd * sd);
@@ -398,7 +398,9 @@ public class GaussianProcessRegression<T> implements Regression<T> {
         }
 
         Matrix K = kernel.K(x);
-        K.addDiag(noise);
+        for (int i = 0; i < n; i++) {
+            K.add(i, i, noise);
+        }
 
         Matrix.Cholesky cholesky = K.cholesky(true);
         double[] w = cholesky.solve(y);
@@ -572,7 +574,9 @@ public class GaussianProcessRegression<T> implements Regression<T> {
         Matrix L = E.mm(UDUt);
 
         Matrix LtL = L.ata();
-        LtL.addDiag(noise);
+        for (int i = 0; i < m; i++) {
+            LtL.add(i, i, noise);
+        }
 
         Matrix.Cholesky chol = LtL.cholesky(true);
         Matrix invLtL = chol.inverse();
@@ -604,12 +608,14 @@ public class GaussianProcessRegression<T> implements Regression<T> {
             double noise = params[params.length - 1];
 
             Matrix K = kernel.K(x);
-            K.addDiag(noise);
+            int n = x.length;
+            for (int i = 0; i < n; i++) {
+                K.add(i, i, noise);
+            }
 
             Matrix.Cholesky cholesky = K.cholesky(true);
             double[] w = cholesky.solve(y);
 
-            int n = x.length;
             double L = -0.5 * (MathEx.dot(y, w) + cholesky.logdet() + n * Math.log(2.0 * Math.PI));
             return -L;
         }
@@ -621,7 +627,11 @@ public class GaussianProcessRegression<T> implements Regression<T> {
 
             Matrix[] K = kernel.KG(x);
             Matrix Ky = K[0];
-            Ky.addDiag(noise);
+
+            int n = x.length;
+            for (int i = 0; i < n; i++) {
+                Ky.add(i, i, noise);
+            }
 
             Matrix.Cholesky cholesky = Ky.cholesky(true);
             Matrix Kinv = cholesky.inverse();
@@ -634,7 +644,6 @@ public class GaussianProcessRegression<T> implements Regression<T> {
                 g[i-1] = -gi / 2;
             }
 
-            int n = x.length;
             double L = -0.5 * (MathEx.dot(y, w) + cholesky.logdet() + n * Math.log(2.0 * Math.PI));
             return -L;
         }

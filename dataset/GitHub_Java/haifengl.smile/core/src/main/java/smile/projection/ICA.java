@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.projection;
 
@@ -22,9 +22,7 @@ import java.util.Properties;
 import smile.math.DifferentiableFunction;
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.EVD;
-import smile.projection.ica.Gaussian;
+import smile.projection.ica.Exp;
 import smile.projection.ica.LogCosh;
 import smile.stat.distribution.GaussianDistribution;
 
@@ -45,7 +43,7 @@ import smile.stat.distribution.GaussianDistribution;
  * underlying speech signals are separated from a sample data consisting
  * of people talking simultaneously in a room. Usually the problem is
  * simplified by assuming no time delays or echoes.
- *
+ * <p>
  * An important note to consider is that if N sources are present,
  * at least N observations (e.g. microphones if the observed signal
  * is audio) are needed to recover the original signals.
@@ -60,6 +58,7 @@ import smile.stat.distribution.GaussianDistribution;
  */
 public class ICA implements Serializable {
     private static final long serialVersionUID = 2L;
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ICA.class);
 
     /**
      * The independent components (row-wise).
@@ -81,6 +80,7 @@ public class ICA implements Serializable {
      *             number of samples of mixed signals and the number of rows
      *             corresponding with the number of independent source signals.
      * @param p the number of independent components.
+     * @return the model.
      */
     public static ICA fit(double[][] data, int p) {
         return fit(data, p, new Properties());
@@ -93,22 +93,24 @@ public class ICA implements Serializable {
      *             number of samples of mixed signals and the number of rows
      *             corresponding with the number of independent source signals.
      * @param p the number of independent components.
+     * @param params the hyper-parameters.
+     * @return the model.
      */
-    public static ICA fit(double[][] data, int p, Properties prop) {
+    public static ICA fit(double[][] data, int p, Properties params) {
         DifferentiableFunction f;
-        String contrast = prop.getProperty("smile.ica.contrast", "LogCosh");
+        String contrast = params.getProperty("smile.ica.contrast", "LogCosh");
         switch (contrast) {
             case "LogCosh":
                 f = new LogCosh();
                 break;
             case "Gaussian":
-                f = new Gaussian();
+                f = new Exp();
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported contrast function: " + contrast);
         }
-        double tol = Double.valueOf(prop.getProperty("smile.ica.tolerance", "1E-4"));
-        int maxIter = Integer.valueOf(prop.getProperty("smile.ica.max.iterations", "100"));
+        double tol = Double.parseDouble(params.getProperty("smile.ica.tolerance", "1E-4"));
+        int maxIter = Integer.parseInt(params.getProperty("smile.ica.iterations", "100"));
         return fit(data, p, f, tol, maxIter);
     }
 
@@ -118,12 +120,13 @@ public class ICA implements Serializable {
      *
      * @param data training data.
      * @param p the number of independent components.
-     * @param contrast the contrast function is a(statistical) functions which
-     *                 is capable of separating or extracting independent
-     *                 sources from a linear mixture. It must be a non-quadratic
-     *                 non-linear function that has second-order derivative.
+     * @param contrast the contrast function which is capable of separating or
+     *                 extracting independent sources from a linear mixture.
+     *                 It must be a non-quadratic non-linear function that
+     *                 has second-order derivative.
      * @param tol the tolerance of convergence test.
      * @param maxIter the maximum number of iterations.
+     * @return the model.
      */
     public static ICA fit(double[][] data, int p, DifferentiableFunction contrast, double tol, int maxIter) {
         if (tol <= 0.0) {
@@ -140,8 +143,6 @@ public class ICA implements Serializable {
             throw new IllegalArgumentException("Invalid dimension of feature space: " + p);
         }
 
-        DenseMatrix projection = Matrix.zeros(p, m);
-
         GaussianDistribution g = new GaussianDistribution(0, 1);
         double[][] W = new double[p][n];
         for (int i = 0; i < p; i++) {
@@ -151,7 +152,7 @@ public class ICA implements Serializable {
             MathEx.unitize(W[i]);
         }
 
-        DenseMatrix X = whiten(data);
+        Matrix X = whiten(data);
         double[] wold = new double[n];
         double[] wdif = new double[n];
         double[] gwX = new double[m];
@@ -161,12 +162,12 @@ public class ICA implements Serializable {
             double[] w = W[i];
 
             double diff = Double.MAX_VALUE;
-            for (int iter = 0; diff > tol && iter < maxIter; iter++) {
+            for (int iter = 0; iter < maxIter && diff > tol; iter++) {
                 System.arraycopy(w, 0, wold, 0, n);
 
                 // Calculate derivative of projection
                 double[] wX = new double[m];
-                X.atx(w, wX);
+                X.tv(w, wX);
 
                 double g2 = 0.0;
                 for (int j = 0; j < m; j++) {
@@ -178,7 +179,7 @@ public class ICA implements Serializable {
                     g2w[j] = w[j] * g2;
                 }
 
-                X.ax(gwX, w);
+                X.mv(gwX, w);
 
                 for (int j = 0; j < n; j++) {
                     w[j] = (w[j] - g2w[j]) / m;
@@ -213,7 +214,7 @@ public class ICA implements Serializable {
             }
 
             if (diff > tol) {
-                throw new IllegalStateException(String.format("Component %d did not converge in %d iterations.", i, maxIter));
+                logger.warn(String.format("Component %d did not converge in %d iterations.", i, maxIter));
             }
         }
 
@@ -227,25 +228,24 @@ public class ICA implements Serializable {
      * @param data the raw data.
      * @return the whitened data
      */
-    private static DenseMatrix whiten(double[][] data) {
+    private static Matrix whiten(double[][] data) {
         // covariance matrix on centered data.
         double[] mean = MathEx.rowMeans(data);
-        DenseMatrix X = Matrix.of(data);
-        int n = X.nrows();
-        int m = X.ncols();
+        Matrix X = new Matrix(data);
+        int n = X.nrow();
+        int m = X.ncol();
         for (int j = 0; j < m; j++) {
             for (int i = 0; i < n; i++) {
                 X.sub(i, j, mean[i]);
             }
         }
 
-        DenseMatrix XXt = X.aat();
-        XXt.setSymmetric(true);
-        EVD eigen = XXt.eigen();
-        DenseMatrix E = eigen.getEigenVectors();
-        DenseMatrix Y = E.atbmm(X);
+        Matrix XXt = X.aat();
+        Matrix.EVD eigen = XXt.eigen(false, true, true);
+        Matrix E = eigen.Vr;
+        Matrix Y = E.tm(X);
 
-        double[] d = eigen.getEigenValues();
+        double[] d = eigen.wr;
         for (int i = 0; i < d.length; i++) {
             if (d[i] < 1E-8) {
                 throw new IllegalArgumentException(String.format("Covariance matrix (column %d) is close to singular.", i));

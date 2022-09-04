@@ -128,7 +128,7 @@ public class GLM implements Serializable {
     /**
      * Log-likelihood.
      */
-    protected double logLikelihood;
+    protected double loglikelihood;
 
     /**
      * Constructor.
@@ -136,19 +136,19 @@ public class GLM implements Serializable {
      * @param predictors the predictors of design matrix.
      * @param model the generalized linear model specification.
      * @param beta the linear weights.
-     * @param logLikelihood the log-likelihood.
+     * @param loglikelihood the log-likelihood.
      * @param deviance the deviance.
      * @param nullDeviance the null deviance.
      * @param mu the fitted mean values.
      * @param residuals the residuals of fitted values of training data.
      * @param ztest the z-test of the coefficients.
      */
-    public GLM(Formula formula, String[] predictors, Model model, double[] beta, double logLikelihood, double deviance, double nullDeviance, double[] mu, double[] residuals, double[][] ztest) {
+    public GLM(Formula formula, String[] predictors, Model model, double[] beta, double loglikelihood, double deviance, double nullDeviance, double[] mu, double[] residuals, double[][] ztest) {
         this.formula = formula;
         this.model = model;
         this.predictors = predictors;
         this.beta = beta;
-        this.logLikelihood = logLikelihood;
+        this.loglikelihood = loglikelihood;
         this.deviance = deviance;
         this.nullDeviance = nullDeviance;
         this.mu = mu;
@@ -209,8 +209,8 @@ public class GLM implements Serializable {
      * Returns the log-likelihood of model.
      * @return the log-likelihood of model.
      */
-    public double logLikelihood() {
-        return logLikelihood;
+    public double loglikelihood() {
+        return loglikelihood;
     }
 
     /**
@@ -218,7 +218,7 @@ public class GLM implements Serializable {
      * @return the AIC score.
      */
     public double AIC() {
-        return ModelSelection.AIC(logLikelihood, beta.length);
+        return ModelSelection.AIC(loglikelihood, beta.length);
     }
 
     /**
@@ -226,7 +226,7 @@ public class GLM implements Serializable {
      * @return the BIC score.
      */
     public double BIC() {
-        return ModelSelection.BIC(logLikelihood, beta.length, mu.length);
+        return ModelSelection.BIC(loglikelihood, beta.length, mu.length);
     }
 
     /**
@@ -317,7 +317,7 @@ public class GLM implements Serializable {
      */
     public static GLM fit(Formula formula, DataFrame data, Model model, Properties params) {
         double tol = Double.parseDouble(params.getProperty("smile.glm.tolerance", "1E-5"));
-        int maxIter = Integer.parseInt(params.getProperty("smile.glm.max_iterations", "50"));
+        int maxIter = Integer.parseInt(params.getProperty("smile.glm.iterations", "50"));
         return fit(formula, data, model, tol, maxIter);
     }
 
@@ -419,6 +419,6 @@ public class GLM implements Serializable {
             ztest[i][3] = 2.0 - Erf.erfc(-0.707106781186547524 * Math.abs(ztest[i][2]));
         }
 
-        return new GLM(formula, X.colNames(), model, beta, model.logLikelihood(y, mu), dev, model.nullDeviance(y, MathEx.mean(y)), mu, residuals, ztest);
+        return new GLM(formula, X.colNames(), model, beta, model.loglikelihood(y, mu), dev, model.nullDeviance(y, MathEx.mean(y)), mu, residuals, ztest);
     }
 }

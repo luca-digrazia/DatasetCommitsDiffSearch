@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,23 +13,21 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.classification;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.stream.IntStream;
 import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
-import smile.data.type.StructField;
 import smile.data.vector.BaseVector;
 import smile.math.MathEx;
 import smile.util.IntSet;
 
 /**
- * To support arbitrary class labels.
+ * Map arbitrary class labels to [0, k), where k is the number of classes.
  *
  * @author Haifeng Li
  */
@@ -38,28 +36,25 @@ public class ClassLabels implements Serializable {
 
     /** The number of classes. */
     public final int k;
-    /** The class labels. If the class labels are already in [0, k), this is empty. */
-    public final IntSet labels;
+    /** The class labels. */
+    public final IntSet classes;
     /** The sample class id in [0, k). */
     public final int[] y;
     /** The number of samples per classes. */
     public final int[] ni;
     /** The estimated priori probabilities. */
     public final double[] priori;
-    /** The optional meta data of response variable. */
-    public final Optional<StructField> field;
 
-    /** Constructor. */
-    public ClassLabels(int k, int[] y, IntSet labels) {
-        this(k, y, labels, Optional.empty());
-    }
-
-    /** Constructor. */
-    public ClassLabels(int k, int[] y, IntSet labels, Optional<StructField> field) {
+    /**
+     * Constructor.
+     * @param k The number of classes.
+     * @param y The sample class id in [0, k).
+     * @param classes the class label encoder.
+     */
+    public ClassLabels(int k, int[] y, IntSet classes) {
         this.k = k;
         this.y = y;
-        this.labels = labels;
-        this.field = field;
+        this.classes = classes;
         this.ni = count(y, k);
 
         priori = new double[k];
@@ -69,35 +64,37 @@ public class ClassLabels implements Serializable {
         }
     }
 
-    /** Returns the nominal scale for the class labels. */
+    /**
+     * Returns the nominal scale of the class labels.
+     * @return the nominal scale of the class labels.
+     */
     public NominalScale scale() {
-        String[] values = new String[labels.size()];
-        for (int i = 0; i < labels.size(); i++) {
-            values[i] = String.valueOf(labels.valueOf(i));
+        String[] values = new String[classes.size()];
+        for (int i = 0; i < classes.size(); i++) {
+            values[i] = String.valueOf(classes.valueOf(i));
         }
         return new NominalScale(values);
     }
 
-    /** Maps the class labels to index. */
+    /**
+     * Maps the class labels to index.
+     * @param y the sample labels.
+     * @return the indices of labels.
+     */
     public int[] indexOf(int[] y) {
         int[] x = new int[y.length];
         for (int i = 0; i < y.length; i++) {
-            x[i] = labels.indexOf(y[i]);
+            x[i] = classes.indexOf(y[i]);
         }
         return x;
     }
 
     /**
-     * Learns the class label mapping from samples.
+     * Fits the class label mapping.
+     * @param y the sample labels.
+     * @return the class label mapping.
      */
     public static ClassLabels fit(int[] y) {
-        return fit(y, Optional.empty());
-    }
-
-    /**
-     * Learns the class label mapping from samples.
-     */
-    public static ClassLabels fit(int[] y, Optional<StructField> field) {
         int[] labels = MathEx.unique(y);
         Arrays.sort(labels);
         int k = labels.length;
@@ -108,30 +105,30 @@ public class ClassLabels implements Serializable {
 
         IntSet encoder = new IntSet(labels);
         if (labels[0] == 0 && labels[k-1] == k-1) {
-            return new ClassLabels(k, y, encoder, field);
+            return new ClassLabels(k, y, encoder);
         } else {
-            return new ClassLabels(k, Arrays.stream(y).map(yi -> encoder.indexOf(yi)).toArray(), encoder, field);
+            return new ClassLabels(k, Arrays.stream(y).map(encoder::indexOf).toArray(), encoder);
         }
     }
 
     /**
-     * Learns the class label mapping from samples.
+     * Fits the class label mapping.
+     * @param response the sample labels.
+     * @return the class label mapping.
      */
-    public static ClassLabels fit(BaseVector response) {
+    public static ClassLabels fit(BaseVector<?, ?, ?> response) {
         int[] y = response.toIntArray();
-        StructField field = response.field();
 
-        @SuppressWarnings("unchecked")
-        Optional<Measure> measure = response.measure();
-        if (measure.isPresent() && measure.get() instanceof NominalScale) {
-            NominalScale scale = (NominalScale) measure.get();
+        Measure measure = response.measure();
+        if (measure instanceof NominalScale) {
+            NominalScale scale = (NominalScale) measure;
             int k = scale.size();
             int[] labels = IntStream.range(0, k).toArray();
             IntSet encoder = new IntSet(labels);
-            return new ClassLabels(k, y, encoder, Optional.of(field));
+            return new ClassLabels(k, y, encoder);
         }
 
-        return fit(y, Optional.of(field));
+        return fit(y);
     }
 
     /**
