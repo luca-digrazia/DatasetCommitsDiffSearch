@@ -7,28 +7,29 @@ import android.text.TextUtils;
 import com.danikula.videocache.CacheListener;
 import com.danikula.videocache.HttpProxyCacheServer;
 import com.danikula.videocache.file.Md5FileNameGenerator;
+import com.danikula.videocache.headers.HeaderInjector;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.utils.StorageUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 
 /**
- 代理缓存管理器
- Created by guoshuyu on 2018/5/18.
+ * 代理缓存管理器
+ * Created by guoshuyu on 2018/5/18.
  */
 
 public class ProxyCacheManager implements ICacheManager, CacheListener {
 
-    public static int DEFAULT_MAX_SIZE = 512 * 1024 * 1024;
-
     //视频代理
     protected HttpProxyCacheServer proxy;
 
+    protected Map<String, String> mMapHeadData;
 
     protected File mCacheDir;
 
@@ -38,10 +39,8 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
 
     private ICacheManager.ICacheAvailableListener cacheAvailableListener;
 
-    protected ProxyCacheUserAgentHeadersInjector userAgentHeadersInjector = new ProxyCacheUserAgentHeadersInjector();
-
     /**
-     单例管理器
+     * 单例管理器
      */
     public static synchronized ProxyCacheManager instance() {
         if (proxyCacheManager == null) {
@@ -61,10 +60,7 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
     @Override
     public void doCacheLogic(Context context, IMediaPlayer mediaPlayer, String originUrl, Map<String, String> header, File cachePath) {
         String url = originUrl;
-        userAgentHeadersInjector.mMapHeadData.clear();
-        if (header != null) {
-            userAgentHeadersInjector.mMapHeadData.putAll(header);
-        }
+        mMapHeadData = header;
         if (url.startsWith("http") && !url.contains("127.0.0.1") && !url.contains(".m3u8")) {
             HttpProxyCacheServer proxy = getProxy(context.getApplicationContext(), cachePath);
             if (proxy != null) {
@@ -148,7 +144,7 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
     }
 
     /**
-     创建缓存代理服务,带文件目录的.
+     * 创建缓存代理服务,带文件目录的.
      */
     public HttpProxyCacheServer newProxy(Context context, File file) {
         if (!file.exists()) {
@@ -156,8 +152,7 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
         }
         HttpProxyCacheServer.Builder builder = new HttpProxyCacheServer.Builder(context);
         builder.cacheDirectory(file);
-        builder.maxCacheSize(DEFAULT_MAX_SIZE);
-        builder.headerInjector(userAgentHeadersInjector);
+        builder.headerInjector(new UserAgentHeadersInjector());
         mCacheDir = file;
         return builder.build();
     }
@@ -167,16 +162,27 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
     }
 
     /**
-     创建缓存代理服务
+     * 创建缓存代理服务
      */
     public HttpProxyCacheServer newProxy(Context context) {
         return new HttpProxyCacheServer.Builder(context.getApplicationContext())
-                .headerInjector(userAgentHeadersInjector).build();
+                .headerInjector(new UserAgentHeadersInjector()).build();
+    }
+
+    /**
+     * for android video cache header
+     */
+    private class UserAgentHeadersInjector implements HeaderInjector {
+
+        @Override
+        public Map<String, String> addHeaders(String url) {
+            return (mMapHeadData == null) ? new HashMap<String, String>() : mMapHeadData;
+        }
     }
 
 
     /**
-     获取缓存代理服务
+     * 获取缓存代理服务
      */
     protected static HttpProxyCacheServer getProxy(Context context) {
         HttpProxyCacheServer proxy = ProxyCacheManager.instance().proxy;
@@ -186,7 +192,7 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
 
 
     /**
-     获取缓存代理服务,带文件目录的
+     * 获取缓存代理服务,带文件目录的
      */
     public static HttpProxyCacheServer getProxy(Context context, File file) {
 
@@ -215,5 +221,6 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
                     ProxyCacheManager.instance().newProxy(context, file)) : proxy;
         }
     }
+
 
 }
