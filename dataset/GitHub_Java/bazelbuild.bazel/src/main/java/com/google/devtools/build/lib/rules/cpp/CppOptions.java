@@ -918,16 +918,6 @@ public class CppOptions extends FragmentOptions {
     host.dontEnableHostNonhost = dontEnableHostNonhost;
     host.requireCtxInConfigureFeatures = requireCtxInConfigureFeatures;
     host.useStandaloneLtoIndexingCommandLines = useStandaloneLtoIndexingCommandLines;
-
-    // Save host options for further use.
-    host.hostCoptList = hostCoptList;
-    host.hostConlyoptList = hostConlyoptList;
-    host.hostCppCompiler = hostCppCompiler;
-    host.hostCrosstoolTop = hostCrosstoolTop;
-    host.hostCxxoptList = hostCxxoptList;
-    host.hostLibcTopLabel = hostLibcTopLabel;
-    host.hostLinkoptList = hostLinkoptList;
-
     return host;
   }
 
