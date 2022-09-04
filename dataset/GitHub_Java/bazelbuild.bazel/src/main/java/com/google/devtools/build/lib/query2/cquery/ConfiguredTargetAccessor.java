@@ -116,7 +116,7 @@ public class ConfiguredTargetAccessor implements TargetAccessor<KeyedConfiguredT
 
     Multimap<Label, KeyedConfiguredTarget> depsByLabel =
         Multimaps.index(
-            queryEnvironment.getFwdDeps(ImmutableList.of(actual)), KeyedConfiguredTarget::getLabel);
+            queryEnvironment.getFwdDeps(ImmutableList.of(actual)), kct -> kct.getLabel());
 
     Rule rule = (Rule) getTarget(actual);
     ImmutableMap<Label, ConfigMatchingProvider> configConditions = actual.getConfigConditions();
@@ -132,9 +132,8 @@ public class ConfiguredTargetAccessor implements TargetAccessor<KeyedConfiguredT
           ConfigurableQuery.Code.ATTRIBUTE_MISSING);
     }
     ImmutableList.Builder<KeyedConfiguredTarget> toReturn = ImmutableList.builder();
-    attributeMapper.visitLabels(
-        attributeMapper.getAttributeDefinition(attrName),
-        label -> toReturn.addAll(depsByLabel.get(label)));
+    attributeMapper.visitLabels(attributeMapper.getAttributeDefinition(attrName)).stream()
+        .forEach(depEdge -> toReturn.addAll(depsByLabel.get(depEdge.getLabel())));
     return toReturn.build();
   }
 

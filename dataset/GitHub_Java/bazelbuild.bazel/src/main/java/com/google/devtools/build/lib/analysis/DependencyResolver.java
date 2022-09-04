@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.config.transitions.TransitionFacto
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -720,8 +719,7 @@ public abstract class DependencyResolver {
         continue;
       }
 
-      if (aspect.getDefinition().propagateAlong(attributeName)
-          || aspect.getDescriptor().inheritedPropagateAlong(attributeName)) {
+      if (aspect.getDefinition().propagateAlong(attributeName)) {
         filteredAspectPath.add(aspect);
       }
     }
@@ -775,11 +773,12 @@ public abstract class DependencyResolver {
 
     Rule toRule = (Rule) toTarget;
     ImmutableList.Builder<Aspect> filteredAspectPath = ImmutableList.builder();
-    AdvertisedProviderSet advertisedProviders =
-        toRule.getRuleClassObject().getAdvertisedProviders();
+
     for (Aspect aspect : aspects) {
-      if (aspect.getDefinition().getRequiredProviders().isSatisfiedBy(advertisedProviders)
-          || aspect.getDescriptor().satisfiesInheritedRequiredProviders(advertisedProviders)) {
+      if (aspect
+          .getDefinition()
+          .getRequiredProviders()
+          .isSatisfiedBy(toRule.getRuleClassObject().getAdvertisedProviders())) {
         filteredAspectPath.add(aspect);
       }
     }
