@@ -43,7 +43,6 @@ import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
 import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.LiveReloadBuildItem;
-import io.quarkus.deployment.builditem.QuarkusBuildCloseablesBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -78,9 +77,7 @@ public class ApplicationArchiveBuildStep {
     }
 
     @BuildStep
-    ApplicationArchivesBuildItem build(
-            QuarkusBuildCloseablesBuildItem buildCloseables,
-            ArchiveRootBuildItem root, ApplicationIndexBuildItem appindex,
+    ApplicationArchivesBuildItem build(ArchiveRootBuildItem root, ApplicationIndexBuildItem appindex,
             List<AdditionalApplicationArchiveMarkerBuildItem> appMarkers,
             List<AdditionalApplicationArchiveBuildItem> additionalApplicationArchiveBuildItem,
             List<IndexDependencyBuildItem> indexDependencyBuildItems,
@@ -97,16 +94,14 @@ public class ApplicationArchiveBuildStep {
             liveReloadContext.setContextObject(IndexCache.class, indexCache);
         }
 
-        List<ApplicationArchive> applicationArchives = scanForOtherIndexes(buildCloseables,
-                Thread.currentThread().getContextClassLoader(),
+        List<ApplicationArchive> applicationArchives = scanForOtherIndexes(Thread.currentThread().getContextClassLoader(),
                 markerFiles, root, additionalApplicationArchiveBuildItem, indexDependencyBuildItems, indexCache);
         return new ApplicationArchivesBuildItem(
-                new ApplicationArchiveImpl(appindex.getIndex(), root.getRootDirs(), root.getPaths()),
+                new ApplicationArchiveImpl(appindex.getIndex(), root.getArchiveRoot(), null, false, root.getArchiveLocation()),
                 applicationArchives);
     }
 
-    private List<ApplicationArchive> scanForOtherIndexes(QuarkusBuildCloseablesBuildItem buildCloseables,
-            ClassLoader classLoader, Set<String> applicationArchiveFiles,
+    private List<ApplicationArchive> scanForOtherIndexes(ClassLoader classLoader, Set<String> applicationArchiveFiles,
             ArchiveRootBuildItem root, List<AdditionalApplicationArchiveBuildItem> additionalApplicationArchives,
             List<IndexDependencyBuildItem> indexDependencyBuildItem, IndexCache indexCache)
             throws IOException {
@@ -118,14 +113,14 @@ public class ApplicationArchiveBuildStep {
         markers.add(JANDEX_INDEX);
         dependenciesToIndex.addAll(getMarkerFilePaths(classLoader, markers, root));
 
+        //we don't index the application root, this is handled elsewhere
+        dependenciesToIndex.remove(root.getArchiveLocation());
+
         for (AdditionalApplicationArchiveBuildItem i : additionalApplicationArchives) {
             dependenciesToIndex.add(i.getPath());
         }
 
-        //we don't index the application root, this is handled elsewhere
-        root.getPaths().forEach(dependenciesToIndex::remove);
-
-        return indexPaths(buildCloseables, root, dependenciesToIndex, classLoader, indexCache);
+        return indexPaths(dependenciesToIndex, classLoader, indexCache);
     }
 
     public List<Path> getIndexDependencyPaths(List<IndexDependencyBuildItem> indexDependencyBuildItems,
@@ -135,10 +130,15 @@ public class ApplicationArchiveBuildStep {
             List<Path> ret = new ArrayList<>();
 
             for (IndexDependencyBuildItem indexDependencyBuildItem : indexDependencyBuildItems) {
+                Path path;
                 String classifier = indexDependencyBuildItem.getClassifier();
-                final Path path = artifactIndex.getPath(indexDependencyBuildItem.getGroupId(),
-                        indexDependencyBuildItem.getArtifactId(),
-                        classifier == null || classifier.isEmpty() ? null : classifier);
+                if (classifier == null || classifier.isEmpty()) {
+                    path = artifactIndex.getPath(indexDependencyBuildItem.getGroupId(),
+                            indexDependencyBuildItem.getArtifactId(), null);
+                } else {
+                    path = artifactIndex.getPath(indexDependencyBuildItem.getGroupId(),
+                            indexDependencyBuildItem.getArtifactId(), classifier);
+                }
                 if (!root.isExcludedFromIndexing(path)) {
                     ret.add(path);
                 }
@@ -149,10 +149,8 @@ public class ApplicationArchiveBuildStep {
         }
     }
 
-    private static List<ApplicationArchive> indexPaths(
-            QuarkusBuildCloseablesBuildItem buildCloseables,
-            ArchiveRootBuildItem rootArchiveBuildItem,
-            Set<Path> dependenciesToIndex, ClassLoader classLoader, IndexCache indexCache)
+    private static List<ApplicationArchive> indexPaths(Set<Path> dependenciesToIndex, ClassLoader classLoader,
+            IndexCache indexCache)
             throws IOException {
         List<ApplicationArchive> ret = new ArrayList<>();
 
@@ -163,7 +161,7 @@ public class ApplicationArchiveBuildStep {
                 ret.add(new ApplicationArchiveImpl(indexView, dep, null, false, dep));
             } else {
                 IndexView index = handleJarPath(dep, indexCache);
-                FileSystem fs = buildCloseables.add(FileSystems.newFileSystem(dep, classLoader));
+                FileSystem fs = FileSystems.newFileSystem(dep, classLoader);
                 ret.add(new ApplicationArchiveImpl(index, fs.getRootDirectories().iterator().next(), fs, true, dep));
             }
         }

@@ -9,21 +9,21 @@ import io.quarkus.runtime.annotations.ConfigItem;
 public class IndexDependencyConfig {
 
     /**
-     * The maven groupId of the artifact.
+     * The maven groupId of the artifact to index
      */
     @ConfigItem
-    public String groupId;
+    String groupId;
 
     /**
-     * The maven artifactId of the artifact.
+     * The maven artifactId of the artifact to index
      */
     @ConfigItem
-    public String artifactId;
+    String artifactId;
 
     /**
-     * The maven classifier of the artifact.
+     * The maven classifier of the artifact to index
      */
     @ConfigItem
-    public Optional<String> classifier;
+    Optional<String> classifier;
 
 }
