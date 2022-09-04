@@ -119,12 +119,12 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
 
   private final StarlarkActionFactory actionFactory;
 
-  // The fields below are intended to be final except that they can be cleared by calling
-  // `nullify()` when the object becomes featureless (analogous to freezing).
+  // The fields below intended to be final except that they can be cleared by calling `nullify()`
+  // when the object becomes featureless.
   private RuleContext ruleContext;
   private FragmentCollection fragments;
   private FragmentCollection hostFragments;
-  @Nullable private AspectDescriptor aspectDescriptor;
+  private AspectDescriptor aspectDescriptor;
 
   private Dict<String, String> makeVariables;
   private StarlarkAttributesCollection attributesCollection;
@@ -133,10 +133,10 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
   private Outputs outputsObject;
 
   /**
-   * Creates a new StarlarkRuleContext wrapping ruleContext.
+   * Creates a new StarlarkRuleContext using ruleContext.
    *
-   * <p>{@code aspectDescriptor} is the aspect for which the context is created, or <code>
-   * null</code> if it is for a rule.
+   * @param aspectDescriptor aspect for which the context is created, or <code>null</code> if it is
+   *     for a rule.
    */
   public StarlarkRuleContext(RuleContext ruleContext, @Nullable AspectDescriptor aspectDescriptor)
       throws RuleErrorException {
@@ -148,11 +148,11 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
     this.fragments = new FragmentCollection(ruleContext, NoTransition.INSTANCE);
     this.hostFragments = new FragmentCollection(ruleContext, HostTransition.INSTANCE);
     this.aspectDescriptor = aspectDescriptor;
-    this.isForAspect = aspectDescriptor != null;
 
     Rule rule = ruleContext.getRule();
 
     if (aspectDescriptor == null) {
+      this.isForAspect = false;
       Collection<Attribute> attributes = rule.getAttributes();
 
       // Populate ctx.outputs.
@@ -214,6 +214,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
       this.splitAttributes = buildSplitAttributeInfo(attributes, ruleContext);
       this.ruleAttributesCollection = null;
     } else { // ASPECT
+      this.isForAspect = true;
       this.outputsObject = null;
       ImmutableCollection<Attribute> attributes =
           ruleContext.getMainAspect().getDefinition().getAttributes().values();
@@ -280,7 +281,8 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
     }
 
     private void addOutput(String key, Object value) throws RuleErrorException {
-      Preconditions.checkState(!context.isImmutable());
+      Preconditions.checkState(!context.isImmutable(),
+          "Cannot add outputs to immutable Outputs object");
       // TODO(bazel-team): We should reject outputs whose key is not an identifier. Today this is
       // allowed, and the resulting ctx.outputs value can be retrieved using getattr().
       if (outputs.containsKey(key)
@@ -297,10 +299,6 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
 
     @Override
     public ImmutableCollection<String> getFieldNames() {
-      // TODO(b/175954936): There's an NPE here when accessing dir(ctx.outputs) after rule
-      // analysis has completed. Since we can't throw EvalException here, this may require that we
-      // preemptively copy the fields into this object, or at least keep a "nullified" bit so we
-      // know to produce an empty result here.
       ImmutableList.Builder<String> result = ImmutableList.builder();
       if (context.isExecutable() && executableCreated) {
         result.add(EXECUTABLE_OUTPUT_NAME);
@@ -364,6 +362,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
             context.ruleLabelCanonicalName);
       }
     }
+
   }
 
   public boolean isExecutable() {
@@ -373,6 +372,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
   public boolean isDefaultExecutableCreated() {
     return this.outputsObject.executableCreated;
   }
+
 
   /**
    * Nullifies fields of the object when it's not supposed to be used anymore to free unused memory
@@ -391,7 +391,6 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
     outputsObject = null;
   }
 
-  /** Throws an EvalException mentioning {@code attrName} if we've already been nullified. */
   public void checkMutable(String attrName) throws EvalException {
     if (isImmutable()) {
       throw Starlark.errorf(
@@ -477,7 +476,9 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
     }
   }
 
-  /** Returns the wrapped ruleContext. */
+  /**
+   * Returns the original ruleContext.
+   */
   public RuleContext getRuleContext() {
     return ruleContext;
   }
@@ -496,7 +497,8 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
   public StarlarkValue createdActions() throws EvalException {
     checkMutable("created_actions");
     if (ruleContext.getRule().getRuleClassObject().isStarlarkTestable()) {
-      return ActionsProvider.create(ruleContext.getAnalysisEnvironment().getRegisteredActions());
+      return ActionsProvider.create(
+          ruleContext.getAnalysisEnvironment().getRegisteredActions());
     } else {
       return Starlark.NONE;
     }
