@@ -19,10 +19,11 @@ package org.graylog2.bootstrap.commands;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Injector;
 import com.google.inject.Module;
+import com.google.inject.ProvisionException;
 import com.google.inject.spi.Message;
 import com.mongodb.MongoException;
-import io.airlift.airline.Command;
-import io.airlift.airline.Option;
+import io.airlift.command.Command;
+import io.airlift.command.Option;
 import org.graylog2.Configuration;
 import org.graylog2.ServerVersion;
 import org.graylog2.UI;
@@ -35,17 +36,18 @@ import org.graylog2.bindings.PersistenceServicesBindings;
 import org.graylog2.bindings.RotationStrategyBindings;
 import org.graylog2.bindings.ServerBindings;
 import org.graylog2.bindings.ServerMessageInputBindings;
-import org.graylog2.bootstrap.ServerBootstrap;
+import org.graylog2.bootstrap.Bootstrap;
 import org.graylog2.bootstrap.Main;
 import org.graylog2.cluster.NodeService;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.configuration.EmailConfiguration;
 import org.graylog2.configuration.MongoDbConfiguration;
+import org.graylog2.configuration.TelemetryConfiguration;
 import org.graylog2.configuration.VersionCheckConfiguration;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
-import org.graylog2.plugin.KafkaJournalConfiguration;
 import org.graylog2.plugin.ServerStatus;
+import org.graylog2.plugin.system.NodeIdPersistenceException;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.system.shutdown.GracefulShutdown;
@@ -57,19 +59,22 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 @Command(name = "server", description = "Start the Graylog2 server")
-public class Server extends ServerBootstrap implements Runnable {
+public class Server extends Bootstrap implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(Server.class);
 
     private static final Configuration configuration = new Configuration();
     private final ElasticsearchConfiguration elasticsearchConfiguration = new ElasticsearchConfiguration();
     private final EmailConfiguration emailConfiguration = new EmailConfiguration();
     private final MongoDbConfiguration mongoDbConfiguration = new MongoDbConfiguration();
+    private final TelemetryConfiguration telemetryConfiguration = new TelemetryConfiguration();
     private final VersionCheckConfiguration versionCheckConfiguration = new VersionCheckConfiguration();
-    private final KafkaJournalConfiguration kafkaJournalConfiguration = new KafkaJournalConfiguration();
 
     public Server() {
-        super("server", configuration);
+        super("Server", configuration);
     }
 
     @Option(name = {"-t", "--configtest"}, description = "Validate Graylog2 configuration and exit")
@@ -144,8 +149,8 @@ public class Server extends ServerBootstrap implements Runnable {
                 elasticsearchConfiguration,
                 emailConfiguration,
                 mongoDbConfiguration,
-                versionCheckConfiguration,
-                kafkaJournalConfiguration);
+                telemetryConfiguration,
+                versionCheckConfiguration);
     }
 
     @Override

@@ -19,8 +19,10 @@ package org.graylog2.bootstrap.commands;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Injector;
 import com.google.inject.Module;
-import io.airlift.airline.Command;
-import org.graylog2.bootstrap.ServerBootstrap;
+import com.google.inject.ProvisionException;
+import com.google.inject.spi.Message;
+import io.airlift.command.Command;
+import org.graylog2.bootstrap.Bootstrap;
 import org.graylog2.bootstrap.Main;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.bindings.PeriodicalBindings;
@@ -34,19 +36,20 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 @Command(name = "radio", description = "Start the Graylog2 radio")
-public class Radio extends ServerBootstrap implements Runnable {
+public class Radio extends Bootstrap implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(Radio.class);
 
     private static final Configuration configuration = new Configuration();
 
     public Radio() {
-        super("radio", configuration);
+        super("Radio", configuration);
     }
 
     @Override
