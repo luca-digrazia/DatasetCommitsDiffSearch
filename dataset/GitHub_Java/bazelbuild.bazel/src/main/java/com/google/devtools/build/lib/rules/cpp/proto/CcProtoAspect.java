@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
@@ -127,7 +126,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
             .useToolchainTransition(true)
             .add(
                 attr(PROTO_TOOLCHAIN_ATTR, LABEL)
-                    .mandatoryBuiltinProviders(ImmutableList.of(ProtoLangToolchainProvider.class))
+                    .mandatoryNativeProviders(ImmutableList.of(ProtoLangToolchainProvider.class))
                     .value(PROTO_TOOLCHAIN_LABEL))
             .add(
                 attr(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, LABEL)
@@ -331,8 +330,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               .addCcCompilationContexts(CppHelper.getCompilationContextsFromDeps(deps))
               .addCcCompilationContexts(
                   ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)))
-              .setPurpose(common.getPurpose(cppSemantics))
-              .setHeadersCheckingMode(HeadersCheckingMode.LOOSE);
+              .setPurpose(common.getPurpose(cppSemantics));
       // Don't instrument the generated C++ files even when --collect_code_coverage is set.
       helper.setCodeCoverageEnabled(false);
 
