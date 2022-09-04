@@ -25,8 +25,7 @@ import java.util.List;
  * <p/>
  * This project is using Dependency Injection based on Dagger as dependency injector. The
  * ObjectGraph field used in this class is the dependency container that is going to provide every
- * dependency declared in Dagger modules. Take a look to BaseActivit to see how the Activity scope
- * injection works using the plus method implemented here.
+ * dependency declared in Dagger modules.
  *
  * @author Pedro Vicente Gómez Sánchez
  */
