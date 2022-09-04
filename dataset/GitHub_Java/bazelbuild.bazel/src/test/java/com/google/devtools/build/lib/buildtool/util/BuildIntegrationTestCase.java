@@ -178,14 +178,12 @@ public abstract class BuildIntegrationTestCase {
     events.setFailFast(false);
     // TODO(mschaller): This will ignore any attempt by Blaze modules to provide a filesystem;
     // consider something better.
-    FileSystem nativeFileSystem = createFileSystem();
-    this.fileSystem = createFileSystemForBuildArtifacts(nativeFileSystem);
+    this.fileSystem = createFileSystem();
     this.testRoot = createTestRoot(fileSystem);
 
-    outputBase = fileSystem.getPath(testRoot.getRelative(outputBaseName).asFragment());
+    outputBase = testRoot.getRelative(outputBaseName);
     outputBase.createDirectoryAndParents();
-    workspace =
-        nativeFileSystem.getPath(testRoot.getRelative(getDesiredWorkspaceRelative()).asFragment());
+    workspace = testRoot.getRelative(getDesiredWorkspaceRelative());
     beforeCreatingWorkspace(workspace);
     workspace.createDirectoryAndParents();
     serverDirectories = createServerDirectories();
@@ -270,7 +268,6 @@ public abstract class BuildIntegrationTestCase {
     }
     LoggingUtil.installRemoteLoggerForTesting(null);
     testRoot.deleteTreesBelow(); // (comment out during debugging)
-    Thread.interrupted(); // If there was a crash in test case, main thread was interrupted.
   }
 
   /**
@@ -322,10 +319,6 @@ public abstract class BuildIntegrationTestCase {
 
   protected FileSystem createFileSystem() throws Exception {
     return FileSystems.getNativeFileSystem(getDigestHashFunction());
-  }
-
-  protected FileSystem createFileSystemForBuildArtifacts(FileSystem fileSystem) {
-    return fileSystem;
   }
 
   protected DigestHashFunction getDigestHashFunction() {
@@ -666,7 +659,7 @@ public abstract class BuildIntegrationTestCase {
       String... arguments)
       throws ExecException, InterruptedException {
     if (workingDirectory == null) {
-      workingDirectory = fileSystem.getPath(directories.getWorkspace().asFragment());
+      workingDirectory = directories.getWorkspace();
     }
     List<String> argv = Lists.newArrayList(arguments);
     argv.add(0, executable.toString());
