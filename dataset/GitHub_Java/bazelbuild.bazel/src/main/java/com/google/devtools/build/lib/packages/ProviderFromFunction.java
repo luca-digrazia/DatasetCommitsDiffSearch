@@ -39,8 +39,9 @@ abstract class ProviderFromFunction extends BaseFunction implements Provider {
    * @param location the location of this provider's Skylark definition. Use {@link
    *     Location#BUILTIN} if it is a native provider.
    */
-  protected ProviderFromFunction(@Nullable String name, FunctionSignature signature) {
-    super(name, signature, /*defaultValues=*/ null);
+  protected ProviderFromFunction(
+      @Nullable String name, FunctionSignature signature, Location location) {
+    super(name, signature, /*defaultValues=*/ null, location);
   }
 
   public final SkylarkProviderIdentifier id() {

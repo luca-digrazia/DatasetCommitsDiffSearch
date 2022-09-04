@@ -14,17 +14,19 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi;
 
-import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import java.util.List;
-import java.util.Map;
 import javax.annotation.Nullable;
 
-/** Fake callable implementation of {@link ProviderApi}. */
+/**
+ * Fake implementation of {@link ProviderApi}. This fake is a subclass of {@link BaseFunction},
+ * as providers are themselves callable.
+ */
 public class FakeProviderApi extends BaseFunction implements ProviderApi {
 
   /**
@@ -32,26 +34,16 @@ public class FakeProviderApi extends BaseFunction implements ProviderApi {
    */
   private static int idCounter = 0;
 
-  private final String name = "ProviderIdentifier" + idCounter++;
-
   public FakeProviderApi() {
-    super(FunctionSignature.KWARGS);
+    super("ProviderIdentifier" + idCounter++, FunctionSignature.KWARGS);
   }
 
   @Override
-  public Object callImpl(
-      StarlarkThread thread,
-      @Nullable FuncallExpression call,
-      List<Object> args,
-      Map<String, Object> kwargs) {
+  protected Object call(Object[] args, @Nullable FuncallExpression ast, StarlarkThread thread)
+      throws EvalException, InterruptedException {
     return new FakeStructApi();
   }
 
   @Override
-  public String getName() {
-    return name;
-  }
-
-  @Override
-  public void repr(Printer printer) {}
+  public void repr(SkylarkPrinter printer) {}
 }
