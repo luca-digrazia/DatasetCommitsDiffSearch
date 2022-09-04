@@ -36,10 +36,10 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
@@ -86,20 +86,24 @@ public class KeyUtil {
     @VisibleForTesting
     protected static void loadCertificates(KeyStore trustStore, File certFile, CertificateFactory cf)
             throws CertificateException, KeyStoreException, IOException {
-        if (certFile.isFile()) {
-            final Collection<? extends Certificate> certificates = cf.generateCertificates(new FileInputStream(certFile));
-            int i = 0;
-            for (Certificate cert : certificates) {
-                final String alias = certFile.getAbsolutePath() + "_" + i;
-                trustStore.setCertificateEntry(alias, cert);
-                i++;
-                LOG.debug("Added certificate with alias {} to trust store: {}", alias, cert);
+            if (certFile.isFile()) {
+                try (InputStream fis = Files.newInputStream(certFile.toPath())) {
+                    final Collection<? extends Certificate> certificates = cf.generateCertificates(fis);
+                    int i = 0;
+                    for (Certificate cert : certificates) {
+                        final String alias = certFile.getAbsolutePath() + "_" + i;
+                        trustStore.setCertificateEntry(alias, cert);
+                        i++;
+                        LOG.debug("Added certificate with alias {} to trust store: {}", alias, cert);
+                    }
+                }
+            } else if (certFile.isDirectory()) {
+                try(DirectoryStream<Path> ds = Files.newDirectoryStream(certFile.toPath());) {
+                    for (Path f : ds) {
+                        loadCertificates(trustStore, f.toFile(), cf);
+                    }
+                }
             }
-        } else if (certFile.isDirectory()) {
-            for (Path f : Files.newDirectoryStream(certFile.toPath())) {
-                loadCertificates(trustStore, f.toFile(), cf);
-            }
-        }
     }
 
     public static KeyManager[] initKeyStore(File tlsKeyFile, File tlsCertFile, String tlsKeyPassword)
@@ -107,7 +111,10 @@ public class KeyUtil {
         final KeyStore ks = KeyStore.getInstance("JKS");
         ks.load(null, null);
         final CertificateFactory cf = CertificateFactory.getInstance("X.509");
-        final Collection<? extends Certificate> certChain = cf.generateCertificates(new FileInputStream(tlsCertFile));
+        final Collection<? extends Certificate> certChain;
+        try (InputStream inputStream = Files.newInputStream(tlsCertFile.toPath())) {
+            certChain = cf.generateCertificates(inputStream);
+        }
         final PrivateKey privateKey = loadPrivateKey(tlsKeyFile, tlsKeyPassword);
         final char[] password = Strings.nullToEmpty(tlsKeyPassword).toCharArray();
         ks.setKeyEntry("key", privateKey, password, certChain.toArray(new Certificate[certChain.size()]));
@@ -130,7 +137,7 @@ public class KeyUtil {
 
     @VisibleForTesting
     protected static PrivateKey loadPrivateKey(File file, String password) throws IOException, GeneralSecurityException {
-        try (final InputStream is = new FileInputStream(file)) {
+        try (final InputStream is = Files.newInputStream(file.toPath())) {
             final byte[] keyBytes = ByteStreams.toByteArray(is);
             final String keyString = new String(keyBytes, StandardCharsets.US_ASCII);
             final Matcher m = KEY_PATTERN.matcher(keyString);
@@ -152,6 +159,7 @@ public class KeyUtil {
             final String[] keyAlgorithms = {"RSA", "DSA", "EC"};
             for(String keyAlgorithm : keyAlgorithms) {
                 try {
+                    @SuppressWarnings("InsecureCryptoUsage")
                     final KeyFactory keyFactory = KeyFactory.getInstance(keyAlgorithm);
                     return keyFactory.generatePrivate(keySpec);
                 } catch (InvalidKeySpecException e) {
@@ -175,6 +183,7 @@ public class KeyUtil {
         final PBEKeySpec keySpec = new PBEKeySpec(password.toCharArray());
         final SecretKey secretKey = kf.generateSecret(keySpec);
 
+        @SuppressWarnings("InsecureCryptoUsage")
         final Cipher cipher = Cipher.getInstance(pkInfo.getAlgName());
         cipher.init(Cipher.DECRYPT_MODE, secretKey, pkInfo.getAlgParameters());
 
