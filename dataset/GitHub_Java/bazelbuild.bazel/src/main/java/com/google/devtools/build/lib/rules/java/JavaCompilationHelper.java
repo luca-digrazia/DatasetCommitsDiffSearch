@@ -374,11 +374,9 @@ public final class JavaCompilationHelper {
 
   private boolean shouldInstrumentJar() {
     // TODO(bazel-team): What about source jars?
-    RuleContext ruleContext = getRuleContext();
     return getConfiguration().isCodeCoverageEnabled()
         && attributes.hasSourceFiles()
-        && InstrumentedFilesCollector.shouldIncludeLocalSources(
-            ruleContext.getConfiguration(), ruleContext.getLabel(), ruleContext.isTestTarget());
+        && InstrumentedFilesCollector.shouldIncludeLocalSources(getRuleContext());
   }
 
   private boolean shouldUseHeaderCompilation() {

@@ -41,14 +41,11 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
-import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
@@ -444,7 +441,7 @@ final class JavaInfoBuildHelper {
                     .addAll(
                         JavaCommon.computePerPackageJavacOpts(
                             skylarkRuleContext.getRuleContext(), toolchainProvider))
-                    .addAll(tokenize(location, javacOpts))
+                    .addAll(javacOpts)
                     .build());
 
     streamProviders(deps, JavaCompilationArgsProvider.class).forEach(helper::addDep);
@@ -517,18 +514,6 @@ final class JavaInfoBuildHelper {
             createJavaPluginsProvider(concat(exportedPlugins, exports)))
         .setNeverlink(neverlink)
         .build();
-  }
-
-  private static List<String> tokenize(Location location, List<String> input) throws EvalException {
-    List<String> output = new ArrayList<>();
-    for (String token : input) {
-      try {
-        ShellUtils.tokenize(output, token);
-      } catch (ShellUtils.TokenizationException e) {
-        throw new EvalException(location, e.getMessage());
-      }
-    }
-    return output;
   }
 
   public Artifact buildIjar(
