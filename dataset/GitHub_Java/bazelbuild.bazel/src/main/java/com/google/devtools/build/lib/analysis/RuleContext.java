@@ -866,17 +866,6 @@ public final class RuleContext extends TargetContext
   }
 
   /**
-   * Returns all the providers of the specified type that are listed under the specified attribute
-   * of this target in the BUILD file, or an empty list of that attribute is not defined.
-   */
-  public <C extends TransitiveInfoProvider> Iterable<C> getPrerequisitesSafe(
-      String attributeName, Mode mode, final Class<C> classType) {
-    return attributes().has(attributeName)
-        ? getPrerequisites(attributeName, mode, classType)
-        : ImmutableList.of();
-  }
-
-  /**
    * Returns all the declared providers (native and Skylark) for the specified constructor under the
    * specified attribute of this target in the BUILD file.
    */
@@ -1090,20 +1079,20 @@ public final class RuleContext extends TargetContext
   }
 
   public ImmutableMap<String, String> getMakeVariables(Iterable<String> attributeNames) {
-    ArrayList<MakeVariableInfo> makeVariableInfos = new ArrayList<>();
+    ArrayList<MakeVariableProvider> makeVariableProviders = new ArrayList<>();
 
     for (String attributeName : attributeNames) {
       // TODO(b/37567440): Remove this continue statement.
       if (!attributes().has(attributeName)) {
         continue;
       }
-      Iterables.addAll(makeVariableInfos, getPrerequisites(
-          attributeName, Mode.DONT_CHECK, MakeVariableInfo.PROVIDER));
+      Iterables.addAll(makeVariableProviders, getPrerequisites(
+          attributeName, Mode.DONT_CHECK, MakeVariableProvider.SKYLARK_CONSTRUCTOR));
     }
 
     LinkedHashMap<String, String> makeVariables = new LinkedHashMap<>();
-    for (MakeVariableInfo makeVariableInfo : makeVariableInfos) {
-      makeVariables.putAll(makeVariableInfo.getMakeVariables());
+    for (MakeVariableProvider makeVariableProvider : makeVariableProviders) {
+      makeVariables.putAll(makeVariableProvider.getMakeVariables());
     }
 
     return ImmutableMap.copyOf(makeVariables);
@@ -1525,6 +1514,14 @@ public final class RuleContext extends TargetContext
    */
   public boolean isTestTarget() {
     return TargetUtils.isTestRule(getTarget());
+  }
+
+  /**
+   * Returns true if runfiles support should create the runfiles tree, or
+   * false if it should just create the manifest.
+   */
+  public boolean shouldCreateRunfilesSymlinks() {
+    return getConfiguration().buildRunfiles();
   }
 
   /**
