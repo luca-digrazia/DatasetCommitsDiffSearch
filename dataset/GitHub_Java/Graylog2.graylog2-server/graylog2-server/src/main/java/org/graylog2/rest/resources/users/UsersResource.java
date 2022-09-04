@@ -57,16 +57,15 @@ public class UsersResource extends RestResource {
 
     @GET
     @Path("{username}")
-    public Response get(@Context SecurityContext securityContext, @PathParam("username") String username) {
+    public Response authenticate(@Context SecurityContext securityContext, @PathParam("username") String username) {
         final Principal principal = securityContext.getUserPrincipal();
-        final User user = User.load(username, core);
+        final User user = User.load(principal.getName(), core);
 
         if (user == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            return Response.status(Response.Status.UNAUTHORIZED).build();
         }
         // if the requested username does not match the authenticated user, then we don't return permission information
-        // TODO also check if the principal has the necessary permissions to actually see the permissions (for editing them!)
-        final boolean isSameUser = principal.getName().equals(username);
+        final boolean isSameUser = user.getName().equals(username);
         return Response.ok().entity(json(toMap(user, isSameUser))).build();
     }
 
@@ -102,9 +101,8 @@ public class UsersResource extends RestResource {
         // Create user.
         Map<String, Object> userData = Maps.newHashMap();
         userData.put("username", cr.username);
-        userData.put("password", cr.password);
-        userData.put("full_name", cr.fullname);
-        userData.put("email", cr.email);
+        userData.put("password", cr.password); // core.getConfiguration().getPasswordSecret()));
+        userData.put("full_name", cr.fullName);
         userData.put("permissions", cr.permissions);
 
         User user = new User(userData, core);
@@ -166,7 +164,6 @@ public class UsersResource extends RestResource {
         final HashMap<String,Object> map = Maps.newHashMap();
         map.put("id", user.getId().toString());
         map.put("username", user.getName());
-        map.put("email", user.getEmail());
         map.put("full_name", user.getFullName());
         if (includePermissions) {
             map.put("permissions", user.getPermissions());
