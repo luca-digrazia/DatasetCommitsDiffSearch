@@ -30,11 +30,13 @@ import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
+import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversalRoot;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFunction.RecursiveFilesystemTraversalException;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFile;
@@ -54,10 +56,10 @@ import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
- * A builder of values for {@link Artifact} keys when the key is not a simple generated artifact. To
- * save memory, ordinary generated artifacts (non-middleman, non-tree) have their metadata accessed
- * directly from the corresponding {@link ActionExecutionValue}. This SkyFunction is therefore only
- * usable for source, middleman, and tree artifacts.
+ * A builder of values for {@link ArtifactSkyKey} keys when the key is not a simple generated
+ * artifact. To save memory, ordinary generated artifacts (non-middleman, non-tree) have their
+ * metadata accessed directly from the corresponding {@link ActionExecutionValue}. This SkyFunction
+ * is therefore only usable for source, middleman, and tree artifacts.
  */
 class ArtifactFunction implements SkyFunction {
   private final Supplier<Boolean> mkdirForTreeArtifacts;
@@ -261,7 +263,7 @@ class ArtifactFunction implements SkyFunction {
         return null;
       }
       Fingerprint fp = new Fingerprint();
-      for (ResolvedFile file : value.getTransitiveFiles().toList()) {
+      for (ResolvedFile file : value.getTransitiveFiles()) {
         fp.addString(file.getNameInSymlinkTree().getPathString());
         fp.addBytes(file.getMetadata().getDigest());
       }
@@ -289,12 +291,23 @@ class ArtifactFunction implements SkyFunction {
       Artifact.DerivedArtifact artifact, ActionExecutionValue actionValue) {
     Preconditions.checkState(!artifact.isMiddlemanArtifact(), "%s %s", artifact, actionValue);
     Preconditions.checkState(!artifact.isTreeArtifact(), "%s %s", artifact, actionValue);
-    return Preconditions.checkNotNull(
-        actionValue.getArtifactValue(artifact),
-        "%s %s %s",
+    FileArtifactValue value = actionValue.getArtifactValue(artifact);
+    if (value != null) {
+      return value;
+    }
+    FileArtifactValue data =
+        Preconditions.checkNotNull(
+            actionValue.getArtifactValue(artifact), "%s %s", artifact, actionValue);
+    Preconditions.checkNotNull(
+        data.getDigest(), "Digest should already have been calculated for %s (%s)", artifact, data);
+    // Directories are special-cased because their mtimes are used, so should have been constructed
+    // during execution of the action (in ActionMetadataHandler#maybeStoreAdditionalData).
+    Preconditions.checkState(
+        data.getType() == FileStateType.REGULAR_FILE || data.getType() == FileStateType.SYMLINK,
+        "Should be file or symlink %s (%s)",
         artifact,
-        artifact.getGeneratingActionKey(),
-        actionValue);
+        data);
+    return data;
   }
 
   @Nullable
@@ -308,8 +321,11 @@ class ArtifactFunction implements SkyFunction {
         ImmutableList.builder();
     ImmutableList.Builder<Pair<Artifact, TreeArtifactValue>> directoryInputsBuilder =
         ImmutableList.builder();
-    // Avoid iterating over nested set twice.
-    Iterable<Artifact> inputs = action.getInputs().toList();
+    Iterable<Artifact> inputs = action.getInputs();
+    if (inputs instanceof NestedSet) {
+      // Avoid iterating over nested set twice.
+      inputs = ((NestedSet<Artifact>) inputs).toList();
+    }
     Map<SkyKey, SkyValue> values = env.getValues(Artifact.keys(inputs));
     if (env.valuesMissing()) {
       return null;
