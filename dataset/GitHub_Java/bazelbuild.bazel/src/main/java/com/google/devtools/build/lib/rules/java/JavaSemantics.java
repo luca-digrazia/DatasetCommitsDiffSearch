@@ -15,10 +15,8 @@
 package com.google.devtools.build.lib.rules.java;
 
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -39,8 +37,6 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaOptimizationMode;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -203,29 +199,6 @@ public interface JavaSemantics {
         }
       };
 
-  LateBoundLabelList<BuildConfiguration> BYTECODE_OPTIMIZERS =
-      new LateBoundLabelList<BuildConfiguration>(JavaConfiguration.class) {
-        @Override
-        public List<Label> resolve(
-            Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-          // Use a modicum of smarts to avoid implicit dependencies where we don't need them.
-          JavaOptimizationMode optMode =
-              configuration.getFragment(JavaConfiguration.class).getJavaOptimizationMode();
-          boolean hasProguardSpecs = attributes.has("proguard_specs")
-              && !attributes.get("proguard_specs", LABEL_LIST).isEmpty();
-          if (optMode == JavaOptimizationMode.NOOP
-              || (optMode == JavaOptimizationMode.LEGACY && !hasProguardSpecs)) {
-            return ImmutableList.<Label>of();
-          }
-          return ImmutableList.copyOf(
-              Optional.presentInstances(
-                  configuration
-                      .getFragment(JavaConfiguration.class)
-                      .getBytecodeOptimizers()
-                      .values()));
-        }
-      };
-
   String IJAR_LABEL = "//tools/defaults:ijar";
 
   /**
@@ -289,7 +262,7 @@ public interface JavaSemantics {
    */
   Artifact createStubAction(
       RuleContext ruleContext,
-      JavaCommon javaCommon,
+      final JavaCommon javaCommon,
       List<String> jvmFlags,
       Artifact executable,
       String javaStartClass,
@@ -315,9 +288,7 @@ public interface JavaSemantics {
    * Add additional targets to be treated as direct dependencies.
    */
   void collectTargetsTreatedAsDeps(
-      RuleContext ruleContext,
-      ImmutableList.Builder<TransitiveInfoCollection> builder,
-      ClasspathType type);
+      RuleContext ruleContext, ImmutableList.Builder<TransitiveInfoCollection> builder);
 
   /**
    * Enables coverage support for the java target - adds instrumented jar to the classpath and
