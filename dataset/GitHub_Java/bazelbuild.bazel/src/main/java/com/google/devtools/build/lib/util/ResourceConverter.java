@@ -55,9 +55,9 @@ public class ResourceConverter extends Converters.IntegerConverter {
 
   private final Pattern validInputPattern;
 
-  protected final int minValue;
+  private final int minValue;
 
-  protected final int maxValue;
+  private final int maxValue;
 
   /**
    * Constructs a ResourceConverter for options that take {@value FLAG_SYNTAX}
@@ -67,7 +67,7 @@ public class ResourceConverter extends Converters.IntegerConverter {
    * @param maxValue the maximum allowed value
    */
   public ResourceConverter(Supplier<Integer> autoSupplier, int minValue, int maxValue) {
-    this(
+    this.keywords =
         ImmutableMap.<String, Supplier<Integer>>builder()
             .put("auto", autoSupplier)
             .put(
@@ -76,9 +76,15 @@ public class ResourceConverter extends Converters.IntegerConverter {
             .put(
                 "HOST_RAM",
                 () -> (int) Math.ceil(LocalHostCapacity.getLocalHostCapacity().getMemoryMb()))
-            .build(),
-        minValue,
-        maxValue);
+            .build();
+
+    this.validInputPattern =
+        Pattern.compile(
+            String.format(
+                "(?<keyword>%s)(?<expression>[%s][0-9]?(?:.[0-9]+)?)?",
+                String.join("|", this.keywords.keySet()), String.join("", OPERATORS.keySet())));
+    this.minValue = minValue;
+    this.maxValue = maxValue;
   }
 
   /**
@@ -91,36 +97,21 @@ public class ResourceConverter extends Converters.IntegerConverter {
     this(autoSupplier, 1, Integer.MAX_VALUE);
   }
 
-  /**
-   * Constructs a ResourceConverter for options that take keywords other than the default set.
-   *
-   * @param keywords a map of keyword to the suppliers of their values
-   */
-  public ResourceConverter(
-      ImmutableMap<String, Supplier<Integer>> keywords, int minValue, int maxValue) {
-    this.keywords = keywords;
-    this.validInputPattern =
-        Pattern.compile(
-            String.format(
-                "(?<keyword>%s)(?<expression>[%s][0-9]?(?:.[0-9]+)?)?",
-                String.join("|", this.keywords.keySet()), String.join("", OPERATORS.keySet())));
-    this.minValue = minValue;
-    this.maxValue = maxValue;
-  }
-
   @Override
   public final Integer convert(String input) throws OptionsParsingException {
     int value;
     if (NumberUtils.isNumber(input)) {
       value = super.convert(input);
-      return checkAndLimit(value);
+      checkValidity(value);
+      return value;
     }
     Matcher matcher = validInputPattern.matcher(input);
     if (matcher.matches()) {
       Supplier<Integer> resourceSupplier = keywords.get(matcher.group("keyword"));
       if (resourceSupplier != null) {
         value = applyOperator(matcher.group("expression"), resourceSupplier);
-        return checkAndLimit(value);
+        checkValidity(value);
+        return value;
       }
     }
     throw new OptionsParsingException(
@@ -158,10 +149,10 @@ public class ResourceConverter extends Converters.IntegerConverter {
   }
 
   /**
-   * Checks validity of a resource value against min/max constraints. Implementations may choose to
-   * either raise an exception on out-of-bounds values, or adjust them to within the constraints.
+   * Checks validity of all values, both calculated and explicitly defined, based on test condition
+   * or host capacity.
    */
-  public int checkAndLimit(int value) throws OptionsParsingException {
+  private void checkValidity(int value) throws OptionsParsingException {
     if (value < minValue) {
       throw new OptionsParsingException(
           String.format("Value '(%d)' must be at least %d.", value, minValue));
@@ -170,7 +161,6 @@ public class ResourceConverter extends Converters.IntegerConverter {
       throw new OptionsParsingException(
           String.format("Value '(%d)' cannot be greater than %d.", value, maxValue));
     }
-    return value;
   }
 
   @Override
