@@ -54,7 +54,7 @@ public abstract class ServerPartition implements IServerPartition {
   /**
    * Estimate sparsity for sparse model type
    */
-  protected final long estElemNum;
+  protected final double estSparsity;
 
   /**
    * Partition clock, it is the minimal clock value in clock vector
@@ -76,16 +76,16 @@ public abstract class ServerPartition implements IServerPartition {
    *
    * @param partKey the partition meta
    * @param rowType row type
-   * @param estElemNum valid element number
+   * @param estSparsity valid element number / index range
    * @param storage partition storage
    */
-  public ServerPartition(PartitionKey partKey, RowType rowType, long estElemNum,
+  public ServerPartition(PartitionKey partKey, RowType rowType, double estSparsity,
       IServerPartitionStorage storage) {
     this.state = PartitionState.INITIALIZING;
     this.partKey = partKey;
     this.rowType = rowType;
     this.clock = 0;
-    this.estElemNum = estElemNum;
+    this.estSparsity = estSparsity;
     this.storage = storage;
   }
 
@@ -94,7 +94,7 @@ public abstract class ServerPartition implements IServerPartition {
    * Create a new Server partition.
    */
   public ServerPartition() {
-    this(null, RowType.T_DOUBLE_DENSE, -1, null);
+    this(null, RowType.T_DOUBLE_DENSE, 1.0, null);
   }
 
 
@@ -256,12 +256,17 @@ public abstract class ServerPartition implements IServerPartition {
     return rowType;
   }
 
+  /**
+   * Get valid element number / index range
+   *
+   * @return valid element number / index range
+   */
+  public double getEstSparsity() {
+    return estSparsity;
+  }
+
   @Override
   public long getElemNum() {
     return getStorage().getElemNum();
-  }
-
-  public long getEstElemNum() {
-    return estElemNum;
   }
 }

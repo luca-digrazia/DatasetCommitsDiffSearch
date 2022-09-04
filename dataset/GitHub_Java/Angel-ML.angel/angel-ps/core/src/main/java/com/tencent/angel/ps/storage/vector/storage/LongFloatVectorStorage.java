@@ -18,15 +18,17 @@
 
 package com.tencent.angel.ps.storage.vector.storage;
 
-import com.tencent.angel.common.ByteBufSerdeUtils;
 import com.tencent.angel.ml.math2.VFactory;
+import com.tencent.angel.ml.math2.vector.FloatVector;
+import com.tencent.angel.ml.math2.vector.IntFloatVector;
 import com.tencent.angel.ml.math2.vector.LongFloatVector;
 import com.tencent.angel.ml.matrix.RowType;
-import com.tencent.angel.ps.server.data.request.KeyType;
+import com.tencent.angel.ps.server.data.request.IndexType;
 import com.tencent.angel.ps.server.data.request.InitFunc;
 import com.tencent.angel.ps.server.data.request.UpdateOp;
 import com.tencent.angel.ps.storage.vector.func.FloatElemUpdateFunc;
 import io.netty.buffer.ByteBuf;
+import it.unimi.dsi.fastutil.ints.Int2FloatMap;
 import it.unimi.dsi.fastutil.longs.Long2FloatMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import org.apache.commons.logging.Log;
@@ -42,9 +44,9 @@ public class LongFloatVectorStorage extends LongFloatStorage {
    * A vector storage: it can be IntFloatVector or LongFloatVector and can use DENSE,SPARSE and
    * SORTED storage type
    */
-  private LongFloatVector vector;
+  private FloatVector vector;
 
-  public LongFloatVectorStorage(LongFloatVector vector, long indexOffset) {
+  public LongFloatVectorStorage(FloatVector vector, long indexOffset) {
     super(indexOffset);
     this.vector = vector;
   }
@@ -53,30 +55,42 @@ public class LongFloatVectorStorage extends LongFloatStorage {
     this(null, 0L);
   }
 
-  public LongFloatVector getVector() {
+  public FloatVector getVector() {
     return vector;
   }
 
-  public void setVector(LongFloatVector vector) {
+  public void setVector(FloatVector vector) {
     this.vector = vector;
   }
 
+  private LongFloatVector getLongFloatVector() {
+    return (LongFloatVector) vector;
+  }
+
+  private IntFloatVector getIntFloatVector() {
+    return (IntFloatVector) vector;
+  }
+
   @Override
-  public void indexGet(KeyType keyType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func) {
+  public void indexGet(IndexType indexType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func) {
     if (func != null) {
-      if (keyType == KeyType.INT) {
-        throw new UnsupportedOperationException("Only support long index for Long key storage");
+      if (indexType == IndexType.INT) {
+        for (int i = 0; i < indexSize; i++) {
+          out.writeFloat(initAndGet(in.readInt(), func));
+        }
       } else {
         for (int i = 0; i < indexSize; i++) {
-          ByteBufSerdeUtils.serializeFloat(out, initAndGet(ByteBufSerdeUtils.deserializeLong(in), func));
+          out.writeFloat(initAndGet(in.readLong(), func));
         }
       }
     } else {
-      if (keyType == KeyType.INT) {
-        throw new UnsupportedOperationException("Only support long index for Long key storage");
+      if (indexType == IndexType.INT) {
+        for (int i = 0; i < indexSize; i++) {
+          out.writeFloat(get(in.readInt()));
+        }
       } else {
         for (int i = 0; i < indexSize; i++) {
-          ByteBufSerdeUtils.serializeFloat(out, get(ByteBufSerdeUtils.deserializeLong(in)));
+          out.writeFloat(get(in.readLong()));
         }
       }
     }
@@ -84,17 +98,51 @@ public class LongFloatVectorStorage extends LongFloatStorage {
 
   @Override
   public void update(RowType updateType, ByteBuf buf, UpdateOp op) {
+    long startTs = System.currentTimeMillis();
     switch (updateType) {
       case T_FLOAT_SPARSE_LONGKEY:
+      case T_FLOAT_SPARSE_LONGKEY_COMPONENT:
         updateUseLongFloatSparse(buf, op);
         break;
 
       case T_LONG_SPARSE_LONGKEY:
+      case T_LONG_SPARSE_LONGKEY_COMPONENT:
         updateUseLongLongSparse(buf, op);
         break;
 
       case T_INT_SPARSE_LONGKEY:
+      case T_INT_SPARSE_LONGKEY_COMPONENT:
         updateUseLongIntSparse(buf, op);
+        break;
+
+      case T_FLOAT_SPARSE:
+      case T_FLOAT_SPARSE_COMPONENT:
+        updateUseIntFloatSparse(buf, op);
+        break;
+
+      case T_LONG_SPARSE:
+      case T_LONG_SPARSE_COMPONENT:
+        updateUseIntLongSparse(buf, op);
+        break;
+
+      case T_INT_SPARSE:
+      case T_INT_SPARSE_COMPONENT:
+        updateUseIntIntSparse(buf, op);
+        break;
+
+      case T_FLOAT_DENSE:
+      case T_FLOAT_DENSE_COMPONENT:
+        updateUseIntFloatDense(buf, op);
+        break;
+
+      case T_LONG_DENSE:
+      case T_LONG_DENSE_COMPONENT:
+        updateUseIntLongDense(buf, op);
+        break;
+
+      case T_INT_DENSE:
+      case T_INT_DENSE_COMPONENT:
+        updateUseIntIntDense(buf, op);
         break;
 
       default: {
@@ -106,68 +154,283 @@ public class LongFloatVectorStorage extends LongFloatStorage {
 
 
   private void updateUseLongFloatSparse(ByteBuf buf, UpdateOp op) {
-    int size = ByteBufSerdeUtils.deserializeInt(buf);
+    int size = buf.readInt();
     if (op == UpdateOp.PLUS) {
-      for (int i = 0; i < size; i++) {
-        long index = buf.readLong();
-        float oldValue = get(index);
-        set(index, oldValue + ByteBufSerdeUtils.deserializeFloat(buf));
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = (int) buf.readLong();
+          getIntFloatVector().set(index, getIntFloatVector().get(index) + buf.readFloat());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readLong();
+          getLongFloatVector().set(index, getLongFloatVector().get(index) + buf.readFloat());
+        }
       }
     } else {
-      for (int i = 0; i < size; i++) {
-        long index = buf.readLong();
-        set(index, ByteBufSerdeUtils.deserializeFloat(buf));
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = (int) buf.readLong();
+          getIntFloatVector().set(index, buf.readFloat());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readLong();
+          getLongFloatVector().set(index, buf.readFloat());
+        }
       }
     }
   }
 
   private void updateUseLongLongSparse(ByteBuf buf, UpdateOp op) {
-    int size = ByteBufSerdeUtils.deserializeInt(buf);
+    int size = buf.readInt();
     if (op == UpdateOp.PLUS) {
-      for (int i = 0; i < size; i++) {
-        long index = buf.readLong();
-        float oldValue = get(index);
-        set(index, oldValue + ByteBufSerdeUtils.deserializeLong(buf));
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = (int) buf.readLong();
+          getIntFloatVector().set(index, getIntFloatVector().get(index) + buf.readLong());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readLong();
+          getLongFloatVector().set(index, getLongFloatVector().get(index) + buf.readLong());
+        }
       }
     } else {
-      for (int i = 0; i < size; i++) {
-        long index = buf.readLong();
-        set(index, ByteBufSerdeUtils.deserializeLong(buf));
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = (int) buf.readLong();
+          getIntFloatVector().set(index, buf.readLong());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readLong();
+          getLongFloatVector().set(index, buf.readLong());
+        }
       }
     }
   }
 
   private void updateUseLongIntSparse(ByteBuf buf, UpdateOp op) {
-    int size = ByteBufSerdeUtils.deserializeInt(buf);
+    int size = buf.readInt();
     if (op == UpdateOp.PLUS) {
-      for (int i = 0; i < size; i++) {
-        long index = buf.readLong();
-        float oldValue = get(index);
-        set(index, oldValue + ByteBufSerdeUtils.deserializeInt(buf));
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = (int) buf.readLong();
+          getIntFloatVector().set(index, getIntFloatVector().get(index) + buf.readInt());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readLong();
+          getLongFloatVector().set(index, getLongFloatVector().get(index) + buf.readInt());
+        }
       }
     } else {
-      for (int i = 0; i < size; i++) {
-        long index = buf.readLong();
-        set(index, ByteBufSerdeUtils.deserializeInt(buf));
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = (int) buf.readLong();
+          getIntFloatVector().set(index, buf.readInt());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readLong();
+          getLongFloatVector().set(index, buf.readInt());
+        }
+      }
+    }
+  }
+
+  private void updateUseIntFloatSparse(ByteBuf buf, UpdateOp op) {
+    int size = buf.readInt();
+    if (op == UpdateOp.PLUS) {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = buf.readInt();
+          getIntFloatVector().set(index, getIntFloatVector().get(index) + buf.readFloat());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readInt();
+          getLongFloatVector().set(index, getLongFloatVector().get(index) + buf.readFloat());
+        }
+      }
+    } else {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = buf.readInt();
+          getIntFloatVector().set(index, buf.readFloat());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readInt();
+          getLongFloatVector().set(index, buf.readFloat());
+        }
+      }
+    }
+  }
+
+  private void updateUseIntLongSparse(ByteBuf buf, UpdateOp op) {
+    int size = buf.readInt();
+    if (op == UpdateOp.PLUS) {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = buf.readInt();
+          getIntFloatVector().set(index, getIntFloatVector().get(index) + buf.readLong());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readInt();
+          getLongFloatVector().set(index, getLongFloatVector().get(index) + buf.readLong());
+        }
+      }
+    } else {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = buf.readInt();
+          getIntFloatVector().set(index, buf.readLong());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readInt();
+          getLongFloatVector().set(index, buf.readLong());
+        }
+      }
+    }
+  }
+
+  private void updateUseIntIntSparse(ByteBuf buf, UpdateOp op) {
+    int size = buf.readInt();
+    if (op == UpdateOp.PLUS) {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = buf.readInt();
+          getIntFloatVector().set(index, getIntFloatVector().get(index) + buf.readInt());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readInt();
+          getLongFloatVector().set(index, getLongFloatVector().get(index) + buf.readInt());
+        }
+      }
+    } else {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          int index = buf.readInt();
+          getIntFloatVector().set(index, buf.readInt());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          long index = buf.readInt();
+          getLongFloatVector().set(index, buf.readInt());
+        }
+      }
+    }
+  }
+
+  private void updateUseIntFloatDense(ByteBuf buf, UpdateOp op) {
+    int size = buf.readInt();
+    if (op == UpdateOp.PLUS) {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          getIntFloatVector().set(i, getIntFloatVector().get(i) + buf.readFloat());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          getLongFloatVector().set(i, getLongFloatVector().get(i) + buf.readFloat());
+        }
+      }
+    } else {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          getIntFloatVector().set(i, buf.readFloat());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          getLongFloatVector().set(i, buf.readFloat());
+        }
+      }
+    }
+  }
+
+  private void updateUseIntLongDense(ByteBuf buf, UpdateOp op) {
+    int size = buf.readInt();
+    if (op == UpdateOp.PLUS) {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          getIntFloatVector().set(i, getIntFloatVector().get(i) + buf.readLong());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          getLongFloatVector().set(i, getLongFloatVector().get(i) + buf.readLong());
+        }
+      }
+    } else {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          getIntFloatVector().set(i, buf.readLong());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          getLongFloatVector().set(i, buf.readLong());
+        }
+      }
+    }
+  }
+
+  private void updateUseIntIntDense(ByteBuf buf, UpdateOp op) {
+    int size = buf.readInt();
+    if (op == UpdateOp.PLUS) {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          getIntFloatVector().set(i, getIntFloatVector().get(i) + buf.readInt());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          getLongFloatVector().set(i, getLongFloatVector().get(i) + buf.readInt());
+        }
+      }
+    } else {
+      if (VectorStorageUtils.useIntKey(vector)) {
+        for (int i = 0; i < size; i++) {
+          getIntFloatVector().set(i, buf.readInt());
+        }
+      } else {
+        for (int i = 0; i < size; i++) {
+          getLongFloatVector().set(i, buf.readInt());
+        }
       }
     }
   }
 
   @Override
   public float get(long index) {
-    return vector.get(index - indexOffset);
+    if (VectorStorageUtils.useIntKey(vector)) {
+      return getIntFloatVector().get((int) (index - indexOffset));
+    } else {
+      return getLongFloatVector().get(index - indexOffset);
+    }
   }
 
   @Override
   public void set(long index, float value) {
-    vector.set(index - indexOffset, value);
+    if (VectorStorageUtils.useIntKey(vector)) {
+      getIntFloatVector().set((int) (index - indexOffset), value);
+    } else {
+      getLongFloatVector().set(index - indexOffset, value);
+    }
   }
 
   @Override
   public float[] get(long[] indices) {
     float[] values = new float[indices.length];
-    for (int i = 0; i < indices.length; i++) {
-      values[i] = get(indices[i]);
+    if (VectorStorageUtils.useIntKey(vector)) {
+      for (int i = 0; i < indices.length; i++) {
+        values[i] = getIntFloatVector().get((int) (indices[i] - indexOffset));
+      }
+    } else {
+      for (int i = 0; i < indices.length; i++) {
+        values[i] = getLongFloatVector().get(indices[i] - indexOffset);
+      }
     }
 
     return values;
@@ -176,8 +439,14 @@ public class LongFloatVectorStorage extends LongFloatStorage {
   @Override
   public void set(long[] indices, float[] values) {
     assert indices.length == values.length;
-    for (int i = 0; i < indices.length; i++) {
-      set(indices[i], values[i]);
+    if (VectorStorageUtils.useIntKey(vector)) {
+      for (int i = 0; i < indices.length; i++) {
+        getIntFloatVector().set((int) (indices[i] - indexOffset), values[i]);
+      }
+    } else {
+      for (int i = 0; i < indices.length; i++) {
+        getLongFloatVector().set(indices[i] - indexOffset, values[i]);
+      }
     }
   }
 
@@ -198,15 +467,58 @@ public class LongFloatVectorStorage extends LongFloatStorage {
   public void mergeTo(LongFloatVector mergedRow) {
     StorageMethod method = VectorStorageUtils.getStorageMethod(vector);
     switch (method) {
-      case SPARSE: {
-        ObjectIterator<Long2FloatMap.Entry> iter = vector.getStorage().entryIterator();
-        Long2FloatMap.Entry entry;
-        while (iter.hasNext()) {
-          entry = iter.next();
-          mergedRow.set(entry.getLongKey() + indexOffset, entry.getFloatValue());
+      case DENSE: {
+        float[] values;
+        if (VectorStorageUtils.useIntKey(vector)) {
+          values = getIntFloatVector().getStorage().getValues();
+        } else {
+          values = getLongFloatVector().getStorage().getValues();
         }
+
+        for (int i = 0; i < values.length; i++) {
+          mergedRow.set(i + indexOffset, values[i]);
+        }
+      }
+      break;
+
+      case SPARSE: {
+        if (VectorStorageUtils.useIntKey(vector)) {
+          ObjectIterator<Int2FloatMap.Entry> iter = getIntFloatVector().getStorage()
+              .entryIterator();
+          Int2FloatMap.Entry entry;
+          while (iter.hasNext()) {
+            entry = iter.next();
+            mergedRow.set(entry.getIntKey() + indexOffset, entry.getFloatValue());
+          }
+        } else {
+          ObjectIterator<Long2FloatMap.Entry> iter =
+              getLongFloatVector().getStorage().entryIterator();
+          Long2FloatMap.Entry entry;
+          while (iter.hasNext()) {
+            entry = iter.next();
+            mergedRow.set(entry.getLongKey() + indexOffset, entry.getFloatValue());
+          }
+        }
+
         break;
       }
+
+      case SORTED: {
+        if (VectorStorageUtils.useIntKey(vector)) {
+          int[] indices = getIntFloatVector().getStorage().getIndices();
+          float[] values = getIntFloatVector().getStorage().getValues();
+          for (int i = 0; i < indices.length; i++) {
+            mergedRow.set(indices[i] + indexOffset, values[i]);
+          }
+        } else {
+          long[] indices = getLongFloatVector().getStorage().getIndices();
+          float[] values = getLongFloatVector().getStorage().getValues();
+          for (int i = 0; i < indices.length; i++) {
+            mergedRow.set(indices[i] + indexOffset, values[i]);
+          }
+        }
+      }
+      break;
 
       default:
         throw new UnsupportedOperationException("unsupport storage method " + method);
@@ -228,17 +540,42 @@ public class LongFloatVectorStorage extends LongFloatStorage {
   public void elemUpdate(FloatElemUpdateFunc func) {
     StorageMethod method = VectorStorageUtils.getStorageMethod(vector);
     switch (method) {
+      case DENSE:
+      case SORTED: {
+        // Attention: Only update the exist values for sorted storage method
+        float[] values;
+        if (VectorStorageUtils.useIntKey(vector)) {
+          values = getIntFloatVector().getStorage().getValues();
+        } else {
+          values = getLongFloatVector().getStorage().getValues();
+        }
+        for (int i = 0; i < values.length; i++) {
+          values[i] = func.update();
+        }
+      }
+      break;
+
       case SPARSE: {
         // Attention: Only update exist element
-        ObjectIterator<Long2FloatMap.Entry> iter = vector.getStorage()
-            .entryIterator();
-        Long2FloatMap.Entry entry;
-        while (iter.hasNext()) {
-          entry = iter.next();
-          entry.setValue(func.update());
+        if (VectorStorageUtils.useIntKey(vector)) {
+          ObjectIterator<Int2FloatMap.Entry> iter = getIntFloatVector().getStorage()
+              .entryIterator();
+          Int2FloatMap.Entry entry;
+          while (iter.hasNext()) {
+            entry = iter.next();
+            entry.setValue(func.update());
+          }
+        } else {
+          ObjectIterator<Long2FloatMap.Entry> iter = getLongFloatVector().getStorage()
+              .entryIterator();
+          Long2FloatMap.Entry entry;
+          while (iter.hasNext()) {
+            entry = iter.next();
+            entry.setValue(func.update());
+          }
         }
-        break;
       }
+      break;
 
       default:
         throw new UnsupportedOperationException("unsupport storage method " + method);
@@ -247,7 +584,22 @@ public class LongFloatVectorStorage extends LongFloatStorage {
 
   @Override
   public boolean exist(long index) {
-    return vector.hasKey(index - indexOffset);
+    StorageMethod method = VectorStorageUtils.getStorageMethod(vector);
+    if (method == StorageMethod.DENSE) {
+      // TODO: just check the value is zero or not now
+      if (VectorStorageUtils.useIntKey(vector)) {
+        return getIntFloatVector().getStorage().get((int) (index - indexOffset)) == 0;
+      } else {
+        return getLongFloatVector().getStorage().get(index - indexOffset) == 0;
+      }
+    } else {
+      // SPARSE and SORT, check index exist or not, When using SORT mode storage, the search efficiency is very low.
+      if (VectorStorageUtils.useIntKey(vector)) {
+        return getIntFloatVector().getStorage().hasKey((int) (index - indexOffset));
+      } else {
+        return getLongFloatVector().getStorage().hasKey(index - indexOffset);
+      }
+    }
   }
 
   @Override
@@ -257,7 +609,7 @@ public class LongFloatVectorStorage extends LongFloatStorage {
 
   @Override
   public LongFloatVectorStorage deepClone() {
-    return new LongFloatVectorStorage(vector.copy(), indexOffset);
+    return new LongFloatVectorStorage((FloatVector) vector.copy(), indexOffset);
   }
 
   @Override
@@ -283,9 +635,15 @@ public class LongFloatVectorStorage extends LongFloatStorage {
   @Override
   public LongFloatVectorStorage adaptiveClone() {
     if (isSparse()) {
-      return new LongFloatVectorStorage(VFactory.sortedLongKeyFloatVector(vector.dim(),
-          vector.getStorage().getIndices(),
-          vector.getStorage().getValues()), indexOffset);
+      if (VectorStorageUtils.useIntKey(vector)) {
+        return new LongFloatVectorStorage(VFactory.sortedFloatVector((int) vector.dim(),
+            ((IntFloatVector) vector).getStorage().getIndices(),
+            ((IntFloatVector) vector).getStorage().getValues()), indexOffset);
+      } else {
+        return new LongFloatVectorStorage(VFactory.sortedLongKeyFloatVector(vector.dim(),
+            ((LongFloatVector) vector).getStorage().getIndices(),
+            ((LongFloatVector) vector).getStorage().getValues()), indexOffset);
+      }
     } else {
       return this;
     }
@@ -300,7 +658,7 @@ public class LongFloatVectorStorage extends LongFloatStorage {
   @Override
   public void deserialize(ByteBuf buf) {
     super.deserialize(buf);
-    vector = (LongFloatVector) VectorStorageUtils.deserialize(buf);
+    vector = (FloatVector) VectorStorageUtils.deserialize(buf);
   }
 
   @Override

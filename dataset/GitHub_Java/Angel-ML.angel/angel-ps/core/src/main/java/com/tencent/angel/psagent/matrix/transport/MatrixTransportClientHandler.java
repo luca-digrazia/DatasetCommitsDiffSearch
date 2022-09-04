@@ -33,25 +33,27 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class MatrixTransportClientHandler extends ChannelInboundHandlerAdapter {
   private static final Log LOG = LogFactory.getLog(MatrixTransportClientHandler.class);
-
   /**
-   * Transport client
+   * rpc response queue
    */
-  private final MatrixTransportClient client;
+  private final LinkedBlockingQueue<ByteBuf> msgQueue;
 
   /**
    * rpc dispatch event queue
    */
   private final LinkedBlockingQueue<DispatcherEvent> dispatchMessageQueue;
 
-  /**
-   * RPC context
-   */
   private final RPCContext rpcContext;
 
-  public MatrixTransportClientHandler(MatrixTransportClient client,
+  /**
+   * Create a new MatrixTransportClientHandler.
+   *
+   * @param msgQueue             rpc response queue
+   * @param dispatchMessageQueue rpc dispatch event queue
+   */
+  public MatrixTransportClientHandler(LinkedBlockingQueue<ByteBuf> msgQueue,
     LinkedBlockingQueue<DispatcherEvent> dispatchMessageQueue, RPCContext rpcContext) {
-    this.client = client;
+    this.msgQueue = msgQueue;
     this.dispatchMessageQueue = dispatchMessageQueue;
     this.rpcContext = rpcContext;
   }
@@ -69,13 +71,18 @@ public class MatrixTransportClientHandler extends ChannelInboundHandlerAdapter {
   }
 
   @Override public void channelRead(ChannelHandlerContext ctx, Object msg) {
+    //LOG.debug("receive a message " + ((ByteBuf) msg).readableBytes());
     if (LOG.isDebugEnabled()) {
       int seqId = ((ByteBuf) msg).readInt();
       LOG.debug("receive result of seqId=" + seqId);
       ((ByteBuf) msg).resetReaderIndex();
     }
 
-    client.handleResponse(msg);
+    try {
+      msgQueue.put((ByteBuf) msg);
+    } catch (InterruptedException e) {
+      //      LOG.error("put response message queue failed ", e);
+    }
   }
 
   @Override public void exceptionCaught(ChannelHandlerContext ctx, Throwable x) {

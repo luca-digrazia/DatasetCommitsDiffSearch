@@ -40,11 +40,13 @@ public class MatrixTransportServerHandler extends ChannelInboundHandlerAdapter {
 
   @Override public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
     LOG.debug("channel " + ctx.channel() + " registered");
+    workerPool.registerChannel(ctx);
     super.channelRegistered(ctx);
   }
 
   @Override public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
     LOG.debug("channel " + ctx.channel() + " unregistered");
+    workerPool.unregisterChannel(ctx);
     super.channelUnregistered(ctx);
   }
 

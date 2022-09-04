@@ -15,38 +15,12 @@
  *
  */
 
-package com.tencent.angel.ps.server.data;
+package com.tencent.angel.ps.storage.partition.storage;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
+import com.tencent.angel.common.StreamSerialize;
 
-public class ChannelHandlerContextMsg {
-  /**
-   * Request
-   */
-  private final ByteBuf message;
-
-  /**
-   * Channel context
-   */
-  private final ChannelHandlerContext ctx;
-
-  public ChannelHandlerContextMsg(ByteBuf message, ChannelHandlerContext ctx) {
-    this.message = message;
-    this.ctx = ctx;
-  }
-
-  public ByteBuf getMessage() {
-    return message;
-  }
-
-  public ChannelHandlerContext getCtx() {
-    return ctx;
-  }
-}
-
-class StopMsg extends ChannelHandlerContextMsg {
-  public StopMsg() {
-    super(null, null);
+public abstract class UserDefinePartitionStorage extends ServerPartitionStorage implements StreamSerialize {
+  public UserDefinePartitionStorage(int rowIdOffset) {
+    super(rowIdOffset);
   }
 }

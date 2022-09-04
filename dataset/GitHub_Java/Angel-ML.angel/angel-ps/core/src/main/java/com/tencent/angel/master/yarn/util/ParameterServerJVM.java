@@ -1,29 +1,25 @@
 /*
  * Tencent is pleased to support the open source community by making Angel available.
  *
- * Copyright (C) 2017 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the BSD 3-Clause License (the "License"); you may not use this file except in
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
  * compliance with the License. You may obtain a copy of the License at
  *
- * https://opensource.org/licenses/BSD-3-Clause
+ * https://opensource.org/licenses/Apache-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is
- * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
- * either express or implied. See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
+ *
  */
+
 
 package com.tencent.angel.master.yarn.util;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Vector;
-
 import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.ps.PSAttemptId;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -35,6 +31,11 @@ import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.util.Apps;
+
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Vector;
 
 /**
  * Ps JVM command utils
@@ -52,23 +53,23 @@ public class ParameterServerJVM {
   }
 
   private static String getChildLogLevel(Configuration conf) {
-    return conf.get(AngelConf.ANGEL_PS_LOG_LEVEL,
-        AngelConf.DEFAULT_ANGEL_PS_LOG_LEVEL);
+    return conf.get(AngelConf.ANGEL_PS_LOG_LEVEL, AngelConf.DEFAULT_ANGEL_PS_LOG_LEVEL);
   }
 
   /**
    * Set environment variables of ps attempt process
+   *
    * @param environment environment variables of ps attempt process
-   * @param conf application configuration
+   * @param conf        application configuration
    */
   public static void setVMEnv(Map<String, String> environment, Configuration conf) {
     // Add the env variables passed by the user
     String setEnv = getChildEnv(conf);
-    try{
+    try {
       Apps.setEnvFromInputString(environment, setEnv);
     } catch (Exception x) {
       LOG.error("set ps env faile.", x);
-    }    
+    }
 
     // Set logging level in the environment.
     environment.put("HADOOP_ROOT_LOGGER", getChildLogLevel(conf) + ",CLA");
@@ -93,9 +94,15 @@ public class ParameterServerJVM {
   }
 
   private static String getChildJavaOpts(Configuration jobConf, ApplicationId appid,
-      PSAttemptId psAttemptId) {
-    String userOpts = null;
+    PSAttemptId psAttemptId) {
+    String userOpts;
     userOpts = jobConf.get(AngelConf.ANGEL_PS_JAVA_OPTS);
+
+    // Old parameter name
+    if(userOpts == null) {
+      userOpts = jobConf.get("angel.ps.child.opts");
+    }
+
     if (userOpts == null) {
       userOpts = generateDefaultJVMParameters(jobConf, appid, psAttemptId);
     }
@@ -104,30 +111,149 @@ public class ParameterServerJVM {
   }
 
   private static String generateDefaultJVMParameters(Configuration conf, ApplicationId appid,
-      PSAttemptId psAttemptId) {
-    int workerMemSizeInMB =
-        conf.getInt(AngelConf.ANGEL_PS_MEMORY_GB,
-            AngelConf.DEFAULT_ANGEL_PS_MEMORY_GB) * 1024;
+    PSAttemptId psAttemptId) {
+    int psMemSizeInMB =
+      conf.getInt(AngelConf.ANGEL_PS_MEMORY_GB, AngelConf.DEFAULT_ANGEL_PS_MEMORY_GB) * 1024;
 
-    int heapMax = workerMemSizeInMB - 200;
-    int youngRegionSize = (int) (heapMax * 0.4);
-    int suvivorRatio = 4;
+    if (psMemSizeInMB < 2048) {
+      psMemSizeInMB = 2048;
+    }
 
-    String ret =
-        new StringBuilder().append(" -Xmx").append(heapMax).append("M").append(" -Xmn")
-            .append(youngRegionSize).append("M").append(" -XX:MaxDirectMemorySize=")
-            .append(workerMemSizeInMB / 4).append("M").append(" -XX:SurvivorRatio=")
-            .append(suvivorRatio).append(" -XX:PermSize=100M -XX:MaxPermSize=200M")
-            .append(" -XX:+AggressiveOpts").append(" -XX:+UseLargePages")
-            .append(" -XX:+UseParallelGC").append(" -XX:+UseAdaptiveSizePolicy")
-            .append(" -XX:CMSInitiatingOccupancyFraction=70")
-            .append(" -XX:+UseCMSInitiatingOccupancyOnly").append(" -XX:+CMSScavengeBeforeRemark")
-            .append(" -XX:+UseCMSCompactAtFullCollection").append(" -verbose:gc")
-            .append(" -XX:+PrintGCDateStamps").append(" -XX:+PrintGCDetails")
-            .append(" -XX:+PrintCommandLineFlags").append(" -XX:+PrintTenuringDistribution")
-            .append(" -XX:+PrintAdaptiveSizePolicy").append(" -Xloggc:/tmp/").append("angelgc-")
-            .append(appid).append("-").append(psAttemptId).append(".log").toString();
+    boolean isUseDirect = conf
+      .getBoolean(AngelConf.ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER,
+        AngelConf.DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER);
 
+    float directFatorUseDirectBuff = conf
+      .getFloat(AngelConf.ANGEL_PS_JVM_DIRECT_FACTOR_USE_DIRECT_BUFF,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_DIRECT_FACTOR_USE_DIRECT_BUFF);
+
+    float directFatorUseHeapBuff = conf.getFloat(AngelConf.ANGEL_PS_JVM_DIRECT_FACTOR_USE_HEAP_BUFF,
+      AngelConf.DEFAULT_ANGEL_PS_JVM_DIRECT_FACTOR_USE_HEAP_BUFF);
+
+    float youngFator = conf
+      .getFloat(AngelConf.ANGEL_PS_JVM_YOUNG_FACTOR, AngelConf.DEFAULT_ANGEL_PS_JVM_YOUNG_FACTOR);
+
+    // Parallel GC parameters
+    boolean isUseParallel = conf.getBoolean(AngelConf.ANGEL_PS_JVM_USE_PARALLEL_GC,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_USE_PARALLEL_GC);
+
+    int parallelGCThread = conf.getInt(AngelConf.ANGEL_PS_JVM_PARALLEL_GC_THREADS,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_PARALLEL_GC_THREADS);
+
+    int parallelGCMaxPauseMillis = conf.getInt(AngelConf.ANGEL_PS_JVM_PARALLEL_GC_MAX_PAUSE_TIME_MS,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_PARALLEL_GC_MAX_PAUSE_TIME_MS);
+
+    boolean useAdaptiveSize = conf.getBoolean(AngelConf.ANGEL_PS_JVM_PARALLEL_GC_USE_ADAPTIVE_SIZE,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_PARALLEL_GC_USE_ADAPTIVE_SIZE);
+
+    // G1 params
+    boolean useG1 = conf
+        .getBoolean(AngelConf.ANGEL_PS_JVM_USE_G1, AngelConf.DEFAULT_ANGEL_PS_JVM_USE_G1);
+
+    int maxPauseTimeTs = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_MAXPAUSETIME_MS,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_G1_MAXPAUSETIME_MS);
+
+    int minNewRatio = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_MIN_NEWRATIO,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_G1_MIN_NEWRATIO);
+
+    int maxNewRatio = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_MAX_NEWRATIO,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_G1_MAX_NEWRATIO);
+
+    int regionSizeMB = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_REGIONSIZE_MB,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_G1_REGIONSIZE_MB);
+
+    int ihop = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_IHOP, AngelConf.DEFAULT_ANGEL_PS_JVM_G1_IHOP);
+
+    int workerNum = conf
+        .getInt(AngelConf.ANGEL_PS_JVM_G1_WORKER_NUM, AngelConf.DEFAULT_ANGEL_PS_JVM_G1_WORKER_NUM);
+
+    int concWorkerNum = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_CONC_WORKER_NUM,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_G1_CONC_WORKER_NUM);
+
+    int reservePercent = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_RESERVE_PERCENT,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_G1_RESERVE_PERCENT);
+
+    int mixGcLiveThreshold = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_MIXGC_LIVE_THRESHOLD_PERCENT,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_G1_MIXGC_LIVE_THRESHOLD_PERCENT);
+
+    int mixGcTargetCount = conf.getInt(AngelConf.ANGEL_PS_JVM_G1_MIXGC_TARGET_COUNT,
+        AngelConf.DEFAULT_ANGEL_PS_JVM_G1_MIXGC_TARGET_COUNT);
+
+    int useMax = psMemSizeInMB - 512;
+    int directRegionSize = 0;
+    if (isUseDirect) {
+      directRegionSize = (int) (useMax * directFatorUseDirectBuff);
+    } else {
+      directRegionSize = (int) (useMax * directFatorUseHeapBuff);
+    }
+
+    int heapMax = useMax - directRegionSize;
+    int youngRegionSize = (int) (heapMax * youngFator);
+    int survivorRatio = 4;
+
+    String ret;
+
+    if(isUseParallel) {
+      // Parallel Scavenge + Parallel Old
+      StringBuilder sb = new StringBuilder();
+      sb.append(" -Xmx").append(heapMax).append("M");
+      if(useAdaptiveSize) {
+        sb.append(" -XX:+UseAdaptiveSizePolicy");
+        sb.append(" -XX:MaxGCPauseMillis=").append(parallelGCMaxPauseMillis);
+      } else {
+        sb.append(" -Xms").append(heapMax).append("M");
+        sb.append(" -XX:-UseAdaptiveSizePolicy");
+        sb.append(" -Xmn").append(youngRegionSize).append("M");
+        sb.append(" -XX:SurvivorRatio=").append(survivorRatio);
+      }
+
+      ret = sb.append(" -XX:MaxDirectMemorySize=").append(directRegionSize).append("M")
+          .append(" -XX:PermSize=100M -XX:MaxPermSize=200M")
+          .append(" -XX:+AggressiveOpts")
+          .append(" -XX:+UseLargePages")
+          .append(" -XX:+UseParallelOldGC")
+          .append(" -XX:ParallelGCThreads=").append(parallelGCThread)
+          .append(" -verbose:gc")
+          .append(" -XX:+PrintGCDateStamps")
+          .append(" -XX:+PrintGCDetails")
+          .append(" -Xloggc:<LOG_DIR>/gc.log").toString();
+    } else if(useG1) {
+      // G1
+      ret = new StringBuilder().append(" -Xmx").append(heapMax).append("M")
+          .append(" -XX:MaxDirectMemorySize=")
+          .append(directRegionSize).append("M")
+          .append(" -XX:+AggressiveOpts")
+          .append(" -XX:+UseLargePages")
+          .append(" -XX:+UseG1GC")
+          .append(" -XX:+UnlockExperimentalVMOptions")
+          .append(" -XX:MaxGCPauseMillis=").append(maxPauseTimeTs)
+          //.append(" -XX:G1NewSizePercent=").append(minNewRatio)
+          //.append(" -XX:G1MaxNewSizePercent=").append(maxNewRatio)
+          .append(" -XX:G1HeapRegionSize=").append(regionSizeMB).append("m")
+          .append(" -XX:InitiatingHeapOccupancyPercent=").append(ihop)
+          .append(" -XX:G1MixedGCLiveThresholdPercent=").append(mixGcLiveThreshold)
+          .append(" -XX:G1MixedGCCountTarget=").append(mixGcTargetCount)
+          .append(" -XX:ConcGCThreads=").append(concWorkerNum)
+          .append(" -XX:ParallelGCThreads=").append(workerNum)
+          .append(" -XX:G1ReservePercent=").append(reservePercent)
+          .append(" -verbose:gc")
+          .append(" -XX:+PrintGCDateStamps").append(" -XX:+PrintGCDetails")
+          .append(" -Xloggc:<LOG_DIR>/gc.log").toString();
+    } else {
+      // CMS
+      ret = new StringBuilder().append(" -Xmx").append(heapMax).append("M").append(" -Xmn")
+          .append(youngRegionSize).append("M").append(" -XX:MaxDirectMemorySize=")
+          .append(directRegionSize).append("M").append(" -XX:SurvivorRatio=").append(survivorRatio)
+          .append(" -XX:PermSize=100M -XX:MaxPermSize=200M").append(" -XX:+AggressiveOpts")
+          .append(" -XX:+UseLargePages").append(" -XX:+UseConcMarkSweepGC")
+          .append(" -XX:CMSInitiatingOccupancyFraction=70")
+          .append(" -XX:+UseCMSInitiatingOccupancyOnly").append(" -XX:+CMSScavengeBeforeRemark")
+          .append(" -XX:+UseCMSCompactAtFullCollection").append(" -verbose:gc")
+          .append(" -XX:+PrintGCDateStamps").append(" -XX:+PrintGCDetails")
+          .append(" -Xloggc:<LOG_DIR>/gc.log").toString();
+    }
+
+    LOG.info("PS GC parameters: " + ret);
     return ret;
   }
 
@@ -138,13 +264,14 @@ public class ParameterServerJVM {
 
   /**
    * Generate ps attempt jvm command
-   * @param conf application configuration
-   * @param appid application id
+   *
+   * @param conf        application configuration
+   * @param appid       application id
    * @param psAttemptId ps attempt id
    * @return ps attempt jvm command
    */
   public static List<String> getVMCommand(Configuration conf, ApplicationId appid,
-      PSAttemptId psAttemptId) {
+    PSAttemptId psAttemptId) {
 
     Vector<String> vargs = new Vector<String>(8);
     vargs.add(Environment.JAVA_HOME.$() + "/bin/java");
@@ -163,8 +290,7 @@ public class ParameterServerJVM {
     setupLog4jProperties(conf, vargs, logSize);
 
     // Add main class and its arguments
-    String psClassName =
-        conf.get(AngelConf.ANGEL_PS_CLASS, AngelConf.DEFAULT_ANGEL_PS_CLASS);
+    String psClassName = conf.get(AngelConf.ANGEL_PS_CLASS, AngelConf.DEFAULT_ANGEL_PS_CLASS);
     vargs.add(psClassName); // main of Child
 
     // Finally add the jvmID

@@ -28,7 +28,6 @@ import com.tencent.angel.model.output.format.ModelFilesConstent;
 import com.tencent.angel.model.output.format.MatrixFilesMeta;
 import com.tencent.angel.model.output.format.MatrixPartitionMeta;
 import com.tencent.angel.protobuf.ProtobufUtil;
-import com.tencent.angel.protobuf.generated.MLProtos;
 import com.tencent.angel.ps.ParameterServerId;
 import com.tencent.angel.ps.ha.RecoverPartKey;
 import com.tencent.angel.ps.server.data.PSLocation;
@@ -190,14 +189,14 @@ public class AMMatrixMetaManager {
     }
   }
 
-  private Partitioner initPartitioner(MatrixContext matrixContext, AMContext context)
+  private Partitioner initPartitioner(MatrixContext matrixContext, Configuration conf)
       throws IllegalAccessException, InvocationTargetException, InstantiationException,
       NoSuchMethodException {
     Class<? extends Partitioner> partitionerClass = matrixContext.getPartitionerClass();
     Constructor<? extends Partitioner> constructor = partitionerClass.getConstructor();
     constructor.setAccessible(true);
     Partitioner partitioner = constructor.newInstance();
-    partitioner.init(matrixContext, context);
+    partitioner.init(matrixContext, conf);
     return partitioner;
   }
 
@@ -214,8 +213,7 @@ public class AMMatrixMetaManager {
 
     String loadPath = matrixContext.getAttributes().get(MatrixConf.MATRIX_LOAD_PATH);
     //matrixContext.set(MatrixConf.MATRIX_LOAD_PATH, "");
-
-    Partitioner partitioner = initPartitioner(matrixContext, context);
+    Partitioner partitioner = initPartitioner(matrixContext, context.getConf());
 
     List<PartitionMeta> partitions;
     if (loadPath != null) {
@@ -239,11 +237,11 @@ public class AMMatrixMetaManager {
     assignReplicationSlaves(partitions);
 
     int size = partitions.size();
-    Map<Integer, PartitionMeta> partIdToMetaMap = new TreeMap<>();
+    Map<Integer, PartitionMeta> partIdToMetaMap = new HashMap<>(size);
     for (int i = 0; i < size; i++) {
       partIdToMetaMap.put(partitions.get(i).getPartId(), partitions.get(i));
     }
-    MatrixMeta meta = new MatrixMeta(size, matrixContext, partIdToMetaMap);
+    MatrixMeta meta = new MatrixMeta(matrixContext, partIdToMetaMap);
     return meta;
   }
 
@@ -357,7 +355,7 @@ public class AMMatrixMetaManager {
 
         MatrixMeta psMatrixMeta = psMatrixIdToMetaMap.get(matrixId);
         if (psMatrixMeta == null) {
-          psMatrixMeta = new MatrixMeta(partMetas.size(), matrixMeta.getMatrixContext());
+          psMatrixMeta = new MatrixMeta(matrixMeta.getMatrixContext());
           psMatrixIdToMetaMap.put(matrixId, psMatrixMeta);
         }
 

@@ -28,12 +28,12 @@ public abstract class UserDefinePartition extends ServerPartition implements Str
    *
    * @param partKey the partition meta
    * @param rowType row type
-   * @param estElemNum valid element number / index range
+   * @param estSparsity valid element number / index range
    * @param storage partition storage
    */
-  public UserDefinePartition(PartitionKey partKey, RowType rowType, long estElemNum,
+  public UserDefinePartition(PartitionKey partKey, RowType rowType, double estSparsity,
       IServerPartitionStorage storage) {
-    super(partKey, rowType, estElemNum, storage);
+    super(partKey, rowType, estSparsity, storage);
   }
 
 
@@ -41,6 +41,6 @@ public abstract class UserDefinePartition extends ServerPartition implements Str
    * Create a new Server partition.
    */
   public UserDefinePartition() {
-    this(null, RowType.T_DOUBLE_DENSE, -1, null);
+    this(null, RowType.T_DOUBLE_DENSE, 1.0, null);
   }
 }

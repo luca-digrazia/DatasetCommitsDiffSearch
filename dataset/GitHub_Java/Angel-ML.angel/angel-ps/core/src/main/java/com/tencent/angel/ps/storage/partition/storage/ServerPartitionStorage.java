@@ -68,11 +68,6 @@ public abstract class ServerPartitionStorage implements IServerPartitionStorage 
   }
 
   @Override
-  public long dataSize() {
-    return 4;
-  }
-
-  @Override
   public void update(UpdateFunc func, PartitionUpdateParam partParam) {
     func.partitionUpdate(partParam);
   }

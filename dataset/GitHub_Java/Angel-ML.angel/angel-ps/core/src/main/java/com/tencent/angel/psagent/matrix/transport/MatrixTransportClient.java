@@ -19,14 +19,15 @@
 package com.tencent.angel.psagent.matrix.transport;
 
 import com.google.protobuf.ServiceException;
+import com.tencent.angel.PartitionKey;
 import com.tencent.angel.common.AngelThreadFactory;
 import com.tencent.angel.common.location.Location;
 import com.tencent.angel.common.transport.ChannelManager2;
 import com.tencent.angel.common.transport.ChannelPoolParam;
 import com.tencent.angel.common.transport.NettyChannel;
 import com.tencent.angel.conf.AngelConf;
-import com.tencent.angel.exception.AngelException;
 import com.tencent.angel.ml.matrix.PartitionLocation;
+import com.tencent.angel.ml.matrix.RowType;
 import com.tencent.angel.ml.matrix.psf.get.base.GetFunc;
 import com.tencent.angel.ml.matrix.psf.get.base.PartitionGetParam;
 import com.tencent.angel.ml.matrix.psf.get.base.PartitionGetResult;
@@ -37,29 +38,44 @@ import com.tencent.angel.ps.ParameterServerId;
 import com.tencent.angel.ps.server.data.PSLocation;
 import com.tencent.angel.ps.server.data.ServerState;
 import com.tencent.angel.ps.server.data.TransportMethod;
+import com.tencent.angel.ps.server.data.request.CheckpointPSRequest;
+import com.tencent.angel.ps.server.data.request.GetClocksRequest;
+import com.tencent.angel.ps.server.data.request.GetPartitionRequest;
+import com.tencent.angel.ps.server.data.request.GetRowSplitRequest;
+import com.tencent.angel.ps.server.data.request.GetRowsSplitRequest;
+import com.tencent.angel.ps.server.data.request.GetStateRequest;
 import com.tencent.angel.ps.server.data.request.GetUDFRequest;
+import com.tencent.angel.ps.server.data.request.IndexPartGetRowRequest;
+import com.tencent.angel.ps.server.data.request.IndexPartGetRowsRequest;
+import com.tencent.angel.ps.server.data.request.InitFunc;
+import com.tencent.angel.ps.server.data.request.PSRequest;
+import com.tencent.angel.ps.server.data.request.PartitionRequest;
 import com.tencent.angel.ps.server.data.request.Request;
-import com.tencent.angel.ps.server.data.request.RequestContext;
-import com.tencent.angel.ps.server.data.request.RequestHeader;
-import com.tencent.angel.ps.server.data.request.UpdateUDFRequest;
+import com.tencent.angel.ps.server.data.request.UpdateItem;
+import com.tencent.angel.ps.server.data.request.UpdateOp;
+import com.tencent.angel.ps.server.data.request.UpdateRequest;
+import com.tencent.angel.ps.server.data.request.UpdaterRequest;
+import com.tencent.angel.ps.server.data.request.ValueType;
+import com.tencent.angel.ps.server.data.response.CheckpointPSResponse;
+import com.tencent.angel.ps.server.data.response.GetClocksResponse;
+import com.tencent.angel.ps.server.data.response.GetPartitionResponse;
+import com.tencent.angel.ps.server.data.response.GetRowSplitResponse;
+import com.tencent.angel.ps.server.data.response.GetRowsSplitResponse;
+import com.tencent.angel.ps.server.data.response.GetStateResponse;
 import com.tencent.angel.ps.server.data.response.GetUDFResponse;
+import com.tencent.angel.ps.server.data.response.IndexPartGetRowResponse;
+import com.tencent.angel.ps.server.data.response.IndexPartGetRowsResponse;
 import com.tencent.angel.ps.server.data.response.Response;
-import com.tencent.angel.ps.server.data.response.ResponseData;
-import com.tencent.angel.ps.server.data.response.ResponseHeader;
 import com.tencent.angel.ps.server.data.response.ResponseType;
-import com.tencent.angel.ps.server.data.response.UpdateUDFResponse;
+import com.tencent.angel.ps.server.data.response.UpdateResponse;
+import com.tencent.angel.ps.server.data.response.UpdaterResponse;
+import com.tencent.angel.ps.storage.partition.ServerPartition;
+import com.tencent.angel.ps.storage.vector.ServerRow;
 import com.tencent.angel.psagent.PSAgentContext;
-import com.tencent.angel.psagent.matrix.transport.adapter.UserRequest;
-import com.tencent.angel.psagent.matrix.transport.adapter.UserRequestAdapter;
-import com.tencent.angel.psagent.matrix.transport.response.GetRowHandler;
-import com.tencent.angel.psagent.matrix.transport.response.GetRowsHandler;
-import com.tencent.angel.psagent.matrix.transport.response.GetUDFHandler;
-import com.tencent.angel.psagent.matrix.transport.response.Handler;
-import com.tencent.angel.psagent.matrix.transport.response.IndexGetRowHandler;
-import com.tencent.angel.psagent.matrix.transport.response.IndexGetRowsHandler;
-import com.tencent.angel.psagent.matrix.transport.response.ResponseCache;
-import com.tencent.angel.psagent.matrix.transport.response.UpdateHandler;
-import com.tencent.angel.psagent.matrix.transport.response.UpdateUDFHandler;
+import com.tencent.angel.psagent.matrix.transport.adapter.IndexPartGetRowResult;
+import com.tencent.angel.psagent.matrix.transport.adapter.IndexPartGetRowsResult;
+import com.tencent.angel.psagent.matrix.transport.adapter.IndicesView;
+import com.tencent.angel.psagent.task.TaskContext;
 import com.tencent.angel.utils.ByteBufUtils;
 import com.tencent.angel.utils.StringUtils;
 import io.netty.bootstrap.Bootstrap;
@@ -84,14 +100,15 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -283,8 +300,6 @@ public class MatrixTransportClient implements MatrixTransportInterface {
   private final ConcurrentHashMap<PSLocation, AtomicInteger> psLocToNoActiveCounterMap =
       new ConcurrentHashMap<>();
 
-  private final ConcurrentHashMap<TransportMethod, Handler> responseHanders;
-
   /**
    * Create a new MatrixTransportClient.
    */
@@ -296,7 +311,6 @@ public class MatrixTransportClient implements MatrixTransportInterface {
     dispatchMessageQueue = new LinkedBlockingQueue<>();
     getItemQueues = new ConcurrentHashMap<>();
     putItemQueues = new ConcurrentHashMap<>();
-    responseHanders = new ConcurrentHashMap<>();
 
     getUseTimes = new ArrayList<>();
 
@@ -339,10 +353,6 @@ public class MatrixTransportClient implements MatrixTransportInterface {
 
     rpcContext.init(conf, PSAgentContext.get().getLocationManager().getPsIds());
 
-    // Init response handler
-    registeHandler();
-
-    // Init network parameters
     int nettyWorkerNum = conf
         .getInt(AngelConf.ANGEL_NETTY_MATRIXTRANSFER_CLIENT_EVENTGROUP_THREADNUM,
             AngelConf.DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_CLIENT_EVENTGROUP_THREADNUM);
@@ -408,7 +418,6 @@ public class MatrixTransportClient implements MatrixTransportInterface {
       ((NioEventLoopGroup) eventGroup).setIoRatio(ioRatio);
     }
 
-    MatrixTransportClient client = this;
     bootstrap.group(eventGroup).channel(channelClass).option(ChannelOption.SO_SNDBUF, sendBuffSize)
         .option(ChannelOption.SO_RCVBUF, recvBuffSize).option(ChannelOption.SO_KEEPALIVE, true)
         .handler(new ChannelInitializer<SocketChannel>() {
@@ -419,20 +428,9 @@ public class MatrixTransportClient implements MatrixTransportInterface {
             pipeLine.addLast(new LengthFieldPrepender(4));
             pipeLine
                 .addLast(
-                    new MatrixTransportClientHandler(client, dispatchMessageQueue, rpcContext));
+                    new MatrixTransportClientHandler(msgQueue, dispatchMessageQueue, rpcContext));
           }
         });
-  }
-
-  private void registeHandler() {
-    PSAgentContext context = PSAgentContext.get();
-    responseHanders.put(TransportMethod.GET_ROWSPLIT, new GetRowHandler(context));
-    responseHanders.put(TransportMethod.GET_ROWSSPLIT, new GetRowsHandler(context));
-    responseHanders.put(TransportMethod.INDEX_GET_ROW, new IndexGetRowHandler(context));
-    responseHanders.put(TransportMethod.INDEX_GET_ROWS, new IndexGetRowsHandler(context));
-    responseHanders.put(TransportMethod.UPDATE, new UpdateHandler(context));
-    responseHanders.put(TransportMethod.GET_PSF, new GetUDFHandler(context));
-    responseHanders.put(TransportMethod.UPDATE_PSF, new UpdateUDFHandler(context));
   }
 
   /**
@@ -514,8 +512,232 @@ public class MatrixTransportClient implements MatrixTransportInterface {
     }
   }
 
+  @Override
+  public Future<ServerPartition> getPart(int requestId, PartitionKey partKey, int clock) {
+    ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(partKey);
+    GetPartitionRequest request = new GetPartitionRequest(partKey, clock);
+
+    FutureResult<ServerPartition> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToGetQueueForServer(serverId, request);
+    startGet();
+    return future;
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public Future<ServerRow> getRowSplit(int requestId, PartitionKey partKey, int rowIndex,
+      int clock) {
+    ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(partKey);
+    GetRowSplitRequest request = new GetRowSplitRequest(requestId, clock, partKey, rowIndex);
+    FutureResult<ServerRow> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToGetQueueForServer(serverId, request);
+    startGet();
+    return future;
+  }
+
+  @Override
+  public Future<List<ServerRow>> getRowsSplit(int requestId, PartitionKey partKey,
+      List<Integer> rowIndexes, int clock) {
+    ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(partKey);
+    GetRowsSplitRequest request = new GetRowsSplitRequest(requestId, clock, partKey, rowIndexes);
+    FutureResult<List<ServerRow>> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToGetQueueForServer(serverId, request);
+    startGet();
+    return future;
+  }
+
+  @Override
+  public Future<GetClocksResponse> getClocks(ParameterServerId serverId) {
+    GetClocksRequest request = new GetClocksRequest(serverId);
+    FutureResult<GetClocksResponse> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToGetQueueForServer(serverId, request);
+    startGet();
+    return future;
+  }
+
+  public FutureResult<ServerState> getPSState(ParameterServerId serverId) {
+    GetStateRequest request = new GetStateRequest(serverId);
+    FutureResult<ServerState> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    requestDispacher.submit(request);
+    return future;
+  }
+
+  @Override
+  public Future<VoidResult> update(int requestId, UpdateFunc updateFunc,
+      PartitionUpdateParam partitionUpdaterParam) {
+    ParameterServerId serverId =
+        PSAgentContext.get().getMatrixMetaManager()
+            .getMasterPS((partitionUpdaterParam.getPartKey()));
+
+    UpdaterRequest request = new UpdaterRequest(requestId, partitionUpdaterParam.getPartKey(),
+        updateFunc.getClass().getName(), partitionUpdaterParam);
+
+    LOG.debug("update request=" + request);
+
+    FutureResult<VoidResult> future = new FutureResult<VoidResult>();
+    requestToResultMap.put(request, future);
+
+    addToPutQueueForServer(serverId, request);
+    startPut();
+    return future;
+  }
+
+  @Override
+  public Future<VoidResult> update(UpdateFunc updateFunc,
+      PartitionUpdateParam partitionUpdaterParam) {
+    return update(-1, updateFunc, partitionUpdaterParam);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public Future<PartitionGetResult> get(int requestId, GetFunc func,
+      PartitionGetParam partitionGetParam) {
+    ParameterServerId serverId =
+        PSAgentContext.get().getMatrixMetaManager().getMasterPS((partitionGetParam.getPartKey()));
+
+    GetUDFRequest request =
+        new GetUDFRequest(requestId, partitionGetParam.getPartKey(), func.getClass().getName(),
+            partitionGetParam);
+
+    LOG.debug("get request=" + request);
+
+    FutureResult<PartitionGetResult> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToGetQueueForServer(serverId, request);
+    startGet();
+    return future;
+  }
+
+  public void checkpoint(int requestId, int matrixId, int checkPointId, ParameterServerId psId) {
+    CheckpointPSRequest request = new CheckpointPSRequest(requestId, matrixId, checkPointId, psId);
+    LOG.debug("checkpoint request=" + request);
+
+    FutureResult<VoidResult> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToPutQueueForServer(psId, request);
+    startPut();
+  }
+
+  @Override
+  public Future<PartitionGetResult> get(GetFunc func, PartitionGetParam partitionGetParam) {
+    return get(-1, func, partitionGetParam);
+  }
+
+  @Override
+  public FutureResult<IndexPartGetRowResult> indexGetRow(int userRequestId, int matrixId, int rowId,
+      PartitionKey partKey, IndicesView indices, InitFunc func) {
+    ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(partKey);
+
+    RowType rowType =
+        PSAgentContext.get().getMatrixMetaManager().getMatrixMeta(partKey.getMatrixId())
+            .getRowType();
+    ValueType valueType = getValueType(rowType);
+    IndexPartGetRowRequest request =
+        new IndexPartGetRowRequest(userRequestId, matrixId, rowId, partKey, indices, valueType,
+            func);
+    LOG.debug("get request=" + request);
+
+    FutureResult<IndexPartGetRowResult> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToGetQueueForServer(serverId, request);
+    startGet();
+    return future;
+  }
+
+  @Override
+  public FutureResult<IndexPartGetRowsResult> indexGetRows(int requestId, int matrixId,
+      PartitionKey partKey, List<Integer> rowIds, IndicesView colIds, InitFunc func) {
+    ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(partKey);
+
+    RowType rowType =
+        PSAgentContext.get().getMatrixMetaManager().getMatrixMeta(partKey.getMatrixId())
+            .getRowType();
+    ValueType valueType = getValueType(rowType);
+    IndexPartGetRowsRequest request =
+        new IndexPartGetRowsRequest(requestId, matrixId, rowIds, partKey, colIds, valueType, func);
+    LOG.debug("get request=" + request);
+
+    FutureResult<IndexPartGetRowsResult> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToGetQueueForServer(serverId, request);
+    startGet();
+    return future;
+  }
+
+  @Override
+  public FutureResult<VoidResult> plus(int requestId, int matrixId, PartitionKey partKey,
+      UpdateItem updateItem, TaskContext taskContext, int clock, boolean updateClock) {
+    return null;
+  }
+
+  @Override
+  public FutureResult<VoidResult> update(int requestId, int matrixId, PartitionKey partKey,
+      UpdateItem updateItem, TaskContext taskContext, int clock, boolean updateClock, UpdateOp op) {
+    ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(partKey);
+    UpdateRequest request;
+    if (taskContext != null) {
+      request = new UpdateRequest(requestId, taskContext.getIndex(), clock, partKey, updateItem,
+          updateClock, op);
+    } else {
+      request = new UpdateRequest(requestId, -1, -1, partKey, updateItem, false, op);
+    }
+
+    FutureResult<VoidResult> future = new FutureResult<>();
+    requestToResultMap.put(request, future);
+    addToPutQueueForServer(serverId, request);
+    startPut();
+    return future;
+  }
+
+  private ValueType getValueType(RowType rowType) {
+    switch (rowType) {
+      case T_DOUBLE_DENSE:
+      case T_DOUBLE_SPARSE:
+      case T_DOUBLE_DENSE_COMPONENT:
+      case T_DOUBLE_SPARSE_COMPONENT:
+      case T_DOUBLE_SPARSE_LONGKEY:
+      case T_DOUBLE_SPARSE_LONGKEY_COMPONENT:
+      case T_DOUBLE_DENSE_LONGKEY_COMPONENT:
+        return ValueType.DOUBLE;
+
+      case T_FLOAT_DENSE:
+      case T_FLOAT_SPARSE:
+      case T_FLOAT_DENSE_COMPONENT:
+      case T_FLOAT_SPARSE_COMPONENT:
+      case T_FLOAT_SPARSE_LONGKEY:
+      case T_FLOAT_SPARSE_LONGKEY_COMPONENT:
+      case T_FLOAT_DENSE_LONGKEY_COMPONENT:
+        return ValueType.FLOAT;
+
+      case T_INT_DENSE:
+      case T_INT_SPARSE:
+      case T_INT_DENSE_COMPONENT:
+      case T_INT_SPARSE_COMPONENT:
+      case T_INT_SPARSE_LONGKEY:
+      case T_INT_SPARSE_LONGKEY_COMPONENT:
+      case T_INT_DENSE_LONGKEY_COMPONENT:
+        return ValueType.INT;
+
+      case T_LONG_DENSE:
+      case T_LONG_SPARSE:
+      case T_LONG_DENSE_COMPONENT:
+      case T_LONG_SPARSE_COMPONENT:
+      case T_LONG_SPARSE_LONGKEY:
+      case T_LONG_SPARSE_LONGKEY_COMPONENT:
+      case T_LONG_DENSE_LONGKEY_COMPONENT:
+        return ValueType.LONG;
+
+      default:
+        return ValueType.DOUBLE;
+    }
+  }
+
   private void addToGetQueueForServer(ParameterServerId serverId, Request request) {
-    request.setContext(new RequestContext());
     request.getContext().setServerId(serverId);
     LinkedBlockingQueue<Request> queue = getItemQueues.get(serverId);
     if (queue == null) {
@@ -527,7 +749,6 @@ public class MatrixTransportClient implements MatrixTransportInterface {
   }
 
   private void addToPutQueueForServer(ParameterServerId serverId, Request request) {
-    request.setContext(new RequestContext());
     request.getContext().setServerId(serverId);
     LinkedBlockingQueue<Request> queue = putItemQueues.get(serverId);
     if (queue == null) {
@@ -538,71 +759,13 @@ public class MatrixTransportClient implements MatrixTransportInterface {
     queue.add(request);
   }
 
-  @Override
-  public void sendGetRequest(Request request) {
-    ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(
-        request.getHeader().getMatrixId(), request.getHeader().getPartId());
-    addToGetQueueForServer(serverId, request);
-    startGet();
-  }
-
-  @Override
-  public void sendUpdateRequest(Request request) {
-    ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(
-        request.getHeader().getMatrixId(), request.getHeader().getPartId());
-    addToPutQueueForServer(serverId, request);
-    startPut();
-  }
-
-  @Override
-  public FutureResult<PartitionGetResult> get(GetFunc func, PartitionGetParam param) {
-    // Request header
-    RequestHeader header = createRequestHeader(-1, TransportMethod.GET_PSF,
-        param.getMatrixId(), param.getPartKey().getPartitionId());
-
-    // Request body
-    GetUDFRequest requestData = new GetUDFRequest(func.getClass().getName(), param);
-
-    // Request
-    Request request = new Request(header, requestData);
-
-    FutureResult<PartitionGetResult> resultFuture = new FutureResult<>();
-    requestToResultMap.put(request, resultFuture);
-
-    // Send the request
-    sendGetRequest(request);
-
-    return resultFuture;
-  }
-
-  @Override
-  public FutureResult<VoidResult> update(UpdateFunc func, PartitionUpdateParam param) {
-    // Request header
-    RequestHeader header = createRequestHeader(-1, TransportMethod.UPDATE_PSF,
-        param.getMatrixId(), param.getPartKey().getPartitionId());
-
-    // Request body
-    UpdateUDFRequest requestData = new UpdateUDFRequest(func.getClass().getName(), param);
-
-    // Request
-    Request request = new Request(header, requestData);
-
-    FutureResult<VoidResult> resultFuture = new FutureResult<>();
-    requestToResultMap.put(request, resultFuture);
-
-    // Send the request
-    sendUpdateRequest(request);
-
-    return resultFuture;
-  }
-
-  private RequestHeader createRequestHeader(int requestId, TransportMethod method, int matrixId, int partId) {
-    RequestHeader header = new RequestHeader();
-    header.setUserRequestId(requestId);
-    header.setMethodId(method.getMethodId());
-    header.setMethodId(matrixId);
-    header.setPartId(partId);
-    return header;
+  private final void breakAllRequests(String errorLog){
+    Iterator<Entry<Integer, Request>> iter = seqIdToRequestMap.entrySet().iterator();
+    while(iter.hasNext()) {
+      Entry<Integer, Request> entry = iter.next();
+      PSAgentContext.get().getPsAgent().getUserRequestAdapter()
+          .notifySubTaskFailed(entry.getValue().getUserRequestId(), entry.getValue().getSeqId(), errorLog);
+    }
   }
 
   class PSLocRefresher extends Thread {
@@ -614,7 +777,7 @@ public class MatrixTransportClient implements MatrixTransportInterface {
 
         if(System.currentTimeMillis() - lastHbTs > hbTimeoutMS) {
           LOG.fatal("can not connect to master in " + hbTimeoutMS + " ms!!");
-          PSAgentContext.get().getUserRequestAdapter().clear("Angel master is exit!!");
+          breakAllRequests("Angel master is exit!!");
         }
 
         if(!failedPSToLocMap.isEmpty()) {
@@ -922,8 +1085,10 @@ public class MatrixTransportClient implements MatrixTransportInterface {
               request.getContext().setFailedTs(System.currentTimeMillis());
 
               // Add it to failed rpc list
-              request.getContext().setNextRetryTs(genNextRetryTs());
-              failedGetCache.add(request);
+              if (request instanceof PartitionRequest || request instanceof PSRequest) {
+                request.getContext().setNextRetryTs(genNextRetryTs());
+                failedGetCache.add(request);
+              }
 
               // Add the server to gray server list
               if (needPutToGrayServers(getFailedEvent.getFailedType())) {
@@ -951,8 +1116,10 @@ public class MatrixTransportClient implements MatrixTransportInterface {
               request.getContext().setFailedTs(System.currentTimeMillis());
 
               // Add it to failed rpc list
-              request.getContext().setNextRetryTs(genNextRetryTs());
-              failedPutCache.add(request);
+              if (request instanceof PartitionRequest || request instanceof PSRequest) {
+                request.getContext().setNextRetryTs(genNextRetryTs());
+                failedPutCache.add(request);
+              }
 
               // Add the server to gray server list
               if (needPutToGrayServers(putFailedEvent.getFailedType())) {
@@ -1163,9 +1330,10 @@ public class MatrixTransportClient implements MatrixTransportInterface {
 
     private void submit(Request item) {
       int seqId = currentSeqId.incrementAndGet();
-      item.setSeqId(seqId);
       item.getContext().setWaitTimeTicks(0);
-      rpcContext.before(item.getContext().getServerId());
+      if (item instanceof PartitionRequest) {
+        rpcContext.before(item.getContext().getServerId());
+      }
       LOG.debug("submit request seqId=" + seqId + ",request=" + item);
       seqIdToRequestMap.put(seqId, item);
       requestThreadPool.execute(new Requester(item, seqId));
@@ -1367,13 +1535,16 @@ public class MatrixTransportClient implements MatrixTransportInterface {
       return;
     }
 
-    rpcContext.after(request.getContext().getServerId());
+    if (request instanceof PartitionRequest) {
+      rpcContext.after(request.getContext().getServerId());
+    }
     seqIdToSendCFMap.remove(seqId);
     returnChannel(request);
     switch (request.getType()) {
       case GET_PART:
       case GET_ROWSPLIT:
       case GET_ROWSSPLIT:
+      case GET_CLOCKS:
       case GET_PSF:
       case INDEX_GET_ROW:
       case INDEX_GET_ROWS:
@@ -1383,7 +1554,11 @@ public class MatrixTransportClient implements MatrixTransportInterface {
       case PUT_PART:
       case UPDATE:
       case UPDATE_PSF:
+      case CHECKPOINT:
         putRequestSuccess(request);
+        break;
+
+      case GET_STATE:
         break;
 
       default:
@@ -1398,8 +1573,7 @@ public class MatrixTransportClient implements MatrixTransportInterface {
       return;
     }
 
-    // Check need retry or not
-    if (isOverTryLimit(request, failedType, errorLog)) {
+    if (isOverTryLimie(request, failedType, errorLog)) {
       LOG.error("request " + request + " failed over " + maxTryNum + ", notify to caller");
       FutureResult response = requestToResultMap.remove(request);
       if(response != null) {
@@ -1408,12 +1582,13 @@ public class MatrixTransportClient implements MatrixTransportInterface {
         LOG.warn("can not find response for request " + request);
       }
 
-      // Clear the cache for this request
-      PSAgentContext.get().getUserRequestAdapter().clear(request.getUserRequestId());
-      return;
+      PSAgentContext.get().getPsAgent().getUserRequestAdapter()
+          .notifySubTaskFailed(request.getUserRequestId(), request.getSeqId(), errorLog);
     }
 
-    rpcContext.after(request.getContext().getServerId());
+    if (request instanceof PartitionRequest) {
+      rpcContext.after(request.getContext().getServerId());
+    }
     seqIdToSendCFMap.remove(seqId);
     //LOG.debug("request failed " + request + ", failedType=" + failedType + ", errorLog=" + errorLog);
     returnChannel(request);
@@ -1436,6 +1611,18 @@ public class MatrixTransportClient implements MatrixTransportInterface {
       case CHECKPOINT:
         putRequestFailed(request, failedType, errorLog);
         break;
+
+      case GET_STATE:
+        break;
+
+      case GET_CLOCKS: {
+        FutureResult<GetClocksResponse> result = requestToResultMap.remove(request);
+        if (result != null) {
+          result.set(new GetClocksResponse(failedType, errorLog, null));
+        }
+        getRequestFailed(request, failedType, errorLog);
+        break;
+      }
 
       default:
         LOG.error("unvalid request " + request);
@@ -1521,7 +1708,7 @@ public class MatrixTransportClient implements MatrixTransportInterface {
     }
   }
 
-  private boolean isOverTryLimit(Request request, ResponseType failedType, String errorLog) {
+  private boolean isOverTryLimie(Request request, ResponseType failedType, String errorLog) {
     request.getContext().setErrorLog(errorLog);
     return request.getContext().getTryCounter() >= maxTryNum;
   }
@@ -1561,6 +1748,18 @@ public class MatrixTransportClient implements MatrixTransportInterface {
       LOG.error("add START_PUT event failed, ", e);
     }
   }
+
+  //private Channel getChannel(Location loc) throws Exception {
+  //  return channelManager.getOrCreateChannel(new Location(loc.getIp(), loc.getPort() + 1));
+  //}
+
+  //private GenericObjectPool<Channel> getChannelPool(Location loc) throws InterruptedException {
+  //  return channelManager.getOrCreateChannelPool(new Location(loc.getIp(), loc.getPort() + 1), PSAgentContext
+  //          .get()
+  //          .getConf()
+  //          .getInt(AngelConf.ANGEL_WORKER_TASK_NUMBER,
+  //              AngelConf.DEFAULT_ANGEL_WORKER_TASK_NUMBER));
+  //}
 
   private void returnBuffer(Request item) {
     ByteBuf buf = item.getContext().getSerializedData();
@@ -1781,7 +1980,7 @@ public class MatrixTransportClient implements MatrixTransportInterface {
         }
       }
 
-      if (LOG.isDebugEnabled()) {
+      if (LOG.isDebugEnabled() && request instanceof PartitionRequest) {
         LOG.debug("request " + request + " with seqId=" + seqId + " get location use time " + (
             System.currentTimeMillis() - startTs));
       }
@@ -1802,42 +2001,43 @@ public class MatrixTransportClient implements MatrixTransportInterface {
 
       getChannelContext(psLoc).getChannelSuccess();
 
-      if (LOG.isDebugEnabled()) {
+      if (LOG.isDebugEnabled() && (request instanceof PartitionRequest)) {
         LOG.debug(
             "request with seqId=" + seqId + " get channel use time " + (System.currentTimeMillis()
                 - startTs));
       }
 
       // Check if need get token first
-      int token;
-
-      if (psIdToStateMap.get(psLoc.psId) == ServerState.BUSY) {
-        requestFailed(seqId, ResponseType.SERVER_IS_BUSY, "server " + psLoc.psId + " is busy");
-        return;
-      } else if (psIdToStateMap.get(psLoc.psId) == ServerState.GENERAL) {
-        try {
-          LOG.debug("PS " + psLoc + " is in GENERAL, need get token first");
-          token = getToken(psLoc.loc);
-          LOG.debug("token=" + token);
-          if (token == 0) {
-            requestFailed(seqId, ResponseType.SERVER_IS_BUSY, "PS " + psLoc.psId + " is busy");
+      int token = 0;
+      if (request instanceof PartitionRequest) {
+        if (psIdToStateMap.get(psLoc.psId) == ServerState.BUSY) {
+          requestFailed(seqId, ResponseType.SERVER_IS_BUSY, "server " + psLoc.psId + " is busy");
+          return;
+        } else if (psIdToStateMap.get(psLoc.psId) == ServerState.GENERAL) {
+          try {
+            LOG.debug("PS " + psLoc + " is in GENERAL, need get token first");
+            token = getToken(psLoc.loc);
+            LOG.debug("token=" + token);
+            if (token == 0) {
+              requestFailed(seqId, ResponseType.SERVER_IS_BUSY, "PS " + psLoc.psId + " is busy");
+              return;
+            }
+            ((PartitionRequest) request).setTokenNum(token);
+          } catch (Throwable e) {
+            LOG.error("get token from PS " + psLoc.loc + " failed ", e);
+            requestFailed(seqId, ResponseType.NETWORK_ERROR, StringUtils.stringifyException(e));
             return;
           }
-          request.setTokenNum(token);
-        } catch (Throwable e) {
-          LOG.error("get token from PS " + psLoc.loc + " failed ", e);
-          requestFailed(seqId, ResponseType.NETWORK_ERROR, StringUtils.stringifyException(e));
-          return;
         }
+      } else {
+        token = 0;
       }
-
-      LOG.info("Send request " + request.getHeader());
 
       // Serialize the request
       startTs = System.currentTimeMillis();
       ByteBuf buffer;
       try {
-        buffer = serializeRequest(request);
+        buffer = serializeRequest(request, seqId, token);
       } catch (Throwable e) {
         if (e instanceof OutOfMemoryError) {
           rpcContext.oom();
@@ -1848,7 +2048,7 @@ public class MatrixTransportClient implements MatrixTransportInterface {
         return;
       }
 
-      if (LOG.isDebugEnabled()) {
+      if (LOG.isDebugEnabled() && (request instanceof PartitionRequest)) {
         LOG.debug("request with seqId=" + seqId + " serialize request use time " + (
             System.currentTimeMillis() - startTs));
       }
@@ -1870,32 +2070,54 @@ public class MatrixTransportClient implements MatrixTransportInterface {
     private PSLocation getPSLoc(Request request) {
       ParameterServerId serverId = null;
       Location loc = null;
-      PartitionLocation partLoc;
-      try {
-        partLoc = PSAgentContext.get().getMatrixMetaManager()
-            .getPartLocation(request.getHeader().matrixId, request.getHeader().partId, disableRouterCache);
-      } catch (Throwable e) {
-        LOG.error("Get partition location from Master failed ", e);
-        partLoc = PSAgentContext.get().getMatrixMetaManager()
-            .getPartLocation(request.getHeader().matrixId, request.getHeader().partId);
-      }
-
-      if (partLoc != null && !partLoc.psLocs.isEmpty()) {
-        serverId = partLoc.psLocs.get(0).psId;
-        loc = partLoc.psLocs.get(0).loc;
-      }
-
-      if (loc == null && !disableRouterCache) {
+      if (request instanceof GetClocksRequest) {
+        serverId = ((GetClocksRequest) request).getServerId();
+        loc = PSAgentContext.get().getLocationManager().getPsLocation(serverId);
+        if (loc == null) {
+          try {
+            loc = PSAgentContext.get().getLocationManager().getPsLocation(serverId, true);
+          } catch (Throwable e) {
+            LOG.error("Get location from Master failed ", e);
+          }
+        }
+      } else if(request instanceof PSRequest) {
+        serverId = ((PSRequest) request).getPsId();
+        loc = PSAgentContext.get().getLocationManager().getPsLocation(serverId);
+        if (loc == null) {
+          try {
+            loc = PSAgentContext.get().getLocationManager().getPsLocation(serverId, true);
+          } catch (Throwable e) {
+            LOG.error("Get location from Master failed ", e);
+          }
+        }
+      } else {
+        PartitionLocation partLoc;
         try {
           partLoc = PSAgentContext.get().getMatrixMetaManager()
-              .getPartLocation(request.getHeader().matrixId, request.getHeader().partId, true);
+              .getPartLocation(((PartitionRequest) request).getPartKey(), disableRouterCache);
         } catch (Throwable e) {
           LOG.error("Get partition location from Master failed ", e);
+          partLoc = PSAgentContext.get().getMatrixMetaManager()
+              .getPartLocation(((PartitionRequest) request).getPartKey());
         }
 
         if (partLoc != null && !partLoc.psLocs.isEmpty()) {
           serverId = partLoc.psLocs.get(0).psId;
           loc = partLoc.psLocs.get(0).loc;
+        }
+
+        if (loc == null && !disableRouterCache) {
+          try {
+            partLoc = PSAgentContext.get().getMatrixMetaManager()
+                .getPartLocation(((PartitionRequest) request).getPartKey(), true);
+          } catch (Throwable e) {
+            LOG.error("Get partition location from Master failed ", e);
+          }
+
+          if (partLoc != null && !partLoc.psLocs.isEmpty()) {
+            serverId = partLoc.psLocs.get(0).psId;
+            loc = partLoc.psLocs.get(0).loc;
+          }
         }
       }
 
@@ -1907,7 +2129,7 @@ public class MatrixTransportClient implements MatrixTransportInterface {
       long startTs = System.currentTimeMillis();
       NettyChannel channel =
           channelManager.getChannel(new Location(psLoc.loc.getIp(), psLoc.loc.getPort() + 1));
-      if (LOG.isDebugEnabled()) {
+      if (LOG.isDebugEnabled() && (request instanceof PartitionRequest)) {
         LOG.debug("request with seqId=" + seqId + " wait for channel use time " + (
             System.currentTimeMillis() - startTs));
       }
@@ -1925,10 +2147,15 @@ public class MatrixTransportClient implements MatrixTransportInterface {
     }
   }
 
-  private ByteBuf serializeRequest(Request request) {
+  private ByteBuf serializeRequest(Request request, int seqId, int token) {
     // Allocate the bytebuf and serialize the request
-    ByteBuf buffer = ByteBufUtils.newByteBuf(request.bufferLen());
+    ByteBuf buffer = ByteBufUtils.newByteBuf(16 + request.bufferLen(), useDirectBuffer);
+    buffer.writeInt(PSAgentContext.get().getPSAgentId());
+    buffer.writeInt(token);
+    buffer.writeInt(seqId);
+    buffer.writeInt(request.getType().getMethodId());
     request.serialize(buffer);
+    request.getContext().setSerializedData(buffer);
     return buffer;
   }
 
@@ -1954,7 +2181,10 @@ public class MatrixTransportClient implements MatrixTransportInterface {
 
     @Override
     public void operationComplete(ChannelFuture future) throws Exception {
-      LOG.debug("send request with seqId=" + seqId + " complete");
+      if (request instanceof PartitionRequest) {
+        LOG.debug("send request with seqId=" + seqId + " complete");
+      }
+
       if (!future.isSuccess()) {
         LOG.error("send request " + seqId + " failed ", future.cause());
         requestFailed(seqId, ResponseType.NETWORK_ERROR,
@@ -1986,9 +2216,6 @@ public class MatrixTransportClient implements MatrixTransportInterface {
     }
   }
 
-  public void handleResponse(Object msg) {
-    responseThreadPool.execute(new Responser((ByteBuf) msg));
-  }
 
   /**
    * RPC responses handler
@@ -2004,130 +2231,397 @@ public class MatrixTransportClient implements MatrixTransportInterface {
     @Override
     public void run() {
       int seqId = 0;
+      Request request;
       try {
-        // Parse response
-        Response response = new Response();
-        response.deserialize(msg);
-        ResponseHeader header = response.getHeader();
-        seqId = header.getSeqId();
+        seqId = msg.readInt();
 
-        LOG.info("ResponseHeader=" + header);
-
-        // Get Request
-        Request request = seqIdToRequestMap.get(header.seqId);
-        if(request == null) {
+        // find the partition request context from cache
+        request = seqIdToRequestMap.get(seqId);
+        long startTs = System.currentTimeMillis();
+        if (request == null) {
           return;
         }
 
-        // TODO: for LDA, will be remove future
-        FutureResult subResult = requestToResultMap.get(request);
-        if(request.getType() == TransportMethod.GET_PSF && subResult != null) {
-          GetUDFResponse getUDFResponse = new GetUDFResponse();
-          getUDFResponse.deserialize(msg);
-          subResult.set(getUDFResponse.getPartResult());
+        TransportMethod method = request.getType();
+
+        if (LOG.isDebugEnabled() && (request instanceof PartitionRequest)) {
+          LOG.debug("response handler, seqId=" + seqId + ", method=" + method + ", ts=" + System
+              .currentTimeMillis());
         }
 
-        if(request.getType() == TransportMethod.UPDATE_PSF && subResult != null) {
-          UpdateUDFResponse updateUDFResponse = new UpdateUDFResponse();
-          updateUDFResponse.deserialize(msg);
-          subResult.set(new VoidResult(com.tencent.angel.psagent.matrix.ResponseType.SUCCESS));
-        }
-
-        int userRequestId = request.getUserRequestId();
-
-        // Update Server state
-        handleServerState(request, header.state);
-
-        //LOG.info("Handle request " + request.getHeader() + ", response " + response.getHeader());
-
-        // Get user request and result cache
-        UserRequestAdapter adapter = PSAgentContext.get().getUserRequestAdapter();
-        UserRequest userRequest = adapter.getUserRequest(userRequestId);
-        ResponseCache responseCache = adapter.getResponseCache(userRequestId);
-        FutureResult futureResult = adapter.getFutureResult(userRequestId);
-
-        //LOG.info("userRequest=" + userRequest + ", responseCache=" + responseCache + ", futureResult=" + futureResult);
-
-        if(userRequest == null || responseCache == null || futureResult == null) {
-          // Some error happens, just return
-          return;
-        }
-
-        //LOG.info("responseCache " + responseCache.getExpectedResponseNum());
-
-        switch (header.getResponseType()) {
-          case SUCCESS: {
-            // Get response handler
-            TransportMethod method = TransportMethod.valueOf(header.methodId);
-            Handler responseHandler = responseHanders.get(method);
-            if(responseHandler == null) {
-              LOG.error("Can not find handler for method " + method);
-              return;
-            }
-
-            // Add the response to the cache
-            responseCache.add(request, response);
-
-            // Check can merge or not
-            if(responseCache.canMerge()) {
-              // Merge
-              responseHandler.handle(futureResult, userRequest, responseCache);
-
-              // Clear response cache
-              responseCache.clear();
-
-              // Remove the response cache
-              adapter.clear(userRequestId);
-            }
-
-            // Handle success
-            requestSuccess(seqId);
+        switch (method) {
+          case GET_ROWSPLIT: {
+            handleGetRowSplitResponse(msg, seqId, (GetRowSplitRequest) request);
             break;
           }
 
-          case OOM:
-          case SERVER_IS_BUSY:
-          case SERIALIZE_RESPONSE_FAILED: {
-            // Server is busy now, retry
-            requestFailed(seqId, ResponseType.SERVER_IS_BUSY, header.detail);
+          case INDEX_GET_ROW: {
+            handleIndexPartGetRowResponse(msg, seqId, (IndexPartGetRowRequest) request);
             break;
           }
 
-          case SERVER_NOT_READY: {
-            // Server is not ready, retry
-            requestFailed(seqId, ResponseType.SERVER_NOT_READY, header.detail);
+          case INDEX_GET_ROWS: {
+            handleIndexPartGetRowsResponse(msg, seqId, (IndexPartGetRowsRequest) request);
             break;
           }
 
-          case PARSE_HEADER_FAILED:
-          case UNSUPPORT_REQUEST:
-          case SERVER_HANDLE_FAILED:
-          case SERVER_HANDLE_FATAL: {
-            // Handle failed, just return error
-            futureResult.setExecuteException(new ExecutionException(
-                new AngelException("Handle request failed " + header.detail)));
-            adapter.clear(request.getUserRequestId());
+          case PUT_PARTUPDATE:
+            break;
+          case GET_ROWSSPLIT: {
+            handleGetRowsSplitResponse(msg, seqId, (GetRowsSplitRequest) request);
             break;
           }
+
+          case GET_PART: {
+            handleGetPartitionResponse(msg, seqId, (GetPartitionRequest) request);
+            break;
+          }
+
+          case PUT_PART:
+            break;
+          case GET_CLOCKS:
+            handleGetClocksResponse(msg, seqId, (GetClocksRequest) request);
+            break;
+
+          case GET_STATE:
+            handleGetStateResponse(msg, seqId, (GetStateRequest) request);
+            break;
+
+          case RECOVER_PART:
+            break;
+          case UPDATE_CLOCK:
+            break;
+          case UPDATE:
+            handleUpdateResponse(msg, seqId, (UpdateRequest) request);
+            break;
+
+          case UPDATE_PSF:
+            handleUpdaterResponse(msg, seqId, (UpdaterRequest) request);
+            break;
+
+          case GET_PSF:
+            handleGetUDFResponse(msg, seqId, (GetUDFRequest) request);
+            break;
+
+          case CHECKPOINT:
+            handleCheckpointResponse(msg, seqId, (CheckpointPSRequest) request);
+            break;
+
+          case UNKNOWN:
+            break;
+          default:
+            break;
         }
+
+        msg.release();
+
+        if (LOG.isDebugEnabled() && (request instanceof PartitionRequest)) {
+          LOG.debug(
+              "handle response of request " + request + " use time=" + (System.currentTimeMillis()
+                  - startTs));
+        }
+      } catch (InterruptedException ie) {
+        LOG.warn(Thread.currentThread().getName() + " is interruptted");
       } catch (Throwable x) {
         LOG.error("hanlder rpc response failed ", x);
         if (x instanceof OutOfMemoryError) {
-          // Parse response msg failed
           rpcContext.oom();
           requestFailed(seqId, ResponseType.OOM, StringUtils.stringifyException(x));
         } else {
           requestFailed(seqId, ResponseType.UNKNOWN_ERROR, StringUtils.stringifyException(x));
         }
-      } finally {
-        msg.release();
       }
     }
 
+    private void handleGetStateResponse(ByteBuf buf, int seqId, GetStateRequest request) {
+      GetStateResponse response = new GetStateResponse();
+      response.deserialize(buf);
+
+      LOG.debug("get state for ps " + request.getPsId() + ", state = " + response.getState());
+      handleServerState(request, response.getState());
+
+      FutureResult<GetStateResponse> future = requestToResultMap.remove(request);
+      if (future != null) {
+        future.set(response);
+      }
+
+      GrayServer server = grayServers.get(request.getPsId());
+      if (server != null) {
+        server.state = response.getState();
+        server.lastHBTs = System.currentTimeMillis();
+      }
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleGetUDFResponse(ByteBuf buf, int seqId, GetUDFRequest request) {
+      GetUDFResponse response = new GetUDFResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        FutureResult<PartitionGetResult> future = requestToResultMap.remove(request);
+        if (future != null) {
+          future.set(response.getPartResult());
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), response.getPartResult());
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    private void handleCheckpointResponse(ByteBuf buf, int seqId, CheckpointPSRequest request) {
+      CheckpointPSResponse response = new CheckpointPSResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        FutureResult<VoidResult> future = requestToResultMap.remove(request);
+        if (future != null) {
+          VoidResult result = new VoidResult(com.tencent.angel.psagent.matrix.ResponseType.SUCCESS);
+          future.set(result);
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), result);
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleUpdaterResponse(ByteBuf buf, int seqId, UpdaterRequest request) {
+      UpdaterResponse response = new UpdaterResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        FutureResult<VoidResult> future = requestToResultMap.remove(request);
+        if (future != null) {
+          VoidResult result = new VoidResult(com.tencent.angel.psagent.matrix.ResponseType.SUCCESS);
+          future.set(result);
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), result);
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleUpdateResponse(ByteBuf buf, int seqId, UpdateRequest request) {
+      UpdateResponse response = new UpdateResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        FutureResult<VoidResult> future = requestToResultMap.remove(request);
+        if (future != null) {
+          VoidResult result = new VoidResult(com.tencent.angel.psagent.matrix.ResponseType.SUCCESS);
+          future.set(result);
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), result);
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleGetClocksResponse(ByteBuf buf, int seqId, GetClocksRequest request) {
+      GetClocksResponse response = new GetClocksResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      FutureResult<GetClocksResponse> future = requestToResultMap.remove(request);
+      if (future != null) {
+        future.set(response);
+      }
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleGetPartitionResponse(ByteBuf buf, int seqId, GetPartitionRequest request) {
+      GetPartitionResponse response = new GetPartitionResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        //updateMatrixCache(request.getPartKey(), response.getPartition());
+        FutureResult<ServerPartition> future = requestToResultMap.remove(request);
+        if (future != null) {
+          future.set(response.getPartition());
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), response.getPartition());
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleGetRowsSplitResponse(ByteBuf buf, int seqId, GetRowsSplitRequest request) {
+      GetRowsSplitResponse response = new GetRowsSplitResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        //updateMatrixCache(request.getPartKey(), response.getRowsSplit());
+        FutureResult<List<ServerRow>> future = requestToResultMap.remove(request);
+        if (future != null) {
+          future.set(response.getRowsSplit());
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), response.getRowsSplit());
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleGetRowSplitResponse(ByteBuf buf, int seqId, GetRowSplitRequest request)
+        throws InterruptedException {
+      GetRowSplitResponse response = new GetRowSplitResponse();
+      // TODO
+      //ServerRow rowSplit = PSAgentContext.get().getMatricesCache()
+      //  .getRowSplit(request.getPartKey().getMatrixId(), request.getPartKey(),
+      //    request.getRowIndex());
+      //response.setRowSplit(rowSplit);
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        //updateMatrixCache(request.getPartKey(), response.getRowSplit());
+        FutureResult<ServerRow> future = requestToResultMap.remove(request);
+        if (future != null) {
+          future.set(response.getRowSplit());
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), response.getRowSplit());
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    private void handleIndexPartGetRowResponse(ByteBuf buf, int seqId,
+        IndexPartGetRowRequest request) {
+      IndexPartGetRowResponse response = new IndexPartGetRowResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        FutureResult<IndexPartGetRowResult> future = requestToResultMap.remove(request);
+        if (future != null) {
+          IndexPartGetRowResult result = response.getPartResult();
+          result.setIndices(request.getColIds());
+          result.setPartKey(request.getPartKey());
+          future.set(result);
+          // LOG.info("user request id " + request.getUserRequestId());
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), response.getPartResult());
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+    private void handleIndexPartGetRowsResponse(ByteBuf buf, int seqId,
+        IndexPartGetRowsRequest request) {
+      IndexPartGetRowsResponse response = new IndexPartGetRowsResponse();
+      response.deserialize(buf);
+
+      handleServerState(request, response.getState());
+
+      if (response.getResponseType() == ResponseType.SUCCESS) {
+        FutureResult<IndexPartGetRowsResult> future = requestToResultMap.remove(request);
+        if (future != null) {
+          IndexPartGetRowsResult result = response.getPartResult();
+          result.setColIds(request.getColIds());
+          result.setPartKey(request.getPartKey());
+          future.set(result);
+          // LOG.info("user request id " + request.getUserRequestId());
+          PSAgentContext.get().getUserRequestAdapter()
+              .notifyResponse(request.getUserRequestId(), response.getPartResult());
+        }
+        requestSuccess(seqId);
+      } else {
+        handleExceptionResponse(seqId, request, response);
+      }
+    }
+
+
+    private void handleExceptionResponse(int seqId, Request request, Response response) {
+      LOG.error("request " + request + " has a exception response " + response);
+      switch (response.getResponseType()) {
+        case CLOCK_NOTREADY:
+        case SERVER_IS_BUSY:
+        case SERVER_HANDLE_FAILED:
+          requestFailed(seqId, response.getResponseType(), response.getDetail());
+          break;
+
+        case SERVER_HANDLE_FATAL:
+          handleFatalError(seqId, request, response);
+          break;
+
+        default:
+          break;
+      }
+    }
+
+    private void handleFatalError(int seqId, Request request, Response response) {
+      String errorMsg = "get row split fatal error happened " + response.getDetail();
+      LOG.fatal(errorMsg);
+      PSAgentContext.get().getPsAgent().getUserRequestAdapter()
+          .notifySubTaskFailed(request.getUserRequestId(), request.getSeqId(), errorMsg);
+    }
+
     private void handleServerState(Request request, ServerState state) {
+      if (LOG.isDebugEnabled() && (request instanceof PartitionRequest)) {
+        LOG.debug("request " + request + " response state = " + state);
+      }
       if (state != null) {
         psIdToStateMap.put(request.getContext().getActualServerId(), state);
       }
     }
+
+    //TODO
+    //private void updateMatrixCache(PartitionKey partKey, ServerPartition partition) {
+    //  PSAgentContext.get().getMatricesCache().update(partKey.getMatrixId(), partKey, partition);
+    //}
+
+    //private void updateMatrixCache(PartitionKey partKey, ServerRow rowSplit) {
+    //  PSAgentContext.get().getMatricesCache().update(partKey.getMatrixId(), partKey, rowSplit);
+    //}
+
+    //private void updateMatrixCache(PartitionKey partKey, List<ServerRow> rowsSplit) {
+    //  PSAgentContext.get().getMatricesCache().update(partKey.getMatrixId(), partKey, rowsSplit);
+    //}
   }
 }
