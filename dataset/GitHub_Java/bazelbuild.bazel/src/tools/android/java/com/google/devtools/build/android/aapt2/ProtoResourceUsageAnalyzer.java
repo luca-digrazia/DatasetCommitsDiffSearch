@@ -155,7 +155,8 @@ public class ProtoResourceUsageAnalyzer extends ResourceUsageAnalyzer {
     ImmutableList<String> resourceConfigs =
         resources.stream()
             .filter(Resource::isKeep)
-            .map(r -> String.format("%s/%s#no_collapse", r.type.getName(), r.name))
+            // TODO(b/141204955): Update this to no_collapse.
+            .map(r -> String.format("%s/%s#no_obfuscate", r.type.getName(), r.name))
             .collect(toImmutableList());
     Files.write(resourcesConfigFile, resourceConfigs, StandardCharsets.UTF_8);
 

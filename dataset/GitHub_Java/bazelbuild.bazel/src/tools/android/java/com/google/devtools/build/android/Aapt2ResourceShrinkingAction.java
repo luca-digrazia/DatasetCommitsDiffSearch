@@ -85,6 +85,9 @@ public class Aapt2ResourceShrinkingAction {
             .writeBinaryTo(linker, options.shrunkApk, aapt2ConfigOptions.resourceTableAsProto)
             .writeReportTo(options.log)
             .writeResourcesToZip(options.shrunkResources);
+        if (options.keptResourcesOutput != null) {
+          shrunk.writeKeptResourcesTo(options.keptResourcesOutput);
+        }
         if (options.resourcesConfigOutput != null) {
           shrunk.writeResourcesConfigTo(options.resourcesConfigOutput);
         }
