@@ -1,7 +1,7 @@
 package io.quarkus.flyway;
 
 import java.util.Collection;
-import java.util.stream.Collectors;
+import java.util.HashSet;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
@@ -16,9 +16,7 @@ import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
 
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
-import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.processor.DotNames;
-import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.util.HashUtil;
 import io.quarkus.flyway.runtime.FlywayProducer;
@@ -49,14 +47,12 @@ class FlywayDatasourceBeanGenerator {
 
     private static final int ACCESS_PACKAGE_PROTECTED = 0;
 
-    private final Collection<String> namedDataSourceNames;
+    private final Collection<String> dataSourceNames = new HashSet<>();
     private final BuildProducer<GeneratedBeanBuildItem> generatedBean;
 
     public FlywayDatasourceBeanGenerator(Collection<String> dataSourceNames,
             BuildProducer<GeneratedBeanBuildItem> generatedBean) {
-        this.namedDataSourceNames = dataSourceNames.stream()
-                .filter(n -> !DataSourceUtil.isDefault(n))
-                .collect(Collectors.toSet());
+        this.dataSourceNames.addAll(dataSourceNames);
         this.generatedBean = generatedBean;
     }
 
@@ -68,9 +64,8 @@ class FlywayDatasourceBeanGenerator {
      * @return String name of the generated producer bean class.
      */
     public void createFlywayProducerBean() {
-        GeneratedBeanGizmoAdaptor classOutput = new GeneratedBeanGizmoAdaptor(generatedBean);
         ClassCreator classCreator = ClassCreator.builder()
-                .classOutput(classOutput)
+                .classOutput(this::writeGeneratedBeanBuildItem)
                 .className(FLYWAY_PRODUCER_TYPE_NAME)
                 .build();
         classCreator.addAnnotation(ApplicationScoped.class);
@@ -79,7 +74,7 @@ class FlywayDatasourceBeanGenerator {
         defaultProducerField.setModifiers(ACCESS_PACKAGE_PROTECTED);
         defaultProducerField.addAnnotation(Inject.class);
 
-        for (String dataSourceName : namedDataSourceNames) {
+        for (String dataSourceName : dataSourceNames) {
             String dataSourceFieldName = "dataSource" + hashed(dataSourceName);
             FieldCreator dataSourceField = classCreator.getFieldCreator(dataSourceFieldName, DataSource.class);
             dataSourceField.setModifiers(ACCESS_PACKAGE_PROTECTED);
@@ -101,6 +96,10 @@ class FlywayDatasourceBeanGenerator {
                             flywayProducerMethod.load(dataSourceName)));
         }
         classCreator.close();
+    }
+
+    private void writeGeneratedBeanBuildItem(String name, byte[] data) {
+        generatedBean.produce(new GeneratedBeanBuildItem(name, data));
     }
 
     private static String hashed(String dataSourceName) {
@@ -132,7 +131,6 @@ class FlywayDatasourceBeanGenerator {
 
     @Override
     public String toString() {
-        return "FlywayDatasourceBeanGenerator [dataSourceNames=" + namedDataSourceNames + ", generatedBean=" + generatedBean
-                + "]";
+        return "FlywayDatasourceBeanGenerator [dataSourceNames=" + dataSourceNames + ", generatedBean=" + generatedBean + "]";
     }
 }
