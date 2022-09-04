@@ -19,6 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
@@ -34,9 +35,6 @@ import com.google.devtools.build.lib.packages.Globber.BadGlobException;
 import com.google.devtools.build.lib.packages.PackageValidator.InvalidPackageException;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.CallExpression;
 import com.google.devtools.build.lib.syntax.ClassObject;
@@ -62,7 +60,6 @@ import com.google.devtools.build.lib.syntax.Resolver;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
-import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StringLiteral;
@@ -91,6 +88,8 @@ import javax.annotation.Nullable;
  * Typically only one is needed per client application.
  */
 public final class PackageFactory {
+
+  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   /** An extension to the global namespace of the BUILD language. */
   // TODO(bazel-team): this should probably be renamed PackageFactory.RuntimeExtension
@@ -263,10 +262,10 @@ public final class PackageFactory {
   }
 
   /** Returns a function-value implementing "package" in the specified package context. */
-  // TODO(cparsons): Migrate this function to be defined with @StarlarkMethod.
+  // TODO(cparsons): Migrate this function to be defined with @SkylarkCallable.
   // TODO(adonovan): don't call this function twice (once for BUILD files and
   // once for the native module) as it results in distinct objects. (Using
-  // @StarlarkMethod may accomplish that.)
+  // @SkylarkCallable may accomplish that.)
   private static StarlarkCallable newPackageFunction(
       final ImmutableMap<String, PackageArgument<?>> packageArguments) {
     return new StarlarkCallable() {
@@ -414,7 +413,7 @@ public final class PackageFactory {
       RootedPath buildFile,
       StarlarkFile file,
       Map<String, Module> loadedModules,
-      ImmutableList<Label> starlarkFileDependencies,
+      ImmutableList<Label> skylarkFileDependencies,
       RuleVisibility defaultVisibility,
       StarlarkSemantics starlarkSemantics,
       Globber globber)
@@ -431,7 +430,7 @@ public final class PackageFactory {
           defaultVisibility,
           starlarkSemantics,
           loadedModules,
-          starlarkFileDependencies,
+          skylarkFileDependencies,
           repositoryMapping);
     } catch (InterruptedException e) {
       globber.onInterrupt();
@@ -526,7 +525,7 @@ public final class PackageFactory {
                 buildFile,
                 file,
                 /*loadedModules=*/ ImmutableMap.<String, Module>of(),
-                /*starlarkFileDependencies=*/ ImmutableList.<Label>of(),
+                /*skylarkFileDependencies=*/ ImmutableList.<Label>of(),
                 /*defaultVisibility=*/ ConstantRuleVisibility.PUBLIC,
                 semantics,
                 globber)
@@ -639,6 +638,7 @@ public final class PackageFactory {
   }
 
   private void populateEnvironment(ImmutableMap.Builder<String, Object> env) {
+    env.putAll(Starlark.UNIVERSE);
     env.putAll(StarlarkLibrary.BUILD); // e.g. rule, select, depset
     env.putAll(StarlarkNativeModule.BINDINGS_FOR_BUILD_FILES);
     env.put("package", newPackageFunction(packageArguments));
@@ -673,6 +673,12 @@ public final class PackageFactory {
               "BUILD file computation took %d steps, but --max_computation_steps=%d",
               steps, maxSteps));
     }
+    // Write a log message for BUILD files with more than 1e6 steps
+    // (approximately the top 1% in Google's code base).
+    if (steps > 1_000_000) {
+      logger.atInfo().log(
+          "%s: BUILD file computation took %d steps", pkg.getPackageIdentifier(), steps);
+    }
 
     packageLoadingListener.onLoadingCompleteAndSuccessful(pkg, starlarkSemantics, loadTimeNanos);
   }
@@ -702,7 +708,7 @@ public final class PackageFactory {
       RuleVisibility defaultVisibility,
       StarlarkSemantics semantics,
       Map<String, Module> loadedModules,
-      ImmutableList<Label> starlarkFileDependencies,
+      ImmutableList<Label> skylarkFileDependencies,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws InterruptedException {
     Package.Builder pkgBuilder =
@@ -718,7 +724,7 @@ public final class PackageFactory {
             // Let's give the BUILD file a chance to set default_visibility once,
             // by resetting the PackageBuilder.defaultVisibilitySet flag.
             .setDefaultVisibilitySet(false)
-            .setStarlarkFileDependencies(starlarkFileDependencies)
+            .setStarlarkFileDependencies(skylarkFileDependencies)
             .setWorkspaceName(workspaceName)
             .setThirdPartyLicenceExistencePolicy(
                 ruleClassProvider.getThirdPartyLicenseExistencePolicy());
@@ -764,55 +770,61 @@ public final class PackageFactory {
     }
 
     // Construct environment.
-    ImmutableMap.Builder<String, Object> predeclared = ImmutableMap.builder();
-    populateEnvironment(predeclared);
-    Module module = Module.withPredeclared(semantics, predeclared.build());
+    ImmutableMap.Builder<String, Object> env = ImmutableMap.builder();
+    populateEnvironment(env);
 
-    // Validate.
-    Resolver.resolveFile(file, module);
-    if (!file.ok()) {
-      Event.replayEventsOn(pkgContext.eventHandler, file.errors());
-      return false;
-    }
-
-    // Check syntax. Make a pass over the syntax tree to:
-    // - reject forbidden BUILD syntax
-    // - extract literal glob patterns for prefetching
-    // - record the generator_name of each top-level macro call
-    Set<String> globs = new HashSet<>();
-    Set<String> globsWithDirs = new HashSet<>();
-    if (!checkBuildSyntax(
-        file,
-        globs,
-        globsWithDirs,
-        pkgBuilder.getGeneratorNameByLocation(),
-        pkgContext.eventHandler)) {
-      return false;
-    }
-
-    // Prefetch glob patterns asynchronously.
-    if (maxDirectoriesToEagerlyVisitInGlobbing == -2) {
-      try {
-        pkgContext.globber.runAsync(
-            ImmutableList.copyOf(globs),
-            ImmutableList.of(),
-            /*excludeDirs=*/ true,
-            /*allowEmpty=*/ true);
-        pkgContext.globber.runAsync(
-            ImmutableList.copyOf(globsWithDirs),
-            ImmutableList.of(),
-            /*excludeDirs=*/ false,
-            /*allowEmpty=*/ true);
-      } catch (BadGlobException ex) {
-        // Ignore exceptions.
-        // Errors will be properly reported when the actual globbing is done.
-      }
-    }
-
-    try (Mutability mu = Mutability.create("package", packageId)) {
-      StarlarkThread thread = new StarlarkThread(mu, semantics);
+    // TODO(adonovan): defer creation of Mutability + Thread till after validation,
+    // once the validate API is rationalized.
+    try (Mutability mutability = Mutability.create("package", packageId)) {
+      StarlarkThread thread =
+          StarlarkThread.builder(mutability)
+              .setGlobals(Module.createForBuiltins(env.build()))
+              .setSemantics(semantics)
+              .build();
       thread.setLoader(loadedModules::get);
       thread.setPrintHandler(Event.makeDebugPrintHandler(pkgContext.eventHandler));
+      Module module = thread.getGlobals();
+
+      // Validate.
+      Resolver.resolveFile(file, module);
+      if (!file.ok()) {
+        Event.replayEventsOn(pkgContext.eventHandler, file.errors());
+        return false;
+      }
+
+      // Check syntax. Make a pass over the syntax tree to:
+      // - reject forbidden BUILD syntax
+      // - extract literal glob patterns for prefetching
+      // - record the generator_name of each top-level macro call
+      Set<String> globs = new HashSet<>();
+      Set<String> globsWithDirs = new HashSet<>();
+      if (!checkBuildSyntax(
+          file,
+          globs,
+          globsWithDirs,
+          pkgBuilder.getGeneratorNameByLocation(),
+          pkgContext.eventHandler)) {
+        return false;
+      }
+
+      // Prefetch glob patterns asynchronously.
+      if (maxDirectoriesToEagerlyVisitInGlobbing == -2) {
+        try {
+          pkgContext.globber.runAsync(
+              ImmutableList.copyOf(globs),
+              ImmutableList.of(),
+              /*excludeDirs=*/ true,
+              /*allowEmpty=*/ true);
+          pkgContext.globber.runAsync(
+              ImmutableList.copyOf(globsWithDirs),
+              ImmutableList.of(),
+              /*excludeDirs=*/ false,
+              /*allowEmpty=*/ true);
+        } catch (BadGlobException ex) {
+          // Ignore exceptions.
+          // Errors will be properly reported when the actual globbing is done.
+        }
+      }
 
       new BazelStarlarkContext(
               BazelStarlarkContext.Phase.LOADING,
@@ -823,7 +835,7 @@ public final class PackageFactory {
               /*analysisRuleLabel=*/ null)
           .storeInThread(thread);
 
-      // TODO(adonovan): save this as a field in BazelStarlarkContext.
+      // TODO(adonovan): save this as a field in BazelSkylarkContext.
       // It needn't be a second thread-local.
       thread.setThreadLocal(PackageContext.class, pkgContext);
 
@@ -985,41 +997,5 @@ public final class PackageFactory {
         };
     checker.visit(file);
     return success[0];
-  }
-
-  // Install profiler hooks into lib.syntax.
-  static {
-    // parser profiler
-    StarlarkFile.setParseProfiler(
-        new StarlarkFile.ParseProfiler() {
-          @Override
-          public Object start(String filename) {
-            return Profiler.instance().profile(ProfilerTask.STARLARK_PARSER, filename);
-          }
-
-          @Override
-          public void end(Object span) {
-            ((SilentCloseable) span).close();
-          }
-        });
-
-    // call profiler
-    StarlarkThread.setCallProfiler(
-        new StarlarkThread.CallProfiler() {
-          @Override
-          public Object start(StarlarkCallable fn) {
-            return Profiler.instance()
-                .profile(
-                    fn instanceof StarlarkFunction
-                        ? ProfilerTask.STARLARK_USER_FN
-                        : ProfilerTask.STARLARK_BUILTIN_FN,
-                    fn.getName());
-          }
-
-          @Override
-          public void end(Object span) {
-            ((SilentCloseable) span).close();
-          }
-        });
   }
 }

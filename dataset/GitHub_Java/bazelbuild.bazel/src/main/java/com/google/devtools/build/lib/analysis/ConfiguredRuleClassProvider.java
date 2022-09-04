@@ -53,6 +53,8 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.skylarkbuildapi.core.Bootstrap;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkInterfaceUtils;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDefinition;
@@ -69,8 +71,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import javax.annotation.Nullable;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkInterfaceUtils;
 
 /**
  * Knows about every rule Blaze supports and the associated configuration options.
@@ -119,8 +119,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     private OptionsDiffPredicate shouldInvalidateCacheForOptionDiff =
         OptionsDiffPredicate.ALWAYS_INVALIDATE;
     private PrerequisiteValidator prerequisiteValidator;
-    private final ImmutableList.Builder<Bootstrap> starlarkBootstraps = ImmutableList.builder();
-    private ImmutableMap.Builder<String, Object> starlarkAccessibleTopLevels =
+    private final ImmutableList.Builder<Bootstrap> skylarkBootstraps = ImmutableList.builder();
+    private ImmutableMap.Builder<String, Object> skylarkAccessibleTopLevels =
         ImmutableMap.builder();
     private final ImmutableList.Builder<SymlinkDefinition> symlinkDefinitions =
         ImmutableList.builder();
@@ -225,13 +225,13 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       return this;
     }
 
-    public Builder addStarlarkBootstrap(Bootstrap bootstrap) {
-      this.starlarkBootstraps.add(bootstrap);
+    public Builder addSkylarkBootstrap(Bootstrap bootstrap) {
+      this.skylarkBootstraps.add(bootstrap);
       return this;
     }
 
-    public Builder addStarlarkAccessibleTopLevels(String name, Object object) {
-      this.starlarkAccessibleTopLevels.put(name, object);
+    public Builder addSkylarkAccessibleTopLevels(String name, Object object) {
+      this.skylarkAccessibleTopLevels.put(name, object);
       return this;
     }
 
@@ -424,8 +424,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
           toolchainTaggedTrimmingTransition,
           shouldInvalidateCacheForOptionDiff,
           prerequisiteValidator,
-          starlarkAccessibleTopLevels.build(),
-          starlarkBootstraps.build(),
+          skylarkAccessibleTopLevels.build(),
+          skylarkBootstraps.build(),
           symlinkDefinitions.build(),
           ImmutableSet.copyOf(reservedActionMnemonics),
           actionEnvironmentProvider,
@@ -519,8 +519,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
 
   private final PrerequisiteValidator prerequisiteValidator;
 
-  private final ImmutableMap<String, Object> nativeRuleSpecificBindings;
-
   private final ImmutableMap<String, Object> environment;
 
   private final ImmutableList<SymlinkDefinition> symlinkDefinitions;
@@ -552,8 +550,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       PatchTransition toolchainTaggedTrimmingTransition,
       OptionsDiffPredicate shouldInvalidateCacheForOptionDiff,
       PrerequisiteValidator prerequisiteValidator,
-      ImmutableMap<String, Object> starlarkAccessibleJavaClasses,
-      ImmutableList<Bootstrap> starlarkBootstraps,
+      ImmutableMap<String, Object> skylarkAccessibleJavaClasses,
+      ImmutableList<Bootstrap> skylarkBootstraps,
       ImmutableList<SymlinkDefinition> symlinkDefinitions,
       ImmutableSet<String> reservedActionMnemonics,
       BuildConfiguration.ActionEnvironmentProvider actionEnvironmentProvider,
@@ -576,9 +574,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     this.toolchainTaggedTrimmingTransition = toolchainTaggedTrimmingTransition;
     this.shouldInvalidateCacheForOptionDiff = shouldInvalidateCacheForOptionDiff;
     this.prerequisiteValidator = prerequisiteValidator;
-    this.nativeRuleSpecificBindings =
-        createNativeRuleSpecificBindings(starlarkAccessibleJavaClasses, starlarkBootstraps);
-    this.environment = createEnvironment(nativeRuleSpecificBindings);
+    this.environment = createEnvironment(skylarkAccessibleJavaClasses, skylarkBootstraps);
     this.symlinkDefinitions = symlinkDefinitions;
     this.reservedActionMnemonics = reservedActionMnemonics;
     this.actionEnvironmentProvider = actionEnvironmentProvider;
@@ -729,24 +725,19 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     return BuildOptions.of(configurationOptions, optionsProvider);
   }
 
-  private static ImmutableMap<String, Object> createNativeRuleSpecificBindings(
-      ImmutableMap<String, Object> starlarkAccessibleTopLevels,
-      ImmutableList<Bootstrap> bootstraps) {
-    ImmutableMap.Builder<String, Object> bindings = ImmutableMap.builder();
-    bindings.putAll(starlarkAccessibleTopLevels);
-    for (Bootstrap bootstrap : bootstraps) {
-      bootstrap.addBindingsToBuilder(bindings);
-    }
-    return bindings.build();
-  }
-
   private static ImmutableMap<String, Object> createEnvironment(
-      ImmutableMap<String, Object> nativeRuleSpecificBindings) {
+      ImmutableMap<String, Object> skylarkAccessibleTopLevels,
+      ImmutableList<Bootstrap> bootstraps) {
     ImmutableMap.Builder<String, Object> envBuilder = ImmutableMap.builder();
-    // Add predeclared symbols of the Bazel build language.
+
+    // Among other symbols, this step adds the Starlark universe (e.g. None/True/len), for now.
     StarlarkModules.addStarlarkGlobalsToBuilder(envBuilder);
-    // Add all the extensions registered with the rule class provider.
-    envBuilder.putAll(nativeRuleSpecificBindings);
+
+    envBuilder.putAll(skylarkAccessibleTopLevels.entrySet());
+    for (Bootstrap bootstrap : bootstraps) {
+      bootstrap.addBindingsToBuilder(envBuilder);
+    }
+
     return envBuilder.build();
   }
 
@@ -761,15 +752,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       }
     }
     return mapBuilder.build();
-  }
-
-  @Override
-  public ImmutableMap<String, Object> getNativeRuleSpecificBindings() {
-    // Include rule-related stuff like CcInfo, but not core stuff like rule(). Essentially, this
-    // is intended to include things that could in principle be migrated to Starlark (and hence
-    // should be overridable by @builtins); in practice it means anything specifically registered
-    // with the RuleClassProvider.
-    return nativeRuleSpecificBindings;
   }
 
   @Override

@@ -15,11 +15,11 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.starlark.spelling.SpellChecker;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import javax.annotation.Nullable;
-import net.starlark.java.spelling.SpellChecker;
 
 /** A StarlarkFunction is a function value created by a Starlark {@code def} statement. */
 public final class StarlarkFunction implements StarlarkCallable {
@@ -35,7 +35,7 @@ public final class StarlarkFunction implements StarlarkCallable {
   }
 
   boolean isToplevel() {
-    return rfn.isToplevel();
+    return rfn.isToplevel;
   }
 
   // TODO(adonovan): many functions would be simpler if
@@ -50,11 +50,10 @@ public final class StarlarkFunction implements StarlarkCallable {
    */
   @Nullable
   public Object getDefaultValue(int i) {
-    if (i < 0 || i >= rfn.getParameters().size()) {
+    if (i < 0 || i >= rfn.params.size()) {
       throw new IndexOutOfBoundsException();
     }
-    int nparams =
-        rfn.getParameters().size() - (rfn.hasKwargs() ? 1 : 0) - (rfn.hasVarargs() ? 1 : 0);
+    int nparams = rfn.params.size() - (rfn.hasKwargs ? 1 : 0) - (rfn.hasVarargs ? 1 : 0);
     int prefix = nparams - defaultValues.size();
     if (i < prefix) {
       return null; // implicit prefix of mandatory parameters
@@ -71,7 +70,7 @@ public final class StarlarkFunction implements StarlarkCallable {
    * **kwargs} parameters, if any, are always last.
    */
   public ImmutableList<String> getParameterNames() {
-    return rfn.getParameterNames();
+    return rfn.parameterNames;
   }
 
   /**
@@ -79,7 +78,7 @@ public final class StarlarkFunction implements StarlarkCallable {
    * f(*args)}.
    */
   public boolean hasVarargs() {
-    return rfn.hasVarargs();
+    return rfn.hasVarargs;
   }
 
   /**
@@ -87,31 +86,26 @@ public final class StarlarkFunction implements StarlarkCallable {
    * f(**kwargs)}.
    */
   public boolean hasKwargs() {
-    return rfn.hasKwargs();
+    return rfn.hasKwargs;
   }
 
-  /** Returns the location of the function's defining identifier. */
   @Override
   public Location getLocation() {
-    return rfn.getLocation();
+    return rfn.location;
   }
 
-  /**
-   * Returns the name of the function. Implicit functions (those not created by a def statement),
-   * may have names such as "<toplevel>" or "<expr>".
-   */
   @Override
   public String getName() {
-    return rfn.getName();
+    return rfn.name;
   }
 
   /** Returns the value denoted by the function's doc string literal, or null if absent. */
   @Nullable
   public String getDocumentation() {
-    if (rfn.getBody().isEmpty()) {
+    if (rfn.body.isEmpty()) {
       return null;
     }
-    Statement first = rfn.getBody().get(0);
+    Statement first = rfn.body.get(0);
     if (!(first instanceof ExpressionStatement)) {
       return null;
     }
@@ -141,17 +135,16 @@ public final class StarlarkFunction implements StarlarkCallable {
     Object[] arguments = processArgs(thread.mutability(), positional, named);
 
     StarlarkThread.Frame fr = thread.frame(0);
-    ImmutableList<String> names = rfn.getParameterNames();
+    ImmutableList<String> names = rfn.parameterNames;
     for (int i = 0; i < names.size(); ++i) {
       fr.locals.put(names.get(i), arguments[i]);
     }
 
-    return Eval.execFunctionBody(fr, rfn.getBody());
+    return Eval.execFunctionBody(fr, rfn.body);
   }
 
   @Override
   public void repr(Printer printer) {
-    // TODO(adonovan): use the file name instead. But that's a breaking Bazel change.
     Object clientData = module.getClientData();
 
     printer.append("<function " + getName());
@@ -188,23 +181,22 @@ public final class StarlarkFunction implements StarlarkCallable {
     //   default values come from the tuple above.
     //   It is an error if the defaults tuple entry for an unset parameter is MANDATORY.
 
-    ImmutableList<String> names = rfn.getParameterNames();
+    ImmutableList<String> names = rfn.parameterNames;
 
     // TODO(adonovan): when we have flat frames, pass in the locals array here instead of
     // allocating.
     Object[] arguments = new Object[names.size()];
 
     // nparams is the number of ordinary parameters.
-    int nparams =
-        rfn.getParameters().size() - (rfn.hasKwargs() ? 1 : 0) - (rfn.hasVarargs() ? 1 : 0);
+    int nparams = rfn.params.size() - (rfn.hasKwargs ? 1 : 0) - (rfn.hasVarargs ? 1 : 0);
 
     // numPositionalParams is the number of non-kwonly parameters.
-    int numPositionalParams = nparams - rfn.numKeywordOnlyParams();
+    int numPositionalParams = nparams - rfn.numKeywordOnlyParams;
 
     // Too many positional args?
     int n = positional.length;
     if (n > numPositionalParams) {
-      if (!rfn.hasVarargs()) {
+      if (!rfn.hasVarargs) {
         if (numPositionalParams > 0) {
           throw Starlark.errorf(
               "%s() accepts no more than %d positional argument%s but got %d",
@@ -224,7 +216,7 @@ public final class StarlarkFunction implements StarlarkCallable {
     }
 
     // Bind surplus positional arguments to *args parameter.
-    if (rfn.hasVarargs()) {
+    if (rfn.hasVarargs) {
       arguments[nparams] = Tuple.wrap(Arrays.copyOfRange(positional, n, positional.length));
     }
 
@@ -232,9 +224,9 @@ public final class StarlarkFunction implements StarlarkCallable {
 
     // named arguments
     Dict<String, Object> kwargs = null;
-    if (rfn.hasKwargs()) {
+    if (rfn.hasKwargs) {
       kwargs = Dict.of(mu);
-      arguments[rfn.getParameters().size() - 1] = kwargs;
+      arguments[rfn.params.size() - 1] = kwargs;
     }
     for (int i = 0; i < named.length; i += 2) {
       String keyword = (String) named[i]; // safe

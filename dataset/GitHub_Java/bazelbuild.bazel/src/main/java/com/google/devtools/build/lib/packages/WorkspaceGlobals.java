@@ -284,7 +284,8 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
           nameLabel,
           actual == NONE ? null : Label.parseAbsolute((String) actual, ImmutableMap.of()),
           thread.getSemantics(),
-          thread.getCallStack());
+          thread.getCallStack(),
+          new AttributeContainer(ruleClass));
     } catch (InvalidRuleException | Package.NameConflictException | LabelSyntaxException e) {
       throw Starlark.errorf("%s", e.getMessage());
     }
