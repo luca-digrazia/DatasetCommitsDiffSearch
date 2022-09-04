@@ -16,10 +16,13 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.Striped;
+import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
@@ -29,17 +32,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.Lock;
 import javax.annotation.Nullable;
 
 /** A cache of Artifacts, keyed by Path. */
 @ThreadSafe
 public class ArtifactFactory implements ArtifactResolver {
+  private static final int CONCURRENCY_LEVEL = Runtime.getRuntime().availableProcessors();
+  private static final Striped<Lock> STRIPED_LOCK = Striped.lock(CONCURRENCY_LEVEL);
 
   private final Path execRootParent;
   private final PathFragment derivedPathPrefix;
   private ImmutableMap<Root, ArtifactRoot> sourceArtifactRoots;
-  private boolean siblingRepositoryLayout = false;
 
   /**
    * Cache of source artifacts.
@@ -70,20 +74,13 @@ public class ArtifactFactory implements ArtifactResolver {
       int getIdOfBuild() {
         return idOfBuild;
       }
-
-      boolean isArtifactValid() {
-        return idOfBuild == buildId;
-      }
     }
-
-    private static final int CONCURRENCY_LEVEL = Runtime.getRuntime().availableProcessors();
 
     /**
      * The main Path to source artifact cache. There will always be exactly one canonical artifact
      * for a given source path.
      */
-    private final ConcurrentMap<PathFragment, Entry> pathToSourceArtifact =
-        new ConcurrentHashMap<>(16, 0.75f, CONCURRENCY_LEVEL);
+    private final Map<PathFragment, Entry> pathToSourceArtifact = new ConcurrentHashMap<>();
 
     /** Id of current build. Has to be increased every time before analysis starts. */
     private int buildId = -1;
@@ -105,9 +102,16 @@ public class ArtifactFactory implements ArtifactResolver {
     @ThreadSafe
     Artifact getArtifactIfValid(PathFragment execPath) {
       Entry cacheEntry = pathToSourceArtifact.get(execPath);
-      return (cacheEntry == null || !cacheEntry.isArtifactValid())
-          ? null
-          : cacheEntry.getArtifact();
+      if (cacheEntry != null && cacheEntry.getIdOfBuild() == buildId) {
+        return cacheEntry.getArtifact();
+      }
+      return null;
+    }
+
+    @ThreadCompatible // Calls #putArtifact.
+    void markEntryAsValid(PathFragment execPath) {
+      SourceArtifact oldValue = Preconditions.checkNotNull(getArtifact(execPath));
+      putArtifact(execPath, oldValue);
     }
 
     void newBuild() {
@@ -117,6 +121,11 @@ public class ArtifactFactory implements ArtifactResolver {
     void clear() {
       pathToSourceArtifact.clear();
       buildId = -1;
+    }
+
+    @ThreadCompatible // Concurrent puts do not know which one actually got its artifact in.
+    void putArtifact(PathFragment execPath, SourceArtifact artifact) {
+      pathToSourceArtifact.put(execPath, new Entry(artifact));
     }
   }
 
@@ -141,10 +150,6 @@ public class ArtifactFactory implements ArtifactResolver {
   public synchronized void setSourceArtifactRoots(
       ImmutableMap<Root, ArtifactRoot> sourceArtifactRoots) {
     this.sourceArtifactRoots = sourceArtifactRoots;
-  }
-
-  public void setSiblingRepositoryLayout(boolean siblingRepositoryLayout) {
-    this.siblingRepositoryLayout = siblingRepositoryLayout;
   }
 
   /**
@@ -184,7 +189,7 @@ public class ArtifactFactory implements ArtifactResolver {
 
   @Override
   public SourceArtifact getSourceArtifact(PathFragment execPath, Root root) {
-    return getSourceArtifact(execPath, root, ArtifactOwner.NULL_OWNER);
+    return getSourceArtifact(execPath, root, ArtifactOwner.NullArtifactOwner.INSTANCE);
   }
 
   private void validatePath(PathFragment rootRelativePath, ArtifactRoot root) {
@@ -278,25 +283,6 @@ public class ArtifactFactory implements ArtifactResolver {
             /*contentBasedPath=*/ false);
   }
 
-  /**
-   * Returns an artifact that represents an unresolved symlink; that is, an artifact whose value is
-   * a symlink and is never dereferenced.
-   *
-   * <p>The root must be below the execRootParent, and the execPath of the resulting Artifact is
-   * computed as {@code root.getRelative(rootRelativePath).relativeTo(root.execRoot)}.
-   */
-  public Artifact.SpecialArtifact getSymlinkArtifact(
-      PathFragment rootRelativePath, ArtifactRoot root, ArtifactOwner owner) {
-    validatePath(rootRelativePath, root);
-    return (Artifact.SpecialArtifact)
-        getArtifact(
-            root,
-            root.getExecPath().getRelative(rootRelativePath),
-            owner,
-            SpecialArtifactType.UNRESOLVED_SYMLINK,
-            /*contentBasedPath=*/ false);
-  }
-
   public Artifact.DerivedArtifact getConstantMetadataArtifact(
       PathFragment rootRelativePath, ArtifactRoot root, ArtifactOwner owner) {
     validatePath(rootRelativePath, root);
@@ -327,28 +313,26 @@ public class ArtifactFactory implements ArtifactResolver {
     }
 
     // Double-checked locking to avoid locking cost when possible.
-    SourceArtifact firstArtifact = sourceArtifactCache.getArtifact(execPath);
-    if (firstArtifact != null && !firstArtifact.differentOwnerOrRoot(owner, root)) {
-      return firstArtifact;
+    SourceArtifact artifact = sourceArtifactCache.getArtifact(execPath);
+    if (artifact == null || artifact.differentOwnerOrRoot(owner, root)) {
+      Lock lock = STRIPED_LOCK.get(execPath);
+      lock.lock();
+      try {
+        artifact = sourceArtifactCache.getArtifact(execPath);
+        if (artifact == null || artifact.differentOwnerOrRoot(owner, root)) {
+          // There really should be a safety net that makes it impossible to create two Artifacts
+          // with the same exec path but a different Owner, but we also need to reuse Artifacts from
+          // previous builds.
+          artifact =
+              (SourceArtifact)
+                  createArtifact(root, execPath, owner, type, /*contentBasedPath=*/ false);
+          sourceArtifactCache.putArtifact(execPath, artifact);
+        }
+      } finally {
+        lock.unlock();
+      }
     }
-    SourceArtifactCache.Entry newEntry =
-        sourceArtifactCache.pathToSourceArtifact.compute(
-            execPath,
-            (k, entry) -> {
-              if (entry == null
-                  || entry.getArtifact() == null
-                  || entry.getArtifact().differentOwnerOrRoot(owner, root)) {
-                // There really should be a safety net that makes it impossible to create two
-                // Artifacts with the same exec path but a different Owner, but we also need to
-                // reuse Artifacts from previous builds.
-                return sourceArtifactCache
-                .new Entry(
-                    (SourceArtifact)
-                        createArtifact(root, execPath, owner, type, /*contentBasedPath=*/ false));
-              }
-              return entry;
-            });
-    return newEntry.getArtifact();
+    return artifact;
   }
 
   private Artifact createArtifact(
@@ -394,18 +378,10 @@ public class ArtifactFactory implements ArtifactResolver {
         !relativePath.isEmpty(), "%s %s %s", relativePath, baseExecPath, baseRoot);
     PathFragment execPath =
         baseExecPath != null ? baseExecPath.getRelative(relativePath) : relativePath;
-
-    // Source exec paths cannot escape the source root.
-    if (siblingRepositoryLayout) {
-      // The exec path may start with .. if using --experimental_sibling_repository_layout, so test
-      // the subfragment from index 1 onwards.
-      if (execPath.subFragment(1).containsUplevelReferences()) {
-        return null;
-      }
-    } else if (execPath.containsUplevelReferences()) {
+    if (execPath.containsUplevelReferences()) {
+      // Source exec paths cannot escape the source root.
       return null;
     }
-
     // Don't create an artifact if it's derived.
     if (isDerivedArtifact(execPath)) {
       return null;
@@ -435,8 +411,7 @@ public class ArtifactFactory implements ArtifactResolver {
       return null;
     }
 
-    Pair<RepositoryName, PathFragment> repo =
-        RepositoryName.fromPathFragment(dir, siblingRepositoryLayout);
+    Pair<RepositoryName, PathFragment> repo = RepositoryName.fromPathFragment(dir);
     if (repo != null) {
       repositoryName = repo.getFirst();
       dir = repo.getSecond();
@@ -461,7 +436,7 @@ public class ArtifactFactory implements ArtifactResolver {
   }
 
   @Override
-  public Map<PathFragment, Artifact> resolveSourceArtifacts(
+  public synchronized Map<PathFragment, Artifact> resolveSourceArtifacts(
       Iterable<PathFragment> execPaths, PackageRootResolver resolver) throws InterruptedException {
     Map<PathFragment, Artifact> result = new HashMap<>();
     ArrayList<PathFragment> unresolvedPaths = new ArrayList<>();
@@ -472,17 +447,16 @@ public class ArtifactFactory implements ArtifactResolver {
         result.put(execPath, null);
         continue;
       }
-      if (isDerivedArtifact(execPath)) {
+      // First try a quick map lookup to see if the artifact already exists.
+      Artifact a = sourceArtifactCache.getArtifactIfValid(execPath);
+      if (a != null) {
+        result.put(execPath, a);
+      } else if (isDerivedArtifact(execPath)) {
+        // Don't create an artifact if it's derived.
         result.put(execPath, null);
       } else {
-        // First try a quick map lookup to see if the artifact already exists.
-        Artifact a = sourceArtifactCache.getArtifactIfValid(execPath);
-        if (a != null) {
-          result.put(execPath, a);
-        } else {
-          // Remember this path, maybe we can resolve it with the help of PackageRootResolver.
-          unresolvedPaths.add(execPath);
-        }
+        // Remember this path, maybe we can resolve it with the help of PackageRootResolver.
+        unresolvedPaths.add(execPath);
       }
     }
     Map<PathFragment, Root> sourceRoots = resolver.findPackageRootsForFiles(unresolvedPaths);
@@ -508,6 +482,9 @@ public class ArtifactFactory implements ArtifactResolver {
     return execRoot.getRelative(execPath);
   }
 
+  // Thread-safety: gets from sourceArtifactCache, which can be done concurrently, and may create
+  // an artifact, which is done by #getSourceArtifact in a thread-safe manner. Only non-thread-safe
+  // call is to sourceArtifactCache#markEntryAsValid, which is synchronized on this.
   @ThreadSafe
   private Artifact createArtifactIfNotValid(Root sourceRoot, PathFragment execPath) {
     if (sourceRoot == null) {
@@ -517,26 +494,26 @@ public class ArtifactFactory implements ArtifactResolver {
     if (artifact != null && sourceRoot.equals(artifact.getRoot().getRoot())) {
       // Source root of existing artifact hasn't changed so we should mark corresponding entry in
       // the cache as valid.
-      sourceArtifactCache.pathToSourceArtifact.compute(
-          execPath,
-          (k, cacheEntry) -> {
-            SourceArtifact validArtifact = cacheEntry.getArtifact();
-            if (!cacheEntry.isArtifactValid()) {
-              // Wasn't previously known to be valid.
-              return sourceArtifactCache.new Entry(validArtifact);
-            }
-            Preconditions.checkState(
-                artifact.equals(validArtifact),
-                "Mismatched artifacts: %s %s",
-                artifact,
-                validArtifact);
-            return cacheEntry;
-          });
-      return artifact;
+      // TODO(janakr): markEntryAsValid looks like it should be thread-safe: revisit if contention
+      // here is still an issue.
+      synchronized (this) {
+        Artifact validArtifact = sourceArtifactCache.getArtifactIfValid(execPath);
+        if (validArtifact == null) {
+          // Wasn't previously known to be valid.
+          sourceArtifactCache.markEntryAsValid(execPath);
+        } else {
+          Preconditions.checkState(
+              artifact.equals(validArtifact),
+              "Mismatched artifacts: %s %s",
+              artifact,
+              validArtifact);
+        }
+      }
     } else {
       // Must be a new artifact or artifact in the cache is stale, so create a new one.
-      return getSourceArtifact(execPath, sourceRoot, ArtifactOwner.NULL_OWNER);
+      artifact = getSourceArtifact(execPath, sourceRoot, ArtifactOwner.NullArtifactOwner.INSTANCE);
     }
+    return artifact;
   }
 
   /**

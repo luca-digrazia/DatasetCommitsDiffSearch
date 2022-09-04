@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.CompletionContext;
 import com.google.devtools.build.lib.actions.CompletionContext.PathResolverFactory;
 import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
@@ -35,21 +36,17 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.skyframe.ArtifactFunction.MissingFileArtifactValue;
 import com.google.devtools.build.lib.skyframe.AspectCompletionValue.AspectCompletionKey;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.TargetCompletionValue.TargetCompletionKey;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.ValueOrException;
-import java.io.IOException;
+import com.google.devtools.build.skyframe.ValueOrException2;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
@@ -325,27 +322,21 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     }
   }
 
-  public static SkyFunction targetCompletionFunction(
-      PathResolverFactory pathResolverFactory, Supplier<Path> execRootSupplier) {
-    return new CompletionFunction<>(pathResolverFactory, new TargetCompletor(), execRootSupplier);
+  public static SkyFunction targetCompletionFunction(PathResolverFactory pathResolverFactory) {
+    return new CompletionFunction<>(pathResolverFactory, new TargetCompletor());
   }
 
-  public static SkyFunction aspectCompletionFunction(
-      PathResolverFactory pathResolverFactory, Supplier<Path> execRootSupplier) {
-    return new CompletionFunction<>(pathResolverFactory, new AspectCompletor(), execRootSupplier);
+  public static SkyFunction aspectCompletionFunction(PathResolverFactory pathResolverFactory) {
+    return new CompletionFunction<>(pathResolverFactory, new AspectCompletor());
   }
 
   private final PathResolverFactory pathResolverFactory;
   private final Completor<TValue, TResult> completor;
-  private final Supplier<Path> execRootSupplier;
 
   private CompletionFunction(
-      PathResolverFactory pathResolverFactory,
-      Completor<TValue, TResult> completor,
-      Supplier<Path> execRootSupplier) {
+      PathResolverFactory pathResolverFactory, Completor<TValue, TResult> completor) {
     this.pathResolverFactory = pathResolverFactory;
     this.completor = completor;
-    this.execRootSupplier = execRootSupplier;
   }
 
   @Nullable
@@ -367,13 +358,15 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     // Avoid iterating over nested set twice.
     ImmutableList<Artifact> allArtifacts =
         completor.getAllArtifactsToBuild(value, topLevelContext).getAllArtifacts().toList();
-    Map<SkyKey, ValueOrException<ActionExecutionException>> inputDeps =
-        env.getValuesOrThrow(Artifact.keys(allArtifacts), ActionExecutionException.class);
+    Map<SkyKey, ValueOrException2<MissingInputFileException, ActionExecutionException>> inputDeps =
+        env.getValuesOrThrow(
+            ArtifactSkyKey.mandatoryKeys(allArtifacts),
+            MissingInputFileException.class,
+            ActionExecutionException.class);
 
     ActionInputMap inputMap = new ActionInputMap(inputDeps.size());
     Map<Artifact, Collection<Artifact>> expandedArtifacts = new HashMap<>();
     Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets = new HashMap<>();
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets = new HashMap<>();
 
     int missingCount = 0;
     ActionExecutionException firstActionExecutionException = null;
@@ -381,29 +374,27 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     NestedSetBuilder<Cause> rootCausesBuilder = NestedSetBuilder.stableOrder();
     for (Artifact input : allArtifacts) {
       try {
-        SkyValue artifactValue = inputDeps.get(Artifact.key(input)).get();
+        SkyValue artifactValue = inputDeps.get(ArtifactSkyKey.mandatoryKey(input)).get();
         if (artifactValue != null) {
-          if (artifactValue instanceof MissingFileArtifactValue) {
-            missingCount++;
-            final Label inputOwner = input.getOwner();
-            if (inputOwner != null) {
-              MissingInputFileException e =
-                  ((MissingFileArtifactValue) artifactValue).getException();
-              env.getListener().handle(Event.error(e.getLocation(), e.getMessage()));
-              Cause cause = new LabelCause(inputOwner, e.getMessage());
-              rootCausesBuilder.add(cause);
-              env.getListener().handle(completor.getRootCauseError(value, cause, env));
-            }
-          } else {
-            ActionInputMapHelper.addToMap(
-                inputMap,
-                expandedArtifacts,
-                expandedFilesets,
-                topLevelFilesets,
-                input,
-                artifactValue,
-                env);
+          ActionInputMapHelper.addToMap(
+              inputMap,
+              expandedArtifacts,
+              expandedFilesets,
+              input,
+              artifactValue,
+              env);
+          if (input.isFileset()) {
+            expandedFilesets.put(
+                input, ActionInputMapHelper.getFilesets(env, (Artifact.SpecialArtifact) input));
           }
+        }
+      } catch (MissingInputFileException e) {
+        missingCount++;
+        final Label inputOwner = input.getOwner();
+        if (inputOwner != null) {
+          Cause cause = new LabelCause(inputOwner, e.getMessage());
+          rootCausesBuilder.add(cause);
+          env.getListener().handle(completor.getRootCauseError(value, cause, env));
         }
       } catch (ActionExecutionException e) {
         rootCausesBuilder.addTransitive(e.getRootCauses());
@@ -414,7 +405,6 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
         }
       }
     }
-    expandedFilesets.putAll(topLevelFilesets);
 
     if (missingCount > 0) {
       missingInputException = completor.getMissingFilesException(value, missingCount, env);
@@ -444,20 +434,13 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
       return null;
     }
 
-    final CompletionContext ctx;
-    try {
-      ctx =
-          CompletionContext.create(
-              expandedArtifacts,
-              expandedFilesets,
-              topLevelContext.expandFilesets(),
-              inputMap,
-              pathResolverFactory,
-              execRootSupplier.get(),
-              workspaceNameValue.getName());
-    } catch (IOException e) {
-      throw new CompletionFunctionException(e);
-    }
+    CompletionContext ctx =
+        CompletionContext.create(
+            expandedArtifacts,
+            expandedFilesets,
+            inputMap,
+            pathResolverFactory,
+            workspaceNameValue.getName());
 
     ExtendedEventHandler.Postable postable =
         completor.createSucceeded(skyKey, value, ctx, topLevelContext, env);
@@ -483,11 +466,6 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     }
 
     public CompletionFunctionException(MissingInputFileException e) {
-      super(e, Transience.TRANSIENT);
-      this.actionException = null;
-    }
-
-    public CompletionFunctionException(IOException e) {
       super(e, Transience.TRANSIENT);
       this.actionException = null;
     }

@@ -543,6 +543,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         ActionConstructionContext actionConstructionContext,
         BuildConfiguration configuration,
         Label label) {
+      // private to avoid class initialization deadlock between this class and its outer class
       this.actionConstructionContext = actionConstructionContext;
       this.configuration = configuration;
       this.label = label;

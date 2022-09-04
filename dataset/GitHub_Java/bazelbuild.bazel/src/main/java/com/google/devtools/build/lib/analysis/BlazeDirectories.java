@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
@@ -47,7 +48,7 @@ import javax.annotation.Nullable;
 @AutoCodec
 @Immutable
 public final class BlazeDirectories {
-  // Include directory name, relative to execRoot/blaze-out/configuration. Only one segment allowed.
+  // Include directory name, relative to execRoot/blaze-out/configuration.
   public static final String RELATIVE_INCLUDE_DIR = StringCanonicalizer.intern("include");
   @VisibleForTesting static final String DEFAULT_EXEC_ROOT = "default-exec-root";
 
@@ -184,15 +185,11 @@ public final class BlazeDirectories {
   }
 
   /**
-   * Returns the directory where actions can store temporary files (such as their stdout and stderr)
-   * during a build. If the directory already exists, the directory is cleaned.
+   * Returns the directory where the stdout/stderr for actions can be stored temporarily for a
+   * build. If the directory already exists, the directory is cleaned.
    */
-  public Path getActionTempsDirectory(Path execRoot) {
-    return execRoot.getRelative(getRelativeOutputPath()).getRelative("_tmp/actions");
-  }
-
-  public Path getPersistentActionOutsDirectory(Path execRoot) {
-    return execRoot.getRelative(getRelativeOutputPath()).getRelative("_actions");
+  public Path getActionConsoleOutputDirectory(Path execRoot) {
+    return execRoot.getRelative(getRelativeOutputPath()).getRelative("_tmp/action_outs");
   }
 
   /** Returns the installed embedded binaries directory, under the shared installBase location. */
@@ -206,7 +203,7 @@ public final class BlazeDirectories {
    */
   public ArtifactRoot getBuildDataDirectory(String workspaceName) {
     return ArtifactRoot.asDerivedRoot(
-        getExecRoot(workspaceName), getRelativeOutputPath(productName));
+        getExecRoot(workspaceName), PathFragment.create(getRelativeOutputPath(productName)));
   }
 
   /**

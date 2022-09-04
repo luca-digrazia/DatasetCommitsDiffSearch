@@ -17,23 +17,15 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpanderImpl;
-import com.google.devtools.build.lib.actions.FilesetManifest.RelativeSymlinkBehavior;
-import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * {@link CompletionContext} contains an {@link ArtifactExpander} and {@link ArtifactPathResolver}
  * used to resolve output files during a {@link
  * com.google.devtools.build.lib.skyframe.CompletionFunction} evaluation.
- *
- * <p>Note that output Artifacts may in fact refer to aggregations, namely tree artifacts and
- * Filesets. We expand these aggregations when visiting artifacts.
  */
 @AutoValue
 public abstract class CompletionContext {
@@ -44,42 +36,31 @@ public abstract class CompletionContext {
 
   public abstract ArtifactPathResolver pathResolver();
 
-  public abstract boolean expandFilesets();
-
-  @Nullable
-  public abstract Path execRoot();
-
   public static CompletionContext create(
       Map<Artifact, Collection<Artifact>> expandedArtifacts,
       Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets,
-      boolean expandFilesets,
       ActionInputMap inputMap,
       PathResolverFactory pathResolverFactory,
-      Path execRoot,
-      String workspaceName)
-      throws IOException {
+      String workspaceName) {
     ArtifactExpander expander = new ArtifactExpanderImpl(expandedArtifacts, expandedFilesets);
     ArtifactPathResolver pathResolver =
         pathResolverFactory.shouldCreatePathResolverForArtifactValues()
             ? pathResolverFactory.createPathResolverForArtifactValues(
-                inputMap, expandedArtifacts, expandedFilesets, workspaceName)
+                inputMap, expandedArtifacts, expandedFilesets.keySet(), workspaceName)
             : ArtifactPathResolver.IDENTITY;
-    return new AutoValue_CompletionContext(expander, pathResolver, expandFilesets, execRoot);
+    return new AutoValue_CompletionContext(expander, pathResolver);
   }
 
   private static CompletionContext createNull() {
-    return new AutoValue_CompletionContext(
-        (artifact, output) -> {}, ArtifactPathResolver.IDENTITY, false, null);
+    return new AutoValue_CompletionContext((artifact, output) -> {}, ArtifactPathResolver.IDENTITY);
   }
 
   public void visitArtifacts(Iterable<Artifact> artifacts, ArtifactReceiver receiver) {
     for (Artifact artifact : artifacts) {
-      if (artifact.isMiddlemanArtifact()) {
+      if (artifact.isMiddlemanArtifact() || artifact.isFileset()) {
+        // We never want to report middleman artifacts. They are for internal use only.
+        // Filesets are not currently supported, but should be in the future.
         continue;
-      } else if (artifact.isFileset()) {
-        if (expandFilesets()) {
-          visitFileset(artifact, receiver);
-        }
       } else if (artifact.isTreeArtifact()) {
         List<Artifact> expandedArtifacts = new ArrayList<>();
         expander().expand(artifact, expandedArtifacts);
@@ -92,31 +73,10 @@ public abstract class CompletionContext {
     }
   }
 
-  private void visitFileset(Artifact filesetArtifact, ArtifactReceiver receiver) {
-    ImmutableList<FilesetOutputSymlink> links = expander().getFileset(filesetArtifact);
-    FilesetManifest filesetManifest;
-    try {
-      filesetManifest =
-          FilesetManifest.constructFilesetManifest(
-              links, PathFragment.EMPTY_FRAGMENT, RelativeSymlinkBehavior.RESOLVE);
-    } catch (IOException e) {
-      // Unexpected: RelativeSymlinkBehavior.RESOLVE should not throw.
-      throw new IllegalStateException(e);
-    }
-
-    for (Map.Entry<PathFragment, String> mapping : filesetManifest.getEntries().entrySet()) {
-      String targetFile = mapping.getValue();
-      PathFragment locationInFileset = mapping.getKey();
-      receiver.acceptFilesetMapping(
-          filesetArtifact, locationInFileset, execRoot().getRelative(targetFile));
-    }
-  }
-
   /** A function that accepts an {@link Artifact}. */
+  @FunctionalInterface
   public interface ArtifactReceiver {
-    void accept(Artifact artifact);
-
-    void acceptFilesetMapping(Artifact fileset, PathFragment relName, Path targetFile);
+    void accept(Artifact a);
   }
 
   /** A factory for {@link ArtifactPathResolver}. */
@@ -124,9 +84,8 @@ public abstract class CompletionContext {
     ArtifactPathResolver createPathResolverForArtifactValues(
         ActionInputMap actionInputMap,
         Map<Artifact, Collection<Artifact>> expandedArtifacts,
-        Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesets,
-        String workspaceName)
-        throws IOException;
+        Iterable<Artifact> filesets,
+        String workspaceName);
 
     boolean shouldCreatePathResolverForArtifactValues();
   }
