@@ -28,12 +28,12 @@ import com.google.devtools.build.lib.remote.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.Digests;
 import com.google.devtools.build.lib.remote.Digests.ActionKey;
 import com.google.devtools.build.lib.remote.SimpleBlobStoreActionCache;
-import com.google.devtools.build.lib.remote.TracingMetadataUtils;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.shell.FutureCommandResult;
+import com.google.devtools.build.lib.shell.TimeoutKillableObserver;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.remoteexecution.v1test.Action;
@@ -42,26 +42,26 @@ import com.google.devtools.remoteexecution.v1test.Command.EnvironmentVariable;
 import com.google.devtools.remoteexecution.v1test.ExecuteRequest;
 import com.google.devtools.remoteexecution.v1test.ExecutionGrpc.ExecutionImplBase;
 import com.google.devtools.remoteexecution.v1test.Platform;
-import com.google.devtools.remoteexecution.v1test.RequestMetadata;
 import com.google.longrunning.Operation;
+import com.google.protobuf.Duration;
 import com.google.protobuf.util.Durations;
 import com.google.rpc.Code;
 import com.google.rpc.Status;
-import io.grpc.Context;
 import io.grpc.StatusException;
 import io.grpc.protobuf.StatusProto;
 import io.grpc.stub.StreamObserver;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -80,10 +80,9 @@ final class ExecutionServer extends ExecutionImplBase {
   // experimental_remote_platform_override in
   // src/main/java/com/google/devtools/build/lib/remote/RemoteOptions.java)
   private static final String CONTAINER_IMAGE_ENTRY_NAME = "container-image";
-  private static final String DOCKER_IMAGE_PREFIX = "docker://";
 
   // How long to wait for the uid command.
-  private static final Duration uidTimeout = Duration.ofMillis(30);
+  private static final Duration uidTimeout = Durations.fromMicros(30);
 
   private static final int LOCAL_EXEC_ERROR = -1;
 
@@ -126,8 +125,12 @@ final class ExecutionServer extends ExecutionImplBase {
   @Override
   public void execute(ExecuteRequest request, StreamObserver<Operation> responseObserver) {
     final String opName = UUID.randomUUID().toString();
-    ListenableFuture<ActionResult> future =
-        executorService.submit(Context.current().wrap(() -> execute(request, opName)));
+    ListenableFuture<ActionResult> future = executorService.submit(new Callable<ActionResult>() {
+      @Override
+      public ActionResult call() throws Exception {
+        return execute(request, opName);
+      }
+    });
     operationsCache.put(opName, future);
     responseObserver.onNext(Operation.newBuilder().setName(opName).build());
     responseObserver.onCompleted();
@@ -136,20 +139,19 @@ final class ExecutionServer extends ExecutionImplBase {
   private ActionResult execute(ExecuteRequest request, String id)
       throws IOException, InterruptedException, StatusException {
     Path tempRoot = workPath.getRelative("build-" + id);
-    String workDetails = "";
     try {
       tempRoot.createDirectory();
-      RequestMetadata meta = TracingMetadataUtils.fromCurrentContext();
-      workDetails =
-          String.format(
-              "build-request-id: %s command-id: %s action-id: %s",
-              meta.getCorrelatedInvocationsId(), meta.getToolInvocationId(), meta.getActionId());
-      logger.log(FINE, "Received work for: {0}", workDetails);
+      logger.log(
+          FINE,
+          "Work received has {0} input files and {1} output files.",
+          new Object[]{
+              request.getTotalInputFileCount(), request.getAction().getOutputFilesCount()
+          });
       ActionResult result = execute(request.getAction(), tempRoot);
-      logger.log(FINE, "Completed {0}.", workDetails);
+      logger.log(FINE, "Completed {0}.", id);
       return result;
     } catch (Exception e) {
-      logger.log(Level.SEVERE, "Work failed: {0} {1}.", new Object[] {workDetails, e});
+      logger.log(Level.SEVERE, "Work failed.", e);
       throw e;
     } finally {
       if (workerOptions.debug) {
@@ -169,6 +171,8 @@ final class ExecutionServer extends ExecutionImplBase {
 
   private ActionResult execute(Action action, Path execRoot)
       throws IOException, InterruptedException, StatusException {
+    ByteArrayOutputStream stdoutBuffer = new ByteArrayOutputStream();
+    ByteArrayOutputStream stderrBuffer = new ByteArrayOutputStream();
     com.google.devtools.remoteexecution.v1test.Command command = null;
     try {
       command =
@@ -219,7 +223,9 @@ final class ExecutionServer extends ExecutionImplBase {
       //
       // As a workaround, we put a synchronized block around the fork.
       try {
-        futureCmdResult = cmd.executeAsync();
+        futureCmdResult = cmd
+            .executeAsynchronously(new ByteArrayInputStream(new byte[0]), Command.NO_OBSERVER,
+                stdoutBuffer, stderrBuffer, true, false);
       } catch (CommandException e) {
         Throwables.throwIfInstanceOf(e.getCause(), IOException.class);
       }
@@ -260,8 +266,8 @@ final class ExecutionServer extends ExecutionImplBase {
 
     ActionResult.Builder result = ActionResult.newBuilder();
     cache.upload(result, execRoot, outputs);
-    byte[] stdout = cmdResult.getStdout();
-    byte[] stderr = cmdResult.getStderr();
+    byte[] stdout = stdoutBuffer.toByteArray();
+    byte[] stderr = stderrBuffer.toByteArray();
     cache.uploadOutErr(result, stdout, stderr);
     ActionResult finalResult = result.setExitCode(exitCode).build();
     if (exitCode == 0) {
@@ -291,12 +297,15 @@ final class ExecutionServer extends ExecutionImplBase {
   // only a small handful of cases where uid is vital (e.g., if strict permissions are set on the
   // output files), so most use cases would work without setting uid.
   private long getUid() {
-    Command cmd =
-        new Command(new String[] {"id", "-u"}, /*env=*/null, /*workingDir=*/null, uidTimeout);
+    Command cmd = new Command(new String[] {"id", "-u"});
     try {
       ByteArrayOutputStream stdout = new ByteArrayOutputStream();
       ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-      cmd.execute(stdout, stderr);
+      cmd.execute(
+          Command.NO_INPUT,
+          new TimeoutKillableObserver(com.google.protobuf.util.Durations.toMicros(uidTimeout)),
+          stdout,
+          stderr);
       return Long.parseLong(stdout.toString().trim());
     } catch (CommandException | NumberFormatException e) {
       logger.log(
@@ -319,15 +328,6 @@ final class ExecutionServer extends ExecutionImplBase {
                   "Multiple entries for %s in action.Platform", CONTAINER_IMAGE_ENTRY_NAME));
         }
         result = property.getValue();
-        if (!result.startsWith(DOCKER_IMAGE_PREFIX)) {
-          throw StatusUtils.invalidArgumentError(
-              "platform", // Field name.
-              String.format(
-                  "%s: Docker images must be stored in gcr.io with an image spec in the form "
-                      + "'docker://gcr.io/{IMAGE_NAME}'",
-                  CONTAINER_IMAGE_ENTRY_NAME));
-        }
-        result = result.substring(DOCKER_IMAGE_PREFIX.length());
       }
     }
     return result;
