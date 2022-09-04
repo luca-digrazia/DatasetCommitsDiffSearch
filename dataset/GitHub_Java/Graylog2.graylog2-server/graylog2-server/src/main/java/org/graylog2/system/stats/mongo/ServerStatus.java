@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.system.stats.mongo;
 
@@ -20,6 +20,8 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 import org.joda.time.DateTime;
+
+import javax.annotation.Nullable;
 
 /**
  * @see <a href="http://docs.mongodb.org/manual/reference/command/serverStatus/">Diagnostic Commands &gt; serverStatus</a>
@@ -60,6 +62,9 @@ public abstract class ServerStatus {
     @JsonProperty
     public abstract Memory memory();
 
+    @JsonProperty
+    public abstract StorageEngine storageEngine();
+
     public static ServerStatus create(String host,
                                       String version,
                                       String process,
@@ -70,9 +75,10 @@ public abstract class ServerStatus {
                                       DateTime localTime,
                                       Connections connections,
                                       Network network,
-                                      Memory memory) {
+                                      Memory memory,
+                                      StorageEngine storageEngine) {
         return new AutoValue_ServerStatus(host, version, process, pid, uptime, uptimeMillis, uptimeEstimate, localTime,
-                connections, network, memory);
+                connections, network, memory, storageEngine);
     }
 
     @JsonAutoDetect
@@ -85,11 +91,12 @@ public abstract class ServerStatus {
         public abstract int available();
 
         @JsonProperty
-        public abstract long totalCreated();
+        @Nullable
+        public abstract Long totalCreated();
 
         public static Connections create(int current,
                                          int available,
-                                         long totalCreated) {
+                                         @Nullable Long totalCreated) {
             return new AutoValue_ServerStatus_Connections(current, available, totalCreated);
         }
     }
@@ -141,6 +148,19 @@ public abstract class ServerStatus {
                                     int mapped,
                                     int mappedWithJournal) {
             return new AutoValue_ServerStatus_Memory(bits, resident, virtual, supported, mapped, mappedWithJournal);
+        }
+    }
+
+    @JsonAutoDetect
+    @AutoValue
+    public abstract static class StorageEngine {
+        public static final StorageEngine DEFAULT = create("mmapv1");
+
+        @JsonProperty
+        public abstract String name();
+
+        public static StorageEngine create(String name) {
+            return new AutoValue_ServerStatus_StorageEngine(name);
         }
     }
 
