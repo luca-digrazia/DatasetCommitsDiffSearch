@@ -22,7 +22,7 @@ import java.util.Arrays;
 import javax.annotation.Nullable;
 
 /** A value class for storing {@link Param} metadata to avoid using Java proxies. */
-final class ParamDescriptor {
+public final class ParamDescriptor {
 
   private final String name;
   private final String defaultValue;
@@ -77,7 +77,7 @@ final class ParamDescriptor {
    * Returns a {@link ParamDescriptor} representing the given raw {@link Param} annotation and the
    * given semantics.
    */
-  static ParamDescriptor of(Param param, StarlarkSemantics starlarkSemantics) {
+  public static ParamDescriptor of(Param param, StarlarkSemantics starlarkSemantics) {
     ImmutableList<ParamTypeDescriptor> allowedTypes =
         Arrays.stream(param.allowedTypes())
             .map(ParamTypeDescriptor::of)
@@ -106,26 +106,32 @@ final class ParamDescriptor {
         allowedTypes,
         generic,
         noneable,
-        param.named()
-            || (param.legacyNamed() && !starlarkSemantics.incompatibleRestrictNamedParams()),
+        isNamed(param, starlarkSemantics),
         param.positional(),
         getType(type, generic, allowedTypes, noneable),
         valueOverride,
         flagResponsibleForDisable);
   }
 
+  private static boolean isNamed(Param param, StarlarkSemantics starlarkSemantics) {
+    if (param.named()) {
+      return true;
+    }
+    return param.legacyNamed() && !starlarkSemantics.incompatibleRestrictNamedParams();
+  }
+
   /** @see Param#name() */
-  String getName() {
+  public String getName() {
     return name;
   }
 
   /** @see Param#allowedTypes() */
-  ImmutableList<ParamTypeDescriptor> getAllowedTypes() {
+  public ImmutableList<ParamTypeDescriptor> getAllowedTypes() {
     return allowedTypes;
   }
 
   /** @see Param#type() */
-  Class<?> getType() {
+  public Class<?> getType() {
     return type;
   }
 
@@ -155,27 +161,27 @@ final class ParamDescriptor {
   }
 
   /** @see Param#generic1() */
-  Class<?> getGeneric1() {
+  public Class<?> getGeneric1() {
     return generic1;
   }
 
   /** @see Param#noneable() */
-  boolean isNoneable() {
+  public boolean isNoneable() {
     return noneable;
   }
 
   /** @see Param#positional() */
-  boolean isPositional() {
+  public boolean isPositional() {
     return positional;
   }
 
   /** @see Param#named() */
-  boolean isNamed() {
+  public boolean isNamed() {
     return named;
   }
 
   /** @see Param#defaultValue() */
-  String getDefaultValue() {
+  public String getDefaultValue() {
     return defaultValue;
   }
 
@@ -184,7 +190,7 @@ final class ParamDescriptor {
   }
 
   /** Returns true if this parameter is disabled under the current skylark semantic flags. */
-  boolean isDisabledInCurrentSemantics() {
+  public boolean isDisabledInCurrentSemantics() {
     return valueOverride != null;
   }
 
@@ -194,7 +200,7 @@ final class ParamDescriptor {
    *
    * @throws IllegalStateException if invoked when {@link #isDisabledInCurrentSemantics()} is false
    */
-  String getValueOverride() {
+  public String getValueOverride() {
     Preconditions.checkState(
         isDisabledInCurrentSemantics(),
         "parameter is not disabled under the current semantic flags. getValueOverride should be "
@@ -208,7 +214,7 @@ final class ParamDescriptor {
    *
    * @throws IllegalStateException if invoked when {@link #isDisabledInCurrentSemantics()} is false
    */
-  FlagIdentifier getFlagResponsibleForDisable() {
+  public FlagIdentifier getFlagResponsibleForDisable() {
     Preconditions.checkState(
         isDisabledInCurrentSemantics(),
         "parameter is not disabled under the current semantic flags. getFlagResponsibleForDisable "
