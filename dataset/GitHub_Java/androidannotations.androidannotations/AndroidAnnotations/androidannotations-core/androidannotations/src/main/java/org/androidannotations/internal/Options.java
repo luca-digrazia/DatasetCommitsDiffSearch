@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -25,7 +25,6 @@ import javax.annotation.processing.ProcessingEnvironment;
 import org.androidannotations.Option;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.holder.BaseGeneratedClassHolder;
-import org.androidannotations.internal.generation.CodeModelGenerator;
 import org.androidannotations.internal.helper.AndroidManifestFinder;
 import org.androidannotations.internal.rclass.ProjectRClassFinder;
 import org.androidannotations.logger.LoggerContext;
@@ -47,7 +46,6 @@ public class Options {
 		addSupportedOption(LoggerContext.OPTION_LOG_APPENDER_CONSOLE);
 		addSupportedOption(LoggerContext.OPTION_LOG_APPENDER_FILE);
 		addSupportedOption(BaseGeneratedClassHolder.OPTION_GENERATE_FINAL_CLASSES);
-		addSupportedOption(CodeModelGenerator.OPTION_ENCODING);
 	}
 
 	public void addAllSupportedOptions(List<Option> options) {
