@@ -15,6 +15,7 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.locks.LockSupport;
 
 import org.jboss.logging.Logger;
 
@@ -51,8 +52,11 @@ public class DevModeMain implements Closeable {
                         e);
             }
             context.setArgs(args);
-            DevModeMain devModeMain = new DevModeMain(context);
-            devModeMain.start();
+            try (DevModeMain devModeMain = new DevModeMain(context)) {
+                devModeMain.start();
+
+                LockSupport.park();
+            }
         }
     }
 
