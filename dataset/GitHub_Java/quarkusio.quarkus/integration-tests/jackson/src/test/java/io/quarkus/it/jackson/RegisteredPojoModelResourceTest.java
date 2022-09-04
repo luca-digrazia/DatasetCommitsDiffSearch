@@ -16,33 +16,19 @@ public class RegisteredPojoModelResourceTest {
 
     @Test
     public void testSimplePojoModel() throws IOException {
-        RegisteredPojoModel parent = new RegisteredPojoModel();
-        parent.setId("123");
-        parent.setVersion(3);
-        parent.setValue("some");
-
-        RegisteredPojoModel child = new RegisteredPojoModel();
-        child.setId("234");
-        child.setVersion(1);
-        child.setValue("value");
-
-        parent.setChild(child);
-        child.setParent(parent);
+        RegisteredPojoModel model = new RegisteredPojoModel();
+        model.setId("123");
+        model.setVersion(3);
+        model.setValue("some");
 
         given()
                 .contentType("application/json")
-                .body(parent.toJson(getObjectMapperForTest()))
+                .body(model.toJson(getObjectMapperForTest()))
                 .when().post("/registeredpojomodel")
                 .then()
                 .statusCode(201)
                 .body("id", equalTo("123"))
                 .body("version", equalTo(3))
-                .body("value", equalTo("some"))
-                .body("parent", equalTo(null))
-                .body("child.id", equalTo("234"))
-                .body("child.version", equalTo(1))
-                .body("child.value", equalTo("value"))
-                .body("child.parent", equalTo("123"))
-                .body("child.child", equalTo(null));
+                .body("value", equalTo("some"));
     }
 }
