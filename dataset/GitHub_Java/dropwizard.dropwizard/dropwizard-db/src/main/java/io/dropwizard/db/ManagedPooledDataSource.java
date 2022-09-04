@@ -27,8 +27,7 @@ public class ManagedPooledDataSource extends DataSourceProxy implements ManagedD
         this.metricRegistry = metricRegistry;
     }
 
-    // JDK6 has JDBC 4.0 which doesn't have this -- don't add @Override
-    @SuppressWarnings("override")
+    @Override
     public Logger getParentLogger() throws SQLFeatureNotSupportedException {
         throw new SQLFeatureNotSupportedException("Doesn't use java.util.logging");
     }
@@ -37,21 +36,37 @@ public class ManagedPooledDataSource extends DataSourceProxy implements ManagedD
     public void start() throws Exception {
         final ConnectionPool connectionPool = createPool();
         metricRegistry.register(name(getClass(), connectionPool.getName(), "active"),
-                                new Gauge<Integer>() {
-                                    @Override
-                                    public Integer getValue() {
-                                        return connectionPool.getActive();
-                                    }
-                                });
+            (Gauge<Integer>) connectionPool::getActive);
 
         metricRegistry.register(name(getClass(), connectionPool.getName(), "idle"),
-                                new Gauge<Integer>() {
+            (Gauge<Integer>) connectionPool::getIdle);
 
-                                    @Override
-                                    public Integer getValue() {
-                                        return connectionPool.getIdle();
-                                    }
-                                });
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "waiting"),
+            (Gauge<Integer>) connectionPool::getWaitCount);
+
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "size"),
+            (Gauge<Integer>) connectionPool::getSize);
+
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "created"),
+            (Gauge<Long>) connectionPool::getCreatedCount);
+
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "borrowed"),
+            (Gauge<Long>) connectionPool::getBorrowedCount);
+
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "reconnected"),
+            (Gauge<Long>) connectionPool::getReconnectedCount);
+
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "released"),
+            (Gauge<Long>) connectionPool::getReleasedCount);
+
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "releasedIdle"),
+            (Gauge<Long>) connectionPool::getReleasedIdleCount);
+
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "returned"),
+            (Gauge<Long>) connectionPool::getReturnedCount);
+
+        metricRegistry.register(name(getClass(), connectionPool.getName(), "removeAbandoned"),
+            (Gauge<Long>) connectionPool::getRemoveAbandonedCount);
     }
 
     @Override
