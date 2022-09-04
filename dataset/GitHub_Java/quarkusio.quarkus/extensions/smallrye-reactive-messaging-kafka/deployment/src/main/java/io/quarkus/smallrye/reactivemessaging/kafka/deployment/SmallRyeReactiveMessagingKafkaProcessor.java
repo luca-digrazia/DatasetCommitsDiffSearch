@@ -65,10 +65,14 @@ public class SmallRyeReactiveMessagingKafkaProcessor {
             MethodInfo method = annotation.target().asMethod();
 
             processIncomingMethod(discovery, method, (keyDeserializer, valueDeserializer) -> {
-                produceRuntimeConfigurationDefaultBuildItem(discovery, config,
-                        "mp.messaging.incoming." + channelName + ".key.deserializer", keyDeserializer);
-                produceRuntimeConfigurationDefaultBuildItem(discovery, config,
-                        "mp.messaging.incoming." + channelName + ".value.deserializer", valueDeserializer);
+                if (keyDeserializer != null) {
+                    config.produce(new RunTimeConfigurationDefaultBuildItem(
+                            "mp.messaging.incoming." + channelName + ".key.deserializer", keyDeserializer));
+                }
+                if (valueDeserializer != null) {
+                    config.produce(new RunTimeConfigurationDefaultBuildItem(
+                            "mp.messaging.incoming." + channelName + ".value.deserializer", valueDeserializer));
+                }
             });
         }
 
@@ -81,10 +85,14 @@ public class SmallRyeReactiveMessagingKafkaProcessor {
             MethodInfo method = annotation.target().asMethod();
 
             processOutgoingMethod(discovery, method, (keySerializer, valueSerializer) -> {
-                produceRuntimeConfigurationDefaultBuildItem(discovery, config,
-                        "mp.messaging.outgoing." + channelName + ".key.serializer", keySerializer);
-                produceRuntimeConfigurationDefaultBuildItem(discovery, config,
-                        "mp.messaging.outgoing." + channelName + ".value.serializer", valueSerializer);
+                if (keySerializer != null) {
+                    config.produce(new RunTimeConfigurationDefaultBuildItem(
+                            "mp.messaging.outgoing." + channelName + ".key.serializer", keySerializer));
+                }
+                if (valueSerializer != null) {
+                    config.produce(new RunTimeConfigurationDefaultBuildItem(
+                            "mp.messaging.outgoing." + channelName + ".value.serializer", valueSerializer));
+                }
             });
         }
 
@@ -109,25 +117,27 @@ public class SmallRyeReactiveMessagingKafkaProcessor {
             }
 
             processIncomingChannelInjectionPoint(discovery, injectionPointType, (keyDeserializer, valueDeserializer) -> {
-                produceRuntimeConfigurationDefaultBuildItem(discovery, config,
-                        "mp.messaging.incoming." + channelName + ".key.deserializer", keyDeserializer);
-                produceRuntimeConfigurationDefaultBuildItem(discovery, config,
-                        "mp.messaging.incoming." + channelName + ".value.deserializer", valueDeserializer);
+                if (keyDeserializer != null) {
+                    config.produce(new RunTimeConfigurationDefaultBuildItem(
+                            "mp.messaging.incoming." + channelName + ".key.deserializer", keyDeserializer));
+                }
+                if (valueDeserializer != null) {
+                    config.produce(new RunTimeConfigurationDefaultBuildItem(
+                            "mp.messaging.incoming." + channelName + ".value.deserializer", valueDeserializer));
+                }
             });
 
             processOutgoingChannelInjectionPoint(discovery, injectionPointType, (keySerializer, valueSerializer) -> {
-                produceRuntimeConfigurationDefaultBuildItem(discovery, config,
-                        "mp.messaging.outgoing." + channelName + ".key.serializer", keySerializer);
-                produceRuntimeConfigurationDefaultBuildItem(discovery, config,
-                        "mp.messaging.outgoing." + channelName + ".value.serializer", valueSerializer);
+                if (keySerializer != null) {
+                    config.produce(new RunTimeConfigurationDefaultBuildItem(
+                            "mp.messaging.outgoing." + channelName + ".key.serializer", keySerializer));
+                }
+                if (valueSerializer != null) {
+                    config.produce(new RunTimeConfigurationDefaultBuildItem(
+                            "mp.messaging.outgoing." + channelName + ".value.serializer", valueSerializer));
+                }
             });
         }
-    }
-
-    void produceRuntimeConfigurationDefaultBuildItem(DefaultSerdeDiscoveryState discovery,
-            BuildProducer<RunTimeConfigurationDefaultBuildItem> config, String key, String value) {
-        discovery.runIfConfigIsAbsent(key, value,
-                () -> config.produce(new RunTimeConfigurationDefaultBuildItem(key, value)));
     }
 
     private void processIncomingMethod(DefaultSerdeDiscoveryState discovery, MethodInfo method,
