@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
 import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -128,10 +127,14 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
     // groups.
     LinkedHashSet<TargetAndConfiguration> nodes = new LinkedHashSet<>(targets.size());
     for (Target target : targets) {
-      for (BuildConfigurationValue.Key configKey : targetConfigurationKeys) {
-        BuildConfiguration config =
-            ((BuildConfigurationValue) configs.get(configKey)).getConfiguration();
-        nodes.add(new TargetAndConfiguration(target, config));
+      if (target.isConfigurable()) {
+        for (BuildConfigurationValue.Key configKey : targetConfigurationKeys) {
+          BuildConfiguration config =
+              ((BuildConfigurationValue) configs.get(configKey)).getConfiguration();
+          nodes.add(new TargetAndConfiguration(target, config));
+        }
+      } else {
+        nodes.add(new TargetAndConfiguration(target, null));
       }
     }
 
@@ -297,10 +300,6 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
       if (labelsWithErrors.contains(key.getLabel()) || key.hasExplicitConfiguration()) {
         continue;
       }
-      if (key.getTransition() == NullTransition.INSTANCE) {
-        continue;
-      }
-
       ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments =
           fragmentsMap.get(key.getLabel());
       if (depFragments != null) {
@@ -320,9 +319,6 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
     }
     for (Dependency key : keys) {
       if (labelsWithErrors.contains(key.getLabel()) || key.hasExplicitConfiguration()) {
-        continue;
-      }
-      if (key.getTransition() == NullTransition.INSTANCE) {
         continue;
       }
       ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments =
