@@ -6,7 +6,6 @@ import java.util.Map;
 
 import junit.framework.Assert;
 
-import org.bson.types.ObjectId;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -16,6 +15,8 @@ import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
 import com.google.common.collect.Maps;
+import org.bson.types.ObjectId;
+import org.graylog2.indexer.EmbeddedElasticSearchClient;
 
 /**
  * Unit tests for {@link Configuration} class
@@ -84,12 +85,12 @@ public class ConfigurationTest {
     }
 
     @Test
-    public void testGetElasticSearchIndexPrefix() throws RepositoryException, ValidationException {
+    public void testGetElasticSearchIndexName() throws RepositoryException, ValidationException {
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
-        Assert.assertEquals("graylog2", configuration.getElasticSearchIndexPrefix());
+        Assert.assertEquals("graylog2", configuration.getElasticSearchIndexName());
     }
 
     @Test
@@ -130,6 +131,26 @@ public class ConfigurationTest {
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
         Assert.assertEquals(5, configuration.getMongoThreadsAllowedToBlockMultiplier());
+    }
+
+    @Test
+    public void testGetLogglyTimeout() throws RepositoryException, ValidationException {
+
+        validProperties.put("forwarder_loggly_timeout", "5");
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals(5000, configuration.getForwarderLogglyTimeout());
+    }
+
+    @Test
+    public void testGetLogglyTimeoutDefault() throws RepositoryException, ValidationException {
+
+        validProperties.remove("forwarder_loggly_timeout");
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals(3000, configuration.getForwarderLogglyTimeout());
     }
 
     /*@Test
@@ -236,7 +257,33 @@ public class ConfigurationTest {
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
-        Assert.assertEquals("gl2-", configuration.getLibratoMetricsPrefix());
+        Assert.assertEquals("gl2", configuration.getLibratoMetricsPrefix());
     }
     
+    @Test
+    public void testGetRecentIndexStoreType() throws RepositoryException, ValidationException {
+        validProperties.put("recent_index_store_type", "mmapfs");
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals("mmapfs", configuration.getRecentIndexStoreType());
+    }
+    
+    @Test
+    public void testGetRecentIndexStoreTypeHasStandardValue() throws RepositoryException, ValidationException {
+        // Nothing set.
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals(EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE, configuration.getRecentIndexStoreType());
+    }
+    
+    @Test
+    public void testGetRecentIndexStoreTypeFallsBackToStandardInCaseOfInvalidType() throws RepositoryException, ValidationException {
+        validProperties.put("recent_index_store_type", "LOLSOMETHINGINVALID");
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals(EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE, configuration.getRecentIndexStoreType());
+    }
 }
