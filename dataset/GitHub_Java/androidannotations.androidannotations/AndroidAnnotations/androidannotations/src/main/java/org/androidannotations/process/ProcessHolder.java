@@ -129,23 +129,22 @@ public class ProcessHolder {
 		/*
 		 * RoboGuice
 		 */
-		public final JClass ROBO_CONTEXT = refClass(CanonicalNameConstants.ROBO_CONTEXT);
-		public final JClass ROBO_INJECTOR = refClass(CanonicalNameConstants.ROBO_INJECTOR);
-		public final JClass CONTENT_VIEW_LISTENER = refClass(CanonicalNameConstants.CONTENT_VIEW_LISTENER);
-		public final JClass KEY = refClass(CanonicalNameConstants.KEY);
+		public final JClass INJECTOR_PROVIDER = refClass(CanonicalNameConstants.INJECTOR_PROVIDER);
+		public final JClass INJECTOR = refClass(CanonicalNameConstants.INJECTOR);
 		public final JClass ON_RESTART_EVENT = refClass(CanonicalNameConstants.ON_RESTART_EVENT);
 		public final JClass ON_START_EVENT = refClass(CanonicalNameConstants.ON_START_EVENT);
 		public final JClass ON_RESUME_EVENT = refClass(CanonicalNameConstants.ON_RESUME_EVENT);
 		public final JClass ON_PAUSE_EVENT = refClass(CanonicalNameConstants.ON_PAUSE_EVENT);
 		public final JClass ON_NEW_INTENT_EVENT = refClass(CanonicalNameConstants.ON_NEW_INTENT_EVENT);
 		public final JClass EVENT_MANAGER = refClass(CanonicalNameConstants.EVENT_MANAGER);
-		public final JClass ROBO_GUICE = refClass(CanonicalNameConstants.ROBO_GUICE);
+		public final JClass CONTEXT_SCOPE = refClass(CanonicalNameConstants.CONTEXT_SCOPE);
 		public final JClass INJECT = refClass(CanonicalNameConstants.INJECT);
 		public final JClass ON_STOP_EVENT = refClass(CanonicalNameConstants.ON_STOP_EVENT);
 		public final JClass ON_DESTROY_EVENT = refClass(CanonicalNameConstants.ON_DESTROY_EVENT);
 		public final JClass ON_CONFIGURATION_CHANGED_EVENT = refClass(CanonicalNameConstants.ON_CONFIGURATION_CHANGED_EVENT);
 		public final JClass ON_CONTENT_CHANGED_EVENT = refClass(CanonicalNameConstants.ON_CONTENT_CHANGED_EVENT);
 		public final JClass ON_ACTIVITY_RESULT_EVENT = refClass(CanonicalNameConstants.ON_ACTIVITY_RESULT_EVENT);
+		public final JClass ON_CONTENT_VIEW_AVAILABLE_EVENT = refClass(CanonicalNameConstants.ON_CONTENT_VIEW_AVAILABLE_EVENT);
 		public final JClass ON_CREATE_EVENT = refClass(CanonicalNameConstants.ON_CREATE_EVENT);
 
 		/*
@@ -162,7 +161,6 @@ public class ProcessHolder {
 		public final JClass CLIENT_CONNECTION_MANAGER = refClass(CanonicalNameConstants.CLIENT_CONNECTION_MANAGER);
 		public final JClass DEFAULT_HTTP_CLIENT = refClass(CanonicalNameConstants.DEFAULT_HTTP_CLIENT);
 		public final JClass SSL_SOCKET_FACTORY = refClass(CanonicalNameConstants.SSL_SOCKET_FACTORY);
-		public final JClass PLAIN_SOCKET_FACTORY = refClass(CanonicalNameConstants.PLAIN_SOCKET_FACTORY);
 		public final JClass SCHEME = refClass(CanonicalNameConstants.SCHEME);
 		public final JClass SCHEME_REGISTRY = refClass(CanonicalNameConstants.SCHEME_REGISTRY);
 		public final JClass SINGLE_CLIENT_CONN_MANAGER = refClass(CanonicalNameConstants.SINGLE_CLIENT_CONN_MANAGER);

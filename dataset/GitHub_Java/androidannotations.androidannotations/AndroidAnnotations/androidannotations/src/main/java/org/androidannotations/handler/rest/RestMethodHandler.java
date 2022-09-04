@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,7 +17,6 @@ package org.androidannotations.handler.rest;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.SortedMap;
 import java.util.TreeMap;
 
 import javax.annotation.processing.ProcessingEnvironment;
@@ -80,7 +79,7 @@ public abstract class RestMethodHandler extends BaseAnnotationHandler<RestHolder
 		// Creating method signature
 		JMethod method = holder.getGeneratedClass().method(JMod.PUBLIC, methodReturnClass, methodName);
 		method.annotate(Override.class);
-		SortedMap<String, JVar> params = addMethodParams(executableElement, holder, method);
+		TreeMap<String, JVar> params = addMethodParams(executableElement, holder, method);
 		JBlock methodBody = new JBlock(false, false);
 
 		// RestTemplate exchange() method call
@@ -101,7 +100,7 @@ public abstract class RestMethodHandler extends BaseAnnotationHandler<RestHolder
 			methodBody._return(addResultCallMethod(response, methodReturnClass));
 		}
 		methodBody = surroundWithRestTryCatch(holder, methodBody, methodReturnVoid);
-		codeModelHelper.copy(methodBody, method.body());
+		method.body().add(methodBody);
 	}
 
 	protected JClass getMethodReturnClass(Element element, RestHolder holder) {
@@ -109,9 +108,9 @@ public abstract class RestMethodHandler extends BaseAnnotationHandler<RestHolder
 		return codeModelHelper.typeMirrorToJClass(executableElement.getReturnType(), holder);
 	}
 
-	protected SortedMap<String, JVar> addMethodParams(ExecutableElement executableElement, RestHolder restHolder, JMethod method) {
+	protected TreeMap<String, JVar> addMethodParams(ExecutableElement executableElement, RestHolder restHolder, JMethod method) {
 		List<? extends VariableElement> params = executableElement.getParameters();
-		SortedMap<String, JVar> methodParams = new TreeMap<String, JVar>();
+		TreeMap<String, JVar> methodParams = new TreeMap<String, JVar>();
 		for (VariableElement parameter : params) {
 			String paramName = parameter.getSimpleName().toString();
 			String paramType = parameter.asType().toString();
@@ -146,7 +145,7 @@ public abstract class RestMethodHandler extends BaseAnnotationHandler<RestHolder
 		return httpMethod.staticRef(restMethodInCapitalLetters);
 	}
 
-	protected JExpression getRequestEntity(ExecutableElement element, RestHolder holder, JBlock methodBody, SortedMap<String, JVar> params) {
+	protected JExpression getRequestEntity(ExecutableElement element, RestHolder holder, JBlock methodBody, TreeMap<String, JVar> params) {
 		JVar httpHeaders = restAnnotationHelper.declareHttpHeaders(element, holder, methodBody);
 		JVar entitySentToServer = restAnnotationHelper.getEntitySentToServer(element, params);
 		return restAnnotationHelper.declareHttpEntity(processHolder, methodBody, entitySentToServer, httpHeaders);
@@ -156,7 +155,7 @@ public abstract class RestMethodHandler extends BaseAnnotationHandler<RestHolder
 		return restAnnotationHelper.getResponseClass(element, holder);
 	}
 
-	protected JExpression getUrlVariables(Element element, RestHolder holder, JBlock methodBody, SortedMap<String, JVar> params) {
+	protected JExpression getUrlVariables(Element element, RestHolder holder, JBlock methodBody, TreeMap<String, JVar> params) {
 		return restAnnotationHelper.declareUrlVariables((ExecutableElement) element, holder, methodBody, params);
 	}
 
@@ -218,7 +217,7 @@ public abstract class RestMethodHandler extends BaseAnnotationHandler<RestHolder
 
 	/**
 	 * Adds the try/catch around the rest execution code.
-	 *
+	 * 
 	 * If an exception is caught, it will first check if the handler is set. If
 	 * the handler is set, it will call the handler and return null (or nothing
 	 * if void). If the handler isn't set, it will re-throw the exception so

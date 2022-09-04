@@ -39,7 +39,6 @@ public final class CanonicalNameConstants {
 	public static final String COLLECTIONS = Collections.class.getCanonicalName();
 	public static final String STRING = String.class.getCanonicalName();
 	public static final String STRING_BUILDER = StringBuilder.class.getCanonicalName();
-	public static final String STRING_SET = "java.util.Set<java.lang.String>";
 	public static final String CHAR_SEQUENCE = CharSequence.class.getCanonicalName();
 	public static final String SQL_EXCEPTION = SQLException.class.getCanonicalName();
 	public static final String INTEGER = Integer.class.getCanonicalName();
@@ -143,10 +142,8 @@ public final class CanonicalNameConstants {
 	/*
 	 * RoboGuice
 	 */
-	public static final String ROBO_CONTEXT = "roboguice.util.RoboContext";
-	public static final String ROBO_INJECTOR = "roboguice.inject.RoboInjector";
-	public static final String KEY = "com.google.inject.Key";
-	public static final String CONTENT_VIEW_LISTENER = "roboguice.inject.ContentViewListener";
+	public static final String INJECTOR_PROVIDER = "roboguice.inject.InjectorProvider";
+	public static final String INJECTOR = "com.google.inject.Injector";
 	public static final String ON_RESTART_EVENT = "roboguice.activity.event.OnRestartEvent";
 	public static final String ON_START_EVENT = "roboguice.activity.event.OnStartEvent";
 	public static final String ON_RESUME_EVENT = "roboguice.activity.event.OnResumeEvent";
@@ -154,7 +151,6 @@ public final class CanonicalNameConstants {
 	public static final String ON_NEW_INTENT_EVENT = "roboguice.activity.event.OnNewIntentEvent";
 	public static final String EVENT_MANAGER = "roboguice.event.EventManager";
 	public static final String CONTEXT_SCOPE = "roboguice.inject.ContextScope";
-	public static final String ROBO_GUICE = "roboguice.RoboGuice";
 	public static final String INJECT = "com.google.inject.Inject";
 	public static final String ON_STOP_EVENT = "roboguice.activity.event.OnStopEvent";
 	public static final String ON_DESTROY_EVENT = "roboguice.activity.event.OnDestroyEvent";
@@ -179,7 +175,6 @@ public final class CanonicalNameConstants {
 	public static final String CLIENT_CONNECTION_MANAGER = "org.apache.http.conn.ClientConnectionManager";
 	public static final String DEFAULT_HTTP_CLIENT = "org.apache.http.impl.client.DefaultHttpClient";
 	public static final String SSL_SOCKET_FACTORY = "org.apache.http.conn.ssl.SSLSocketFactory";
-	public static final String PLAIN_SOCKET_FACTORY = "org.apache.http.conn.scheme.PlainSocketFactory";
 	public static final String SCHEME = "org.apache.http.conn.scheme.Scheme";
 	public static final String SCHEME_REGISTRY = "org.apache.http.conn.scheme.SchemeRegistry";
 	public static final String SINGLE_CLIENT_CONN_MANAGER = "org.apache.http.impl.conn.SingleClientConnManager";
