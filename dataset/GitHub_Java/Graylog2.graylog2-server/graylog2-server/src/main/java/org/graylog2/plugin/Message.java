@@ -29,7 +29,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.net.InetAddresses;
-import org.graylog2.indexer.IndexSet;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
@@ -117,7 +116,6 @@ public class Message implements Messages {
 
     private final Map<String, Object> fields = Maps.newHashMap();
     private Set<Stream> streams = Sets.newHashSet();
-    private Set<IndexSet> indexSets = Sets.newHashSet();
     private String sourceInputId;
 
     // Used for drools to filter out messages.
@@ -131,10 +129,11 @@ public class Message implements Messages {
     private ArrayList<Recording> recordings;
 
     public Message(final String message, final String source, final DateTime timestamp) {
+        // Adding the fields directly because they would not be accepted as a reserved fields.
         fields.put(FIELD_ID, new UUID().toString());
-        addRequiredField(FIELD_MESSAGE, message);
-        addRequiredField(FIELD_SOURCE, source);
-        addRequiredField(FIELD_TIMESTAMP, timestamp);
+        fields.put(FIELD_MESSAGE, message);
+        fields.put(FIELD_SOURCE, source);
+        fields.put(FIELD_TIMESTAMP, timestamp);
     }
 
     public Message(final Map<String, Object> fields) {
@@ -297,34 +296,24 @@ public class Message implements Messages {
     }
 
     public void addField(final String key, final Object value) {
-        addField(key, value, false);
-    }
-
-    private void addRequiredField(final String key, final Object value) {
-        addField(key, value, true);
-    }
-
-    private void addField(final String key, final Object value, final boolean isRequiredField) {
-        final String trimmedKey = key.trim();
-
         // Don't accept protected keys. (some are allowed though lol)
-        if (RESERVED_FIELDS.contains(trimmedKey) && !RESERVED_SETTABLE_FIELDS.contains(trimmedKey) || !validKey(trimmedKey)) {
+        if (RESERVED_FIELDS.contains(key) && !RESERVED_SETTABLE_FIELDS.contains(key) || !validKey(key)) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Ignoring invalid or reserved key {} for message {}", trimmedKey, getId());
+                LOG.debug("Ignoring invalid or reserved key {} for message {}", key, getId());
             }
             return;
         }
 
-        if (FIELD_TIMESTAMP.equals(trimmedKey) && value != null && value instanceof Date) {
+        if (FIELD_TIMESTAMP.equals(key.trim()) && value != null && value instanceof Date) {
             fields.put(FIELD_TIMESTAMP, new DateTime(value));
-        } else if (value instanceof String) {
+        } else if(value instanceof String) {
             final String str = ((String) value).trim();
 
-            if (isRequiredField || !str.isEmpty()) {
-                fields.put(trimmedKey, str);
+            if(!str.isEmpty()) {
+                fields.put(key.trim(), str);
             }
-        } else if (value != null) {
-            fields.put(trimmedKey, value);
+        } else if(value != null) {
+            fields.put(key.trim(), value);
         }
     }
 
@@ -425,7 +414,6 @@ public class Message implements Messages {
      * @param stream the stream to route this message into
      */
     public void addStream(Stream stream) {
-        indexSets.addAll(stream.getIndexSets());
         streams.add(stream);
     }
 
@@ -434,9 +422,7 @@ public class Message implements Messages {
      * @param newStreams an iterable of Stream objects
      */
     public void addStreams(Iterable<Stream> newStreams) {
-        for (final Stream stream : newStreams) {
-            addStream(stream);
-        }
+        Iterables.addAll(streams, newStreams);
     }
 
     /**
@@ -445,25 +431,7 @@ public class Message implements Messages {
      * @return <tt>true</tt> if this message was assigned to the stream
      */
     public boolean removeStream(Stream stream) {
-        final boolean removed = streams.remove(stream);
-
-        if (removed) {
-            indexSets.clear();
-            for (Stream s : streams) {
-                indexSets.addAll(s.getIndexSets());
-            }
-        }
-
-        return removed;
-    }
-
-    /**
-     * Return the index sets for this message based on the assigned streams.
-     *
-     * @return index sets
-     */
-    public Set<IndexSet> getIndexSets() {
-        return ImmutableSet.copyOf(this.indexSets);
+        return streams.remove(stream);
     }
 
     public List<String> getStreamIds() {

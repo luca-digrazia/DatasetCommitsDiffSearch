@@ -18,12 +18,10 @@ package org.graylog2.plugin;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
-import com.eaio.uuid.UUID;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import org.graylog2.indexer.IndexSet;
+import org.assertj.core.api.Assertions;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -96,27 +94,6 @@ public class MessageTest {
 
         m.addField("something3", "bar ");
         assertEquals("bar", m.getField("something3"));
-    }
-
-    @Test
-    public void testConstructorsTrimValues() throws Exception {
-        final Map<String, Object> messageFields = ImmutableMap.of(
-                Message.FIELD_ID, new UUID().toString(),
-                Message.FIELD_MESSAGE, " foo ",
-                Message.FIELD_SOURCE, " bar ",
-                "something", " awesome ",
-                "something_else", " "
-        );
-
-        Message m = new Message((String) messageFields.get(Message.FIELD_MESSAGE), (String) messageFields.get(Message.FIELD_SOURCE), Tools.nowUTC());
-        assertEquals("foo", m.getMessage());
-        assertEquals("bar", m.getSource());
-
-        Message m2 = new Message(messageFields);
-        assertEquals("foo", m2.getMessage());
-        assertEquals("bar", m2.getSource());
-        assertEquals("awesome", m2.getField("something"));
-        assertNull(m2.getField("something_else"));
     }
 
     @Test
@@ -249,38 +226,6 @@ public class MessageTest {
     }
 
     @Test
-    public void testStreamMutatorsWithIndexSets() {
-        final Stream stream1 = mock(Stream.class);
-        final Stream stream2 = mock(Stream.class);
-        final Stream stream3 = mock(Stream.class);
-
-        final IndexSet indexSet1 = mock(IndexSet.class);
-        final IndexSet indexSet2 = mock(IndexSet.class);
-
-        assertThat(message.getIndexSets()).isEmpty();
-
-        when(stream1.getIndexSets()).thenReturn(Collections.singleton(indexSet1));
-        when(stream2.getIndexSets()).thenReturn(Collections.emptySet());
-        when(stream3.getIndexSets()).thenReturn(Sets.newHashSet(indexSet1, indexSet2));
-
-        message.addStream(stream1);
-        message.addStreams(Sets.newHashSet(stream2, stream3));
-
-        assertThat(message.getIndexSets()).containsOnly(indexSet1, indexSet2);
-
-        message.removeStream(stream3);
-
-        assertThat(message.getIndexSets()).containsOnly(indexSet1);
-
-        final Set<IndexSet> indexSets = message.getIndexSets();
-
-        message.addStream(stream3);
-
-        // getIndexSets is a copy and doesn't change after mutations
-        assertThat(indexSets).containsOnly(indexSet1);
-    }
-
-    @Test
     public void testGetStreamIds() throws Exception {
         message.addField("streams", Lists.newArrayList("stream-id"));
 
@@ -370,7 +315,7 @@ public class MessageTest {
         assertEquals("wat", object.get("field1"));
         assertEquals("that", object.get("field2"));
         assertEquals(Tools.buildElasticSearchTimeFormat((DateTime) message.getField("timestamp")), object.get("timestamp"));
-        assertEquals(Collections.emptyList(), object.get("streams"));
+        assertEquals(Collections.EMPTY_LIST, object.get("streams"));
     }
 
     @Test
@@ -386,7 +331,7 @@ public class MessageTest {
         assertEquals("foo", object.get("message"));
         assertEquals("bar", object.get("source"));
         assertEquals(Tools.buildElasticSearchTimeFormat((DateTime) message.getField("timestamp")), object.get("timestamp"));
-        assertEquals(Collections.emptyList(), object.get("streams"));
+        assertEquals(Collections.EMPTY_LIST, object.get("streams"));
     }
 
     @Test
@@ -513,6 +458,7 @@ public class MessageTest {
     public void getStreamIdsReturnsStreamsFieldContentsIfFieldDoesExist() {
         final Message message = new Message("", "source", Tools.nowUTC());
         final Stream stream = mock(Stream.class);
+        when(stream.getId()).thenReturn("test1");
         message.addField("streams", Collections.singletonList("test2"));
         message.addStream(stream);
 
