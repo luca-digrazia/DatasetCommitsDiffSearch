@@ -3,6 +3,7 @@ package io.quarkus.oidc.runtime;
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.time.Duration;
 
 import org.jboss.logging.Logger;
 
@@ -25,6 +26,7 @@ import io.vertx.mutiny.ext.web.client.WebClient;
 public class OidcProviderClient {
     private static final Logger LOG = Logger.getLogger(OidcProviderClient.class);
 
+    private static final Duration REQUEST_RETRY_BACKOFF_DURATION = Duration.ofSeconds(1);
     private static final String AUTHORIZATION_HEADER = String.valueOf(HttpHeaders.AUTHORIZATION);
 
     private final WebClient client;
@@ -53,7 +55,7 @@ public class OidcProviderClient {
     }
 
     public Uni<JsonObject> getUserInfo(String token) {
-        return client.getAbs(metadata.getUserInfoUri())
+        return client.postAbs(metadata.getUserInfoUri())
                 .putHeader(AUTHORIZATION_HEADER, OidcConstants.BEARER_SCHEME + " " + token)
                 .send().onItem().transform(resp -> getUserInfo(resp));
     }
@@ -111,7 +113,7 @@ public class OidcProviderClient {
         Uni<HttpResponse<Buffer>> response = request.sendBuffer(OidcCommonUtils.encodeForm(formBody))
                 .onFailure(ConnectException.class)
                 .retry()
-                .atMost(oidcConfig.connectionRetryCount).onFailure().transform(t -> t.getCause());
+                .atMost(3);
         return response.onItem();
     }
 

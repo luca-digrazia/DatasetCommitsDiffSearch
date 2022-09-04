@@ -4,10 +4,9 @@ import java.io.IOException;
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.Collections;
-import java.util.Map;
 import java.util.function.Supplier;
 
 import org.eclipse.microprofile.jwt.Claims;
@@ -32,6 +31,7 @@ public class OidcClientImpl implements OidcClient {
 
     private static final Logger LOG = Logger.getLogger(OidcClientImpl.class);
 
+    private static final Duration REQUEST_RETRY_BACKOFF_DURATION = Duration.ofSeconds(1);
     private static final String AUTHORIZATION_HEADER = String.valueOf(HttpHeaders.AUTHORIZATION);
 
     private final WebClient client;
@@ -42,7 +42,6 @@ public class OidcClientImpl implements OidcClient {
     private final String clientSecretBasicAuthScheme;
     private final Key clientJwtKey;
     private final OidcClientConfig oidcConfig;
-    private volatile boolean closed;
 
     public OidcClientImpl(WebClient client, String tokenRequestUri, String grantType,
             MultiMap tokenGrantParams, MultiMap commonRefreshGrantParams, OidcClientConfig oidcClientConfig) {
@@ -57,27 +56,21 @@ public class OidcClientImpl implements OidcClient {
     }
 
     @Override
-    public Uni<Tokens> getTokens(Map<String, String> additionalGrantParameters) {
-        checkClosed();
-        if (tokenGrantParams == null) {
-            throw new OidcClientException(
-                    "Only 'refresh_token' grant is supported, please call OidcClient#refreshTokens method instead");
-        }
-        return getJsonResponse(tokenGrantParams, additionalGrantParameters, false);
+    public Uni<Tokens> getTokens() {
+        return getJsonResponse(tokenGrantParams, false);
     }
 
     @Override
     public Uni<Tokens> refreshTokens(String refreshToken) {
-        checkClosed();
         if (refreshToken == null) {
             throw new OidcClientException("Refresh token is null");
         }
         MultiMap refreshGrantParams = copyMultiMap(commonRefreshGrantParams);
         refreshGrantParams.add(OidcConstants.REFRESH_TOKEN_VALUE, refreshToken);
-        return getJsonResponse(refreshGrantParams, Collections.emptyMap(), true);
+        return getJsonResponse(refreshGrantParams, true);
     }
 
-    private Uni<Tokens> getJsonResponse(MultiMap formBody, Map<String, String> additionalGrantParameters, boolean refresh) {
+    private Uni<Tokens> getJsonResponse(MultiMap formBody, boolean refresh) {
         //Uni needs to be lazy by default, we don't send the request unless
         //something has subscribed to it. This is important for the CAS state
         //management in TokensHelper
@@ -96,18 +89,11 @@ public class OidcClientImpl implements OidcClient {
                     body.add(OidcConstants.CLIENT_ASSERTION_TYPE, OidcConstants.JWT_BEARER_CLIENT_ASSERTION_TYPE);
                     body.add(OidcConstants.CLIENT_ASSERTION, OidcCommonUtils.signJwtWithKey(oidcConfig, clientJwtKey));
                 }
-                if (!additionalGrantParameters.isEmpty()) {
-                    body = copyMultiMap(body);
-                    for (Map.Entry<String, String> entry : additionalGrantParameters.entrySet()) {
-                        body.add(entry.getKey(), entry.getValue());
-                    }
-                }
                 // Retry up to three times with a one second delay between the retries if the connection is closed
                 Uni<HttpResponse<Buffer>> response = request.sendBuffer(OidcCommonUtils.encodeForm(body))
                         .onFailure(ConnectException.class)
                         .retry()
-                        .atMost(oidcConfig.connectionRetryCount)
-                        .onFailure().transform(t -> t.getCause());
+                        .atMost(3);
                 return response.onItem()
                         .transform(resp -> emitGrantTokens(resp, refresh));
             }
@@ -118,17 +104,16 @@ public class OidcClientImpl implements OidcClient {
         if (resp.statusCode() == 200) {
             LOG.debugf("%s OidcClient has %s the tokens", oidcConfig.getId().get(), (refresh ? "refreshed" : "acquired"));
             JsonObject json = resp.bodyAsJsonObject();
-            final String accessToken = json.getString(oidcConfig.grant.accessTokenProperty);
-            final String refreshToken = json.getString(oidcConfig.grant.refreshTokenProperty);
+            final String accessToken = json.getString(OidcConstants.ACCESS_TOKEN_VALUE);
+            final String refreshToken = json.getString(OidcConstants.REFRESH_TOKEN_VALUE);
             Long accessTokenExpiresAt;
-            Long accessTokenExpiresIn = json.getLong(oidcConfig.grant.expiresInProperty);
+            Long accessTokenExpiresIn = json.getLong(OidcConstants.EXPIRES_IN);
             if (accessTokenExpiresIn != null) {
                 accessTokenExpiresAt = Instant.now().getEpochSecond() + accessTokenExpiresIn;
             } else {
                 accessTokenExpiresAt = getExpiresJwtClaim(accessToken);
             }
-            return new Tokens(accessToken, accessTokenExpiresAt, oidcConfig.refreshTokenTimeSkew.orElse(null), refreshToken,
-                    json);
+            return new Tokens(accessToken, accessTokenExpiresAt, oidcConfig.refreshTokenTimeSkew.orElse(null), refreshToken);
         } else {
             String errorMessage = resp.bodyAsString();
             LOG.debugf("%s OidcClient has failed to complete the %s grant request:  status: %d, error message: %s",
@@ -172,15 +157,6 @@ public class OidcClientImpl implements OidcClient {
 
     @Override
     public void close() throws IOException {
-        if (!closed) {
-            client.close();
-            closed = true;
-        }
-    }
-
-    private void checkClosed() {
-        if (closed) {
-            throw new IllegalStateException("OidcClient " + oidcConfig.getId().get() + " is closed");
-        }
+        client.close();
     }
 }

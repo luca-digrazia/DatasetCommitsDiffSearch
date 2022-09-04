@@ -1,7 +1,6 @@
 package io.quarkus.oidc.common.runtime;
 
 import java.io.InputStream;
-import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -10,7 +9,6 @@ import java.security.PrivateKey;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 import javax.crypto.SecretKey;
 
@@ -37,27 +35,14 @@ public class OidcCommonUtils {
 
     }
 
-    public static void verifyCommonConfiguration(OidcCommonConfig oidcConfig, boolean clientIdOptional,
-            boolean isServerConfig) {
+    public static void verifyCommonConfiguration(OidcCommonConfig oidcConfig, boolean isServerConfig) {
         final String configPrefix = isServerConfig ? "quarkus.oidc." : "quarkus.oidc-client.";
-        if (!oidcConfig.getAuthServerUrl().isPresent()) {
+        if (!oidcConfig.getAuthServerUrl().isPresent() || !oidcConfig.getClientId().isPresent()) {
             throw new ConfigurationException(
-                    String.format("'%sauth-server-url' property must be configured",
+                    String.format("Both '%1$sauth-server-url' and '%1$sclient-id' properties must be configured",
                             configPrefix));
         }
 
-        if (!clientIdOptional && !oidcConfig.getClientId().isPresent()) {
-            throw new ConfigurationException(
-                    String.format("'%sclient-id' property must be configured", configPrefix));
-        }
-
-        try {
-            // Verify that auth-server-url is a valid URL
-            URI.create(oidcConfig.getAuthServerUrl().get()).toURL();
-        } catch (Throwable ex) {
-            throw new ConfigurationException(
-                    String.format("'%sauth-server-url' is invalid", configPrefix), ex);
-        }
         Credentials creds = oidcConfig.getCredentials();
         if (creds.secret.isPresent() && creds.clientSecret.value.isPresent()) {
             throw new ConfigurationException(
@@ -109,12 +94,6 @@ public class OidcCommonUtils {
         if (proxyOpt.isPresent()) {
             options.setProxyOptions(proxyOpt.get());
         }
-
-        OptionalInt maxPoolSize = oidcConfig.maxPoolSize;
-        if (maxPoolSize.isPresent()) {
-            options.setMaxPoolSize(maxPoolSize.getAsInt());
-        }
-
         options.setConnectTimeout((int) oidcConfig.getConnectionTimeout().toMillis());
     }
 
