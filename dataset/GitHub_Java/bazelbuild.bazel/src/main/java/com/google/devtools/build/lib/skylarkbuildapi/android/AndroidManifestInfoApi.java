@@ -28,14 +28,14 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
             + "Information about the Android manifest provided by a rule.",
     documented = false,
     category = SkylarkModuleCategory.PROVIDER)
-public interface AndroidManifestInfoApi<FileT extends FileApi> extends StructApi {
+public interface AndroidManifestInfoApi extends StructApi {
 
   @SkylarkCallable(
       name = "manifest",
       doc = "This target's manifest, merged with manifests from dependencies",
       documented = false,
       structField = true)
-  FileT getManifest();
+  FileApi getManifest();
 
   @SkylarkCallable(
       name = "package",

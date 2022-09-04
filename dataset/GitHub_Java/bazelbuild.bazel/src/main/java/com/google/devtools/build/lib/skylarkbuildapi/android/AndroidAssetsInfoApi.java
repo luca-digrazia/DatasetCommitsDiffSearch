@@ -40,8 +40,7 @@ import javax.annotation.Nullable;
 public interface AndroidAssetsInfoApi<FileT extends FileApi, AssetsT extends ParsedAndroidAssetsApi>
     extends StructApi {
 
-  /** The name of the provider for this info object. */
-  String NAME = "AndroidAssetsInfo";
+  public static final String NAME = "AndroidAssetsInfo";
 
   @SkylarkCallable(name = "label", structField = true, doc = "", documented = false)
   Label getLabel();
@@ -166,7 +165,7 @@ public interface AndroidAssetsInfoApi<FileT extends FileApi, AssetsT extends Par
     @SkylarkConstructor(objectType = AndroidAssetsInfoApi.class, receiverNameForDoc = NAME)
     public AndroidAssetsInfoApi<FileT, AssetsT> createInfo(
         Label label,
-        Object validationResult,
+        FileT validationResult,
         SkylarkNestedSet directParsedAssets,
         SkylarkNestedSet transitiveParsedAssets,
         SkylarkNestedSet transitiveAssets,

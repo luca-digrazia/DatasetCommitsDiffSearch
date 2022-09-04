@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.skylarkbuildapi.android;
 
 import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
@@ -33,7 +33,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
             + "Information about the c++ libraries to be linked into Android targets.",
     documented = false,
     category = SkylarkModuleCategory.PROVIDER)
-public interface AndroidCcLinkParamsProviderApi<T extends CcInfoApi> extends StructApi {
+public interface AndroidCcLinkParamsProviderApi<T extends CcLinkingInfoApi> extends StructApi {
   /** Name of this info object. */
   public static String NAME = "AndroidCcLinkParamsInfo";
 
@@ -48,7 +48,7 @@ public interface AndroidCcLinkParamsProviderApi<T extends CcInfoApi> extends Str
           "Do not use this module. It is intended for migration purposes only. If you depend on "
               + "it, you will be broken when it is removed.",
       documented = false)
-  public interface Provider<T extends CcInfoApi> extends ProviderApi {
+  public interface Provider<T extends CcLinkingInfoApi> extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
@@ -57,10 +57,10 @@ public interface AndroidCcLinkParamsProviderApi<T extends CcInfoApi> extends Str
         parameters = {
           @Param(
               name = "store",
-              doc = "The CcInfo provider.",
+              doc = "The CcLinkingInfo provider.",
               positional = true,
               named = false,
-              type = CcInfoApi.class),
+              type = CcLinkingInfoApi.class),
         },
         selfCall = true)
     @SkylarkConstructor(

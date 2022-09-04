@@ -42,7 +42,7 @@ public interface AndroidSdkProviderApi<
     extends StructApi {
 
   /** Name of this info object. */
-  String NAME = "AndroidSdkInfo";
+  public static final String NAME = "AndroidSdkInfo";
 
   /** The value of build_tools_version. May be null or empty. */
   @SkylarkCallable(name = "build_tools_version", structField = true, doc = "", documented = false)
@@ -98,7 +98,13 @@ public interface AndroidSdkProviderApi<
   @SkylarkCallable(name = "aapt", structField = true, doc = "", documented = false)
   FilesToRunProviderT getAapt();
 
-  @SkylarkCallable(name = "aapt2", structField = true, doc = "", documented = false)
+  @SkylarkCallable(
+      name = "aapt2",
+      structField = true,
+      doc = "",
+      documented = false,
+      allowReturnNones = true)
+  @Nullable
   FilesToRunProviderT getAapt2();
 
   @SkylarkCallable(
@@ -216,7 +222,8 @@ public interface AndroidSdkProviderApi<
               doc = "A files to run provider of AAPT2.",
               positional = true,
               named = false,
-              type = FilesToRunProviderApi.class),
+              type = FilesToRunProviderApi.class,
+              noneable = true),
           @Param(
               name = "apk_builder",
               doc = "A files to run provider of the Apk builder.",
@@ -258,7 +265,7 @@ public interface AndroidSdkProviderApi<
         FilesToRunProviderT mainDexListCreator,
         FilesToRunProviderT aidl,
         FilesToRunProviderT aapt,
-        FilesToRunProviderT aapt2,
+        /*noneable*/ Object aapt2,
         /*noneable*/ Object apkBuilder,
         FilesToRunProviderT apkSigner,
         FilesToRunProviderT proguard,

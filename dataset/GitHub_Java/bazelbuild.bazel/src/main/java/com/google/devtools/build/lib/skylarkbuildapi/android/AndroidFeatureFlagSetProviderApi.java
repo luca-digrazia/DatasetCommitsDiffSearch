@@ -36,8 +36,7 @@ import com.google.devtools.build.lib.syntax.SkylarkDict;
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidFeatureFlagSetProviderApi extends StructApi {
 
-  /** The name of the provider for this info object. */
-  String NAME = "AndroidFeatureFlagSet";
+  public static final String NAME = "AndroidFeatureFlagSet";
 
   @SkylarkCallable(
       name = "flags",
@@ -71,7 +70,6 @@ public interface AndroidFeatureFlagSetProviderApi extends StructApi {
     @SkylarkConstructor(
         objectType = AndroidFeatureFlagSetProviderApi.class,
         receiverNameForDoc = NAME)
-    AndroidFeatureFlagSetProviderApi create(SkylarkDict<?, ?> flags /* <Label, String> */)
-        throws EvalException;
+    AndroidFeatureFlagSetProviderApi create(SkylarkDict<Label, String> flags) throws EvalException;
   }
 }

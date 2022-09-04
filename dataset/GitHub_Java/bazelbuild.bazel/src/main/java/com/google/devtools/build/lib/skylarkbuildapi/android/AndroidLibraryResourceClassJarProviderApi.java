@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
@@ -35,11 +36,11 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidLibraryResourceClassJarProviderApi<FileT extends FileApi>
     extends StructApi {
-  /** The name of the provider for this info object. */
-  String NAME = "AndroidLibraryResourceClassJarProvider";
+
+  public static final String NAME = "AndroidLibraryResourceClassJarProvider";
 
   @SkylarkCallable(name = "jars", structField = true, doc = "", documented = false)
-  SkylarkNestedSet /*<FileT>*/ getResourceClassJarsForStarlark();
+  NestedSet<FileT> getResourceClassJars();
 
   /** The provider implementing this can construct the AndroidLibraryResourceClassJarProvider. */
   @SkylarkModule(

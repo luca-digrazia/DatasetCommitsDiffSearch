@@ -32,8 +32,7 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
             + "you will be broken when it is removed.",
     documented = false)
 public interface AndroidProguardInfoApi<FileT extends FileApi> extends StructApi {
-  /** The name of the provider for this info object. */
-  String NAME = "AndroidProguardInfo";
+  String PROVIDER_NAME = "AndroidProguardInfo";
 
   @SkylarkCallable(
       name = "local_proguard_specs",
@@ -49,10 +48,10 @@ public interface AndroidProguardInfoApi<FileT extends FileApi> extends StructApi
           "Do not use this module. It is intended for migration purposes only. If you depend on "
               + "it, you will be broken when it is removed.",
       documented = false)
-  public interface Provider<FileT extends FileApi> extends ProviderApi {
+  public interface Provider<F extends FileApi> extends ProviderApi {
 
     @SkylarkCallable(
-        name = NAME,
+        name = PROVIDER_NAME,
         doc = "The <code>AndroidProguardInfo</code> constructor.",
         documented = false,
         parameters = {
@@ -66,7 +65,6 @@ public interface AndroidProguardInfoApi<FileT extends FileApi> extends StructApi
         },
         selfCall = true)
     @SkylarkConstructor(objectType = AndroidProguardInfoApi.class)
-    AndroidProguardInfoApi<FileT> createInfo(SkylarkList<FileT> localProguardSpecs /* <FileT> */)
-        throws EvalException;
+    AndroidProguardInfoApi<F> createInfo(SkylarkList<F> localProguardSpecs) throws EvalException;
   }
 }
