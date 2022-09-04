@@ -22,12 +22,13 @@ import javax.validation.Validator;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
 
@@ -39,11 +40,6 @@ import static java.util.Objects.requireNonNull;
  * @param <T> the type of the configuration objects to produce
  */
 public class ConfigurationFactory<T> {
-
-    private static final Pattern ESCAPED_COMMA_PATTERN = Pattern.compile("\\\\,");
-    private static final Splitter ESCAPED_COMMA_SPLITTER = Splitter.on(Pattern.compile("(?<!\\\\),")).trimResults();
-    private static final Splitter DOT_SPLITTER = Splitter.on('.').trimResults();
-
     private final Class<T> klass;
     private final String propertyPrefix;
     private final ObjectMapper mapper;
@@ -98,7 +94,7 @@ public class ConfigurationFactory<T> {
 
             return build(node, path);
         } catch (YAMLException e) {
-            final ConfigurationParsingException.Builder builder = ConfigurationParsingException
+            ConfigurationParsingException.Builder builder = ConfigurationParsingException
                     .builder("Malformed YAML")
                     .setCause(e)
                     .setDetail(e.getMessage());
@@ -154,9 +150,11 @@ public class ConfigurationFactory<T> {
             validate(path, config);
             return config;
         } catch (UnrecognizedPropertyException e) {
-            final List<String> properties = e.getKnownPropertyIds().stream()
-                    .map(Object::toString)
-                    .collect(Collectors.toList());
+            Collection<Object> knownProperties = e.getKnownPropertyIds();
+            List<String> properties = new ArrayList<>(knownProperties.size());
+            for (Object property : knownProperties) {
+                properties.add(property.toString());
+            }
             throw ConfigurationParsingException.builder("Unrecognized field")
                     .setFieldPath(e.getPath())
                     .setLocation(e.getLocation())
@@ -165,8 +163,8 @@ public class ConfigurationFactory<T> {
                     .setCause(e)
                     .build(path);
         } catch (InvalidFormatException e) {
-            final String sourceType = e.getValue().getClass().getSimpleName();
-            final String targetType = e.getTargetType().getSimpleName();
+            String sourceType = e.getValue().getClass().getSimpleName();
+            String targetType = e.getTargetType().getSimpleName();
             throw ConfigurationParsingException.builder("Incorrect type of value")
                     .setDetail("is of type: " + sourceType + ", expected: " + targetType)
                     .setLocation(e.getLocation())
@@ -185,9 +183,11 @@ public class ConfigurationFactory<T> {
 
     protected void addOverride(JsonNode root, String name, String value) {
         JsonNode node = root;
-        final String[] parts = Iterables.toArray(DOT_SPLITTER.split(name), String.class);
+        final Iterable<String> split = Splitter.on('.').trimResults().split(name);
+        final String[] parts = Iterables.toArray(split, String.class);
+
         for (int i = 0; i < parts.length; i++) {
-            final String key = parts[i];
+            String key = parts[i];
 
             if (!(node instanceof ObjectNode)) {
                 throw new IllegalArgumentException("Unable to override " + name + "; it's not a valid path.");
@@ -208,23 +208,21 @@ public class ConfigurationFactory<T> {
             if (key.matches(".+\\[\\d+\\]$")) {
                 final int s = key.indexOf('[');
                 final int index = Integer.parseInt(key.substring(s + 1, key.length() - 1));
-                child = obj.get(key.substring(0, s));
+                key = key.substring(0, s);
+                child = obj.get(key);
                 if (child == null) {
-                    throw new IllegalArgumentException("Unable to override " + name +
-                            "; node with index not found.");
+                    throw new IllegalArgumentException("Unable to override " + name + "; node with index not found.");
                 }
                 if (!child.isArray()) {
-                    throw new IllegalArgumentException("Unable to override " + name +
-                            "; node with index is not an array.");
+                    throw new IllegalArgumentException("Unable to override " + name + "; node with index is not an array.");
                 } else if (index >= child.size()) {
-                    throw new ArrayIndexOutOfBoundsException("Unable to override " + name +
-                            "; index is greater than size of array.");
+                    throw new ArrayIndexOutOfBoundsException("Unable to override " + name + "; index is greater than size of array.");
                 }
                 if (moreParts) {
                     child = child.get(index);
                     node = child;
                 } else {
-                    final ArrayNode array = (ArrayNode) child;
+                    ArrayNode array = (ArrayNode) child;
                     array.set(index, TextNode.valueOf(value));
                     return;
                 }
@@ -235,18 +233,18 @@ public class ConfigurationFactory<T> {
                     obj.set(key, child);
                 }
                 if (child.isArray()) {
-                    throw new IllegalArgumentException("Unable to override " + name +
-                            "; target is an array but no index specified");
+                    throw new IllegalArgumentException("Unable to override " + name + "; target is an array but no index specified");
                 }
                 node = child;
             }
 
             if (!moreParts) {
                 if (node.get(key) != null && node.get(key).isArray()) {
-                    final ArrayNode arrayNode = (ArrayNode) obj.get(key);
+                    ArrayNode arrayNode = (ArrayNode) obj.get(key);
                     arrayNode.removeAll();
-                    for (String val : ESCAPED_COMMA_SPLITTER.split(value)) {
-                        arrayNode.add(ESCAPED_COMMA_PATTERN.matcher(val).replaceAll(","));
+                    Pattern escapedComma = Pattern.compile("\\\\,");
+                    for (String val : Splitter.on(Pattern.compile("(?<!\\\\),")).trimResults().split(value)) {
+                        arrayNode.add(escapedComma.matcher(val).replaceAll(","));
                     }
                 } else {
                     obj.put(key, value);

@@ -4,15 +4,12 @@ import io.dropwizard.util.Generics;
 import org.hibernate.Criteria;
 import org.hibernate.Hibernate;
 import org.hibernate.HibernateException;
+import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.hibernate.query.Query;
-import org.hibernate.query.internal.AbstractProducedQuery;
 
 import java.io.Serializable;
 import java.util.List;
-
-import javax.persistence.criteria.CriteriaQuery;
 
 import static java.util.Objects.requireNonNull;
 
@@ -66,16 +63,6 @@ public class AbstractDAO<E> {
     }
 
     /**
-     * Returns a typed {@link Query<E>}
-     *
-     * @param queryString HQL query
-     * @return typed query
-     */
-    protected Query<E> query(String queryString) {
-        return currentSession().createQuery(requireNonNull(queryString), getEntityClass());
-    }
-
-    /**
      * Returns the entity class managed by this DAO.
      *
      * @return the entity class managed by this DAO
@@ -83,22 +70,6 @@ public class AbstractDAO<E> {
     @SuppressWarnings("unchecked")
     public Class<E> getEntityClass() {
         return (Class<E>) entityClass;
-    }
-
-    /**
-     * Convenience method to return a single instance that matches the criteria query,
-     * or null if the criteria returns no results.
-     *
-     * @param criteriaQuery the {@link CriteriaQuery} query to run
-     * @return the single result or {@code null}
-     * @throws HibernateException if there is more than one matching result
-     */
-    protected E uniqueResult(CriteriaQuery<E> criteriaQuery) throws HibernateException {
-        return AbstractProducedQuery.uniqueElement(
-            currentSession()
-                .createQuery(requireNonNull(criteriaQuery))
-                .getResultList()
-        );
     }
 
     /**
@@ -124,8 +95,9 @@ public class AbstractDAO<E> {
      * @throws HibernateException if there is more than one matching result
      * @see Query#uniqueResult()
      */
-    protected E uniqueResult(Query<E> query) throws HibernateException {
-        return requireNonNull(query).uniqueResult();
+    @SuppressWarnings("unchecked")
+    protected E uniqueResult(Query query) throws HibernateException {
+        return (E) requireNonNull(query).uniqueResult();
     }
 
     /**
@@ -141,23 +113,14 @@ public class AbstractDAO<E> {
     }
 
     /**
-     * Get the results of a {@link CriteriaQuery} query.
-     *
-     * @param criteria the {@link CriteriaQuery} query to run
-     * @return the list of matched query results
-     */
-    protected List<E> list(CriteriaQuery<E> criteria) throws HibernateException {
-        return currentSession().createQuery(requireNonNull(criteria)).getResultList();
-    }
-
-    /**
      * Get the results of a query.
      *
      * @param query the query to run
      * @return the list of matched query results
      * @see Query#list()
      */
-    protected List<E> list(Query<E> query) throws HibernateException {
+    @SuppressWarnings("unchecked")
+    protected List<E> list(Query query) throws HibernateException {
         return requireNonNull(query).list();
     }
 

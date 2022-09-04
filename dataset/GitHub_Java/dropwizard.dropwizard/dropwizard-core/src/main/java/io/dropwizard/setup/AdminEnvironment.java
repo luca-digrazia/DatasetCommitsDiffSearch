@@ -6,6 +6,7 @@ import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck;
 import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.jetty.setup.ServletEnvironment;
 import io.dropwizard.servlets.tasks.GarbageCollectionTask;
+import io.dropwizard.servlets.tasks.LogConfigurationTask;
 import io.dropwizard.servlets.tasks.Task;
 import io.dropwizard.servlets.tasks.TaskServlet;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
@@ -13,7 +14,8 @@ import org.eclipse.jetty.util.component.LifeCycle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.MoreObjects.firstNonNull;
+import static java.util.Objects.requireNonNull;
 
 /**
  * The administrative environment of a Dropwizard application.
@@ -37,6 +39,7 @@ public class AdminEnvironment extends ServletEnvironment {
         this.healthChecks.register("deadlocks", new ThreadDeadlockHealthCheck());
         this.tasks = new TaskServlet(metricRegistry);
         tasks.add(new GarbageCollectionTask());
+        tasks.add(new LogConfigurationTask());
         addServlet("tasks", tasks).addMapping("/tasks/*");
         handler.addLifeCycleListener(new AbstractLifeCycle.AbstractLifeCycleListener() {
             @Override
@@ -53,17 +56,18 @@ public class AdminEnvironment extends ServletEnvironment {
      * @param task a task
      */
     public void addTask(Task task) {
-        tasks.add(checkNotNull(task));
+        tasks.add(requireNonNull(task));
     }
 
     private void logTasks() {
         final StringBuilder stringBuilder = new StringBuilder(1024).append(String.format("%n%n"));
 
         for (Task task : tasks.getTasks()) {
+            final String taskClassName = firstNonNull(task.getClass().getCanonicalName(), task.getClass().getName());
             stringBuilder.append(String.format("    %-7s /tasks/%s (%s)%n",
                                                "POST",
                                                task.getName(),
-                                               task.getClass().getCanonicalName()));
+                                               taskClassName));
         }
 
         LOGGER.info("tasks = {}", stringBuilder.toString());
