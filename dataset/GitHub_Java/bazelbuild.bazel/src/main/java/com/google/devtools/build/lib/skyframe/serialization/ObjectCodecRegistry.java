@@ -18,6 +18,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.protobuf.CodedInputStream;
@@ -28,8 +29,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
@@ -46,7 +45,7 @@ public class ObjectCodecRegistry {
 
   private final boolean allowDefaultCodec;
 
-  private final ConcurrentMap<Class<?>, CodecDescriptor> classMappedCodecs;
+  private final ImmutableMap<Class<?>, CodecDescriptor> classMappedCodecs;
   private final ImmutableList<CodecDescriptor> tagMappedCodecs;
 
   private final int referenceConstantsStartTag;
@@ -67,13 +66,15 @@ public class ObjectCodecRegistry {
     this.allowDefaultCodec = allowDefaultCodec;
 
     int nextTag = 1; // 0 is reserved for null.
-    this.classMappedCodecs =
-        new ConcurrentHashMap<>(
-            memoizingCodecs.size(), 0.75f, Runtime.getRuntime().availableProcessors());
+    ImmutableMap.Builder<Class<?>, CodecDescriptor> memoizingCodecsBuilder =
+        ImmutableMap.builderWithExpectedSize(memoizingCodecs.size());
     ImmutableList.Builder<CodecDescriptor> tagMappedMemoizingCodecsBuilder =
         ImmutableList.builderWithExpectedSize(memoizingCodecs.size());
     nextTag =
-        processCodecs(memoizingCodecs, nextTag, tagMappedMemoizingCodecsBuilder, classMappedCodecs);
+        processCodecs(
+            memoizingCodecs, nextTag, tagMappedMemoizingCodecsBuilder, memoizingCodecsBuilder);
+
+    this.classMappedCodecs = memoizingCodecsBuilder.build();
     this.tagMappedCodecs = tagMappedMemoizingCodecsBuilder.build();
 
     referenceConstantsStartTag = nextTag;
@@ -115,12 +116,10 @@ public class ObjectCodecRegistry {
    * <p>Also checks if there are codecs for a superclass of the given type.
    */
   private @Nullable CodecDescriptor getCodecDescriptor(Class<?> type) {
+    // TODO(blaze-team): consider caching this traversal.
     for (Class<?> nextType = type; nextType != null; nextType = nextType.getSuperclass()) {
       CodecDescriptor result = classMappedCodecs.get(nextType);
       if (result != null) {
-        if (nextType != type) {
-          classMappedCodecs.put(type, result);
-        }
         return result;
       }
     }
@@ -326,7 +325,7 @@ public class ObjectCodecRegistry {
       Iterable<? extends ObjectCodec<?>> memoizingCodecs,
       int nextTag,
       ImmutableList.Builder<CodecDescriptor> tagMappedCodecsBuilder,
-      ConcurrentMap<Class<?>, CodecDescriptor> codecsBuilder) {
+      ImmutableMap.Builder<Class<?>, CodecDescriptor> codecsBuilder) {
     for (ObjectCodec<?> codec :
         ImmutableList.sortedCopyOf(
             Comparator.comparing(o -> o.getEncodedClass().getName()), memoizingCodecs)) {
