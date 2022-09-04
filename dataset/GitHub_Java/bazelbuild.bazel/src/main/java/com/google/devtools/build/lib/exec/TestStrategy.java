@@ -48,7 +48,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -236,7 +235,7 @@ public abstract class TestStrategy implements TestActionContext {
    * the "categorical timeouts" which are based on the --test_timeout flag. A rule picks its timeout
    * but ends up with the same effective value as all other rules in that bucket.
    */
-  protected final Duration getTimeout(TestRunnerAction testAction) {
+  protected final int getTimeout(TestRunnerAction testAction) {
     return executionOptions.testTimeout.get(testAction.getTestProperties().getTimeout());
   }
 
