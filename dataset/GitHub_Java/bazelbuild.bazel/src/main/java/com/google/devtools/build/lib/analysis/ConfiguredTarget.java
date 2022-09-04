@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfigu
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
-import com.google.devtools.build.lib.syntax.EvalException;
 import javax.annotation.Nullable;
 
 /**
@@ -45,13 +44,10 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, ClassObject,
    */
   String FILES_FIELD = "files";
 
+
   /**
-   * Returns the {@link Target} with which this {@link ConfiguredTarget} is associated.
-   *
-   * <p>Do not add new usages if possible. Prefer {@link #getLabel}, or use {@code
-   * ConfiguredTargetAndTarget} objects.
+   * Returns the Target with which this {@link ConfiguredTarget} is associated.
    */
-  @Deprecated
   Target getTarget();
 
   /**
@@ -67,11 +63,11 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, ClassObject,
   /**
    * Returns keys for a legacy Skylark provider.
    *
-   * Overrides {@link ClassObject#getFieldNames()}, but does not allow {@link EvalException} to
+   * Overrides {@link ClassObject#getKeys()}, but does not allow {@link EvalException} to
    * be thrown.
    */
   @Override
-  ImmutableCollection<String> getFieldNames();
+  ImmutableCollection<String> getKeys();
 
   /**
    * Returns a legacy Skylark provider.

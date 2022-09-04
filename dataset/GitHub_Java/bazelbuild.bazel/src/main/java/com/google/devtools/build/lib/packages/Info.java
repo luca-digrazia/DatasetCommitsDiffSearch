@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
@@ -28,6 +27,7 @@ import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -71,7 +71,7 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
    * String)} If you need to override an error message, preferred way is to create a specific {@link
    * NativeProvider}.
    */
-  Info(Provider provider, String errorMessage) {
+  Info(Provider provider, Map<String, Object> values, String errorMessage) {
     this.provider = provider;
     this.creationLoc = null;
     this.errorMessage = Preconditions.checkNotNull(errorMessage);

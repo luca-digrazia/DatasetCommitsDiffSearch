@@ -11,38 +11,36 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableCollection;
 import javax.annotation.Nullable;
 
-/** An interface for Skylark objects (such as structs) that have fields. */
-// TODO(adonovan): rename "HasFields".
+/**
+ * An interface for objects behaving like Skylark structs.
+ */
+// TODO(bazel-team): type checks
 public interface ClassObject {
 
   /**
-   * Returns the value of the field with the given name, or null if the field does not exist.
+   * Returns the value associated with the name field in this struct,
+   * or null if the field does not exist.
    *
    * @throws EvalException if a user-visible error occurs (other than non-existent field).
    */
-  // TODO(adonovan): rename "getField".
   @Nullable
   Object getValue(String name) throws EvalException;
 
   /**
-   * Returns the names of the fields of this struct, in some canonical order.
+   * Returns the fields of this struct.
    *
-   * @throws EvalException if a user-visible error occurs
+   * @throws EvalException if a user-visible error occurs.
    */
-  // TODO(adonovan): change type to ImmutableSet. Users rely on O(1) lookup.
-  ImmutableCollection<String> getFieldNames() throws EvalException;
+  ImmutableCollection<String> getKeys() throws EvalException;
 
   /**
-   * Returns the error message to print for an attempt to access an undefined field.
-   *
-   * <p>May return null to use a default error message.
+   * Returns a customized error message to print if the name is not a valid struct field
+   * of this struct, or returns null to use the default error message.
    */
-  @Nullable
-  String getErrorMessageForUnknownField(String field);
+  @Nullable String errorMessage(String name);
 }
