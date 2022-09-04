@@ -60,10 +60,11 @@ public abstract class Link {
       CppFileTypes.ALWAYS_LINK_LIBRARY,
       CppFileTypes.ALWAYS_LINK_PIC_LIBRARY);
 
+
   /** The set of object files */
-  public static final FileTypeSet OBJECT_FILETYPES =
-      FileTypeSet.of(
-          CppFileTypes.OBJECT_FILE, CppFileTypes.PIC_OBJECT_FILE, CppFileTypes.CLIF_OUTPUT_PROTO);
+  public static final FileTypeSet OBJECT_FILETYPES = FileTypeSet.of(
+      CppFileTypes.OBJECT_FILE,
+      CppFileTypes.PIC_OBJECT_FILE);
 
   /**
    * Prefix that is prepended to command line entries that refer to the output
@@ -151,7 +152,7 @@ public abstract class Link {
     PIC_STATIC_LIBRARY(
         ".pic.a",
         Staticness.STATIC,
-        "c++-link-static-library",
+        "c++-link-pic-static-library",
         Picness.PIC,
         ArtifactCategory.STATIC_LIBRARY,
         Executable.NOT_EXECUTABLE),
@@ -160,25 +161,17 @@ public abstract class Link {
     INTERFACE_DYNAMIC_LIBRARY(
         ".ifso",
         Staticness.DYNAMIC,
-        "c++-link-dynamic-library",
+        "c++-link-interface-dynamic-library",
         Picness.NOPIC,  // Actually PIC but it's not indicated in the file name
         ArtifactCategory.INTERFACE_LIBRARY,
         Executable.NOT_EXECUTABLE),
 
-    /** A dynamic library built from cc_library srcs. */
-    NODEPS_DYNAMIC_LIBRARY(
-        ".so",
-        Staticness.DYNAMIC,
-        "c++-link-nodeps-dynamic-library",
-        Picness.NOPIC, // Actually PIC but it's not indicated in the file name
-        ArtifactCategory.DYNAMIC_LIBRARY,
-        Executable.NOT_EXECUTABLE),
-    /** A transitive dynamic library used for distribution. */
+    /** A dynamic library. */
     DYNAMIC_LIBRARY(
         ".so",
         Staticness.DYNAMIC,
         "c++-link-dynamic-library",
-        Picness.NOPIC, // Actually PIC but it's not indicated in the file name
+        Picness.NOPIC,  // Actually PIC but it's not indicated in the file name
         ArtifactCategory.DYNAMIC_LIBRARY,
         Executable.NOT_EXECUTABLE),
 
@@ -186,7 +179,7 @@ public abstract class Link {
     ALWAYS_LINK_STATIC_LIBRARY(
         ".lo",
         Staticness.STATIC,
-        "c++-link-static-library",
+        "c++-link-alwayslink-static-library",
         Picness.NOPIC,
         ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY,
         Executable.NOT_EXECUTABLE),
@@ -195,7 +188,7 @@ public abstract class Link {
     ALWAYS_LINK_PIC_STATIC_LIBRARY(
         ".pic.lo",
         Staticness.STATIC,
-        "c++-link-static-library",
+        "c++-link-alwayslink-pic-static-library",
         Picness.PIC,
         ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY,
         Executable.NOT_EXECUTABLE),
@@ -262,11 +255,6 @@ public abstract class Link {
     /** Returns true iff this link type is executable */
     public boolean isExecutable() {
       return (executable == Executable.EXECUTABLE);
-    }
-
-    /** Returns true iff this link type is a dynamic library or transitive dynamic library */
-    public boolean isDynamicLibrary() {
-      return this == NODEPS_DYNAMIC_LIBRARY || this == DYNAMIC_LIBRARY;
     }
   }
 
@@ -396,12 +384,9 @@ public abstract class Link {
         // deps is true, in which case this code only computes the list of inputs for the link
         // action (so the order isn't critical).
         if (passMembersToLinkCmd || (deps && needMembersForLink)) {
-          delayList =
-              LinkerInputs.simpleLinkerInputs(
-                      inputLibrary.getObjectFiles(),
-                      ArtifactCategory.OBJECT_FILE,
-                      /* disableWholeArchive= */ false)
-                  .iterator();
+          delayList = LinkerInputs
+              .simpleLinkerInputs(inputLibrary.getObjectFiles(), ArtifactCategory.OBJECT_FILE)
+              .iterator();
         }
 
         if (!(passMembersToLinkCmd || (deps && useStartEndLib(inputLibrary, archiveType)))) {
