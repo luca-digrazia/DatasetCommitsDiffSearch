@@ -166,6 +166,11 @@ public class SubsamplingScaleImageView extends View {
     // Minimum scale type
     private int minimumScaleType = SCALE_TYPE_CENTER_INSIDE;
 
+    // overrides for the dimensions of the generated tiles
+    public static int TILE_SIZE_AUTO = Integer.MAX_VALUE;
+    private int maxTileWidth = TILE_SIZE_AUTO;
+    private int maxTileHeight = TILE_SIZE_AUTO;
+
     // Whether to use the thread pool executor to load tiles
     private boolean parallelLoadingEnabled;
 
@@ -258,8 +263,13 @@ public class SubsamplingScaleImageView extends View {
     private float[] srcArray = new float[8];
     private float[] dstArray = new float[8];
 
+    //The logical density of the display
+    private float density;
+
+
     public SubsamplingScaleImageView(Context context, AttributeSet attr) {
         super(context, attr);
+        density = getResources().getDisplayMetrics().density;
         setMinimumDpi(160);
         setDoubleTapZoomDpi(160);
         setGestureDetector(context);
@@ -741,7 +751,10 @@ public class SubsamplingScaleImageView extends View {
                         // and long click behaviour is preserved.
                         float dx = Math.abs(event.getX() - vCenterStart.x);
                         float dy = Math.abs(event.getY() - vCenterStart.y);
-                        if (dx > 5 || dy > 5 || isPanning) {
+                        
+                        //On the Samsung S6 long click event does not work, because the dx > 5 usually true
+                        float offset = density * 5;
+                        if (dx > offset || dy > offset || isPanning) {
                             consumed = true;
                             vTranslate.x = vTranslateStart.x + (event.getX() - vCenterStart.x);
                             vTranslate.y = vTranslateStart.y + (event.getY() - vCenterStart.y);
@@ -751,10 +764,10 @@ public class SubsamplingScaleImageView extends View {
                             fitToBounds(true);
                             boolean atXEdge = lastX != vTranslate.x;
                             boolean edgeXSwipe = atXEdge && dx > dy && !isPanning;
-                            boolean yPan = lastY == vTranslate.y && dy > 15;
+                            boolean yPan = lastY == vTranslate.y && dy > offset * 3;
                             if (!edgeXSwipe && (!atXEdge || yPan || isPanning)) {
                                 isPanning = true;
-                            } else if (dx > 5) {
+                            } else if (dx > offset) {
                                 // Haven't panned the image, and we're at the left or right edge. Switch to page swipe.
                                 maxTouchCount = 0;
                                 handler.removeMessages(MESSAGE_LONG_CLICK);
@@ -1659,10 +1672,9 @@ public class SubsamplingScaleImageView extends View {
     private int getExifOrientation(String sourceUri) {
         int exifOrientation = ORIENTATION_0;
         if (sourceUri.startsWith(ContentResolver.SCHEME_CONTENT)) {
-            Cursor cursor = null;
             try {
-                String[] columns = { MediaStore.Images.Media.ORIENTATION };
-                cursor = getContext().getContentResolver().query(Uri.parse(sourceUri), columns, null, null, null);
+                final String[] columns = { MediaStore.Images.Media.ORIENTATION };
+                final Cursor cursor = getContext().getContentResolver().query(Uri.parse(sourceUri), columns, null, null, null);
                 if (cursor != null) {
                     if (cursor.moveToFirst()) {
                         int orientation = cursor.getInt(0);
@@ -1672,13 +1684,10 @@ public class SubsamplingScaleImageView extends View {
                             Log.w(TAG, "Unsupported orientation: " + orientation);
                         }
                     }
+                    cursor.close();
                 }
             } catch (Exception e) {
                 Log.w(TAG, "Could not get orientation of image from media store");
-            } finally {
-                if (cursor != null) {
-                    cursor.close();
-                }
             }
         } else if (sourceUri.startsWith(ImageSource.FILE_SCHEME) && !sourceUri.startsWith(ImageSource.ASSET_SCHEME)) {
             try {
@@ -1770,19 +1779,41 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
+     * By default the View automatically calculates the optimal tile size. Set this to override this, and force an upper limit to the dimensions of the generated tiles. Passing {@link TILE_SIZE_AUTO} will re-enable the default behaviour.
+     *
+     * @param maxPixels
+     */
+    public void setMaxTileSize(int maxPixels) {
+        this.maxTileWidth = maxPixels;
+        this.maxTileHeight = maxPixels;
+    }
+
+    /**
+     * By default the View automatically calculates the optimal tile size. Set this to override this, and force an upper limit to the dimensions of the generated tiles. Passing {@link TILE_SIZE_AUTO} will re-enable the default behaviour.
+     *
+     * @param maxPixelsX
+     * @param maxPixelsU
+     */
+    public void setMaxTileSize(int maxPixelsX, int maxPixelsY) {
+        this.maxTileWidth = maxPixelsX;
+        this.maxTileHeight = maxPixelsY;
+    }
+
+    /**
      * In SDK 14 and above, use canvas max bitmap width and height instead of the default 2048, to avoid redundant tiling.
      */
     private Point getMaxBitmapDimensions(Canvas canvas) {
+        int maxWidth = 2048;
+        int maxHeight = 2048;
         if (VERSION.SDK_INT >= 14) {
             try {
-                int maxWidth = (Integer)Canvas.class.getMethod("getMaximumBitmapWidth").invoke(canvas);
-                int maxHeight = (Integer)Canvas.class.getMethod("getMaximumBitmapHeight").invoke(canvas);
-                return new Point(maxWidth, maxHeight);
+                maxWidth = (Integer)Canvas.class.getMethod("getMaximumBitmapWidth").invoke(canvas);
+                maxHeight = (Integer)Canvas.class.getMethod("getMaximumBitmapHeight").invoke(canvas);
             } catch (Exception e) {
                 // Return default
             }
         }
-        return new Point(2048, 2048);
+        return new Point(Math.min(maxWidth, maxTileWidth), Math.min(maxHeight, maxTileHeight));
     }
 
     /**
