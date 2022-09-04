@@ -52,6 +52,8 @@ public abstract class StarlarkSemantics {
         StarlarkSemantics::experimentalStarlarkConfigTransitions),
     EXPERIMENTAL_STARLARK_UNUSED_INPUTS_LIST(
         StarlarkSemantics::experimentalStarlarkUnusedInputsList),
+    INCOMPATIBLE_DISABLE_OBJC_PROVIDER_RESOURCES(
+        StarlarkSemantics::incompatibleDisableObjcProviderResources),
     INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT(StarlarkSemantics::incompatibleNoOutputAttrDefault),
     INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM(StarlarkSemantics::incompatibleNoRuleOutputsParam),
     INCOMPATIBLE_NO_TARGET_OUTPUT_GROUP(StarlarkSemantics::incompatibleNoTargetOutputGroup),
@@ -149,6 +151,8 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleDisableThirdPartyLicenseChecking();
 
   public abstract boolean incompatibleDisableDeprecatedAttrParams();
+
+  public abstract boolean incompatibleDisableObjcProviderResources();
 
   public abstract boolean incompatibleDisallowDictPlus();
 
@@ -261,10 +265,11 @@ public abstract class StarlarkSemantics {
           .incompatibleDisableTargetProviderFields(false)
           .incompatibleDisableThirdPartyLicenseChecking(true)
           .incompatibleDisableDeprecatedAttrParams(true)
+          .incompatibleDisableObjcProviderResources(true)
           .incompatibleDisallowDictPlus(true)
           .incompatibleDisallowEmptyGlob(false)
           .incompatibleDisallowLegacyJavaProvider(false)
-          .incompatibleDisallowLegacyJavaInfo(true)
+          .incompatibleDisallowLegacyJavaInfo(false)
           .incompatibleDisallowOldStyleArgsAdd(true)
           .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(true)
           .incompatibleDisallowStructProviderSyntax(false)
@@ -329,6 +334,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDisableThirdPartyLicenseChecking(boolean value);
 
     public abstract Builder incompatibleDisableDeprecatedAttrParams(boolean value);
+
+    public abstract Builder incompatibleDisableObjcProviderResources(boolean value);
 
     public abstract Builder incompatibleDisallowDictPlus(boolean value);
 
