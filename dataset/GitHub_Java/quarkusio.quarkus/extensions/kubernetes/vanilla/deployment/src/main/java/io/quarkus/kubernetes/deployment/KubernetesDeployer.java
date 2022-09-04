@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import javax.net.ssl.SSLHandshakeException;
+
 import org.jboss.logging.Logger;
 
 import io.dekorate.deps.kubernetes.api.model.HasMetadata;
@@ -25,14 +27,12 @@ import io.dekorate.deps.kubernetes.client.KubernetesClient;
 import io.dekorate.deps.kubernetes.client.KubernetesClientException;
 import io.dekorate.utils.Clients;
 import io.dekorate.utils.Serialization;
-import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageResultBuildItem;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.pkg.builditem.DeploymentResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
-import io.quarkus.kubernetes.client.deployment.KubernetesClientErrorHanlder;
 import io.quarkus.kubernetes.client.spi.KubernetesClientBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem;
 
@@ -46,7 +46,6 @@ public class KubernetesDeployer {
 
     @BuildStep(onlyIf = { IsNormal.class, KubernetesDeploy.class })
     public void deploy(KubernetesClientBuildItem kubernetesClient,
-            ContainerImageInfoBuildItem containerImageInfo,
             List<ContainerImageResultBuildItem> containerImageResults,
             List<KubernetesDeploymentTargetBuildItem> kubernetesDeploymentTargetBuildItems,
             OutputTargetBuildItem outputTarget,
@@ -64,7 +63,7 @@ public class KubernetesDeployer {
         }
 
         ContainerImageResultBuildItem containerImageResult = containerImageResults.get(0);
-        if (!hasRegistry(containerImageInfo.getImage()) && !S2I.equals(containerImageResult.getProvider())) {
+        if (!hasRegistry(containerImageResult.getImageId()) && !S2I.equals(containerImageResult.getProvider())) {
             log.warn(
                     "A Kubernetes deployment was requested, but the container image to be built will not be pushed to any registry"
                             + " because \"quarkus.container-image.registry\" has not been set. The Kubernetes deployment will only work properly"
@@ -74,7 +73,7 @@ public class KubernetesDeployer {
         //Get any build item but if the build was s2i, use openshift
         KubernetesDeploymentTargetBuildItem deploymentTarget = kubernetesDeploymentTargetBuildItems
                 .stream()
-                .filter(d -> !S2I.equals(containerImageResult.getProvider()) || OPENSHIFT.equals(d.getName()))
+                .filter(d -> !"s2i".equals(containerImageResult.getProvider()) || OPENSHIFT.equals(d.getName()))
                 .findFirst()
                 .orElse(new KubernetesDeploymentTargetBuildItem(KUBERNETES, DEPLOYMENT));
 
@@ -105,7 +104,12 @@ public class KubernetesDeployer {
         } catch (FileNotFoundException e) {
             throw new IllegalStateException("Can't find generated kubernetes manifest: " + manifest.getAbsolutePath());
         } catch (KubernetesClientException e) {
-            KubernetesClientErrorHanlder.handle(e);
+            if (e.getCause() instanceof SSLHandshakeException) {
+                String message = "The application could not be deployed to the cluster because the Kubernetes API Server certificates are not trusted. The certificates can be configured using the relevant configuration propertiers under the 'quarkus.kubernetes-client' config root, or \"quarkus.kubernetes-client.trust-certs=true\" can be set to explicitly trust the certificates (not recommended)";
+                log.error(message);
+                throw new RuntimeException(e.getCause());
+            }
+            log.error("Unable to deploy the application to the Kubernetes cluster: " + e.getMessage());
             throw e;
         } catch (IOException e) {
             throw new RuntimeException("Error closing file: " + manifest.getAbsolutePath());
