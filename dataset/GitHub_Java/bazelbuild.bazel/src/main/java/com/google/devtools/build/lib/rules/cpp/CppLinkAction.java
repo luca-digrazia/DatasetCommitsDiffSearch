@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -285,11 +284,10 @@ public final class CppLinkAction extends AbstractAction
    * Returns the command line specification for this link, included any required linkstamp
    * compilation steps. The command line may refer to a .params file.
    *
-   * @param expander ArtifactExpander for expanding TreeArtifacts.
    * @return a finalized command line suitable for execution
    */
-  public final List<String> getCommandLine(@Nullable ArtifactExpander expander) {
-    return linkCommandLine.getCommandLine(expander);
+  public final List<String> getCommandLine() {
+    return linkCommandLine.getCommandLine();
   }
 
   /**
@@ -307,19 +305,18 @@ public final class CppLinkAction extends AbstractAction
   public ActionResult execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     if (fake) {
-      executeFake(actionExecutionContext.getArtifactExpander());
+      executeFake();
       return ActionResult.EMPTY;
     } else {
       try {
-        Spawn spawn =
-            new SimpleSpawn(
-                this,
-                ImmutableList.copyOf(getCommandLine(actionExecutionContext.getArtifactExpander())),
-                getEnvironment(),
-                getExecutionInfo(),
-                ImmutableList.copyOf(getMandatoryInputs()),
-                getOutputs().asList(),
-                estimateResourceConsumptionLocal());
+        Spawn spawn = new SimpleSpawn(
+            this,
+            ImmutableList.copyOf(getCommandLine()),
+            getEnvironment(),
+            getExecutionInfo(),
+            ImmutableList.copyOf(getMandatoryInputs()),
+            getOutputs().asList(),
+            estimateResourceConsumptionLocal());
         return ActionResult.create(
             actionExecutionContext
                 .getSpawnActionContext(getMnemonic())
@@ -335,11 +332,11 @@ public final class CppLinkAction extends AbstractAction
 
   // Don't forget to update FAKE_LINK_GUID if you modify this method.
   @ThreadCompatible
-  private void executeFake(@Nullable ArtifactExpander expander) throws ActionExecutionException {
+  private void executeFake()
+      throws ActionExecutionException {
     // Prefix all fake output files in the command line with $TEST_TMPDIR/.
     final String outputPrefix = "$TEST_TMPDIR/";
-    List<String> escapedLinkArgv =
-        escapeLinkArgv(linkCommandLine.getRawLinkArgv(expander), outputPrefix);
+    List<String> escapedLinkArgv = escapeLinkArgv(linkCommandLine.getRawLinkArgv(), outputPrefix);
     // Write the commands needed to build the real target to the fake target
     // file.
     StringBuilder s = new StringBuilder();
@@ -427,7 +424,7 @@ public final class CppLinkAction extends AbstractAction
     info.setLinkStaticness(getLinkCommandLine().getLinkStaticness().name());
     info.addAllLinkStamp(Artifact.toExecPaths(getLinkstampObjects()));
     info.addAllBuildInfoHeaderArtifact(Artifact.toExecPaths(getBuildInfoHeaderArtifacts()));
-    info.addAllLinkOpt(getLinkCommandLine().getRawLinkArgv(null));
+    info.addAllLinkOpt(getLinkCommandLine().getRawLinkArgv());
 
     try {
       return super.getExtraActionInfo(actionKeyContext)
