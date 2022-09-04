@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.SpecialInputsHandler;
 import com.google.devtools.build.lib.util.FileType;
@@ -55,7 +54,7 @@ public class CppCompileActionBuilder {
   private final BuildConfiguration configuration;
   private final List<String> features = new ArrayList<>();
   private CcToolchainFeatures.FeatureConfiguration featureConfiguration;
-  private CcToolchainFeatures.Variables variables = Variables.EMPTY;
+  private CcToolchainFeatures.Variables variables;
   private Artifact sourceFile;
   private final Label sourceLabel;
   private final NestedSetBuilder<Artifact> mandatoryInputsBuilder;
@@ -222,14 +221,17 @@ public class CppCompileActionBuilder {
     if (finalPatterns.isEmpty()) {
       return Predicates.alwaysTrue();
     } else {
-      return option -> {
-        for (Pattern pattern : finalPatterns) {
-          if (pattern.matcher(option).matches()) {
-            return false;
+      return new Predicate<String>() {
+        @Override
+        public boolean apply(String option) {
+          for (Pattern pattern : finalPatterns) {
+            if (pattern.matcher(option).matches()) {
+              return false;
+            }
           }
-        }
 
-        return true;
+          return true;
+        }
       };
     }
   }
@@ -382,8 +384,8 @@ public class CppCompileActionBuilder {
           ImmutableList.copyOf(copts),
           getNocoptPredicate(nocopts),
           getLipoScannables(realMandatoryInputs),
+          ccToolchain.getBuiltinIncludeFiles(),
           cppSemantics,
-          ccToolchain,
           ImmutableMap.copyOf(executionInfo));
     } else {
       return new CppCompileAction(
@@ -419,8 +421,8 @@ public class CppCompileActionBuilder {
           ImmutableMap.copyOf(executionInfo),
           ImmutableMap.copyOf(environment),
           getActionName(),
-          cppSemantics,
-          ccToolchain);
+          ccToolchain.getBuiltinIncludeFiles(),
+          cppSemantics);
     }
   }
 

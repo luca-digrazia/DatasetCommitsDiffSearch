@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.cmdline;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
@@ -28,8 +29,6 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.SkyFunctionName;
-import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
 import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
@@ -51,7 +50,7 @@ import javax.annotation.Nullable;
 )
 @Immutable
 @ThreadSafe
-public final class Label implements Comparable<Label>, Serializable, SkylarkPrintableValue, SkyKey {
+public final class Label implements Comparable<Label>, Serializable, SkylarkPrintableValue {
   public static final PathFragment EXTERNAL_PACKAGE_NAME = PathFragment.create("external");
   public static final PathFragment EXTERNAL_PACKAGE_FILE_NAME = PathFragment.create("WORKSPACE");
   public static final String DEFAULT_REPOSITORY_DIRECTORY = "__main__";
@@ -74,8 +73,6 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
       PackageIdentifier.createInMainRepo(EXTERNAL_PACKAGE_NAME);
 
   public static final PathFragment EXTERNAL_PATH_PREFIX = PathFragment.create("external");
-  public static final SkyFunctionName TRANSITIVE_TRAVERSAL =
-      SkyFunctionName.create("TRANSITIVE_TRAVERSAL");
 
   private static final Interner<Label> LABEL_INTERNER = BlazeInterners.newWeakInterner();
 
@@ -151,6 +148,15 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
   public static Label parseAbsoluteUnchecked(String absName) {
     return parseAbsoluteUnchecked(absName, true);
   }
+
+  /** A long way to say '(String) s -> parseAbsoluteUnchecked(s)'. */
+  public static final Function<String, Label> PARSE_ABSOLUTE_UNCHECKED =
+      new Function<String, Label>() {
+        @Override
+        public Label apply(@Nullable String s) {
+          return s == null ? null : parseAbsoluteUnchecked(s);
+        }
+      };
 
   /**
    * Factory for Labels from separate components.
@@ -502,16 +508,6 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
         throw new IllegalStateException(e);
       }
     }
-  }
-
-  @Override
-  public SkyFunctionName functionName() {
-    return TRANSITIVE_TRAVERSAL;
-  }
-
-  @Override
-  public Label argument() {
-    return this;
   }
 
   @Override

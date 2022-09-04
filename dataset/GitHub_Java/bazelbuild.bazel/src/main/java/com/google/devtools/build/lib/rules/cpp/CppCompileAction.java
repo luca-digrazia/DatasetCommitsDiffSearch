@@ -83,7 +83,6 @@ import javax.annotation.Nullable;
 @ThreadCompatible
 public class CppCompileAction extends AbstractAction
     implements IncludeScannable, ExecutionInfoSpecifier, CommandAction {
-
   /**
    * Represents logic that determines if an artifact is a special input, meaning that it may require
    * additional inputs when it is compiled or may not be available to other actions.
@@ -115,10 +114,6 @@ public class CppCompileAction extends AbstractAction
 
   private static final int VALIDATION_DEBUG = 0;  // 0==none, 1==warns/errors, 2==all
   private static final boolean VALIDATION_DEBUG_WARN = VALIDATION_DEBUG >= 1;
-
-  /** A string constant used to compute CC_FLAGS make variable value */
-  public static final java.lang.String CC_FLAGS_MAKE_VARIABLE_ACTION_NAME =
-      "cc-flags-make-variable";
 
   /**
    * A string constant for the c compilation action.
@@ -222,8 +217,6 @@ public class CppCompileAction extends AbstractAction
   /** Whether this action needs to discover inputs. */
   private final boolean discoversInputs;
 
-  private final ImmutableList<PathFragment> builtInIncludeDirectories;
-
   /**
    * Set when the action prepares for execution. Used to preserve state between preparation and
    * execution.
@@ -273,10 +266,11 @@ public class CppCompileAction extends AbstractAction
    * @param additionalIncludeScannables list of additional artifacts to include-scan
    * @param actionClassId TODO(bazel-team): Add parameter description
    * @param environment TODO(bazel-team): Add parameter description
+   * @param builtinIncludeFiles List of include files that may be included even if they are not
+   *     mentioned in the source file or any of the headers included by it
    * @param actionName a string giving the name of this action for the purpose of toolchain
    *     evaluation
    * @param cppSemantics C++ compilation semantics
-   * @param cppProvider - CcToolchainProvider with configuration-dependent information.
    */
   protected CppCompileAction(
       ActionOwner owner,
@@ -313,8 +307,8 @@ public class CppCompileAction extends AbstractAction
       ImmutableMap<String, String> executionInfo,
       ImmutableMap<String, String> environment,
       String actionName,
-      CppSemantics cppSemantics,
-      CcToolchainProvider cppProvider) {
+      Iterable<Artifact> builtinIncludeFiles,
+      CppSemantics cppSemantics) {
     super(
         owner,
         allInputs,
@@ -355,8 +349,7 @@ public class CppCompileAction extends AbstractAction
             cppConfiguration,
             variables,
             actionName,
-            dotdFile,
-            cppProvider);
+            dotdFile);
     this.actionContext = actionContext;
     this.lipoScannables = lipoScannables;
     this.actionClassId = actionClassId;
@@ -367,11 +360,9 @@ public class CppCompileAction extends AbstractAction
     // artifact and will definitely exist prior to this action execution.
     this.mandatoryInputs = mandatoryInputs;
     this.prunableInputs = prunableInputs;
-    this.builtinIncludeFiles = ImmutableList.copyOf(cppProvider.getBuiltinIncludeFiles());
+    this.builtinIncludeFiles = ImmutableList.copyOf(builtinIncludeFiles);
     this.cppSemantics = cppSemantics;
     this.additionalIncludeScannables = ImmutableList.copyOf(additionalIncludeScannables);
-    this.builtInIncludeDirectories =
-        ImmutableList.copyOf(cppProvider.getBuiltInIncludeDirectories());
   }
 
   /**
@@ -390,7 +381,7 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   public List<PathFragment> getBuiltInIncludeDirectories() {
-    return builtInIncludeDirectories;
+    return cppConfiguration.getBuiltInIncludeDirectories();
   }
 
   @Nullable
@@ -844,10 +835,9 @@ public class CppCompileAction extends AbstractAction
     if (optionalSourceFile != null) {
       allowedIncludes.add(optionalSourceFile);
     }
-    Iterable<PathFragment> ignoreDirs =
-        cppConfiguration.isStrictSystemIncludes()
-            ? getBuiltInIncludeDirectories()
-            : getValidationIgnoredDirs();
+    Iterable<PathFragment> ignoreDirs = cppConfiguration.isStrictSystemIncludes()
+        ? cppConfiguration.getBuiltInIncludeDirectories()
+        : getValidationIgnoredDirs();
 
     // Copy the sets to hash sets for fast contains checking.
     // Avoid immutable sets here to limit memory churn.
@@ -916,7 +906,7 @@ public class CppCompileAction extends AbstractAction
   }
 
   Iterable<PathFragment> getValidationIgnoredDirs() {
-    List<PathFragment> cxxSystemIncludeDirs = getBuiltInIncludeDirectories();
+    List<PathFragment> cxxSystemIncludeDirs = cppConfiguration.getBuiltInIncludeDirectories();
     return Iterables.concat(
         cxxSystemIncludeDirs, context.getSystemIncludeDirs());
   }
@@ -1269,8 +1259,9 @@ public class CppCompileAction extends AbstractAction
   }
 
   public List<Path> getPermittedSystemIncludePrefixes(Path execRoot) {
+    CppConfiguration toolchain = cppConfiguration;
     List<Path> systemIncludePrefixes = new ArrayList<>();
-    for (PathFragment includePath : getBuiltInIncludeDirectories()) {
+    for (PathFragment includePath : toolchain.getBuiltInIncludeDirectories()) {
       if (includePath.isAbsolute()) {
         systemIncludePrefixes.add(execRoot.getFileSystem().getPath(includePath));
       }

@@ -14,9 +14,9 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.common.base.Optional;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -138,6 +138,15 @@ public final class IntermediateArtifacts {
   private Artifact appendExtension(String extension) {
     PathFragment name = PathFragment.create(ruleContext.getLabel().getName());
     return scopedArtifact(name.replaceName(addOutputPrefix(name.getBaseName(), extension)));
+  }
+
+  /**
+   * A dummy .c file to be included in xcode projects. This is needed if the target does not have
+   * any source files but Xcode requires one.
+   */
+  public Artifact dummySource() {
+    return scopedArtifact(
+        ruleContext.getPrerequisiteArtifact("$dummy_source", Mode.TARGET).getRootRelativePath());
   }
 
   /**
@@ -441,13 +450,9 @@ public final class IntermediateArtifacts {
             .replace("@", "")
             .replace("/", "_")
             .replace(":", "_");
- 
-    Optional<Artifact> customModuleMap = CompilationSupport.getCustomModuleMap(ruleContext);
-    if (customModuleMap.isPresent()) {
-      return new CppModuleMap(customModuleMap.get(), moduleName);
-    } else if (umbrellaHeaderStrategy == UmbrellaHeaderStrategy.GENERATE) {
-      // To get Swift to pick up module maps, we need to name them "module.modulemap" and have their
-      // parent directory in the module map search paths.
+    // To get Swift to pick up module maps, we need to name them "module.modulemap" and have their
+    // parent directory in the module map search paths.
+    if (umbrellaHeaderStrategy == UmbrellaHeaderStrategy.GENERATE) {
       return new CppModuleMap(
           appendExtensionInGenfiles(".modulemaps/module.modulemap"),
           appendExtensionInGenfiles(".modulemaps/umbrella.h"),

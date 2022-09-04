@@ -1119,7 +1119,6 @@ public final class BuildConfiguration {
   private final ImmutableMap<Class<? extends Fragment>, Fragment> fragments;
   private final ImmutableMap<String, Class<? extends Fragment>> skylarkVisibleFragments;
 
-
   /**
    * Directories in the output tree.
    *
@@ -1222,8 +1221,7 @@ public final class BuildConfiguration {
   private final Root testlogsDirectoryForMainRepository;
   private final Root middlemanDirectoryForMainRepository;
 
-  // Cache this value for quicker access. We don't cache it inside BuildOptions because BuildOptions
-  // is mutable, so a cached value there could fall out of date when it's updated.
+  /** If false, AnalysisEnviroment doesn't register any actions created by the ConfiguredTarget. */
   private final boolean actionsEnabled;
 
   // TODO(bazel-team): Move this to a configuration fragment.
@@ -1306,7 +1304,7 @@ public final class BuildConfiguration {
   }
 
   private int computeHashCode() {
-    return Objects.hash(isActionsEnabled(), fragments, buildOptions.getOptions());
+    return Objects.hash(actionsEnabled, fragments, buildOptions.getOptions());
   }
 
   @Override
@@ -1427,14 +1425,15 @@ public final class BuildConfiguration {
    */
   public BuildConfiguration(BlazeDirectories directories,
       Map<Class<? extends Fragment>, Fragment> fragmentsMap,
-      BuildOptions buildOptions) {
+      BuildOptions buildOptions,
+      boolean actionsDisabled) {
     this.directories = directories;
+    this.actionsEnabled = !actionsDisabled;
     this.fragments = ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter);
 
     this.skylarkVisibleFragments = buildIndexOfSkylarkVisibleFragments();
 
-    this.buildOptions = buildOptions.clone();
-    this.actionsEnabled = buildOptions.enableActions();
+    this.buildOptions = buildOptions;
     this.options = buildOptions.get(Options.class);
 
     Map<String, String> testEnv = new TreeMap<>();
@@ -1522,7 +1521,7 @@ public final class BuildConfiguration {
     BuildOptions options = buildOptions.trim(
         getOptionsClasses(fragmentsMap.keySet(), ruleClassProvider));
     BuildConfiguration newConfig =
-        new BuildConfiguration(directories, fragmentsMap, options);
+        new BuildConfiguration(directories, fragmentsMap, options, !actionsEnabled);
     newConfig.setConfigurationTransitions(this.transitions);
     return newConfig;
   }
@@ -2448,7 +2447,6 @@ public final class BuildConfiguration {
     return options.useLLVMCoverageMapFormat;
   }
 
-  /** If false, AnalysisEnviroment doesn't register any actions created by the ConfiguredTarget. */
   public boolean isActionsEnabled() {
     return actionsEnabled;
   }
@@ -2494,7 +2492,7 @@ public final class BuildConfiguration {
   }
 
   public List<Label> getActionListeners() {
-    return isActionsEnabled() ? options.actionListeners : ImmutableList.<Label>of();
+    return actionsEnabled ? options.actionListeners : ImmutableList.<Label>of();
   }
 
   /**

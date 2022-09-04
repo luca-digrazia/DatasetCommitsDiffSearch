@@ -14,9 +14,6 @@
 
 package com.google.devtools.build.lib.actions;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-import static java.util.Comparator.comparing;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
@@ -24,7 +21,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
+import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -102,28 +99,37 @@ import javax.annotation.Nullable;
         + "Files. If you have a Skylark rule that needs to create a new File, you might need to "
         + "add the label to the attrs (if it's an input) or the outputs (if it's an output). Then "
         + "you can access the File through the rule's <a href='ctx.html'>context</a>. You can "
-        + "also use <a href='actions.html#declare_file'>ctx.actions.declare_file</a> to "
-        + "declare a new file in the rule implementation.</p>")
+        + "also use <a href='ctx.html#new_file'>ctx.new_file</a> to create a new file in the rule "
+        + "implementation.</p>")
 public class Artifact
     implements FileType.HasFilename, ActionInput, SkylarkValue, Comparable<Object> {
 
-  /** Compares artifact according to their exec paths. Sorts null values first. */
-  public static final Comparator<Artifact> EXEC_PATH_COMPARATOR =
-      (a, b) -> {
-        if (a == b) {
-          return 0;
-        } else if (a == null) {
-          return -1;
-        } else if (b == null) {
-          return -1;
-        } else {
-          return a.execPath.compareTo(b.execPath);
-        }
-      };
+  /**
+   * Compares artifact according to their exec paths. Sorts null values first.
+   */
+  public static final Comparator<Artifact> EXEC_PATH_COMPARATOR = new Comparator<Artifact>() {
+    @Override
+    public int compare(Artifact a, Artifact b) {
+      if (a == b) {
+        return 0;
+      } else if (a == null) {
+        return -1;
+      } else if (b == null) {
+        return -1;
+      } else {
+        return a.execPath.compareTo(b.execPath);
+      }
+    }
+  };
 
   /** Compares artifacts according to their root relative paths. */
   public static final Comparator<Artifact> ROOT_RELATIVE_PATH_COMPARATOR =
-      comparing(Artifact::getRootRelativePath);
+      new Comparator<Artifact>() {
+        @Override
+        public int compare(Artifact lhs, Artifact rhs) {
+          return lhs.getRootRelativePath().compareTo(rhs.getRootRelativePath());
+        }
+      };
 
   @Override
   public int compareTo(Object o) {
@@ -148,8 +154,25 @@ public class Artifact
 
   public static final ImmutableList<Artifact> NO_ARTIFACTS = ImmutableList.of();
 
-  /** A Predicate that evaluates to true if the Artifact is not a middleman artifact. */
-  public static final Predicate<Artifact> MIDDLEMAN_FILTER = input -> !input.isMiddlemanArtifact();
+  /**
+   * A Predicate that evaluates to true if the Artifact is not a middleman artifact.
+   */
+  public static final Predicate<Artifact> MIDDLEMAN_FILTER = new Predicate<Artifact>() {
+    @Override
+    public boolean apply(Artifact input) {
+      return !input.isMiddlemanArtifact();
+    }
+  };
+
+  /**
+   * A Predicate that evaluates to true if the Artifact <b>is</b> a tree artifact.
+   */
+  public static final Predicate<Artifact> IS_TREE_ARTIFACT = new Predicate<Artifact>() {
+    @Override
+    public boolean apply(Artifact input) {
+      return input.isTreeArtifact();
+    }
+  };
 
   private final int hashCode;
   private final Path path;
@@ -641,12 +664,35 @@ public class Artifact
     return result;
   }
 
-  // ---------------------------------------------------------------------------
+  //---------------------------------------------------------------------------
   // Static methods to assist in working with Artifacts
 
-  /** Formatter for execPath PathFragment output. */
+  /**
+   * Formatter for execPath PathFragment output.
+   */
+  private static final Function<Artifact, PathFragment> EXEC_PATH_FORMATTER =
+      new Function<Artifact, PathFragment>() {
+        @Override
+        public PathFragment apply(Artifact input) {
+          return input.getExecPath();
+        }
+      };
+
   public static final Function<Artifact, String> ROOT_RELATIVE_PATH_STRING =
-      artifact -> artifact.getRootRelativePath().getPathString();
+      new Function<Artifact, String>() {
+        @Override
+        public String apply(Artifact artifact) {
+          return artifact.getRootRelativePath().getPathString();
+        }
+      };
+
+  public static final Function<Artifact, String> ABSOLUTE_PATH_STRING =
+      new Function<Artifact, String>() {
+        @Override
+        public String apply(Artifact artifact) {
+          return artifact.getPath().getPathString();
+        }
+      };
 
   /**
    * Converts a collection of artifacts into execution-time path strings, and
@@ -678,7 +724,7 @@ public class Artifact
   public static Iterable<String> toAbsolutePaths(Iterable<Artifact> artifacts) {
     return Iterables.transform(
         Iterables.filter(artifacts, MIDDLEMAN_FILTER),
-        artifact -> artifact.getPath().getPathString());
+        ABSOLUTE_PATH_STRING);
   }
 
   /**
@@ -688,7 +734,7 @@ public class Artifact
   public static Iterable<String> toRootRelativePaths(Iterable<Artifact> artifacts) {
     return Iterables.transform(
         Iterables.filter(artifacts, MIDDLEMAN_FILTER),
-        artifact -> artifact.getRootRelativePath().getPathString());
+        ROOT_RELATIVE_PATH_STRING);
   }
 
   /**
@@ -754,7 +800,7 @@ public class Artifact
    */
   public static void addExpandedExecPaths(Iterable<Artifact> artifacts,
       Collection<PathFragment> output, ArtifactExpander artifactExpander) {
-    addExpandedArtifacts(artifacts, output, Artifact::getExecPath, artifactExpander);
+    addExpandedArtifacts(artifacts, output, EXEC_PATH_FORMATTER, artifactExpander);
   }
 
   /**
@@ -860,14 +906,15 @@ public class Artifact
    * Converts artifacts into their exec paths. Returns an immutable list.
    */
   public static List<PathFragment> asPathFragments(Iterable<? extends Artifact> artifacts) {
-    return Streams.stream(artifacts).map(Artifact::getExecPath).collect(toImmutableList());
+    return ImmutableList.copyOf(Iterables.transform(artifacts, EXEC_PATH_FORMATTER));
   }
 
   /**
    * Returns the exec paths of the input artifacts in alphabetical order.
    */
   public static ImmutableList<PathFragment> asSortedPathFragments(Iterable<Artifact> input) {
-    return Streams.stream(input).map(Artifact::getExecPath).sorted().collect(toImmutableList());
+    return Ordering.natural().immutableSortedCopy(Iterables.transform(
+        input, EXEC_PATH_FORMATTER));
   }
 
 

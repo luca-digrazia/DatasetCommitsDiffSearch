@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -150,14 +149,14 @@ public abstract class PackageLookupValue implements SkyValue {
    */
   public abstract String getErrorMsg();
 
-  public static SkyKey key(PathFragment directory) {
+  static SkyKey key(PathFragment directory) {
     Preconditions.checkArgument(!directory.isAbsolute(), directory);
     return key(PackageIdentifier.createInMainRepo(directory));
   }
 
   public static SkyKey key(PackageIdentifier pkgIdentifier) {
     Preconditions.checkArgument(!pkgIdentifier.getRepository().isDefault());
-    return LegacySkyKey.create(SkyFunctions.PACKAGE_LOOKUP, pkgIdentifier);
+    return SkyKey.create(SkyFunctions.PACKAGE_LOOKUP, pkgIdentifier);
   }
 
   /** Successful lookup value. */
