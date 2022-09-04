@@ -22,9 +22,9 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -87,6 +87,9 @@ public class ResourceJarActionBuilder {
     checkNotNull(javaToolchain, "javaToolchain must not be null");
 
     Artifact singleJar = javaToolchain.getSingleJar();
+    if (singleJar == null) {
+      singleJar = ruleContext.getPrerequisiteArtifact("$singlejar", Mode.HOST);
+    }
     SpawnAction.Builder builder = new SpawnAction.Builder();
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
@@ -120,7 +123,6 @@ public class ResourceJarActionBuilder {
     if (!classpathResources.isEmpty()) {
       command.addExecPaths("--classpath_resources", classpathResources);
     }
-    ParamFileInfo paramFileInfo = null;
     // TODO(b/37444705): remove this logic and always call useParameterFile once the bug is fixed
     // Most resource jar actions are very small and expanding the argument list for
     // ParamFileHelper#getParamsFileMaybe is expensive, so avoid doing that work if
@@ -130,7 +132,7 @@ public class ResourceJarActionBuilder {
     if (sizeGreaterThanOrEqual(
             Iterables.concat(messages, resources.values(), resourceJars, classpathResources), 10)
         || ruleContext.getConfiguration().getMinParamFileSize() < 10000) {
-      paramFileInfo = ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).build();
+      builder.useParameterFile(ParameterFileType.SHELL_QUOTED);
     }
     ruleContext.registerAction(
         builder
@@ -139,7 +141,7 @@ public class ResourceJarActionBuilder {
             .addInputs(resources.values())
             .addTransitiveInputs(resourceJars)
             .addInputs(classpathResources)
-            .addCommandLine(command.build(), paramFileInfo)
+            .setCommandLine(command.build())
             .setProgressMessage("Building Java resource jar")
             .setMnemonic(MNEMONIC)
             .build(ruleContext));

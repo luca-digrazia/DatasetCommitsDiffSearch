@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
@@ -34,7 +35,6 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.Util;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
@@ -171,6 +171,28 @@ public class JavaCommon {
                 constraintProvider.getLabel(), constraint));
       }
     }
+  }
+
+  /**
+   * Creates an action to aggregate all metadata artifacts into a single
+   * &lt;target_name&gt;_instrumented.jar file.
+   */
+  public static void createInstrumentedJarAction(
+      RuleContext ruleContext,
+      JavaSemantics semantics,
+      List<Artifact> metadataArtifacts,
+      Artifact instrumentedJar,
+      String mainClass)
+      throws InterruptedException {
+    // In Jacoco's setup, metadata artifacts are real jars.
+    new DeployArchiveBuilder(semantics, ruleContext)
+        .setOutputJar(instrumentedJar)
+        // We need to save the original mainClass because we're going to run inside CoverageRunner
+        .setJavaStartClass(mainClass)
+        .setAttributes(new JavaTargetAttributes.Builder(semantics).build())
+        .addRuntimeJars(ImmutableList.copyOf(metadataArtifacts))
+        .setCompression(DeployArchiveBuilder.Compression.UNCOMPRESSED)
+        .build();
   }
 
   public static ImmutableList<String> getConstraints(RuleContext ruleContext) {
@@ -458,11 +480,10 @@ public class JavaCommon {
   }
 
   /**
-   * Returns the path of the java executable that the java stub should use.
-   *
+   * Returns the string that the stub should use to determine the JVM
    * @param launcher if non-null, the cc_binary used to launch the Java Virtual Machine
    */
-  public static String getJavaExecutableForStub(
+  public static String getJavaBinSubstitution(
       RuleContext ruleContext, @Nullable Artifact launcher) {
     Preconditions.checkState(ruleContext.getConfiguration().hasFragment(Jvm.class));
     PathFragment javaExecutable;
@@ -480,16 +501,8 @@ public class JavaCommon {
       javaExecutable =
           PathFragment.create(PathFragment.create(ruleContext.getWorkspaceName()), javaExecutable);
     }
-    return javaExecutable.normalize().getPathString();
-  }
+    javaExecutable = javaExecutable.normalize();
 
-  /**
-   * Returns the shell command that computes `JAVABIN`.
-   * The command derives the JVM location from a given Java executable path.
-   */
-  public static String getJavaBinSubstitutionFromJavaExecutable(
-      RuleContext ruleContext, String javaExecutableStr) {
-    PathFragment javaExecutable = PathFragment.create(javaExecutableStr);
     if (ruleContext.getConfiguration().runfilesEnabled()) {
       String prefix = "";
       if (!javaExecutable.isAbsolute()) {
@@ -499,13 +512,6 @@ public class JavaCommon {
     } else {
       return "JAVABIN=${JAVABIN:-$(rlocation " + javaExecutable.getPathString() + ")}";
     }
-  }
-
-  /** Returns the string that the stub should use to determine the JVM binary (java) path */
-  public static String getJavaBinSubstitution(
-      RuleContext ruleContext, @Nullable Artifact launcher) {
-    return getJavaBinSubstitutionFromJavaExecutable(
-        ruleContext, getJavaExecutableForStub(ruleContext, launcher));
   }
 
   /**
@@ -547,7 +553,7 @@ public class JavaCommon {
   public static List<String> getJvmFlags(RuleContext ruleContext) {
     List<String> jvmFlags = new ArrayList<>();
     jvmFlags.addAll(ruleContext.getFragment(JavaConfiguration.class).getDefaultJvmFlags());
-    jvmFlags.addAll(ruleContext.getExpandedStringListAttr("jvm_flags"));
+    jvmFlags.addAll(ruleContext.getExpandedStringListAttr("jvm_flags", RuleContext.Tokenize.NO));
     return jvmFlags;
   }
 
@@ -734,6 +740,7 @@ public class JavaCommon {
         .addTransitiveTargets(runtimeDepInfo, true, ClasspathType.RUNTIME_ONLY)
         .build();
     attributes.addRuntimeClassPathEntries(args.getRuntimeJars());
+    attributes.addInstrumentationMetadataEntries(args.getInstrumentationMetadata());
   }
 
   /**
