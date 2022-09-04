@@ -62,12 +62,7 @@ public class OutputServiceMJImpl implements OutputService {
 
     @Override
     public Output load(String streamOutputId) throws NotFoundException {
-        final Output output = coll.findOneById(streamOutputId);
-        if (output == null) {
-            throw new NotFoundException("Couldn't find output with id " + streamOutputId);
-        }
-
-        return output;
+        return coll.findOneById(streamOutputId);
     }
 
     @Override
