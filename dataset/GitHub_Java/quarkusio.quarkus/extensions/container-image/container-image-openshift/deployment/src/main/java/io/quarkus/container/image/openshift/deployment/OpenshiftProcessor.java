@@ -138,7 +138,6 @@ public class OpenshiftProcessor {
 
         builderImageProducer.produce(new BaseImageInfoBuildItem(config.baseJvmImage));
         Optional<OpenshiftBaseJavaImage> baseImage = OpenshiftBaseJavaImage.findMatching(config.baseJvmImage);
-        boolean libRequired = !packageConfig.type.equalsIgnoreCase(PackageConfig.UBER_JAR);
 
         if (config.buildStrategy == BuildStrategy.BINARY) {
             // Jar directory priorities:
@@ -156,25 +155,20 @@ public class OpenshiftProcessor {
             // If the image is known, we can define env vars for classpath, jar, lib etc.
             baseImage.ifPresent(b -> {
                 envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getJarEnvVar(), pathToJar, null));
-                if (libRequired) {
-                    envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getJarLibEnvVar(),
-                            concatUnixPaths(jarDirectory, "lib"), null));
-                    envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getClasspathEnvVar(), classpath, null));
-                }
+                envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getJarLibEnvVar(),
+                        concatUnixPaths(jarDirectory, "lib"), null));
+                envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getClasspathEnvVar(), classpath, null));
                 envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getJvmOptionsEnvVar(),
                         String.join(" ", config.jvmArguments), null));
             });
             //In all other cases its the responsibility of the image to set those up correctly.
             if (!baseImage.isPresent()) {
                 List<String> args = new ArrayList<>();
-                args.addAll(Arrays.asList("-jar", pathToJar));
-                if (libRequired) {
-                    args.addAll(Arrays.asList("-cp", classpath));
-                    envProducer.produce(
-                            KubernetesEnvBuildItem.createSimpleVar("JAVA_LIB_DIR", concatUnixPaths(jarDirectory, "lib"), null));
-                }
+                args.addAll(Arrays.asList("-jar", pathToJar, "-cp", classpath));
                 args.addAll(config.jvmArguments);
                 envProducer.produce(KubernetesEnvBuildItem.createSimpleVar("JAVA_APP_JAR", pathToJar, null));
+                envProducer.produce(
+                        KubernetesEnvBuildItem.createSimpleVar("JAVA_LIB_DIR", concatUnixPaths(jarDirectory, "lib"), null));
                 commandProducer.produce(new KubernetesCommandBuildItem("java", args.toArray(new String[args.size()])));
             }
         }
@@ -434,39 +428,20 @@ public class OpenshiftProcessor {
             }
         }
 
-        while (isNew(build) || isPending(build) || isRunning(build)) {
-            Build updated = client.builds().withName(build.getMetadata().getName()).get();
-            if (updated == null) {
-                throw new IllegalStateException("Build:" + build.getMetadata().getName() + " is no longer present!");
-            } else if (updated.getStatus() == null) {
-                throw new IllegalStateException("Build:" + build.getMetadata().getName() + " has no status!");
-            } else if (isNew(updated) || isPending(updated) || isRunning(updated)) {
-                build = updated;
-                final String buildName = build.getMetadata().getName();
-                try (LogWatch w = client.builds().withName(build.getMetadata().getName()).withPrettyOutput().watchLog();
-                        BufferedReader reader = new BufferedReader(new InputStreamReader(w.getOutput()))) {
-                    watchBuild(client, openshiftConfig, buildName, w);
-                    for (String line = reader.readLine(); line != null; line = reader.readLine()) {
-                        LOG.info(line);
-                    }
-                } catch (IOException e) {
-                    throw openshiftException(e);
-                }
-            } else if (isComplete(updated)) {
-                return;
-            } else if (isCancelled(updated)) {
-                throw new IllegalStateException("Build:" + build.getMetadata().getName() + " cancelled!");
-            } else if (isFailed(updated)) {
-                throw new IllegalStateException(
-                        "Build:" + build.getMetadata().getName() + " failed! " + updated.getStatus().getMessage());
-            } else if (isError(updated)) {
-                throw new IllegalStateException(
-                        "Build:" + build.getMetadata().getName() + " encountered error! " + updated.getStatus().getMessage());
+        final String buildName = build.getMetadata().getName();
+        try (LogWatch w = client.builds().withName(build.getMetadata().getName()).withPrettyOutput().watchLog();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(w.getOutput()))) {
+            waitForBuildComplete(client, openshiftConfig, buildName, w);
+            for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+                LOG.info(line);
             }
+        } catch (IOException e) {
+            throw openshiftException(e);
         }
     }
 
-    private static void watchBuild(OpenShiftClient client, OpenshiftConfig openshiftConfig, String buildName, Closeable watch) {
+    private static void waitForBuildComplete(OpenShiftClient client, OpenshiftConfig openshiftConfig, String buildName,
+            Closeable watch) {
         Executor executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
             try {
@@ -526,40 +501,4 @@ public class OpenshiftProcessor {
         }
         return result.toString();
     }
-
-    static boolean isNew(Build build) {
-        return build != null && build.getStatus() != null
-                && BuildStatus.New.name().equalsIgnoreCase(build.getStatus().getPhase());
-    }
-
-    static boolean isPending(Build build) {
-        return build != null && build.getStatus() != null
-                && BuildStatus.Pending.name().equalsIgnoreCase(build.getStatus().getPhase());
-    }
-
-    static boolean isRunning(Build build) {
-        return build != null && build.getStatus() != null
-                && BuildStatus.Running.name().equalsIgnoreCase(build.getStatus().getPhase());
-    }
-
-    static boolean isComplete(Build build) {
-        return build != null && build.getStatus() != null
-                && BuildStatus.Complete.name().equalsIgnoreCase(build.getStatus().getPhase());
-    }
-
-    static boolean isFailed(Build build) {
-        return build != null && build.getStatus() != null
-                && BuildStatus.Failed.name().equalsIgnoreCase(build.getStatus().getPhase());
-    }
-
-    static boolean isError(Build build) {
-        return build != null && build.getStatus() != null
-                && BuildStatus.Error.name().equalsIgnoreCase(build.getStatus().getPhase());
-    }
-
-    static boolean isCancelled(Build build) {
-        return build != null && build.getStatus() != null
-                && BuildStatus.Cancelled.name().equalsIgnoreCase(build.getStatus().getPhase());
-    }
-
 }
