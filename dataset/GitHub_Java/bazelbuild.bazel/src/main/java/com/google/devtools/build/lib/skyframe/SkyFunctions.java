@@ -83,6 +83,8 @@ public final class SkyFunctions {
       SkyFunctionName.create("BUILD_CONFIGURATION");
   public static final SkyFunctionName CONFIGURATION_FRAGMENT =
       SkyFunctionName.create("CONFIGURATION_FRAGMENT");
+  public static final SkyFunctionName CONFIGURATION_COLLECTION =
+      SkyFunctionName.create("CONFIGURATION_COLLECTION");
   public static final SkyFunctionName ARTIFACT = SkyFunctionName.create("ARTIFACT");
   public static final SkyFunctionName ACTION_EXECUTION =
       SkyFunctionName.create("ACTION_EXECUTION");

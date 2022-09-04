@@ -24,8 +24,8 @@ import org.junit.Before;
 /** Utility methods for setting up platform and toolchain related tests. */
 public abstract class ToolchainTestCase extends SkylarkTestCase {
 
-  public PlatformInfo linuxPlatform;
-  public PlatformInfo macPlatform;
+  public PlatformInfo targetPlatform;
+  public PlatformInfo hostPlatform;
 
   public ConstraintSettingInfo setting;
   public ConstraintValueInfo linuxConstraint;
@@ -41,31 +41,23 @@ public abstract class ToolchainTestCase extends SkylarkTestCase {
         "constraint_value(name = 'linux',",
         "    constraint_setting = ':os')",
         "constraint_value(name = 'mac',",
-        "    constraint_setting = ':os')",
-        "platform(name = 'linux_plat',",
-        "    constraint_values = [':linux'])",
-        "platform(name = 'mac_plat',",
-        "    constraint_values = [':mac'])");
+        "    constraint_setting = ':os')");
 
     setting = ConstraintSettingInfo.create(makeLabel("//constraint:os"));
     linuxConstraint = ConstraintValueInfo.create(setting, makeLabel("//constraint:linux"));
     macConstraint = ConstraintValueInfo.create(setting, makeLabel("//constraint:mac"));
+  }
 
-    linuxPlatform =
-        PlatformInfo.builder()
-            .setLabel(makeLabel("//platforms:target_platform"))
-            .addConstraint(linuxConstraint)
-            .build();
-    macPlatform =
-        PlatformInfo.builder()
-            .setLabel(makeLabel("//platforms:host_platform"))
-            .addConstraint(macConstraint)
-            .build();
+  @Before
+  public void createPlatforms() throws Exception {
+    targetPlatform =
+        PlatformInfo.builder().setLabel(makeLabel("//platforms:target_platform")).build();
+    hostPlatform = PlatformInfo.builder().setLabel(makeLabel("//platforms:host_platform")).build();
   }
 
   @Before
   public void createToolchains() throws Exception {
-    rewriteWorkspace("register_toolchains('//toolchain:toolchain_1', '//toolchain:toolchain_2')");
+    rewriteWorkspace("register_toolchains('//toolchain:toolchain_1',  '//toolchain:toolchain_2')");
 
     scratch.file(
         "toolchain/BUILD",
@@ -93,6 +85,7 @@ public abstract class ToolchainTestCase extends SkylarkTestCase {
         "toolchain/toolchain_def.bzl",
         "def _impl(ctx):",
         "  toolchain = platform_common.ToolchainInfo(",
+        "      type = Label('//toolchain:test_toolchain'),",
         "      data = ctx.attr.data)",
         "  return [toolchain]",
         "test_toolchain = rule(",
