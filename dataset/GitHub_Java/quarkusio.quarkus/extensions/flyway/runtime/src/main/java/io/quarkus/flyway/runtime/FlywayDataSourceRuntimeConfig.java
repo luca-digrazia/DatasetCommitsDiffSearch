@@ -72,12 +72,6 @@ public final class FlywayDataSourceRuntimeConfig {
     public boolean cleanAtStart;
 
     /**
-     * true to prevent Flyway clean operations, false otherwise.
-     */
-    @ConfigItem
-    public boolean cleanDisabled;
-
-    /**
      * true to execute Flyway automatically when the application starts, false otherwise.
      *
      */
@@ -154,9 +148,4 @@ public final class FlywayDataSourceRuntimeConfig {
     @ConfigItem
     public Optional<String> placeholderSuffix = Optional.empty();
 
-    /**
-     * The SQL statements to run to initialize a new database connection immediately after opening it.
-     */
-    @ConfigItem
-    public Optional<String> initSql = Optional.empty();
 }
