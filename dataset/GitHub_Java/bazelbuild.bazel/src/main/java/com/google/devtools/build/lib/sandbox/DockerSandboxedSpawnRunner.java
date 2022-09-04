@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.ProcessWrapper;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
-import com.google.devtools.build.lib.server.FailureDetails.Sandbox.Code;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.util.OS;
@@ -219,7 +218,11 @@ final class DockerSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
 
     SandboxInputs inputs =
         helpers.processInputFiles(
-            context.getInputMapping(), spawn, context.getArtifactExpander(), execRoot);
+            context.getInputMapping(
+                getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
+            spawn,
+            context.getArtifactExpander(),
+            execRoot);
     SandboxOutputs outputs = helpers.getOutputs(spawn);
 
     Duration timeout = context.getTimeout();
@@ -229,21 +232,16 @@ final class DockerSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     String baseImageName = dockerContainerFromSpawn(spawn).orElse(this.defaultImage);
     if (baseImageName.isEmpty()) {
       throw new UserExecException(
-          createFailureDetail(
-              String.format(
-                  "Cannot execute %s mnemonic with Docker, because no image could be found in the"
-                      + " remote_execution_properties of the platform and no default image was set"
-                      + " via --experimental_docker_image",
-                  spawn.getMnemonic()),
-              Code.NO_DOCKER_IMAGE));
+          String.format(
+              "Cannot execute %s mnemonic with Docker, because no "
+                  + "image could be found in the remote_execution_properties of the platform and "
+                  + "no default image was set via --experimental_docker_image",
+              spawn.getMnemonic()));
     }
 
     String customizedImageName = getOrCreateCustomizedImage(baseImageName);
     if (customizedImageName == null) {
-      throw new UserExecException(
-          createFailureDetail(
-              "Could not prepare Docker image for execution",
-              Code.DOCKER_IMAGE_PREPARATION_FAILURE));
+      throw new UserExecException("Could not prepare Docker image for execution");
     }
 
     DockerCommandLineBuilder cmdLine = new DockerCommandLineBuilder();
@@ -371,8 +369,8 @@ final class DockerSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     try {
       cmd.executeAsync(stdIn, stdOut, stdErr, Command.KILL_SUBPROCESS_ON_INTERRUPT).get();
     } catch (CommandException e) {
-      String message = String.format("Running command %s failed: %s", cmd.toDebugString(), stdErr);
-      throw new UserExecException(e, createFailureDetail(message, Code.DOCKER_COMMAND_FAILURE));
+      throw new UserExecException(
+          "Running command " + cmd.toDebugString() + " failed: " + stdErr, e);
     }
     return stdOut.toString().trim();
   }

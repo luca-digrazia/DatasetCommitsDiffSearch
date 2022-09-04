@@ -48,8 +48,7 @@ public final class CommandUsingProcessWrapperTest {
         testFS
             .getPath(BlazeTestUtils.runfilesDir())
             .getRelative(TestConstants.PROCESS_WRAPPER_PATH),
-        /*killDelay=*/ null,
-        /*extraFlags=*/ ImmutableList.of());
+        /*killDelay=*/ null);
   }
 
   private String getCpuTimeSpenderPath() {

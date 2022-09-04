@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.runtime;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
@@ -37,15 +36,11 @@ public final class ProcessWrapper {
   /** Grace delay between asking a process to stop and forcibly killing it, or null for none. */
   @Nullable private final Duration killDelay;
 
-  /** Optional list of extra flags to append to the process-wrapper invocations. */
-  private final List<String> extraFlags;
-
   /** Creates a new process-wrapper instance from explicit values. */
   @VisibleForTesting
-  public ProcessWrapper(Path binPath, @Nullable Duration killDelay, List<String> extraFlags) {
+  public ProcessWrapper(Path binPath, @Nullable Duration killDelay) {
     this.binPath = binPath;
     this.killDelay = killDelay;
-    this.extraFlags = extraFlags;
   }
 
   /**
@@ -58,12 +53,10 @@ public final class ProcessWrapper {
   public static ProcessWrapper fromCommandEnvironment(CommandEnvironment cmdEnv) {
     LocalExecutionOptions options = cmdEnv.getOptions().getOptions(LocalExecutionOptions.class);
     Duration killDelay = options == null ? null : options.getLocalSigkillGraceSeconds();
-    List<String> extraFlags =
-        options == null ? ImmutableList.of() : options.processWrapperExtraFlags;
 
     Path path = cmdEnv.getBlazeWorkspace().getBinTools().getEmbeddedPath(BIN_BASENAME);
     if (OS.isPosixCompatible() && path != null && path.exists()) {
-      return new ProcessWrapper(path, killDelay, extraFlags);
+      return new ProcessWrapper(path, killDelay);
     } else {
       return null;
     }
@@ -71,7 +64,7 @@ public final class ProcessWrapper {
 
   /** Returns a new {@link CommandLineBuilder} for the process-wrapper tool. */
   public CommandLineBuilder commandLineBuilder(List<String> commandArguments) {
-    return new CommandLineBuilder(binPath.getPathString(), commandArguments, killDelay, extraFlags);
+    return new CommandLineBuilder(binPath.getPathString(), commandArguments, killDelay);
   }
 
   /**
@@ -82,7 +75,6 @@ public final class ProcessWrapper {
     private final String processWrapperPath;
     private final List<String> commandArguments;
     @Nullable private final Duration killDelay;
-    private final List<String> extraFlags;
 
     private Path stdoutPath;
     private Path stderrPath;
@@ -90,14 +82,10 @@ public final class ProcessWrapper {
     private Path statisticsPath;
 
     private CommandLineBuilder(
-        String processWrapperPath,
-        List<String> commandArguments,
-        @Nullable Duration killDelay,
-        List<String> extraFlags) {
+        String processWrapperPath, List<String> commandArguments, @Nullable Duration killDelay) {
       this.processWrapperPath = processWrapperPath;
       this.commandArguments = commandArguments;
       this.killDelay = killDelay;
-      this.extraFlags = extraFlags;
     }
 
     /** Sets the path to use for redirecting stdout, if any. */
@@ -144,8 +132,6 @@ public final class ProcessWrapper {
       if (statisticsPath != null) {
         fullCommandLine.add("--stats=" + statisticsPath);
       }
-
-      fullCommandLine.addAll(extraFlags);
 
       fullCommandLine.addAll(commandArguments);
 

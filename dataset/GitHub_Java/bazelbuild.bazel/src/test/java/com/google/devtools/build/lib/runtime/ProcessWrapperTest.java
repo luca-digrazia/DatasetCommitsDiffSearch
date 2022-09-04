@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -39,11 +40,12 @@ public final class ProcessWrapperTest {
     testFS = new InMemoryFileSystem();
   }
 
-  private Path makeProcessWrapperBin(String path) throws IOException {
+  private ProcessWrapper getProcessWrapper(String path, @Nullable Duration killDelay)
+      throws IOException {
     Path processWrapperPath = testFS.getPath(path);
     processWrapperPath.getParentDirectory().createDirectoryAndParents();
     processWrapperPath.getOutputStream().close();
-    return processWrapperPath;
+    return new ProcessWrapper(processWrapperPath, killDelay);
   }
 
   @Test
@@ -52,11 +54,9 @@ public final class ProcessWrapperTest {
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "hello, world");
 
     ImmutableList<String> expectedCommandLine =
-        ImmutableList.<String>builder().add("/some/path").addAll(commandArguments).build();
+        ImmutableList.<String>builder().add("/some/bin/path").addAll(commandArguments).build();
 
-    ImmutableList<String> extraFlags = ImmutableList.of();
-    ProcessWrapper processWrapper =
-        new ProcessWrapper(makeProcessWrapperBin("/some/path"), /*killDelay=*/ null, extraFlags);
+    ProcessWrapper processWrapper = getProcessWrapper("/some/bin/path", /*killDelay=*/ null);
     List<String> commandLine = processWrapper.commandLineBuilder(commandArguments).build();
 
     assertThat(commandLine).containsExactlyElementsIn(expectedCommandLine).inOrder();
@@ -65,7 +65,6 @@ public final class ProcessWrapperTest {
   @Test
   public void testProcessWrapperCommandLineBuilder_BuildsWithOptionalArguments()
       throws IOException {
-    ImmutableList<String> extraFlags = ImmutableList.of("--debug");
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "hello, world");
 
     Duration timeout = Duration.ofSeconds(10);
@@ -76,19 +75,16 @@ public final class ProcessWrapperTest {
 
     ImmutableList<String> expectedCommandLine =
         ImmutableList.<String>builder()
-            .add("/path/process-wrapper")
+            .add("/path/to/process-wrapper")
             .add("--timeout=" + timeout.getSeconds())
             .add("--kill_delay=" + killDelay.getSeconds())
             .add("--stdout=" + stdoutPath)
             .add("--stderr=" + stderrPath)
             .add("--stats=" + statisticsPath)
-            .addAll(extraFlags)
             .addAll(commandArguments)
             .build();
 
-    ProcessWrapper processWrapper =
-        new ProcessWrapper(makeProcessWrapperBin("/path/process-wrapper"), killDelay, extraFlags);
-
+    ProcessWrapper processWrapper = getProcessWrapper("/path/to/process-wrapper", killDelay);
     List<String> commandLine =
         processWrapper
             .commandLineBuilder(commandArguments)
