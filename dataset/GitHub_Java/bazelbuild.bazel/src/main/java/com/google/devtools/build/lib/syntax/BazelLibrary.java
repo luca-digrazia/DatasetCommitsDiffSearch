@@ -180,29 +180,19 @@ public class BazelLibrary {
     returnType = SkylarkNestedSet.class,
     doc =
         "<i>(Deprecated)</i> Returns a new <a href=\"depset.html\">depset</a> that is the merge "
-            + "of the given depset and <code>new_elements</code>. Use the <code>transitive</code> "
-            + "constructor argument instead.",
+            + "of the given depset and <code>new_elements</code>. This is the same as the <code>+"
+            + "</code> operator.",
     parameters = {
       @Param(name = "input", type = SkylarkNestedSet.class, doc = "The input depset."),
       @Param(name = "new_elements", type = Object.class, doc = "The elements to be added.")
     },
-    useLocation = true,
-    useEnvironment = true
+    useLocation = true
   )
   private static final BuiltinFunction union =
       new BuiltinFunction("union") {
         @SuppressWarnings("unused")
-        public SkylarkNestedSet invoke(
-            SkylarkNestedSet input, Object newElements, Location loc, Environment env)
+        public SkylarkNestedSet invoke(SkylarkNestedSet input, Object newElements, Location loc)
             throws EvalException {
-          if (env.getSemantics().incompatibleDepsetUnion()) {
-            throw new EvalException(
-                location,
-                "depset method `.union` has been removed. See "
-                    + "https://docs.bazel.build/versions/master/skylark/depsets.html for "
-                    + "recommendations. Use --incompatible_depset_union=false "
-                    + "to temporarily disable this check.");
-          }
           // newElements' type is Object because of the polymorphism on unioning two
           // SkylarkNestedSets versus a set and another kind of iterable.
           // Can't use EvalUtils#toIterable since that would discard this information.
@@ -238,10 +228,7 @@ public class BazelLibrary {
    */
   @SkylarkSignature(
     name = "select",
-    doc =
-        "<code>select()</code> is the helper function that makes a rule attribute "
-            + "<a href=\"$BE_ROOT/common-definitions.html#configurable-attributes\">configurable</a>. "
-            + "See <a href=\"$BE_ROOT/functions.html#select\">build encyclopedia</a> for details.",
+    doc = "Creates a select from the dict parameter, usable for setting configurable attributes.",
     parameters = {
       @Param(name = "x", type = SkylarkDict.class, doc = "The parameter to convert."),
       @Param(

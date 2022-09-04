@@ -59,6 +59,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
       com.google.devtools.build.lib.syntax.Environment buildEnv =
           com.google.devtools.build.lib.syntax.Environment.builder(mutability)
               .useDefaultSemantics()
+              .setGlobals(rule.getRuleClassObject().getRuleDefinitionEnvironment().getGlobals())
               .setEventHandler(env.getListener())
               .build();
       SkylarkRepositoryContext skylarkRepositoryContext =
@@ -71,8 +72,8 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
       // structure as it is.
       Object retValue =
           function.call(
-              /*args=*/ ImmutableList.of(skylarkRepositoryContext),
-              /*kwargs=*/ ImmutableMap.of(),
+              ImmutableList.<Object>of(skylarkRepositoryContext),
+              ImmutableMap.<String, Object>of(),
               null,
               buildEnv);
       if (retValue != Runtime.NONE) {

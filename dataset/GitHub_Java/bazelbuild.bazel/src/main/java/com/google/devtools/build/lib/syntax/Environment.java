@@ -692,7 +692,7 @@ public final class Environment implements Freezable {
       Frame globalFrame = new Frame(mutability, parent);
       Frame dynamicFrame = new Frame(mutability, null);
       if (semantics == null) {
-        throw new IllegalArgumentException("must call either setSemantics or useDefaultSemantics");
+        semantics = SkylarkSemantics.DEFAULT_SEMANTICS;
       }
       if (importedExtensions == null) {
         importedExtensions = ImmutableMap.of();
