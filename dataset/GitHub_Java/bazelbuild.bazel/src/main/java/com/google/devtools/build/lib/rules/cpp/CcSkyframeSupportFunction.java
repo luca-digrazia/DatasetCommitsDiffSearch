@@ -13,20 +13,26 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.skyframe.PackageLookupValue;
+import com.google.devtools.build.lib.skyframe.SkyframeBuildView.CcCrosstoolException;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import com.google.protobuf.TextFormat;
+import com.google.protobuf.TextFormat.ParseException;
+import com.google.protobuf.UninitializedMessageException;
 import java.io.IOException;
 import java.io.InputStream;
 import javax.annotation.Nullable;
@@ -48,6 +54,8 @@ import javax.annotation.Nullable;
  * com.google.devtools.build.lib.analysis.RuleContext)} which needs a {@link Path}.
  */
 public class CcSkyframeSupportFunction implements SkyFunction {
+
+  static final String CROSSTOOL_CONFIGURATION_FILENAME = "CROSSTOOL";
   private final BlazeDirectories directories;
 
   public CcSkyframeSupportFunction(BlazeDirectories directories) {
@@ -60,38 +68,48 @@ public class CcSkyframeSupportFunction implements SkyFunction {
       throws InterruptedException, CcSkyframeSupportException {
     CcSkyframeSupportValue.Key key = (CcSkyframeSupportValue.Key) skyKey.argument();
     Path fdoZipPath = null;
-    CrosstoolRelease crosstoolRelease = null;
     if (key.getFdoZipPath() != null) {
       fdoZipPath = directories.getWorkspace().getRelative(key.getFdoZipPath());
     }
 
-    if (key.getCrosstoolPath() != null) {
+    CrosstoolRelease crosstoolRelease = null;
+    if (key.getPackageWithCrosstoolInIt() != null) {
       try {
-        Root root;
-        // Dear reader, if your eye just twitched and the thought cannot escape your mind that
-        // I should've used execroot, beware, execroot is created after the analysis, and this
-        // function is executed during the analysis.
-        if (key.getCrosstoolPath().startsWith(Label.EXTERNAL_PACKAGE_NAME)) {
-          root = Root.fromPath(directories.getOutputBase());
-        } else {
-          root = Root.fromPath(directories.getWorkspace());
-        }
-        FileValue crosstoolFileValue =
-            (FileValue)
-                env.getValue(FileValue.key(RootedPath.toRootedPath(root, key.getCrosstoolPath())));
+        // 1. Lookup the package to handle multiple package roots (PackageLookupValue)
+        PackageIdentifier packageIdentifier = key.getPackageWithCrosstoolInIt();
+        PackageLookupValue crosstoolPackageValue =
+            (PackageLookupValue) env.getValue(PackageLookupValue.key(packageIdentifier));
         if (env.valuesMissing()) {
           return null;
         }
 
+        // 2. Get crosstool file (FileValue)
+        PathFragment crosstool =
+            packageIdentifier.getPackageFragment().getRelative(CROSSTOOL_CONFIGURATION_FILENAME);
+        FileValue crosstoolFileValue =
+            (FileValue)
+                env.getValue(
+                    FileValue.key(
+                        RootedPath.toRootedPath(crosstoolPackageValue.getRoot(), crosstool)));
+        if (env.valuesMissing()) {
+          return null;
+        }
+
+        // 3. Parse the crosstool file the into CrosstoolRelease
         Path crosstoolFile = crosstoolFileValue.realRootedPath().asPath();
+        if (!crosstoolFile.exists()) {
+          throw new CcSkyframeSupportException(
+              String.format(
+                  "there is no CROSSTOOL file at %s, which is needed for this cc_toolchain",
+                  crosstool.toString()),
+              key);
+        }
         try (InputStream inputStream = crosstoolFile.getInputStream()) {
           String crosstoolContent = new String(FileSystemUtils.readContentAsLatin1(inputStream));
-          crosstoolRelease =
-              CrosstoolConfigurationLoader.toReleaseConfiguration(
-                  "CROSSTOOL file " + key.getCrosstoolPath(), crosstoolContent);
+          crosstoolRelease = toReleaseConfiguration(crosstoolContent);
         }
       } catch (IOException | InvalidConfigurationException e) {
-        throw new CcSkyframeSupportException(e, key);
+        throw new CcSkyframeSupportException(e.getMessage(), key);
       }
     }
 
@@ -104,11 +122,39 @@ public class CcSkyframeSupportFunction implements SkyFunction {
     return null;
   }
 
+  /**
+   * Reads the given <code>crosstoolContent</code>, which must be in ascii format, into a protocol
+   * buffer.
+   *
+   * @param crosstoolContent for the error messages
+   */
+  @VisibleForTesting
+  static CrosstoolRelease toReleaseConfiguration(String crosstoolContent)
+      throws InvalidConfigurationException {
+    CrosstoolRelease.Builder builder = CrosstoolRelease.newBuilder();
+    try {
+      TextFormat.merge(crosstoolContent, builder);
+      return builder.build();
+    } catch (ParseException e) {
+      throw new InvalidConfigurationException(
+          "Could not read the CROSSTOOL file because of a parser error (" + e.getMessage() + ")");
+    } catch (UninitializedMessageException e) {
+      throw new InvalidConfigurationException(
+          "Could not read the CROSSTOOL file because of an incomplete protocol buffer ("
+              + e.getMessage()
+              + ")");
+    }
+  }
+
   /** Exception encapsulating IOExceptions thrown in {@link CcSkyframeSupportFunction} */
   public static class CcSkyframeSupportException extends SkyFunctionException {
 
-    public CcSkyframeSupportException(Exception cause, SkyKey childKey) {
-      super(cause, childKey);
+    public CcSkyframeSupportException(Exception cause, CcSkyframeSupportValue.Key key) {
+      super(cause, key);
+    }
+
+    public CcSkyframeSupportException(String message, CcSkyframeSupportValue.Key key) {
+      super(new CcCrosstoolException(message), key);
     }
   }
 }
