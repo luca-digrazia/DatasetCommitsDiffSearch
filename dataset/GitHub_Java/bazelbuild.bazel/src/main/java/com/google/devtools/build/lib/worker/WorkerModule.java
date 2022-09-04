@@ -151,8 +151,7 @@ public class WorkerModule extends BlazeModule {
             localEnvProvider,
             env.getOptions()
                 .getOptions(SandboxOptions.class)
-                .symlinkedSandboxExpandsTreeArtifactsInRunfilesTree,
-            env.getBlazeWorkspace().getBinTools());
+                .symlinkedSandboxExpandsTreeArtifactsInRunfilesTree);
     builder.addActionContext(new WorkerSpawnStrategy(env.getExecRoot(), spawnRunner));
 
     builder.addStrategyByContext(SpawnActionContext.class, "standalone");
@@ -167,8 +166,7 @@ public class WorkerModule extends BlazeModule {
         env.getExecRoot(),
         localExecutionOptions,
         ResourceManager.instance(),
-        localEnvProvider,
-        env.getBlazeWorkspace().getBinTools());
+        localEnvProvider);
   }
 
   private static LocalEnvProvider createLocalEnvProvider(CommandEnvironment env) {
