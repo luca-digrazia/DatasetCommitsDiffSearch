@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.fileset.FilesetProvider;
+import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
@@ -954,8 +955,8 @@ public final class RuleContext extends TargetContext
     initConfigurationMakeVariableContext(ImmutableList.copyOf(makeVariableSuppliers));
   }
 
-  public Expander getExpander(ConfigurationMakeVariableContext makeVariableContext) {
-    return new Expander(this, makeVariableContext);
+  public Expander getExpander(TemplateContext templateContext) {
+    return new Expander(this, templateContext);
   }
 
   public Expander getExpander() {
@@ -963,20 +964,20 @@ public final class RuleContext extends TargetContext
   }
 
   public ImmutableMap<String, String> getMakeVariables(Iterable<String> attributeNames) {
-    ArrayList<TemplateVariableInfo> templateVariableInfos = new ArrayList<>();
+    ArrayList<MakeVariableInfo> makeVariableInfos = new ArrayList<>();
 
     for (String attributeName : attributeNames) {
       // TODO(b/37567440): Remove this continue statement.
       if (!attributes().has(attributeName)) {
         continue;
       }
-      Iterables.addAll(templateVariableInfos, getPrerequisites(
-          attributeName, Mode.DONT_CHECK, TemplateVariableInfo.PROVIDER));
+      Iterables.addAll(makeVariableInfos, getPrerequisites(
+          attributeName, Mode.DONT_CHECK, MakeVariableInfo.PROVIDER));
     }
 
     LinkedHashMap<String, String> makeVariables = new LinkedHashMap<>();
-    for (TemplateVariableInfo templateVariableInfo : templateVariableInfos) {
-      makeVariables.putAll(templateVariableInfo.getVariables());
+    for (MakeVariableInfo makeVariableInfo : makeVariableInfos) {
+      makeVariables.putAll(makeVariableInfo.getMakeVariables());
     }
 
     return ImmutableMap.copyOf(makeVariables);

@@ -90,8 +90,7 @@ public final class TemplateExpander {
             result.append(value);
           } else {
             String name = var.substring(0, spaceIndex);
-            // Trim the string to remove leading and trailing whitespace.
-            String param = var.substring(spaceIndex + 1).trim();
+            String param = var.substring(spaceIndex + 1);
             String value = context.lookupFunction(name, param);
             result.append(value);
           }
