@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -25,6 +25,7 @@ import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
@@ -37,7 +38,6 @@ import org.androidannotations.handler.AnnotationHandlers;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.AndroidManifestFinder;
 import org.androidannotations.helper.ErrorHelper;
-import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.helper.Option;
 import org.androidannotations.helper.OptionsHelper;
 import org.androidannotations.logger.Level;
@@ -70,8 +70,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 	public synchronized void init(ProcessingEnvironment processingEnv) {
 		super.init(processingEnv);
 
-		ModelConstants.init(processingEnv);
-
 		// Configure Logger
 		LoggerContext loggerContext = LoggerContext.getInstance();
 		loggerContext.setProcessingEnv(processingEnv);
@@ -93,8 +91,8 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		String coreVersion = getAAProcessorVersion();
 
 		if (!apiVersion.equals(coreVersion)) {
-			LOGGER.error("AndroidAnnotations version for API ({}) and core ({}) doesn't match. Please check your classpath", apiVersion, coreVersion);
-			throw new VersionMismatchException("AndroidAnnotations version for API (" + apiVersion + ") and core (" + coreVersion + ") doesn't match. Please check your classpath");
+			LOGGER.error("AndroidAnnotation version for API ({}) and core ({}) doesn't match. Please check your classpath", apiVersion, coreVersion);
+			throw new VersionMismatchException("AndroidAnnotation version for API (" + apiVersion + ") and core (" + coreVersion + ") doesn't match. Please check your classpath");
 		}
 	}
 
@@ -133,7 +131,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 			URL url = getClass().getClassLoader().getResource(filename);
 			properties.load(url.openStream());
 		} catch (Exception e) {
-			LOGGER.error("Core property file {} couldn't be parsed");
+			LOGGER.error("Core property file {} couldn't be parse");
 			throw new FileNotFoundException("Core property file " + filename + " couldn't be parsed.");
 		}
 	}
@@ -144,7 +142,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 			URL url = EActivity.class.getClassLoader().getResource(filename);
 			propertiesApi.load(url.openStream());
 		} catch (Exception e) {
-			LOGGER.error("API property file {} couldn't be parsed");
+			LOGGER.error("API property file {} couldn't be parse");
 			throw new FileNotFoundException("API property file " + filename + " couldn't be parsed. Please check your classpath and verify that AA-API's version is at least 3.0");
 		}
 	}
@@ -267,9 +265,9 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		Iterator<? extends TypeElement> iterator = annotations.iterator();
 		if (iterator.hasNext()) {
 			Element element = roundEnv.getElementsAnnotatedWith(iterator.next()).iterator().next();
-			LOGGER.error("Something went wrong: {}", element, errorMessage);
+			LOGGER.error("Something went wront : {}", element, errorMessage);
 		} else {
-			LOGGER.error("Something went wrong: {}", errorMessage);
+			LOGGER.error("Something went wront : {}", errorMessage);
 		}
 	}
 
