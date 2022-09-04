@@ -16,9 +16,8 @@
  */
 package org.graylog.security;
 
-import com.google.inject.TypeLiteral;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
-import com.google.inject.multibindings.MapBinder;
+import com.google.inject.multibindings.Multibinder;
 import com.google.inject.multibindings.OptionalBinder;
 import org.graylog.security.authservice.AuthServiceBackend;
 import org.graylog.security.authservice.InternalAuthServiceBackend;
@@ -31,12 +30,7 @@ import org.graylog2.plugin.PluginModule;
 public class SecurityModule extends PluginModule {
     @Override
     protected void configure() {
-        // Call this to ensure the presence of the multi binder and avoid startup errors when no action is registered
-        MapBinder.newMapBinder(
-                binder(),
-                TypeLiteral.get(String.class),
-                new TypeLiteral<ProvisionerAction.Factory<? extends ProvisionerAction>>() {}
-        );
+        final Multibinder<ProvisionerAction> provisionerActions = Multibinder.newSetBinder(binder(), ProvisionerAction.class);
 
         bind(BuiltinCapabilities.class).asEagerSingleton();
 

@@ -22,7 +22,6 @@ import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.assertj.core.api.Assertions;
 import org.graylog2.rest.models.system.ldap.requests.LdapTestConfigRequest;
 import org.graylog2.security.DefaultX509TrustManager;
-import org.graylog2.security.TrustManagerProvider;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,7 +76,7 @@ public class LdapConnectorSSLTLSIT {
             .withExposedPorts(PORT, SSL_PORT)
             .withStartupTimeout(Duration.ofMinutes(1));
 
-    private TrustManagerProvider trustManagerProvider;
+    private LdapConnector.TrustManagerProvider trustManagerProvider;
 
     private LdapConnector ldapConnector;
 
@@ -89,7 +88,7 @@ public class LdapConnectorSSLTLSIT {
     @BeforeEach
     void setUp() throws KeyStoreException, NoSuchAlgorithmException {
         final LdapSettingsService ldapSettingsService = mock(LdapSettingsService.class);
-        this.trustManagerProvider = mock(TrustManagerProvider.class);
+        this.trustManagerProvider = mock(LdapConnector.TrustManagerProvider.class);
 
         mockTrustManagerWithSystemKeystore();
 

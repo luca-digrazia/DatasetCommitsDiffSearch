@@ -52,13 +52,13 @@ public class AuthServiceAuthenticator {
     }
 
     private AuthServiceResult authenticate(AuthServiceCredentials authCredentials, AuthServiceBackend backend) {
-        final Optional<UserDetails> userDetails = backend.authenticateAndProvision(authCredentials, provisionerService);
+        final Optional<UserProfile> userProfile = backend.authenticateAndProvision(authCredentials, provisionerService);
 
-        if (userDetails.isPresent()) {
+        if (userProfile.isPresent()) {
             return AuthServiceResult.builder()
                     .username(authCredentials.username())
                     //.userProfileId(userProfile.get().uid())
-                    .userProfileId(userDetails.get().username()) // TODO: Switch to uid() once our session implementation can handle it
+                    .userProfileId(userProfile.get().username()) // TODO: Switch to uid() once our session implementation can handle it
                     .backendId(backend.backendId())
                     .backendTitle(backend.backendTitle())
                     .build();

@@ -19,9 +19,7 @@ package org.graylog.security.authservice;
 import java.util.Optional;
 
 public interface AuthServiceBackend {
-    String INTERNAL_BACKEND_ID = "000000000000000000000001";
-
-    Optional<UserDetails> authenticateAndProvision(AuthServiceCredentials authCredentials,
+    Optional<UserProfile> authenticateAndProvision(AuthServiceCredentials authCredentials,
                                                    ProvisionerService provisionerService);
 
     String backendType();
