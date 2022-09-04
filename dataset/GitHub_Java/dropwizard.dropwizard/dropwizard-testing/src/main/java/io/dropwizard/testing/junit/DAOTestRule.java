@@ -197,8 +197,7 @@ public class DAOTestRule extends ExternalResource {
             return result;
         } catch (final Exception e) {
             transaction.rollback();
-            Throwables.throwIfUnchecked(e);
-            throw new RuntimeException(e);
+            throw Throwables.propagate(e);
         }
     }
 
