@@ -1329,10 +1329,7 @@ public abstract class AndroidSkylarkData {
     // TODO(asteinb): There should never be more than one direct resource exposed in the provider.
     // Can we adjust its structure to take this into account?
     if (!binaryDataInfo.getResourcesInfo().getDirectAndroidResources().isSingleton()) {
-      throw new EvalException(
-          Location.BUILTIN,
-          "Expected exactly 1 direct android resource container, but found: "
-              + binaryDataInfo.getResourcesInfo().getDirectAndroidResources());
+      throw new EvalException(Location.BUILTIN, "TODO");
     }
 
     Optional<Artifact> maybeShrunkApk =
