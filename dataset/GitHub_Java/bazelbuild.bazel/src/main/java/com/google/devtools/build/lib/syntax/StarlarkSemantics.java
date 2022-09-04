@@ -272,8 +272,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleLinkoptsToLinkLibs();
 
-  public abstract long maxComputationSteps();
-
   public abstract boolean recordRuleInstantiationCallstack();
 
   @Memoized
@@ -353,7 +351,6 @@ public abstract class StarlarkSemantics {
           .incompatibleRestrictStringEscapes(false)
           .incompatibleUseCcConfigureFromRulesCc(false)
           .incompatibleLinkoptsToLinkLibs(false)
-          .maxComputationSteps(0)
           .recordRuleInstantiationCallstack(false)
           .build();
 
@@ -449,8 +446,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleUseCcConfigureFromRulesCc(boolean value);
 
     public abstract Builder incompatibleLinkoptsToLinkLibs(boolean value);
-
-    public abstract Builder maxComputationSteps(long value);
 
     public abstract Builder recordRuleInstantiationCallstack(boolean value);
 

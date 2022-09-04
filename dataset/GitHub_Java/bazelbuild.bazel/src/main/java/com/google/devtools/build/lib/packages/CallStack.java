@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -143,7 +143,6 @@ public final class CallStack {
         int line = entry.location.line();
         int column = entry.location.column();
         if (i < depth
-            && parent == nodes[i].parent
             && name == nodes[i].name
             && file == nodes[i].file
             && line == nodes[i].line

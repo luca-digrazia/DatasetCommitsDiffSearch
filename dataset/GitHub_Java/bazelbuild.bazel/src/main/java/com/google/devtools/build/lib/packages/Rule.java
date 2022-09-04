@@ -31,9 +31,9 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -73,6 +73,8 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
   private RuleVisibility visibility;
 
   private boolean containsErrors;
+
+  private String definitionInformation;
 
   private final Location location;
 
@@ -121,6 +123,10 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
 
   void setVisibility(RuleVisibility visibility) {
     this.visibility = visibility;
+  }
+
+  void setDefinitionInformation(String info) {
+    this.definitionInformation = info;
   }
 
   void setAttributeValue(Attribute attribute, Object value, boolean explicit) {
@@ -275,6 +281,10 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
     return callstack;
   }
 
+  public String getDefinitionInformation() {
+    return definitionInformation;
+  }
+
   public ImplicitOutputsFunction getImplicitOutputsFunction() {
     return implicitOutputsFunction;
   }
@@ -349,15 +359,6 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
    */
   public boolean wasCreatedByMacro() {
     return hasStringAttribute("generator_name") || hasStringAttribute("generator_function");
-  }
-
-  /** Returns the macro that generated this rule, or an empty string. */
-  public String getGeneratorFunction() {
-    Object value = attributes.getAttr("generator_function");
-    if (value instanceof String) {
-      return (String) value;
-    }
-    return "";
   }
 
   private boolean hasStringAttribute(String attrName) {

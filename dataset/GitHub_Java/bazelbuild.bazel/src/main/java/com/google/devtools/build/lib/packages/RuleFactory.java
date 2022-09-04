@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate.CannotPrecomputeDefaultsException;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Map;
 import java.util.Set;
@@ -77,8 +76,8 @@ public class RuleFactory {
       RuleClass ruleClass,
       BuildLangTypedAttributeValuesMap attributeValues,
       EventHandler eventHandler,
-      StarlarkSemantics semantics,
-      ImmutableList<StarlarkThread.CallStackEntry> callstack,
+      Location location,
+      @Nullable StarlarkThread thread,
       AttributeContainer attributeContainer)
       throws InvalidRuleException, InterruptedException {
     Preconditions.checkNotNull(ruleClass);
@@ -107,16 +106,21 @@ public class RuleFactory {
           ruleClass + " cannot be in the WORKSPACE file " + "(used by " + label + ")");
     }
 
-    AttributesAndLocation generator =
-        generatorAttributesForMacros(pkgBuilder, attributeValues, callstack, label);
+    ImmutableList<StarlarkThread.CallStackEntry> callstack =
+        thread != null ? thread.getCallStack() : ImmutableList.of();
 
-    // The raw stack is of the form [<toplevel>@BUILD:1, macro@lib.bzl:1, cc_library@<builtin>].
-    // If we're recording it (--record_rule_instantiation_callstack),
-    // pop the innermost frame for the rule, since it's obvious.
-    callstack =
-        semantics.recordRuleInstantiationCallstack()
-            ? callstack.subList(0, callstack.size() - 1) // pop
-            : ImmutableList.of(); // save space
+    AttributesAndLocation generator =
+        generatorAttributesForMacros(pkgBuilder, attributeValues, callstack, location, label);
+
+    if (thread != null) {
+      // The raw stack is of the form [<toplevel>@BUILD:1, macro@lib.bzl:1, cc_library@<builtin>].
+      // If we're recording it (--record_rule_instantiation_callstack),
+      // pop the innermost frame for the rule, since it's obvious.
+      callstack =
+          thread.getSemantics().recordRuleInstantiationCallstack()
+              ? callstack.subList(0, callstack.size() - 1) // pop
+              : ImmutableList.of(); // save space
+    }
 
     try {
       // Examines --incompatible_disable_third_party_license_checking to see if we should check
@@ -125,13 +129,14 @@ public class RuleFactory {
       // This flag is overridable by RuleClass.ThirdPartyLicenseEnforcementPolicy (which is checked
       // in RuleClass). This lets Bazel and Blaze migrate away from license logic on independent
       // timelines. See --incompatible_disable_third_party_license_checking comments for details.
-      boolean checkThirdPartyLicenses = !semantics.incompatibleDisableThirdPartyLicenseChecking();
+      boolean checkThirdPartyLicenses =
+          thread != null && !thread.getSemantics().incompatibleDisableThirdPartyLicenseChecking();
       return ruleClass.createRule(
           pkgBuilder,
           label,
           generator.attributes,
           eventHandler,
-          generator.location, // see b/23974287 for rationale
+          generator.location,
           callstack,
           attributeContainer,
           checkThirdPartyLicenses);
@@ -152,8 +157,8 @@ public class RuleFactory {
    *     a map entry for each non-optional attribute of this class of rule.
    * @param eventHandler a eventHandler on which errors and warnings are reported during rule
    *     creation
-   * @param semantics the Starlark semantics
-   * @param callstack the stack of active calls in the Starlark thread
+   * @param location the location at which this rule was declared
+   * @param thread the lexical environment of the function call which declared this rule (optional)
    * @param attributeContainer the {@link AttributeContainer} the rule will contain
    * @throws InvalidRuleException if the rule could not be constructed for any reason (e.g. no
    *     {@code name} attribute is defined)
@@ -166,8 +171,8 @@ public class RuleFactory {
       RuleClass ruleClass,
       BuildLangTypedAttributeValuesMap attributeValues,
       EventHandler eventHandler,
-      StarlarkSemantics semantics,
-      ImmutableList<StarlarkThread.CallStackEntry> callstack,
+      Location location,
+      @Nullable StarlarkThread thread,
       AttributeContainer attributeContainer)
       throws InvalidRuleException, NameConflictException, InterruptedException {
     Rule rule =
@@ -176,8 +181,8 @@ public class RuleFactory {
             ruleClass,
             attributeValues,
             eventHandler,
-            semantics,
-            callstack,
+            location,
+            thread,
             attributeContainer);
     pkgBuilder.addRule(rule);
     return rule;
@@ -206,8 +211,8 @@ public class RuleFactory {
       PackageContext context,
       RuleClass ruleClass,
       BuildLangTypedAttributeValuesMap attributeValues,
-      StarlarkSemantics semantics,
-      ImmutableList<StarlarkThread.CallStackEntry> callstack,
+      Location loc,
+      @Nullable StarlarkThread thread,
       AttributeContainer attributeContainer)
       throws InvalidRuleException, NameConflictException, InterruptedException {
     return createAndAddRule(
@@ -215,8 +220,8 @@ public class RuleFactory {
         ruleClass,
         attributeValues,
         context.eventHandler,
-        semantics,
-        callstack,
+        loc,
+        thread,
         attributeContainer);
   }
 
@@ -314,11 +319,8 @@ public class RuleFactory {
       Package.Builder pkgBuilder,
       BuildLangTypedAttributeValuesMap args,
       ImmutableList<StarlarkThread.CallStackEntry> stack,
+      Location location,
       Label label) {
-    // For a callstack [BUILD <toplevel>, .bzl <function>, <rule>],
-    // location is that of the caller of 'rule' (the .bzl function).
-    Location location = stack.size() < 2 ? Location.BUILTIN : stack.get(stack.size() - 2).location;
-
     boolean hasName = args.containsAttributeNamed("generator_name");
     boolean hasFunc = args.containsAttributeNamed("generator_function");
     // TODO(bazel-team): resolve cases in our code where hasName && !hasFunc, or hasFunc && !hasName
@@ -334,34 +336,33 @@ public class RuleFactory {
     if (stack.size() < 2 || !stack.get(1).location.file().endsWith(".bzl")) {
       return new AttributesAndLocation(args, location); // macro is not a Starlark function
     }
-    Location generatorLocation = stack.get(0).location; // location of call to generator
+    // TODO(adonovan): is it correct that we clobber the location used by
+    // BuildLangTypedAttributeValuesMap?
+    location = stack.get(0).location;
     String generatorFunction = stack.get(1).name;
     ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
     for (Map.Entry<String, Object> attributeAccessor : args.getAttributeAccessors()) {
       String attributeName = args.getName(attributeAccessor);
       builder.put(attributeName, args.getValue(attributeAccessor));
     }
-    String generatorName = pkgBuilder.getGeneratorNameByLocation().get(generatorLocation);
+    String generatorName = pkgBuilder.getGeneratorNameByLocation().get(location);
     if (generatorName == null) {
       generatorName = (String) args.getAttributeValue("name");
     }
     builder.put("generator_name", generatorName);
     builder.put("generator_function", generatorFunction);
-    String relativePath = maybeGetRelativeLocation(generatorLocation, label);
+    String relativePath = maybeGetRelativeLocation(location, label);
     if (relativePath != null) {
       builder.put("generator_location", relativePath);
     }
 
     try {
-      args = new BuildLangTypedAttributeValuesMap(builder.build());
-    } catch (IllegalArgumentException unused) {
+      return new AttributesAndLocation(
+          new BuildLangTypedAttributeValuesMap(builder.build()), location);
+    } catch (IllegalArgumentException ex) {
       // We just fall back to the default case and swallow any messages.
+      return new AttributesAndLocation(args, location);
     }
-
-    // TODO(adonovan): is it appropriate to use generatorLocation as the rule's main location?
-    // Or would 'location' (the immediate call) be more informative? When there are errors, the
-    // location of the toplevel call of the generator may be quite unrelated to the error message.
-    return new AttributesAndLocation(args, generatorLocation);
   }
 
   /**

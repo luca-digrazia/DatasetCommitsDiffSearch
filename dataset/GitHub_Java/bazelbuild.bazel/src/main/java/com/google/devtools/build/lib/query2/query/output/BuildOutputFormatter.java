@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.io.IOException;
@@ -138,29 +139,14 @@ public class BuildOutputFormatter extends AbstractUnorderedFormatter {
       writer.append(")").append(lineTerm);
 
       // Display the instantiation stack, if any.
-      appendStack(
-          String.format("# Rule %s instantiated at (most recent call last):", rule.getName()),
-          rule.getCallStack().toList());
-
-      // Display the stack of the rule class definition, if any.
-      appendStack(
-          String.format("# Rule %s defined at (most recent call last):", rule.getRuleClass()),
-          rule.getRuleClassObject().getCallStack());
-
-      // TODO(adonovan): also list inputs and outputs of the rule.
-
-      writer.append(lineTerm);
-    }
-
-    private void appendStack(String title, List<StarlarkThread.CallStackEntry> stack)
-        throws IOException {
       // For readability, ensure columns line up.
       int maxLocLen = 0;
+      List<StarlarkThread.CallStackEntry> stack = rule.getCallStack().toList().reverse();
       for (StarlarkThread.CallStackEntry fr : stack) {
         maxLocLen = Math.max(maxLocLen, fr.location.toString().length());
       }
       if (maxLocLen > 0) {
-        writer.append(title).append(lineTerm);
+        writer.append("# Instantiation stack:\n");
         for (StarlarkThread.CallStackEntry fr : stack) {
           String loc = fr.location.toString(); // TODO(b/151151653): display root-relative
           // Java's String.format doesn't support
@@ -169,9 +155,14 @@ public class BuildOutputFormatter extends AbstractUnorderedFormatter {
           for (int i = loc.length(); i < maxLocLen; i++) {
             writer.append(' ');
           }
-          writer.append(" in ").append(fr.name).append(lineTerm);
+          writer.append(" called from ").append(fr.name).append("\n");
         }
       }
+
+      // TODO(adonovan): also record and show creation stack for rule.getRuleClassObject(),
+      // and list inputs and outputs of the rule.
+
+      writer.append(lineTerm);
     }
 
     /** Outputs the given attribute value BUILD-style. Does not support selects. */
@@ -182,6 +173,9 @@ public class BuildOutputFormatter extends AbstractUnorderedFormatter {
           licenseTypes.add(Ascii.toLowerCase(licenseType.toString()));
         }
         value = licenseTypes;
+      } else if (value instanceof List<?> && EvalUtils.isImmutable(value)) {
+        // Display it as a list (and not as a tuple). Attributes can never be tuples.
+        value = new ArrayList<>((List<?>) value);
       } else if (value instanceof TriState) {
         value = ((TriState) value).toInt();
       }
