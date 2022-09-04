@@ -21,7 +21,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import javax.persistence.Embeddable;
@@ -29,7 +28,6 @@ import javax.persistence.Embedded;
 import javax.persistence.Entity;
 import javax.persistence.MappedSuperclass;
 
-import org.graalvm.nativeimage.ImageInfo;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
 import org.jboss.jandex.AnnotationInstance;
@@ -38,6 +36,7 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
+import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
@@ -62,6 +61,7 @@ final class JpaJandexScavenger {
     private static final DotName MAPPED_SUPERCLASS = DotName.createSimple(MappedSuperclass.class.getName());
 
     private static final DotName ENUM = DotName.createSimple(Enum.class.getName());
+    private static final Logger log = Logger.getLogger("io.quarkus.hibernate.orm");
 
     private final List<ParsedPersistenceXmlDescriptor> descriptors;
     private final BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
@@ -83,7 +83,7 @@ final class JpaJandexScavenger {
         // Not functional as we will need one deployment template per persistence unit
         final JpaEntitiesBuildItem domainObjectCollector = new JpaEntitiesBuildItem();
         final Set<String> enumTypeCollector = new HashSet<>();
-        final Set<DotName> unindexedClasses = new TreeSet<>();
+        final Set<DotName> unindexedClasses = new HashSet<>();
 
         enlistJPAModelClasses(indexView, domainObjectCollector, enumTypeCollector, JPA_ENTITY, unindexedClasses);
         enlistJPAModelClasses(indexView, domainObjectCollector, enumTypeCollector, EMBEDDABLE, unindexedClasses);
@@ -108,10 +108,10 @@ final class JpaJandexScavenger {
             final String unindexedClassesErrorMessage = unindexedClasses.stream().map(d -> "\t- " + d + "\n")
                     .collect(Collectors.joining());
             throw new ConfigurationError(
-                    "Unable to properly register the hierarchy of the following JPA classes as they are not in the Jandex index:\n"
+                    "Unable to properly register the hierarchy of the following classes for reflection as they are not in the Jandex index:\n"
                             + unindexedClassesErrorMessage
                             + "Consider adding them to the index either by creating a Jandex index " +
-                            "for your dependency via the Maven plugin, an empty META-INF/beans.xml or quarkus.index-dependency properties.");
+                            "for your dependency or via quarkus.index-dependency properties.");
         }
 
         return domainObjectCollector;
@@ -125,7 +125,11 @@ final class JpaJandexScavenger {
             if (isInIndex) {
                 addClassHierarchyToReflectiveList(index, domainObjectCollector, enumTypeCollector, dotName, unindexedClasses);
             } else {
-                unindexedClasses.add(dotName);
+                // We do lipstick service by manually adding explicitly the <class> reference but not navigating the hierarchy
+                // so a class with a complex hierarchy will fail.
+                log.warnf(
+                        "Did not find `%s` in the indexed jars. You likely forgot to tell Quarkus to index your dependency jar. See https://github.com/quarkus-project/quarkus/#indexing-and-application-classes for more info.",
+                        className);
                 domainObjectCollector.addEntity(className);
             }
         }
@@ -184,19 +188,25 @@ final class JpaJandexScavenger {
      * Add the superclasses recursively as well as the interfaces.
      * Un-indexed classes/interfaces are accumulated to be thrown as a configuration error in the top level caller method
      * <p>
-     * TODO should we also return the return types of all methods and fields? It could contain Enums for example.
+     * TODO should we also return the return types of all methods and fields? It could container Enums for example.
      */
     private static void addClassHierarchyToReflectiveList(IndexView index, JpaEntitiesBuildItem domainObjectCollector,
             Set<String> enumTypeCollector, DotName className, Set<DotName> unindexedClasses) {
-        if (className == null || className.toString().startsWith("java.")) {
-            // bail out if java.lang.Object or any java. class
+        // If type is not Object
+        // recursively add superclass and interfaces
+        if (className == null) {
+            // java.lang.Object
             return;
         }
 
         ClassInfo classInfo = index.getClassByName(className);
         if (classInfo == null) {
-            unindexedClasses.add(className);
-            return;
+            if (className.toString().startsWith("java.")) {
+                return;
+            } else {
+                unindexedClasses.add(className);
+                return;
+            }
         }
         //we need to check for enums
         for (FieldInfo fieldInfo : classInfo.fields()) {
