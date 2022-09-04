@@ -13,12 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.vfs.Path;
-
 import java.util.Collection;
 
 /**
@@ -30,17 +27,16 @@ public final class LoadingResult {
   private final boolean hasLoadingError;
   private final ImmutableSet<Target> targetsToAnalyze;
   private final ImmutableSet<Target> testsToRun;
-  private final ImmutableMap<PackageIdentifier, Path> packageRoots;
+  private final String workspaceName;
 
   public LoadingResult(boolean hasTargetPatternError, boolean hasLoadingError,
-      Collection<Target> targetsToAnalyze, Collection<Target> testsToRun,
-      ImmutableMap<PackageIdentifier, Path> packageRoots) {
+      Collection<Target> targetsToAnalyze, Collection<Target> testsToRun, String workspaceName) {
     this.hasTargetPatternError = hasTargetPatternError;
     this.hasLoadingError = hasLoadingError;
     this.targetsToAnalyze =
         targetsToAnalyze == null ? null : ImmutableSet.copyOf(targetsToAnalyze);
     this.testsToRun = testsToRun == null ? null : ImmutableSet.copyOf(testsToRun);
-    this.packageRoots = packageRoots;
+    this.workspaceName = workspaceName;
   }
 
   /** Whether there were errors during target pattern evaluation. */
@@ -63,11 +59,19 @@ public final class LoadingResult {
     return testsToRun;
   }
 
-  /**
-   * The map from package names to the package root where each package was found; this is used to
-   * set up the symlink tree.
-   */
-  public ImmutableMap<PackageIdentifier, Path> getPackageRoots() {
-    return packageRoots;
+  /** The name of the local workspace. */
+  public String getWorkspaceName() {
+    return workspaceName;
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(LoadingResult.class)
+        .add("hasTargetPatternError", hasTargetPatternError)
+        .add("hasLoadingError", hasLoadingError)
+        .add("targetsToAnalyze", targetsToAnalyze)
+        .add("testsToRun", testsToRun)
+        .add("workspaceName", workspaceName)
+        .toString();
   }
 }

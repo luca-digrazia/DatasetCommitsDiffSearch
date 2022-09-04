@@ -1641,24 +1641,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return getConfiguredTargetForTesting(eventHandler, label, configuration, NoTransition.INSTANCE);
   }
 
-  /** Returns a particular configured target after applying the given transition. */
+  /**
+   * Returns a particular configured target after applying the given transition.
+   */
   @VisibleForTesting
   @Nullable
   public ConfiguredTarget getConfiguredTargetForTesting(
-      ExtendedEventHandler eventHandler,
-      Label label,
-      BuildConfiguration configuration,
-      ConfigurationTransition transition) {
-    ConfiguredTargetAndTarget configuredTargetAndTarget =
-        getConfiguredTargetAndTargetForTesting(eventHandler, label, configuration, transition);
-    return configuredTargetAndTarget == null
-        ? null
-        : configuredTargetAndTarget.getConfiguredTarget();
-  }
-
-  @VisibleForTesting
-  @Nullable
-  public ConfiguredTargetAndTarget getConfiguredTargetAndTargetForTesting(
       ExtendedEventHandler eventHandler,
       Label label,
       BuildConfiguration configuration,
@@ -1674,15 +1662,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
                         : Dependency.withTransitionAndAspects(
                             label, transition, AspectCollection.EMPTY))),
             null);
-    return configuredTargetAndTarget;
-  }
-
-  @VisibleForTesting
-  @Nullable
-  public ConfiguredTargetAndTarget getConfiguredTargetAndTargetForTesting(
-      ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration) {
-    return getConfiguredTargetAndTargetForTesting(
-        eventHandler, label, configuration, NoTransition.INSTANCE);
+    return configuredTargetAndTarget == null
+        ? null
+        : configuredTargetAndTarget.getConfiguredTarget();
   }
 
   /**

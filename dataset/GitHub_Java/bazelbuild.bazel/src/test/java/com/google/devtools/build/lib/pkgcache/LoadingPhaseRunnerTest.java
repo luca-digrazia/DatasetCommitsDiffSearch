@@ -24,8 +24,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Iterators;
-import com.google.common.collect.MoreCollectors;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
@@ -45,7 +43,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
-import com.google.devtools.build.lib.skyframe.PatternExpandingError;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
@@ -136,9 +133,6 @@ public class LoadingPhaseRunnerTest {
     assertThat(loadingResult.getTestsToRun()).isNull();
     tester.assertContainsError("Skipping '//base:missing': no such package 'base'");
     tester.assertContainsWarning("Target pattern parsing failed.");
-    PatternExpandingError err = tester.findPostOnce(PatternExpandingError.class);
-    assertThat(err.getPattern()).containsExactly("//base:missing");
-    assertThat(err.getSkipped()).isTrue();
   }
 
   @Test
@@ -151,9 +145,6 @@ public class LoadingPhaseRunnerTest {
     assertThat(loadingResult.getTestsToRun()).isNull();
     tester.assertContainsError("Skipping '//base:missing': no such target '//base:missing'");
     tester.assertContainsWarning("Target pattern parsing failed.");
-    PatternExpandingError err = tester.findPostOnce(PatternExpandingError.class);
-    assertThat(err.getPattern()).containsExactly("//base:missing");
-    assertThat(err.getSkipped()).isTrue();
   }
 
   @Test
@@ -167,8 +158,6 @@ public class LoadingPhaseRunnerTest {
           + "invalid package name 'foo//bar': "
           + "package names may not contain '//' path separators");
     }
-    ParsingFailedEvent err = tester.findPostOnce(ParsingFailedEvent.class);
-    assertThat(err.getPattern()).isEqualTo("foo//bar:missing");
   }
 
   @Test
@@ -193,8 +182,6 @@ public class LoadingPhaseRunnerTest {
           "invalid target format 'foo//bar:missing': "
           + "invalid package name 'foo//bar': "
           + "package names may not contain '//' path separators");
-    ParsingFailedEvent err = tester.findPostOnce(ParsingFailedEvent.class);
-    assertThat(err.getPattern()).isEqualTo("foo//bar:missing");
   }
 
   @Test
@@ -553,9 +540,6 @@ public class LoadingPhaseRunnerTest {
     } catch (TargetParsingException expected) {
     }
     tester.assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
-    PatternExpandingError err = tester.findPostOnce(PatternExpandingError.class);
-    assertThat(err.getPattern()).containsExactly("//bad");
-    assertThat(err.getSkipped()).isFalse();
   }
 
   @Test
@@ -623,50 +607,11 @@ public class LoadingPhaseRunnerTest {
   public void testParsingFailureReported() throws Exception {
     LoadingResult loadingResult = tester.loadKeepGoing("//does_not_exist");
     assertThat(loadingResult.hasTargetPatternError()).isTrue();
-    ParsingFailedEvent event = tester.findPostOnce(ParsingFailedEvent.class);
+    ParsingFailedEvent event = tester.findPost(ParsingFailedEvent.class);
+    assertThat(event).isNotNull();
     assertThat(event.getPattern()).isEqualTo("//does_not_exist");
     assertThat(event.getMessage()).contains("BUILD file not found on package path");
-  }
-
-  @Test
-  public void testCyclesKeepGoing() throws Exception {
-    tester.addFile("test/BUILD", "load(':cycle1.bzl', 'make_cycle')");
-    tester.addFile("test/cycle1.bzl", "load(':cycle2.bzl', 'make_cycle')");
-    tester.addFile("test/cycle2.bzl", "load(':cycle1.bzl', 'make_cycle')");
-    if (useSkyframeTargetPatternEval()) {
-      // The skyframe target pattern evaluator isn't able to provide partial results in the presence
-      // of cycles, so it simply raises an exception rather than returning an empty LoadingResult.
-      try {
-        tester.load("//test:cycle1");
-        fail();
-      } catch (TargetParsingException e) {
-        assertThat(e).hasMessageThat().contains("cycles detected");
-      }
-    } else {
-      LoadingResult loadingResult = tester.loadKeepGoing("//test:cycle1");
-      assertThat(loadingResult.hasTargetPatternError()).isTrue();
-    }
-    tester.assertContainsEventWithFrequency("cycle detected in extension", 1);
-    PatternExpandingError err = tester.findPostOnce(PatternExpandingError.class);
-    assertThat(err.getPattern()).containsExactly("//test:cycle1");
-    assertThat(err.getSkipped()).isEqualTo(!useSkyframeTargetPatternEval());
-  }
-
-  @Test
-  public void testCyclesNoKeepGoing() throws Exception {
-    tester.addFile("test/BUILD", "load(':cycle1.bzl', 'make_cycle')");
-    tester.addFile("test/cycle1.bzl", "load(':cycle2.bzl', 'make_cycle')");
-    tester.addFile("test/cycle2.bzl", "load(':cycle1.bzl', 'make_cycle')");
-    try {
-      tester.load("//test:cycle1");
-      fail();
-    } catch (TargetParsingException e) {
-      assertThat(e).hasMessageThat().contains("cycles detected");
-    }
-    tester.assertContainsEventWithFrequency("cycle detected in extension", 1);
-    PatternExpandingError err = tester.findPostOnce(PatternExpandingError.class);
-    assertThat(err.getPattern()).containsExactly("//test:cycle1");
-    assertThat(err.getSkipped()).isFalse();
+    assertThat(Iterables.filter(tester.getPosts(), ParsingFailedEvent.class)).hasSize(1);
   }
 
   private void assertCircularSymlinksDuringTargetParsing(String targetPattern) throws Exception {
@@ -716,8 +661,7 @@ public class LoadingPhaseRunnerTest {
       analysisMock.setupMockClient(mockToolsConfig);
       directories =
           new BlazeDirectories(
-              new ServerDirectories(
-                  fs.getPath("/install"), fs.getPath("/output"), fs.getPath("/userRoot")),
+              new ServerDirectories(fs.getPath("/install"), fs.getPath("/output")),
               workspace,
               analysisMock.getProductName());
       FileSystemUtils.deleteTree(workspace.getRelative("base"));
@@ -925,19 +869,17 @@ public class LoadingPhaseRunnerTest {
           filteredEvents(), expectedMessage, expectedFrequency);
     }
 
-    public <T extends Postable> T findPost(Class<T> clazz) {
-      return Iterators.getNext(
-          storedErrors.getPosts().stream().filter(clazz::isInstance).map(clazz::cast).iterator(),
-          null);
+    public Iterable<Postable> getPosts() {
+      return storedErrors.getPosts();
     }
 
-    public <T extends Postable> T findPostOnce(Class<T> clazz) {
-      return storedErrors
-          .getPosts()
-          .stream()
-          .filter(clazz::isInstance)
-          .map(clazz::cast)
-          .collect(MoreCollectors.onlyElement());
+    public <T extends Postable> T findPost(Class<T> clazz) {
+      for (Postable p : storedErrors.getPosts()) {
+        if (clazz.isInstance(p)) {
+          return clazz.cast(p);
+        }
+      }
+      return null;
     }
   }
 }
