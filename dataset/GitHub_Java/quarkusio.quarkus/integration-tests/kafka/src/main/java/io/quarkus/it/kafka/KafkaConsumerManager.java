@@ -9,7 +9,6 @@ import javax.enterprise.context.ApplicationScoped;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -38,11 +37,7 @@ public class KafkaConsumerManager {
     }
 
     public String receive() {
-        final ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(60000));
-        if (records.isEmpty()) {
-            return null;
-        }
-        return records.iterator().next().value();
+        return consumer.poll(Duration.ofMillis(10000)).iterator().next().value();
     }
 
 }
