@@ -27,14 +27,12 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarInfo.Aar;
 import com.google.devtools.build.lib.rules.java.JavaCompilationInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidBinaryDataSettingsApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -348,7 +346,7 @@ public abstract class AndroidSkylarkData {
               + " to are available. Note that this method might do additional processing to this"
               + " manifest, so in the future, you may want to use the manifest contained in this"
               + " method's output instead of this one.")
-  public SkylarkDict<Provider, NativeInfo> mergeResources(
+  public SkylarkDict<NativeProvider<?>, NativeInfo> mergeResources(
       AndroidDataContext ctx,
       AndroidManifestInfo manifest,
       SkylarkList<ConfiguredTarget> resources,
@@ -598,7 +596,7 @@ public abstract class AndroidSkylarkData {
       doc =
           "Performs full processing of data for android_library or similar rules. Returns a dict"
               + " from provider type to providers for the target.")
-  public SkylarkDict<Provider, NativeInfo> processLibraryData(
+  public SkylarkDict<NativeProvider<?>, NativeInfo> processLibraryData(
       AndroidDataContext ctx,
       Artifact libraryClassJar,
       Object manifest,
@@ -619,7 +617,7 @@ public abstract class AndroidSkylarkData {
         getProviders(deps, AndroidResourcesInfo.PROVIDER);
     SkylarkList<AndroidAssetsInfo> assetDeps = getProviders(deps, AndroidAssetsInfo.PROVIDER);
 
-    ImmutableMap.Builder<Provider, NativeInfo> infoBuilder = ImmutableMap.builder();
+    ImmutableMap.Builder<NativeProvider<?>, NativeInfo> infoBuilder = ImmutableMap.builder();
 
     AndroidResourcesInfo resourcesInfo;
     AndroidAssetsInfo assetsInfo;
@@ -646,7 +644,7 @@ public abstract class AndroidSkylarkData {
               location,
               env);
 
-      SkylarkDict<Provider, NativeInfo> resourceOutput =
+      SkylarkDict<NativeProvider<?>, NativeInfo> resourceOutput =
           mergeResources(
               ctx,
               baseManifest,
@@ -706,7 +704,7 @@ public abstract class AndroidSkylarkData {
             doc = "Targets to inherit asset and resource dependencies from.")
       },
       doc = "Processes assets, resources, and manifest for aar_import targets")
-  public SkylarkDict<Provider, NativeInfo> processAarImportData(
+  public SkylarkDict<NativeProvider<?>, NativeInfo> processAarImportData(
       AndroidDataContext ctx,
       SpecialArtifact resources,
       SpecialArtifact assets,
@@ -828,7 +826,7 @@ public abstract class AndroidSkylarkData {
       doc =
           "Processes resources, assets, and manifests for android_local_test and returns a dict"
               + " from provider type to the appropriate provider.")
-  public SkylarkDict<Provider, NativeInfo> processLocalTestData(
+  public SkylarkDict<NativeProvider<?>, NativeInfo> processLocalTestData(
       AndroidDataContext ctx,
       Object manifest,
       SkylarkList<ConfiguredTarget> resources,
@@ -982,7 +980,10 @@ public abstract class AndroidSkylarkData {
         env);
   }
 
-  private static class BinaryDataSettings implements AndroidBinaryDataSettingsApi {
+  @SkylarkModule(
+      name = "AndroidBinaryDataSettings",
+      doc = "Wraps common settings for working with android_binary assets, resources, and manifest")
+  private static class BinaryDataSettings {
     private final AndroidAaptVersion aaptVersion;
     private final boolean shrinkResources;
     private final ResourceFilterFactory resourceFilterFactory;
@@ -1195,7 +1196,7 @@ public abstract class AndroidSkylarkData {
           resourceApk.getArtifact(),
           resourceApk.getResourceProguardConfig(),
           resourceApk.toResourceInfo(ctx.getLabel()),
-          resourceApk.toAssetsInfo(ctx.getLabel()),
+          resourceApk.toAssetsInfo(ctx.getLabel()).get(),
           resourceApk.toManifestInfo().get());
 
     } catch (RuleErrorException e) {
@@ -1309,14 +1310,15 @@ public abstract class AndroidSkylarkData {
     return maybeShrunkApk.map(binaryDataInfo::withShrunkApk).orElse(binaryDataInfo);
   }
 
-  public static SkylarkDict<Provider, NativeInfo> getNativeInfosFrom(
+  public static SkylarkDict<NativeProvider<?>, NativeInfo> getNativeInfosFrom(
       ResourceApk resourceApk, Label label) {
-    ImmutableMap.Builder<Provider, NativeInfo> builder = ImmutableMap.builder();
+    ImmutableMap.Builder<NativeProvider<?>, NativeInfo> builder = ImmutableMap.builder();
 
-    builder
-        .put(AndroidResourcesInfo.PROVIDER, resourceApk.toResourceInfo(label))
-        .put(AndroidAssetsInfo.PROVIDER, resourceApk.toAssetsInfo(label));
+    builder.put(AndroidResourcesInfo.PROVIDER, resourceApk.toResourceInfo(label));
 
+    resourceApk
+        .toAssetsInfo(label)
+        .ifPresent(info -> builder.put(AndroidAssetsInfo.PROVIDER, info));
     resourceApk.toManifestInfo().ifPresent(info -> builder.put(AndroidManifestInfo.PROVIDER, info));
 
     builder.put(JavaInfo.PROVIDER, getJavaInfoForRClassJar(resourceApk.getResourceJavaClassJar()));

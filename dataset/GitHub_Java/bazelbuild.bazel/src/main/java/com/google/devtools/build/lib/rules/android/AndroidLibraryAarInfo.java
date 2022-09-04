@@ -24,7 +24,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidLibraryAarInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
@@ -32,8 +33,12 @@ import javax.annotation.Nullable;
  * A target that can provide the aar artifact of Android libraries and all the manifests that are
  * merged into the main aar manifest.
  */
+@SkylarkModule(
+    name = "AndroidLibraryAarInfo",
+    doc = "Android AARs provided by a library rule and its dependencies",
+    category = SkylarkModuleCategory.PROVIDER)
 @Immutable
-public class AndroidLibraryAarInfo extends NativeInfo implements AndroidLibraryAarInfoApi {
+public class AndroidLibraryAarInfo extends NativeInfo {
   private static final String SKYLARK_NAME = "AndroidLibraryAarInfo";
   public static final NativeProvider<AndroidLibraryAarInfo> PROVIDER =
       new NativeProvider<AndroidLibraryAarInfo>(AndroidLibraryAarInfo.class, SKYLARK_NAME) {};
@@ -108,7 +113,7 @@ public class AndroidLibraryAarInfo extends NativeInfo implements AndroidLibraryA
           dataContext,
           resourceApk.getPrimaryResources(),
           resourceApk.getPrimaryAssets(),
-          resourceApk.getProcessedManifest().toProvider(),
+          resourceApk.getProcessedManifest(),
           resourceApk.getRTxt(),
           libraryClassJar,
           localProguardSpecs);
@@ -118,7 +123,7 @@ public class AndroidLibraryAarInfo extends NativeInfo implements AndroidLibraryA
         AndroidDataContext dataContext,
         AndroidResources primaryResources,
         AndroidAssets primaryAssets,
-        AndroidManifestInfo manifest,
+        ProcessedAndroidManifest manifest,
         Artifact rTxt,
         Artifact libraryClassJar,
         ImmutableList<Artifact> localProguardSpecs)

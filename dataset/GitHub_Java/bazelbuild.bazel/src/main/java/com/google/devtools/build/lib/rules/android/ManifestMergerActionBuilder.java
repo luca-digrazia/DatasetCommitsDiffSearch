@@ -15,27 +15,14 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Map.Entry;
 
-/**
- * Builder for creating manifest merger actions.
- */
+/** Builder for creating manifest merger actions. */
 public class ManifestMergerActionBuilder {
-  private final RuleContext ruleContext;
-  private final SpawnAction.Builder spawnActionBuilder;
 
   private Artifact manifest;
   private Map<Artifact, Label> mergeeManifests;
@@ -43,11 +30,7 @@ public class ManifestMergerActionBuilder {
   private Map<String, String> manifestValues;
   private String customPackage;
   private Artifact manifestOutput;
-
-  public ManifestMergerActionBuilder(RuleContext ruleContext) {
-    this.ruleContext = ruleContext;
-    this.spawnActionBuilder = new SpawnAction.Builder();
-  }
+  private Artifact logOut;
 
   public ManifestMergerActionBuilder setManifest(Artifact manifest) {
     this.manifest = manifest;
@@ -79,70 +62,48 @@ public class ManifestMergerActionBuilder {
     return this;
   }
 
-  public void build(ActionConstructionContext context) {
-    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.naiveLinkOrder();
-    ImmutableList.Builder<Artifact> outputs = ImmutableList.builder();
-    CustomCommandLine.Builder builder = new CustomCommandLine.Builder();
-
-    inputs.addAll(ruleContext.getExecutablePrerequisite("$android_manifest_merger", Mode.HOST)
-        .getRunfilesSupport()
-        .getRunfilesArtifactsWithoutMiddlemen());
-
-    builder.addExecPath("--manifest", manifest);
-    inputs.add(manifest);
-
-    if (mergeeManifests != null && !mergeeManifests.isEmpty()) {
-      builder.add("--mergeeManifests")
-          .add(mapToDictionaryString(mergeeManifests,
-              new Function<Artifact, String>() {
-                @Override public String apply(Artifact input) {
-                  return input.getExecPathString();
-                }
-              },
-              null /* valueConverter */));
-      inputs.addAll(mergeeManifests.keySet());
-    }
-
-    if (isLibrary) {
-      builder.add("--mergeType").add("LIBRARY");
-    }
-
-    if (manifestValues != null && !manifestValues.isEmpty()) {
-      builder.add("--manifestValues").add(mapToDictionaryString(manifestValues));
-    }
-
-    if (customPackage != null && !customPackage.isEmpty()) {
-      builder.add("--customPackage").add(customPackage);
-    }
-
-    builder.addExecPath("--manifestOutput", manifestOutput);
-    outputs.add(manifestOutput);
-
-    ruleContext.registerAction(
-        this.spawnActionBuilder
-            .addTransitiveInputs(inputs.build())
-            .addOutputs(outputs.build())
-            .setCommandLine(builder.build())
-            .setExecutable(
-                ruleContext.getExecutablePrerequisite("$android_manifest_merger", Mode.HOST))
-            .setProgressMessage("Merging manifest")
-            .setMnemonic("ManifestMerger")
-            .build(context));
+  public ManifestMergerActionBuilder setLogOut(Artifact logOut) {
+    this.logOut = logOut;
+    return this;
   }
 
-  private static final Function<String, String> ESCAPER = new Function<String, String>() {
-    @Override public String apply(String value) {
-      return value.replace(":", "\\:").replace(",", "\\,");
+  public void build(AndroidDataContext dataContext) {
+    BusyBoxActionBuilder builder =
+        BusyBoxActionBuilder.create(dataContext, "MERGE_MANIFEST")
+            .maybeAddInput("--manifest", manifest);
+
+    if (mergeeManifests != null) {
+      builder.maybeAddInput(
+          "--mergeeManifests",
+          mapToDictionaryString(
+              mergeeManifests, Artifact::getExecPathString, /* valueConverter = */ null),
+          mergeeManifests.keySet());
     }
-  };
+
+    builder
+        .maybeAddFlag("--mergeType", isLibrary)
+        .maybeAddFlag("LIBRARY", isLibrary)
+        .maybeAddFlag("--manifestValues", mapToDictionaryString(manifestValues))
+        .maybeAddFlag("--customPackage", customPackage)
+        .addOutput("--manifestOutput", manifestOutput)
+        .maybeAddOutput("--log", logOut)
+        .buildAndRegister("Merging manifest", "ManifestMerger");
+  }
+
+  private static final Function<String, String> ESCAPER =
+      (String value) -> value.replace(":", "\\:").replace(",", "\\,");
 
   private <K, V> String mapToDictionaryString(Map<K, V> map) {
     return mapToDictionaryString(map, Functions.toStringFunction(), Functions.toStringFunction());
   }
 
-  private <K, V> String mapToDictionaryString(Map<K, V> map,
+  private <K, V> String mapToDictionaryString(
+      Map<K, V> map,
       Function<? super K, String> keyConverter,
       Function<? super V, String> valueConverter) {
+    if (map == null) {
+      return null;
+    }
     if (keyConverter == null) {
       keyConverter = Functions.toStringFunction();
     }
@@ -151,9 +112,9 @@ public class ManifestMergerActionBuilder {
     }
 
     StringBuilder sb = new StringBuilder();
-    Iterator<Entry<K, V>> iter = map.entrySet().iterator();
+    Iterator<Map.Entry<K, V>> iter = map.entrySet().iterator();
     while (iter.hasNext()) {
-      Entry<K, V> entry = iter.next();
+      Map.Entry<K, V> entry = iter.next();
       sb.append(Functions.compose(ESCAPER, keyConverter).apply(entry.getKey()));
       sb.append(':');
       sb.append(Functions.compose(ESCAPER, valueConverter).apply(entry.getValue()));
@@ -164,4 +125,3 @@ public class ManifestMergerActionBuilder {
     return sb.toString();
   }
 }
-

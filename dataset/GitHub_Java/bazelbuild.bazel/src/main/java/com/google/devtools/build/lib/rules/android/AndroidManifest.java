@@ -13,19 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
-import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidManifestMerger;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -41,6 +34,7 @@ public class AndroidManifest {
   private final Artifact manifest;
   /** The Android package. Will be null if and only if this is an aar_import target. */
   @Nullable private final String pkg;
+
   private final boolean exported;
 
   public static StampedAndroidManifest forAarImport(Artifact manifest) {
@@ -80,7 +74,7 @@ public class AndroidManifest {
     Artifact rawManifest = null;
     if (AndroidResources.definesAndroidResources(ruleContext.attributes())) {
       AndroidResources.validateRuleContext(ruleContext);
-      rawManifest = ruleContext.getPrerequisiteArtifact("manifest", Mode.TARGET);
+      rawManifest = ApplicationManifest.getManifestFromAttributes(ruleContext);
     }
 
     return from(
@@ -116,16 +110,9 @@ public class AndroidManifest {
   /**
    * Inner method to create an AndroidManifest.
    *
-   * @param rawManifest If non-null, the returned object will wrap this manifest. Otherwise, the
-   *     returned object will wrap a generated dummy manifest.
-   * @param androidSemantics If non-null, will invoke
-   *     AndroidSemantics#renameManifest(AndroidDataContext, AndroidManifest)} to do
-   *     platform-specific processing on the manifest.
-   * @param pkg If non-null, this Android package will be used for the manifest, and the manifest
-   *     will be stamped with it when the {@link #stamp(AndroidDataContext)} method is called.
-   *     Otherwise, the default package, based on the current target's Bazel package, will be used.
+   * <p>AndroidSemantics-specific processing will be used if a non-null AndroidSemantics is passed.
    */
-  public static AndroidManifest from(
+  static AndroidManifest from(
       AndroidDataContext dataContext,
       RuleErrorConsumer errorConsumer,
       @Nullable Artifact rawManifest,
@@ -134,48 +121,27 @@ public class AndroidManifest {
       boolean exportsManifest)
       throws InterruptedException {
     if (pkg == null) {
-      pkg =
-          getDefaultPackage(
-              dataContext.getLabel(), dataContext.getActionConstructionContext(), errorConsumer);
+      pkg = getDefaultPackage(dataContext.getActionConstructionContext(), errorConsumer);
     }
 
     if (rawManifest == null) {
       // Generate a dummy manifest
       return StampedAndroidManifest.createEmpty(
-          dataContext.getActionConstructionContext(), pkg, exportsManifest);
+          dataContext.getActionConstructionContext(), pkg, /* exported = */ false);
     }
 
-    AndroidManifest raw = new AndroidManifest(rawManifest, pkg, exportsManifest);
-
+    Artifact renamedManifest;
     if (androidSemantics != null) {
-      return androidSemantics.renameManifest(dataContext, raw);
-    }
-    return raw.renameManifestIfNeeded(dataContext);
-  }
-
-  AndroidManifest renameManifestIfNeeded(AndroidDataContext dataContext)
-      throws InterruptedException {
-    if (manifest.getFilename().equals("AndroidManifest.xml")) {
-      return this;
+      renamedManifest = androidSemantics.renameManifest(dataContext, rawManifest);
     } else {
-      /*
-       * If the manifest file is not named AndroidManifest.xml, we create a symlink named
-       * AndroidManifest.xml to it. aapt requires the manifest to be named as such.
-       */
-      Artifact manifestSymlink =
-          dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_SYMLINKED_MANIFEST);
-      dataContext.registerAction(
-          new SymlinkAction(
-              dataContext.getActionConstructionContext().getActionOwner(),
-              manifest,
-              manifestSymlink,
-              "Renaming Android manifest for " + dataContext.getLabel()));
-      return updateManifest(manifestSymlink);
+      renamedManifest = ApplicationManifest.renameManifestIfNeeded(dataContext, rawManifest);
     }
+
+    return new AndroidManifest(renamedManifest, pkg, exportsManifest);
   }
 
-  public AndroidManifest updateManifest(Artifact manifest) {
-    return new AndroidManifest(manifest, pkg, exported);
+  AndroidManifest(AndroidManifest other, Artifact manifest) {
+    this(manifest, other.pkg, other.exported);
   }
 
   /**
@@ -190,18 +156,25 @@ public class AndroidManifest {
 
   /** If needed, stamps the manifest with the correct Java package */
   public StampedAndroidManifest stamp(AndroidDataContext dataContext) {
-    Artifact outputManifest = getManifest();
-    if (!isNullOrEmpty(pkg)) {
-      outputManifest = dataContext.getUniqueDirectoryArtifact("_renamed", "AndroidManifest.xml");
-      new ManifestMergerActionBuilder()
-          .setManifest(manifest)
-          .setLibrary(true)
-          .setCustomPackage(pkg)
-          .setManifestOutput(outputManifest)
-          .build(dataContext);
-    }
+    return new StampedAndroidManifest(
+        ApplicationManifest.maybeSetManifestPackage(dataContext, manifest, pkg).orElse(manifest),
+        pkg,
+        exported);
+  }
 
-    return new StampedAndroidManifest(outputManifest, pkg, exported);
+  /**
+   * Stamps the manifest with values from the "manifest_values" attributes.
+   *
+   * <p>If no manifest values are specified, the manifest will remain unstamped.
+   */
+  public StampedAndroidManifest stampWithManifestValues(
+      RuleContext ruleContext, AndroidDataContext dataContext, AndroidSemantics androidSemantics) {
+    return mergeWithDeps(
+        dataContext,
+        androidSemantics,
+        ResourceDependencies.empty(),
+        ApplicationManifest.getManifestValues(ruleContext),
+        ApplicationManifest.useLegacyMerging(ruleContext));
   }
 
   /**
@@ -211,77 +184,25 @@ public class AndroidManifest {
    *
    * <p>If there is no merging to be done and no manifest values are specified, the manifest will
    * remain unstamped.
-   *
-   * @param manifestMerger if not null, a string dictating which manifest merger to use
    */
   public StampedAndroidManifest mergeWithDeps(
       AndroidDataContext dataContext,
       AndroidSemantics androidSemantics,
-      RuleErrorConsumer errorConsumer,
       ResourceDependencies resourceDeps,
       Map<String, String> manifestValues,
-      @Nullable String manifestMerger) {
-    Map<Artifact, Label> mergeeManifests = getMergeeManifests(resourceDeps.getResourceContainers());
-
-    Artifact newManifest;
-    if (useLegacyMerging(errorConsumer, dataContext.getAndroidConfig(), manifestMerger)) {
-      newManifest =
-          androidSemantics
-              .maybeDoLegacyManifestMerging(mergeeManifests, dataContext, manifest)
-              .orElse(manifest);
-
-    } else if (!mergeeManifests.isEmpty() || !manifestValues.isEmpty()) {
-      newManifest = dataContext.getUniqueDirectoryArtifact("_merged", "AndroidManifest.xml");
-
-      new ManifestMergerActionBuilder()
-          .setManifest(manifest)
-          .setMergeeManifests(mergeeManifests)
-          .setLibrary(false)
-          .setManifestValues(manifestValues)
-          .setCustomPackage(pkg)
-          .setManifestOutput(newManifest)
-          .setLogOut(dataContext.getUniqueDirectoryArtifact("_merged", "manifest_merger_log.txt"))
-          .build(dataContext);
-
-    } else {
-      newManifest = manifest;
-    }
+      boolean useLegacyMerger) {
+    Artifact newManifest =
+        ApplicationManifest.maybeMergeWith(
+                dataContext,
+                androidSemantics,
+                manifest,
+                resourceDeps,
+                manifestValues,
+                useLegacyMerger,
+                pkg)
+            .orElse(manifest);
 
     return new StampedAndroidManifest(newManifest, pkg, exported);
-  }
-
-  /**
-   * Checks if the legacy manifest merger should be used, based on an optional string specifying the
-   * merger to use.
-   */
-  private static boolean useLegacyMerging(
-      RuleErrorConsumer errorConsumer,
-      AndroidConfiguration androidConfig,
-      @Nullable String mergerString) {
-    AndroidManifestMerger merger = AndroidManifestMerger.fromString(mergerString);
-    if (merger == null) {
-      merger = androidConfig.getManifestMerger();
-    }
-    if (merger == AndroidManifestMerger.LEGACY) {
-      errorConsumer.ruleWarning(
-          "manifest_merger 'legacy' is deprecated. Please update to 'android'.\n"
-              + "See https://developer.android.com/studio/build/manifest-merge.html for more "
-              + "information about the manifest merger.");
-    }
-
-    return merger == AndroidManifestMerger.LEGACY;
-  }
-
-  private static Map<Artifact, Label> getMergeeManifests(
-      Iterable<ValidatedAndroidResources> transitiveData) {
-    ImmutableSortedMap.Builder<Artifact, Label> builder =
-        ImmutableSortedMap.orderedBy(Artifact.EXEC_PATH_COMPARATOR);
-    for (ValidatedAndroidResources d : transitiveData) {
-      if (d.isManifestExported()) {
-        builder.put(d.getManifest(), d.getLabel());
-      }
-    }
-    return builder.build();
   }
 
   public Artifact getManifest() {
@@ -303,28 +224,13 @@ public class AndroidManifest {
       return ruleContext.attributes().get(CUSTOM_PACKAGE_ATTR, Type.STRING);
     }
 
-    return getDefaultPackage(ruleContext.getLabel(), ruleContext, ruleContext);
+    return getDefaultPackage(ruleContext, ruleContext);
   }
 
-  /**
-   * Gets the default Java package for this target, based on the path to it.
-   *
-   * <p>For example, target "//some/path/java/com/foo/bar:baz" will have the default Java package of
-   * "com.foo.bar".
-   *
-   * <p>A rule error will be registered if this path does not contain a "java" or "javatests"
-   * segment indicating where the package begins.
-   *
-   * <p>This method should not be called if the target specifies a custom package; in that case,
-   * that package should be used instead.
-   */
+  /** Gets the default Java package */
   public static String getDefaultPackage(
-      Label label, ActionConstructionContext context, RuleErrorConsumer errorConsumer) {
-    PathFragment dummyJar =
-        // For backwards compatibility, also include the target's name in case it contains multiple
-        // directories - for example, target "//foo/bar:java/baz/quux" is a legal one and results in
-        // Java path of "baz/quux"
-        context.getPackageDirectory().getRelative(label.getName() + "Dummy.jar");
+      ActionConstructionContext context, RuleErrorConsumer errorConsumer) {
+    PathFragment dummyJar = context.getPackageDirectory().getChild("Dummy.jar");
     return getJavaPackageFromPath(context, errorConsumer, dummyJar);
   }
 
@@ -360,7 +266,7 @@ public class AndroidManifest {
 
   @Override
   public boolean equals(Object object) {
-    if (!(object instanceof AndroidManifest)) {
+    if (object == null || getClass() != object.getClass()) {
       return false;
     }
 
