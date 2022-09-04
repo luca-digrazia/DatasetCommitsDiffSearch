@@ -16,15 +16,19 @@
 package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.VariableElement;
 
 import com.googlecode.androidannotations.annotations.UiThread;
 import com.googlecode.androidannotations.generation.UiThreadInstruction;
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
+import com.sun.codemodel.JCodeModel;
 
 public class UiThreadProcessor implements ElementProcessor {
 
@@ -43,8 +47,26 @@ public class UiThreadProcessor implements ElementProcessor {
 		String className = metaActivity.getClassSimpleName();
 		List<Instruction> memberInstructions = metaActivity.getMemberInstructions();
 
-		Instruction instruction = new UiThreadInstruction(className, methodName);
+		List<String> methodArguments = new ArrayList<String>();
+		List<String> methodParameters =  new ArrayList<String>();
+		
+		ExecutableElement executableElement = (ExecutableElement) element;
+		
+		for(VariableElement parameter : executableElement.getParameters()) {
+			String parameterName = parameter.getSimpleName().toString();
+			String parameterType = parameter.asType().toString();
+			methodArguments.add(parameterType+" "+parameterName);
+			methodParameters.add(parameterName);
+		}
+		
+		Instruction instruction = new UiThreadInstruction(className, methodName, methodArguments, methodParameters);
 		memberInstructions.add(instruction);
+	}
+
+	@Override
+	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) {
+		// TODO Auto-generated method stub
+		
 	}
 
 }

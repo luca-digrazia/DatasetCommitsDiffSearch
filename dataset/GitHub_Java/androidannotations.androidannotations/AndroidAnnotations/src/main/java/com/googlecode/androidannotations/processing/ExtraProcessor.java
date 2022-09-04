@@ -26,15 +26,7 @@ import com.googlecode.androidannotations.generation.ExtractAndCastExtraInstructi
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCatchBlock;
-import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JFieldRef;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JTryBlock;
-import com.sun.codemodel.JVar;
 
 public class ExtraProcessor implements ElementProcessor {
 
@@ -70,40 +62,8 @@ public class ExtraProcessor implements ElementProcessor {
 
 	@Override
 	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) {
-		Extra annotation = element.getAnnotation(Extra.class);
-		String extraKey = annotation.value();
-		String fieldName = element.getSimpleName().toString();
-		JClass fieldType = codeModel.ref(element.asType().toString());
-
-		ActivityHolder holder = activitiesHolder.getActivityHolder(element);
-
-		JBlock methodBody = holder.beforeSetContentView.body();
-
-		if (holder.extras == null) {
-			holder.extras = methodBody.decl(holder.bundleClass, "extras_");
-			holder.extras.init(JExpr.invoke("getIntent").invoke("getExtras"));
-
-			holder.extrasNotNullBlock = methodBody._if(holder.extras.ne(JExpr._null()))._then();
-		}
-
-		JBlock ifContainsKey = holder.extrasNotNullBlock._if(JExpr.invoke(holder.extras, "containsKey").arg(extraKey))._then();
-
-		JTryBlock containsKeyTry = ifContainsKey._try();
+		// TODO Auto-generated method stub
 		
-		JFieldRef extraField = JExpr.ref(fieldName);
-
-		containsKeyTry.body().assign(extraField, JExpr.cast(fieldType, holder.extras.invoke("get").arg(extraKey)));
-		
-		JCatchBlock containsKeyCatch = containsKeyTry._catch(codeModel.ref(ClassCastException.class));
-		JVar exceptionParam = containsKeyCatch.param("e");
-
-		JInvocation errorInvoke = codeModel.ref("android.util.Log").staticInvoke("e");
-
-		errorInvoke.arg(holder.activity.name());
-		errorInvoke.arg("Could not cast extra to expected type, the field is left to its default value");
-		errorInvoke.arg(exceptionParam);
-
-		containsKeyCatch.body().add(errorInvoke);
 	}
 
 }

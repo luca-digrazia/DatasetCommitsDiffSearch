@@ -87,7 +87,7 @@ public class EnhanceProcessor extends AnnotationHelper implements ElementProcess
 	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) throws Exception {
 
 		ActivityHolder holder = activitiesHolder.create(element);
-
+		
 		TypeElement typeElement = (TypeElement) element;
 
 		// Activity
@@ -95,49 +95,60 @@ public class EnhanceProcessor extends AnnotationHelper implements ElementProcess
 
 		String subActivityQualifiedName = annotatedActivityQualifiedName + NEW_CLASS_SUFFIX;
 		holder.activity = codeModel._class(subActivityQualifiedName);
-
+		
 		JClass annotatedActivity = codeModel.directClass(annotatedActivityQualifiedName);
 
 		holder.activity._extends(annotatedActivity);
 
 		JClass bundleClass = codeModel.ref("android.os.Bundle");
-
+		
 		// beforeSetContentView
 		holder.beforeSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "beforeSetContentView_");
 		holder.beforeSetContentViewSavedInstanceStateParam = holder.beforeSetContentView.param(bundleClass, "savedInstanceState");
-
+		
 		// afterSetContentView
-		holder.afterSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "afterSetContentView_");
-		holder.afterSetContentView.param(bundleClass, "savedInstanceState");
-
+		JMethod afterSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "afterSetContentView_");
+		afterSetContentView.param(bundleClass, "savedInstanceState");
+		
 		// onCreate
-		JMethod onCreate = holder.activity.method(JMod.PUBLIC, codeModel.VOID, "onCreate");
+		JMethod onCreate =	holder.activity.method(JMod.PUBLIC, codeModel.VOID, "onCreate");
 		onCreate.annotate(Override.class);
 
 		JVar onCreateSavedInstanceState = onCreate.param(bundleClass, "savedInstanceState");
 		JBlock onCreateBody = onCreate.body();
-
+		
 		onCreateBody.invoke(holder.beforeSetContentView).arg(onCreateSavedInstanceState);
-
+		
 		Enhance layoutAnnotation = element.getAnnotation(Enhance.class);
 		int layoutIdValue = layoutAnnotation.value();
-
-		JFieldRef contentViewId;
+		
+		String layoutFieldQualifiedName;
 		if (layoutIdValue != Id.DEFAULT_VALUE) {
 			IRInnerClass rInnerClass = rClass.get(Res.LAYOUT);
-			contentViewId = rInnerClass.getIdStaticRef(layoutIdValue, codeModel);
+			layoutFieldQualifiedName = rInnerClass.getIdQualifiedName(layoutIdValue);
 		} else {
-			contentViewId = null;
+			layoutFieldQualifiedName = null;
 		}
-
-		if (contentViewId != null) {
+		
+		if (layoutFieldQualifiedName != null) {
+			int fieldSuffix = layoutFieldQualifiedName.lastIndexOf('.');
+			
+			String fieldName = layoutFieldQualifiedName.substring(fieldSuffix+1);
+			String rInnerClassName = layoutFieldQualifiedName.substring(0, fieldSuffix);
+			
+			JFieldRef contentViewId = codeModel.ref(rInnerClassName).staticRef(fieldName);
+			
 			onCreateBody.invoke("setContentView").arg(contentViewId);
 		}
-
-		onCreateBody.invoke(holder.afterSetContentView).arg(onCreateSavedInstanceState);
+		
+		onCreateBody.invoke(afterSetContentView).arg(onCreateSavedInstanceState);
 
 		onCreateBody.invoke(JExpr._super(), onCreate).arg(onCreateSavedInstanceState);
-
+		
 	}
+
+
+
+
 
 }
