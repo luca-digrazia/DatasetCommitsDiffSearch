@@ -40,15 +40,14 @@ import io.quarkus.creator.phase.augment.AugmentTask;
 /**
  * Legacy mojo for backwards compatibility reasons. This should not be used in new projects
  *
- * This has been replaced by setting quarkus.package.type=native in the configuration.
+ * This has been replaced by setting quarkus.package.types=native in the configuration.
  *
  * @deprecated
  */
 @Mojo(name = "native-image", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME)
-@Deprecated
 public class NativeImageMojo extends AbstractMojo {
 
-    protected static final String QUARKUS_PACKAGE_TYPE = "quarkus.package.type";
+    protected static final String QUARKUS_PACKAGE_TYPES = "quarkus.package.types";
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
 
@@ -287,8 +286,8 @@ public class NativeImageMojo extends AbstractMojo {
         projectProperties.putIfAbsent("quarkus.application.version", project.getVersion());
 
         Consumer<ConfigBuilder> config = createCustomConfig();
-        String old = System.getProperty(QUARKUS_PACKAGE_TYPE);
-        System.setProperty(QUARKUS_PACKAGE_TYPE, "native");
+        String old = System.getProperty(QUARKUS_PACKAGE_TYPES);
+        System.setProperty(QUARKUS_PACKAGE_TYPES, "native");
 
         try (CuratedApplicationCreator appCreationContext = creatorBuilder
                 .setWorkDir(buildDir.toPath())
@@ -305,9 +304,9 @@ public class NativeImageMojo extends AbstractMojo {
             throw new MojoExecutionException("Failed to generate a native image", e);
         } finally {
             if (old == null) {
-                System.clearProperty(QUARKUS_PACKAGE_TYPE);
+                System.clearProperty(QUARKUS_PACKAGE_TYPES);
             } else {
-                System.setProperty(QUARKUS_PACKAGE_TYPE, old);
+                System.setProperty(QUARKUS_PACKAGE_TYPES, old);
             }
         }
     }
@@ -317,14 +316,14 @@ public class NativeImageMojo extends AbstractMojo {
             @Override
             public void accept(ConfigBuilder configBuilder) {
                 InMemoryConfigSource type = new InMemoryConfigSource(Integer.MAX_VALUE, "Native Image Type")
-                        .add("quarkus.package.type", "native");
+                        .add("quarkus.package.types", "native");
                 configBuilder.withSources(type);
 
                 InMemoryConfigSource configs = new InMemoryConfigSource(0, "Native Image Maven Settings");
                 if (addAllCharsets != null) {
                     configs.add("quarkus.native.add-all-charsets", addAllCharsets.toString());
                 }
-                if (additionalBuildArgs != null && !additionalBuildArgs.isEmpty()) {
+                if (additionalBuildArgs != null) {
                     configs.add("quarkus.native.additional-build-args", additionalBuildArgs);
                 }
                 if (autoServiceLoaderRegistration != null) {
@@ -345,10 +344,10 @@ public class NativeImageMojo extends AbstractMojo {
                 if (enableReports != null) {
                     configs.add("quarkus.native.enable-reports", enableReports.toString());
                 }
-                if (containerRuntime != null && !containerRuntime.trim().isEmpty()) {
+                if (containerRuntime != null) {
                     configs.add("quarkus.native.container-runtime", containerRuntime);
-                } else if (dockerBuild != null && !dockerBuild.trim().isEmpty()) {
-                    if (!dockerBuild.toLowerCase().equals("false")) {
+                } else if (dockerBuild != null) {
+                    if (!dockerBuild.isEmpty() && !dockerBuild.toLowerCase().equals("false")) {
                         if (dockerBuild.toLowerCase().equals("true")) {
                             configs.add("quarkus.native.container-runtime", "docker");
                         } else {
@@ -356,7 +355,7 @@ public class NativeImageMojo extends AbstractMojo {
                         }
                     }
                 }
-                if (containerRuntimeOptions != null && !containerRuntimeOptions.trim().isEmpty()) {
+                if (containerRuntimeOptions != null) {
                     configs.add("quarkus.native.container-runtime-options", containerRuntimeOptions);
                 }
                 if (dumpProxies != null) {
@@ -395,13 +394,13 @@ public class NativeImageMojo extends AbstractMojo {
                 if (fullStackTraces != null) {
                     configs.add("quarkus.native.full-stack-traces", fullStackTraces.toString());
                 }
-                if (graalvmHome != null && !graalvmHome.trim().isEmpty()) {
+                if (graalvmHome != null) {
                     configs.add("quarkus.native.graalvm-home", graalvmHome.toString());
                 }
-                if (javaHome != null && !javaHome.toString().isEmpty()) {
+                if (javaHome != null) {
                     configs.add("quarkus.native.java-home", javaHome.toString());
                 }
-                if (nativeImageXmx != null && !nativeImageXmx.trim().isEmpty()) {
+                if (nativeImageXmx != null) {
                     configs.add("quarkus.native.native-image-xmx", nativeImageXmx.toString());
                 }
                 if (reportErrorsAtRuntime != null) {
