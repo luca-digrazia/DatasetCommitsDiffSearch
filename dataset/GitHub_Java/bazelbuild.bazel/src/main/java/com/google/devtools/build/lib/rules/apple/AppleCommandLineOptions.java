@@ -75,91 +75,83 @@ public class AppleCommandLineOptions extends FragmentOptions {
   public String xcodeVersion;
 
   @Option(
-      name = "ios_sdk_version",
-      defaultValue = "null",
-      converter = DottedVersionConverter.class,
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "Specifies the version of the iOS SDK to use to build iOS applications. "
-              + "If unspecified, uses default iOS SDK version from 'xcode_version'.")
+    name = "ios_sdk_version",
+    defaultValue = "null",
+    converter = DottedVersionConverter.class,
+    documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+    effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
+    help = "Specifies the version of the iOS SDK to use to build iOS applications."
+  )
   public DottedVersion.Option iosSdkVersion;
 
   @Option(
-      name = "watchos_sdk_version",
-      defaultValue = "null",
-      converter = DottedVersionConverter.class,
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "Specifies the version of the watchOS SDK to use to build watchOS applications. "
-              + "If unspecified, uses default watchOS SDK version from 'xcode_version'.")
+    name = "watchos_sdk_version",
+    defaultValue = "null",
+    converter = DottedVersionConverter.class,
+    documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+    effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
+    help = "Specifies the version of the watchOS SDK to use to build watchOS applications."
+  )
   public DottedVersion.Option watchOsSdkVersion;
 
   @Option(
-      name = "tvos_sdk_version",
-      defaultValue = "null",
-      converter = DottedVersionConverter.class,
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "Specifies the version of the tvOS SDK to use to build tvOS applications. "
-              + "If unspecified, uses default tvOS SDK version from 'xcode_version'.")
+    name = "tvos_sdk_version",
+    defaultValue = "null",
+    converter = DottedVersionConverter.class,
+    documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+    effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
+    help = "Specifies the version of the tvOS SDK to use to build tvOS applications."
+  )
   public DottedVersion.Option tvOsSdkVersion;
 
   @Option(
-      name = "macos_sdk_version",
-      defaultValue = "null",
-      converter = DottedVersionConverter.class,
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "Specifies the version of the macOS SDK to use to build macOS applications. "
-              + "If unspecified, uses default macOS SDK version from 'xcode_version'.")
+    name = "macos_sdk_version",
+    defaultValue = "null",
+    converter = DottedVersionConverter.class,
+    documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+    effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
+    help = "Specifies the version of the macOS SDK to use to build macOS applications."
+  )
   public DottedVersion.Option macOsSdkVersion;
 
   @Option(
-      name = "ios_minimum_os",
-      defaultValue = "null",
-      converter = DottedVersionConverter.class,
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "Minimum compatible iOS version for target simulators and devices. "
-              + "If unspecified, uses 'ios_sdk_version'.")
+    name = "ios_minimum_os",
+    defaultValue = "null",
+    converter = DottedVersionConverter.class,
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
+    help = "Minimum compatible iOS version for target simulators and devices."
+  )
   public DottedVersion.Option iosMinimumOs;
 
   @Option(
-      name = "watchos_minimum_os",
-      defaultValue = "null",
-      converter = DottedVersionConverter.class,
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "Minimum compatible watchOS version for target simulators and devices. "
-              + "If unspecified, uses 'watchos_sdk_version'.")
+    name = "watchos_minimum_os",
+    defaultValue = "null",
+    converter = DottedVersionConverter.class,
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
+    help = "Minimum compatible watchOS version for target simulators and devices."
+  )
   public DottedVersion.Option watchosMinimumOs;
 
   @Option(
-      name = "tvos_minimum_os",
-      defaultValue = "null",
-      converter = DottedVersionConverter.class,
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "Minimum compatible tvOS version for target simulators and devices. "
-              + "If unspecified, uses 'tvos_sdk_version'.")
+    name = "tvos_minimum_os",
+    defaultValue = "null",
+    converter = DottedVersionConverter.class,
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
+    help = "Minimum compatible tvOS version for target simulators and devices."
+  )
   public DottedVersion.Option tvosMinimumOs;
 
   @Option(
-      name = "macos_minimum_os",
-      defaultValue = "null",
-      converter = DottedVersionConverter.class,
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "Minimum compatible macOS version for targets. "
-              + "If unspecified, uses 'macos_sdk_version'.")
+    name = "macos_minimum_os",
+    defaultValue = "null",
+    converter = DottedVersionConverter.class,
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
+    help = "Minimum compatible macOS version for targets."
+  )
   public DottedVersion.Option macosMinimumOs;
 
   @VisibleForTesting public static final String DEFAULT_IOS_SDK_VERSION = "8.4";

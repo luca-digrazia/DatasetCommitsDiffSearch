@@ -674,18 +674,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     public boolean useAndroidResourceCycleShrinking;
 
     @Option(
-        name = "experimental_android_resource_path_shortening",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {
-          OptionEffectTag.AFFECTS_OUTPUTS,
-          OptionEffectTag.LOADING_AND_ANALYSIS,
-        },
-        metadataTags = OptionMetadataTag.EXPERIMENTAL,
-        help = "Enables shortening of resource file paths within android_binary APKs.")
-    public boolean useAndroidResourcePathShortening;
-
-    @Option(
         name = "android_manifest_merger",
         defaultValue = "android",
         converter = AndroidManifestMergerConverter.class,
@@ -720,7 +708,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
 
     @Option(
         name = "android_aapt",
-        defaultValue = "aapt2",
+        defaultValue = "auto",
         documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
         effectTags = {
           OptionEffectTag.AFFECTS_OUTPUTS,
@@ -826,6 +814,17 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
         },
         help = "If passed, resource merge conflicts will be treated as errors instead of warnings")
     public boolean throwOnResourceConflict;
+
+    @Option(
+        name = "experimental_skip_parsing_action",
+        defaultValue = "false",
+        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+        effectTags = {OptionEffectTag.UNKNOWN},
+        help =
+            "Skips resource parsing action for library targets"
+                + " and uses the output of the compile action instead for resource merging.")
+    // TODO(b/136572475): Remove this flag once the usage has been removed from blazerc files.
+    public boolean skipParsingAction;
 
     @Option(
         name = "experimental_omit_resources_info_provider_from_android_binary",
@@ -969,7 +968,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
           OptionMetadataTag.INCOMPATIBLE_CHANGE,
           OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
         },
-        defaultValue = "true",
+        defaultValue = "false",
         help =
             "Switch the Android rules to use aapt2 by default for resource processing. "
                 + "To resolve issues when migrating your app to build with aapt2, see "
@@ -1082,7 +1081,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   private final boolean allowAndroidLibraryDepsWithoutSrcs;
   private final boolean useAndroidResourceShrinking;
   private final boolean useAndroidResourceCycleShrinking;
-  private final boolean useAndroidResourcePathShortening;
   private final AndroidManifestMerger manifestMerger;
   private final ManifestMergerOrder manifestMergerOrder;
   private final ApkSigningMethod apkSigningMethod;
@@ -1132,7 +1130,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.useAndroidResourceShrinking =
         options.useAndroidResourceShrinking || options.useExperimentalAndroidResourceShrinking;
     this.useAndroidResourceCycleShrinking = options.useAndroidResourceCycleShrinking;
-    this.useAndroidResourcePathShortening = options.useAndroidResourcePathShortening;
     this.manifestMerger = options.manifestMerger;
     this.manifestMergerOrder = options.manifestMergerOrder;
     this.apkSigningMethod = options.apkSigningMethod;
@@ -1305,11 +1302,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   @Override
   public boolean useAndroidResourceCycleShrinking() {
     return useAndroidResourceCycleShrinking;
-  }
-
-  @Override
-  public boolean useAndroidResourcePathShortening() {
-    return useAndroidResourcePathShortening;
   }
 
   public AndroidAaptVersion getAndroidAaptVersion() {
