@@ -13,6 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.concurrent;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.ListenableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 
 /**
@@ -49,4 +52,19 @@ public interface QuiescingExecutor extends Executor {
    *                         If false, just wait for them to terminate normally.
    */
   void awaitQuiescence(boolean interruptWorkers) throws InterruptedException;
+
+  /**
+   * Prevent quiescence of the executor until the given future is completed. If the executor is
+   * interrupted, then the executor will call {@link ListenableFuture#cancel} with a parameter of
+   * {@code true}.
+   */
+  void dependOnFuture(ListenableFuture<?> future) throws InterruptedException;
+
+  /** Get latch that is released if a task throws an exception. Used only in tests. */
+  @VisibleForTesting
+  CountDownLatch getExceptionLatchForTestingOnly();
+
+  /** Get latch that is released if a task is interrupted. Used only in tests. */
+  @VisibleForTesting
+  CountDownLatch getInterruptionLatchForTestingOnly();
 }

@@ -149,9 +149,6 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
       TimeUnit units,
       BlockingQueue<Runnable> workQueue,
       String poolName) {
-    if (System.getProperty("experimental_use_fork_join_pool") != null) {
-      return new NamedForkJoinPool(poolName, parallelism);
-    }
     return new ThreadPoolExecutor(
         /*corePoolSize=*/ parallelism,
         /*maximumPoolSize=*/ parallelism,

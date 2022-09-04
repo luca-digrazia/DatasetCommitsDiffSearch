@@ -90,7 +90,7 @@ class NodeEntryVisitor {
    * graph) also has good results experimentally, since it minimizes sprawl.
    */
   void enqueueEvaluation(SkyKey key, int evaluationPriority) {
-    if (shouldPreventNewEvaluations()) {
+    if (preventNewEvaluations.get()) {
       // If an error happens in nokeep_going mode, we still want to mark these nodes as inflight,
       // otherwise cleanup will not happen properly.
       progressReceiver.enqueueAfterError(key);
@@ -123,16 +123,6 @@ class NodeEntryVisitor {
                 },
                 MoreExecutors.directExecutor());
     quiescingExecutor.dependOnFuture(future);
-  }
-
-  /**
-   * Returns whether any new evaluations should be prevented.
-   *
-   * <p>If called from within node evaluation, the caller may use the return value to determine
-   * whether it is responsible for throwing an exception to halt evaluation at the executor level.
-   */
-  boolean shouldPreventNewEvaluations() {
-    return preventNewEvaluations.get();
   }
 
   /**
