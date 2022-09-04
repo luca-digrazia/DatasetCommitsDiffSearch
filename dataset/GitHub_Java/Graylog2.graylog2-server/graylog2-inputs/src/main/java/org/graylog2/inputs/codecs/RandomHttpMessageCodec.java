@@ -72,7 +72,6 @@ public class RandomHttpMessageCodec implements Codec {
         return "randomhttp";
     }
 
-    @Nonnull
     @Override
     public ConfigurationRequest getRequestedConfiguration() {
         return new ConfigurationRequest();

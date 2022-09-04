@@ -104,7 +104,7 @@ public class GelfCodec implements Codec {
         final double messageTimestamp = doubleValue(node, "timestamp");
         final DateTime timestamp;
         if (messageTimestamp <= 0) {
-            timestamp = rawMessage.getTimestamp();
+            timestamp = Tools.iso8601();
         } else {
             // we treat this as a unix timestamp
             timestamp = Tools.dateTimeFromDouble(messageTimestamp);
@@ -200,7 +200,6 @@ public class GelfCodec implements Codec {
         return "gelf";
     }
 
-    @Nonnull
     @Override
     public ConfigurationRequest getRequestedConfiguration() {
         return new ConfigurationRequest();

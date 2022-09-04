@@ -83,7 +83,6 @@ public class RadioMessageCodec implements Codec {
         return "Radio Message";
     }
 
-    @Nonnull
     @Override
     public ConfigurationRequest getRequestedConfiguration() {
         return new ConfigurationRequest();

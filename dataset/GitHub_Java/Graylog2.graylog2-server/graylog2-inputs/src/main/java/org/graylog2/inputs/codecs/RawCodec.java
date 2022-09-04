@@ -97,7 +97,6 @@ public class RawCodec implements Codec {
         return "raw";
     }
 
-    @Nonnull
     @Override
     public ConfigurationRequest getRequestedConfiguration() {
         return new ConfigurationRequest();

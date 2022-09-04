@@ -57,7 +57,6 @@ public abstract class MessageInput2 extends MessageInput {
     private Meter incomingMessages;
     private Meter processedMessages;
     private Timer parseTime;
-    private Meter rawSize;
 
     public MessageInput2(MetricRegistry metricRegistry, Transport transport, Codec codec) {
         this.metricRegistry = metricRegistry;
@@ -85,7 +84,7 @@ public abstract class MessageInput2 extends MessageInput {
         incompleteMessages = metricRegistry.meter(name(metricsId, "incompleteMessages"));
         processedMessages = metricRegistry.meter(name(metricsId, "processedMessages"));
         parseTime = metricRegistry.timer(name(metricsId, "parseTime"));
-        rawSize = metricRegistry.meter(name(metricsId, "rawSize"));
+
     }
 
     @Override
@@ -161,7 +160,6 @@ public abstract class MessageInput2 extends MessageInput {
         }
 
         processedMessages.mark();
-        rawSize.mark(rawMessage.getPayload().length);
         processBuffer.insertCached(message, this);
     }
 
@@ -203,7 +201,6 @@ public abstract class MessageInput2 extends MessageInput {
         // the following statements are only executed if insertFailFail does not throw!
         incomingMessages.mark();
         processedMessages.mark();
-        rawSize.mark(rawMessage.getPayload().length);
         return true;
     }
 
