@@ -28,8 +28,6 @@ import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
@@ -37,16 +35,10 @@ import com.google.devtools.common.options.TriState;
 import java.util.List;
 
 /** Test-related options. */
-@AutoCodec
 public class TestConfiguration extends Fragment {
-  public static final ObjectCodec<TestConfiguration> CODEC = new TestConfiguration_AutoCodec();
 
   /** Command-line options. */
-  @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
   public static class TestOptions extends FragmentOptions {
-    public static final ObjectCodec<TestOptions> CODEC =
-        new TestConfiguration_TestOptions_AutoCodec();
-
     @Option(
       name = "test_filter",
       allowMultiple = false,
