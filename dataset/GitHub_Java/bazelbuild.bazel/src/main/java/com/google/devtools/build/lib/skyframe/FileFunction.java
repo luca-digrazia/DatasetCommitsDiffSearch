@@ -46,26 +46,9 @@ import javax.annotation.Nullable;
  */
 public class FileFunction implements SkyFunction {
   private final AtomicReference<PathPackageLocator> pkgLocator;
-  @Nullable private final NonexistentFileReceiver nonexistentFileReceiver;
-
-  /** Temporary interface to help track down why files are missing in some cases. */
-  public interface NonexistentFileReceiver {
-    void accept(
-        RootedPath rootedPath,
-        RootedPath realRootedPath,
-        RootedPath parentRootedPath,
-        FileValue parentFileValue);
-  }
 
   public FileFunction(AtomicReference<PathPackageLocator> pkgLocator) {
-    this(pkgLocator, null);
-  }
-
-  FileFunction(
-      AtomicReference<PathPackageLocator> pkgLocator,
-      @Nullable NonexistentFileReceiver nonexistentFileReceiver) {
     this.pkgLocator = pkgLocator;
-    this.nonexistentFileReceiver = nonexistentFileReceiver;
   }
 
   @Override
@@ -133,8 +116,9 @@ public class FileFunction implements SkyFunction {
    * {@code null} if there was a missing dep.
    */
   @Nullable
-  private Pair<RootedPath, FileStateValue> resolveFromAncestors(
-      RootedPath rootedPath, Environment env) throws InterruptedException {
+  private static Pair<RootedPath, FileStateValue> resolveFromAncestors(
+      RootedPath rootedPath, Environment env)
+      throws FileFunctionException, InterruptedException {
     PathFragment relativePath = rootedPath.getRootRelativePath();
     RootedPath realRootedPath = rootedPath;
     FileValue parentFileValue = null;
@@ -154,11 +138,8 @@ public class FileFunction implements SkyFunction {
               parentRealRootedPath.getRootRelativePath().getRelative(baseName));
 
       if (!parentFileValue.exists() || !parentFileValue.isDirectory()) {
-        if (nonexistentFileReceiver != null) {
-          nonexistentFileReceiver.accept(
-              rootedPath, realRootedPath, parentRootedPath, parentFileValue);
-        }
-        return Pair.of(realRootedPath, FileStateValue.NONEXISTENT_FILE_STATE_NODE);
+        return Pair.<RootedPath, FileStateValue>of(
+            realRootedPath, FileStateValue.NONEXISTENT_FILE_STATE_NODE);
       }
     }
     FileStateValue realFileStateValue =
