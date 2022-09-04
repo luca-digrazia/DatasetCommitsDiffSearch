@@ -13,10 +13,10 @@ import io.quarkus.arc.DefaultBean;
 public class ReactiveSessionProducer {
 
     @Inject
-    Stage.SessionFactory reactiveSessionFactory;
+    private Stage.SessionFactory reactiveSessionFactory;
 
     @Inject
-    Mutiny.SessionFactory mutinySessionFactory;
+    private Mutiny.SessionFactory mutinySessionFactory;
 
     @Produces
     @RequestScoped
