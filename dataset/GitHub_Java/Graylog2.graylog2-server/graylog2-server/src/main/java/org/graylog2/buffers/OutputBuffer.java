@@ -50,6 +50,8 @@ public class OutputBuffer extends Buffer {
 
     private final ExecutorService executor;
 
+    private final OutputBufferWatermark outputBufferWatermark;
+
     private final Configuration configuration;
     private final OutputCache overflowCache;
 
@@ -62,9 +64,11 @@ public class OutputBuffer extends Buffer {
     @Inject
     public OutputBuffer(OutputBufferProcessor.Factory outputBufferProcessorFactory,
                         MetricRegistry metricRegistry,
+                        OutputBufferWatermark outputBufferWatermark,
                         Configuration configuration,
                         OutputCache overflowCache) {
         this.outputBufferProcessorFactory = outputBufferProcessorFactory;
+        this.outputBufferWatermark = outputBufferWatermark;
         this.configuration = configuration;
         this.overflowCache = overflowCache;
         this.executor = executorService(metricRegistry);
@@ -169,6 +173,7 @@ public class OutputBuffer extends Buffer {
 
     @Override
     protected void afterInsert(int n) {
+        outputBufferWatermark.addAndGet(n);
         incomingMessages.mark(n);
     }
 }

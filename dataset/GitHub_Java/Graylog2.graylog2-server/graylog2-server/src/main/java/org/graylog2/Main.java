@@ -189,8 +189,8 @@ public final class Main extends NodeRunner {
         final ServerStatus serverStatus = injector.getInstance(ServerStatus.class);
         serverStatus.initialize();
 
-        final ActivityWriter activityWriter;
-        final ServiceManager serviceManager;
+        ActivityWriter activityWriter = null;
+        ServiceManager serviceManager = null;
         try {
             activityWriter = injector.getInstance(ActivityWriter.class);
             serviceManager = injector.getInstance(ServiceManager.class);
@@ -204,23 +204,23 @@ public final class Main extends NodeRunner {
 
             LOG.error("Guice error", e);
             System.exit(-1);
-            return;
         } catch (Exception e) {
             LOG.error("Unexpected exception", e);
             System.exit(-1);
-            return;
         }
 
+        final ActivityWriter finalActivityWriter = activityWriter;
+        final ServiceManager finalServiceManager = serviceManager;
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
                 String msg = "SIGNAL received. Shutting down.";
                 LOG.info(msg);
-                activityWriter.write(new Activity(msg, Main.class));
+                finalActivityWriter.write(new Activity(msg, Main.class));
 
                 GracefulShutdown shutdown = injector.getInstance(GracefulShutdown.class);
                 shutdown.runWithoutExit();
-                serviceManager.stopAsync().awaitStopped();
+                finalServiceManager.stopAsync().awaitStopped();
             }
         });
 

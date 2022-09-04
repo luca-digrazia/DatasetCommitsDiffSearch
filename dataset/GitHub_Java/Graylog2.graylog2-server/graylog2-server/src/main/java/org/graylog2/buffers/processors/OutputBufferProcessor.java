@@ -27,6 +27,7 @@ import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.lmax.disruptor.EventHandler;
 import org.graylog2.Configuration;
+import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.outputs.CachedOutputRouter;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.outputs.OutputRouter;
@@ -69,6 +70,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
     private final Histogram batchSize;
     private final Timer processTime;
 
+    private final OutputBufferWatermark outputBufferWatermark;
     private final OutputRouter outputRouter;
     private final long ordinal;
     private final long numberOfConsumers;
@@ -79,6 +81,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
                                  OutputRegistry outputRegistry,
                                  ThroughputStats throughputStats,
                                  ServerStatus serverStatus,
+                                 OutputBufferWatermark outputBufferWatermark,
                                  CachedOutputRouter outputRouter,
                                  @Assisted("ordinal") final long ordinal,
                                  @Assisted("numberOfConsumers") final long numberOfConsumers) {
@@ -86,6 +89,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
         this.outputRegistry = outputRegistry;
         this.throughputStats = throughputStats;
         this.serverStatus = serverStatus;
+        this.outputBufferWatermark = outputBufferWatermark;
         this.outputRouter = outputRouter;
         this.ordinal = ordinal;
         this.numberOfConsumers = numberOfConsumers;
@@ -121,6 +125,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
             return;
         }
 
+        outputBufferWatermark.decrementAndGet();
         incomingMessages.mark();
 
         final Message msg = event.getMessage();
@@ -140,9 +145,9 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
                 continue;
             }
             try {
-                LOG.debug("Writing message to [{}].", output.getClass());
+                LOG.debug("Writing message to [{}].", output.getName());
                 if (LOG.isTraceEnabled()) {
-                    LOG.trace("Message id for [{}]: <{}>", output.getClass(), msg.getId());
+                    LOG.trace("Message id for [{}]: <{}>", output.getName(), msg.getId());
                 }
                 executor.submit(new Runnable() {
                     @Override
@@ -150,7 +155,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
                         try (Timer.Context context = processTime.time()) {
                             output.write(msg);
                         } catch (Exception e) {
-                            LOG.error("Error in output [" + output.getClass() + "].", e);
+                            LOG.error("Error in output [" + output.getName() + "].", e);
                         } finally {
                             doneSignal.countDown();
                         }
@@ -158,7 +163,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
                 });
 
             } catch (Exception e) {
-                LOG.error("Could not write message batch to output [" + output.getClass() + "].", e);
+                LOG.error("Could not write message batch to output [" + output.getName() + "].", e);
                 doneSignal.countDown();
             }
         }

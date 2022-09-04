@@ -22,14 +22,18 @@ import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.shared.buffers.ProcessBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -39,7 +43,7 @@ public abstract class InputRegistry {
     protected final Set<InputState> inputStates = new HashSet<>();
     protected final ExecutorService executor;
     private final MessageInputFactory messageInputFactory;
-    private final InputBuffer inputBuffer;
+    private final ProcessBuffer processBuffer;
 
     protected abstract void finishedLaunch(InputState state);
 
@@ -52,10 +56,10 @@ public abstract class InputRegistry {
     public abstract void cleanInput(MessageInput input);
 
     public InputRegistry(MessageInputFactory messageInputFactory,
-                         InputBuffer inputBuffer,
+                         ProcessBuffer processBuffer,
                          MetricRegistry metricRegistry) {
         this.messageInputFactory = messageInputFactory;
-        this.inputBuffer = inputBuffer;
+        this.processBuffer = processBuffer;
         this.executor = executorService(metricRegistry);
     }
 
@@ -102,7 +106,7 @@ public abstract class InputRegistry {
                 try {
                     input.checkConfiguration();
                     inputState.setState(InputState.InputStateType.STARTING);
-                    input.launch(inputBuffer);
+                    input.launch(processBuffer);
                     inputState.setState(InputState.InputStateType.RUNNING);
                     String msg = "Completed starting [" + input.getClass().getCanonicalName() + "] input with ID <" + input.getId() + ">";
                     LOG.info(msg);

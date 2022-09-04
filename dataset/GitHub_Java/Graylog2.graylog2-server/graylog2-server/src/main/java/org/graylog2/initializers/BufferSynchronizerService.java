@@ -21,6 +21,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.AbstractIdleService;
 import org.graylog2.Configuration;
 import org.graylog2.buffers.Buffers;
+import org.graylog2.caches.Caches;
 import org.graylog2.indexer.cluster.Cluster;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,13 +32,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static com.codahale.metrics.MetricRegistry.name;
-
 @Singleton
 public class BufferSynchronizerService extends AbstractIdleService {
     private static final Logger LOG = LoggerFactory.getLogger(BufferSynchronizerService.class);
 
     private final Buffers bufferSynchronizer;
+    private final Caches cacheSynchronizer;
     private final Cluster cluster;
     private final Configuration configuration;
     private final MetricRegistry metricRegistry;
@@ -46,10 +46,12 @@ public class BufferSynchronizerService extends AbstractIdleService {
 
     @Inject
     public BufferSynchronizerService(final Buffers bufferSynchronizer,
+                                     final Caches cacheSynchronizer,
                                      final Cluster cluster,
                                      final Configuration configuration,
                                      final MetricRegistry metricRegistry) {
         this.bufferSynchronizer = bufferSynchronizer;
+        this.cacheSynchronizer = cacheSynchronizer;
         this.cluster = cluster;
         this.configuration = configuration;
         this.metricRegistry = metricRegistry;
@@ -63,15 +65,19 @@ public class BufferSynchronizerService extends AbstractIdleService {
     protected void shutDown() throws Exception {
         LOG.debug("Stopping BufferSynchronizerService");
         if (indexerAvailable && cluster.isConnectedAndHealthy()) {
-            final ExecutorService executorService = new InstrumentedExecutorService(
-                    Executors.newFixedThreadPool(2),
-                    metricRegistry,
-                    name(this.getClass(), "executor-service"));
+            final ExecutorService executorService = new InstrumentedExecutorService(Executors.newFixedThreadPool(2), metricRegistry);
 
             executorService.submit(new Runnable() {
                 @Override
                 public void run() {
                     bufferSynchronizer.waitForEmptyBuffers(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
+                }
+            });
+
+            executorService.submit(new Runnable() {
+                @Override
+                public void run() {
+                    cacheSynchronizer.waitForEmptyCaches(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
                 }
             });
 

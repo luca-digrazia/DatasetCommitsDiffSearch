@@ -17,12 +17,13 @@
 package org.graylog2.system.jobs;
 
 import com.codahale.metrics.InstrumentedExecutorService;
+import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.MetricRegistry;
 import com.eaio.uuid.UUID;
 import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.graylog2.shared.system.activities.Activity;
-import org.graylog2.shared.system.activities.ActivityWriter;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,8 +51,14 @@ public class SystemJobManager {
     }
 
     private ExecutorService executorService(final MetricRegistry metricRegistry) {
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("systemjob-executor-%d").build();
-        return new InstrumentedExecutorService(Executors.newFixedThreadPool(THREAD_POOL_SIZE, threadFactory), metricRegistry);
+        return new InstrumentedExecutorService(
+                Executors.newFixedThreadPool(THREAD_POOL_SIZE, threadFactory(metricRegistry)), metricRegistry);
+    }
+
+    private ThreadFactory threadFactory(final MetricRegistry metricRegistry) {
+        return new InstrumentedThreadFactory(
+                new ThreadFactoryBuilder().setNameFormat("systemjob-executor-%d").build(),
+                metricRegistry);
     }
 
     public String submit(final SystemJob job) throws SystemJobConcurrencyException {

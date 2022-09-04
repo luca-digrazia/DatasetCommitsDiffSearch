@@ -16,7 +16,11 @@
  */
 package org.graylog2.streams;
 
-import com.codahale.metrics.*;
+import com.codahale.metrics.InstrumentedExecutorService;
+import com.codahale.metrics.InstrumentedThreadFactory;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.SimpleTimeLimiter;
@@ -28,7 +32,6 @@ import org.graylog2.database.ValidationException;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.streams.matchers.StreamRuleMatcher;
@@ -39,7 +42,12 @@ import javax.inject.Inject;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -59,7 +67,6 @@ public class StreamRouter {
     private final MetricRegistry metricRegistry;
     private final Configuration configuration;
     private final NotificationService notificationService;
-    private final ServerStatus serverStatus;
 
     private final ExecutorService executor;
     private final TimeLimiter timeLimiter;
@@ -71,14 +78,12 @@ public class StreamRouter {
                         StreamRuleService streamRuleService,
                         MetricRegistry metricRegistry,
                         Configuration configuration,
-                        NotificationService notificationService,
-                        ServerStatus serverStatus) {
+                        NotificationService notificationService) {
         this.streamService = streamService;
         this.streamRuleService = streamRuleService;
         this.metricRegistry = metricRegistry;
         this.configuration = configuration;
         this.notificationService = notificationService;
-        this.serverStatus = serverStatus;
         this.faultCounter = Maps.newConcurrentMap();
         this.executor = executorService();
         this.timeLimiter = new SimpleTimeLimiter(executor);
@@ -101,9 +106,8 @@ public class StreamRouter {
     }
 
     public List<Stream> route(final Message msg) {
-        final List<Stream> matches = Lists.newArrayList();
-        final List<Stream> streams = getStreams();
-        msg.recordCounter(serverStatus, "streams-evaluated", streams.size());
+        List<Stream> matches = Lists.newArrayList();
+        List<Stream> streams = getStreams();
 
         final long timeout = configuration.getStreamProcessingTimeout();
         final int maxFaultCount = configuration.getStreamProcessingMaxFaults();
@@ -111,22 +115,22 @@ public class StreamRouter {
         for (final Stream stream : streams) {
             final Timer timer = getExecutionTimer(stream.getId());
 
-            final Callable<Boolean> task = new Callable<Boolean>() {
+            Callable<Boolean> task = new Callable<Boolean>() {
                 public Boolean call() {
-                    final Map<StreamRule, Boolean> result = getRuleMatches(stream, msg);
+                    Map<StreamRule, Boolean> result = getRuleMatches(stream, msg);
                     return doesStreamMatch(result);
                 }
             };
 
-            try (final Timer.Context ignored = timer.time()) {
-                final boolean matched = timeLimiter.callWithTimeout(task, timeout, TimeUnit.MILLISECONDS, true);
+            try (final Timer.Context timerContext = timer.time()) {
+                boolean matched = timeLimiter.callWithTimeout(task, timeout, TimeUnit.MILLISECONDS, true);
                 if (matched) {
                     getIncomingMeter(stream.getId()).mark();
                     matches.add(stream);
                 }
             } catch (Exception e) {
-                final AtomicInteger faultCount = getFaultCount(stream.getId());
-                final int streamFaultCount = faultCount.incrementAndGet();
+                AtomicInteger faultCount = getFaultCount(stream.getId());
+                int streamFaultCount = faultCount.incrementAndGet();
                 getStreamRuleTimeoutMeter(stream.getId()).mark();
                 if (maxFaultCount > 0 && streamFaultCount >= maxFaultCount) {
                     try {
@@ -135,7 +139,7 @@ public class StreamRouter {
                         getStreamFaultsExceededMeter(stream.getId()).mark();
                         LOG.error("Processing of stream <" + stream.getId() + "> failed to return within " + timeout + "ms for more than " + maxFaultCount + " times. Disabling stream.");
 
-                        final Notification notification = notificationService.buildNow()
+                        Notification notification = notificationService.buildNow()
                                 .addType(Notification.Type.STREAM_PROCESSING_DISABLED)
                                 .addSeverity(Notification.Severity.URGENT)
                                 .addDetail("stream_id", stream.getId())
@@ -166,14 +170,13 @@ public class StreamRouter {
     }
 
     public Map<StreamRule, Boolean> getRuleMatches(Stream stream, Message msg) {
-        final Map<StreamRule, Boolean> result = Maps.newHashMap();
+        Map<StreamRule, Boolean> result = Maps.newHashMap();
 
-        final List<StreamRule> streamRules = getStreamRules(stream);
-        msg.recordCounter(serverStatus, "streamrules-evaluated-" + stream.getId(), streamRules.size());
+        List<StreamRule> streamRules = getStreamRules(stream);
 
-        for (final StreamRule rule : streamRules) {
+        for (StreamRule rule : streamRules) {
             try {
-                final StreamRuleMatcher matcher = StreamRuleMatcherFactory.build(rule.getType());
+                StreamRuleMatcher matcher = StreamRuleMatcherFactory.build(rule.getType());
                 result.put(rule, matchStreamRule(msg, matcher, rule));
             } catch (InvalidStreamRuleTypeException e) {
                 LOG.warn("Invalid stream rule type. Skipping matching for this rule. " + e.getMessage(), e);
