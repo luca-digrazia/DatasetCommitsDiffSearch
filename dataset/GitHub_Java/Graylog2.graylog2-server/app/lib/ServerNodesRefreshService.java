@@ -37,7 +37,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static lib.Configuration.apiTimeout;
-import static lib.Tools.rootCause;
 
 @Singleton
 public class ServerNodesRefreshService {
@@ -147,8 +146,7 @@ public class ServerNodesRefreshService {
             serverNodes.put(nodeList);
             return true;
         } catch (Exception e) {
-            log.warn("Could not retrieve graylog2 node list from node " + initialNode + ". Retrying automatically.",
-                    rootCause(e));
+            log.warn("Could not retrieve graylog2 node list from node " + initialNode + ". Retrying automatically.", e);
         }
         return false;
     }

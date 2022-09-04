@@ -25,6 +25,7 @@ import models.Radio;
 import models.api.requests.ApiRequest;
 
 import java.io.IOException;
+import java.net.URL;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -59,7 +60,9 @@ public interface ApiRequestBuilder<T> {
 
     ApiRequestBuilder<T> queryParams(Map<String, String> params);
 
-    ApiRequestBuilder<T> credentials(String username, String password);
+    ApiRequestBuilder<T> session(String sessionId);
+
+    ApiRequestBuilder<T> extendSession(boolean extend);
 
     ApiRequestBuilder<T> unauthenticated();
 
@@ -67,11 +70,16 @@ public interface ApiRequestBuilder<T> {
 
     ApiRequestBuilder<T> expect(int... httpStatusCodes);
 
-    ApiRequestBuilder<T> timeout(int value, TimeUnit unit);
+    ApiRequestBuilder<T> timeout(long value);
+
+    ApiRequestBuilder<T> timeout(long value, TimeUnit unit);
 
     ApiRequestBuilder<T> accept(MediaType mediaType);
 
     T execute() throws APIException, IOException;
 
     Map<Node, T> executeOnAll();
+
+    // solely for test purposes
+    URL prepareUrl(ClusterEntity node);
 }

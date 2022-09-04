@@ -27,6 +27,9 @@ import models.api.responses.system.indices.*;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static lib.Configuration.apiTimeout;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -83,6 +86,7 @@ public class IndexService {
 
     public void cycleDeflector() throws APIException, IOException {
         api.post().path("/system/deflector/cycle")
+                .timeout(apiTimeout("cycle_deflector", 60, TimeUnit.SECONDS))
                 .onlyMasterNode()
                 .execute();
     }
@@ -90,6 +94,7 @@ public class IndexService {
     // Not part an Index model instance method because opening/closing can be applied to indices without calculated ranges.
     public void close(String index) throws APIException, IOException {
         api.post().path("/system/indexer/indices/{0}/close", index)
+                .timeout(apiTimeout("index_close", 60, TimeUnit.SECONDS))
                 .expect(204)
                 .execute();
     }
@@ -97,6 +102,7 @@ public class IndexService {
     // Not part an Index model instance method because opening/closing can be applied to indices without calculated ranges.
     public void reopen(String index) throws APIException, IOException {
         api.post().path("/system/indexer/indices/{0}/reopen", index)
+                .timeout(apiTimeout("index_reopen", 60, TimeUnit.SECONDS))
                 .expect(204)
                 .execute();
     }
@@ -104,6 +110,7 @@ public class IndexService {
     // Not part an Index model instance method because opening/closing can be applied to indices without calculated ranges.
     public void delete(String index) throws APIException, IOException {
         api.delete().path("/system/indexer/indices/{0}", index)
+                .timeout(apiTimeout("index_delete", 60, TimeUnit.SECONDS))
                 .expect(204)
                 .execute();
     }
