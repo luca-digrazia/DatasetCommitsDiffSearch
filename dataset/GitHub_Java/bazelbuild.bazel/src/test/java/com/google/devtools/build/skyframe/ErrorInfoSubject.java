@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import static com.google.common.truth.Fact.simpleFact;
-
 import com.google.common.truth.FailureMetadata;
 import com.google.common.truth.IterableSubject;
 import com.google.common.truth.Subject;
@@ -45,13 +43,13 @@ public class ErrorInfoSubject extends Subject<ErrorInfoSubject, ErrorInfo> {
 
   public void isTransient() {
     if (!getSubject().isTransitivelyTransient()) {
-      failWithActual(simpleFact("expected to be transient"));
+      fail("is transient");
     }
   }
 
   public void isNotTransient() {
     if (getSubject().isTransitivelyTransient()) {
-      failWithActual(simpleFact("expected not to be transient"));
+      fail("is not transient");
     }
   }
 }
