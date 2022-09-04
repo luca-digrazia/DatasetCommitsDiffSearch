@@ -12,8 +12,6 @@ import com.yammer.dropwizard.config.Configuration;
 import com.yammer.dropwizard.config.DropwizardResourceConfig;
 import com.yammer.dropwizard.config.Environment;
 import com.yammer.dropwizard.config.LoggingFactory;
-import com.yammer.dropwizard.json.Json;
-
 import org.codehaus.jackson.map.Module;
 
 import javax.annotation.CheckForNull;
@@ -191,18 +189,6 @@ public abstract class AbstractService<T extends Configuration> {
      */
     public ImmutableList<Module> getJacksonModules() {
         return ImmutableList.copyOf(modules);
-    }
-    
-    /**
-     * Returns the json environment wrapper that configures and calls into jackson
-     * @return an instanceof Json
-     */
-    public Json getJson() {
-        Json json = new Json();
-        for (Module module : getJacksonModules()) {
-            json.registerModule(module);
-        }
-        return json;
     }
 
     /**
