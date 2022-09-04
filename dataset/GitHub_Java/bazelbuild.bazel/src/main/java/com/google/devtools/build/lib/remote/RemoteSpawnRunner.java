@@ -148,7 +148,9 @@ class RemoteSpawnRunner implements SpawnRunner {
     context.report(ProgressStatus.EXECUTING, getName());
     // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
     MetadataProvider inputFileCache = context.getMetadataProvider();
-    TreeNodeRepository repository = new TreeNodeRepository(execRoot, inputFileCache, digestUtil);
+    TreeNodeRepository repository =
+        new TreeNodeRepository(
+            execRoot, inputFileCache, digestUtil, remoteOptions.incompatibleRemoteSymlinks);
     SortedMap<PathFragment, ActionInput> inputMap = context.getInputMapping(true);
     TreeNode inputRoot;
     try (SilentCloseable c = Profiler.instance().profile("Remote.computeMerkleDigests")) {
@@ -250,15 +252,6 @@ class RemoteSpawnRunner implements SpawnRunner {
               try (SilentCloseable c = Profiler.instance().profile("Remote.executeRemotely")) {
                 reply = remoteExecutor.executeRemotely(request);
               }
-
-              FileOutErr outErr = context.getFileOutErr();
-              String message = reply.getMessage();
-              if ((reply.getResult().getExitCode() != 0
-                      || reply.getStatus().getCode() != Code.OK.value())
-                  && !message.isEmpty()) {
-                outErr.printErr(message + "\n");
-              }
-
               try (SilentCloseable c =
                   Profiler.instance().profile("Remote.maybeDownloadServerLogs")) {
                 maybeDownloadServerLogs(reply, actionKey);
@@ -266,7 +259,7 @@ class RemoteSpawnRunner implements SpawnRunner {
 
               try (SilentCloseable c =
                   Profiler.instance().profile("Remote.downloadRemoteResults")) {
-                return downloadRemoteResults(reply.getResult(), outErr)
+                return downloadRemoteResults(reply.getResult(), context.getFileOutErr())
                     .setRunnerName(reply.getCachedResult() ? "remote cache hit" : getName())
                     .setCacheHit(reply.getCachedResult())
                     .build();

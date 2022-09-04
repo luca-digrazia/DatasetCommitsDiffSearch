@@ -17,17 +17,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.devtools.build.lib.actions.ActionContext;
-import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.exec.AbstractSpawnStrategy;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnRunner;
-import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -44,47 +40,45 @@ import javax.annotation.Nullable;
  */
 final class RemoteActionContextProvider extends ActionContextProvider {
   private final CommandEnvironment env;
-  private final RemoteCache cache;
+  private final AbstractRemoteActionCache cache;
   @Nullable private final GrpcRemoteExecutor executor;
-  private final ListeningScheduledExecutorService retryScheduler;
+  private final RemoteRetrier retrier;
   private final DigestUtil digestUtil;
   @Nullable private final Path logDir;
   private final AtomicReference<SpawnRunner> fallbackRunner = new AtomicReference<>();
-  private ImmutableSet<ActionInput> filesToDownload = ImmutableSet.of();
 
   private RemoteActionContextProvider(
       CommandEnvironment env,
-      RemoteCache cache,
+      AbstractRemoteActionCache cache,
       @Nullable GrpcRemoteExecutor executor,
-      @Nullable ListeningScheduledExecutorService retryScheduler,
+      RemoteRetrier retrier,
       DigestUtil digestUtil,
       @Nullable Path logDir) {
     this.env = Preconditions.checkNotNull(env, "env");
     this.cache = Preconditions.checkNotNull(cache, "cache");
     this.executor = executor;
-    this.retryScheduler = retryScheduler;
+    this.retrier = retrier;
     this.digestUtil = digestUtil;
     this.logDir = logDir;
   }
 
   public static RemoteActionContextProvider createForRemoteCaching(
       CommandEnvironment env,
-      RemoteCache cache,
-      ListeningScheduledExecutorService retryScheduler,
+      AbstractRemoteActionCache cache,
+      RemoteRetrier retrier,
       DigestUtil digestUtil) {
     return new RemoteActionContextProvider(
-        env, cache, /*executor=*/ null, retryScheduler, digestUtil, /*logDir=*/ null);
+        env, cache, /*executor=*/ null, retrier, digestUtil, /*logDir=*/ null);
   }
 
   public static RemoteActionContextProvider createForRemoteExecution(
       CommandEnvironment env,
-      RemoteExecutionCache cache,
+      GrpcRemoteCache cache,
       GrpcRemoteExecutor executor,
-      ListeningScheduledExecutorService retryScheduler,
+      RemoteRetrier retrier,
       DigestUtil digestUtil,
       Path logDir) {
-    return new RemoteActionContextProvider(
-        env, cache, executor, retryScheduler, digestUtil, logDir);
+    return new RemoteActionContextProvider(env, cache, executor, retrier, digestUtil, logDir);
   }
 
   @Override
@@ -104,8 +98,7 @@ final class RemoteActionContextProvider extends ActionContextProvider {
               buildRequestId,
               commandId,
               env.getReporter(),
-              digestUtil,
-              filesToDownload);
+              digestUtil);
       return ImmutableList.of(spawnCache);
     } else {
       RemoteSpawnRunner spawnRunner =
@@ -118,12 +111,11 @@ final class RemoteActionContextProvider extends ActionContextProvider {
               env.getReporter(),
               buildRequestId,
               commandId,
-              (RemoteExecutionCache) cache,
+              (GrpcRemoteCache) cache,
               executor,
-              retryScheduler,
+              retrier,
               digestUtil,
-              logDir,
-              filesToDownload);
+              logDir);
       return ImmutableList.of(new RemoteSpawnStrategy(env.getExecRoot(), spawnRunner));
     }
   }
@@ -165,16 +157,6 @@ final class RemoteActionContextProvider extends ActionContextProvider {
               strategyName, validStrategies),
           ExitCode.COMMAND_LINE_ERROR);
     }
-  }
-
-  /** Returns the remote cache object if any. */
-  @Nullable
-  RemoteCache getRemoteCache() {
-    return cache;
-  }
-
-  void setFilesToDownload(ImmutableSet<ActionInput> topLevelOutputs) {
-    this.filesToDownload = Preconditions.checkNotNull(topLevelOutputs, "filesToDownload");
   }
 
   @Override

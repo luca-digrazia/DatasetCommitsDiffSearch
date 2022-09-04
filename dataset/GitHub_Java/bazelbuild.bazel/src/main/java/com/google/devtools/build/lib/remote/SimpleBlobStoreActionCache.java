@@ -21,7 +21,7 @@ import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
 import build.bazel.remote.execution.v2.FileNode;
-import com.google.common.hash.HashingOutputStream;
+import build.bazel.remote.execution.v2.SymlinkNode;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.ByteArrayInputStream;
@@ -78,6 +79,10 @@ public final class SimpleBlobStoreActionCache extends AbstractRemoteActionCache 
     }
     for (DirectoryNode child : directory.getDirectoriesList()) {
       downloadTree(child.getDigest(), rootLocation.getRelative(child.getName()));
+    }
+    for (SymlinkNode symlink : directory.getSymlinksList()) {
+      PathFragment targetPath = PathFragment.create(symlink.getTarget());
+      rootLocation.getRelative(symlink.getName()).createSymbolicLink(targetPath);
     }
   }
 
@@ -226,15 +231,13 @@ public final class SimpleBlobStoreActionCache extends AbstractRemoteActionCache 
   @Override
   protected ListenableFuture<Void> downloadBlob(Digest digest, OutputStream out) {
     SettableFuture<Void> outerF = SettableFuture.create();
-    HashingOutputStream hashOut = digestUtil.newHashingOutputStream(out);
     Futures.addCallback(
-        blobStore.get(digest.getHash(), hashOut),
+        blobStore.get(digest.getHash(), out),
         new FutureCallback<Boolean>() {
           @Override
           public void onSuccess(Boolean found) {
             if (found) {
               try {
-                verifyContents(digest, hashOut);
                 out.flush();
                 outerF.set(null);
               } catch (IOException e) {
