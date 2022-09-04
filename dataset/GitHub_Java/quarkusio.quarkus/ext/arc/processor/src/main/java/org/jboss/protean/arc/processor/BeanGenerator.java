@@ -5,6 +5,7 @@ import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,9 +43,9 @@ import org.jboss.protean.arc.InitializedInterceptor;
 import org.jboss.protean.arc.InjectableBean;
 import org.jboss.protean.arc.InjectableInterceptor;
 import org.jboss.protean.arc.InjectableReferenceProvider;
+import org.jboss.protean.arc.InvocationContextImpl;
 import org.jboss.protean.arc.LazyValue;
 import org.jboss.protean.arc.Subclass;
-import org.jboss.protean.arc.processor.BeanInfo.InterceptionInfo;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource.SpecialType;
 import org.jboss.protean.gizmo.BytecodeCreator;
@@ -77,29 +78,25 @@ public class BeanGenerator extends AbstractGenerator {
 
     private static final String FIELD_NAME_DECLARING_PROVIDER = "declaringProvider";
 
-    protected final AnnotationLiteralProcessor annotationLiterals;
-
-    public BeanGenerator(AnnotationLiteralProcessor annotationLiterals) {
-        this.annotationLiterals = annotationLiterals;
-    }
-
     /**
      *
      * @param bean
+     * @param annotationLiterals
      * @return a collection of resources
      */
-    Collection<Resource> generate(BeanInfo bean, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generate(BeanInfo bean, AnnotationLiteralProcessor annotationLiterals, ReflectionRegistration reflectionRegistration) {
         if (Kind.CLASS.equals(bean.getTarget().kind())) {
-            return generateClassBean(bean, bean.getTarget().asClass(), reflectionRegistration);
+            return generateClassBean(bean, bean.getTarget().asClass(), annotationLiterals, reflectionRegistration);
         } else if (Kind.METHOD.equals(bean.getTarget().kind())) {
-            return generateProducerMethodBean(bean, bean.getTarget().asMethod(), reflectionRegistration);
+            return generateProducerMethodBean(bean, bean.getTarget().asMethod(), annotationLiterals, reflectionRegistration);
         } else if (Kind.FIELD.equals(bean.getTarget().kind())) {
-            return generateProducerFieldBean(bean, bean.getTarget().asField(), reflectionRegistration);
+            return generateProducerFieldBean(bean, bean.getTarget().asField(), annotationLiterals, reflectionRegistration);
         }
         throw new IllegalArgumentException("Unsupported bean type");
     }
 
-    Collection<Resource> generateClassBean(BeanInfo bean, ClassInfo beanClass, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generateClassBean(BeanInfo bean, ClassInfo beanClass, AnnotationLiteralProcessor annotationLiterals,
+            ReflectionRegistration reflectionRegistration) {
 
         String baseName;
         if (beanClass.enclosingClass() != null) {
@@ -138,8 +135,7 @@ public class BeanGenerator extends AbstractGenerator {
         if (!bean.hasDefaultDestroy()) {
             createDestroy(bean, beanCreator, providerTypeName, injectionPointToProviderField, reflectionRegistration);
         }
-        createCreate(classOutput, beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField, interceptorToProviderField,
-                reflectionRegistration);
+        createCreate(beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField, interceptorToProviderField, reflectionRegistration);
         createGet(bean, beanCreator, providerTypeName);
 
         createGetTypes(beanCreator, beanTypes.getFieldDescriptor());
@@ -157,7 +153,8 @@ public class BeanGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    Collection<Resource> generateProducerMethodBean(BeanInfo bean, MethodInfo producerMethod, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generateProducerMethodBean(BeanInfo bean, MethodInfo producerMethod, AnnotationLiteralProcessor annotationLiterals,
+            ReflectionRegistration reflectionRegistration) {
 
         ClassInfo declaringClass = producerMethod.declaringClass();
         String declaringClassBase;
@@ -199,7 +196,7 @@ public class BeanGenerator extends AbstractGenerator {
         if (!bean.hasDefaultDestroy()) {
             createDestroy(bean, beanCreator, providerTypeName, injectionPointToProviderField, reflectionRegistration);
         }
-        createCreate(classOutput, beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField, Collections.emptyMap(), reflectionRegistration);
+        createCreate(beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField, Collections.emptyMap(), reflectionRegistration);
         createGet(bean, beanCreator, providerTypeName);
 
         createGetTypes(beanCreator, beanTypes.getFieldDescriptor());
@@ -215,7 +212,8 @@ public class BeanGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    Collection<Resource> generateProducerFieldBean(BeanInfo bean, FieldInfo producerField, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generateProducerFieldBean(BeanInfo bean, FieldInfo producerField, AnnotationLiteralProcessor annotationLiterals,
+            ReflectionRegistration reflectionRegistration) {
 
         ClassInfo declaringClass = producerField.declaringClass();
         String declaringClassBase;
@@ -253,7 +251,7 @@ public class BeanGenerator extends AbstractGenerator {
         if (!bean.hasDefaultDestroy()) {
             createDestroy(bean, beanCreator, providerTypeName, null, reflectionRegistration);
         }
-        createCreate(classOutput, beanCreator, bean, providerTypeName, baseName, Collections.emptyMap(), Collections.emptyMap(), reflectionRegistration);
+        createCreate(beanCreator, bean, providerTypeName, baseName, Collections.emptyMap(), Collections.emptyMap(), reflectionRegistration);
         createGet(bean, beanCreator, providerTypeName);
 
         createGetTypes(beanCreator, beanTypes.getFieldDescriptor());
@@ -543,7 +541,6 @@ public class BeanGenerator extends AbstractGenerator {
 
     /**
      *
-     * @param classOutput
      * @param beanCreator
      * @param bean
      * @param baseName
@@ -551,7 +548,7 @@ public class BeanGenerator extends AbstractGenerator {
      * @param interceptorToProviderField
      * @see Contextual#create(CreationalContext)
      */
-    protected void createCreate(ClassOutput classOutput, ClassCreator beanCreator, BeanInfo bean, String providerTypeName, String baseName,
+    protected void createCreate(ClassCreator beanCreator, BeanInfo bean, String providerTypeName, String baseName,
             Map<InjectionPointInfo, String> injectionPointToProviderField, Map<InterceptorInfo, String> interceptorToProviderField,
             ReflectionRegistration reflectionRegistration) {
 
@@ -568,13 +565,13 @@ public class BeanGenerator extends AbstractGenerator {
 
             if (bean.hasLifecycleInterceptors()) {
                 // Note that we must share the interceptors instances with the intercepted subclass, if present
-                InterceptionInfo postConstructs = bean.getLifecycleInterceptors(InterceptionType.POST_CONSTRUCT);
-                InterceptionInfo aroundConstructs = bean.getLifecycleInterceptors(InterceptionType.AROUND_CONSTRUCT);
+                List<InterceptorInfo> postConstructs = bean.getLifecycleInterceptors(InterceptionType.POST_CONSTRUCT);
+                List<InterceptorInfo> aroundConstructs = bean.getLifecycleInterceptors(InterceptionType.AROUND_CONSTRUCT);
 
                 // Wrap InjectableInterceptors using InitializedInterceptor
                 Set<InterceptorInfo> wraps = new HashSet<>();
-                wraps.addAll(aroundConstructs.interceptors);
-                wraps.addAll(postConstructs.interceptors);
+                wraps.addAll(aroundConstructs);
+                wraps.addAll(postConstructs);
                 for (InterceptorInfo interceptor : wraps) {
                     ResultHandle interceptorProvider = create.readInstanceField(
                             FieldDescriptor.of(beanCreator.getClassName(), interceptorToProviderField.get(interceptor), InjectableInterceptor.class.getName()),
@@ -589,16 +586,14 @@ public class BeanGenerator extends AbstractGenerator {
                 if (!postConstructs.isEmpty()) {
                     // postConstructs = new ArrayList<InterceptorInvocation>()
                     postConstructsHandle = create.newInstance(MethodDescriptor.ofConstructor(ArrayList.class));
-                    for (InterceptorInfo interceptor : postConstructs.interceptors) {
+                    for (InterceptorInfo interceptor : postConstructs) {
                         ResultHandle interceptorHandle = create.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(),
                                 interceptorToProviderField.get(interceptor), InjectableInterceptor.class.getName()), create.getThis());
                         ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD, create.getMethodParam(0));
                         ResultHandle interceptorInstanceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, interceptorHandle,
                                 childCtxHandle);
-
                         ResultHandle interceptorInvocationHandle = create.invokeStaticMethod(MethodDescriptors.INTERCEPTOR_INVOCATION_POST_CONSTRUCT,
                                 interceptorHandle, interceptorInstanceHandle);
-
                         // postConstructs.add(InterceptorInvocation.postConstruct(interceptor,interceptor.get(CreationalContextImpl.child(ctx))))
                         create.invokeInterfaceMethod(MethodDescriptors.LIST_ADD, postConstructsHandle, interceptorInvocationHandle);
                     }
@@ -606,16 +601,14 @@ public class BeanGenerator extends AbstractGenerator {
                 if (!aroundConstructs.isEmpty()) {
                     // aroundConstructs = new ArrayList<InterceptorInvocation>()
                     aroundConstructsHandle = create.newInstance(MethodDescriptor.ofConstructor(ArrayList.class));
-                    for (InterceptorInfo interceptor : aroundConstructs.interceptors) {
+                    for (InterceptorInfo interceptor : aroundConstructs) {
                         ResultHandle interceptorHandle = create.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(),
                                 interceptorToProviderField.get(interceptor), InjectableInterceptor.class.getName()), create.getThis());
                         ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD, create.getMethodParam(0));
                         ResultHandle interceptorInstanceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, interceptorHandle,
                                 childCtxHandle);
-
                         ResultHandle interceptorInvocationHandle = create.invokeStaticMethod(MethodDescriptors.INTERCEPTOR_INVOCATION_AROUND_CONSTRUCT,
                                 interceptorHandle, interceptorInstanceHandle);
-
                         // aroundConstructs.add(InterceptorInvocation.aroundConstruct(interceptor,interceptor.get(CreationalContextImpl.child(ctx))))
                         create.invokeInterfaceMethod(MethodDescriptors.LIST_ADD, aroundConstructsHandle, interceptorInvocationHandle);
                     }
@@ -623,8 +616,7 @@ public class BeanGenerator extends AbstractGenerator {
             }
 
             // AroundConstruct lifecycle callback interceptors
-            InterceptionInfo aroundConstructs = bean.getLifecycleInterceptors(InterceptionType.AROUND_CONSTRUCT);
-            if (!aroundConstructs.isEmpty()) {
+            if (!bean.getLifecycleInterceptors(InterceptionType.AROUND_CONSTRUCT).isEmpty()) {
                 Optional<Injection> constructorInjection = bean.getConstructorInjection();
                 ResultHandle constructorHandle;
                 if (constructorInjection.isPresent()) {
@@ -656,21 +648,15 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle retHandle = newInstanceHandle(bean, beanCreator, funcBytecode, create, providerTypeName, baseName, providerHandles,
                         reflectionRegistration);
                 funcBytecode.returnValue(retHandle);
-                // Interceptor bindings
-                ResultHandle bindingsHandle = create.newInstance(MethodDescriptor.ofConstructor(HashSet.class));
-                for (AnnotationInstance binding : aroundConstructs.bindings) {
-                    // Create annotation literals first
-                    ClassInfo bindingClass = bean.getDeployment().getInterceptorBinding(binding.name());
-                    String literalType = annotationLiterals.process(classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName()));
-                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle, create.newInstance(MethodDescriptor.ofConstructor(literalType)));
-                }
 
                 // InvocationContextImpl.aroundConstruct(constructor,aroundConstructs,forward).proceed()
-                ResultHandle invocationContextHandle = create.invokeStaticMethod(MethodDescriptors.INVOCATION_CONTEXT_AROUND_CONSTRUCT, constructorHandle,
-                        aroundConstructsHandle, func.getInstance(), bindingsHandle);
+                ResultHandle invocationContextHandle = create.invokeStaticMethod(MethodDescriptor.ofMethod(InvocationContextImpl.class, "aroundConstruct",
+                        InvocationContextImpl.class, Constructor.class, List.class, Supplier.class), constructorHandle, aroundConstructsHandle,
+                        func.getInstance());
                 ExceptionTable tryCatch = create.addTryCatch();
                 CatchBlockCreator exceptionCatch = tryCatch.addCatchClause(Exception.class);
                 // throw new RuntimeException(e)
+                // TODO existing exception param
                 exceptionCatch.throwException(RuntimeException.class, "Error invoking aroundConstructs", exceptionCatch.getCaughtException());
                 instanceHandle = create.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class),
                         invocationContextHandle);
@@ -730,25 +716,17 @@ public class BeanGenerator extends AbstractGenerator {
             }
 
             // PostConstruct lifecycle callback interceptors
-            InterceptionInfo postConstructs = bean.getLifecycleInterceptors(InterceptionType.POST_CONSTRUCT);
-            if (!postConstructs.isEmpty()) {
-
-                // Interceptor bindings
-                ResultHandle bindingsHandle = create.newInstance(MethodDescriptor.ofConstructor(HashSet.class));
-                for (AnnotationInstance binding : postConstructs.bindings) {
-                    // Create annotation literals first
-                    ClassInfo bindingClass = bean.getDeployment().getInterceptorBinding(binding.name());
-                    String literalType = annotationLiterals.process(classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName()));
-                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle, create.newInstance(MethodDescriptor.ofConstructor(literalType)));
-                }
+            if (!bean.getLifecycleInterceptors(InterceptionType.POST_CONSTRUCT).isEmpty()) {
 
                 // InvocationContextImpl.postConstruct(instance,postConstructs).proceed()
-                ResultHandle invocationContextHandle = create.invokeStaticMethod(MethodDescriptors.INVOCATION_CONTEXT_POST_CONSTRUCT, instanceHandle,
-                        postConstructsHandle, bindingsHandle);
+                ResultHandle invocationContextHandle = create.invokeStaticMethod(
+                        MethodDescriptor.ofMethod(InvocationContextImpl.class, "postConstruct", InvocationContextImpl.class, Object.class, List.class),
+                        instanceHandle, postConstructsHandle);
 
                 ExceptionTable tryCatch = create.addTryCatch();
                 CatchBlockCreator exceptionCatch = tryCatch.addCatchClause(Exception.class);
                 // throw new RuntimeException(e)
+                // TODO existing exception param
                 exceptionCatch.throwException(RuntimeException.class, "Error invoking postConstructs", exceptionCatch.getCaughtException());
                 create.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class), invocationContextHandle);
                 tryCatch.complete();
