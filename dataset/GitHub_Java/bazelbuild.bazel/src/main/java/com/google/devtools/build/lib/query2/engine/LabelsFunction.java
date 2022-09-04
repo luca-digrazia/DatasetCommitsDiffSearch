@@ -55,7 +55,7 @@ public class LabelsFunction implements QueryFunction {
   @Override
   public <T> QueryTaskFuture<Void> eval(
       final QueryEnvironment<T> env,
-      QueryExpressionContext<T> context,
+      VariableContext<T> context,
       final QueryExpression expression,
       final List<Argument> args,
       final Callback<T> callback) {
