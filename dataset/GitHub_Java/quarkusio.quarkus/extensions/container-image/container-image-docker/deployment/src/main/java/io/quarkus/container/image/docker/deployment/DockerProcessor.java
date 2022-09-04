@@ -37,7 +37,6 @@ import io.quarkus.deployment.util.ExecUtil;
 public class DockerProcessor {
 
     private static final Logger log = Logger.getLogger(DockerProcessor.class);
-    private static final String DOCKER = "docker";
     private static final String DOCKERFILE_JVM = "Dockerfile.jvm";
     private static final String DOCKERFILE_NATIVE = "Dockerfile.native";
 
@@ -66,7 +65,7 @@ public class DockerProcessor {
         createContainerImage(containerImageConfig, dockerConfig, image, out, reader, false, pushRequest.isPresent());
 
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
-        containerImageResultProducer.produce(new ContainerImageResultBuildItem(DOCKER, reader.getImageId(),
+        containerImageResultProducer.produce(new ContainerImageResultBuildItem(reader.getImageId(),
                 ImageUtil.getRepository(image), ImageUtil.getTag(image)));
     }
 
@@ -100,7 +99,7 @@ public class DockerProcessor {
         createContainerImage(containerImageConfig, dockerConfig, image, out, reader, true, pushRequest.isPresent());
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
         containerImageResultProducer
-                .produce(new ContainerImageResultBuildItem(DOCKER, reader.getImageId(), ImageUtil.getRepository(image),
+                .produce(new ContainerImageResultBuildItem(reader.getImageId(), ImageUtil.getRepository(image),
                         ImageUtil.getTag(image)));
     }
 
@@ -120,7 +119,7 @@ public class DockerProcessor {
         if (pushRequested || containerImageConfig.push) {
             // Check if we need to login first
             if (containerImageConfig.username.isPresent() && containerImageConfig.password.isPresent()) {
-                boolean loginSuccessful = ExecUtil.exec("docker", "login", "-u", containerImageConfig.username.get(),
+                boolean loginSuccessful = ExecUtil.exec("docker", "-u", containerImageConfig.username.get(),
                         "-p" + containerImageConfig.password.get());
                 if (!loginSuccessful) {
                     throw dockerException(new String[] { "-u", containerImageConfig.username.get(), "-p", "********" });
