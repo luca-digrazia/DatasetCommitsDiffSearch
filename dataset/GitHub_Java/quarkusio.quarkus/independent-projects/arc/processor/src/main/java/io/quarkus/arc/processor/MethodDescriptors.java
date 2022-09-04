@@ -1,7 +1,9 @@
 package io.quarkus.arc.processor;
 
+import io.quarkus.arc.AbstractInvocationContext;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.AroundInvokeInvocationContext;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.arc.CreationalContextImpl;
 import io.quarkus.arc.FixedValueSupplier;
@@ -9,11 +11,10 @@ import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.InjectableInterceptor;
 import io.quarkus.arc.InjectableReferenceProvider;
-import io.quarkus.arc.InterceptorInvocation;
-import io.quarkus.arc.InvocationContexts;
+import io.quarkus.arc.InvocationContextImpl;
+import io.quarkus.arc.InvocationContextImpl.InterceptorInvocation;
 import io.quarkus.arc.MapValueSupplier;
 import io.quarkus.arc.Reflections;
-import io.quarkus.arc.SubclassMethodMetadata;
 import io.quarkus.gizmo.MethodDescriptor;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -79,10 +80,6 @@ final class MethodDescriptors {
             "postConstruct",
             InterceptorInvocation.class, InjectableInterceptor.class, Object.class);
 
-    static final MethodDescriptor INTERCEPTOR_INVOCATION_PRE_DESTROY = MethodDescriptor.ofMethod(InterceptorInvocation.class,
-            "preDestroy",
-            InterceptorInvocation.class, InjectableInterceptor.class, Object.class);
-
     static final MethodDescriptor INTERCEPTOR_INVOCATION_AROUND_CONSTRUCT = MethodDescriptor.ofMethod(
             InterceptorInvocation.class, "aroundConstruct",
             InterceptorInvocation.class, InjectableInterceptor.class, Object.class);
@@ -134,31 +131,24 @@ final class MethodDescriptors {
     static final MethodDescriptor EVENT_CONTEXT_GET_METADATA = MethodDescriptor.ofMethod(EventContext.class, "getMetadata",
             EventMetadata.class);
 
-    static final MethodDescriptor INVOCATION_CONTEXTS_PERFORM_AROUND_INVOKE = MethodDescriptor.ofMethod(
-            InvocationContexts.class,
-            "performAroundInvoke",
-            Object.class, Object.class, Method.class, Function.class, Object[].class, List.class,
-            Set.class);
+    static final MethodDescriptor INVOCATION_CONTEXT_AROUND_INVOKE = MethodDescriptor.ofMethod(
+            AroundInvokeInvocationContext.class,
+            "create",
+            AbstractInvocationContext.class, Object.class, Method.class, Function.class, Object[].class, List.class, Set.class);
 
-    static final MethodDescriptor INVOCATION_CONTEXTS_AROUND_CONSTRUCT = MethodDescriptor.ofMethod(
-            InvocationContexts.class,
+    static final MethodDescriptor INVOCATION_CONTEXT_AROUND_CONSTRUCT = MethodDescriptor.ofMethod(InvocationContextImpl.class,
             "aroundConstruct",
-            InvocationContext.class, Constructor.class, List.class, Supplier.class, Set.class);
+            InvocationContextImpl.class, Constructor.class, List.class, Supplier.class, Set.class);
 
-    static final MethodDescriptor INVOCATION_CONTEXTS_POST_CONSTRUCT = MethodDescriptor.ofMethod(
-            InvocationContexts.class,
+    static final MethodDescriptor INVOCATION_CONTEXT_POST_CONSTRUCT = MethodDescriptor.ofMethod(InvocationContextImpl.class,
             "postConstruct",
-            InvocationContext.class, Object.class, List.class, Set.class);
+            InvocationContextImpl.class, Object.class, List.class, Set.class);
 
-    static final MethodDescriptor INVOCATION_CONTEXTS_PRE_DESTROY = MethodDescriptor.ofMethod(InvocationContexts.class,
+    static final MethodDescriptor INVOCATION_CONTEXT_PRE_DESTROY = MethodDescriptor.ofMethod(InvocationContextImpl.class,
             "preDestroy",
-            InvocationContext.class, Object.class, List.class, Set.class);
+            InvocationContextImpl.class, Object.class, List.class, Set.class);
 
     static final MethodDescriptor INVOCATION_CONTEXT_PROCEED = MethodDescriptor.ofMethod(InvocationContext.class, "proceed",
-            Object.class);
-
-    static final MethodDescriptor INVOCATION_CONTEXT_GET_TARGET = MethodDescriptor.ofMethod(InvocationContext.class,
-            "getTarget",
             Object.class);
 
     static final MethodDescriptor CREATIONAL_CTX_ADD_DEP_TO_PARENT = MethodDescriptor.ofMethod(CreationalContextImpl.class,
@@ -181,10 +171,6 @@ final class MethodDescriptors {
 
     static final MethodDescriptor GET_IDENTIFIER = MethodDescriptor.ofMethod(InjectableBean.class, "getIdentifier",
             String.class);
-
-    static final MethodDescriptor SUBCLASS_METHOD_METADATA_CONSTRUCTOR = MethodDescriptor.ofConstructor(
-            SubclassMethodMetadata.class,
-            List.class, Method.class, Set.class);
 
     private MethodDescriptors() {
     }
