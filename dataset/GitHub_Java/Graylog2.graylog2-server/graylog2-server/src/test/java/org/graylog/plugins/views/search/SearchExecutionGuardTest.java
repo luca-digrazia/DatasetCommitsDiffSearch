@@ -25,7 +25,6 @@ import org.graylog.plugins.views.search.views.PluginMetadataSummary;
 import org.graylog2.plugin.PluginMetaData;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.graylog2.shared.bindings.GuiceInjectorHolder;
-import org.graylog2.shared.rest.exceptions.MissingStreamPermissionException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -61,7 +60,7 @@ public class SearchExecutionGuardTest {
     public void failsForNonPermittedStreams() {
         final Search search = searchWithStreamIds("ok", "not-ok");
 
-        assertThatExceptionOfType(MissingStreamPermissionException.class)
+        assertThatExceptionOfType(ForbiddenException.class)
                 .isThrownBy(() -> sut.check(search, id -> id.equals("ok")));
     }
 

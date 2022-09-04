@@ -27,7 +27,6 @@ import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
 import com.github.joschi.jadconfig.validators.StringNotBlankValidator;
 import org.graylog2.plugin.BaseConfiguration;
-import org.graylog2.security.realm.RootAccountRealm;
 import org.graylog2.utilities.IPSubnetConverter;
 import org.graylog2.utilities.IpSubnet;
 import org.joda.time.DateTimeZone;
@@ -72,8 +71,7 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "root_username")
     private String rootUsername = "admin";
 
-    // Required unless "root-user" is deactivated in the "deactivated_builtin_authentication_providers" setting
-    @Parameter(value = "root_password_sha2")
+    @Parameter(value = "root_password_sha2", required = true)
     private String rootPasswordSha2;
 
     @Parameter(value = "root_timezone")
@@ -297,21 +295,6 @@ public class Configuration extends BaseConfiguration {
         if (passwordSecret == null || passwordSecret.length() < 16) {
             throw new ValidationException("The minimum length for \"password_secret\" is 16 characters.");
         }
-    }
-
-    @ValidatorMethod
-    @SuppressWarnings("unused")
-    public void validateRootUser() throws ValidationException {
-        if (getRootPasswordSha2() == null && !isRootUserDisabled()) {
-            throw new ValidationException("Required parameter \"root_password_sha2\" not found.");
-        }
-    }
-
-    /**
-     * The root user is disabled if the {@link RootAccountRealm} is deactivated.
-     */
-    public boolean isRootUserDisabled() {
-        return getDeactivatedBuiltinAuthenticationProviders().contains(RootAccountRealm.NAME);
     }
 
     public static class NodeIdFileValidator implements Validator<String> {
