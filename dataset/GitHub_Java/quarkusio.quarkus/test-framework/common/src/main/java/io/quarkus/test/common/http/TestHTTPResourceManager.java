@@ -4,25 +4,47 @@ import java.lang.reflect.Field;
 import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.function.Function;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 
+import io.quarkus.bootstrap.app.RunningQuarkusApplication;
+import io.quarkus.runtime.test.TestHttpEndpointProvider;
+
 public class TestHTTPResourceManager {
 
     public static String getUri() {
-        Config config = ConfigProvider.getConfig();
-        String host = config.getOptionalValue("quarkus.http.host", String.class).orElse("localhost");
-        String port = config.getOptionalValue("quarkus.http.test-port", String.class).orElse("8081");
-        String contextPath = config.getOptionalValue("quarkus.servlet.context-path", String.class).orElse("");
-        String testUrl = "http://" + host + ":" + port + contextPath;
-        System.setProperty("test.url", testUrl);
-        return testUrl;
+        try {
+            Config config = ConfigProvider.getConfig();
+            return config.getValue("test.url", String.class);
+        } catch (IllegalStateException e) {
+            //massive hack for dev mode tests, dev mode has not started yet
+            //so we don't have any way to load this correctly from config
+            return "http://localhost:8080";
+        }
+    }
+
+    public static String getSslUri() {
+        return ConfigProvider.getConfig().getValue("test.url.ssl", String.class);
+    }
+
+    public static String getUri(RunningQuarkusApplication application) {
+        return application.getConfigValue("test.url", String.class).get();
+    }
+
+    public static String getSslUri(RunningQuarkusApplication application) {
+        return application.getConfigValue("test.url.ssl", String.class).get();
     }
 
     public static void inject(Object testCase) {
+        inject(testCase, TestHttpEndpointProvider.load());
+    }
+
+    public static void inject(Object testCase, List<Function<Class<?>, String>> endpointProviders) {
         Map<Class<?>, TestHTTPResourceProvider<?>> providers = getProviders();
         Class<?> c = testCase.getClass();
         while (c != Object.class) {
@@ -35,11 +57,43 @@ public class TestHTTPResourceManager {
                                 "Unable to inject TestHTTPResource field " + f + " as no provider exists for the type");
                     }
                     String path = resource.value();
+                    String endpointPath = null;
+                    TestHTTPEndpoint endpointAnnotation = f.getAnnotation(TestHTTPEndpoint.class);
+                    if (endpointAnnotation != null) {
+                        for (Function<Class<?>, String> func : endpointProviders) {
+                            endpointPath = func.apply(endpointAnnotation.value());
+                            if (endpointPath != null) {
+                                break;
+                            }
+                        }
+                        if (endpointPath == null) {
+                            throw new RuntimeException(
+                                    "Could not determine the endpoint path for " + endpointAnnotation.value() + " to inject "
+                                            + f);
+                        }
+                    }
+                    if (!path.isEmpty() && endpointPath != null) {
+                        if (!endpointPath.endsWith("/")) {
+                            path = endpointPath + "/" + path;
+                        } else {
+                            path = endpointPath + path;
+                        }
+                    } else if (endpointPath != null) {
+                        path = endpointPath;
+                    }
                     String val;
-                    if (path.startsWith("/")) {
-                        val = getUri() + path;
+                    if (resource.ssl()) {
+                        if (path.startsWith("/")) {
+                            val = getSslUri() + path;
+                        } else {
+                            val = getSslUri() + "/" + path;
+                        }
                     } else {
-                        val = getUri() + "/" + path;
+                        if (path.startsWith("/")) {
+                            val = getUri() + path;
+                        } else {
+                            val = getUri() + "/" + path;
+                        }
                     }
                     f.setAccessible(true);
                     try {
@@ -55,7 +109,8 @@ public class TestHTTPResourceManager {
 
     private static Map<Class<?>, TestHTTPResourceProvider<?>> getProviders() {
         Map<Class<?>, TestHTTPResourceProvider<?>> map = new HashMap<>();
-        for (TestHTTPResourceProvider<?> i : ServiceLoader.load(TestHTTPResourceProvider.class)) {
+        for (TestHTTPResourceProvider<?> i : ServiceLoader.load(TestHTTPResourceProvider.class,
+                TestHTTPResourceProvider.class.getClassLoader())) {
             map.put(i.getProvidedType(), i);
         }
         return Collections.unmodifiableMap(map);

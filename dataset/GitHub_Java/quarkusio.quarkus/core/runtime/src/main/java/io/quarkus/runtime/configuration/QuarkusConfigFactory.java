@@ -1,5 +1,7 @@
 package io.quarkus.runtime.configuration;
 
+import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
+
 import io.smallrye.config.SmallRyeConfig;
 import io.smallrye.config.SmallRyeConfigFactory;
 import io.smallrye.config.SmallRyeConfigProviderResolver;
@@ -26,14 +28,20 @@ public final class QuarkusConfigFactory extends SmallRyeConfigFactory {
             //the HTTP port or logging info
             return configProviderResolver.getBuilder().forClassLoader(classLoader)
                     .addDefaultSources()
+                    .addDefaultInterceptors()
                     .addDiscoveredSources()
                     .addDiscoveredConverters()
+                    .addDiscoveredInterceptors()
+                    .withProfile(ProfileManager.getActiveProfile())
                     .build();
         }
         return config;
     }
 
     public static void setConfig(SmallRyeConfig config) {
+        if (QuarkusConfigFactory.config != null) {
+            ConfigProviderResolver.instance().releaseConfig(QuarkusConfigFactory.config);
+        }
         QuarkusConfigFactory.config = config;
     }
 }
