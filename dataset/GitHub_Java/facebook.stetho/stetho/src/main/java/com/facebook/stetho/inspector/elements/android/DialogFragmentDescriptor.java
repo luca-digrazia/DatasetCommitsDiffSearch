@@ -28,10 +28,9 @@ import com.facebook.stetho.inspector.elements.StyleAccumulator;
 import javax.annotation.Nullable;
 
 final class DialogFragmentDescriptor
-    extends Descriptor<Object>
-    implements ChainedDescriptor<Object>, HighlightableDescriptor<Object> {
+    extends Descriptor implements ChainedDescriptor, HighlightableDescriptor {
   private final DialogFragmentAccessor mAccessor;
-  private Descriptor<? super Object> mSuper;
+  private Descriptor mSuper;
 
   public static DescriptorMap register(DescriptorMap map) {
     maybeRegister(map, FragmentCompat.getSupportLibInstance());
@@ -52,7 +51,7 @@ final class DialogFragmentDescriptor
   }
 
   @Override
-  public void setSuper(Descriptor<? super Object> superDescriptor) {
+  public void setSuper(Descriptor superDescriptor) {
     Util.throwIfNull(superDescriptor);
 
     if (superDescriptor != mSuper) {

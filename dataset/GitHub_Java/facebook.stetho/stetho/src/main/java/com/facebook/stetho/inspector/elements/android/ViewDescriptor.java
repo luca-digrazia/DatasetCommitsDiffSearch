@@ -189,22 +189,12 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View> implements Hi
     AccessibilityNodeInfoCompat nodeInfo = AccessibilityNodeInfoCompat.obtain();
     ViewCompat.onInitializeAccessibilityNodeInfo(element, nodeInfo);
 
-    boolean ignored = AccessibilityNodeInfoWrapper.getIgnored(nodeInfo, element);
     getStyleFromValue(
         element,
         "ignored",
-        ignored,
+        AccessibilityNodeInfoWrapper.getIgnored(element, nodeInfo),
         null,
         styles);
-
-    if (ignored) {
-      getStyleFromValue(
-          element,
-          "ignored-reasons",
-          AccessibilityNodeInfoWrapper.getIgnoredReasons(nodeInfo, element),
-          null,
-          styles);
-    }
 
     nodeInfo.recycle();
   }
