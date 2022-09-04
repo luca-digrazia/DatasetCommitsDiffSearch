@@ -23,33 +23,33 @@ import javax.validation.constraints.NotNull;
 import java.util.List;
 
 public class ConfigurationBundle {
-    @JsonProperty("id")
+    @JsonProperty
     private String id;
 
-    @JsonProperty("name")
+    @JsonProperty
     @NotNull
     private String name;
 
-    @JsonProperty("description")
+    @JsonProperty
     @NotNull
     private String description;
 
-    @JsonProperty("category")
+    @JsonProperty
     @NotNull
     private String category;
 
-    @JsonProperty("inputs")
+    @JsonProperty
     private List<Input> inputs = Lists.newArrayList();
 
-    @JsonProperty("streams")
+    @JsonProperty
     private List<Stream> streams = Lists.newArrayList();
 
-    @JsonProperty("outputs")
+    @JsonProperty
     private List<Output> outputs = Lists.newArrayList();
 
-    @JsonProperty("dashboards")
+    @JsonProperty
     private List<Dashboard> dashboards = Lists.newArrayList();
 
-    @JsonProperty("grok_patterns")
+    @JsonProperty
     private List<GrokPattern> grokPatterns = Lists.newArrayList();
 }
