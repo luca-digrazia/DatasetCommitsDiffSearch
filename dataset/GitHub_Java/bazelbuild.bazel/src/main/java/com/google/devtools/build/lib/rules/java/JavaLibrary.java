@@ -78,7 +78,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     JavaConfiguration javaConfig = ruleContext.getFragment(JavaConfiguration.class);
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.stableOrder();
 
-    JavaTargetAttributes attributes = attributesBuilder.build();
+    JavaTargetAttributes attributes = helper.getAttributes();
     if (attributes.hasMessages()) {
       helper.setTranslations(
           semantics.translate(ruleContext, javaConfig, attributes.getMessages()));
@@ -106,10 +106,29 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     filesBuilder.add(classJar);
 
-    JavaCompileOutputs<Artifact> outputs = helper.createOutputs(classJar);
-    javaArtifactsBuilder.setCompileTimeDependencies(outputs.depsProto());
-    helper.createCompileAction(outputs);
-    helper.createSourceJarAction(srcJar, outputs.genSource());
+    Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
+
+    Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
+
+    // The gensrc jar is created only if the target uses annotation processing.
+    // Otherwise, it is null, and the source jar action will not depend on the compile action.
+    Artifact genSourceJar = null;
+    Artifact genClassJar = null;
+    if (helper.usesAnnotationProcessing()) {
+      genClassJar = helper.createGenJar(classJar);
+      genSourceJar = helper.createGensrcJar(classJar);
+    }
+
+    Artifact nativeHeaderOutput = helper.createNativeHeaderJar(classJar);
+
+    helper.createCompileAction(
+        classJar,
+        manifestProtoOutput,
+        outputDepsProto,
+        genSourceJar,
+        genClassJar,
+        nativeHeaderOutput);
+    helper.createSourceJarAction(srcJar, genSourceJar);
 
     Artifact iJar = null;
     if (attributes.hasSources() && jar != null) {
@@ -117,9 +136,9 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     }
     JavaRuleOutputJarsProvider.Builder ruleOutputJarsProviderBuilder =
         JavaRuleOutputJarsProvider.builder()
-            .addOutputJar(classJar, iJar, outputs.manifestProto(), ImmutableList.of(srcJar))
-            .setJdeps(outputs.depsProto())
-            .setNativeHeaders(outputs.nativeHeader());
+            .addOutputJar(classJar, iJar, manifestProtoOutput, ImmutableList.of(srcJar))
+            .setJdeps(outputDepsProto)
+            .setNativeHeaders(nativeHeaderOutput);
 
     GeneratedExtensionRegistryProvider generatedExtensionRegistryProvider = null;
     if (includeGeneratedExtensionRegistry) {
@@ -152,7 +171,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
 
-    semantics.addProviders(ruleContext, common, outputs.genSource(), builder);
+    semantics.addProviders(ruleContext, common, genSourceJar, builder);
     if (generatedExtensionRegistryProvider != null) {
       builder.addNativeDeclaredProvider(generatedExtensionRegistryProvider);
     }
@@ -166,7 +185,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     JavaInfo.Builder javaInfoBuilder = JavaInfo.Builder.create();
 
     common.addTransitiveInfoProviders(builder, javaInfoBuilder, filesToBuild, classJar);
-    common.addGenJarsProvider(builder, javaInfoBuilder, outputs.genClass(), outputs.genSource());
+    common.addGenJarsProvider(builder, javaInfoBuilder, genClassJar, genSourceJar);
 
     NestedSet<Artifact> proguardSpecs = new ProguardLibrary(ruleContext).collectProguardSpecs();
 
@@ -188,7 +207,6 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
             .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
             // TODO(bazel-team): this should only happen for java_plugin
             .addProvider(JavaPluginInfoProvider.class, pluginInfoProvider)
-            .maybeTransitiveOnlyRuntimeJarsToJavaInfo(common.getDependencies(), true)
             .setRuntimeJars(javaArtifacts.getRuntimeJars())
             .setJavaConstraints(JavaCommon.getConstraints(ruleContext))
             .setNeverlink(neverLink)

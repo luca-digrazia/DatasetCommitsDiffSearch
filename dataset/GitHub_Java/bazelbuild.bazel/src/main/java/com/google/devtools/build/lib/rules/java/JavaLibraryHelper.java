@@ -204,7 +204,7 @@ public final class JavaLibraryHelper {
       boolean createOutputSourceJar,
       @Nullable Artifact outputSourceJar,
       @Nullable JavaInfo.Builder javaInfoBuilder,
-      List<JavaGenJarsProvider> transitiveJavaGenJars,
+      Iterable<JavaGenJarsProvider> transitiveJavaGenJars,
       ImmutableList<Artifact> additionalJavaBaseInputs)
       throws InterruptedException {
 
@@ -243,9 +243,26 @@ public final class JavaLibraryHelper {
             javaToolchainProvider,
             hostJavabase,
             additionalJavaBaseInputs);
-    JavaCompileOutputs<Artifact> outputs = helper.createOutputs(output);
-    artifactsBuilder.setCompileTimeDependencies(outputs.depsProto());
-    helper.createCompileAction(outputs);
+    Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(output, artifactsBuilder);
+
+    Artifact manifestProtoOutput = helper.createManifestProtoOutput(output);
+
+    Artifact genSourceJar = null;
+    Artifact genClassJar = null;
+    if (helper.usesAnnotationProcessing()) {
+      genClassJar = helper.createGenJar(output);
+      genSourceJar = helper.createGensrcJar(output);
+    }
+
+    Artifact nativeHeaderOutput = helper.createNativeHeaderJar(output);
+
+    helper.createCompileAction(
+        output,
+        manifestProtoOutput,
+        outputDepsProto,
+        genSourceJar,
+        genClassJar,
+        nativeHeaderOutput);
 
     Artifact iJar = null;
     if (!sourceJars.isEmpty() || !sourceFiles.isEmpty()) {
@@ -255,14 +272,14 @@ public final class JavaLibraryHelper {
 
     if (createOutputSourceJar) {
       helper.createSourceJarAction(
-          outputSourceJar, outputs.genSource(), javaToolchainProvider, hostJavabase);
+          outputSourceJar, genSourceJar, javaToolchainProvider, hostJavabase);
     }
     ImmutableList<Artifact> outputSourceJars =
         outputSourceJar == null ? ImmutableList.of() : ImmutableList.of(outputSourceJar);
     outputJarsBuilder
-        .addOutputJar(new OutputJar(output, iJar, outputs.manifestProto(), outputSourceJars))
-        .setJdeps(outputs.depsProto())
-        .setNativeHeaders(outputs.nativeHeader());
+        .addOutputJar(new OutputJar(output, iJar, manifestProtoOutput, outputSourceJars))
+        .setJdeps(outputDepsProto)
+        .setNativeHeaders(nativeHeaderOutput);
 
     JavaCompilationArtifacts javaArtifacts = artifactsBuilder.build();
     if (javaInfoBuilder != null) {
@@ -284,8 +301,7 @@ public final class JavaLibraryHelper {
 
       javaInfoBuilder.addProvider(
           JavaGenJarsProvider.class,
-          createJavaGenJarsProvider(
-              helper, outputs.genClass(), outputs.genSource(), transitiveJavaGenJars));
+          createJavaGenJarsProvider(helper, genClassJar, genSourceJar, transitiveJavaGenJars));
     }
 
     return javaArtifacts;
@@ -295,7 +311,7 @@ public final class JavaLibraryHelper {
       JavaCompilationHelper helper,
       @Nullable Artifact genClassJar,
       @Nullable Artifact genSourceJar,
-      List<JavaGenJarsProvider> transitiveJavaGenJars) {
+      Iterable<JavaGenJarsProvider> transitiveJavaGenJars) {
     return JavaGenJarsProvider.create(
         helper.usesAnnotationProcessing(),
         genClassJar,
