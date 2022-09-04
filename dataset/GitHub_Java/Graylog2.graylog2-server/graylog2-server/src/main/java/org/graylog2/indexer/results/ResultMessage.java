@@ -1,72 +1,95 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@socketfeed.com>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.indexer.results;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Range;
+import org.graylog2.plugin.Message;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
-import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.search.SearchHit;
+import static org.graylog2.plugin.Tools.ES_DATE_FORMAT_FORMATTER;
 
-/**
- * @author Lennart Koopmann <lennart@socketfeed.com>
- */
 public class ResultMessage {
+    private static final Logger LOG = LoggerFactory.getLogger(ResultMessage.class);
 
-	/* 
-	 * I suppress all the warnings because Eclipse doesn't know shit
-	 * about JSON POJO serialization.
-	 */
-	@SuppressWarnings("unused") private Map<String, Object> message;
-	@SuppressWarnings("unused") private String index;
-	@SuppressWarnings("unused") private String nodeId;
+    private Message message;
+    private String index;
 
-	protected ResultMessage() { /* use factory method */}
-	
-	public static ResultMessage parseFromSource(SearchHit hit) {
-		ResultMessage m = new ResultMessage();
-		m.setMessage(hit.getSource());
-		m.setIndex(hit.getIndex());
-		m.setNodeId(hit.getShard().getNodeId());
-		
-		return m;
-	}
-	
-	public static ResultMessage parseFromSource(GetResponse r) {
-		ResultMessage m = new ResultMessage();
-		m.setMessage(r.getSource());
-		m.setIndex(r.getIndex());
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Multimap<String, Range<Integer>> highlightRanges;
 
-		return m;
-	}
-	
-	public void setMessage(Map<String, Object> message) {
-		this.message = message;
-	}
-	
-	public void setIndex(String index) {
-		this.index = index;
-	}
-	
-	public void setNodeId(String nodeId) {
-		this.nodeId = nodeId;
-	}
+    protected ResultMessage() { /* use factory method */}
 
+    private ResultMessage(String id, String index, Map<String, Object> message, Multimap<String, Range<Integer>> highlightRanges) {
+        this.index = index;
+        this.highlightRanges = highlightRanges;
+        setMessage(id, message);
+    }
+
+    public static ResultMessage parseFromSource(String id, String index, Map<String, Object> message) {
+        return parseFromSource(id, index, message, Collections.emptyMap());
+    }
+
+    public static ResultMessage parseFromSource(String id, String index, Map<String, Object> message, Map<String, List<String>> highlight) {
+        return new ResultMessage(id, index, message, HighlightParser.extractHighlightRanges(highlight));
+    }
+
+    public static ResultMessage createFromMessage(Message message) {
+        ResultMessage m = new ResultMessage();
+        m.setMessage(message);
+        return m;
+    }
+
+    public void setMessage(Message message) {
+        this.message = message;
+    }
+
+    public void setMessage(String id, Map<String, Object> message) {
+        Map<String, Object> tmp = Maps.newHashMap();
+        tmp.putAll(message);
+        tmp.put(Message.FIELD_ID, id);
+        if (tmp.containsKey(Message.FIELD_TIMESTAMP)) {
+            final Object tsField = tmp.get(Message.FIELD_TIMESTAMP);
+            try {
+                tmp.put(Message.FIELD_TIMESTAMP, ES_DATE_FORMAT_FORMATTER.parseDateTime(String.valueOf(tsField)));
+            } catch (IllegalArgumentException e) {
+                // could not parse date string, this is likely a bug, but we will leave the original value alone
+                LOG.warn("Could not parse timestamp of message {}", message.get("id"), e);
+            }
+        }
+        this.message = new Message(tmp);
+    }
+
+    public void setIndex(String index) {
+        this.index = index;
+    }
+
+    public Message getMessage() {
+        return message;
+    }
+
+    public String getIndex() {
+        return index;
+    }
 }
