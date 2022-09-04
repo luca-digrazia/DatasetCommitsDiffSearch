@@ -81,8 +81,7 @@ public class QuarkusGenerateCode extends QuarkusTask {
     @OutputDirectory
     public File getGeneratedOutputDirectory() {
         final String generatedSourceSetName = test ? QUARKUS_TEST_GENERATED_SOURCES : QUARKUS_GENERATED_SOURCES;
-        return QuarkusGradleUtils.getSourceSet(getProject(), generatedSourceSetName).getJava().getClassesDirectory().get()
-                .getAsFile();
+        return QuarkusGradleUtils.getSourceSet(getProject(), generatedSourceSetName).getJava().getOutputDir();
     }
 
     @TaskAction
