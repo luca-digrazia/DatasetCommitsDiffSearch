@@ -199,7 +199,8 @@ public abstract class Graylog2Module extends AbstractModule {
             return;
         }
 
-        installInput(inputMapBinder, target, factoryClass);
+        install(new FactoryModuleBuilder().implement(MessageInput.class, target).build(factoryClass));
+        inputMapBinder.addBinding(target.getCanonicalName()).to(Key.get(factoryClass));
     }
 
     protected MapBinder<String, MessageOutput.Factory<? extends MessageOutput>> outputsMapBinder() {
