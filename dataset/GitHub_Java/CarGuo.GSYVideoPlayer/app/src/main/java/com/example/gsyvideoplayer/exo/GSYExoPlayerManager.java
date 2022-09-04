@@ -6,7 +6,6 @@ import android.os.Message;
 import android.view.Surface;
 
 import com.google.android.exoplayer2.video.DummySurface;
-import com.shuyu.gsyvideoplayer.cache.ICacheManager;
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.player.IPlayerManager;
 
@@ -32,7 +31,7 @@ public class GSYExoPlayerManager implements IPlayerManager {
     }
 
     @Override
-    public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList, ICacheManager cacheManager) {
+    public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList) {
         mediaPlayer = new GSYExo2MediaPlayer(context);
         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
         if (dummySurface == null) {

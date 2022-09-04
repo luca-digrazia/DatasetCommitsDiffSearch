@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 
+import com.danikula.videocache.HttpProxyCacheServer;
 import com.example.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.model.GSYVideoModel;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
@@ -178,7 +179,7 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
             Debuger.printfError("********************** urls isEmpty . Do you know why ? **********************");
         }
 
-        ((GSYExoVideoManager)getGSYVideoManager()).prepare(urls, (mMapHeadData == null) ? new HashMap<String, String>() : mMapHeadData, mLooping, mSpeed, mExoCache, mCachePath);
+        ((GSYExoVideoManager)getGSYVideoManager()).prepare(urls, (mMapHeadData == null) ? new HashMap<String, String>() : mMapHeadData, mLooping, mSpeed, mExoCache);
 
         setStateAndUi(CURRENT_STATE_PREPAREING);
     }
@@ -223,7 +224,6 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
 
     @Override
     public GSYVideoViewBridge getGSYVideoManager() {
-        GSYExoVideoManager.instance().initContext(getContext().getApplicationContext());
         return GSYExoVideoManager.instance();
     }
 
@@ -235,6 +235,14 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
     @Override
     protected void releaseVideos() {
         GSYExoVideoManager.releaseAllVideos();
+    }
+
+    /**
+     * 不支持边播边缓存，也就不存在proxy
+     */
+    @Override
+    protected HttpProxyCacheServer getProxy(Context context, File file) {
+        return null;
     }
 
     @Override
