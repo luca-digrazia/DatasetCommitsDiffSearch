@@ -427,21 +427,17 @@ public final class AspectFunction implements SkyFunction {
       return null;
     }
 
-    ConfiguredAspect configuredAspect;
-    if (ConfiguredTargetFunction.aspectMatchesConfiguredTarget(associatedTarget, aspect)) {
-      configuredAspect = view.getConfiguredTargetFactory().createAspect(
-          analysisEnvironment,
-          associatedTarget,
-          aspectPath,
-          aspectFactory,
-          aspect,
-          directDeps,
-          configConditions,
-          aspectConfiguration,
-          view.getHostConfiguration(aspectConfiguration));
-    } else {
-      configuredAspect = ConfiguredAspect.forNonapplicableTarget(aspect.getDescriptor());
-    }
+    ConfiguredAspect configuredAspect =
+        view.getConfiguredTargetFactory().createAspect(
+            analysisEnvironment,
+            associatedTarget,
+            aspectPath,
+            aspectFactory,
+            aspect,
+            directDeps,
+            configConditions,
+            aspectConfiguration,
+            view.getHostConfiguration(aspectConfiguration));
 
     events.replayOn(env.getListener());
     if (events.hasErrors()) {
