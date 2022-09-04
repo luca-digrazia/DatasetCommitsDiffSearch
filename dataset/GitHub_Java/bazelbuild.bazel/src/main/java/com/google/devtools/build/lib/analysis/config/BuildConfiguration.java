@@ -239,7 +239,7 @@ public final class BuildConfiguration implements BuildEvent {
     }
   }
 
-  public static final Label convertOptionsLabel(String input) throws OptionsParsingException {
+  private static final Label convertLabel(String input) throws OptionsParsingException {
     try {
       // Check if the input starts with '/'. We don't check for "//" so that
       // we get a better error message if the user accidentally tries to use
@@ -259,7 +259,7 @@ public final class BuildConfiguration implements BuildEvent {
   public static class LabelConverter implements Converter<Label> {
     @Override
     public Label convert(String input) throws OptionsParsingException {
-      return convertOptionsLabel(input);
+      return convertLabel(input);
     }
 
     @Override
@@ -274,7 +274,7 @@ public final class BuildConfiguration implements BuildEvent {
     public List<Label> convert(String input) throws OptionsParsingException {
       ImmutableList.Builder result = ImmutableList.builder();
       for (String label : Splitter.on(",").omitEmptyStrings().split(input)) {
-        result.add(convertOptionsLabel(label));
+        result.add(convertLabel(label));
       }
       return result.build();
     }
@@ -292,7 +292,7 @@ public final class BuildConfiguration implements BuildEvent {
   public static class EmptyToNullLabelConverter implements Converter<Label> {
     @Override
     public Label convert(String input) throws OptionsParsingException {
-      return input.isEmpty() ? null : convertOptionsLabel(input);
+      return input.isEmpty() ? null : convertLabel(input);
     }
 
     @Override
@@ -315,7 +315,7 @@ public final class BuildConfiguration implements BuildEvent {
 
     @Override
     public Label convert(String input) throws OptionsParsingException {
-      return input.isEmpty() ? defaultValue : convertOptionsLabel(input);
+      return input.isEmpty() ? defaultValue : convertLabel(input);
     }
 
     @Override
@@ -340,7 +340,7 @@ public final class BuildConfiguration implements BuildEvent {
         } else {
           key = entry.substring(0, sepIndex);
           String value = entry.substring(sepIndex + 1);
-          label = value.isEmpty() ? null : convertOptionsLabel(value);
+          label = value.isEmpty() ? null : convertLabel(value);
         }
         if (result.containsKey(key)) {
           throw new OptionsParsingException("Key '" + key + "' appears twice");
@@ -1080,32 +1080,19 @@ public final class BuildConfiguration implements BuildEvent {
      * Values for --experimental_dynamic_configs.
      */
     public enum DynamicConfigsMode {
+      /** Don't use dynamic configurations. */
+      OFF,
       /** Use dynamic configurations, including only the fragments each rule needs. */
       ON,
       /** Use dynamic configurations, always including all fragments known to Blaze. */
       NOTRIM,
       /**
-       * Same as NOTRIM.
-       *
-       * <p>This used to revert certain special cases to static configurations because dynamic
-       * configuration didn't support them. But now all builds use dynamic configurations. This
-       * value will be removed once we know no one is setting it.
-       *
-       * @deprecated use {@link #NOTRIM} instead
+       * Use untrimmed dynamic configurations unless an {@link Options} fragment needs static
+       * configurations. This is used to exempt features that don't yet work with dynamic configs.
        */
-      @Deprecated
-      NOTRIM_PARTIAL,
-      /**
-       * Same as NOTRIM.
-       *
-       * <p>This used to disable dynamic configurations (while the feature was still being
-       * developed). But now all builds use dynamic configurations. This value will be removed
-       * once we know no one is setting it.
-       *
-       * @deprecated use {@link #NOTRIM} instead
-       */
-      @Deprecated
-      OFF
+      // TODO(gregce): make this mode unnecesary by making everything compatible with dynamic
+      // configs. b/23280991 tracks the effort (LIPO is the main culprit).
+      NOTRIM_PARTIAL
     }
 
     /**
@@ -1114,17 +1101,6 @@ public final class BuildConfiguration implements BuildEvent {
     public static class DynamicConfigsConverter extends EnumConverter<DynamicConfigsMode> {
       public DynamicConfigsConverter() {
         super(DynamicConfigsMode.class, "dynamic configurations mode");
-      }
-
-      @Override
-      public DynamicConfigsMode convert(String input) throws OptionsParsingException {
-        DynamicConfigsMode userSetValue = super.convert(input);
-        if (userSetValue == DynamicConfigsMode.OFF
-            || userSetValue == DynamicConfigsMode.NOTRIM_PARTIAL) {
-          return DynamicConfigsMode.NOTRIM;
-        } else {
-          return userSetValue;
-        }
       }
     }
 
@@ -1468,6 +1444,11 @@ public final class BuildConfiguration implements BuildEvent {
           "Heuristic sharding is intended as a one-off experimentation tool for determing the "
               + "benefit from sharding certain tests. Please don't keep this option in your "
               + ".blazerc or continuous build"));
+    }
+
+    if (trimConfigurations() && !options.useDistinctHostConfiguration) {
+      reporter.handle(Event.error(
+          "--nodistinct_host_configuration does not currently work with dynamic configurations"));
     }
   }
 
