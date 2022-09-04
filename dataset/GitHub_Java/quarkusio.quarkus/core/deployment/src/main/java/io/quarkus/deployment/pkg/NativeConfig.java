@@ -139,7 +139,7 @@ public class NativeConfig {
     /**
      * The docker image to use to do the image build
      */
-    @ConfigItem(defaultValue = "quay.io/quarkus/ubi-quarkus-native-image:19.3.1-java11")
+    @ConfigItem(defaultValue = "quay.io/quarkus/ubi-quarkus-native-image:19.3.1-java8")
     public String builderImage;
 
     /**
@@ -168,7 +168,7 @@ public class NativeConfig {
     public boolean fullStackTraces;
 
     /**
-     * If the reports on call paths and included packages/classes/methods should be generated
+     * If reporting on call paths should be enabled
      */
     @ConfigItem(defaultValue = "false")
     public boolean enableReports;
