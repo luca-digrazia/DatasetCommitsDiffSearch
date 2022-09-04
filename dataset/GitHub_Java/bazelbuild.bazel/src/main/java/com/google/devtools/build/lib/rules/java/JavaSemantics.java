@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -172,20 +173,19 @@ public interface JavaSemantics {
               ImmutableList.copyOf(javaConfig.getExtraProguardSpecs()));
 
   @AutoCodec
-  LabelLateBoundDefault<JavaConfiguration> BYTECODE_OPTIMIZER =
-      LabelLateBoundDefault.fromTargetConfiguration(
+  LabelListLateBoundDefault<JavaConfiguration> BYTECODE_OPTIMIZERS =
+      LabelListLateBoundDefault.fromTargetConfiguration(
           JavaConfiguration.class,
-          null,
           (rule, attributes, javaConfig) -> {
             // Use a modicum of smarts to avoid implicit dependencies where we don't need them.
             boolean hasProguardSpecs =
                 attributes.has("proguard_specs")
                     && !attributes.get("proguard_specs", LABEL_LIST).isEmpty();
-            JavaConfiguration.NamedLabel optimizer = javaConfig.getBytecodeOptimizer();
-            if (!hasProguardSpecs || !optimizer.label().isPresent()) {
-              return null;
+            if (!hasProguardSpecs) {
+              return ImmutableList.<Label>of();
             }
-            return optimizer.label().get();
+            return ImmutableList.copyOf(
+                Optional.presentInstances(javaConfig.getBytecodeOptimizers().values()));
           });
 
   String JACOCO_METADATA_PLACEHOLDER = "%set_jacoco_metadata%";
@@ -326,6 +326,10 @@ public interface JavaSemantics {
   static boolean isTestTargetAndPersistentTestRunner(RuleContext ruleContext) {
     return ruleContext.isTestTarget()
         && ruleContext.getFragment(TestConfiguration.class).isPersistentTestRunner();
+  }
+
+  static boolean isPersistentTestRunner(RuleContext ruleContext) {
+    return ruleContext.getFragment(TestConfiguration.class).isPersistentTestRunner();
   }
 
   static Runfiles getTestSupportRunfiles(RuleContext ruleContext) {

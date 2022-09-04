@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.Runfiles.Builder;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.LauncherFileWriteAction;
@@ -38,6 +37,7 @@ import com.google.devtools.build.lib.analysis.actions.Substitution;
 import com.google.devtools.build.lib.analysis.actions.Substitution.ComputedSubstitution;
 import com.google.devtools.build.lib.analysis.actions.Template;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -184,7 +184,7 @@ public class BazelJavaSemantics implements JavaSemantics {
       return ImmutableList.of();
     }
 
-    return ruleContext.getPrerequisiteArtifacts("resources", TransitionMode.TARGET).list();
+    return ruleContext.getPrerequisiteArtifacts("resources", Mode.TARGET).list();
   }
 
   /**
@@ -219,12 +219,12 @@ public class BazelJavaSemantics implements JavaSemantics {
         if (!isRunfilesEnabled) {
           buffer.append("$(rlocation ");
           PathFragment runfilePath =
-              PathFragment.create(workspacePrefix).getRelative(artifact.getRootRelativePath());
+              PathFragment.create(workspacePrefix).getRelative(artifact.getRunfilesPath());
           buffer.append(runfilePath.getPathString());
           buffer.append(")");
         } else {
           buffer.append("${RUNPATH}");
-          buffer.append(artifact.getRootRelativePath().getPathString());
+          buffer.append(artifact.getRunfilesPath().getPathString());
         }
       }
       buffer.append("\"");
@@ -617,7 +617,7 @@ public class BazelJavaSemantics implements JavaSemantics {
 
       // Add the coverage runner to the list of dependencies when compiling in coverage mode.
       TransitiveInfoCollection runnerTarget =
-          helper.getRuleContext().getPrerequisite("$jacocorunner", TransitionMode.TARGET);
+          helper.getRuleContext().getPrerequisite("$jacocorunner", Mode.TARGET);
       if (JavaInfo.getProvider(JavaCompilationArgsProvider.class, runnerTarget) != null) {
         helper.addLibrariesToAttributes(ImmutableList.of(runnerTarget));
       } else {
