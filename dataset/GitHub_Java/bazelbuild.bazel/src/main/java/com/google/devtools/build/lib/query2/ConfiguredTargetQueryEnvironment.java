@@ -105,7 +105,7 @@ public class ConfiguredTargetQueryEnvironment
   protected WalkableGraph graph;
 
   private static final Function<ConfiguredTarget, SkyKey> CT_TO_SKYKEY =
-      target -> ConfiguredTargetValue.key(getCorrectLabel(target), target.getConfiguration());
+      target -> ConfiguredTargetValue.key(target.getLabel(), target.getConfiguration());
   private static final Function<SkyKey, ConfiguredTargetKey> SKYKEY_TO_CTKEY =
       skyKey -> (ConfiguredTargetKey) skyKey.argument();
   private static final ImmutableList<TargetPatternKey> ALL_PATTERNS;
@@ -173,17 +173,6 @@ public class ConfiguredTargetQueryEnvironment
 
   private static ImmutableList<QueryFunction> getCqueryFunctions() {
     return ImmutableList.of(new ConfigFunction());
-  }
-
-  /**
-   * This method has to exist because {@link AliasConfiguredTarget#getLabel()} returns
-   * the label of the "actual" target instead of the alias target. Grr.
-   */
-  public static Label getCorrectLabel(ConfiguredTarget target) {
-    if (target instanceof AliasConfiguredTarget) {
-      return ((AliasConfiguredTarget) target).getOriginalLabel();
-    }
-    return target.getLabel();
   }
 
   // Check to make sure the settings requested are currently supported by this class
@@ -330,7 +319,7 @@ public class ConfiguredTargetQueryEnvironment
       public Void call() throws QueryException, InterruptedException {
         List<ConfiguredTarget> transformedResult = new ArrayList<>();
         for (ConfiguredTarget target : targets) {
-          Label label = getCorrectLabel(target);
+          Label label = target.getLabel();
           ConfiguredTarget configuredTarget;
           switch (configuration) {
             case "\'host\'":
@@ -390,6 +379,10 @@ public class ConfiguredTargetQueryEnvironment
     if (settings.isEmpty()) {
       return rawFwdDeps;
     }
+    if (configTarget instanceof AliasConfiguredTarget
+        && ((AliasConfiguredTarget) configTarget).getActual() instanceof RuleConfiguredTarget) {
+      return getAllowedDeps(((AliasConfiguredTarget) configTarget).getActual(), rawFwdDeps);
+    }
     return getAllowedDeps(configTarget, rawFwdDeps);
   }
 
@@ -431,7 +424,7 @@ public class ConfiguredTargetQueryEnvironment
                   dep ->
                       !implicitDeps.contains(
                           ConfiguredTargetKey.of(
-                              getCorrectLabel(dep), dep.getConfiguration())))
+                              dep.getLabel(), dep.getConfiguration())))
               .collect(Collectors.toList());
     }
     return deps;
