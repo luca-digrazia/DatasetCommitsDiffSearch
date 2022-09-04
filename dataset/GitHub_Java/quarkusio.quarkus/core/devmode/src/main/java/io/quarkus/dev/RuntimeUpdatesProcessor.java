@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.dev;
 
 import static java.util.stream.Collectors.groupingBy;
@@ -19,7 +35,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -35,13 +50,11 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
     private final ClassLoaderCompiler compiler;
     private volatile long lastChange = System.currentTimeMillis();
 
-    // file path -> isRestartNeeded
-    private volatile Map<String, Boolean> watchedFilePaths = Collections.emptyMap();
+    private volatile Set<String> watchedFilePaths = Collections.emptySet();
     private final Map<Path, Long> watchedFileTimestamps = new ConcurrentHashMap<>();
 
     private static final Logger log = Logger.getLogger(RuntimeUpdatesProcessor.class.getPackage().getName());
     private final List<Runnable> preScanSteps = new CopyOnWriteArrayList<>();
-    private final List<Consumer<Set<String>>> noRestartChangesConsumers = new CopyOnWriteArrayList<>();
     private final List<HotReplacementSetup> hotReplacementSetup = new ArrayList<>();
 
     public RuntimeUpdatesProcessor(DevModeContext context, ClassLoaderCompiler compiler) {
@@ -84,40 +97,26 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
     @Override
     public boolean doScan(boolean userInitiated) throws IOException {
         final long startNanoseconds = System.nanoTime();
-        for (Runnable step : preScanSteps) {
+        for (Runnable i : preScanSteps) {
             try {
-                step.run();
+                i.run();
             } catch (Throwable t) {
                 log.error("Pre Scan step failed", t);
             }
         }
 
         boolean classChanged = checkForChangedClasses();
-        Set<String> filesChanged = checkForFileChange();
+        Set<String> configFileChanged = checkForFileChange();
 
         //if there is a deployment problem we always restart on scan
         //this is because we can't setup the config file watches
         //in an ideal world we would just check every resource file for changes, however as everything is already
         //all broken we just assume the reason that they have refreshed is because they have fixed something
         //trying to watch all resource files is complex and this is likely a good enough solution for what is already an edge case
-        boolean restartNeeded = classChanged || (DevModeMain.deploymentProblem != null && userInitiated);
-        if (!restartNeeded && !filesChanged.isEmpty()) {
-            restartNeeded = filesChanged.stream().map(watchedFilePaths::get).anyMatch(Boolean.TRUE::equals);
-        }
-        if (restartNeeded) {
-            DevModeMain.restartApp(filesChanged);
+        if (classChanged || !configFileChanged.isEmpty() || (DevModeMain.deploymentProblem != null && userInitiated)) {
+            DevModeMain.restartApp(configFileChanged);
             log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
             return true;
-        } else if (!filesChanged.isEmpty()) {
-            for (Consumer<Set<String>> consumer : noRestartChangesConsumers) {
-                try {
-                    consumer.accept(filesChanged);
-                } catch (Throwable t) {
-                    log.error("Changed files consumer failed", t);
-                }
-            }
-            log.infof("Files changed but restart not needed - notified extensions in: %ss ",
-                    Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
         }
         return false;
     }
@@ -125,11 +124,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
     @Override
     public void addPreScanStep(Runnable runnable) {
         preScanSteps.add(runnable);
-    }
-
-    @Override
-    public void consumeNoRestartChanges(Consumer<Set<String>> consumer) {
-        noRestartChangesConsumers.add(consumer);
     }
 
     boolean checkForChangedClasses() throws IOException {
@@ -197,7 +191,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
             Path root = Paths.get(rootPath);
             Path classesDir = Paths.get(module.getClassesPath());
 
-            for (String path : watchedFilePaths.keySet()) {
+            for (String path : watchedFilePaths) {
                 Path file = root.resolve(path);
                 if (Files.exists(file)) {
                     try {
@@ -242,7 +236,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
         }
     }
 
-    public RuntimeUpdatesProcessor setWatchedFilePaths(Map<String, Boolean> watchedFilePaths) {
+    public RuntimeUpdatesProcessor setWatchedFilePaths(Set<String> watchedFilePaths) {
         this.watchedFilePaths = watchedFilePaths;
         watchedFileTimestamps.clear();
 
@@ -256,8 +250,8 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                 continue;
             }
             Path root = Paths.get(rootPath);
-            for (String path : watchedFilePaths.keySet()) {
-                Path config = root.resolve(path);
+            for (String i : watchedFilePaths) {
+                Path config = root.resolve(i);
                 if (Files.exists(config)) {
                     try {
                         watchedFileTimestamps.put(config, Files.getLastModifiedTime(config).toMillis());

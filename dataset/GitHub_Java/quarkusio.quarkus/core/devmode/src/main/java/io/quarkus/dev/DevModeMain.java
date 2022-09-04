@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.dev;
 
 import java.io.Closeable;
@@ -44,7 +60,7 @@ public class DevModeMain {
 
     private static volatile ClassLoader currentAppClassLoader;
     private static volatile URLClassLoader runtimeCl;
-    private static List<File> classesRoots;
+    private static File classesRoot;
     private static File wiringDir;
     private static File cacheDir;
     private static DevModeContext context;
@@ -70,14 +86,8 @@ public class DevModeMain {
                 System.setProperty(i.getKey(), i.getValue());
             }
         }
-
-        // we can potentially have multiple roots separated by commas
-        final String[] classesRootsParts = args[0].split(",");
-        classesRoots = new ArrayList<>(classesRootsParts.length);
-        for (String classesRootsPart : classesRootsParts) {
-            classesRoots.add(new File(classesRootsPart));
-        }
-
+        //the path that contains the compiled classes
+        classesRoot = new File(args[0]);
         wiringDir = new File(args[1]);
         cacheDir = new File(args[2]);
 
@@ -121,11 +131,7 @@ public class DevModeMain {
 
     private static synchronized void doStart(boolean liveReload, Set<String> changedResources) {
         try {
-            final URL[] urls = new URL[classesRoots.size()];
-            for (int i = 0; i < classesRoots.size(); i++) {
-                urls[i] = classesRoots.get(i).toURL();
-            }
-            runtimeCl = new URLClassLoader(urls, ClassLoader.getSystemClassLoader());
+            runtimeCl = new URLClassLoader(new URL[] { classesRoot.toURL() }, ClassLoader.getSystemClassLoader());
             currentAppClassLoader = runtimeCl;
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             //we can potentially throw away this class loader, and reload the app
@@ -135,8 +141,7 @@ public class DevModeMain {
                         .setLaunchMode(LaunchMode.DEVELOPMENT)
                         .setLiveReloadState(new LiveReloadBuildItem(liveReload, changedResources, liveReloadContext))
                         .setClassLoader(runtimeCl)
-                        // just use the first item in classesRoot which is where the actual class files are written
-                        .setTarget(classesRoots.get(0).toPath())
+                        .setTarget(classesRoot.toPath())
                         .setFrameworkClassesPath(wiringDir.toPath())
                         .setTransformerCache(cacheDir.toPath());
 

@@ -3,10 +3,7 @@ package io.quarkus.vertx.web.deployment.devmode;
 import io.quarkus.deployment.devmode.HotReplacementContext;
 import io.quarkus.deployment.devmode.HotReplacementSetup;
 import io.quarkus.deployment.devmode.ReplacementDebugPage;
-import io.quarkus.vertx.web.runtime.VertxWebRecorder;
-import io.vertx.core.AsyncResult;
-import io.vertx.core.Handler;
-import io.vertx.core.Promise;
+import io.quarkus.vertx.web.runtime.VertxWebTemplate;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
 
@@ -17,22 +14,15 @@ public class VertxHotReplacementSetup implements HotReplacementSetup {
 
     private static final long HOT_REPLACEMENT_INTERVAL = 2000;
 
-    private static final String HEADER_NAME = "x-quarkus-hot-deployment-done";
-
     @Override
     public void setupHotDeployment(HotReplacementContext context) {
         this.hotReplacementContext = context;
-        VertxWebRecorder.setHotReplacement(this::handleHotReplacementRequest);
-    }
-
-    @Override
-    public void handleFailedInitialStart() {
-        VertxWebRecorder.startServerAfterFailedStart();
+        VertxWebTemplate.setHotReplacement(this::handleHotReplacementRequest);
     }
 
     void handleHotReplacementRequest(RoutingContext routingContext) {
-        if ((nextUpdate > System.currentTimeMillis() && !hotReplacementContext.isTest())
-                || routingContext.request().headers().contains(HEADER_NAME)) {
+
+        if (nextUpdate > System.currentTimeMillis()) {
             if (hotReplacementContext.getDeploymentProblem() != null) {
                 handleDeploymentProblem(routingContext, hotReplacementContext.getDeploymentProblem());
                 return;
@@ -40,48 +30,26 @@ public class VertxHotReplacementSetup implements HotReplacementSetup {
             routingContext.next();
             return;
         }
-        routingContext.request().pause();
-        routingContext.vertx().executeBlocking(new Handler<Promise<Boolean>>() {
-            @Override
-            public void handle(Promise<Boolean> event) {
-                boolean restart = false;
-                synchronized (this) {
-                    if (nextUpdate < System.currentTimeMillis() || hotReplacementContext.isTest()) {
-                        try {
-                            restart = hotReplacementContext.doScan(true);
-                        } catch (Exception e) {
-                            event.fail(new IllegalStateException("Unable to perform hot replacement scanning", e));
-                            return;
-                        }
-                        nextUpdate = System.currentTimeMillis() + HOT_REPLACEMENT_INTERVAL;
-                    }
+        boolean restart = false;
+        synchronized (this) {
+            if (nextUpdate < System.currentTimeMillis()) {
+                try {
+                    restart = hotReplacementContext.doScan(true);
+                } catch (Exception e) {
+                    throw new IllegalStateException("Unable to perform hot replacement scanning", e);
                 }
-                if (hotReplacementContext.getDeploymentProblem() != null) {
-                    event.fail(hotReplacementContext.getDeploymentProblem());
-                    return;
-                }
-                event.complete(restart);
+                nextUpdate = System.currentTimeMillis() + HOT_REPLACEMENT_INTERVAL;
             }
-        }, false, new Handler<AsyncResult<Boolean>>() {
-            @Override
-            public void handle(AsyncResult<Boolean> event) {
-                if (!routingContext.request().isEnded()) {
-                    routingContext.request().resume();
-                }
-                if (event.failed()) {
-                    handleDeploymentProblem(routingContext, event.cause());
-                } else {
-                    boolean restart = event.result();
-                    if (restart) {
-                        routingContext.request().headers().set(HEADER_NAME, "true");
-                        VertxWebRecorder.getRouter().handle(routingContext.request());
-                    } else {
-                        routingContext.next();
-                    }
-                }
-            }
-        });
-
+        }
+        if (hotReplacementContext.getDeploymentProblem() != null) {
+            handleDeploymentProblem(routingContext, hotReplacementContext.getDeploymentProblem());
+            return;
+        }
+        if (restart) {
+            routingContext.reroute(routingContext.request().path());
+        } else {
+            routingContext.next();
+        }
     }
 
     public static void handleDeploymentProblem(RoutingContext routingContext, final Throwable exception) {
@@ -92,8 +60,4 @@ public class VertxHotReplacementSetup implements HotReplacementSetup {
         response.end(bodyText);
     }
 
-    @Override
-    public void close() {
-        VertxWebRecorder.shutDownDevMode();
-    }
 }
