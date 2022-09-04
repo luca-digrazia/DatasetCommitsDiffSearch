@@ -22,7 +22,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
@@ -32,7 +31,7 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.bazel.repository.downloader.DownloadProgressEvent;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
@@ -52,7 +51,6 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.LoggingTerminalWriter;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.io.IOException;
 import java.net.URL;
@@ -70,7 +68,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
   private Action mockAction(String progressMessage, String primaryOutput) {
     Path path = outputBase.getRelative(PathFragment.create(primaryOutput));
-    Artifact artifact = new Artifact(path, ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)));
+    Artifact artifact = new Artifact(path, Root.asSourceRoot(outputBase));
 
     Action action = Mockito.mock(Action.class);
     when(action.getProgressMessage()).thenReturn(progressMessage);
@@ -336,7 +334,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     ManualClock clock = new ManualClock();
     ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
     TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
-    Label labelA = Label.parseAbsolute("//foo/bar:baz", ImmutableMap.of());
+    Label labelA = Label.parseAbsolute("//foo/bar:baz");
     ConfiguredTarget targetA = Mockito.mock(ConfiguredTarget.class);
     when(targetA.getLabel()).thenReturn(labelA);
     ConfiguredTarget targetB = Mockito.mock(ConfiguredTarget.class);
@@ -369,7 +367,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     ManualClock clock = new ManualClock();
     ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
     TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
-    Label labelA = Label.parseAbsolute("//foo/bar:baz", ImmutableMap.of());
+    Label labelA = Label.parseAbsolute("//foo/bar:baz");
     ConfiguredTarget targetA = Mockito.mock(ConfiguredTarget.class);
     when(targetA.getLabel()).thenReturn(labelA);
     ConfiguredTarget targetB = Mockito.mock(ConfiguredTarget.class);
@@ -400,7 +398,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     ManualClock clock = new ManualClock();
     ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
     TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
-    Label labelA = Label.parseAbsolute("//foo/bar:baz", ImmutableMap.of());
+    Label labelA = Label.parseAbsolute("//foo/bar:baz");
     ConfiguredTarget targetA = Mockito.mock(ConfiguredTarget.class);
     when(targetA.getLabel()).thenReturn(labelA);
     ConfiguredTarget targetB = Mockito.mock(ConfiguredTarget.class);
@@ -435,8 +433,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
         "Building some/very/very/long/path/for/some/library/directory/foo.jar (42 source files)",
         "some/very/very/long/path/for/some/library/directory/foo.jar");
     Label label =
-        Label.parseAbsolute(
-            "//some/very/very/long/path/for/some/library/directory:libfoo", ImmutableMap.of());
+        Label.parseAbsolute("//some/very/very/long/path/for/some/library/directory:libfoo");
     ActionOwner owner =
         ActionOwner.create(
             label,
@@ -476,7 +473,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
     ManualClock clock = new ManualClock();
     Path path = outputBase.getRelative(PathFragment.create(primaryOutput));
-    Artifact artifact = new Artifact(path, ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)));
+    Artifact artifact = new Artifact(path, Root.asSourceRoot(outputBase));
     ActionExecutionMetadata actionMetadata = Mockito.mock(ActionExecutionMetadata.class);
     when(actionMetadata.getOwner()).thenReturn(Mockito.mock(ActionOwner.class));
     when(actionMetadata.getPrimaryOutput()).thenReturn(artifact);
@@ -511,8 +508,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
     Label bartestLabel =
         Label.parseAbsolute(
-            "//src/another/very/long/long/path/long/long/long/long/long/long/long/long/bars:bartest",
-            ImmutableMap.of());
+            "//src/another/very/long/long/path/long/long/long/long/long/long/long/long/bars:bartest");
     ConfiguredTarget bartestTarget = Mockito.mock(ConfiguredTarget.class);
     when(bartestTarget.getLabel()).thenReturn(bartestLabel);
 
@@ -775,7 +771,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     clock.advanceMillis(TimeUnit.SECONDS.toMillis(1234));
     ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock, 80);
 
-    Label labelFooTest = Label.parseAbsolute("//foo/bar:footest", ImmutableMap.of());
+    Label labelFooTest = Label.parseAbsolute("//foo/bar:footest");
     ConfiguredTarget targetFooTest = Mockito.mock(ConfiguredTarget.class);
     when(targetFooTest.getLabel()).thenReturn(labelFooTest);
     ActionOwner fooOwner =
@@ -790,7 +786,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
             null,
             null);
 
-    Label labelBarTest = Label.parseAbsolute("//baz:bartest", ImmutableMap.of());
+    Label labelBarTest = Label.parseAbsolute("//baz:bartest");
     ConfiguredTarget targetBarTest = Mockito.mock(ConfiguredTarget.class);
     when(targetBarTest.getLabel()).thenReturn(labelBarTest);
     TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);

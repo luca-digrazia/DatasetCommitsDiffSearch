@@ -60,11 +60,6 @@ public final class FakeOwner implements ActionExecutionMetadata {
   }
 
   @Override
-  public boolean isShareable() {
-    return false;
-  }
-
-  @Override
   public String getMnemonic() {
     return mnemonic;
   }
@@ -137,11 +132,6 @@ public final class FakeOwner implements ActionExecutionMetadata {
   @Override
   public String prettyPrint() {
     throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public String describe() {
-    return getProgressMessage();
   }
 
   @Override

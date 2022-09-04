@@ -24,10 +24,10 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
+import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -166,30 +166,32 @@ public final class LtoBackendAction extends SpawnAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
     try {
-      fp.addStrings(getArguments());
+      f.addStrings(getArguments());
     } catch (CommandLineExpansionException e) {
       throw new AssertionError("LtoBackendAction command line expansion cannot fail");
     }
-    fp.addString(getMnemonic());
-    fp.addPaths(getRunfilesSupplier().getRunfilesDirs());
+    f.addString(getMnemonic());
+    f.addPaths(getRunfilesSupplier().getRunfilesDirs());
     ImmutableList<Artifact> runfilesManifests = getRunfilesSupplier().getManifests();
     for (Artifact runfilesManifest : runfilesManifests) {
-      fp.addPath(runfilesManifest.getExecPath());
+      f.addPath(runfilesManifest.getExecPath());
     }
     for (Artifact input : getMandatoryInputs()) {
-      fp.addPath(input.getExecPath());
+      f.addPath(input.getExecPath());
     }
     if (imports != null) {
       for (PathFragment bitcodePath : bitcodeFiles.keySet()) {
-        fp.addPath(bitcodePath);
+        f.addPath(bitcodePath);
       }
-      fp.addPath(imports.getExecPath());
+      f.addPath(imports.getExecPath());
     }
-    fp.addStringMap(getEnvironment());
-    fp.addStringMap(getExecutionInfo());
+    f.addStringMap(getEnvironment());
+    f.addStringMap(getExecutionInfo());
+    return f.hexDigestAndReset();
   }
 
   /** Builder class to construct {@link LtoBackendAction} instances. */

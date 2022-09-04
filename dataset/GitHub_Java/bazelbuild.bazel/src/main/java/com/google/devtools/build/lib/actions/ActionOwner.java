@@ -17,6 +17,7 @@ import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
@@ -53,7 +54,7 @@ public abstract class ActionOwner {
       @Nullable String mnemonic,
       @Nullable String targetKind,
       String configurationChecksum,
-      @Nullable BuildConfigurationInterface configuration,
+      @Nullable BuildEvent configuration,
       @Nullable String additionalProgressInfo,
       @Nullable PlatformInfo executionPlatform) {
     return new AutoValue_ActionOwner(
@@ -95,7 +96,7 @@ public abstract class ActionOwner {
    * event protocol.
    */
   @Nullable
-  public abstract BuildConfigurationInterface getConfiguration();
+  public abstract BuildEvent getConfiguration();
 
   /** Returns the target kind (rule class name) for this ActionOwner, if any; null otherwise. */
   @Nullable

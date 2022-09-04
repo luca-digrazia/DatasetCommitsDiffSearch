@@ -27,10 +27,10 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
+import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -165,7 +165,7 @@ public final class ExtraAction extends SpawnAction {
     if (createDummyOutput) {
       for (Artifact output : getOutputs()) {
         try {
-          FileSystemUtils.touchFile(actionExecutionContext.getInputPath(output));
+          FileSystemUtils.touchFile(output.getPath());
         } catch (IOException e) {
           throw new ActionExecutionException(e.getMessage(), e, this, false);
         }

@@ -19,7 +19,6 @@ import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.transitions.ComposingSplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
-import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.Transition;
@@ -71,7 +70,7 @@ public final class TransitionResolver {
 
     // I. Input files and package groups have no configurations. We don't want to duplicate them.
     if (usesNullConfiguration(toTarget)) {
-      return NullTransition.INSTANCE;
+      return ConfigurationTransitionProxy.NULL;
     }
 
     // II. Host configurations never switch to another. All prerequisites of host targets have the
@@ -167,9 +166,9 @@ public final class TransitionResolver {
       return transition1;
     } else if (transition2 == ConfigurationTransitionProxy.NONE) {
       return transition1;
-    } else if (transition2 == NullTransition.INSTANCE) {
+    } else if (transition2 == ConfigurationTransitionProxy.NULL) {
       // A NULL transition can just replace earlier transitions: no need to compose them.
-      return NullTransition.INSTANCE;
+      return ConfigurationTransitionProxy.NULL;
     } else if (transition2.isHostTransition()) {
       // A HOST transition can just replace earlier transitions: no need to compose them.
       // But it also improves performance: host transitions are common, and
@@ -190,7 +189,7 @@ public final class TransitionResolver {
    * be composed after it.
    */
   private static boolean isFinal(Transition transition) {
-    return (transition == NullTransition.INSTANCE
+    return (transition == ConfigurationTransitionProxy.NULL
         || transition == HostTransition.INSTANCE);
   }
 
@@ -198,7 +197,7 @@ public final class TransitionResolver {
    * Applies the given split and composes it after an existing transition.
    */
   private static Transition split(Transition currentTransition, SplitTransition split) {
-    Preconditions.checkState(currentTransition != NullTransition.INSTANCE,
+    Preconditions.checkState(currentTransition != ConfigurationTransitionProxy.NULL,
         "cannot apply splits after null transitions (null transitions are expected to be final)");
     Preconditions.checkState(currentTransition != HostTransition.INSTANCE,
         "cannot apply splits after host transitions (host transitions are expected to be final)");

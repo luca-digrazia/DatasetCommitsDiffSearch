@@ -166,10 +166,8 @@ public final class ConfiguredTargetFactory {
     Root root = rule.hasBinaryOutput()
         ? configuration.getBinDirectory(rule.getRepository())
         : configuration.getGenfilesDirectory(rule.getRepository());
-    ArtifactOwner owner =
-        ConfiguredTargetKey.of(
-            rule.getLabel(),
-            getArtifactOwnerConfiguration(analysisEnvironment.getSkyframeEnv(), configuration));
+    ArtifactOwner owner = new ConfiguredTargetKey(rule.getLabel(),
+        getArtifactOwnerConfiguration(analysisEnvironment.getSkyframeEnv(), configuration));
     if (analysisEnvironment.getSkyframeEnv().valuesMissing()) {
       return null;
     }
@@ -273,13 +271,11 @@ public final class ConfiguredTargetFactory {
       }
     } else if (target instanceof InputFile) {
       InputFile inputFile = (InputFile) target;
-      Artifact artifact =
-          artifactFactory.getSourceArtifact(
-              inputFile.getExecPath(),
-              Root.asSourceRoot(
-                  inputFile.getPackage().getSourceRoot(),
-                  inputFile.getPackage().getPackageIdentifier().getRepository().isMain()),
-              ConfiguredTargetKey.of(target.getLabel(), config));
+      Artifact artifact = artifactFactory.getSourceArtifact(
+          inputFile.getExecPath(),
+          Root.asSourceRoot(inputFile.getPackage().getSourceRoot(),
+              inputFile.getPackage().getPackageIdentifier().getRepository().isMain()),
+          new ConfiguredTargetKey(target.getLabel(), config));
 
       return new InputFileConfiguredTarget(targetContext, inputFile, artifact);
     } else if (target instanceof PackageGroup) {

@@ -22,6 +22,8 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
+import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -63,11 +65,11 @@ import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 /** Action that represents a Java compilation. */
 @ThreadCompatible
@@ -503,7 +505,6 @@ public final class JavaCompileAction extends SpawnAction {
     private PathFragment javaExecutable;
     private List<Artifact> javabaseInputs = ImmutableList.of();
     private Artifact outputJar;
-    private Artifact nativeHeaderOutput;
     private Artifact gensrcOutputJar;
     private Artifact manifestProtoOutput;
     private Artifact outputDepsProto;
@@ -598,16 +599,14 @@ public final class JavaCompileAction extends SpawnAction {
 
       Preconditions.checkState(javaExecutable != null, owner);
 
-      ImmutableList.Builder<Artifact> outputsBuilder = ImmutableList.<Artifact>builder();
-      Stream.of(
-              outputJar,
-              metadata,
-              gensrcOutputJar,
-              manifestProtoOutput,
-              outputDepsProto,
-              nativeHeaderOutput)
-          .filter(x -> x != null)
-          .forEachOrdered(outputsBuilder::add);
+      ImmutableList.Builder<Artifact> outputsBuilder = ImmutableList.<Artifact>builder()
+          .addAll(
+              new ArrayList<>(Collections2.filter(Arrays.asList(
+                  outputJar,
+                  metadata,
+                  gensrcOutputJar,
+                  manifestProtoOutput,
+                  outputDepsProto), Predicates.notNull())));
       if (additionalOutputs != null) {
         outputsBuilder.addAll(additionalOutputs);
       }
@@ -701,9 +700,6 @@ public final class JavaCompileAction extends SpawnAction {
       result.add("--tempdir").addPath(tempDirectory);
       if (outputJar != null) {
         result.addExecPath("--output", outputJar);
-      }
-      if (nativeHeaderOutput != null) {
-        result.addExecPath("--native_header_output", nativeHeaderOutput);
       }
       if (sourceGenDirectory != null) {
         result.add("--sourcegendir").addPath(sourceGenDirectory);
@@ -876,11 +872,6 @@ public final class JavaCompileAction extends SpawnAction {
 
     public Builder setOutputJar(Artifact outputJar) {
       this.outputJar = outputJar;
-      return this;
-    }
-
-    public Builder setNativeHeaderOutput(Artifact nativeHeaderOutput) {
-      this.nativeHeaderOutput = nativeHeaderOutput;
       return this;
     }
 
