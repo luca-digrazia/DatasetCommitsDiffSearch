@@ -15,10 +15,6 @@
 package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.common.base.Ascii;
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
-import com.google.common.net.UrlEscapers;
-import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.bazel.repository.downloader.ProxyHelper;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.Rule;
@@ -26,7 +22,6 @@ import com.google.devtools.build.lib.rules.repository.RepositoryFunction.Reposit
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -36,8 +31,6 @@ import java.net.URL;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -56,10 +49,6 @@ import org.eclipse.jgit.transport.NetRCCredentialsProvider;
  * clones submodules if specified.
  */
 public class GitCloner {
-
-  private static final Pattern GITHUB_URL = Pattern.compile(
-      "(?:git@|https?://)github\\.com[:/](\\w+)/(\\w+)\\.git");
-
   private GitCloner() {
     // Only static methods in this class
   }
@@ -107,8 +96,7 @@ public class GitCloner {
       Rule rule,
       Path outputDirectory,
       ExtendedEventHandler eventHandler,
-      Map<String, String> clientEnvironment,
-      HttpDownloader downloader)
+      Map<String, String> clientEnvironment)
       throws RepositoryFunctionException {
     WorkspaceAttributeMapper mapper = WorkspaceAttributeMapper.of(rule);
     if (mapper.isAttributeValueExplicitlySpecified("commit")
@@ -119,20 +107,19 @@ public class GitCloner {
     }
 
     GitRepositoryDescriptor descriptor;
+    String startingPoint;
     try {
       if (mapper.isAttributeValueExplicitlySpecified("commit")) {
-        descriptor = GitRepositoryDescriptor.createWithCommit(
-            mapper.get("remote", Type.STRING),
-            mapper.get("commit", Type.STRING),
-            mapper.get("init_submodules", Type.BOOLEAN),
-            outputDirectory);
+        startingPoint = mapper.get("commit", Type.STRING);
       } else {
-        descriptor = GitRepositoryDescriptor.createWithTag(
-            mapper.get("remote", Type.STRING),
-            mapper.get("tag", Type.STRING),
-            mapper.get("init_submodules", Type.BOOLEAN),
-            outputDirectory);
+        startingPoint = "tags/" + mapper.get("tag", Type.STRING);
       }
+
+      descriptor = new GitRepositoryDescriptor(
+          mapper.get("remote", Type.STRING),
+          startingPoint,
+          mapper.get("init_submodules", Type.BOOLEAN),
+          outputDirectory);
     } catch (EvalException e) {
       throw new RepositoryFunctionException(e, Transience.PERSISTENT);
     }
@@ -147,7 +134,6 @@ public class GitCloner {
     }
 
     Git git = null;
-    Exception suppressedException = null;
     try {
       if (descriptor.directory.exists()) {
         if (isUpToDate(descriptor)) {
@@ -159,18 +145,6 @@ public class GitCloner {
           throw new RepositoryFunctionException(e, Transience.TRANSIENT);
         }
       }
-
-      if (repositoryLooksTgzable(descriptor.remote)) {
-        Optional<Exception> maybeException = downloadRepositoryAsHttpArchive(
-            descriptor, eventHandler, clientEnvironment, downloader);
-        if (maybeException.isPresent()) {
-          suppressedException = maybeException.get();
-        } else {
-          return new HttpDownloadValue(descriptor.directory);
-        }
-        // Fallthrough to cloning from git.
-      }
-
       git =
           Git.cloneRepository()
               .setURI(descriptor.remote)
@@ -202,22 +176,13 @@ public class GitCloner {
             .call();
       }
     } catch (InvalidRemoteException e) {
-      if (suppressedException != null) {
-        e.addSuppressed(suppressedException);
-      }
       throw new RepositoryFunctionException(
           new IOException("Invalid Git repository URI: " + e.getMessage()), Transience.PERSISTENT);
     } catch (RefNotFoundException | InvalidRefNameException e) {
-      if (suppressedException != null) {
-        e.addSuppressed(suppressedException);
-      }
       throw new RepositoryFunctionException(
           new IOException("Invalid branch, tag, or commit: " + e.getMessage()),
           Transience.PERSISTENT);
     } catch (GitAPIException e) {
-      if (suppressedException != null) {
-        e.addSuppressed(suppressedException);
-      }
       // This is a sad attempt to actually get a useful error message out of jGit, which will bury
       // the actual (useful) cause of the exception under several throws.
       StringBuilder errmsg = new StringBuilder();
@@ -230,9 +195,6 @@ public class GitCloner {
       throw new RepositoryFunctionException(
           new IOException("Error cloning repository: " + errmsg), Transience.PERSISTENT);
     } catch (JGitInternalException e) {
-      if (suppressedException != null) {
-        e.addSuppressed(suppressedException);
-      }
       // This is a lame catch-all for jgit throwing RuntimeExceptions all over the place because,
       // as the docs put it, "a lot of exceptions are so low-level that is is unlikely that the
       // caller of the command can handle them effectively." Thanks, jgit.
@@ -246,58 +208,15 @@ public class GitCloner {
     return new HttpDownloadValue(descriptor.directory);
   }
 
-  private static boolean repositoryLooksTgzable(String remote) {
-    // Only handles GitHub right now.
-    return GITHUB_URL.matcher(remote).matches();
-  }
-
-  private static Optional<Exception> downloadRepositoryAsHttpArchive(
-      GitRepositoryDescriptor descriptor, ExtendedEventHandler eventHandler,
-      Map<String, String> clientEnvironment, HttpDownloader downloader)
-      throws RepositoryFunctionException {
-    Matcher matcher = GITHUB_URL.matcher(descriptor.remote);
-    Preconditions.checkState(
-        matcher.matches(), "Remote should be checked before calling this method");
-    String user = matcher.group(1);
-    String repositoryName = matcher.group(2);
-    String downloadUrl =
-        "https://github.com/"
-            + UrlEscapers.urlPathSegmentEscaper().escape(
-                user + "/" + repositoryName + "/archive/" + descriptor.ref + ".tar.gz");
-    try {
-      FileSystemUtils.createDirectoryAndParents(descriptor.directory);
-      Path tgz = downloader.download(ImmutableList.of(new URL(downloadUrl)), "",
-          Optional.of("tar.gz"), descriptor.directory, eventHandler, clientEnvironment);
-      DecompressorValue.decompress(DecompressorDescriptor.builder()
-          .setArchivePath(tgz)
-          // GitHub puts the contents under a directory called <repo>-<commit>.
-          .setPrefix(repositoryName + "-" + descriptor.ref)
-          .setRepositoryPath(descriptor.directory)
-          .build());
-    } catch (InterruptedException | IOException e) {
-      try {
-        FileSystemUtils.deleteTree(descriptor.directory);
-      } catch (IOException e1) {
-        throw new RepositoryFunctionException(
-            new IOException("Unable to delete " + descriptor.directory + ": " + e1.getMessage()),
-            Transience.TRANSIENT);
-      }
-      return Optional.<Exception>of(e);
-    }
-    return Optional.absent();
-  }
-
   private static final class GitRepositoryDescriptor {
     private final String remote;
     private final String checkout;
     private final boolean initSubmodules;
     private final Path directory;
-    private final String ref;
 
-    private GitRepositoryDescriptor(String remote, String ref, String checkout,
-        boolean initSubmodules, Path directory) {
+    public GitRepositoryDescriptor(String remote, String checkout, boolean initSubmodules,
+        Path directory) {
       this.remote = remote;
-      this.ref = ref;
       this.checkout = checkout;
       this.initSubmodules = initSubmodules;
       this.directory = directory;
@@ -319,26 +238,14 @@ public class GitCloner {
       }
       GitRepositoryDescriptor other = (GitRepositoryDescriptor) obj;
       return Objects.equals(remote, other.remote)
-          && Objects.equals(ref, other.ref)
+          && Objects.equals(checkout, other.checkout)
           && Objects.equals(initSubmodules, other.initSubmodules)
           && Objects.equals(directory, other.directory);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(remote, ref, initSubmodules, directory);
-    }
-
-    static GitRepositoryDescriptor createWithCommit(String remote, String commit,
-        Boolean initSubmodules, Path outputDirectory) {
-      return new GitRepositoryDescriptor(
-          remote, commit, commit, initSubmodules, outputDirectory);
-    }
-
-    static GitRepositoryDescriptor createWithTag(String remote, String tag,
-        Boolean initSubmodules, Path outputDirectory) {
-      return new GitRepositoryDescriptor(
-          remote, tag, "tags/" + tag, initSubmodules, outputDirectory);
+      return Objects.hash(remote, checkout, initSubmodules, directory);
     }
   }
 }

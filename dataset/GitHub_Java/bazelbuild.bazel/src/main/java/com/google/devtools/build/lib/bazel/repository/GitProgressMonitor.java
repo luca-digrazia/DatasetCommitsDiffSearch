@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,58 +15,63 @@
 package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.Reporter;
-
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import org.eclipse.jgit.lib.ProgressMonitor;
 
 /**
  * ProgressMonitor for reporting progress for Git repository rules.
  */
 class GitProgressMonitor implements ProgressMonitor {
-  private String message;
-  private Reporter reporter;
-  private int totalTasks;
-  private int currentTask;
+  private final String remote;
+  private final String message;
+  private final ExtendedEventHandler eventHandler;
 
   private String workTitle;
   private int totalWork;
   private int completedWork;
+  private int unfinishedTasks;
 
-  GitProgressMonitor(String message, Reporter reporter) {
+  GitProgressMonitor(String remote, String message, ExtendedEventHandler eventHandler) {
+    this.remote = remote;
     this.message = message;
-    this.reporter = reporter;
+    this.eventHandler = eventHandler;
   }
 
+  @Override
   public void start(int totalTasks) {
-    this.totalTasks = totalTasks;
-    this.currentTask = 0;
+    this.unfinishedTasks = totalTasks;
   }
 
   private void report() {
-    reporter.handle(
-        Event.progress("[" + currentTask + " / " + totalTasks + "] "
-            + message + ": " + workTitle + " ("
-            + completedWork + " / " + totalWork + ")"));
+    String progress = workTitle + " (" + completedWork + " / " + totalWork + ")";
+    eventHandler.handle(Event.progress(message + ": " + progress));
+    eventHandler.post(new GitFetchProgress(remote, progress));
   }
 
+  @Override
   public void beginTask(String title, int totalWork) {
-    ++currentTask;
-    // TODO(dzc): Remove this when jgit reports totalTasks correctly in start().
-    if (currentTask > totalTasks) {
-      totalTasks = currentTask;
-    }
     this.totalWork = totalWork;
     this.completedWork = 0;
     this.workTitle = title;
     report();
   }
 
+  @Override
   public boolean isCancelled() { return false; }
 
+  @Override
   public void update(int completed) {
     completedWork += completed;
     report();
   }
 
-  public void endTask() { }
+  @Override
+  public void endTask() {
+    unfinishedTasks--;
+    // The number of tasks to do as reported on the start event is sometimes underestimated, so
+    // report a finished event after each task that could be the last one.
+    if (unfinishedTasks <= 0) {
+      eventHandler.post(new GitFetchProgress(remote, "done", true));
+    }
+  }
 }
