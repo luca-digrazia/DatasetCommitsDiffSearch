@@ -234,7 +234,7 @@ final class ExecutionServer extends ExecutionImplBase {
         logger.log(INFO, "Preserving work directory {0}.", tempRoot);
       } else {
         try {
-          tempRoot.deleteTree();
+          FileSystemUtils.deleteTree(tempRoot);
         } catch (IOException e) {
           logger.log(
               SEVERE,
@@ -349,6 +349,14 @@ final class ExecutionServer extends ExecutionImplBase {
       throw new ExecutionStatusException(errStatus, resp.build());
     } else if (setResult) {
       cache.setCachedActionResult(actionKey, finalResult);
+    }
+    if (finalResult.getOutputFilesCount()
+            + finalResult.getOutputFileSymlinksCount()
+            + finalResult.getOutputDirectoriesCount()
+            + finalResult.getOutputDirectorySymlinksCount()
+        <= 0) {
+      logger.warning(
+          String.format("Unexpected result of remote execution: no output files: %s", finalResult));
     }
     return finalResult;
   }

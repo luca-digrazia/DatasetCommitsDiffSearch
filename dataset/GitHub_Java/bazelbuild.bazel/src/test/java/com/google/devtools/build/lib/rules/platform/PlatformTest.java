@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.Label;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -36,11 +35,8 @@ public class PlatformTest extends BuildViewTestCase {
   @Rule public ExpectedException expectedException = ExpectedException.none();
 
   @Test
-  // TODO(https://github.com/bazelbuild/bazel/issues/6849): Remove this test when the functionality
-  // is removed, but until then it still needs to be verified.
   public void testPlatform_autoconfig() throws Exception {
-    useConfiguration(
-        "--host_cpu=piii", "--cpu=k8", "--noincompatible_auto_configure_host_platform");
+    useConfiguration("--host_cpu=piii", "--cpu=k8");
 
     scratch.file(
         "autoconfig/BUILD",
@@ -51,19 +47,19 @@ public class PlatformTest extends BuildViewTestCase {
         "constraint_setting(name = 'os')",
         "constraint_value(name = 'linux', constraint_setting = ':os')",
         "constraint_value(name = 'another_os', constraint_setting = ':os')",
-        "platform(name = 'host',",
+        "platform(name = 'host_platform',",
         "    host_platform = True,",
         "    cpu_constraints = [':x86_32', 'x86_64', ':another_cpu'],",
         "    os_constraints = [':linux', ':another_os'],",
         ")",
-        "platform(name = 'target',",
+        "platform(name = 'target_platform',",
         "    target_platform = True,",
         "    cpu_constraints = [':x86_32', 'x86_64', ':another_cpu'],",
         "    os_constraints = [':linux', ':another_os'],",
         ")");
 
     // Check the host platform.
-    ConfiguredTarget hostPlatform = getConfiguredTarget("//autoconfig:host");
+    ConfiguredTarget hostPlatform = getConfiguredTarget("//autoconfig:host_platform");
     assertThat(hostPlatform).isNotNull();
 
     PlatformInfo hostPlatformProvider = PlatformProviderUtils.platform(hostPlatform);
@@ -71,20 +67,15 @@ public class PlatformTest extends BuildViewTestCase {
 
     // Check the CPU and OS.
     ConstraintSettingInfo cpuConstraint =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//autoconfig:cpu"));
-    ConstraintSettingInfo osConstraint =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//autoconfig:os"));
+        ConstraintSettingInfo.create(makeLabel("//autoconfig:cpu"));
+    ConstraintSettingInfo osConstraint = ConstraintSettingInfo.create(makeLabel("//autoconfig:os"));
     assertThat(hostPlatformProvider.constraints().get(cpuConstraint))
-        .isEqualTo(
-            ConstraintValueInfo.create(
-                cpuConstraint, Label.parseAbsoluteUnchecked("//autoconfig:x86_32")));
+        .isEqualTo(ConstraintValueInfo.create(cpuConstraint, makeLabel("//autoconfig:x86_32")));
     assertThat(hostPlatformProvider.constraints().get(osConstraint))
-        .isEqualTo(
-            ConstraintValueInfo.create(
-                osConstraint, Label.parseAbsoluteUnchecked("//autoconfig:linux")));
+        .isEqualTo(ConstraintValueInfo.create(osConstraint, makeLabel("//autoconfig:linux")));
 
     // Check the target platform.
-    ConfiguredTarget targetPlatform = getConfiguredTarget("//autoconfig:target");
+    ConfiguredTarget targetPlatform = getConfiguredTarget("//autoconfig:target_platform");
     assertThat(targetPlatform).isNotNull();
 
     PlatformInfo targetPlatformProvider = PlatformProviderUtils.platform(targetPlatform);
@@ -92,12 +83,8 @@ public class PlatformTest extends BuildViewTestCase {
 
     // Check the CPU and OS.
     assertThat(targetPlatformProvider.constraints().get(cpuConstraint))
-        .isEqualTo(
-            ConstraintValueInfo.create(
-                cpuConstraint, Label.parseAbsoluteUnchecked("//autoconfig:x86_64")));
+        .isEqualTo(ConstraintValueInfo.create(cpuConstraint, makeLabel("//autoconfig:x86_64")));
     assertThat(targetPlatformProvider.constraints().get(osConstraint))
-        .isEqualTo(
-            ConstraintValueInfo.create(
-                osConstraint, Label.parseAbsoluteUnchecked("//autoconfig:linux")));
+        .isEqualTo(ConstraintValueInfo.create(osConstraint, makeLabel("//autoconfig:linux")));
   }
 }
