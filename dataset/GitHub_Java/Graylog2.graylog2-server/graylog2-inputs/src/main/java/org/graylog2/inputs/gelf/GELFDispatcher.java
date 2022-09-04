@@ -90,7 +90,8 @@ public class GELFDispatcher extends SimpleChannelHandler {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
-        LOG.debug("Could not handle GELF message.", e.getCause());
+        LOG.warn("Could not handle GELF message.", e.getCause());
+        throw (Exception) e.getCause();
     }
 
 }

@@ -150,7 +150,7 @@ public class Radio implements InputHost {
     }
 
     public void launchPersistedInputs() throws InterruptedException, ExecutionException, IOException {
-        inputs.launchAllPersisted();
+        inputs.launchPersisted();
     }
 
     public void startRestApi() throws IOException {
