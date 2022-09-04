@@ -436,14 +436,18 @@ public class BuildViewForTesting {
    */
   @VisibleForTesting
   public ConfiguredTarget getConfiguredTargetForTesting(
-      ExtendedEventHandler eventHandler, Label label, BuildConfiguration config)
-      throws TransitionException {
+      ExtendedEventHandler eventHandler, Label label, BuildConfiguration config) {
     ConfigurationTransition transition =
         getTopLevelTransitionForTarget(label, config, eventHandler);
     if (transition == null) {
       return null;
     }
-    return skyframeExecutor.getConfiguredTargetForTesting(eventHandler, label, config, transition);
+    try {
+      return skyframeExecutor.getConfiguredTargetForTesting(
+          eventHandler, label, config, transition);
+    } catch (TransitionException e) {
+      return null;
+    }
   }
 
   @VisibleForTesting
