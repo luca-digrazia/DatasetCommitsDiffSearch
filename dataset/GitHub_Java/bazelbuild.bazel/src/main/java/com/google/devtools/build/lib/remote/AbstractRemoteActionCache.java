@@ -93,10 +93,11 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
       throws IOException, InterruptedException;
 
   /**
-   * Upload the result of a locally executed action to the remote cache.
+   * Upload the result of a locally executed action to the cache by uploading any necessary files,
+   * stdin / stdout, as well as adding an entry for the given action key to the cache if
+   * uploadAction is true.
    *
-   * @throws IOException if there was an error uploading to the remote cache
-   * @throws ExecException if uploading any of the action outputs is not supported
+   * @throws IOException if the remote cache is unavailable.
    */
   abstract void upload(
       DigestUtil.ActionKey actionKey,
@@ -104,7 +105,8 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
       Command command,
       Path execRoot,
       Collection<Path> files,
-      FileOutErr outErr)
+      FileOutErr outErr,
+      boolean uploadAction)
       throws ExecException, IOException, InterruptedException;
 
   /**
@@ -152,6 +154,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
    * @throws IOException in case of a cache miss or if the remote cache is unavailable.
    * @throws ExecException in case clean up after a failed download failed.
    */
+  // TODO(olaola): will need to amend to include the TreeNodeRepository for updating.
   public void download(ActionResult result, Path execRoot, FileOutErr outErr)
       throws ExecException, IOException, InterruptedException {
     Context ctx = Context.current();
