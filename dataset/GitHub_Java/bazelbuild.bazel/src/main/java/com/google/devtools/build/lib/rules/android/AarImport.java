@@ -63,7 +63,9 @@ public class AarImport implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    AndroidSdkProvider.verifyPresence(ruleContext);
+    if (!AndroidSdkProvider.verifyPresence(ruleContext)) {
+      return null;
+    }
 
     RuleConfiguredTargetBuilder ruleBuilder = new RuleConfiguredTargetBuilder(ruleContext);
     Artifact aar = ruleContext.getPrerequisiteArtifact("aar", Mode.TARGET);
@@ -281,13 +283,13 @@ public class AarImport implements RuleConfiguredTargetFactory {
   // Adds the appropriate SpawnAction options depending on if SingleJar is a jar or not.
   private static SpawnAction.Builder singleJarSpawnActionBuilder(RuleContext ruleContext) {
     SpawnAction.Builder builder = new SpawnAction.Builder().useDefaultShellEnvironment();
-    Artifact singleJar = JavaToolchainProvider.from(ruleContext).getSingleJar();
+    Artifact singleJar = JavaToolchainProvider.fromRuleContext(ruleContext).getSingleJar();
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
               JavaCommon.getHostJavaExecutable(ruleContext),
               singleJar,
-              JavaToolchainProvider.from(ruleContext).getJvmOptions())
+              JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));
     } else {
       builder.setExecutable(singleJar);
