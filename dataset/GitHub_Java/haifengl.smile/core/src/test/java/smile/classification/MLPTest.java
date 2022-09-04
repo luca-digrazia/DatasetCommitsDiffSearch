@@ -30,7 +30,6 @@ import smile.data.USPS;
 import smile.feature.Standardizer;
 import smile.feature.WinsorScaler;
 import smile.math.MathEx;
-import smile.math.TimeFunction;
 import smile.validation.CrossValidation;
 import smile.validation.Error;
 import smile.validation.Validation;
@@ -79,9 +78,6 @@ public class MLPTest {
                     Layer.mle(k, OutputFunction.SIGMOID)
             );
 
-            model.setLearningRate(TimeFunction.linear(0.2, 10000, 0.1));
-            model.setMomentum(TimeFunction.constant(0.5));
-
             for (int epoch = 1; epoch <= 8; epoch++) {
                 int[] permutation = MathEx.permutate(xi.length);
                 for (int i : permutation) {
@@ -94,7 +90,7 @@ public class MLPTest {
 
         int error = Error.of(PenDigits.y, prediction);
         System.out.println("Error = " + error);
-        assertEquals(100, error);
+        assertEquals(125, error);
     }
 
     @Test
@@ -113,8 +109,8 @@ public class MLPTest {
                     Layer.mle(1, OutputFunction.SIGMOID)
             );
 
-            model.setLearningRate(TimeFunction.linear(0.2, 1000, 0.1));
-            model.setMomentum(TimeFunction.constant(0.2));
+            model.setLearningRate(0.1);
+            model.setMomentum(0.1);
 
             for (int epoch = 1; epoch <= 8; epoch++) {
                 int[] permutation = MathEx.permutate(xi.length);
@@ -128,7 +124,7 @@ public class MLPTest {
 
         int error = Error.of(BreastCancer.y, prediction);
         System.out.println("Error = " + error);
-        assertEquals(11, error);
+        assertEquals(13, error);
     }
 
     @Test
@@ -149,7 +145,8 @@ public class MLPTest {
                 Layer.mle(k, OutputFunction.SOFTMAX)
         );
 
-        model.setLearningRate(TimeFunction.constant(0.2));
+        model.setLearningRate(0.2);
+        model.setMomentum(0.2);
 
         int error = 0;
         for (int epoch = 1; epoch <= 30; epoch++) {
@@ -163,7 +160,7 @@ public class MLPTest {
             error = Error.of(Segment.testy, prediction);
             System.out.println("Test Error = " + error);
         }
-        assertEquals(30, error);
+        assertEquals(34, error);
 
         System.out.format("----- Mini-Batch Learning -----%n");
         model = new MLP(p,
@@ -171,12 +168,13 @@ public class MLPTest {
                 Layer.mle(k, OutputFunction.SOFTMAX)
         );
 
-        model.setLearningRate(TimeFunction.constant(0.2));
+        model.setLearningRate(0.3);
+        model.setMomentum(0.0);
 
-        int batch = 10;
+        int batch = 20;
         double[][] batchx = new double[batch][];
         int[] batchy = new int[batch];
-        for (int epoch = 1; epoch <= 300; epoch++) {
+        for (int epoch = 1; epoch <= 11; epoch++) {
             System.out.format("----- epoch %d -----%n", epoch);
             int[] permutation = MathEx.permutate(x.length);
             int i = 0;
@@ -197,7 +195,7 @@ public class MLPTest {
             System.out.println("Test Error = " + error);
         }
 
-        assertEquals(31, error);
+        assertEquals(33, error);
     }
 
     @Test(expected = Test.None.class)
@@ -219,7 +217,8 @@ public class MLPTest {
                 Layer.mle(k, OutputFunction.SIGMOID)
         );
 
-        model.setLearningRate(TimeFunction.linear(0.2, 20000, 0.05));
+        model.setLearningRate(0.1);
+        model.setMomentum(0.0);
 
         int error = 0;
         for (int epoch = 1; epoch < 5; epoch++) {
@@ -234,7 +233,7 @@ public class MLPTest {
             System.out.println("Test Error = " + error);
         }
 
-        assertEquals(134, error);
+        assertEquals(145, error);
 
         java.nio.file.Path temp = smile.data.Serialize.write(model);
         smile.data.Serialize.read(temp);

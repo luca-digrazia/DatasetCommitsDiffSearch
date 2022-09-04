@@ -17,8 +17,6 @@
 
 package smile.base.mlp;
 
-import smile.math.TimeFunction;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -57,21 +55,17 @@ public abstract class MultilayerPerceptron implements Serializable {
      */
     protected transient ThreadLocal<double[]> target;
     /**
-     * The learning rate.
+     * learning rate
      */
-    protected TimeFunction learningRate = TimeFunction.constant(0.01);
+    protected double eta = 0.1;
     /**
-     * The momentum factor.
+     * momentum factor
      */
-    protected TimeFunction momentum = TimeFunction.constant(0.0);
+    protected double alpha = 0.0;
     /**
-     * The L2 regularization factor, which is also the weight decay factor.
+     * weight decay factor, which is also a regularization term.
      */
     protected double lambda = 0.0;
-    /**
-     * The training iterations.
-     */
-    protected int t = 0;
 
     /**
      * Constructor.
@@ -123,25 +117,33 @@ public abstract class MultilayerPerceptron implements Serializable {
 
     @Override
     public String toString() {
-        return String.format("x(%d) -> %s -> %s(learning rate = %s, momentum = %s, weight decay = %.2f)", p,
+        return String.format("x(%d) -> %s -> %s(eta = %.2f, alpha = %.2f, lambda = %.2f)", p,
                 Arrays.stream(net).map(Object::toString).collect(Collectors.joining(" -> ")),
-                output, learningRate, momentum, lambda);
+                output, eta, alpha, lambda);
     }
 
     /**
      * Sets the learning rate.
-     * @param rate the learning rate.
+     * @param eta the learning rate.
      */
-    public void setLearningRate(TimeFunction rate) {
-        this.learningRate = rate;
+    public void setLearningRate(double eta) {
+        if (eta <= 0) {
+            throw new IllegalArgumentException("Invalid learning rate: " + eta);
+        }
+
+        this.eta = eta;
     }
 
     /**
-     * Sets the momentum factor. momentum = 0.0 means no momentum.
-     * @param momentum the momentum factor.
+     * Sets the momentum factor. alpha = 0.0 means no momentum.
+     * @param alpha the momentum factor.
      */
-    public void setMomentum(TimeFunction momentum) {
-        this.momentum = momentum;
+    public void setMomentum(double alpha) {
+        if (alpha < 0.0 || alpha >= 1.0) {
+            throw new IllegalArgumentException("Invalid momentum factor: " + alpha);
+        }
+
+        this.alpha = alpha;
     }
 
     /**
@@ -150,7 +152,7 @@ public abstract class MultilayerPerceptron implements Serializable {
      * w = w * (1 - 2 * eta * lambda).
      */
     public void setWeightDecay(double lambda) {
-        if (lambda < 0.0) {
+        if (lambda < 0.0 || lambda > 0.1) {
             throw new IllegalArgumentException("Invalid weight decay factor: " + lambda);
         }
 
@@ -161,14 +163,14 @@ public abstract class MultilayerPerceptron implements Serializable {
      * Returns the learning rate.
      */
     public double getLearningRate() {
-        return learningRate.apply(t);
+        return eta;
     }
 
     /**
      * Returns the momentum factor.
      */
     public double getMomentum() {
-        return momentum.apply(t);
+        return alpha;
     }
 
     /**
@@ -192,10 +194,8 @@ public abstract class MultilayerPerceptron implements Serializable {
 
     /**
      * Propagates the errors back through the network.
-     * @param update the flag if update the weights directly.
-     *               It should be false for (mini-)batch.
      */
-    protected void backpropagate(double[] x, boolean update) {
+    protected void backpropagate(double[] x, double eta) {
         output.computeOutputGradient(target.get(), 1.0);
 
         Layer upper = output;
@@ -206,54 +206,20 @@ public abstract class MultilayerPerceptron implements Serializable {
         // first hidden layer
         upper.backpropagate(null);
 
-        if (update) {
-            double eta = learningRate.apply(t);
-            if (eta <= 0) {
-                throw new IllegalArgumentException("Invalid learning rate: " + eta);
-            }
-
-            double alpha = momentum.apply(t);
-            if (alpha < 0.0 || alpha >= 1.0) {
-                throw new IllegalArgumentException("Invalid momentum factor: " + alpha);
-            }
-
-            double decay = 1.0 - 2 * eta * lambda;
-            if (decay < 0.9) {
-                throw new IllegalStateException(String.format("Invalid learning rate (eta = %.2f) and/or L2 regularization (lambda = %.2f) such that weight decay = %.2f", eta, lambda, decay));
-            }
-
-            for (Layer layer : net) {
-                layer.computeGradientUpdate(x, eta, alpha, decay);
-                x = layer.output();
-            }
-
-            output.computeGradientUpdate(x, eta, alpha, decay);
-        } else {
-            for (Layer layer : net) {
-                layer.computeGradient(x);
-                x = layer.output();
-            }
-
-            output.computeGradient(x);
+        for (Layer layer : net) {
+            layer.computeGradient(x, eta, alpha);
+            x = layer.output();
         }
+
+        output.computeGradient(x, eta, alpha);
     }
 
     /**
-     * Updates the weights for mini-batch training.
+     * Updates the weights.
      *
      * @param m the mini-batch size.
      */
     protected void update(int m) {
-        double eta = learningRate.apply(t);
-        if (eta <= 0) {
-            throw new IllegalArgumentException("Invalid learning rate: " + eta);
-        }
-
-        double alpha = momentum.apply(t);
-        if (alpha < 0.0 || alpha >= 1.0) {
-            throw new IllegalArgumentException("Invalid momentum factor: " + alpha);
-        }
-
         double decay = 1.0 - 2 * eta * lambda;
         if (decay < 0.9) {
             throw new IllegalStateException(String.format("Invalid learning rate (eta = %.2f) and/or decay (lambda = %.2f)", eta, lambda));
