@@ -19,13 +19,12 @@ import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -54,8 +53,7 @@ class WorkerFilesHash {
    * artifact of the given spawn.
    */
   static SortedMap<PathFragment, HashCode> getWorkerFilesWithHashes(
-      Spawn spawn, ArtifactExpander artifactExpander, ArtifactPathResolver pathResolver,
-      MetadataProvider actionInputFileCache)
+      Spawn spawn, ArtifactExpander artifactExpander, ActionInputFileCache actionInputFileCache)
       throws IOException {
     TreeMap<PathFragment, HashCode> workerFilesMap = new TreeMap<>();
 
@@ -68,13 +66,13 @@ class WorkerFilesHash {
     }
 
     for (Map.Entry<PathFragment, Map<PathFragment, Artifact>> rootAndMappings :
-        spawn.getRunfilesSupplier().getMappings(pathResolver).entrySet()) {
+        spawn.getRunfilesSupplier().getMappings().entrySet()) {
       PathFragment root = rootAndMappings.getKey();
       Preconditions.checkState(!root.isAbsolute(), root);
       for (Map.Entry<PathFragment, Artifact> mapping : rootAndMappings.getValue().entrySet()) {
         Artifact localArtifact = mapping.getValue();
         if (localArtifact != null) {
-          FileArtifactValue metadata = actionInputFileCache.getMetadata(localArtifact);
+          Metadata metadata = actionInputFileCache.getMetadata(localArtifact);
           if (metadata.getType().isFile()) {
             workerFilesMap.put(
                 root.getRelative(mapping.getKey()),

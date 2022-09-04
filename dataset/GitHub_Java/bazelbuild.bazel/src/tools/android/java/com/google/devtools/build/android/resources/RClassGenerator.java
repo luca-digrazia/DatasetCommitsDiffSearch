@@ -17,14 +17,13 @@ import static java.nio.file.StandardOpenOption.CREATE_NEW;
 
 import com.android.SdkConstants;
 import com.android.resources.ResourceType;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
@@ -79,7 +78,7 @@ public class RClassGenerator {
 
   private void writeClasses(
       String packageName,
-      Iterable<Map.Entry<ResourceType, Collection<FieldInitializer>>> initializersToWrite)
+      Iterable<Map.Entry<ResourceType, Map<String, FieldInitializer>>> initializersToWrite)
       throws IOException {
 
     Iterable<String> folders = PACKAGE_SPLITTER.split(packageName);
@@ -110,7 +109,7 @@ public class RClassGenerator {
     classWriter.visitSource(SdkConstants.FN_RESOURCE_CLASS, null);
     writeConstructor(classWriter);
     // Build the R.class w/ the inner classes, then later build the individual R$inner.class.
-    for (Map.Entry<ResourceType, Collection<FieldInitializer>> entry : initializersToWrite) {
+    for (Map.Entry<ResourceType, Map<String, FieldInitializer>> entry : initializersToWrite) {
       String innerClassName = rClassName + "$" + entry.getKey().toString();
       classWriter.visitInnerClass(
           innerClassName,
@@ -121,13 +120,13 @@ public class RClassGenerator {
     classWriter.visitEnd();
     Files.write(rClassFile, classWriter.toByteArray(), CREATE_NEW);
     // Now generate the R$inner.class files.
-    for (Map.Entry<ResourceType, Collection<FieldInitializer>> entry : initializersToWrite) {
+    for (Map.Entry<ResourceType, Map<String, FieldInitializer>> entry : initializersToWrite) {
       writeInnerClass(entry.getValue(), packageDir, rClassName, entry.getKey().toString());
     }
   }
 
   private void writeInnerClass(
-      Collection<FieldInitializer> initializers,
+      Map<String, FieldInitializer> initializers,
       Path packageDir,
       String fullyQualifiedOuterClass,
       String innerClass)
@@ -136,16 +135,22 @@ public class RClassGenerator {
     String fullyQualifiedInnerClass =
         writeInnerClassHeader(fullyQualifiedOuterClass, innerClass, innerClassWriter);
 
-    List<FieldInitializer> deferredInitializers = new ArrayList<>();
+    Map<String, FieldInitializer> deferredInitializers = new LinkedHashMap<>();
     int fieldAccessLevel = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC;
     if (finalFields) {
       fieldAccessLevel |= Opcodes.ACC_FINAL;
     }
-    for (FieldInitializer init : initializers) {
-      JavaIdentifierValidator.validate(
-          init.getFieldName(), "in class:", fullyQualifiedInnerClass, "and package:", packageDir);
-      if (init.writeFieldDefinition(innerClassWriter, fieldAccessLevel, finalFields)) {
-        deferredInitializers.add(init);
+    for (Map.Entry<String, FieldInitializer> entry : initializers.entrySet()) {
+      FieldInitializer init = entry.getValue();
+      Preconditions.checkArgument(
+          !entry.getKey().contains(":"),
+          "%s in %s, %s is invalid java id",
+          entry.getKey(),
+          packageDir,
+          fullyQualifiedInnerClass);
+      if (init.writeFieldDefinition(
+          entry.getKey(), innerClassWriter, fieldAccessLevel, finalFields)) {
+        deferredInitializers.put(entry.getKey(), init);
       }
     }
     if (!deferredInitializers.isEmpty()) {
@@ -192,15 +197,17 @@ public class RClassGenerator {
   private static void writeStaticClassInit(
       ClassWriter classWriter,
       String className,
-      Collection<FieldInitializer> deferredInitializers) {
+      Map<String, FieldInitializer> deferredInitializers) {
     MethodVisitor visitor =
         classWriter.visitMethod(
             Opcodes.ACC_STATIC, "<clinit>", "()V", null, /* signature */ null /* exceptions */);
     visitor.visitCode();
     int stackSlotsNeeded = 0;
     InstructionAdapter insts = new InstructionAdapter(visitor);
-    for (FieldInitializer fieldInit : deferredInitializers) {
-      stackSlotsNeeded = Math.max(stackSlotsNeeded, fieldInit.writeCLInit(insts, className));
+    for (Map.Entry<String, FieldInitializer> fieldEntry : deferredInitializers.entrySet()) {
+      final FieldInitializer fieldInit = fieldEntry.getValue();
+      stackSlotsNeeded =
+          Math.max(stackSlotsNeeded, fieldInit.writeCLInit(fieldEntry.getKey(), insts, className));
     }
     insts.areturn(Type.VOID_TYPE);
     visitor.visitMaxs(stackSlotsNeeded, 0);

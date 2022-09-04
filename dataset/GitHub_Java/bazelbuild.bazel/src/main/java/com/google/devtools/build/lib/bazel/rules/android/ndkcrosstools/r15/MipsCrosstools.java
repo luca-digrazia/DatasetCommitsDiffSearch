@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkPaths;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.Builder;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationMode;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationModeFlags;
 
@@ -38,7 +37,7 @@ final class MipsCrosstools {
     this.clangVersion = clangVersion;
   }
 
-  ImmutableList<Builder> createCrosstools() {
+  ImmutableList<CToolchain.Builder> createCrosstools() {
     return ImmutableList.of(createMips64Toolchain(), createMipsToolchain());
   }
 
@@ -54,7 +53,7 @@ final class MipsCrosstools {
                 ndkPaths.createClangToolpaths(
                     "mips64el-linux-android-4.9", targetPlatform, null, CppConfiguration.Tool.DWP))
             .addCompilerFlag(
-                "-I%ndk%/usr/include/%triple%"
+                "-isystem%ndk%/usr/include/%triple%"
                     .replace("%ndk%", ndkPaths.createBuiltinSysroot())
                     .replace("%triple%", targetPlatform))
             .addCompilerFlag("-D__ANDROID_API__=" + ndkPaths.getCorrectedApiLevel(targetCpu))
@@ -74,7 +73,7 @@ final class MipsCrosstools {
             .setTargetSystemName("mipsel-linux-android")
             .setTargetCpu(targetCpu)
             .addCompilerFlag(
-                "-I%ndk%/usr/include/%triple%"
+                "-isystem%ndk%/usr/include/%triple%"
                     .replace("%ndk%", ndkPaths.createBuiltinSysroot())
                     .replace("%triple%", targetPlatform))
             .addCompilerFlag("-D__ANDROID_API__=" + ndkPaths.getCorrectedApiLevel("mips"))

@@ -46,17 +46,14 @@ public class WorkerOptions extends OptionsBase {
 
   @Option(
     name = "worker_max_instances",
-    converter = Converters.NamedIntegersConverter.class,
-    defaultValue = "",
+    defaultValue = "4",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "How many instances of a worker process (like the persistent Java compiler) may be "
-            + "launched if you use the 'worker' strategy. May be specified as [name=value] to "
-            + "give a different value per worker mnemonic.",
-    allowMultiple = true
+            + "launched if you use the 'worker' strategy."
   )
-  public List<Map.Entry<String, Integer>> workerMaxInstances;
+  public int workerMaxInstances;
 
   @Option(
       name = "high_priority_workers",

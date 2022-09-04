@@ -376,7 +376,6 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   public ImmutableMap<SkyFunctionName, ? extends SkyFunction> getSkyFunctionsForTesting() {
     return skyFunctions;
   }
-
   public static final EventFilter DEFAULT_STORED_EVENT_FILTER =
       new EventFilter() {
         @Override
@@ -391,7 +390,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
         }
 
         @Override
-        public boolean storeEventsAndPosts() {
+        public boolean storeEvents() {
           return true;
         }
       };
