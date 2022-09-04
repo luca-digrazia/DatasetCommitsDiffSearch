@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
-import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
@@ -73,12 +72,9 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
     PlatformType platformType = MultiArchSplitTransitionProvider.getPlatformType(ruleContext);
     ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap =
         ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
-    ImmutableListMultimap<BuildConfiguration, ObjcProvider> configToObjcAvoidDepsMap =
+    ImmutableListMultimap<BuildConfiguration, ObjcProvider> configToAvoidDepsMap =
         ruleContext.getPrerequisitesByConfiguration(AppleStaticLibraryRule.AVOID_DEPS_ATTR_NAME,
             Mode.SPLIT, ObjcProvider.class);
-    ImmutableListMultimap<BuildConfiguration, CcLinkParamsProvider> configToCcAvoidDepsMap =
-        ruleContext.getPrerequisitesByConfiguration(AppleStaticLibraryRule.AVOID_DEPS_ATTR_NAME,
-            Mode.SPLIT, CcLinkParamsProvider.class);
 
     Set<BuildConfiguration> childConfigurations = getChildConfigurations(ruleContext);
 
@@ -112,9 +108,8 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
               nullToEmptyList(configToDepsCollectionMap.get(childConfig)),
               protosObjcProvider);
       ObjcProvider objcProvider =
-          common.getObjcProvider().subtractSubtrees(configToObjcAvoidDepsMap.get(childConfig),
-              configToCcAvoidDepsMap.get(childConfig));
-
+          common.getObjcProvider().subtractSubtrees(configToAvoidDepsMap.get(childConfig));
+      
       librariesToLipo.add(intermediateArtifacts.strippedSingleArchitectureLibrary());
 
       CompilationSupport.createForConfig(ruleContext, childConfig)

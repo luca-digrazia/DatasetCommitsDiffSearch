@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper;
@@ -76,6 +75,8 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
           "c-compile",
           "c++-compile");
 
+  private CompilationArtifacts compilationArtifacts;
+
   /**
    * Creates a new CompilationSupport instance that uses the c++ rule backend
    *
@@ -102,6 +103,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       IntermediateArtifacts intermediateArtifacts,
       CompilationAttributes compilationAttributes) {
     super(ruleContext, buildConfiguration, intermediateArtifacts, compilationAttributes);
+    this.compilationArtifacts = compilationArtifacts(ruleContext);
   }
 
   @Override
@@ -125,11 +127,11 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
   
       extension.addVariableCategory(VariableCategory.ARCHIVE_VARIABLES);
       
-      helper = createCcLibraryHelper(objcProvider, compilationArtifacts, extension.build())
+      helper = createCcLibraryHelper(objcProvider, extension.build())
           .setLinkType(LinkTargetType.OBJC_ARCHIVE)
           .addLinkActionInput(objList);
     } else {
-      helper = createCcLibraryHelper(objcProvider, compilationArtifacts, extension.build());
+      helper = createCcLibraryHelper(objcProvider, extension.build());
     }
     
     helper.build();
@@ -238,8 +240,9 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
     
     return this;
   }
+
   private CcLibraryHelper createCcLibraryHelper(ObjcProvider objcProvider,
-      CompilationArtifacts compilationArtifacts, VariablesExtension extension) {
+      VariablesExtension extension) {
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
     Collection<Artifact> arcSources = ImmutableSortedSet.copyOf(compilationArtifacts.getSrcs());
     Collection<Artifact> nonArcSources =
@@ -262,10 +265,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .addPublicHeaders(publicHdrs)
             .addPrecompiledFiles(precompiledFiles)
             .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
-            // Not all our dependencies need to export cpp information.
-            // For example, objc_proto_library can depend on a proto_library rule that does not
-            // generate C++ protos.
-            .setCheckDepsGenerateCpp(false)
             .addCopts(getCompileRuleCopts())
             .addIncludeDirs(objcProvider.get(INCLUDE))
             .addCopts(ruleContext.getFragment(ObjcConfiguration.class).getCoptsForCompilationMode())
@@ -274,10 +273,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .setPropagateModuleMapToCompileAction(false)
             .addVariableExtension(extension);
 
-    Artifact pchHdr = null;
-    if (ruleContext.attributes().has("pch", BuildType.LABEL)) {
-      pchHdr = ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET);
-    }
+    Artifact pchHdr = ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET);
     if (pchHdr != null) {
       result.addNonModuleMapHeader(pchHdr);
     }
@@ -313,8 +309,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       activatedCrosstoolSelectables.add(NO_ENABLE_MODULES_FEATURE_NAME);
     } 
 
-    if (ruleContext.attributes().has("pch", BuildType.LABEL)
-        && ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET) != null) {
+    if (ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET) != null) {
       activatedCrosstoolSelectables.add("pch");
     }
 
