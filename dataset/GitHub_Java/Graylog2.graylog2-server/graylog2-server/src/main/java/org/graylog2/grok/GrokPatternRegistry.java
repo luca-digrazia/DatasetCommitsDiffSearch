@@ -44,6 +44,7 @@ public class GrokPatternRegistry {
     private static final Logger log = LoggerFactory.getLogger(GrokPatternRegistry.class);
 
     private final GrokPatternService grokPatternService;
+    private final ScheduledExecutorService daemonExecutor;
 
     private final AtomicReference<Set<GrokPattern>> patterns = new AtomicReference<>(Collections.emptySet());
     private final LoadingCache<String, Grok> grokCache;
@@ -53,6 +54,7 @@ public class GrokPatternRegistry {
                                GrokPatternService grokPatternService,
                                @Named("daemonScheduler") ScheduledExecutorService daemonExecutor) {
         this.grokPatternService = grokPatternService;
+        this.daemonExecutor = daemonExecutor;
 
         grokCache = CacheBuilder.newBuilder()
                 .expireAfterAccess(1, TimeUnit.MINUTES) // prevent from hanging on to memory forever
@@ -67,14 +69,14 @@ public class GrokPatternRegistry {
     @Subscribe
     public void grokPatternsChanged(GrokPatternsChangedEvent event) {
         // for now we simply reload everything and don't care what exactly has changed
-        reload();
+        daemonExecutor.schedule(this::reload, 0, TimeUnit.SECONDS);
     }
 
     public Grok cachedGrokForPattern(String pattern) {
         try {
             return grokCache.get(pattern);
         } catch (ExecutionException e) {
-            log.error("Unable to load grok pattern {} into cache", pattern, e);
+            log.error("Unable to load grok pattern " + pattern + " into cache", e);
             throw new RuntimeException(e);
         }
     }
