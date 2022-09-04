@@ -1,5 +1,6 @@
 package io.quarkus.arc.runtime.context;
 
+import java.util.Collection;
 import java.util.Map;
 
 import org.eclipse.microprofile.context.ThreadContext;
@@ -9,7 +10,7 @@ import org.eclipse.microprofile.context.spi.ThreadContextSnapshot;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
-import io.quarkus.arc.InjectableContext;
+import io.quarkus.arc.ContextInstanceHandle;
 import io.quarkus.arc.ManagedContext;
 
 /**
@@ -34,8 +35,8 @@ public class ArcContextProvider implements ThreadContextProvider {
             return NOOP_SNAPSHOT;
         }
 
-        // capture the state
-        InjectableContext.ContextState state = arc.requestContext().getState();
+        // capture all instances
+        Collection<ContextInstanceHandle<?>> instancesToPropagate = arc.requestContext().getAll();
         return () -> {
             // can be called later on, we should retrieve the container again
             ArcContainer arcContainer = Arc.container();
@@ -47,17 +48,17 @@ public class ArcContextProvider implements ThreadContextProvider {
             // this is executed on another thread, context can but doesn't need to be active here
             if (isContextActiveOnThisThread(arcContainer)) {
                 // context active, store current state, feed it new one and restore state afterwards
-                InjectableContext.ContextState stateToRestore = requestContext.getState();
+                Collection<ContextInstanceHandle<?>> instancesToRestore = requestContext.getAll();
                 requestContext.deactivate();
-                requestContext.activate(state);
+                requestContext.activate(instancesToPropagate);
                 controller = () -> {
                     // clean up, reactivate context with previous values
                     requestContext.deactivate();
-                    requestContext.activate(stateToRestore);
+                    requestContext.activate(instancesToRestore);
                 };
             } else {
                 // context not active, activate and pass it new instance, deactivate afterwards
-                requestContext.activate(state);
+                requestContext.activate(instancesToPropagate);
                 controller = () -> {
                     requestContext.deactivate();
                 };
@@ -91,13 +92,13 @@ public class ArcContextProvider implements ThreadContextProvider {
             // this is executed on another thread, context can but doesn't need to be active here
             if (isContextActiveOnThisThread(arcContainer)) {
                 // context active, store current state, start blank context anew and restore state afterwards
-                InjectableContext.ContextState stateToRestore = requestContext.getState();
+                Collection<ContextInstanceHandle<?>> instancesToRestore = requestContext.getAll();
                 requestContext.deactivate();
                 requestContext.activate();
                 controller = () -> {
                     // clean up, reactivate context with previous values
                     requestContext.deactivate();
-                    requestContext.activate(stateToRestore);
+                    requestContext.activate(instancesToRestore);
                 };
             } else {
                 // context not active, activate blank one, deactivate afterwards
