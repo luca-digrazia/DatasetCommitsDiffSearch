@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Verify;
 import com.google.common.base.VerifyException;
@@ -676,15 +675,17 @@ public final class ConfigurationResolver {
   }
 
   /**
-   * Determines the output ordering of each {@code <attribute, depLabel> -> [dep<config1>,
-   * dep<config2>, ...]} collection produced by a split transition.
+   * Determines the output ordering of each <attribute, depLabel> ->
+   * [dep<config1>, dep<config2>, ...] collection produced by a split transition.
    */
   @VisibleForTesting
   public static final Comparator<Dependency> SPLIT_DEP_ORDERING =
-      Comparator.comparing(
-              Functions.compose(BuildConfiguration::getMnemonic, Dependency::getConfiguration))
-          .thenComparing(
-              Functions.compose(BuildConfiguration::checksum, Dependency::getConfiguration));
+      new Comparator<Dependency>() {
+        @Override
+        public int compare(Dependency d1, Dependency d2) {
+          return d1.getConfiguration().getMnemonic().compareTo(d2.getConfiguration().getMnemonic());
+        }
+      };
 
   /**
    * Returns a copy of the output deps using the same key and value ordering as the input deps.
