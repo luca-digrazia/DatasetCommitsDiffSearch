@@ -43,7 +43,6 @@ public class LoggingOutput implements MessageOutput {
     @Override
     public void initialize(Configuration config) throws MessageOutputConfigurationException {
         LOG.info("Initializing");
-        configuration = config;
         isRunning.set(true);
     }
 
@@ -60,7 +59,7 @@ public class LoggingOutput implements MessageOutput {
 
     @Override
     public void write(Message message) throws Exception {
-        LOG.info("{} {}", configuration.getString("prefix"), message);
+        LOG.info("Writing message {}", message);
     }
 
     @Override
