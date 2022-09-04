@@ -23,8 +23,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.channels.FileChannel;
-import javax.annotation.Nullable;
 
 /** This class implements the FileSystem interface using direct calls to the UNIX filesystem. */
 @ThreadSafe
@@ -66,7 +64,7 @@ public abstract class AbstractFileSystem extends FileSystem {
       long startTime = Profiler.nanoTimeMaybe();
       try {
         // Replace default FileInputStream instance with the custom one that does profiling.
-        return new ProfiledInputStream(name, newFileInputStream(name));
+        return new ProfiledFileInputStream(name, newFileInputStream(name));
       } finally {
         profiler.logSimpleTask(startTime, ProfilerTask.VFS_OPEN, name);
       }
@@ -119,12 +117,11 @@ public abstract class AbstractFileSystem extends FileSystem {
     }
   }
 
-  private static final class ProfiledInputStream extends InputStream implements
-      FileChannelSupplier {
+  private static final class ProfiledFileInputStream extends InputStream {
     private final String name;
     private final InputStream stm;
 
-    public ProfiledInputStream(String name, InputStream stm) {
+    public ProfiledFileInputStream(String name, InputStream stm) {
       this.name = name;
       this.stm = stm;
     }
@@ -185,21 +182,6 @@ public abstract class AbstractFileSystem extends FileSystem {
     public long skip(long n) throws IOException {
       return stm.skip(n);
     }
-
-    @Override
-    public FileChannel getChannel() {
-      return stm instanceof FileInputStream
-          ? ((FileInputStream) stm).getChannel()
-          : null;
-    }
-  }
-
-  /**
-   * Interface to return a {@link FileChannel}.
-   */
-  public interface FileChannelSupplier {
-    @Nullable
-    FileChannel getChannel();
   }
 
   private static final class ProfiledFileOutputStream extends OutputStream {
