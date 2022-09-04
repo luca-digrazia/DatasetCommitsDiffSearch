@@ -16,25 +16,25 @@
  */
 package org.graylog2.outputs;
 
-import com.google.common.collect.Maps;
+import autovalue.shaded.com.google.common.common.collect.Maps;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.bindings.InstantiationService;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 import java.util.Map;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.*;
 
-@RunWith(MockitoJUnitRunner.class)
+@Test
 public class MessageOutputFactoryTest {
     @Mock
     private InstantiationService instantiationService;
@@ -46,12 +46,14 @@ public class MessageOutputFactoryTest {
         this.availableOutputs = Maps.newHashMap();
     }
 
-    @Before
+    @BeforeMethod
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         this.messageOutputFactory = new MessageOutputFactory(instantiationService, availableOutputs);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expectedExceptions = IllegalArgumentException.class)
     public void testNonExistentOutputType() throws MessageOutputConfigurationException {
         final String outputType = "non.existent";
         final Output output = mock(Output.class);
