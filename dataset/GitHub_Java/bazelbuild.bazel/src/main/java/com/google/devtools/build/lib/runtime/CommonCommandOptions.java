@@ -279,8 +279,7 @@ public class CommonCommandOptions extends OptionsBase {
   public boolean slimProfile;
 
   @Option(
-      name = "experimental_profile_include_primary_output",
-      oldName = "experimental_include_primary_output",
+      name = "experimental_include_primary_output",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.LOGGING,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.BAZEL_MONITORING},
