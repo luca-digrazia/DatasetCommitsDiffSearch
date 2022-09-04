@@ -50,6 +50,10 @@ public class SkyframeExecutorWrappingWalkableGraph extends DelegatingWalkableGra
             return result;
           }
 
+          @Override
+          public Iterable<SkyKey> getCurrentlyAvailableNodes(Iterable<SkyKey> keys, Reason reason) {
+            return keys;
+          }
         });
   }
 
