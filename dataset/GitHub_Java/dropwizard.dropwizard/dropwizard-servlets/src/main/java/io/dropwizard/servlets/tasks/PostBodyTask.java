@@ -23,9 +23,8 @@ public abstract class PostBodyTask extends Task {
     /**
      * Create a new task with the given name and response content type
      *
-     * @param name                the task's name
+     * @param name the task's name
      * @param responseContentType the task's response content type
-     * @since 2.0
      */
     protected PostBodyTask(String name, String responseContentType) {
         super(name, responseContentType);
@@ -42,12 +41,11 @@ public abstract class PostBodyTask extends Task {
                                  PrintWriter output) throws Exception;
 
     /**
-     * Deprecated, use {@link #execute(Map, String, PrintWriter)} or inherit from Task instead.
+     * Deprecated, use `execute(parameters, body, output)` or inherit from Task instead.
      *
      * @param parameters the query string parameters
      * @param output     a {@link PrintWriter} wrapping the output stream of the task
      * @throws Exception
-     * @deprecated Use {@link #execute(Map, String, PrintWriter)} or inherit from Task instead.
      */
     @Override
     @Deprecated

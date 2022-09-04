@@ -1,6 +1,5 @@
 package io.dropwizard.servlets.tasks;
 
-import javax.annotation.Nullable;
 import java.io.PrintWriter;
 import java.util.List;
 import java.util.Map;
@@ -13,8 +12,7 @@ import java.util.Optional;
  */
 public abstract class Task {
     private final String name;
-    @Nullable
-    private final String responseContentType;
+    private final Optional<String> responseContentType;
 
     /**
      * Create a new task with the given name.
@@ -22,19 +20,19 @@ public abstract class Task {
      * @param name the task's name
      */
     protected Task(String name) {
-        this(name, null);
+        this.name = name;
+        this.responseContentType = Optional.empty();
     }
 
     /**
      * Create a new task with the given name and response content type
      *
-     * @param name                the task's name
+     * @param name the task's name
      * @param responseContentType the task's response content type
-     * @since 2.0
      */
-    protected Task(String name, @Nullable String responseContentType) {
+    protected Task(String name, String responseContentType) {
         this.name = name;
-        this.responseContentType = responseContentType;
+        this.responseContentType = Optional.ofNullable(responseContentType);
     }
 
     /**
@@ -47,13 +45,12 @@ public abstract class Task {
     }
 
     /**
-     * Returns the task's response content type.
+     * Returns the task's response content type,
      *
      * @return the task's response content type
-     * @since 2.0
      */
     public Optional<String> getResponseContentType() {
-        return Optional.ofNullable(responseContentType);
+        return responseContentType;
     }
 
     /**
