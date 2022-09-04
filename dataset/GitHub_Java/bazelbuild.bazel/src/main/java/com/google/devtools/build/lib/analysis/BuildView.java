@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import static java.util.stream.Collectors.toSet;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
@@ -39,7 +37,7 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.constraints.TopLevelConstraintSemantics;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -157,17 +155,9 @@ public class BuildView {
     this.skyframeBuildView = skyframeExecutor.getSkyframeBuildView();
   }
 
-  /** The number of configured targets freshly evaluated in the last analysis run. */
-  public int getTargetsConfigured() {
+  /** The number of targets freshly evaluated in the last analysis run. */
+  public int getTargetsVisited() {
     return skyframeBuildView.getEvaluatedTargetKeys().size();
-  }
-
-  /** The number of targets (not configured targets) loaded in the last analysis run. */
-  public int getTargetsLoaded() {
-    return skyframeBuildView.getEvaluatedTargetKeys().stream()
-        .map(key -> ((ConfiguredTargetKey) key).getLabel())
-        .collect(toSet())
-        .size();
   }
 
   public int getActionsConstructed() {
@@ -251,8 +241,7 @@ public class BuildView {
       }
     }
 
-    skyframeBuildView.setConfigurations(
-        eventHandler, configurations, viewOptions.maxConfigChangesToShow);
+    skyframeBuildView.setConfigurations(eventHandler, configurations);
 
     if (configurations.getTargetConfigurations().size() == 1) {
       eventBus
@@ -528,7 +517,7 @@ public class BuildView {
       ArtifactsToOwnerLabels.Builder topLevelArtifactsToOwnerLabels) {
     NestedSetBuilder<Artifact> baselineCoverageArtifacts = NestedSetBuilder.stableOrder();
     for (ConfiguredTarget target : configuredTargets) {
-      InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
+      InstrumentedFilesProvider provider = target.getProvider(InstrumentedFilesProvider.class);
       if (provider != null) {
         TopLevelArtifactHelper.addArtifactsWithOwnerLabel(
             provider.getBaselineCoverageArtifacts(),
