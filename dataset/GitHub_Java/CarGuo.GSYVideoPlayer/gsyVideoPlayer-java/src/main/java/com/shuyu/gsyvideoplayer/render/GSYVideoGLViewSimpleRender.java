@@ -35,7 +35,7 @@ public class GSYVideoGLViewSimpleRender extends GSYVideoGLViewBaseRender {
 
     private static final int TRIANGLE_VERTICES_DATA_UV_OFFSET = 3;
 
-    private static final int GL_TEXTURE_EXTERNAL_OES = 0x8D65;
+    protected static final int GL_TEXTURE_EXTERNAL_OES = 0x8D65;
 
     private final float[] mTriangleVerticesData = {
             // X, Y, Z, U, V
@@ -57,15 +57,15 @@ public class GSYVideoGLViewSimpleRender extends GSYVideoGLViewBaseRender {
             + "  vTextureCoord = (uSTMatrix * aTextureCoord).xy;\n"
             + "}\n";
 
-    private float[] mMVPMatrix = new float[16];
+    protected float[] mMVPMatrix = new float[16];
 
     private float[] mSTMatrix = new float[16];
 
-    private int mProgram;
+    protected int mProgram;
 
-    private int mTextureID[] = new int[2];
+    protected int mTextureID[] = new int[2];
 
-    private int muMVPMatrixHandle;
+    protected int muMVPMatrixHandle;
 
     private int muSTMatrixHandle;
 
@@ -244,10 +244,6 @@ public class GSYVideoGLViewSimpleRender extends GSYVideoGLViewBaseRender {
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         checkGlError("glDrawArrays");
 
-    }
-
-    public int getProgram() {
-        return mProgram;
     }
 
     protected String getVertexShader() {
