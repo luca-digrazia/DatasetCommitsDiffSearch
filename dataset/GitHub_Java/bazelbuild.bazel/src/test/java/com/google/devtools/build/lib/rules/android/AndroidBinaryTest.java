@@ -97,7 +97,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "android_binary(",
         "    name = 'a',",
         "    srcs = ['A.java'],",
-        "    manifest = 'AndroidManifest.xml',",
         "    main_dex_proguard_specs = ['foo'])");
   }
 

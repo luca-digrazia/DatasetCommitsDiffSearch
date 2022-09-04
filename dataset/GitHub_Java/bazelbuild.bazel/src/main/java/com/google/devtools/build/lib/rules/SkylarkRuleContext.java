@@ -985,8 +985,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
   }
 
   @SkylarkCallable(doc =
-        "<b>Deprecated.</b> Use <code>ctx.var</code> to access the variables instead.<br>"
-      + "Returns a string after expanding all references to \"Make variables\". The variables "
+        "Returns a string after expanding all references to \"Make variables\". The variables "
       + "must have the following format: <code>$(VAR_NAME)</code>. Also, <code>$$VAR_NAME"
       + "</code> expands to <code>$VAR_NAME</code>. Parameters:"
       + "<ul><li>The name of the attribute (<code>string</code>). It's only used for error "
