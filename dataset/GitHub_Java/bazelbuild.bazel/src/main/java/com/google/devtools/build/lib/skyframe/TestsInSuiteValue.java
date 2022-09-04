@@ -36,14 +36,14 @@ import java.util.Objects;
 @Immutable
 @ThreadSafe
 final class TestsInSuiteValue implements SkyValue {
-  private ResolvedTargets<Label> labels;
+  private ResolvedTargets<Target> targets;
 
-  TestsInSuiteValue(ResolvedTargets<Label> labels) {
-    this.labels = Preconditions.checkNotNull(labels);
+  TestsInSuiteValue(ResolvedTargets<Target> targets) {
+    this.targets = Preconditions.checkNotNull(targets);
   }
 
-  public ResolvedTargets<Label> getLabels() {
-    return labels;
+  public ResolvedTargets<Target> getTargets() {
+    return targets;
   }
 
   @SuppressWarnings("unused")
