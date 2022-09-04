@@ -65,10 +65,13 @@ public class InjectJobTest {
 
     }
 
-    public static class Starter {
+    public static class Starter implements Job {
+
+        @Inject
+        Service service;
 
         void onStart(@Observes StartupEvent event, Scheduler quartz) throws SchedulerException {
-            JobDetail job = JobBuilder.newJob(ServiceJob.class)
+            JobDetail job = JobBuilder.newJob(Starter.class)
                     .withIdentity("myJob", "myGroup")
                     .build();
             Trigger trigger = TriggerBuilder.newTrigger()
@@ -81,17 +84,11 @@ public class InjectJobTest {
             quartz.scheduleJob(job, trigger);
         }
 
-    }
-
-    public static class ServiceJob implements Job {
-
-        @Inject
-        Service service;
-
         @Override
         public void execute(JobExecutionContext context) throws JobExecutionException {
             service.execute();
         }
+
     }
 
 }

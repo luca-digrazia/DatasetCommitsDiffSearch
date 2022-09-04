@@ -12,7 +12,6 @@ import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.BeforeDestroyed;
 import javax.enterprise.event.Event;
 import javax.enterprise.event.Observes;
-import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.inject.Singleton;
 import javax.interceptor.Interceptor;
@@ -79,7 +78,7 @@ public class QuartzScheduler implements Scheduler {
     }
 
     public QuartzScheduler(SchedulerContext context, QuartzSupport quartzSupport, Config config,
-            SchedulerRuntimeConfig schedulerRuntimeConfig, Event<SkippedExecution> skippedExecutionEvent, Instance<Job> jobs) {
+            SchedulerRuntimeConfig schedulerRuntimeConfig, Event<SkippedExecution> skippedExecutionEvent) {
         enabled = schedulerRuntimeConfig.enabled;
         if (!enabled) {
             LOGGER.info("Quartz scheduler is disabled by config property and will not be started");
@@ -103,7 +102,7 @@ public class QuartzScheduler implements Scheduler {
                 scheduler = schedulerFactory.getScheduler();
 
                 // Set custom job factory
-                scheduler.setJobFactory(new InvokerJobFactory(invokers, jobs));
+                scheduler.setJobFactory(new InvokerJobFactory(invokers));
 
                 CronType cronType = context.getCronType();
                 CronDefinition def = CronDefinitionBuilder.instanceDefinitionFor(cronType);
@@ -336,10 +335,11 @@ public class QuartzScheduler implements Scheduler {
 
     private Properties getAdditionalConfigurationProperties(String prefix, Map<String, QuartzAdditionalPropsConfig> config) {
         Properties props = new Properties();
-        for (Map.Entry<String, QuartzAdditionalPropsConfig> configEntry : config.entrySet()) {
-            props.put(String.format("%s.%s.class", prefix, configEntry.getKey()), configEntry.getValue().clazz);
-            for (Map.Entry<String, String> propsEntry : configEntry.getValue().propsValue.entrySet()) {
-                props.put(String.format("%s.%s.%s", prefix, configEntry.getKey(), propsEntry.getKey()), propsEntry.getValue());
+        for (String key : config.keySet()) {
+            props.put(String.format("%s.%s.class", prefix, key), config.get(key).clazz);
+            for (String propsName : config.get(key).propsValue.keySet()) {
+                props.put(String.format("%s.%s.%s", prefix, key, propsName),
+                        config.get(key).propsValue.get(propsName));
             }
         }
         return props;
@@ -418,11 +418,9 @@ public class QuartzScheduler implements Scheduler {
     static class InvokerJobFactory extends SimpleJobFactory {
 
         final Map<String, ScheduledInvoker> invokers;
-        final Instance<Job> jobs;
 
-        InvokerJobFactory(Map<String, ScheduledInvoker> invokers, Instance<Job> jobs) {
+        InvokerJobFactory(Map<String, ScheduledInvoker> invokers) {
             this.invokers = invokers;
-            this.jobs = jobs;
         }
 
         @Override
@@ -431,9 +429,9 @@ public class QuartzScheduler implements Scheduler {
             if (jobClass.equals(InvokerJob.class)) {
                 return new InvokerJob(invokers);
             }
-            Instance<?> instance = jobs.select(jobClass);
-            if (instance.isResolvable()) {
-                return (Job) instance.get();
+            InstanceHandle<? extends Job> instance = Arc.container().instance(jobClass);
+            if (instance.isAvailable()) {
+                return instance.get();
             }
             return super.newJob(bundle, Scheduler);
         }
