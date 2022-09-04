@@ -19,8 +19,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -33,12 +35,14 @@ import io.quarkus.runtime.util.JavaVersionUtil;
 import io.quarkus.utilities.JavaBinFinder;
 
 public abstract class QuarkusDevModeLauncher {
+    final Pattern validDebug = Pattern.compile("^(true|false|client|[0-9]+)$");
+    final Pattern validPort = Pattern.compile("^[0-9]+$");
 
     public class Builder<R extends QuarkusDevModeLauncher, B extends Builder<R, B>> {
 
-        protected Builder() {
+        protected Builder(String java) {
             args = new ArrayList<>();
-            String javaTool = JavaBinFinder.findBin();
+            final String javaTool = java == null ? JavaBinFinder.findBin() : java;
             QuarkusDevModeLauncher.this.debug("Using javaTool: %s", javaTool);
             args.add(javaTool);
 
@@ -198,7 +202,18 @@ public abstract class QuarkusDevModeLauncher {
 
         @SuppressWarnings("unchecked")
         public B remoteDev(boolean remoteDev) {
-            QuarkusDevModeLauncher.this.remoteDev = remoteDev;
+            QuarkusDevModeLauncher.this.entryPointCustomizer = new Consumer<DevModeContext>() {
+                @Override
+                public void accept(DevModeContext devModeContext) {
+                    devModeContext.setMode(QuarkusBootstrap.Mode.REMOTE_DEV_CLIENT);
+                    devModeContext.setAlternateEntryPoint(IsolatedRemoteDevModeMain.class.getName());
+                }
+            };
+            return (B) this;
+        }
+
+        public B entryPointCustomizer(Consumer<DevModeContext> consumer) {
+            QuarkusDevModeLauncher.this.entryPointCustomizer = consumer;
             return (B) this;
         }
 
@@ -218,6 +233,13 @@ public abstract class QuarkusDevModeLauncher {
             return (B) this;
         }
 
+        public boolean isTestsPresent() {
+            if (main == null) {
+                return false;
+            }
+            return main.getTest().isPresent();
+        }
+
         @SuppressWarnings("unchecked")
         public B dependency(ModuleInfo module) {
             dependencies.add(module);
@@ -227,6 +249,20 @@ public abstract class QuarkusDevModeLauncher {
         @SuppressWarnings("unchecked")
         public B classpathEntry(File f) {
             classpath.add(f);
+            return (B) this;
+        }
+
+        public B debugHost(String host) {
+            if ((null != host) && !host.isEmpty()) {
+                QuarkusDevModeLauncher.this.debugHost = host;
+            }
+            return (B) this;
+        }
+
+        public B debugPort(String port) {
+            if ((null != port) && !port.isEmpty()) {
+                QuarkusDevModeLauncher.this.debugPort = port;
+            }
             return (B) this;
         }
 
@@ -241,6 +277,8 @@ public abstract class QuarkusDevModeLauncher {
     private String debug;
     private Boolean debugPortOk;
     private String suspend;
+    private String debugHost = "localhost";
+    private String debugPort = "5005";
     private File projectDir;
     private File buildDir;
     private File outputDir;
@@ -256,7 +294,7 @@ public abstract class QuarkusDevModeLauncher {
     private Set<Path> buildFiles = new HashSet<>(0);
     private boolean deleteDevJar = true;
     private String baseName;
-    private boolean remoteDev;
+    private Consumer<DevModeContext> entryPointCustomizer;
     private String applicationArgs;
     private Set<AppArtifactKey> localArtifacts = new HashSet<>();
     private ModuleInfo main;
@@ -271,8 +309,11 @@ public abstract class QuarkusDevModeLauncher {
      */
     protected void prepare() throws Exception {
 
-        // the following flags reduce startup time and are acceptable only for dev purposes
-        args.add("-XX:TieredStopAtLevel=1");
+        if (!JavaVersionUtil.isGraalvmJdk()) {
+            // prevent C2 compiler for kicking in - makes startup a little faster
+            // it only makes sense in dev-mode but it is not available when GraalVM is used as the JDK
+            args.add("-XX:TieredStopAtLevel=1");
+        }
 
         if (suspend != null) {
             switch (suspend.toLowerCase(Locale.ENGLISH)) {
@@ -296,39 +337,40 @@ public abstract class QuarkusDevModeLauncher {
             suspend = "n";
         }
 
-        if (debug == null) {
-            // debug mode not specified
-            // make sure 5005 is not used, we don't want to just fail if something else is using it
+        int port = 5005;
+
+        if (debugPort != null && validPort.matcher(debugPort).matches()) {
+            port = Integer.parseInt(debugPort);
+        }
+        if (debug != null) {
+            if (!validDebug.matcher(debug).matches()) {
+                throw new Exception(
+                        "Invalid value for debug parameter: " + debug + " must be true|false|client|{port}");
+            }
+            if (validPort.matcher(debug).matches()) {
+                port = Integer.parseInt(debug);
+            }
+        }
+        if (port <= 0) {
+            throw new Exception("The specified debug port must be greater than 0");
+        }
+
+        if (debug != null && debug.toLowerCase().equals("client")) {
+            args.add("-agentlib:jdwp=transport=dt_socket,address=" + debugHost + ":" + port + ",server=n,suspend=" + suspend);
+        } else if (debug == null || !debug.toLowerCase().equals("false")) {
+            // make sure the debug port is not used, we don't want to just fail if something else is using it
             // we don't check this on restarts, as the previous process is still running
             if (debugPortOk == null) {
-                try (Socket socket = new Socket(InetAddress.getByAddress(new byte[] { 127, 0, 0, 1 }), 5005)) {
-                    error("Port 5005 in use, not starting in debug mode");
+                try (Socket socket = new Socket(InetAddress.getByAddress(new byte[] { 127, 0, 0, 1 }), port)) {
+                    error("Port " + port + " in use, not starting in debug mode");
                     debugPortOk = false;
                 } catch (IOException e) {
                     debugPortOk = true;
                 }
             }
             if (debugPortOk) {
-                args.add("-Xdebug");
-                args.add("-Xrunjdwp:transport=dt_socket,address=0.0.0.0:5005,server=y,suspend=" + suspend);
-            }
-        } else if (debug.toLowerCase().equals("client")) {
-            args.add("-Xdebug");
-            args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=" + suspend);
-        } else if (debug.toLowerCase().equals("true")) {
-            args.add("-Xdebug");
-            args.add("-Xrunjdwp:transport=dt_socket,address=0.0.0.0:5005,server=y,suspend=" + suspend);
-        } else if (!debug.toLowerCase().equals("false")) {
-            try {
-                int port = Integer.parseInt(debug);
-                if (port <= 0) {
-                    throw new Exception("The specified debug port must be greater than 0");
-                }
-                args.add("-Xdebug");
-                args.add("-Xrunjdwp:transport=dt_socket,address=0.0.0.0:" + port + ",server=y,suspend=" + suspend);
-            } catch (NumberFormatException e) {
-                throw new Exception(
-                        "Invalid value for debug parameter: " + debug + " must be true|false|client|{port}");
+                args.add("-agentlib:jdwp=transport=dt_socket,address=" + debugHost + ":" + port + ",server=y,suspend="
+                        + suspend);
             }
         }
 
@@ -380,9 +422,8 @@ public abstract class QuarkusDevModeLauncher {
         // this is the jar file we will use to launch the dev mode main class
         devModeContext.setDevModeRunnerJarFile(tempFile);
 
-        if (remoteDev) {
-            devModeContext.setMode(QuarkusBootstrap.Mode.PROD);
-            devModeContext.setAlternateEntryPoint(IsolatedRemoteDevModeMain.class.getName());
+        if (entryPointCustomizer != null) {
+            entryPointCustomizer.accept(devModeContext);
         }
 
         try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(tempFile))) {
