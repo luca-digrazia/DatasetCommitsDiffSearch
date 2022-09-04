@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
  * compliance with the License. You may obtain a copy of the License at
  *
  * https://opensource.org/licenses/Apache-2.0
@@ -18,18 +18,31 @@
 
 package com.tencent.angel.utils;
 
+import com.tencent.angel.exception.AngelException;
 import it.unimi.dsi.fastutil.doubles.DoubleComparator;
 import it.unimi.dsi.fastutil.ints.IntComparator;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
 
 /**
  * Quick sort utils
  */
 public class Sort {
 
+  public static final int QUICKSORT_THRESHOLD = 16;
+
   public static void quickSort(int[] array, double[] values, int low, int high) {
     if (low < high) {
-      int tmp = array[low];
-      double tmpValue = values[low];
+      int mid = (low + high) / 2;
+      int tmp = array[mid];
+      double tmpValue = values[mid];
+      array[mid] = array[low];
+      values[mid] = values[low];
+      array[low] = tmp;
+      values[low] = tmpValue;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -56,8 +69,14 @@ public class Sort {
 
   public static void quickSort(long[] array, double[] values, int low, int high) {
     if (low < high) {
-      long tmp = array[low];
-      double tmpValue = values[low];
+      int mid = (low + high) / 2;
+      long tmp = array[mid];
+      double tmpValue = values[mid];
+      array[mid] = array[low];
+      values[mid] = values[low];
+      array[low] = tmp;
+      values[low] = tmpValue;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -84,7 +103,11 @@ public class Sort {
 
   public static void quickSort(long[] array, int low, int high) {
     if (low < high) {
-      long tmp = array[low];
+      int mid = (low + high) / 2;
+      long tmp = array[mid];
+      array[mid] = array[low];
+      array[low] = tmp;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -108,7 +131,11 @@ public class Sort {
 
   public static void quickSort(int[] array, int low, int high) {
     if (low < high) {
-      int tmp = array[low];
+      int mid = (low + high) / 2;
+      int tmp = array[mid];
+      array[mid] = array[low];
+      array[low] = tmp;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -132,8 +159,14 @@ public class Sort {
 
   public static void quickSort(int[] array, int[] values, int low, int high) {
     if (low < high) {
-      int tmp = array[low];
-      int tmpValue = values[low];
+      int mid = (low + high) / 2;
+      int tmp = array[mid];
+      int tmpValue = values[mid];
+      array[mid] = array[low];
+      values[mid] = values[low];
+      array[low] = tmp;
+      values[low] = tmpValue;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -160,8 +193,14 @@ public class Sort {
 
   public static void quickSort(int[] array, long[] values, int low, int high) {
     if (low < high) {
-      int tmp = array[low];
-      long tmpValue = values[low];
+      int mid = (low + high) / 2;
+      int tmp = array[mid];
+      long tmpValue = values[mid];
+      array[mid] = array[low];
+      values[mid] = values[low];
+      array[low] = tmp;
+      values[low] = tmpValue;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -188,8 +227,14 @@ public class Sort {
 
   public static void quickSort(long[] array, int[] values, int low, int high) {
     if (low < high) {
-      long tmp = array[low];
-      int tmpValue = values[low];
+      int mid = (low + high) / 2;
+      long tmp = array[mid];
+      int tmpValue = values[mid];
+      array[mid] = array[low];
+      values[mid] = values[low];
+      array[low] = tmp;
+      values[low] = tmpValue;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -214,10 +259,33 @@ public class Sort {
     }
   }
 
+  public static void simpleSort(long[] keys, long[] values, int low, int high) {
+    int highPos = low + high - 1;
+    for(int i = low; i <= high; i++) {
+      int innerHighPos = highPos - i;
+      for(int j = low; j <= innerHighPos; j++) {
+        if(keys[j] > keys[j + 1]) {
+          long tmpKey = keys[j];
+          long tmpValue = values[j];
+          keys[j] = keys[j + 1];
+          values[j] = values[j + 1];
+          keys[j + 1] = tmpKey;
+          values[j + 1] = tmpValue;
+        }
+      }
+    }
+  }
+
   public static void quickSort(long[] array, long[] values, int low, int high) {
     if (low < high) {
-      long tmp = array[low];
-      long tmpValue = values[low];
+      int mid = (low + high) / 2;
+      long tmp = array[mid];
+      long tmpValue = values[mid];
+      array[mid] = array[low];
+      values[mid] = values[low];
+      array[low] = tmp;
+      values[low] = tmpValue;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -244,8 +312,14 @@ public class Sort {
 
   public static void quickSort(long[] array, float[] values, int low, int high) {
     if (low < high) {
-      long tmp = array[low];
-      float tmpValue = values[low];
+      int mid = (low + high) / 2;
+      long tmp = array[mid];
+      float tmpValue = values[mid];
+      array[mid] = array[low];
+      values[mid] = values[low];
+      array[low] = tmp;
+      values[low] = tmpValue;
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -267,6 +341,74 @@ public class Sort {
 
       quickSort(array, values, low, ii - 1);
       quickSort(array, values, ii + 1, high);
+    }
+  }
+
+  public static <T> void quickSort(int[] ids, T[] values, int low, int high) {
+    if (low < high) {
+      int mid = (low + high) / 2;
+      int tmp = ids[mid];
+      T tmpValue = values[mid];
+      ids[mid] = ids[low];
+      values[mid] = values[low];
+      ids[low] = tmp;
+      values[low] = tmpValue;
+
+      int ii = low, jj = high;
+      while (ii < jj) {
+        while (ii < jj && ids[jj] >= tmp) {
+          jj--;
+        }
+
+        ids[ii] = ids[jj];
+        values[ii] = values[jj];
+
+        while (ii < jj && ids[ii] <= tmp) {
+          ii++;
+        }
+
+        ids[jj] = ids[ii];
+        values[jj] = values[ii];
+      }
+      ids[ii] = tmp;
+      values[ii] = tmpValue;
+
+      quickSort(ids, values, low, ii - 1);
+      quickSort(ids, values, ii + 1, high);
+    }
+  }
+
+  public static <T> void quickSort(long[] ids, T[] values, int low, int high) {
+    if (low < high) {
+      int mid = (low + high) / 2;
+      long tmp = ids[mid];
+      T tmpValue = values[mid];
+      ids[mid] = ids[low];
+      values[mid] = values[low];
+      ids[low] = tmp;
+      values[low] = tmpValue;
+
+      int ii = low, jj = high;
+      while (ii < jj) {
+        while (ii < jj && ids[jj] >= tmp) {
+          jj--;
+        }
+
+        ids[ii] = ids[jj];
+        values[ii] = values[jj];
+
+        while (ii < jj && ids[ii] <= tmp) {
+          ii++;
+        }
+
+        ids[jj] = ids[ii];
+        values[jj] = values[ii];
+      }
+      ids[ii] = tmp;
+      values[ii] = tmpValue;
+
+      quickSort(ids, values, low, ii - 1);
+      quickSort(ids, values, ii + 1, high);
     }
   }
 
@@ -346,8 +488,15 @@ public class Sort {
 
   public static void quickSort(int[] array, float[] values, int low, int high) {
     if (low < high) {
-      int tmp = array[low];
-      float tmpValue = values[low];
+      int mid = (low + high) / 2;
+      int tmp = array[mid];
+      float tmpValue = values[mid];
+      array[mid] = array[low];
+      values[mid] = values[low];
+      array[low] = tmp;
+      values[low] = tmpValue;
+
+
       int ii = low, jj = high;
       while (ii < jj) {
         while (ii < jj && array[jj] >= tmp) {
@@ -418,7 +567,7 @@ public class Sort {
   }
 
   public static void selectionSort(double[] a, double[] y, int from, int to,
-    DoubleComparator comp) {
+      DoubleComparator comp) {
     for (int i = from; i < to - 1; ++i) {
       int m = i;
       for (int u = i + 1; u < to; ++u) {
@@ -435,6 +584,91 @@ public class Sort {
         y[i] = y[m];
         y[m] = temp;
       }
+    }
+  }
+
+  public static void main(String[] args) {
+
+    long startTs = System.currentTimeMillis();
+    for(int i = 0; i < 1000000; i++) {
+      long[] indices = {4, 7, 3, 2, 9, 6, 1, 2, 5, 0, 12, 14, 11, 10, 13, 15};
+      long[] values = {4, 7, 3, 2, 9, 6, 1, 2, 5, 0, 12, 14, 11, 10, 13, 15};
+
+      simpleSort(indices, values, 0, indices.length - 1);
+    }
+    System.out.println("Simple sort use time = " + (System.currentTimeMillis() - startTs));
+
+    startTs = System.currentTimeMillis();
+    for(int i = 0; i < 1000000; i++) {
+      long[] indices = {4, 7, 3, 2, 9, 6, 1, 2, 5, 0, 12, 14, 11, 10, 13, 15};
+      long[] values = {4, 7, 3, 2, 9, 6, 1, 2, 5, 0, 12, 14, 11, 10, 13, 15};
+
+      quickSort(indices, values, 0, indices.length - 1);
+    }
+    System.out.println("Quick sort use time = " + (System.currentTimeMillis() - startTs));
+
+    int len = 5000000;
+    List<Integer> keys = new ArrayList<>(len);
+    for(int i = 0; i < len; i++) {
+      keys.add(i);
+    }
+    Collections.shuffle(keys);
+    int [] indices = new int[len];
+    double [] values = new double[len];
+    for(int i = 0; i < len; i++) {
+      indices[i] = keys.get(i);
+      values[i] = indices[i];
+    }
+
+    startTs = System.currentTimeMillis();
+    quickSort(indices, values, 0, len  - 1);
+    System.out.println("Quick sort use time = " + (System.currentTimeMillis() - startTs));
+
+    for(int i = 0; i < len; i++) {
+      if(indices[i] != i || values[i] != i) {
+        throw new AngelException("fuck + " + i);
+      }
+    }
+
+
+
+    //for (int i = 0; i < indices.length; i++) {
+    //  System.out.println("" + i + ", index = " + indices[i] + ", value = " + values[i]);
+    //}
+
+    len = 100000000;
+    double[] predicts = new double[len];
+    double[] labels = new double[len];
+
+    Random r = new Random();
+    for (int i = 0; i < len; i++) {
+      predicts[i] = 1.0;
+      labels[i] = 1.0;
+    }
+
+    DoubleComparator cmp = new DoubleComparator() {
+      @Override
+      public int compare(double i, double i1) {
+        if (Math.abs(i - i1) < 10e-12) {
+          return 0;
+        } else {
+          return i - i1 > 10e-12 ? 1 : -1;
+        }
+      }
+
+      @Override
+      public int compare(Double o1, Double o2) {
+        if (Math.abs(o1 - o2) < 10e-12) {
+          return 0;
+        } else {
+          return o1 - o2 > 10e-12 ? 1 : -1;
+        }
+      }
+    };
+
+    while (len-- > -10) {
+      System.out.println("len=" + len);
+      quickSort(predicts, labels, 0, len, cmp);
     }
   }
 }
