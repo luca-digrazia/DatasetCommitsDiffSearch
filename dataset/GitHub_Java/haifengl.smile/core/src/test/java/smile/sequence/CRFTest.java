@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.sequence;
 
@@ -58,7 +58,7 @@ public class CRFTest {
     public void testProtein() {
         System.out.println("protein");
 
-        CRF model = CRF.fit(Protein.seq, Protein.label, 100, 20, 100, 5, 0.3);
+        CRF model = CRF.fit(Protein.seq, Protein.label, Protein.k, 100, 20, 100, 5, 0.3);
 
         int error = 0;
         int n = 0;
@@ -95,7 +95,7 @@ public class CRFTest {
     public void testHyphen() {
         System.out.println("hyphen");
 
-        CRF model = CRF.fit(Hyphen.seq, Hyphen.label, 100, 20, 100, 5, 0.3);
+        CRF model = CRF.fit(Hyphen.seq, Hyphen.label, Hyphen.k, 100, 20, 100, 5, 0.3);
 
         int error = 0;
         int n = 0;
