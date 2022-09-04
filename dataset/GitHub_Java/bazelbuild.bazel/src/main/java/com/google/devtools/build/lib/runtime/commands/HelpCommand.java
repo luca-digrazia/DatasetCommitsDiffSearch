@@ -18,7 +18,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.escape.Escaper;
@@ -50,7 +49,7 @@ import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParser.HelpVerbosity;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -121,7 +120,7 @@ public final class HelpCommand implements BlazeCommand {
   public void editOptions(OptionsParser optionsParser) {}
 
   @Override
-  public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
+  public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
     env.getEventBus().post(new NoBuildEvent());
 
     BlazeRuntime runtime = env.getRuntime();
@@ -251,10 +250,6 @@ public final class HelpCommand implements BlazeCommand {
     Predicate<OptionDefinition> allOptions = option -> true;
     BiConsumer<String, OptionDefinition> visitor =
         (commandName, option) -> {
-          if (ImmutableSet.copyOf(option.getOptionMetadataTags())
-              .contains(OptionMetadataTag.INTERNAL)) {
-            return;
-          }
           BazelFlagsProto.FlagInfo.Builder info =
               flags.computeIfAbsent(option.getOptionName(), key -> createFlagInfo(option));
           info.addCommands(commandName);
