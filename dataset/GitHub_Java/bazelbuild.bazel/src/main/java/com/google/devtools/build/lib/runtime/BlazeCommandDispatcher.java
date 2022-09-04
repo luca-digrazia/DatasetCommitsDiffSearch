@@ -651,11 +651,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     }
     Command annotation = command.getClass().getAnnotation(Command.class);
     OptionsParser parser =
-        OptionsParser.builder()
-            .optionsData(optionsData)
-            .skippedPrefix("--//")
-            .allowResidue(annotation.allowResidue())
-            .build();
+        OptionsParser.newOptionsParser(optionsData, "--//", annotation.allowResidue());
     return parser;
   }
 
