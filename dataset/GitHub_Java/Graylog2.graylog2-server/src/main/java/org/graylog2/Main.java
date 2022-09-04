@@ -20,7 +20,11 @@
 
 package org.graylog2;
 
+import org.apache.log4j.Layout;
 import org.apache.log4j.Logger;
+import org.apache.log4j.spi.ErrorHandler;
+import org.apache.log4j.spi.Filter;
+import org.apache.log4j.spi.LoggingEvent;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.messagehandlers.amqp.AMQP;
 import org.graylog2.messagehandlers.amqp.AMQPBroker;
@@ -40,8 +44,7 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import org.apache.log4j.Level;
-import org.apache.log4j.Priority;
+import org.apache.log4j.Appender;
 
 /**
  * Main class of Graylog2.
@@ -60,7 +63,7 @@ public final class Main {
     /**
      * This holds the filter out regular expressions. Defined in masterConfig
      */
-    public static final String GRAYLOG2_VERSION = "0.9.5";
+    public static final String GRAYLOG2_VERSION = "0.9.5-dev";
     
     public static RulesEngine drools = null;
     
@@ -71,15 +74,8 @@ public final class Main {
      */
     public static void main(String[] args) {
 
-        Logger.getRootLogger().addAppender(new SelfLogAppender());
-
-        // Are we in debug mode?
-        if (args.length > 0 && args[0].equalsIgnoreCase("debug")) {
-            LOG.info("[x] Running in Debug mode");
-            Logger.getRootLogger().setLevel(Level.ALL);
-            Logger.getLogger("org.graylog2").setLevel(Level.ALL);
-        }
-
+        Logger.getRootLogger().addAppender(new TestAppender());
+        
         LOG.info("[x] Graylog2 starting up. (JRE: " + Tools.getSystemInformation() + ")");
 
         // Read config.
@@ -174,13 +170,12 @@ public final class Main {
         }
 
         // Fill some stuff into the server_values collection.
-        ServerValue sv = new ServerValue("d3b07384d113edec49eaa6238ad5ff01");
-        /*ServerValue.setStartupTime(Tools.getUTCTimestamp());
+        ServerValue.setStartupTime(Tools.getUTCTimestamp());
         ServerValue.setPID(Integer.parseInt(Tools.getPID()));
         ServerValue.setJREInfo(Tools.getSystemInformation());
         ServerValue.setGraylog2Version(GRAYLOG2_VERSION);
         ServerValue.setAvailableProcessors(HostSystem.getAvailableProcessors());
-        ServerValue.setLocalHostname(Tools.getLocalHostname());*/
+        ServerValue.setLocalHostname(Tools.getLocalHostname());
 
         // Create Rules Engine
         try {
@@ -255,8 +250,8 @@ public final class Main {
         throughputThread.start();
 
         // Start thread that stores system information periodically.
-        //ServerValueWriterThread serverValueThread = new ServerValueWriterThread();
-        //serverValueThread.start();
+        ServerValueWriterThread serverValueThread = new ServerValueWriterThread();
+        serverValueThread.start();
 
         LOG.info("[x] Graylog2 up and running.");
     }

@@ -73,7 +73,7 @@ public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF
         gelf.setHost(event.getHost());
         gelf.setFacility(Tools.syslogFacilityToReadable(event.getFacility()));
         gelf.setLevel(event.getLevel());
-        gelf.setRaw(event.getRaw());
+        gelf.setFullMessage(new String(event.getRaw()));
         
         try {
             SimpleGELFClientHandler gelfHandler = new SimpleGELFClientHandler(gelf);

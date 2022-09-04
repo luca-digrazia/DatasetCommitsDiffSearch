@@ -57,11 +57,6 @@ public class GELFMessage {
     private boolean convertedFromSyslog = false;
 
     private boolean filterOut = false;
-    private boolean doRouting = true;
-    private boolean doBlacklisting = true;
-
-    private Map<Integer, GELFClientChunk> chunks = null;
-    private boolean chunked = false;
 
     /**
      * Get the version
@@ -289,10 +284,6 @@ public class GELFMessage {
     }
 
     public boolean matchStreamRule(StreamRuleMatcherIF matcher, StreamRule rule) {
-        if (!this.doRouting) {
-            return false;
-        }
-        
         try {
             return matcher.match(this, rule);
         } catch (Exception e) {
@@ -302,10 +293,6 @@ public class GELFMessage {
     }
 
     public boolean blacklisted(List<Blacklist> blacklists) {
-        if (!this.doBlacklisting) {
-            return false;
-        }
-
         for (Blacklist blacklist : blacklists) {
             for (BlacklistRule rule : blacklist.getRules()) {
                 if (this.getShortMessage().matches(rule.getTerm())) {
@@ -386,30 +373,6 @@ public class GELFMessage {
         }
 
         return ret;
-    }
-
-    public void disableRouting() {
-        this.doRouting = false;
-    }
-
-    public void disableBlacklisting() {
-        this.doBlacklisting = false;
-    }
-
-    public void storeMessageChunks(Map<Integer, GELFClientChunk> chunks) {
-        this.chunks = chunks;
-    }
-
-    public Map<Integer, GELFClientChunk> getMessageChunks() {
-        return this.chunks;
-    }
-
-    public void setIsChunked(boolean b) {
-        this.chunked = true;
-    }
-
-    public boolean isChunked() {
-        return this.chunked;
     }
 
 }

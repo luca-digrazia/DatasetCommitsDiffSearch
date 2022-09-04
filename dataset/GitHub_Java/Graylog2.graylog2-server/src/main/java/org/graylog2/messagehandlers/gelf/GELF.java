@@ -64,9 +64,9 @@ public final class GELF {
     public static final String HEADER_TYPE_CHUNKED_GELF = "1e0f";
 
     /**
-     * GELF header size.
+     * GELF header is 70 bytes long.
      */
-    public static final int GELF_HEADER_LENGTH = 12;
+    public static final int GELF_HEADER_LENGTH = 38;
 
     /**
      * The maximum size of the GELF data part
