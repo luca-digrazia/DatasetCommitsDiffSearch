@@ -2,12 +2,13 @@ package io.quarkus.hibernate.orm.panache.common.runtime;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Parameter;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import javax.persistence.EntityManager;
@@ -19,13 +20,20 @@ import org.hibernate.Filter;
 import org.hibernate.Session;
 import org.hibernate.engine.spi.RowSelection;
 
-import io.quarkus.hibernate.orm.panache.ProjectedFieldName;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Range;
 import io.quarkus.panache.common.exception.PanacheQueryException;
-import io.quarkus.panache.hibernate.common.runtime.PanacheJpaUtil;
 
 public class CommonPanacheQueryImpl<Entity> {
+
+    // match SELECT DISTINCT? id (AS id)? (, id (AS id)?)*
+    static final Pattern SELECT_PATTERN = Pattern.compile(
+            "^\\s*SELECT\\s+((?:DISTINCT\\s+)?\\w+(?:\\.\\w+)*)(?:\\s+AS\\s+\\w+)?(\\s*,\\s*\\w+(?:\\.\\w+)*(?:\\s+AS\\s+\\w+)?)*\\s+(.*)",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    // match FROM
+    static final Pattern FROM_PATTERN = Pattern.compile("^\\s*FROM\\s+.*",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     private interface NonThrowingCloseable extends AutoCloseable {
         @Override
@@ -78,7 +86,7 @@ public class CommonPanacheQueryImpl<Entity> {
     // Builder
 
     public <T> CommonPanacheQueryImpl<T> project(Class<T> type) {
-        if (PanacheJpaUtil.isNamedQuery(query)) {
+        if (AbstractJpaOperations.isNamedQuery(query)) {
             throw new PanacheQueryException("Unable to perform a projection on a named query");
         }
 
@@ -92,24 +100,16 @@ public class CommonPanacheQueryImpl<Entity> {
         StringBuilder select = new StringBuilder("SELECT new ").append(type.getName()).append(" (");
         int selectInitialLength = select.length();
         for (Parameter parameter : constructor.getParameters()) {
-            String parameterName;
-            if (parameter.isAnnotationPresent(ProjectedFieldName.class)) {
-                final String name = parameter.getAnnotation(ProjectedFieldName.class).value();
-                if (name.isEmpty())
-                    throw new PanacheQueryException("The annotation ProjectedFieldName must have a non-empty value.");
-                parameterName = name;
-            } else if (!parameter.isNamePresent()) {
+            if (!parameter.isNamePresent()) {
                 throw new PanacheQueryException(
                         "Your application must be built with parameter names, this should be the default if" +
                                 " using Quarkus artifacts. Check the maven or gradle compiler configuration to include '-parameters'.");
-            } else {
-                parameterName = parameter.getName();
             }
 
             if (select.length() > selectInitialLength) {
                 select.append(", ");
             }
-            select.append(parameterName);
+            select.append(parameter.getName());
         }
         select.append(") ");
 
@@ -208,7 +208,7 @@ public class CommonPanacheQueryImpl<Entity> {
     public long count() {
         if (count == null) {
             String selectQuery = query;
-            if (PanacheJpaUtil.isNamedQuery(query)) {
+            if (AbstractJpaOperations.isNamedQuery(query)) {
                 org.hibernate.query.Query q = (org.hibernate.query.Query) em.createNamedQuery(query.substring(1));
                 selectQuery = q.getQueryString();
             }
@@ -230,7 +230,37 @@ public class CommonPanacheQueryImpl<Entity> {
             return countQuery;
         }
 
-        return PanacheJpaUtil.getCountQuery(selectQuery);
+        // try to generate a good count query from the existing query
+        Matcher selectMatcher = SELECT_PATTERN.matcher(selectQuery);
+        String countQuery;
+        if (selectMatcher.matches()) {
+            // this one cannot be null
+            String firstSelection = selectMatcher.group(1).trim();
+            if (firstSelection.toLowerCase().startsWith("distinct ")) {
+                // this one can be null
+                String secondSelection = selectMatcher.group(2);
+                // we can only count distinct single columns
+                if (secondSelection != null && !secondSelection.trim().isEmpty()) {
+                    throw new PanacheQueryException("Count query not supported for select query: " + selectQuery);
+                }
+                countQuery = "SELECT COUNT(" + firstSelection + ") " + selectMatcher.group(3);
+            } else {
+                // it's not distinct, forget the column list
+                countQuery = "SELECT COUNT(*) " + selectMatcher.group(3);
+            }
+        } else if (FROM_PATTERN.matcher(selectQuery).matches()) {
+            countQuery = "SELECT COUNT(*) " + selectQuery;
+        } else {
+            throw new PanacheQueryException("Count query not supported for select query: " + selectQuery);
+        }
+
+        // remove the order by clause
+        String lcQuery = countQuery.toLowerCase();
+        int orderByIndex = lcQuery.lastIndexOf(" order by ");
+        if (orderByIndex != -1) {
+            countQuery = countQuery.substring(0, orderByIndex);
+        }
+        return countQuery;
     }
 
     @SuppressWarnings("unchecked")
@@ -325,7 +355,7 @@ public class CommonPanacheQueryImpl<Entity> {
     @SuppressWarnings("unchecked")
     private Query createBaseQuery() {
         Query jpaQuery;
-        if (PanacheJpaUtil.isNamedQuery(query)) {
+        if (AbstractJpaOperations.isNamedQuery(query)) {
             String namedQuery = query.substring(1);
             jpaQuery = em.createNamedQuery(namedQuery);
         } else {
@@ -357,13 +387,7 @@ public class CommonPanacheQueryImpl<Entity> {
         for (Entry<String, Map<String, Object>> entry : filters.entrySet()) {
             Filter filter = session.enableFilter(entry.getKey());
             for (Entry<String, Object> paramEntry : entry.getValue().entrySet()) {
-                if (paramEntry.getValue() instanceof Collection<?>) {
-                    filter.setParameterList(paramEntry.getKey(), (Collection<?>) paramEntry.getValue());
-                } else if (paramEntry.getValue() instanceof Object[]) {
-                    filter.setParameterList(paramEntry.getKey(), (Object[]) paramEntry.getValue());
-                } else {
-                    filter.setParameter(paramEntry.getKey(), paramEntry.getValue());
-                }
+                filter.setParameter(paramEntry.getKey(), paramEntry.getValue());
             }
             filter.validate();
         }
