@@ -506,16 +506,13 @@ public class CppLinkActionTest extends BuildViewTestCase {
             CppLinkActionBuilder builder =
                 new CppLinkActionBuilder(
                     ruleContext,
-                    ruleContext,
-                    ruleContext.getLabel(),
                     attributesToFlip.contains(NonStaticAttributes.OUTPUT_FILE)
                         ? dynamicOutputFile
                         : staticOutputFile,
-                    ruleContext.getConfiguration(),
                     toolchain,
                     toolchain.getFdoContext(),
                     featureConfiguration,
-                    MockCppSemantics.INSTANCE);
+                    MockCppSemantics.INSTANCE) {};
             if (attributesToFlip.contains(NonStaticAttributes.OUTPUT_FILE)) {
               builder.setLinkType(LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
               builder.setLibraryIdentifier("foo");
@@ -567,16 +564,13 @@ public class CppLinkActionTest extends BuildViewTestCase {
             CppLinkActionBuilder builder =
                 new CppLinkActionBuilder(
                     ruleContext,
-                    ruleContext,
-                    ruleContext.getLabel(),
                     attributes.contains(StaticKeyAttributes.OUTPUT_FILE)
                         ? staticOutputFile
                         : dynamicOutputFile,
-                    ruleContext.getConfiguration(),
                     toolchain,
                     toolchain.getFdoContext(),
                     featureConfiguration,
-                    MockCppSemantics.INSTANCE);
+                    MockCppSemantics.INSTANCE) {};
             builder.setLinkType(
                 attributes.contains(StaticKeyAttributes.OUTPUT_FILE)
                     ? LinkTargetType.STATIC_LIBRARY
@@ -606,10 +600,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
     CppLinkActionBuilder builder =
         new CppLinkActionBuilder(
             ruleContext,
-            ruleContext,
-            ruleContext.getLabel(),
             output,
-            ruleContext.getConfiguration(),
             toolchain,
             toolchain.getFdoContext(),
             FeatureConfiguration.EMPTY,
@@ -694,14 +685,13 @@ public class CppLinkActionTest extends BuildViewTestCase {
       String outputPath,
       Iterable<Artifact> nonLibraryInputs,
       ImmutableList<LibraryToLink> libraryInputs,
-      FeatureConfiguration featureConfiguration) {
+      FeatureConfiguration featureConfiguration)
+      throws Exception {
     CcToolchainProvider toolchain =
         CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     CppLinkActionBuilder builder =
         new CppLinkActionBuilder(
                 ruleContext,
-                ruleContext,
-                ruleContext.getLabel(),
                 new Artifact(
                     PathFragment.create(outputPath),
                     getTargetConfiguration()

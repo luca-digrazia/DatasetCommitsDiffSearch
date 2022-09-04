@@ -17,13 +17,12 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory;
@@ -75,9 +74,7 @@ public final class LtoBackendArtifacts {
   private Artifact dwoFile;
 
   LtoBackendArtifacts(
-      RuleErrorConsumer ruleErrorConsumer,
-      BuildOptions buildOptions,
-      CppConfiguration cppConfiguration,
+      RuleContext ruleContext,
       PathFragment ltoOutputRootPrefix,
       Artifact bitcodeFile,
       Map<PathFragment, Artifact> allBitCodeFiles,
@@ -111,9 +108,7 @@ public final class LtoBackendArtifacts {
             FileSystemUtils.appendExtension(obj, ".thinlto.bc"));
 
     scheduleLtoBackendAction(
-        ruleErrorConsumer,
-        buildOptions,
-        cppConfiguration,
+        ruleContext,
         actionConstructionContext,
         repositoryName,
         featureConfiguration,
@@ -129,9 +124,7 @@ public final class LtoBackendArtifacts {
 
   // Interface to create an LTO backend that does not perform any cross-module optimization.
   public LtoBackendArtifacts(
-      RuleErrorConsumer ruleErrorConsumer,
-      BuildOptions buildOptions,
-      CppConfiguration cppConfiguration,
+      RuleContext ruleContext,
       PathFragment ltoOutputRootPrefix,
       Artifact bitcodeFile,
       ActionConstructionContext actionConstructionContext,
@@ -154,9 +147,7 @@ public final class LtoBackendArtifacts {
     index = null;
 
     scheduleLtoBackendAction(
-        ruleErrorConsumer,
-        buildOptions,
-        cppConfiguration,
+        ruleContext,
         actionConstructionContext,
         repositoryName,
         featureConfiguration,
@@ -194,9 +185,7 @@ public final class LtoBackendArtifacts {
   }
 
   private void scheduleLtoBackendAction(
-      RuleErrorConsumer ruleErrorConsumer,
-      BuildOptions buildOptions,
-      CppConfiguration cppConfiguration,
+      RuleContext ruleContext,
       ActionConstructionContext actionConstructionContext,
       RepositoryName repositoryName,
       FeatureConfiguration featureConfiguration,
@@ -235,11 +224,14 @@ public final class LtoBackendArtifacts {
 
     // The command-line doesn't specify the full path to clang++, so we set it in the
     // environment.
-    PathFragment compiler = ccToolchain.getToolPathFragment(Tool.GCC, ruleErrorConsumer);
+    PathFragment compiler = ccToolchain.getToolPathFragment(Tool.GCC, ruleContext);
 
     builder.setExecutable(compiler);
     CcToolchainVariables.Builder buildVariablesBuilder =
-        CcToolchainVariables.builder(ccToolchain.getBuildVariables(buildOptions, cppConfiguration));
+        CcToolchainVariables.builder(
+            ccToolchain.getBuildVariables(
+                ruleContext.getConfiguration().getOptions(),
+                ruleContext.getFragment(CppConfiguration.class)));
     if (index != null) {
       buildVariablesBuilder.addStringVariable("thinlto_index", index.getExecPath().toString());
     } else {

@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
-import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier.MapBackedMakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
@@ -384,20 +383,12 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       CcLinkingHelper linkingHelper =
           new CcLinkingHelper(
                   ruleContext,
-                  ruleContext.getLabel(),
-                  ruleContext,
-                  ruleContext,
                   semantics,
                   featureConfiguration,
                   ccToolchain,
                   fdoContext,
-                  ruleContext.getConfiguration(),
-                  cppConfiguration,
-                  ruleContext.getSymbolGenerator())
-              .fromCommon(ruleContext, common)
-              .setGrepIncludes(CppHelper.getGrepIncludes(ruleContext))
-              .setIsStampingEnabled(AnalysisUtils.isStampingEnabled(ruleContext))
-              .setTestOrTestOnlyTarget(ruleContext.isTestTarget() || ruleContext.isTestOnlyTarget())
+                  ruleContext.getConfiguration())
+              .fromCommon(common)
               .addCcLinkingContexts(
                   CppHelper.getLinkingContextsFromDeps(
                       ImmutableList.of(CppHelper.mallocForTarget(ruleContext))))
@@ -691,20 +682,12 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CcCompilationOutputs ccCompilationOutputsWithOnlyObjects = ccCompilationOutputsBuilder.build();
     CcLinkingHelper ccLinkingHelper =
         new CcLinkingHelper(
-                ruleContext,
-                ruleContext.getLabel(),
-                ruleContext,
-                ruleContext,
-                cppSemantics,
-                featureConfiguration,
-                ccToolchain,
-                fdoContext,
-                ruleContext.getConfiguration(),
-                cppConfiguration,
-                ruleContext.getSymbolGenerator())
-            .setGrepIncludes(CppHelper.getGrepIncludes(ruleContext))
-            .setIsStampingEnabled(AnalysisUtils.isStampingEnabled(ruleContext))
-            .setTestOrTestOnlyTarget(ruleContext.isTestTarget() || ruleContext.isTestOnlyTarget());
+            ruleContext,
+            cppSemantics,
+            featureConfiguration,
+            ccToolchain,
+            fdoContext,
+            ruleContext.getConfiguration());
 
     CcInfo depsCcInfo = CcInfo.builder().setCcLinkingContext(depsCcLinkingContext).build();
 
