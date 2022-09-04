@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -25,7 +23,6 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -58,6 +55,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -510,9 +508,11 @@ public class Package {
     return targets;
   }
 
-  /** Common getTargets implementation, accessible by {@link Package.Builder}. */
-  private static Set<Target> getTargets(BiMap<String, Target> targetMap) {
-    return targetMap.values();
+  /**
+   * Common getTargets implementation, accessible by {@link Package.Builder}.
+   */
+  private static Collection<Target> getTargets(Map<String, Target> targetMap) {
+    return Collections.unmodifiableCollection(targetMap.values());
   }
 
   /**
@@ -830,7 +830,7 @@ public class Package {
     private License defaultLicense = License.NO_LICENSE;
     private Set<License.DistributionType> defaultDistributionSet = License.DEFAULT_DISTRIB;
 
-    private BiMap<String, Target> targets = HashBiMap.create();
+    private Map<String, Target> targets = new LinkedHashMap<>();
     private final Map<Label, EnvironmentGroup> environmentGroups = new HashMap<>();
 
     private ImmutableList<Label> skylarkFileDependencies = ImmutableList.of();
@@ -1212,7 +1212,7 @@ public class Package {
       }
     }
 
-    public Set<Target> getTargets() {
+    public Collection<Target> getTargets() {
       return Package.getTargets(targets);
     }
 
@@ -1472,7 +1472,7 @@ public class Package {
       }
 
       // Freeze targets and distributions.
-      targets = Maps.unmodifiableBiMap(targets);
+      targets = Collections.unmodifiableMap(targets);
       defaultDistributionSet =
           Collections.unmodifiableSet(defaultDistributionSet);
 
