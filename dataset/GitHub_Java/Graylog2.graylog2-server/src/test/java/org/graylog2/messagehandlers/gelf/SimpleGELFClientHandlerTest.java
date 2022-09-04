@@ -42,7 +42,7 @@ public class SimpleGELFClientHandlerTest {
         DatagramPacket gelfMessage = GELFTestHelper.buildZLIBCompressedDatagramPacket(this.originalMessage);
 
         // Let the decompression take place.
-        SimpleGELFClientHandler handler = new SimpleGELFClientHandler(gelfMessage);
+        SimpleGELFClientHandler handler = new SimpleGELFClientHandler(gelfMessage, "foo");
 
         assertEquals(handler.getClientMessage(), this.originalMessage);
     }
@@ -56,7 +56,7 @@ public class SimpleGELFClientHandlerTest {
         DatagramPacket gelfMessage = GELFTestHelper.buildGZIPCompressedDatagramPacket(this.originalMessage);
 
         // Let the decompression take place.
-        SimpleGELFClientHandler handler = new SimpleGELFClientHandler(gelfMessage);
+        SimpleGELFClientHandler handler = new SimpleGELFClientHandler(gelfMessage, "foo");
 
         assertEquals(handler.getClientMessage(), this.originalMessage);
     }
