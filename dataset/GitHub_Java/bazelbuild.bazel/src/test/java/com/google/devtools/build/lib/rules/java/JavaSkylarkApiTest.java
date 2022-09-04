@@ -49,7 +49,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "load(':rule.bzl', 'jrule')",
         "java_runtime(name='jvm', srcs=[], java_home='/foo/bar/')",
         "java_runtime_suite(name='suite', default=':jvm')",
-        "java_runtime_alias(name='alias')",
         "jrule(name='r')");
 
     scratch.file(
@@ -59,7 +58,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "  return struct(",
         "    java_executable = provider.java_executable_exec_path,",
         ")",
-        "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
+        "jrule = rule(_impl, attrs = { '_java_runtime': java_common.java_runtime_attr})");
 
     useConfiguration("--javabase=//a:suite");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
@@ -649,13 +648,12 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "myrule = rule(",
         "  implementation=_impl,",
         "  fragments = ['java'],",
-        "  attrs = { '_java_toolchain': attr.label(default=Label('//foo:alias')) }",
+        "  attrs = { '_java_toolchain': java_common.java_toolchain_attr }",
         ")"
     );
     scratch.file(
         "foo/BUILD",
         "load(':rule.bzl', 'myrule')",
-        "java_toolchain_alias(name='alias')",
         "myrule(name='myrule')"
     );
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
@@ -676,13 +674,12 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "myrule = rule(",
         "  implementation=_impl,",
         "  fragments = ['java'],",
-        "  attrs = { '_java_toolchain': attr.label(default=Label('//foo:alias')) }",
+        "  attrs = { '_java_toolchain': java_common.java_toolchain_attr }",
         ")"
     );
     scratch.file(
         "foo/BUILD",
         "load(':rule.bzl', 'myrule')",
-        "java_toolchain_alias(name='alias')",
         "myrule(name='myrule')"
     );
     useConfiguration("--java_toolchain=//java/com/google/test:toolchain");
