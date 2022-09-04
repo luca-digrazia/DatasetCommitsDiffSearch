@@ -16,15 +16,31 @@
 package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.VariableElement;
 
 import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.generation.BackgroundInstruction;
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCatchBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JTryBlock;
+import com.sun.codemodel.JVar;
 
 public class BackgroundProcessor implements ElementProcessor {
 
@@ -43,8 +59,73 @@ public class BackgroundProcessor implements ElementProcessor {
 		String className = metaActivity.getClassSimpleName();
 		List<Instruction> memberInstructions = metaActivity.getMemberInstructions();
 
-		Instruction instruction = new BackgroundInstruction(className, methodName);
+		List<String> methodArguments = new ArrayList<String>();
+		List<String> methodParameters = new ArrayList<String>();
+
+		ExecutableElement executableElement = (ExecutableElement) element;
+
+		for (VariableElement parameter : executableElement.getParameters()) {
+			String parameterName = parameter.getSimpleName().toString();
+			String parameterType = parameter.asType().toString();
+			methodArguments.add(parameterType + " " + parameterName);
+			methodParameters.add(parameterName);
+		}
+
+		Instruction instruction = new BackgroundInstruction(className, methodName, methodArguments, methodParameters);
 		memberInstructions.add(instruction);
 	}
 
+	@Override
+	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) throws JClassAlreadyExistsException {
+
+		ActivityHolder holder = activitiesHolder.getActivityHolder(element);
+
+		// Method
+		String backgroundMethodName = element.getSimpleName().toString();
+		JMethod backgroundMethod = holder.activity.method(JMod.PUBLIC, codeModel.VOID, backgroundMethodName);
+		backgroundMethod.annotate(Override.class);
+
+		// Method parameters
+		List<JVar> parameters = new ArrayList<JVar>();
+		ExecutableElement executableElement = (ExecutableElement) element;
+		for (VariableElement parameter : executableElement.getParameters()) {
+			String parameterName = parameter.getSimpleName().toString();
+			JClass parameterClass = codeModel.ref(parameter.asType().toString());
+			JVar param = backgroundMethod.param(JMod.FINAL, parameterClass, parameterName);
+			parameters.add(param);
+		}
+
+		JDefinedClass anonymousThreadClass = codeModel.anonymousClass(Thread.class);
+
+		JMethod runMethod = anonymousThreadClass.method(JMod.PUBLIC, codeModel.VOID, "run");
+		runMethod.annotate(Override.class);
+
+		JBlock runMethodBody = runMethod.body();
+		JTryBlock runTry = runMethodBody._try();
+		
+		JExpression activitySuper = holder.activity.staticRef("super");
+		
+		JInvocation superCall = runTry.body().invoke(activitySuper, backgroundMethod);
+		for (JVar param : parameters) {
+			superCall.arg(param);
+		}
+
+		JCatchBlock runCatch = runTry._catch(codeModel.ref(RuntimeException.class));
+		JVar exceptionParam = runCatch.param("e");
+
+		JClass logClass = codeModel.ref("android.util.Log");
+
+		JInvocation errorInvoke = logClass.staticInvoke("e");
+
+		errorInvoke.arg(holder.activity.name());
+		errorInvoke.arg("A runtime exception was thrown while executing code in a background thread");
+		errorInvoke.arg(exceptionParam);
+
+		runCatch.body().add(errorInvoke);
+
+		JBlock backgroundBody = backgroundMethod.body();
+
+		backgroundBody.add(JExpr._new(anonymousThreadClass).invoke("start"));
+
+	}
 }
