@@ -30,7 +30,6 @@ import org.graylog2.indexer.results.TermsResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.rest.resources.RestResource;
-import org.graylog2.rest.resources.search.responses.SearchResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,12 +87,8 @@ public class SearchResource extends RestResource {
     }
 
     protected FieldStatsResult fieldStats(String field, String query, TimeRange timeRange) throws IndexHelper.InvalidRangeFormatException {
-        return fieldStats(field, query, null, timeRange);
-    }
-
-    protected FieldStatsResult fieldStats(String field, String query, String filter, TimeRange timeRange) throws IndexHelper.InvalidRangeFormatException {
         try {
-            return core.getIndexer().searches().fieldStats(field, query, filter, timeRange);
+            return core.getIndexer().searches().fieldStats(field, query, timeRange);
         } catch(Searches.FieldTypeException e) {
             LOG.error("Stats query failed. Make sure that field [{}] is a numeric type.", field);
             throw new WebApplicationException(400);
@@ -126,15 +121,15 @@ public class SearchResource extends RestResource {
         return result;
     }
 
-    protected SearchResponse buildSearchResponse(SearchResult sr) {
-        SearchResponse result = new SearchResponse();
-        result.query = sr.getOriginalQuery();
-        result.builtQuery = sr.getBuiltQuery();
-        result.usedIndices = sr.getUsedIndices();
-        result.messages = sr.getResults();
-        result.fields = sr.getFields();
-        result.time = sr.took().millis();
-        result.totalResults = sr.getTotalResults();
+    protected Map<String, Object> buildSearchResult(SearchResult sr) {
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("query", sr.getOriginalQuery());
+        result.put("built_query", sr.getBuiltQuery());
+        result.put("used_indices", sr.getUsedIndices());
+        result.put("messages", sr.getResults());
+        result.put("fields", sr.getFields());
+        result.put("time", sr.took().millis());
+        result.put("total_results", sr.getTotalResults());
 
         return result;
     }
