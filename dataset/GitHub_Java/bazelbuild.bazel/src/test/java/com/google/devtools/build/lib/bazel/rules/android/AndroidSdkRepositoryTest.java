@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.util.ResourceLoader;
 import com.google.devtools.build.lib.rules.android.AndroidSdkProvider;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -92,8 +91,8 @@ public class AndroidSdkRepositoryTest extends BuildViewTestCase {
         ")");
     invalidatePackages();
 
-    ConfiguredTargetAndTarget aarImportTarget =
-        getConfiguredTargetAndTarget("@androidsdk//com.google.android:foo-1.0.0");
+    ConfiguredTarget aarImportTarget =
+        getConfiguredTarget("@androidsdk//com.google.android:foo-1.0.0");
     assertThat(aarImportTarget).isNotNull();
     assertThat(aarImportTarget.getTarget().getAssociatedRule().getRuleClass())
         .isEqualTo("aar_import");
@@ -176,22 +175,6 @@ public class AndroidSdkRepositoryTest extends BuildViewTestCase {
             android24X86Filegroup.getProvider(FilesToRunProvider.class).getFilesToRun()))
         .containsExactly(
             "src external/androidsdk/system-images/android-24/google_apis/x86/system.img");
-  }
-
-  // Regression test for https://github.com/bazelbuild/bazel/issues/3672.
-  @Test
-  public void testMalformedSystemImageDirectories() throws Exception {
-    scratchPlatformsDirectories(25, 26);
-    scratchBuildToolsDirectories("26.0.1");
-    scratchSystemImagesDirectories("android-25/default/armeabi-v7a", "android-O/google_apis/x86");
-    FileSystemUtils.appendIsoLatin1(scratch.resolve("WORKSPACE"),
-        "local_repository(name = 'bazel_tools', path = '/bazel_tools_workspace')",
-        "android_sdk_repository(",
-        "    name = 'androidsdk',",
-        "    path = '/sdk',",
-        ")");
-    invalidatePackages();
-    assertThat(getConfiguredTarget("@androidsdk//:emulator_images_android_25_arm")).isNotNull();
   }
 
   @Test
