@@ -23,10 +23,10 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
 
-public class RClass implements IRClass {
-	
+public class RClass {
+
 	public enum Res {
-		LAYOUT, ID, STRING, ARRAY, COLOR, ANIM, BOOL, DIMEN, DRAWABLE, INTEGER, MOVIE;
+		LAYOUT, ID, STRING, ARRAY, COLOR;
 		public String rName() {
 			return toString().toLowerCase();
 		}
@@ -48,12 +48,11 @@ public class RClass implements IRClass {
 		return ElementFilter.typesIn(rEnclosedElements);
 	}
 
-	@Override
-	public IRInnerClass get(Res res) {
+	public RInnerClass get(Res res) {
 
 		String id = res.rName();
 
-		IRInnerClass rInnerClass = rClass.get(id);
+		RInnerClass rInnerClass = rClass.get(id);
 		if (rInnerClass != null) {
 			return rInnerClass;
 		} else {

@@ -17,6 +17,7 @@ package com.googlecode.androidannotations.validation;
 
 import java.lang.annotation.Annotation;
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -26,18 +27,19 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.Click;
-import com.googlecode.androidannotations.helper.ValidatorHelper;
+import com.googlecode.androidannotations.annotations.Layout;
+import com.googlecode.androidannotations.helper.HasTargetAnnotationHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
-import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
+import com.googlecode.androidannotations.rclass.RClass;
 import com.googlecode.androidannotations.rclass.RClass.Res;
+import com.googlecode.androidannotations.rclass.RInnerClass;
 
-public class ClickValidator extends ValidatorHelper implements ElementValidator {
+public class ClickValidator extends HasTargetAnnotationHelper implements ElementValidator {
 
 	private static final String ANDROID_VIEW_QUALIFIED_NAME = "android.view.View";
-	private final IRClass rClass;
+	private final RClass rClass;
 
-	public ClickValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
+	public ClickValidator(ProcessingEnvironment processingEnv, RClass rClass) {
 		super(processingEnv);
 		this.rClass = rClass;
 	}
@@ -63,10 +65,15 @@ public class ClickValidator extends ValidatorHelper implements ElementValidator 
 		validateParameters(element, valid, executableElement);
 
 		validateIsNotPrivate(element, valid);
-		
-		validateDoesntThrowException(element, valid);
 
 		return valid.isValid();
+	}
+
+	private void validateIsNotPrivate(Element element, IsValid valid) {
+		if (isPrivate(element)) {
+			valid.invalidate();
+			printAnnotationError(element, annotationName() + " should not be used on a private method");
+		}
 	}
 
 	private void validateParameters(Element element, IsValid valid, ExecutableElement executableElement) {
@@ -82,7 +89,8 @@ public class ClickValidator extends ValidatorHelper implements ElementValidator 
 			TypeMirror parameterType = parameter.asType();
 			if (!parameterType.toString().equals(ANDROID_VIEW_QUALIFIED_NAME)) {
 				valid.invalidate();
-				printAnnotationError(element, annotationName() + " should only be used on a method with no parameter or a parameter of type android.view.View, not " + parameterType);
+				printAnnotationError(element, annotationName()
+						+ " should only be used on a method with no parameter or a parameter of type android.view.View, not " + parameterType);
 			}
 		}
 	}
@@ -91,13 +99,9 @@ public class ClickValidator extends ValidatorHelper implements ElementValidator 
 		Click annotation = element.getAnnotation(Click.class);
 		int idValue = annotation.value();
 
-		IRInnerClass rInnerClass = rClass.get(Res.ID);
+		RInnerClass rInnerClass = rClass.get(Res.ID);
 		if (idValue == Click.DEFAULT_VALUE) {
 			String methodName = element.getSimpleName().toString();
-			int lastIndex = methodName.lastIndexOf(actionName());
-			if (lastIndex != -1) {
-				methodName = methodName.substring(0, lastIndex);
-			}
 			if (!rInnerClass.containsField(methodName)) {
 				valid.invalidate();
 				printAnnotationError(element, "Id not found: R.id." + methodName);
@@ -115,6 +119,17 @@ public class ClickValidator extends ValidatorHelper implements ElementValidator 
 
 		if (returnType.getKind() != TypeKind.VOID) {
 			printAnnotationWarning(element, annotationName() + " should only be used on a method with a void return type ");
+		}
+	}
+
+	private void validateHasLayout(Element element, AnnotationElements validatedElements, IsValid valid) {
+		Element enclosingElement = element.getEnclosingElement();
+
+		Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(Layout.class);
+
+		if (!layoutAnnotatedElements.contains(enclosingElement)) {
+			valid.invalidate();
+			printAnnotationError(element, annotationName() + " should only be used on a method in a class annotated with " + annotationName(Layout.class));
 		}
 	}
 }

@@ -1,18 +1,13 @@
 package com.googlecode.androidannotations.helloworldeclipse;
 
 import android.app.Activity;
-import android.graphics.Color;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.annotations.Click;
-import com.googlecode.androidannotations.annotations.ColorValue;
 import com.googlecode.androidannotations.annotations.Layout;
-import com.googlecode.androidannotations.annotations.StringArrayValue;
-import com.googlecode.androidannotations.annotations.StringResValue;
-import com.googlecode.androidannotations.annotations.UiThread;
+import com.googlecode.androidannotations.annotations.Value;
 import com.googlecode.androidannotations.annotations.ViewById;
 
 @Layout(R.layout.main)
@@ -24,13 +19,13 @@ public class MyActivity extends Activity {
 	@ViewById(R.id.myTextView)
 	TextView textView;
 
-	@StringResValue(R.string.hello)
+	@Value(R.string.hello)
 	String helloFormat;
 
-	@StringArrayValue
+	@Value
 	String[] bestFoods;
 
-	@ColorValue
+	@Value
 	int androidColor;
 
 	@Click
@@ -39,25 +34,10 @@ public class MyActivity extends Activity {
 		String message = String.format(helloFormat, name);
 		textView.setText(message);
 		textView.setTextColor(androidColor);
+		
 		for (String item : bestFoods) {
 			Toast.makeText(this, item, Toast.LENGTH_SHORT).show();
 		}
-
-		someBackgroundWork("Some string", 5000);
-	}
-
-	@Background
-	void someBackgroundWork(String someParameter, long someOtherParameter) {
-		try {
-			Thread.sleep(someOtherParameter);
-		} catch (InterruptedException e) {
-		}
-		updateUi(Color.RED);
-	}
-
-	@UiThread
-	void updateUi(int color) {
-		textView.setTextColor(color);
 	}
 
 }

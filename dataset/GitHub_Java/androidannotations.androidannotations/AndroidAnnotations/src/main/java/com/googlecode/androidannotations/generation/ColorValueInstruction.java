@@ -17,33 +17,22 @@ package com.googlecode.androidannotations.generation;
 
 import com.googlecode.androidannotations.model.Instruction;
 
-public class UiThreadInstruction implements Instruction {
+public class ColorValueInstruction implements Instruction {
 
-	private static final String FORMAT = //
-	"" + //
-			"        @Override\n" + //
-			"        protected void %s() {\n" + //
-			"		 	runOnUiThread(new Runnable() {\n" + //
-			"		      public void run() {\n" + //
-			"               %s.super.%s();\n" + //
-			"		      }\n" + //
-			"           });\n" + //
-			"		 }\n" + //
-			"\n";
+	private static final String VALUE_FORMAT = "        %s = getResources().getColor(%s);\n";
 
-	private final String methodName;
+	private final String fieldName;
 
-	private final String className;
+	private final String qualifiedId;
 
-
-	public UiThreadInstruction(String className, String methodName) {
-		this.className = className;
-		this.methodName = methodName;
+	public ColorValueInstruction(String fieldName, String qualifiedId) {
+		this.fieldName = fieldName;
+		this.qualifiedId = qualifiedId;
 	}
 
 	@Override
 	public String generate() {
-		return String.format(FORMAT, methodName, className, methodName);
+		return String.format(VALUE_FORMAT, fieldName, qualifiedId);
 	}
 
 }

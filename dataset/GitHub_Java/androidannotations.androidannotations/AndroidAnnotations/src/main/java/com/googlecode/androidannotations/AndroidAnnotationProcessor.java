@@ -25,31 +25,20 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
 
-import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.annotations.Click;
-import com.googlecode.androidannotations.annotations.ColorValue;
-import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.Layout;
-import com.googlecode.androidannotations.annotations.StringArrayValue;
-import com.googlecode.androidannotations.annotations.StringResValue;
-import com.googlecode.androidannotations.annotations.SystemService;
-import com.googlecode.androidannotations.annotations.UiThread;
+import com.googlecode.androidannotations.annotations.Value;
 import com.googlecode.androidannotations.annotations.ViewById;
 import com.googlecode.androidannotations.generation.ModelGenerator;
-import com.googlecode.androidannotations.model.AndroidSystemServices;
-import com.googlecode.androidannotations.model.AndroidValue;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.model.AnnotationElementsHolder;
 import com.googlecode.androidannotations.model.EmptyAnnotationElements;
 import com.googlecode.androidannotations.model.MetaModel;
 import com.googlecode.androidannotations.model.ModelExtractor;
-import com.googlecode.androidannotations.processing.BackgroundProcessor;
 import com.googlecode.androidannotations.processing.ClickProcessor;
-import com.googlecode.androidannotations.processing.ExtraProcessor;
+import com.googlecode.androidannotations.processing.ElementProcessor;
 import com.googlecode.androidannotations.processing.LayoutProcessor;
 import com.googlecode.androidannotations.processing.ModelProcessor;
-import com.googlecode.androidannotations.processing.SystemServiceProcessor;
-import com.googlecode.androidannotations.processing.UiThreadProcessor;
 import com.googlecode.androidannotations.processing.ValueProcessor;
 import com.googlecode.androidannotations.processing.ViewProcessor;
 import com.googlecode.androidannotations.processor.ExtendedAbstractProcessor;
@@ -57,24 +46,13 @@ import com.googlecode.androidannotations.processor.SupportedAnnotationClasses;
 import com.googlecode.androidannotations.rclass.RClass;
 import com.googlecode.androidannotations.rclass.RClassFinder;
 import com.googlecode.androidannotations.validation.ClickValidator;
-import com.googlecode.androidannotations.validation.ExtraValidator;
+import com.googlecode.androidannotations.validation.ElementValidator;
 import com.googlecode.androidannotations.validation.LayoutValidator;
 import com.googlecode.androidannotations.validation.ModelValidator;
-import com.googlecode.androidannotations.validation.RunnableValidator;
-import com.googlecode.androidannotations.validation.SystemServiceValidator;
 import com.googlecode.androidannotations.validation.ValueValidator;
 import com.googlecode.androidannotations.validation.ViewValidator;
 
-@SupportedAnnotationClasses({ Layout.class, //
-		ViewById.class, //
-		Click.class, //
-		UiThread.class, //
-		Background.class, //
-		StringResValue.class, //
-		ColorValue.class, //
-		Extra.class, //
-		SystemService.class, //
-		StringArrayValue.class })
+@SupportedAnnotationClasses({ Layout.class, ViewById.class, Click.class, Value.class })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 public class AndroidAnnotationProcessor extends ExtendedAbstractProcessor {
 
@@ -86,89 +64,92 @@ public class AndroidAnnotationProcessor extends ExtendedAbstractProcessor {
 			StackTraceElement firstElement = e.getStackTrace()[0];
 			String errorMessage = e.toString() + " " + firstElement.toString();
 
-			processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unexpected annotation processing exception: " + errorMessage);
+			processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+					"Unexpected annotation processing exception: " + errorMessage);
 			e.printStackTrace();
 
 			Element element = roundEnv.getElementsAnnotatedWith(annotations.iterator().next()).iterator().next();
-			processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-					"Unexpected annotation processing exception (not related to this element, but otherwise it wouldn't show up in eclipse) : " + errorMessage,
-					element);
+			processingEnv
+					.getMessager()
+					.printMessage(
+							Diagnostic.Kind.ERROR,
+							"Unexpected annotation processing exception (not related to this element, but otherwise it wouldn't show up in eclipse) : "
+									+ errorMessage, element);
 		}
 
 		return false;
 	}
 
 	private void processThrowing(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) throws IOException {
-		AnnotationElementsHolder extractedModel = extractAnnotations(annotations, roundEnv);
 
-		RClass rClass = findAndroidRClass(extractedModel);
-		
-		AndroidSystemServices androidSystemServices = new AndroidSystemServices();
+		AnnotationElementsHolder extractedModel = extract(annotations, roundEnv);
 
-		AnnotationElements validatedModel = validateAnnotations(extractedModel, rClass, androidSystemServices);
+		RClass rClass = findRClass(extractedModel);
 
-		MetaModel model = processAnnotations(validatedModel, rClass, androidSystemServices);
+		AnnotationElements validatedModel = validate(extractedModel, rClass);
 
-		generateSources(model);
+		MetaModel model = process(validatedModel, rClass);
+
+		generate(model);
 	}
 
-	private AnnotationElementsHolder extractAnnotations(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+	private AnnotationElementsHolder extract(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
 		ModelExtractor modelExtractor = new ModelExtractor();
 		AnnotationElementsHolder extractedModel = modelExtractor.extract(annotations, roundEnv);
 		return extractedModel;
 	}
 
-	private RClass findAndroidRClass(AnnotationElementsHolder extractedModel) {
+	private RClass findRClass(AnnotationElementsHolder extractedModel) {
 		RClassFinder rClassFinder = new RClassFinder(processingEnv);
 		RClass rClass = rClassFinder.find(extractedModel);
 		return rClass;
 	}
 
-	private AnnotationElements validateAnnotations(AnnotationElementsHolder extractedModel, RClass rClass, AndroidSystemServices androidSystemServices) {
+	private AnnotationElements validate(AnnotationElementsHolder extractedModel, RClass rClass) {
 		if (rClass != null) {
-			ModelValidator modelValidator = buildModelValidator(rClass, androidSystemServices);
+			ModelValidator modelValidator = buildModelValidator(rClass);
 			return modelValidator.validate(extractedModel);
 		} else {
 			return EmptyAnnotationElements.INSTANCE;
 		}
 	}
 
-	private ModelValidator buildModelValidator(RClass rClass, AndroidSystemServices androidSystemServices) {
+	private ModelValidator buildModelValidator(RClass rClass) {
+		ElementValidator layoutValidator = new LayoutValidator(processingEnv, rClass);
+		ElementValidator viewValidator = new ViewValidator(processingEnv, rClass);
+		ElementValidator clickValidator = new ClickValidator(processingEnv, rClass);
+		ElementValidator valueValidator = new ValueValidator(processingEnv, rClass);
+
 		ModelValidator modelValidator = new ModelValidator();
-		modelValidator.register(new LayoutValidator(processingEnv, rClass));
-		modelValidator.register(new ViewValidator(processingEnv, rClass));
-		modelValidator.register(new ClickValidator(processingEnv, rClass));
-		modelValidator.register(new ValueValidator(AndroidValue.STRING, processingEnv, rClass));
-		modelValidator.register(new ValueValidator(AndroidValue.STRING_ARRAY, processingEnv, rClass));
-		modelValidator.register(new ValueValidator(AndroidValue.COLOR, processingEnv, rClass));
-		modelValidator.register(new RunnableValidator(UiThread.class, processingEnv));
-		modelValidator.register(new RunnableValidator(Background.class, processingEnv));
-		modelValidator.register(new ExtraValidator(processingEnv));
-		modelValidator.register(new SystemServiceValidator(processingEnv, androidSystemServices));
+		modelValidator.register(layoutValidator);
+		modelValidator.register(viewValidator);
+		modelValidator.register(clickValidator);
+		modelValidator.register(valueValidator);
 		return modelValidator;
 	}
 
-	private MetaModel processAnnotations(AnnotationElements validatedModel, RClass rClass, AndroidSystemServices androidSystemServices) {
-		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices);
+	private MetaModel process(AnnotationElements validatedModel, RClass rClass) {
+		ModelProcessor modelProcessor = buildModelProcessor(rClass);
 		return modelProcessor.process(validatedModel);
 	}
 
-	private ModelProcessor buildModelProcessor(RClass rClass, AndroidSystemServices androidSystemServices) {
+	private ModelProcessor buildModelProcessor(RClass rClass) {
+		ElementProcessor layoutProcessor = new LayoutProcessor(processingEnv, rClass);
+		ElementProcessor viewProcessor = new ViewProcessor(rClass);
+		ElementProcessor clickProcessor = new ClickProcessor(rClass);
+		ElementProcessor valueProcessor = new ValueProcessor(rClass);
+		
+		
+
 		ModelProcessor modelProcessor = new ModelProcessor();
-		modelProcessor.register(new LayoutProcessor(processingEnv, rClass));
-		modelProcessor.register(new ViewProcessor(rClass));
-		modelProcessor.register(new ClickProcessor(rClass));
-		modelProcessor.register(new ValueProcessor(AndroidValue.STRING, rClass));
-		modelProcessor.register(new ValueProcessor(AndroidValue.STRING_ARRAY, rClass));
-		modelProcessor.register(new ValueProcessor(AndroidValue.COLOR, rClass));
-		modelProcessor.register(new UiThreadProcessor());
-		modelProcessor.register(new BackgroundProcessor());
-		modelProcessor.register(new ExtraProcessor());
-		modelProcessor.register(new SystemServiceProcessor(androidSystemServices));
+		modelProcessor.register(layoutProcessor);
+		modelProcessor.register(viewProcessor);
+		modelProcessor.register(clickProcessor);
+		modelProcessor.register(valueProcessor);
 		return modelProcessor;
 	}
 
-	private void generateSources(MetaModel model) throws IOException {
+	private void generate(MetaModel model) throws IOException {
 		ModelGenerator modelGenerator = new ModelGenerator(processingEnv.getFiler());
 		modelGenerator.generate(model);
 	}
