@@ -56,6 +56,7 @@ public class SourcesResource extends RestResource {
     private static final String CACHE_KEY = "sources_list";
 
     private static final Cache<String, TermsResult> cache = CacheBuilder.newBuilder()
+            .maximumSize(1)
             .expireAfterWrite(10, TimeUnit.SECONDS)
             .build();
 
