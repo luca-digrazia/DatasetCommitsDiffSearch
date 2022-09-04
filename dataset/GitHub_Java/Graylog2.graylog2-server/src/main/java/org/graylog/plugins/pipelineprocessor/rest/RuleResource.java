@@ -47,7 +47,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.Collection;
 
-@Api(value = "Pipeline/Rules", description = "Rules for the pipeline message processor")
+@Api(value = "Pipeline Rules", description = "Rules for the pipeline message processor")
 @Path("/system/pipelines")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
@@ -136,8 +136,6 @@ public class RuleResource extends RestResource implements PluginRestResource {
             throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST).entity(e.getErrors()).build());
         }
         final RuleSource toSave = ruleSource.toBuilder()
-                .title(update.title())
-                .description(update.description())
                 .source(update.source())
                 .modifiedAt(DateTime.now())
                 .build();

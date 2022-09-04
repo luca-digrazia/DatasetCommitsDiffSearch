@@ -36,8 +36,7 @@ import org.graylog.plugins.pipelineprocessor.ast.Pipeline;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
 import org.graylog.plugins.pipelineprocessor.ast.Stage;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.AndExpression;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.IndexedAccessExpression;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.ArrayLiteralExpression;
+import org.graylog.plugins.pipelineprocessor.ast.expressions.ArrayExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.BinaryExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.BooleanExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.BooleanValuedFunctionWrapper;
@@ -50,7 +49,7 @@ import org.graylog.plugins.pipelineprocessor.ast.expressions.FieldRefExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.FunctionExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.LogicalExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.LongExpression;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.MapLiteralExpression;
+import org.graylog.plugins.pipelineprocessor.ast.expressions.MapExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.MessageRefExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.NotExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.OrExpression;
@@ -64,18 +63,15 @@ import org.graylog.plugins.pipelineprocessor.ast.statements.FunctionStatement;
 import org.graylog.plugins.pipelineprocessor.ast.statements.Statement;
 import org.graylog.plugins.pipelineprocessor.ast.statements.VarAssignStatement;
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleArgumentType;
-import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleIndexType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleTypes;
 import org.graylog.plugins.pipelineprocessor.parser.errors.MissingRequiredParam;
-import org.graylog.plugins.pipelineprocessor.parser.errors.NonIndexableType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.OptionalParametersMustBeNamed;
 import org.graylog.plugins.pipelineprocessor.parser.errors.ParseError;
 import org.graylog.plugins.pipelineprocessor.parser.errors.SyntaxError;
 import org.graylog.plugins.pipelineprocessor.parser.errors.UndeclaredFunction;
 import org.graylog.plugins.pipelineprocessor.parser.errors.UndeclaredVariable;
 import org.graylog.plugins.pipelineprocessor.parser.errors.WrongNumberOfArgs;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,11 +152,11 @@ public class PipelineRuleParser {
         throw new ParseException(parseContext.getErrors());
     }
 
-    public Pipeline parsePipeline(PipelineSource pipelineSource) {
+    public Pipeline parsePipeline(String pipeline) {
         final ParseContext parseContext = new ParseContext();
         final SyntaxErrorListener errorListener = new SyntaxErrorListener(parseContext);
 
-        final RuleLangLexer lexer = new RuleLangLexer(new ANTLRInputStream(pipelineSource.source()));
+        final RuleLangLexer lexer = new RuleLangLexer(new ANTLRInputStream(pipeline));
         lexer.removeErrorListeners();
         lexer.addErrorListener(errorListener);
 
@@ -174,8 +170,7 @@ public class PipelineRuleParser {
         WALKER.walk(new PipelineAstBuilder(parseContext), pipelineContext);
 
         if (parseContext.getErrors().isEmpty()) {
-            final Pipeline pipeline = parseContext.pipelines.get(0);
-            return pipeline.withId(pipelineSource.id());
+            return parseContext.pipelines.get(0);
         }
         throw new ParseException(parseContext.getErrors());
     }
@@ -338,15 +333,11 @@ public class PipelineRuleParser {
                             i++;
                         }
                     }
-                } else if(! params.stream().allMatch(ParameterDescriptor::optional)) {
-                    // no parameters given but some of them are required
-                    parseContext.addError(new WrongNumberOfArgs(ctx, function, 0));
                 }
             }
 
-            final FunctionExpression expr = new FunctionExpression(
-                     new FunctionArgs(functionRegistry.resolveOrError(name), argsMap)
-            );
+            final FunctionExpression expr = new FunctionExpression(functionRegistry.resolveOrError(name),
+                                                                   new FunctionArgs(argsMap));
 
             log.info("FUNC: ctx {} => {}", ctx, expr);
             exprs.put(ctx, expr);
@@ -478,7 +469,7 @@ public class PipelineRuleParser {
         @Override
         public void exitArrayLiteralExpr(RuleLangParser.ArrayLiteralExprContext ctx) {
             final List<Expression> elements = ctx.expression().stream().map(exprs::get).collect(toList());
-            exprs.put(ctx, new ArrayLiteralExpression(elements));
+            exprs.put(ctx, new ArrayExpression(elements));
         }
 
         @Override
@@ -489,7 +480,7 @@ public class PipelineRuleParser {
                 final Expression value = exprs.get(propAssignmentContext.expression());
                 map.put(key, value);
             }
-            exprs.put(ctx, new MapLiteralExpression(map));
+            exprs.put(ctx, new MapExpression(map));
         }
 
         @Override
@@ -523,16 +514,12 @@ public class PipelineRuleParser {
                 parseContext.addError(new UndeclaredVariable(ctx));
             }
             final Expression expr;
-            String type;
-            // if the identifier is also a declared variable name prefer the variable
-            if (idIsFieldAccess && !definedVars.contains(identifierName)) {
+            if (idIsFieldAccess) {
                 expr = new FieldRefExpression(identifierName);
-                type = "FIELDREF";
             } else {
                 expr = new VarRefExpression(identifierName);
-                type = "VARREF";
             }
-            log.info("{}: ctx {} => {}", type, ctx, expr);
+            log.info("VAR: ctx {} => {}", ctx, expr);
             exprs.put(ctx, expr);
         }
 
@@ -541,16 +528,6 @@ public class PipelineRuleParser {
             // nothing to do, just propagate
             exprs.put(ctx, exprs.get(ctx.functionCall()));
             parseContext.addInnerNode(ctx);
-        }
-
-        @Override
-        public void exitIndexedAccess(RuleLangParser.IndexedAccessContext ctx) {
-            final Expression array = exprs.get(ctx.array);
-            final Expression index = exprs.get(ctx.index);
-
-            final IndexedAccessExpression expr = new IndexedAccessExpression(array, index);
-            exprs.put(ctx, expr);
-            log.info("IDXACCESS: ctx {} => {}", ctx, expr);
         }
     }
 
@@ -662,36 +639,6 @@ public class PipelineRuleParser {
             }
         }
 
-        @Override
-        public void exitIndexedAccess(RuleLangParser.IndexedAccessContext ctx) {
-            final IndexedAccessExpression idxExpr = (IndexedAccessExpression) parseContext.expressions().get(
-                    ctx);
-
-            final Class<?> indexableType = idxExpr.getIndexableObject().getType();
-            final Class<?> indexType = idxExpr.getIndex().getType();
-
-            final boolean isMap = Map.class.isAssignableFrom(indexableType);
-            if (indexableType.isArray()
-                    || List.class.isAssignableFrom(indexableType)
-                    || Iterable.class.isAssignableFrom(indexableType)
-                    || isMap) {
-                // then check if the index type is compatible, must be long for array-like and string for map-like types
-                if (isMap) {
-                    if (!String.class.equals(indexType)) {
-                        // add type error
-                        parseContext.addError(new IncompatibleIndexType(ctx, String.class, indexType));
-                    }
-                } else {
-                    if (!Long.class.equals(indexType)) {
-                        parseContext.addError(new IncompatibleIndexType(ctx, Long.class, indexType));
-                    }
-                }
-            } else {
-                // not an indexable type
-                parseContext.addError(new NonIndexableType(ctx, indexableType));
-            }
-
-        }
     }
 
     /**
