@@ -48,7 +48,7 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
                               Type genericType,
                               Annotation[] annotations,
                               MediaType mediaType) {
-        return !isIgnored(type) && json.canDeserialize(type);
+        return json.canDeserialize(type);
     }
 
     @Override
@@ -83,12 +83,8 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
                                Type genericType,
                                Annotation[] annotations,
                                MediaType mediaType) {
-        return !isIgnored(type) && json.canSerialize(type);
-    }
-
-    private boolean isIgnored(Class<?> type) {
         final JsonIgnoreType ignore = type.getAnnotation(JsonIgnoreType.class);
-        return (ignore != null) && ignore.value();
+        return !((ignore != null) && ignore.value()) && json.canSerialize(type);
     }
 
     @Override
