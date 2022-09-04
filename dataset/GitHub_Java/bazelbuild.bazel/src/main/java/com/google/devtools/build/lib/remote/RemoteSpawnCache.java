@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SpawnCache;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
+import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
@@ -96,7 +97,7 @@ final class RemoteSpawnCache implements SpawnCache {
     // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
     TreeNodeRepository repository =
         new TreeNodeRepository(execRoot, context.getMetadataProvider(), digestUtil);
-    SortedMap<PathFragment, ActionInput> inputMap = context.getInputMapping(true);
+    SortedMap<PathFragment, ActionInput> inputMap = context.getInputMapping();
     TreeNode inputRoot = repository.buildFromActionInputs(inputMap);
     repository.computeMerkleDigests(inputRoot);
     Command command =
@@ -137,15 +138,18 @@ final class RemoteSpawnCache implements SpawnCache {
                   .build();
           return SpawnCache.success(spawnResult);
         }
-      } catch (IOException e) {
+      } catch (RetryException e) {
         if (!AbstractRemoteActionCache.causedByCacheMiss(e)) {
-          String errorMsg = e.getMessage();
-          if (isNullOrEmpty(errorMsg)) {
-            errorMsg = e.getClass().getSimpleName();
-          }
-          errorMsg = "Error reading from the remote cache:\n" + errorMsg;
-          report(Event.warn(errorMsg));
+          throw e;
         }
+        // There's a cache miss. Fall back to local execution.
+      } catch (IOException e) {
+        String errorMsg = e.getMessage();
+        if (isNullOrEmpty(errorMsg)) {
+          errorMsg = e.getClass().getSimpleName();
+        }
+        errorMsg = "Error reading from the remote cache:\n" + errorMsg;
+        report(Event.warn(errorMsg));
       } finally {
         withMetadata.detach(previous);
       }

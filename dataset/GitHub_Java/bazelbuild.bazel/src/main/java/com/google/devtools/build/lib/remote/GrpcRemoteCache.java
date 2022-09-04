@@ -261,7 +261,7 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
       boolean uploadAction)
       throws ExecException, IOException, InterruptedException {
     ActionResult.Builder result = ActionResult.newBuilder();
-    upload(execRoot, actionKey, action, command, files, outErr, uploadAction, result);
+    upload(execRoot, action, command, files, outErr, uploadAction, result);
     if (!uploadAction) {
       return;
     }
@@ -286,7 +286,6 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
 
   void upload(
       Path execRoot,
-      ActionKey actionKey,
       Action action,
       Command command,
       Collection<Path> files,
@@ -298,7 +297,7 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
         new UploadManifest(digestUtil, result, execRoot, options.allowSymlinkUpload);
     manifest.addFiles(files);
     if (uploadAction) {
-      manifest.addAction(actionKey, action, command);
+      manifest.addAction(action, command);
     }
 
     List<Chunker> filesToUpload = new ArrayList<>();

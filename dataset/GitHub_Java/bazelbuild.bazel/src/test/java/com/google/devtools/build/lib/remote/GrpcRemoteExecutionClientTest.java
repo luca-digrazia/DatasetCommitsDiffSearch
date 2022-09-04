@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -182,11 +181,9 @@ public class GrpcRemoteExecutionClientTest {
         }
 
         @Override
-        public SortedMap<PathFragment, ActionInput> getInputMapping(
-            boolean expandTreeArtifactsInRunfiles) throws IOException {
+        public SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException {
           return new SpawnInputExpander(execRoot, /*strict*/ false)
-              .getInputMapping(simpleSpawn, SIMPLE_ARTIFACT_EXPANDER, ArtifactPathResolver.IDENTITY,
-                  fakeFileCache, true);
+              .getInputMapping(simpleSpawn, SIMPLE_ARTIFACT_EXPANDER, fakeFileCache);
         }
 
         @Override
