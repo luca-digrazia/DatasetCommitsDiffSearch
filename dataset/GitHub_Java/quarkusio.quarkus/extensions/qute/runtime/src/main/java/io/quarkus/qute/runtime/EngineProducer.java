@@ -11,8 +11,8 @@ import java.util.Optional;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Event;
 import javax.enterprise.inject.Produces;
+import javax.inject.Inject;
 import javax.inject.Singleton;
-import javax.interceptor.Interceptor;
 
 import org.jboss.logging.Logger;
 
@@ -33,10 +33,7 @@ import io.quarkus.qute.UserTagSectionHelper;
 import io.quarkus.qute.ValueResolver;
 import io.quarkus.qute.ValueResolvers;
 import io.quarkus.qute.Variant;
-import io.quarkus.qute.runtime.QuteRecorder.QuteContext;
-import io.quarkus.runtime.Startup;
 
-@Startup(Interceptor.Priority.PLATFORM_BEFORE)
 @Singleton
 public class EngineProducer {
 
@@ -44,20 +41,26 @@ public class EngineProducer {
 
     private static final Logger LOGGER = Logger.getLogger(EngineProducer.class);
 
-    private final Engine engine;
-    private final List<String> tags;
-    private final List<String> suffixes;
-    private final String basePath;
-    private final String tagPath;
+    @Inject
+    Event<EngineBuilder> event;
 
-    public EngineProducer(QuteContext context, Event<EngineBuilder> event) {
-        this.suffixes = context.getConfig().suffixes;
-        this.basePath = "templates/";
-        this.tagPath = basePath + "tags/";
-        this.tags = context.getTags();
+    private volatile Engine engine;
+    private volatile List<String> tags;
 
-        LOGGER.debugf("Initializing Qute [templates: %s, tags: %s, resolvers: %s", context.getTemplatePaths(), tags,
-                context.getResolverClasses());
+    private volatile List<String> suffixes;
+    private volatile String basePath;
+    private volatile String tagPath;
+
+    void init(QuteConfig config, List<String> resolverClasses, List<String> templatePaths, List<String> tags) {
+        if (engine != null) {
+            LOGGER.warn("Qute already initialized!");
+            return;
+        }
+        LOGGER.debugf("Initializing Qute with: %s", resolverClasses);
+
+        suffixes = config.suffixes;
+        basePath = "templates/";
+        tagPath = basePath + "tags/";
 
         EngineBuilder builder = Engine.builder()
                 .addDefaultSectionHelpers();
@@ -103,11 +106,12 @@ public class EngineProducer {
         }).build());
 
         // Add generated resolvers
-        for (String resolverClass : context.getResolverClasses()) {
+        for (String resolverClass : resolverClasses) {
             builder.addValueResolver(createResolver(resolverClass));
             LOGGER.debugf("Added generated value resolver: %s", resolverClass);
         }
         // Add tags
+        this.tags = tags;
         for (String tag : tags) {
             // Strip suffix, item.html -> item
             String tagName = tag.contains(".") ? tag.substring(0, tag.lastIndexOf('.')) : tag;
@@ -119,7 +123,7 @@ public class EngineProducer {
         engine = builder.build();
 
         // Load discovered templates
-        for (String path : context.getTemplatePaths()) {
+        for (String path : templatePaths) {
             engine.getTemplate(path);
         }
     }

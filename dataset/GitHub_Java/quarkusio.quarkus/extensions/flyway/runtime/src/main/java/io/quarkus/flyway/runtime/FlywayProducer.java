@@ -12,14 +12,14 @@ import org.flywaydb.core.Flyway;
 
 @ApplicationScoped
 public class FlywayProducer {
-    private static final String ERROR_NOT_READY = "The flyway settings are not ready to be consumed: the %s configuration has not been injected yet";
+    private static final String ERROR_NOT_READY = "The Flyway settings are not ready to be consumed: the %s configuration has not been injected yet";
 
     @Inject
     @Default
     Instance<DataSource> defaultDataSource;
 
-    private FlywayRuntimeConfig flywayRuntimeConfig;
-    private FlywayBuildConfig flywayBuildConfig;
+    private volatile FlywayRuntimeConfig flywayRuntimeConfig;
+    private volatile FlywayBuildTimeConfig flywayBuildConfig;
 
     @Produces
     @Dependent
@@ -32,7 +32,7 @@ public class FlywayProducer {
         this.flywayRuntimeConfig = flywayRuntimeConfig;
     }
 
-    public void setFlywayBuildConfig(FlywayBuildConfig flywayBuildConfig) {
+    public void setFlywayBuildConfig(FlywayBuildTimeConfig flywayBuildConfig) {
         this.flywayBuildConfig = flywayBuildConfig;
     }
 
@@ -51,7 +51,7 @@ public class FlywayProducer {
         return failIfNotReady(flywayRuntimeConfig, "runtime");
     }
 
-    private FlywayBuildConfig getFlywayBuildConfig() {
+    private FlywayBuildTimeConfig getFlywayBuildConfig() {
         return failIfNotReady(flywayBuildConfig, "build");
     }
 

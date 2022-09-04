@@ -27,7 +27,7 @@ import io.quarkus.vertx.http.runtime.security.TrustedAuthenticationRequest;
 @ApplicationScoped
 public class ElytronTrustedIdentityProvider implements IdentityProvider<TrustedAuthenticationRequest> {
 
-    private static Logger log = Logger.getLogger(ElytronTrustedIdentityProvider.class);
+    private static final Logger log = Logger.getLogger(ElytronTrustedIdentityProvider.class);
 
     @Inject
     SecurityDomain domain;
@@ -50,26 +50,27 @@ public class ElytronTrustedIdentityProvider implements IdentityProvider<TrustedA
                         return null;
                     }
                     PasswordCredential cred = id.getCredential(PasswordCredential.class);
-                    ServerAuthenticationContext ac = domain.createNewAuthenticationContext();
-                    ac.setAuthenticationName(request.getPrincipal());
-                    ac.addPrivateCredential(cred);
-                    ac.authorize();
-                    result = ac.getAuthorizedIdentity();
+                    try (ServerAuthenticationContext ac = domain.createNewAuthenticationContext()) {
+                        ac.setAuthenticationName(request.getPrincipal());
+                        ac.addPrivateCredential(cred);
+                        ac.authorize();
+                        result = ac.getAuthorizedIdentity();
 
-                    if (result == null) {
-                        throw new AuthenticationFailedException();
+                        if (result == null) {
+                            throw new AuthenticationFailedException();
+                        }
+                        QuarkusSecurityIdentity.Builder builder = QuarkusSecurityIdentity.builder();
+                        builder.setPrincipal(result.getPrincipal());
+                        for (String i : result.getRoles()) {
+                            builder.addRole(i);
+                        }
+                        return builder.build();
                     }
-                    QuarkusSecurityIdentity.Builder builder = QuarkusSecurityIdentity.builder();
-                    builder.setPrincipal(result.getPrincipal());
-                    for (String i : result.getRoles()) {
-                        builder.addRole(i);
-                    }
-                    return builder.build();
                 } catch (RealmUnavailableException e) {
                     throw new RuntimeException(e);
                 } catch (SecurityException e) {
                     log.debug("Authentication failed", e);
-                    throw new AuthenticationFailedException();
+                    throw new AuthenticationFailedException(e);
                 }
             }
         });

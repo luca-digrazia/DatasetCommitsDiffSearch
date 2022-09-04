@@ -23,7 +23,6 @@ import io.quarkus.oidc.runtime.OidcConfig;
 import io.quarkus.oidc.runtime.OidcTenantConfig;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
-import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.quarkus.vertx.http.runtime.security.HttpSecurityPolicy;
 import io.vertx.ext.web.RoutingContext;
 
@@ -32,7 +31,6 @@ public class KeycloakPolicyEnforcerAuthorizer
         implements HttpSecurityPolicy, BiFunction<RoutingContext, SecurityIdentity, HttpSecurityPolicy.CheckResult> {
 
     private volatile KeycloakAdapterPolicyEnforcer delegate;
-    private volatile long readTimeout;
 
     @Override
     public CompletionStage<CheckResult> checkPermission(RoutingContext request, SecurityIdentity identity,
@@ -42,7 +40,7 @@ public class KeycloakPolicyEnforcerAuthorizer
 
     @Override
     public CheckResult apply(RoutingContext routingContext, SecurityIdentity identity) {
-        VertxHttpFacade httpFacade = new VertxHttpFacade(routingContext, readTimeout);
+        VertxHttpFacade httpFacade = new VertxHttpFacade(routingContext);
         AuthorizationContext result = delegate.authorize(httpFacade);
 
         if (result.isGranted()) {
@@ -88,7 +86,7 @@ public class KeycloakPolicyEnforcerAuthorizer
                 }).build();
     }
 
-    public void init(OidcConfig oidcConfig, KeycloakPolicyEnforcerConfig config, HttpConfiguration httpConfiguration) {
+    public void init(OidcConfig oidcConfig, KeycloakPolicyEnforcerConfig config) {
         AdapterConfig adapterConfig = new AdapterConfig();
         String authServerUrl = oidcConfig.defaultTenant.getAuthServerUrl().get();
 
@@ -110,7 +108,6 @@ public class KeycloakPolicyEnforcerAuthorizer
 
         adapterConfig.setPolicyEnforcerConfig(enforcerConfig);
 
-        this.readTimeout = httpConfiguration.readTimeout.toMillis();
         this.delegate = new KeycloakAdapterPolicyEnforcer(
                 new PolicyEnforcer(KeycloakDeploymentBuilder.build(adapterConfig), adapterConfig));
     }
@@ -150,16 +147,12 @@ public class KeycloakPolicyEnforcerAuthorizer
                     PolicyEnforcerConfig.EnforcementMode.valueOf(config.policyEnforcer.enforcementMode));
             enforcerConfig.setHttpMethodAsScope(config.policyEnforcer.httpMethodAsScope);
 
-            Optional<KeycloakPolicyEnforcerConfig.KeycloakConfigPolicyEnforcer.PathCacheConfig> pathCache = config.policyEnforcer.pathCache;
+            PolicyEnforcerConfig.PathCacheConfig pathCacheConfig = new PolicyEnforcerConfig.PathCacheConfig();
 
-            if (pathCache.isPresent()) {
-                PolicyEnforcerConfig.PathCacheConfig pathCacheConfig = new PolicyEnforcerConfig.PathCacheConfig();
+            pathCacheConfig.setLifespan(config.policyEnforcer.pathCache.lifespan);
+            pathCacheConfig.setMaxEntries(config.policyEnforcer.pathCache.maxEntries);
 
-                pathCacheConfig.setLifespan(pathCache.get().lifespan);
-                pathCacheConfig.setMaxEntries(pathCache.get().maxEntries);
-
-                enforcerConfig.setPathCacheConfig(pathCacheConfig);
-            }
+            enforcerConfig.setPathCacheConfig(pathCacheConfig);
 
             enforcerConfig.setClaimInformationPointConfig(
                     getClaimInformationPointConfig(config.policyEnforcer.claimInformationPoint));
