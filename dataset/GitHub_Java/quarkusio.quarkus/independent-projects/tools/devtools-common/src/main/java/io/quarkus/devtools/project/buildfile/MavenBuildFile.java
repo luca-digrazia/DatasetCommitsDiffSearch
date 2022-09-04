@@ -28,10 +28,6 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
 
-/**
- * {@link io.quarkus.devtools.project.buildfile.MavenProjectBuildFile} should be used in place of this class.
- */
-@Deprecated
 public class MavenBuildFile extends BuildFile {
 
     private static final Pattern PROPERTY_PATTERN = Pattern.compile("\\$\\{(.+)}");
@@ -51,32 +47,6 @@ public class MavenBuildFile extends BuildFile {
             MojoUtils.write(getModel(), pomOutputStream);
             writeToProjectFile(BuildTool.MAVEN.getDependenciesFile(), pomOutputStream.toByteArray());
         }
-    }
-
-    @Override
-    protected boolean importBom(ArtifactCoords coords) {
-        if (!"pom".equalsIgnoreCase(coords.getType())) {
-            throw new IllegalArgumentException(coords + " is not a POM");
-        }
-        Model model = getModel();
-        final Dependency d = new Dependency();
-        d.setGroupId(coords.getGroupId());
-        d.setArtifactId(coords.getArtifactId());
-        d.setType(coords.getType());
-        d.setScope("import");
-        DependencyManagement dependencyManagement = model.getDependencyManagement();
-        if (dependencyManagement == null) {
-            dependencyManagement = new DependencyManagement();
-            model.setDependencyManagement(dependencyManagement);
-        }
-        if (dependencyManagement.getDependencies()
-                .stream()
-                .map(this::toResolvedDependency)
-                .noneMatch(thisDep -> d.getManagementKey().equals(thisDep.getManagementKey()))) {
-            dependencyManagement.addDependency(d);
-            return true;
-        }
-        return false;
     }
 
     @Override

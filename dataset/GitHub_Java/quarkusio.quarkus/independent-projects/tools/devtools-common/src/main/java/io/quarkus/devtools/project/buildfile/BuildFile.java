@@ -16,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -54,7 +53,7 @@ public abstract class BuildFile implements ExtensionManager {
         List<ArtifactCoords> installedPlatforms = new ArrayList<>();
         final Set<ArtifactKey> alreadyInstalled = alreadyInstalled(plan.toCollection());
         for (ArtifactCoords platform : withoutAlreadyInstalled(alreadyInstalled, plan.getPlatforms())) {
-            if (importBom(platform)) {
+            if (addDependency(platform, false)) {
                 installedPlatforms.add(platform);
             }
         }
@@ -75,14 +74,9 @@ public abstract class BuildFile implements ExtensionManager {
 
     @Override
     public final Collection<ArtifactCoords> getInstalled() throws IOException {
-        if (catalog == null) {
-            return Collections.emptyList();
-        }
         this.refreshData();
-        final Set<ArtifactKey> catalogKeys = catalog.getExtensions().stream().map(e -> e.getArtifact().getKey())
-                .collect(Collectors.toSet());
-        return getDependencies().stream()
-                .filter(d -> catalogKeys.contains(d.getKey()))
+        return this.getDependencies().stream()
+                .filter(d -> this.isQuarkusExtension(d.getKey()))
                 .collect(toList());
     }
 
@@ -122,8 +116,6 @@ public abstract class BuildFile implements ExtensionManager {
                 .collect(toList());
     }
 
-    protected abstract boolean importBom(ArtifactCoords coords);
-
     protected abstract boolean addDependency(ArtifactCoords coords, boolean managed);
 
     protected abstract void removeDependency(ArtifactKey key) throws IOException;
@@ -152,6 +144,10 @@ public abstract class BuildFile implements ExtensionManager {
 
     protected void writeToProjectFile(final String fileName, final byte[] content) throws IOException {
         Files.write(projectDirPath.resolve(fileName), content);
+    }
+
+    private boolean isQuarkusExtension(final ArtifactKey key) {
+        return catalog != null ? isDefinedInRegistry(catalog.getExtensions(), key) : false;
     }
 
     private Set<ArtifactKey> getDependenciesKeys() throws IOException {
