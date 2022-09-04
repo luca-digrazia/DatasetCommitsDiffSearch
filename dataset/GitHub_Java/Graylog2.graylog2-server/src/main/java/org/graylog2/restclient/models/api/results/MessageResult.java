@@ -23,7 +23,6 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.gson.Gson;
 import org.graylog2.restclient.models.FieldMapper;
 import org.graylog2.restclient.models.api.responses.HighlightRange;
 import org.joda.time.DateTime;
@@ -40,7 +39,8 @@ public class MessageResult {
             "gl2_source_input",
             "gl2_source_node",
             "gl2_source_radio",
-            "gl2_source_radio_input"
+            "gl2_source_radio_input",
+            "g2eid"
     );
 
     private final Map<String, Object> fields;
@@ -184,7 +184,11 @@ public class MessageResult {
         return highlightRanges;
     }
 
-    public String getHighlightRangesAsJson() {
-        return new Gson().toJson(getHighlightRanges());
+    public boolean hasHighlightedField(String field) {
+        return highlightRanges != null && highlightRanges.containsKey(field);
+    }
+
+    public HighlightedField getHighlightedField(String field) {
+        return new HighlightedField(this, field);
     }
 }
