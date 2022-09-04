@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
@@ -24,8 +23,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
-import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper.LinkingInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper.Info;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
@@ -44,7 +42,7 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws RuleErrorException, InterruptedException {
     Artifact staticLibrary = ruleContext.getPrerequisiteArtifact("static_library", Mode.TARGET);
     Artifact sharedLibrary = ruleContext.getPrerequisiteArtifact("shared_library", Mode.TARGET);
     Artifact interfaceLibrary =
@@ -64,19 +62,18 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
           "'shared_library' should be specified when 'system_provided' is false");
     }
 
-    // Create CcCompilationHelper
+    // Create CcLibraryHelper
     CcToolchainProvider ccToolchain =
         CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeaturesOrReportRuleError(ruleContext, ccToolchain);
+        CcCommon.configureFeatures(ruleContext, ccToolchain);
     FdoSupportProvider fdoSupport =
         CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext);
 
     // Add headers to compilation step.
     final CcCommon common = new CcCommon(ruleContext);
-    CompilationInfo compilationInfo =
-        new CcCompilationHelper(
-                ruleContext, semantics, featureConfiguration, ccToolchain, fdoSupport)
+    Info.CompilationInfo compilationInfo =
+        new CcLibraryHelper(ruleContext, semantics, featureConfiguration, ccToolchain, fdoSupport)
             .addPublicHeaders(common.getHeaders())
             .setHeadersCheckingMode(HeadersCheckingMode.STRICT)
             .compile();
@@ -93,14 +90,8 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
             .getRelative(labelName.replaceName("lib" + labelName.getBaseName()))
             .getPathString();
 
-    CcLinkingHelper linkingHelper =
-        new CcLinkingHelper(
-            ruleContext,
-            semantics,
-            featureConfiguration,
-            ccToolchain,
-            fdoSupport,
-            ruleContext.getConfiguration());
+    CcLibraryHelper linkingHelper =
+        new CcLibraryHelper(ruleContext, semantics, featureConfiguration, ccToolchain, fdoSupport);
 
     if (staticLibrary != null) {
       if (CppFileTypes.PIC_ARCHIVE.matches(staticLibrary.getPath())) {
@@ -168,18 +159,17 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
       linkingHelper.addDynamicLibraries(dynamicLibraryList);
     }
 
-    LinkingInfo linkingInfo =
+    Info.LinkingInfo linkingInfo =
         linkingHelper.link(
-            compilationInfo.getCcCompilationOutputs(),
-            compilationInfo.getCcCompilationContextInfo());
+            compilationInfo.getCcCompilationOutputs(), compilationInfo.getCppCompilationContext());
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProviders(compilationInfo.getProviders())
         .addProviders(linkingInfo.getProviders())
         .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .addOutputGroups(
-            CcCommon.mergeOutputGroups(
-                ImmutableList.of(compilationInfo.getOutputGroups(), linkingInfo.getOutputGroups())))
+            Info.mergeOutputGroups(
+                compilationInfo.getOutputGroups(), linkingInfo.getOutputGroups()))
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY))
         .build();
   }

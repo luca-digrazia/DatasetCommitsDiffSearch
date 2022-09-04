@@ -151,7 +151,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             // between Bazel and Blaze.
             .setGenerateLinkActionsIfEmpty(
                 ruleContext.getRule().getImplicitOutputsFunction() != ImplicitOutputsFunction.NONE)
-            .setStaticLinkType(staticLinkType)
+            .setLinkType(staticLinkType)
             .setNeverLink(neverLink)
             .addLinkstamps(ruleContext.getPrerequisites("linkstamp", Mode.TARGET));
 

@@ -223,6 +223,12 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CppCompilationContext cppCompilationContext = compilationInfo.getCppCompilationContext();
     CcCompilationOutputs ccCompilationOutputs = compilationInfo.getCcCompilationOutputs();
 
+    CcLibraryHelper linkingHelper =
+        new CcLibraryHelper(ruleContext, semantics, featureConfiguration, ccToolchain, fdoSupport)
+            .fromCommon(common)
+            .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
+            .setFake(fake)
+            .enableInterfaceSharedObjects();
     List<String> linkopts = common.getLinkopts();
     LinkStaticness linkStaticness =
         getLinkStaticness(ruleContext, linkopts, cppConfiguration, ccToolchain);
@@ -243,18 +249,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // [*] The only library link type is STATIC_LIBRARY. EXECUTABLE specifies a normal
     // cc_binary output, while DYNAMIC_LIBRARY is a cc_binary rules that produces an
     // output matching a shared object, for example cc_binary(name="foo.so", ...) on linux.
-    CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
-    if (linkCompileOutputSeparately) {
-      CcLibraryHelper linkingHelper =
-          new CcLibraryHelper(ruleContext, semantics, featureConfiguration, ccToolchain, fdoSupport)
-              .fromCommon(common)
-              .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
-              .setFake(fake)
-              .enableInterfaceSharedObjects();
-      linkingHelper.setStaticLinkType(LinkTargetType.STATIC_LIBRARY);
-      ccLinkingOutputs =
-          linkingHelper.link(ccCompilationOutputs, cppCompilationContext).getCcLinkingOutputs();
-    }
+    linkingHelper.setLinkType(
+        linkCompileOutputSeparately ? LinkTargetType.STATIC_LIBRARY : linkType);
+    Info.LinkingInfo linkingInfo = linkingHelper.link(ccCompilationOutputs, cppCompilationContext);
 
     CcLinkParams linkParams =
         collectCcLinkParams(
@@ -271,7 +268,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             common,
             precompiledFiles,
             ccCompilationOutputs,
-            ccLinkingOutputs,
+            linkingInfo.getCcLinkingOutputs(),
             cppCompilationContext.getTransitiveCompilationPrerequisites(),
             fake,
             binary,
@@ -451,7 +448,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ruleContext,
             ccToolchain,
             linkingOutputs,
-            ccLinkingOutputs,
+            linkingInfo.getCcLinkingOutputs(),
             cppCompilationContext,
             linkStaticness,
             filesToBuild,
