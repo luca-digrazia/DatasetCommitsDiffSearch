@@ -19,7 +19,6 @@ package org.graylog2.rest.resources.cluster;
 import com.codahale.metrics.annotation.Timed;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
-import edu.emory.mathcs.backport.java.util.Collections;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.cluster.Node;
@@ -91,12 +90,12 @@ public class ClusterInputStatesResource {
                         if (response.isSuccess()) {
                             return response.body().states();
                         } else {
-                            LOG.warn("Unable to fetch input states from node " + entry.getKey() + ": " + response.message());
+                            LOG.warn("Unable to fetch system jobs from node " + entry.getKey() + ": " + response);
                         }
                     } catch (IOException e) {
-                        LOG.warn("Unable to fetch input states from node " + entry.getKey() + ": ", e);
+                        LOG.warn("Unable to fetch system jobs from node " + entry.getKey() + ": ", e);
                     }
-                    return Collections.emptySet();
+                    return null;
                 }));
         return result;
     }
