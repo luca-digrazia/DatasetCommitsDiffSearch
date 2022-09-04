@@ -20,7 +20,6 @@ import org.apache.camel.TypeConverter;
 import org.apache.camel.component.file.GenericFile;
 import org.apache.camel.component.file.GenericFileProcessStrategy;
 import org.apache.camel.component.file.strategy.GenericFileProcessStrategyFactory;
-import org.apache.camel.converter.jaxp.XmlConverter;
 import org.apache.camel.spi.ExchangeFormatter;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.DotName;
@@ -37,7 +36,7 @@ import io.quarkus.deployment.builditem.substrate.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBundleBuildItem;
-import io.quarkus.jaxb.deployment.JaxbFileRootBuildItem;
+import io.quarkus.jaxb.JaxbFileRootBuildItem;
 
 class CamelProcessor {
     private static final List<Class<?>> CAMEL_REFLECTIVE_CLASSES = Arrays.asList(
@@ -73,7 +72,14 @@ class CamelProcessor {
         return new FeatureBuildItem(FeatureBuildItem.CAMEL_CORE);
     }
 
-    @BuildStep(applicationArchiveMarkers = { CamelSupport.CAMEL_SERVICE_BASE_PATH, "org/apache/camel" })
+    @BuildStep
+    SubstrateConfigBuildItem processSystemProperties() {
+        return SubstrateConfigBuildItem.builder()
+                .addNativeImageSystemProperty("CamelSimpleLRUCacheFactory", "true")
+                .build();
+    }
+
+    @BuildStep(applicationArchiveMarkers = CamelSupport.CAMEL_SERVICE_BASE_PATH)
     void process() {
         IndexView view = combinedIndexBuildItem.getIndex();
 
@@ -101,7 +107,6 @@ class CamelProcessor {
 
         addReflectiveClass(false, GenericFile.class.getName());
         addReflectiveClass(true, GenericFileProcessStrategyFactory.class.getName());
-        addReflectiveClass(true, XmlConverter.class.getName());
 
         addCamelServices();
     }
