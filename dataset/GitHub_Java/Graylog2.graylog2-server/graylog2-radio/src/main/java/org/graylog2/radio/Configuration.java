@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.radio;
 
@@ -21,7 +21,6 @@ import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.Tools;
-import org.joda.time.Duration;
 
 import java.net.URI;
 
@@ -95,12 +94,9 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "amqp_persistent_messages_enabled")
     private boolean amqpPersistentMessagesEnabled = false;
-    
-    @Parameter(value = "amqp_broker_connect_timeout")
-    private Duration amqpConnectTimeout = Duration.standardSeconds(5);
 
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
-    private int ringSize = 65536;
+    private int ringSize = 1024;
 
     @Parameter(value = "radio_transport_max_errors")
     private int radioTransportMaxErrors = 0;
@@ -192,9 +188,5 @@ public class Configuration extends BaseConfiguration {
 
     public int getRadioTransportMaxErrors() {
         return radioTransportMaxErrors;
-    }
-
-    public Duration getAmqpConnectTimeout() {
-        return amqpConnectTimeout;
     }
 }
