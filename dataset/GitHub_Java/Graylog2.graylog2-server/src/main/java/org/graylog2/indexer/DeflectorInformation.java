@@ -27,7 +27,7 @@ import java.util.Map;
 import org.elasticsearch.action.admin.indices.stats.IndexShardStats;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.ShardStats;
-import org.graylog2.Core;
+import org.graylog2.GraylogServer;
 import org.graylog2.Tools;
 
 /**
@@ -35,7 +35,7 @@ import org.graylog2.Tools;
  */
 public class DeflectorInformation {
     
-    private Core graylogServer;
+    private GraylogServer graylogServer;
     
     private Map<String, IndexStats> indices = Maps.newHashMap();
     private IndexStats recentIndex;
@@ -44,7 +44,7 @@ public class DeflectorInformation {
     private int maxMessagesPerIndex;
     private String serverId;
     
-    public DeflectorInformation(Core server) {
+    public DeflectorInformation(GraylogServer server) {
         this.graylogServer = server;
     }
     
@@ -101,12 +101,12 @@ public class DeflectorInformation {
     
     private Map<String, Object> getIndexInformation(IndexStats stats) {
         Map<String, Object> info = Maps.newHashMap();
-        info.put("docs", stats.getPrimaries().getDocs().getCount());
-        info.put("size", stats.getPrimaries().store().getSize().getKb());
-        info.put("time_index", stats.getPrimaries().getIndexing().total().indexTime().getSeconds());
-        info.put("time_query", stats.getPrimaries().getSearch().total().queryTime().getSeconds());
-        info.put("time_fetch", stats.getPrimaries().getSearch().total().fetchTime().getSeconds());
-        info.put("time_get", stats.getPrimaries().getGet().getTime().getSeconds());
+        info.put("docs", stats.getTotal().getDocs().count());
+        info.put("size", stats.getTotal().store().getSize().getKb());
+        info.put("time_index", stats.getTotal().getIndexing().total().indexTime().getSeconds());
+        info.put("time_query", stats.getTotal().getSearch().total().queryTime().getSeconds());
+        info.put("time_fetch", stats.getTotal().getSearch().total().fetchTime().getSeconds());
+        info.put("time_get", stats.getTotal().getGet().getTime().getSeconds());
         info.put("shards", getShardInformation(stats));
         
         return info;
