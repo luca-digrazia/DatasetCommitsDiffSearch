@@ -40,8 +40,7 @@ import io.quarkus.rest.runtime.core.serialization.EntityWriter;
 import io.quarkus.rest.runtime.handlers.RestHandler;
 import io.quarkus.rest.runtime.injection.QuarkusRestInjectionContext;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestAsyncResponse;
-import io.quarkus.rest.runtime.jaxrs.QuarkusRestContainerRequestContextImpl;
-import io.quarkus.rest.runtime.jaxrs.QuarkusRestContainerResponseContextImpl;
+import io.quarkus.rest.runtime.jaxrs.QuarkusRestContainerRequestContext;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestHttpHeaders;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestProviders;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestRequest;
@@ -116,8 +115,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     private Map<String, Object> properties;
     private Request request;
     private EntityWriter entityWriter;
-    private QuarkusRestContainerRequestContextImpl containerRequestContext;
-    private QuarkusRestContainerResponseContextImpl containerResponseContext;
+    private QuarkusRestContainerRequestContext containerRequestContext;
     private String method;
     // this is only set if we override the requestUri
     private String path;
@@ -538,18 +536,11 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return request;
     }
 
-    public QuarkusRestContainerRequestContextImpl getContainerRequestContext() {
+    public QuarkusRestContainerRequestContext getContainerRequestContext() {
         if (containerRequestContext == null) {
-            containerRequestContext = new QuarkusRestContainerRequestContextImpl(this);
+            containerRequestContext = new QuarkusRestContainerRequestContext(this);
         }
         return containerRequestContext;
-    }
-
-    public QuarkusRestContainerResponseContextImpl getContainerResponseContext() {
-        if (containerResponseContext == null) {
-            containerResponseContext = new QuarkusRestContainerResponseContextImpl(this);
-        }
-        return containerResponseContext;
     }
 
     public String getMethod() {

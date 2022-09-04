@@ -1,7 +1,5 @@
 package io.quarkus.rest.runtime.handlers;
 
-import java.util.List;
-
 import javax.ws.rs.NotFoundException;
 
 import io.quarkus.arc.Arc;
@@ -21,27 +19,22 @@ public class QuarkusRestInitialHandler implements Handler<RoutingContext>, RestH
     final RequestMapper<InitialMatch> mappers;
     final QuarkusRestDeployment deployment;
     final QuarkusRestProviders providers;
-    final List<ResourceRequestFilterHandler> preMappingHandlers;
+    final ResourceRequestInterceptorHandler preMappingHandler;
     final RestHandler[] initialChain;
 
     final CurrentVertxRequest currentVertxRequest;
     final ManagedContext requestContext;
 
     public QuarkusRestInitialHandler(RequestMapper<InitialMatch> mappers, QuarkusRestDeployment deployment,
-            List<ResourceRequestFilterHandler> preMappingHandlers) {
+            ResourceRequestInterceptorHandler preMappingHandler) {
         this.mappers = mappers;
         this.deployment = deployment;
         this.providers = new QuarkusRestProviders(QuarkusRestRecorder.getCurrentDeployment());
-        this.preMappingHandlers = preMappingHandlers;
-        if (preMappingHandlers == null) {
+        this.preMappingHandler = preMappingHandler;
+        if (preMappingHandler == null) {
             initialChain = new RestHandler[] { new MatrixParamHandler(), this };
         } else {
-            initialChain = new RestHandler[preMappingHandlers.size() + 2];
-            initialChain[0] = new MatrixParamHandler();
-            for (int i = 0; i < preMappingHandlers.size(); i++) {
-                initialChain[i + 1] = preMappingHandlers.get(i);
-            }
-            initialChain[initialChain.length - 1] = this;
+            initialChain = new RestHandler[] { new MatrixParamHandler(), preMappingHandler, this };
         }
         this.requestContext = Arc.container().requestContext();
         this.currentVertxRequest = Arc.container().instance(CurrentVertxRequest.class).get();
