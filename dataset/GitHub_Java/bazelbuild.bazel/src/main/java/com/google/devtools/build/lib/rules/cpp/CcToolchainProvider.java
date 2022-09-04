@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.OptionalFlag;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -339,51 +339,31 @@ public final class CcToolchainProvider extends ToolchainInfo {
   }
 
   /**
-   * Returns true if the featureConfiguration includes statically linking the cpp runtimes.
-   *
-   * @param featureConfiguration the relevant FeatureConfiguration.
+   * Returns the static runtime libraries.
    */
-  public boolean shouldStaticallyLinkCppRuntimes(FeatureConfiguration featureConfiguration) {
-    return featureConfiguration.isEnabled(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES);
+  public NestedSet<Artifact> getStaticRuntimeLinkInputs() {
+    return staticRuntimeLinkInputs;
   }
 
-  /** Returns the static runtime libraries. */
-  public NestedSet<Artifact> getStaticRuntimeLinkInputs(FeatureConfiguration featureConfiguration) {
-    if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
-      return staticRuntimeLinkInputs;
-    } else {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
+  /**
+   * Returns an aggregating middleman that represents the static runtime libraries.
+   */
+  @Nullable public Artifact getStaticRuntimeLinkMiddleman() {
+    return staticRuntimeLinkMiddleman;
   }
 
-  /** Returns an aggregating middleman that represents the static runtime libraries. */
-  @Nullable
-  public Artifact getStaticRuntimeLinkMiddleman(FeatureConfiguration featureConfiguration) {
-    if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
-      return staticRuntimeLinkMiddleman;
-    } else {
-      return null;
-    }
+  /**
+   * Returns the dynamic runtime libraries.
+   */
+  public NestedSet<Artifact> getDynamicRuntimeLinkInputs() {
+    return dynamicRuntimeLinkInputs;
   }
 
-  /** Returns the dynamic runtime libraries. */
-  public NestedSet<Artifact> getDynamicRuntimeLinkInputs(
-      FeatureConfiguration featureConfiguration) {
-    if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
-      return dynamicRuntimeLinkInputs;
-    } else {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
-  }
-
-  /** Returns an aggregating middleman that represents the dynamic runtime libraries. */
-  @Nullable
-  public Artifact getDynamicRuntimeLinkMiddleman(FeatureConfiguration featureConfiguration) {
-    if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
-      return dynamicRuntimeLinkMiddleman;
-    } else {
-      return null;
-    }
+  /**
+   * Returns an aggregating middleman that represents the dynamic runtime libraries.
+   */
+  @Nullable public Artifact getDynamicRuntimeLinkMiddleman() {
+    return dynamicRuntimeLinkMiddleman;
   }
 
   /**
@@ -643,15 +623,14 @@ public final class CcToolchainProvider extends ToolchainInfo {
       name = "unfiltered_compiler_options",
       doc =
           "Returns the default list of options which cannot be filtered by BUILD "
-              + "rules. These should be appended to the command line after filtering.")
-  // TODO(b/24373706): Remove this method once new C++ toolchain API is available
-  public ImmutableList<String> getUnfilteredCompilerOptionsWithSysroot(
-      Iterable<String> featuresNotUsedAnymore) {
-    return toolchainInfo.getUnfilteredCompilerOptions(sysroot);
+              + "rules. These should be appended to the command line after filtering."
+  )
+  public ImmutableList<String> getUnfilteredCompilerOptionsWithSysroot(Iterable<String> features) {
+    return toolchainInfo.getUnfilteredCompilerOptions(features, sysroot);
   }
 
-  public ImmutableList<String> getUnfilteredCompilerOptions() {
-    return toolchainInfo.getUnfilteredCompilerOptions(/* sysroot= */ null);
+  public ImmutableList<String> getUnfilteredCompilerOptions(Iterable<String> features) {
+    return toolchainInfo.getUnfilteredCompilerOptions(features, /* sysroot= */ null);
   }
 
   /**
@@ -714,8 +693,8 @@ public final class CcToolchainProvider extends ToolchainInfo {
    * Returns link options for the specified flag list, combined with universal options for all
    * shared libraries (regardless of link staticness).
    */
-  ImmutableList<String> getSharedLibraryLinkOptions(FlagList flags) {
-    return toolchainInfo.getSharedLibraryLinkOptions(flags);
+  ImmutableList<String> getSharedLibraryLinkOptions(FlagList flags, Iterable<String> features) {
+    return toolchainInfo.getSharedLibraryLinkOptions(flags, features);
   }
 
   /** Returns compiler flags arising from the {@link CToolchain}. */
@@ -756,10 +735,16 @@ public final class CcToolchainProvider extends ToolchainInfo {
     return toolchainInfo.getLipoCxxFlags();
   }
 
+  /** Returns optional compiler flags arising from the {@link CToolchain}. */
+  ImmutableList<OptionalFlag> getOptionalCompilerFlags() {
+    return toolchainInfo.getOptionalCompilerFlags();
+  }
+
   /** Returns linker flags for fully statically linked outputs. */
   FlagList getFullyStaticLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
         configureLinkerOptions(compilationMode, lipoMode, LinkingMode.FULLY_STATIC),
+        ImmutableList.of(),
         ImmutableList.<String>of());
   }
 
@@ -767,6 +752,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   FlagList getMostlyStaticLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
         configureLinkerOptions(compilationMode, lipoMode, LinkingMode.MOSTLY_STATIC),
+        ImmutableList.of(),
         ImmutableList.<String>of());
   }
 
@@ -774,6 +760,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   FlagList getMostlyStaticSharedLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
         configureLinkerOptions(compilationMode, lipoMode, LinkingMode.MOSTLY_STATIC_LIBRARIES),
+        ImmutableList.of(),
         ImmutableList.<String>of());
   }
 
@@ -781,6 +768,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   FlagList getDynamicLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
         configureLinkerOptions(compilationMode, lipoMode, LinkingMode.DYNAMIC),
+        ImmutableList.of(),
         ImmutableList.of());
   }
 

@@ -25,13 +25,13 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -510,9 +510,56 @@ public class CcToolchainTest extends BuildViewTestCase {
 
     assertDoesNotContainSublist(
         CppHelper.getCompilerOptions(
-            getConfiguration(lib).getFragment(CppConfiguration.class), toolchain),
+            getConfiguration(lib).getFragment(CppConfiguration.class),
+            toolchain,
+            Collections.emptyList()),
         "--param",
         "df-double-quote-threshold-factor=0");
+  }
+
+  @Test
+  public void testFeatures() throws Exception {
+    writeDummyCcToolchain();
+
+    String originalCrosstool = analysisMock.ccSupport().readCrosstoolFile();
+    getAnalysisMock()
+        .ccSupport()
+        .setupCrosstoolWithRelease(
+            mockToolsConfig, MockCcSupport.addOptionalDefaultCoptsToCrosstool(originalCrosstool));
+
+    scratch.file("lib/BUILD", "cc_library(", "   name = 'lib',", "   srcs = ['a.cc'],", ")");
+
+    useConfiguration();
+    ConfiguredTarget lib = getConfiguredTarget("//lib");
+    CcToolchainProvider toolchain =
+        CppHelper.getToolchainUsingDefaultCcToolchainAttribute(getRuleContext(lib));
+
+    String defaultSettingFalse = "crosstool_default_false";
+    List<String> copts =
+        CppHelper.getCompilerOptions(
+            getConfiguration(lib).getFragment(CppConfiguration.class),
+            toolchain,
+            Collections.emptyList());
+    assertThat(copts).doesNotContain("-DDEFAULT_FALSE");
+    copts =
+        CppHelper.getCompilerOptions(
+            getConfiguration(lib).getFragment(CppConfiguration.class),
+            toolchain,
+            ImmutableList.of(defaultSettingFalse));
+    assertThat(copts).contains("-DDEFAULT_FALSE");
+
+    useConfiguration("--copt", "-DCOPT");
+    lib = getConfiguredTarget("//lib");
+    toolchain = CppHelper.getToolchainUsingDefaultCcToolchainAttribute(getRuleContext(lib));
+
+    copts =
+        CppHelper.getCompilerOptions(
+            getConfiguration(lib).getFragment(CppConfiguration.class),
+            toolchain,
+            ImmutableList.of(defaultSettingFalse));
+    assertThat(copts).contains("-DDEFAULT_FALSE");
+    assertThat(copts).contains("-DCOPT");
+    assertThat(copts.indexOf("-DDEFAULT_FALSE")).isLessThan(copts.indexOf("-DCOPT"));
   }
 
   @Test
@@ -527,7 +574,9 @@ public class CcToolchainTest extends BuildViewTestCase {
     List<String> expected = new ArrayList<>();
     expected.addAll(
         CppHelper.getCompilerOptions(
-            getConfiguration(lib).getFragment(CppConfiguration.class), toolchain));
+            getConfiguration(lib).getFragment(CppConfiguration.class),
+            toolchain,
+            Collections.emptyList()));
     expected.add("-Dfoo");
 
     useConfiguration("--copt", "-Dfoo");
@@ -536,7 +585,9 @@ public class CcToolchainTest extends BuildViewTestCase {
     assertThat(
             ImmutableList.copyOf(
                 CppHelper.getCompilerOptions(
-                    getConfiguration(lib).getFragment(CppConfiguration.class), toolchain)))
+                    getConfiguration(lib).getFragment(CppConfiguration.class),
+                    toolchain,
+                    Collections.emptyList())))
         .isEqualTo(ImmutableList.copyOf(expected));
   }
 
@@ -861,33 +912,5 @@ public class CcToolchainTest extends BuildViewTestCase {
         (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
 
     assertThat(toolchainProvider.supportsDynamicLinker()).isTrue();
-  }
-
-  @Test
-  public void testStaticLinkCppRuntimesSetViaSupportsEmbeddedRuntimesUnset() throws Exception {
-    writeDummyCcToolchain();
-    getAnalysisMock().ccSupport().setupCrosstool(mockToolsConfig);
-    useConfiguration();
-    ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider =
-        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
-    FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeatures(getRuleContext(target), toolchainProvider);
-    assertThat(toolchainProvider.supportsEmbeddedRuntimes())
-        .isEqualTo(featureConfiguration.isEnabled(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES));
-  }
-
-  @Test
-  public void testStaticLinkCppRuntimesSetViaSupportsEmbeddedRuntimesFalse() throws Exception {
-    writeDummyCcToolchain();
-    getAnalysisMock().ccSupport().setupCrosstoolWithEmbeddedRuntimes(mockToolsConfig);
-    useConfiguration();
-    ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider =
-        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
-    FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeatures(getRuleContext(target), toolchainProvider);
-    assertThat(toolchainProvider.supportsEmbeddedRuntimes())
-        .isEqualTo(featureConfiguration.isEnabled(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES));
   }
 }
