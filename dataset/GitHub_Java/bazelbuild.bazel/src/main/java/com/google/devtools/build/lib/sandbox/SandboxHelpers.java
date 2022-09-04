@@ -22,10 +22,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.CommandLines.ParamFileActionInput;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput.EmptyActionInput;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
+import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingResult;
@@ -38,24 +40,6 @@ import java.util.TreeMap;
 
 /** Helper methods that are shared by the different sandboxing strategies in this package. */
 public final class SandboxHelpers {
-  /** Wrapper class for the inputs of a sandbox. */
-  public static final class SandboxInputs {
-    private final Map<PathFragment, Path> files;
-    private final Map<PathFragment, PathFragment> symlinks;
-
-    public SandboxInputs(Map<PathFragment, Path> files, Map<PathFragment, PathFragment> symlinks) {
-      this.files = files;
-      this.symlinks = symlinks;
-    }
-
-    public Map<PathFragment, Path> getFiles() {
-      return files;
-    }
-
-    public Map<PathFragment, PathFragment> getSymlinks() {
-      return symlinks;
-    }
-  }
 
   /**
    * Returns the inputs of a Spawn as a map of PathFragments relative to an execRoot to paths in the
@@ -65,7 +49,7 @@ public final class SandboxHelpers {
    *
    * @throws IOException If any files could not be written.
    */
-  public static SandboxInputs processInputFiles(
+  public static Map<PathFragment, Path> processInputFiles(
       Spawn spawn,
       SpawnExecutionContext context,
       Path execRoot,
@@ -86,7 +70,7 @@ public final class SandboxHelpers {
    *
    * @throws IOException If any files could not be written.
    */
-  private static SandboxInputs processInputFiles(
+  private static Map<PathFragment, Path> processInputFiles(
       Map<PathFragment, ActionInput> inputMap,
       Spawn spawn,
       ArtifactExpander artifactExpander,
@@ -110,8 +94,6 @@ public final class SandboxHelpers {
     }
 
     Map<PathFragment, Path> inputFiles = new TreeMap<>();
-    Map<PathFragment, PathFragment> inputSymlinks = new TreeMap<>();
-
     for (Map.Entry<PathFragment, ActionInput> e : inputMap.entrySet()) {
       PathFragment pathFragment = e.getKey();
       ActionInput actionInput = e.getValue();
@@ -128,21 +110,13 @@ public final class SandboxHelpers {
           Preconditions.checkState(actionInput instanceof EmptyActionInput);
         }
       }
-
-      if (actionInput.isSymlink()) {
-        Path inputPath = execRoot.getRelative(actionInput.getExecPath());
-        // TODO(lberki): This does I/O. This method already throws IOException, so I suppose that is
-        // A-OK?
-        inputSymlinks.put(pathFragment, inputPath.readSymbolicLink());
-      } else {
-        Path inputPath =
-            actionInput instanceof EmptyActionInput
-                ? null
-                : execRoot.getRelative(actionInput.getExecPath());
-        inputFiles.put(pathFragment, inputPath);
-      }
+      Path inputPath =
+          actionInput instanceof EmptyActionInput
+              ? null
+              : execRoot.getRelative(actionInput.getExecPath());
+      inputFiles.put(pathFragment, inputPath);
     }
-    return new SandboxInputs(inputFiles, inputSymlinks);
+    return inputFiles;
   }
 
   /** The file and directory outputs of a sandboxed spawn. */
@@ -174,8 +148,7 @@ public final class SandboxHelpers {
 
   /**
    * Returns true if the build options are set in a way that requires network access for all
-   * actions. This is separate from {@link
-   * com.google.devtools.build.lib.actions.Spawns#requiresNetwork} to avoid having to keep a
+   * actions. This is separate from {@link Spawns#requiresNetwork} to avoid having to keep a
    * reference to the full set of build options (and also for performance, since this only needs to
    * be checked once-per-build).
    */
@@ -187,5 +160,30 @@ public final class SandboxHelpers {
         .getOptions(TestConfiguration.TestOptions.class)
         .testArguments
         .contains("--wrapper_script_flag=--debug");
+  }
+
+  /**
+   * Waits for a process to terminate.
+   *
+   * @param process the process to wait for
+   * @return the exit code of the terminated process
+   */
+  static int waitForProcess(Subprocess process) {
+    boolean interrupted = false;
+    try {
+      while (true) {
+        try {
+          process.waitFor();
+          break;
+        } catch (InterruptedException ie) {
+          interrupted = true;
+        }
+      }
+    } finally {
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
+    }
+    return process.exitValue();
   }
 }
