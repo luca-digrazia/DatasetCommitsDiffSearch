@@ -119,10 +119,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
     private String sanitizeName(String name) {
         if (name.startsWith("/")) {
-            name = name.substring(1);
-        }
-        if (name.endsWith("/")) {
-            name = name.substring(0, name.length() - 1);
+            return name.substring(1);
         }
         return name;
     }
@@ -148,13 +145,19 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
     }
 
     @Override
-    public Enumeration<URL> getResources(String unsanitisedName) throws IOException {
+    public Enumeration<URL> getResources(String nm) throws IOException {
         ClassLoaderState state = getState();
-        String name = sanitizeName(unsanitisedName);
+        String name = sanitizeName(nm);
         //for resources banned means that we don't delegate to the parent, as there can be multiple resources
         //for single resources we still respect this
         boolean banned = state.bannedResources.contains(name);
         Set<URL> resources = new LinkedHashSet<>();
+        //ClassPathElement[] providers = loadableResources.get(name);
+        //if (providers != null) {
+        //    for (ClassPathElement element : providers) {
+        //        resources.add(element.getResource(nm).getUrl());
+        //    }
+        //}
 
         //this is a big of a hack, but is necessary to prevent service leakage
         //in some situations (looking at you gradle) the parent can contain the same
@@ -176,17 +179,15 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
                 //ignore
             }
         }
-        //TODO: in theory resources could have been added in dev mode
-        //but I don't thing this really matters for this code path
-        ClassPathElement[] providers = state.loadableResources.get(name);
-        if (providers != null) {
-            for (ClassPathElement element : providers) {
-                resources.add(element.getResource(name).getUrl());
+        for (ClassPathElement i : elements) {
+            ClassPathResource res = i.getResource(nm);
+            if (res != null) {
+                resources.add(res.getUrl());
             }
         }
         if (!banned) {
             if (resources.isEmpty() || aggregateParentResources) {
-                Enumeration<URL> res = parent.getResources(unsanitisedName);
+                Enumeration<URL> res = parent.getResources(nm);
                 while (res.hasMoreElements()) {
                     resources.add(res.nextElement());
                 }
@@ -252,53 +253,45 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
     }
 
     @Override
-    public URL getResource(String unsantisedName) {
-        String name = sanitizeName(unsantisedName);
+    public URL getResource(String nm) {
+        String name = sanitizeName(nm);
         ClassLoaderState state = getState();
         if (state.bannedResources.contains(name)) {
             return null;
         }
-        //TODO: because of dev mode we iterate, to see if any resources were added
-        //not for .class files though, adding them causes a restart
-        //this is very important for bytebuddy performance
-        if (name.endsWith(".class")) {
-            ClassPathElement[] providers = state.loadableResources.get(name);
-            if (providers != null) {
-                return providers[0].getResource(name).getUrl();
-            }
-        } else {
-            for (ClassPathElement i : elements) {
-                ClassPathResource res = i.getResource(name);
-                if (res != null) {
-                    return res.getUrl();
-                }
+        //        ClassPathElement[] providers = loadableResources.get(name);
+        //        if (providers != null) {
+        //            return providers[0].getResource(nm).getUrl();
+        //        }
+        //TODO: because of dev mode we can't use the fast path her, we need to iterate
+        for (ClassPathElement i : elements) {
+            ClassPathResource res = i.getResource(name);
+            if (res != null) {
+                return res.getUrl();
             }
         }
-        return parent.getResource(unsantisedName);
+        return parent.getResource(nm);
     }
 
     @Override
-    public InputStream getResourceAsStream(String unsanitisedName) {
-        String name = sanitizeName(unsanitisedName);
+    public InputStream getResourceAsStream(String nm) {
+        String name = sanitizeName(nm);
         ClassLoaderState state = getState();
         if (state.bannedResources.contains(name)) {
             return null;
         }
-        //dev mode may have added some files, so we iterate to check, but not for classes
-        if (name.endsWith(".class")) {
-            ClassPathElement[] providers = state.loadableResources.get(name);
-            if (providers != null) {
-                return new ByteArrayInputStream(providers[0].getResource(name).getData());
-            }
-        } else {
-            for (ClassPathElement i : elements) {
-                ClassPathResource res = i.getResource(name);
-                if (res != null) {
-                    return new ByteArrayInputStream(res.getData());
-                }
+        //        ClassPathElement[] providers = loadableResources.get(name);
+        //        if (providers != null) {
+        //            return new ByteArrayInputStream(providers[0].getResource(nm).getData());
+        //        }
+        //TODO: because of dev mode we can't use the fast path her, we need to iterate
+        for (ClassPathElement i : elements) {
+            ClassPathResource res = i.getResource(name);
+            if (res != null) {
+                return new ByteArrayInputStream(res.getData());
             }
         }
-        return parent.getResourceAsStream(unsanitisedName);
+        return parent.getResourceAsStream(nm);
     }
 
     /**
