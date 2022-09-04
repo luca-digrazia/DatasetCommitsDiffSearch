@@ -1,8 +1,8 @@
 package com.yammer.dropwizard.config;
 
-import ch.qos.logback.classic.Level;
 import com.google.common.collect.ImmutableMap;
-import com.yammer.dropwizard.validation.ValidationMethod;
+import com.yammer.dropwizard.util.Size;
+import org.apache.log4j.Level;
 import org.codehaus.jackson.annotate.JsonProperty;
 
 import javax.validation.Valid;
@@ -10,12 +10,9 @@ import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
-import java.util.TimeZone;
 
 @SuppressWarnings({"FieldCanBeLocal", "FieldMayBeFinal"})
 public class LoggingConfiguration {
-    static final TimeZone UTC = TimeZone.getTimeZone("UTC");
-
     public static class ConsoleConfiguration {
         @JsonProperty
         private boolean enabled = true;
@@ -24,20 +21,12 @@ public class LoggingConfiguration {
         @JsonProperty
         private Level threshold = Level.ALL;
 
-        @NotNull
-        @JsonProperty
-        private TimeZone timeZone = UTC;
-
         public boolean isEnabled() {
             return enabled;
         }
 
         public Level getThreshold() {
             return threshold;
-        }
-
-        public TimeZone getTimeZone() {
-            return timeZone;
         }
     }
 
@@ -50,26 +39,18 @@ public class LoggingConfiguration {
         @JsonProperty
         private Level threshold = Level.ALL;
 
+        @NotNull
         @JsonProperty
-        private String currentLogFilename;
+        private String filenamePattern = "./logs/example.log";
 
+        @NotNull
         @JsonProperty
-        private String archivedLogFilenamePattern;
+        private Size maxFileSize = Size.megabytes(50);
 
         @Min(1)
         @Max(50)
         @JsonProperty
-        private int archivedFileCount = 5;
-
-        @NotNull
-        @JsonProperty
-        private TimeZone timeZone = UTC;
-
-        @ValidationMethod(message = "must have logging.file.currentLogFilename and " +
-                "logging.file.archivedLogFilenamePattern if logging.file.enabled is true")
-        public boolean isConfigured() {
-            return !enabled || ((currentLogFilename != null) && (archivedLogFilenamePattern != null));
-        }
+        private int retainedFileCount = 5;
 
         public boolean isEnabled() {
             return enabled;
@@ -79,20 +60,16 @@ public class LoggingConfiguration {
             return threshold;
         }
 
-        public String getCurrentLogFilename() {
-            return currentLogFilename;
+        public String getFilenamePattern() {
+            return filenamePattern;
         }
 
-        public int getArchivedFileCount() {
-            return archivedFileCount;
+        public Size getMaxFileSize() {
+            return maxFileSize;
         }
 
-        public String getArchivedLogFilenamePattern() {
-            return archivedLogFilenamePattern;
-        }
-
-        public TimeZone getTimeZone() {
-            return timeZone;
+        public int getRetainedFileCount() {
+            return retainedFileCount;
         }
     }
 
