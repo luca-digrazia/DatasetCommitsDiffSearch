@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -84,7 +85,7 @@ import javax.annotation.Nullable;
  *
  * <p>Aspects are also not supported, but probably should be in some fashion.
  */
-public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQueryEnvironment<T> {
+abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQueryEnvironment<T> {
   protected final BuildConfiguration defaultTargetConfiguration;
   protected final BuildConfiguration hostConfiguration;
   private final String parserPrefix;
@@ -132,16 +133,13 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
     this.accessor = targetAccessor;
   }
 
-  public abstract ImmutableList<NamedThreadSafeOutputFormatterCallback<T>>
-      getDefaultOutputFormatters(
-          TargetAccessor<T> accessor,
-          Reporter reporter,
-          SkyframeExecutor skyframeExecutor,
-          BuildConfiguration hostConfiguration,
-          @Nullable RuleTransitionFactory trimmingTransitionFactory,
-          PackageManager packageManager);
-
-  public abstract String getOutputFormat();
+  public abstract ImmutableList<CqueryThreadsafeCallback> getDefaultOutputFormatters(
+      TargetAccessor<ConfiguredTarget> accessor,
+      Reporter reporter,
+      SkyframeExecutor skyframeExecutor,
+      BuildConfiguration hostConfiguration,
+      @Nullable RuleTransitionFactory trimmingTransitionFactory,
+      PackageManager packageManager);
 
   protected abstract KeyExtractor<T, ConfiguredTargetKey> getConfiguredTargetKeyExtractor();
 

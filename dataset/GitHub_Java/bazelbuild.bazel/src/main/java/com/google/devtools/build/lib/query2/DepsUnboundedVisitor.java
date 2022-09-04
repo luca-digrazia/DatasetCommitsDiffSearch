@@ -47,6 +47,7 @@ class DepsUnboundedVisitor extends AbstractEdgeVisitor<SkyKey> {
   private final Uniquifier<SkyKey> validDepUniquifier;
 
   private final boolean depsNeedFiltering;
+  private final Callback<Target> errorReporter;
   private final QueryExpressionContext<Target> context;
 
   DepsUnboundedVisitor(
@@ -55,10 +56,12 @@ class DepsUnboundedVisitor extends AbstractEdgeVisitor<SkyKey> {
       Callback<Target> callback,
       MultisetSemaphore<PackageIdentifier> packageSemaphore,
       boolean depsNeedFiltering,
+      Callback<Target> errorReporter,
       QueryExpressionContext<Target> context) {
     super(env, callback, packageSemaphore);
     this.validDepUniquifier = validDepUniquifier;
     this.depsNeedFiltering = depsNeedFiltering;
+    this.errorReporter = errorReporter;
     this.context = context;
   }
 
@@ -74,6 +77,7 @@ class DepsUnboundedVisitor extends AbstractEdgeVisitor<SkyKey> {
     private final Callback<Target> callback;
     private final MultisetSemaphore<PackageIdentifier> packageSemaphore;
     private final boolean depsNeedFiltering;
+    private final Callback<Target> errorReporter;
     private final QueryExpressionContext<Target> context;
 
     Factory(
@@ -81,12 +85,14 @@ class DepsUnboundedVisitor extends AbstractEdgeVisitor<SkyKey> {
         Callback<Target> callback,
         MultisetSemaphore<PackageIdentifier> packageSemaphore,
         boolean depsNeedFiltering,
+        Callback<Target> errorReporter,
         QueryExpressionContext<Target> context) {
       this.env = env;
       this.validDepUniquifier = env.createSkyKeyUniquifier();
       this.callback = callback;
       this.packageSemaphore = packageSemaphore;
       this.depsNeedFiltering = depsNeedFiltering;
+      this.errorReporter = errorReporter;
       this.context = context;
     }
 
@@ -98,6 +104,7 @@ class DepsUnboundedVisitor extends AbstractEdgeVisitor<SkyKey> {
           callback,
           packageSemaphore,
           depsNeedFiltering,
+          errorReporter,
           context);
     }
   }
@@ -147,6 +154,13 @@ class DepsUnboundedVisitor extends AbstractEdgeVisitor<SkyKey> {
   @Override
   protected Iterable<SkyKey> preprocessInitialVisit(Iterable<SkyKey> keys) {
     return keys;
+  }
+
+  @Override
+  protected void processPartialResults(
+      Iterable<SkyKey> keysToUseForResult, Callback<Target> callback)
+      throws QueryException, InterruptedException {
+    errorReporter.process(processResultsAndReturnTargets(keysToUseForResult, callback));
   }
 
   @Override
