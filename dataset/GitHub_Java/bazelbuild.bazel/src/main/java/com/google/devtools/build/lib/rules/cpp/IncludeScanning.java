@@ -49,7 +49,7 @@ public class IncludeScanning implements IncludeProcessing {
 
   @Nullable
   @Override
-  public ListenableFuture<List<Artifact>> determineAdditionalInputs(
+  public ListenableFuture<Iterable<Artifact>> determineAdditionalInputs(
       @Nullable IncludeScannerSupplier includeScannerSupplier,
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
@@ -108,9 +108,9 @@ public class IncludeScanning implements IncludeProcessing {
               action.getGrepIncludes());
       return Futures.transformAsync(
           future,
-          new AsyncFunction<Object, List<Artifact>>() {
+          new AsyncFunction<Object, Iterable<Artifact>>() {
             @Override
-            public ListenableFuture<List<Artifact>> apply(Object input) throws Exception {
+            public ListenableFuture<Iterable<Artifact>> apply(Object input) throws Exception {
               return Futures.immediateFuture(
                   collect(actionExecutionContext, includes, absoluteBuiltInIncludeDirs));
             }
@@ -127,7 +127,7 @@ public class IncludeScanning implements IncludeProcessing {
       List<PathFragment> absoluteBuiltInIncludeDirs)
       throws ExecException {
     // Collect inputs and output
-    List<Artifact> inputs = new ArrayList<>(includes.size());
+    ImmutableList.Builder<Artifact> inputs = ImmutableList.builderWithExpectedSize(includes.size());
     for (Artifact included : includes) {
       // Check for absolute includes -- we assign the file system root as
       // the root path for such includes
@@ -150,6 +150,6 @@ public class IncludeScanning implements IncludeProcessing {
         inputs.add(included);
       }
     }
-    return inputs;
+    return inputs.build();
   }
 }
