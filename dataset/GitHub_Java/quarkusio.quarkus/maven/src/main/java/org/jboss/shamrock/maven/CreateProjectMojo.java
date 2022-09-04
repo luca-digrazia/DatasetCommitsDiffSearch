@@ -26,7 +26,6 @@ import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
-import org.fusesource.jansi.Ansi;
 import org.jboss.shamrock.maven.components.Prompter;
 import org.jboss.shamrock.maven.components.SetupTemplates;
 import org.jboss.shamrock.maven.utilities.MojoUtils;
@@ -37,7 +36,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
 
-import static org.fusesource.jansi.Ansi.ansi;
 import static org.jboss.shamrock.maven.components.dependencies.Extensions.addExtensions;
 import static org.jboss.shamrock.maven.utilities.MojoUtils.configuration;
 import static org.jboss.shamrock.maven.utilities.MojoUtils.plugin;
@@ -108,9 +106,12 @@ public class CreateProjectMojo extends AbstractMojo {
         createDirectories();
         templates.generate(project, model, root, path, className, getLog());
         Optional<Plugin> maybe = MojoUtils.hasPlugin(project, PLUGIN_KEY);
-
         if (maybe.isPresent()) {
-            printUserInstructions(pomFile);
+            getLog().info("========================================================================================");
+            getLog().info("Your new application has been created in " + pomFile.getAbsolutePath());
+            getLog().info("Navigate into this directory and launch your application with `mvn compile shamrock:dev`");
+            getLog().info("Your application will be accessible on `http://localhost:8080`");
+            getLog().info("========================================================================================");
             return;
         }
 
@@ -120,16 +121,6 @@ public class CreateProjectMojo extends AbstractMojo {
         addExtensions(model, extensions, getLog());
         addNativeProfile(model);
         save(pomFile, model);
-    }
-
-    private void printUserInstructions(File pomFile) {
-        getLog().info("");
-        getLog().info("========================================================================================");
-        getLog().info(ansi().a("Your new application has been created in ").bold().a(pomFile.getAbsolutePath()).boldOff().toString());
-        getLog().info(ansi().a("Navigate into this directory and launch your application with ").bold().fg(Ansi.Color.CYAN).a("mvn compile shamrock:dev").reset().toString());
-        getLog().info(ansi().a("Your application will be accessible on ").bold().fg(Ansi.Color.CYAN).a("http://localhost:8080").reset().toString());
-        getLog().info("========================================================================================");
-        getLog().info("");
     }
 
     private void addNativeProfile(Model model) {
@@ -165,7 +156,7 @@ public class CreateProjectMojo extends AbstractMojo {
 
     private void addVersionProperty(Model model) {
         //Set  a property at maven project level for Shamrock maven plugin versions
-        shamrockVersion = shamrockVersion == null ? MojoUtils.get(VERSION_PROP) : shamrockVersion;
+        shamrockVersion = shamrockVersion == null ? MojoUtils.getVersion(VERSION_PROP) : shamrockVersion;
         model.getProperties().putIfAbsent(PLUGIN_VERSION_PROPERTY_NAME, shamrockVersion);
     }
 
@@ -212,7 +203,7 @@ public class CreateProjectMojo extends AbstractMojo {
                 // Ask for maven version if not set
                 if (shamrockVersion == null) {
                     shamrockVersion = prompter.promptWithDefaultValue("Set the Shamrock version",
-                            MojoUtils.get(VERSION_PROP));
+                            MojoUtils.getVersion(VERSION_PROP));
                 }
 
                 if (className == null) {
@@ -260,8 +251,7 @@ public class CreateProjectMojo extends AbstractMojo {
             context.put("mProjectGroupId", projectGroupId);
             context.put("mProjectArtifactId", projectArtifactId);
             context.put("mProjectVersion", projectVersion);
-            context.put("shamrockVersion", shamrockVersion != null ? shamrockVersion : MojoUtils.get(VERSION_PROP));
-            context.put("docRoot", MojoUtils.get("doc-root"));
+            context.put("shamrockVersion", shamrockVersion != null ? shamrockVersion : MojoUtils.getVersion(VERSION_PROP));
 
             context.put("className", className);
             context.put("root", root);
