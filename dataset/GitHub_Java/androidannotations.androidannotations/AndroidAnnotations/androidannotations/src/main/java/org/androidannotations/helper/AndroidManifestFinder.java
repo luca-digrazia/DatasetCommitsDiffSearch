@@ -40,7 +40,7 @@ import org.w3c.dom.NodeList;
 
 public class AndroidManifestFinder {
 
-	public static final String ANDROID_MANIFEST_FILE_OPTION = "androidManifestFile";
+	private static final String ANDROID_MANIFEST_FILE_OPTION = "androidManifestFile";
 
 	private static final int MAX_PARENTS_FROM_SOURCE_FOLDER = 10;
 
