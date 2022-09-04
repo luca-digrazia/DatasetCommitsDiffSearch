@@ -19,9 +19,6 @@
 
 package org.graylog2.bindings;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.jaxrs.base.JsonMappingExceptionMapper;
-import com.fasterxml.jackson.jaxrs.base.JsonParseExceptionMapper;
 import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
 import com.google.inject.TypeLiteral;
@@ -33,12 +30,12 @@ import org.graylog2.Configuration;
 import org.graylog2.alerts.AlertSender;
 import org.graylog2.alerts.FormattedEmailAlertSender;
 import org.graylog2.bindings.providers.*;
+import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
+import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.filters.FilterService;
-import org.graylog2.filters.FilterServiceImpl;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.MessageGatewayImpl;
 import org.graylog2.indexer.cluster.Cluster;
@@ -49,16 +46,14 @@ import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.inputs.BasicCache;
 import org.graylog2.inputs.InputCache;
 import org.graylog2.inputs.OutputCache;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
+import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.plugin.PluginMetaData;
 import org.graylog2.plugin.RulesEngine;
 import org.graylog2.plugin.indexer.MessageGateway;
-import org.graylog2.rest.NotFoundExceptionMapper;
 import org.graylog2.rest.RestAccessLogFilter;
-import org.graylog2.rest.ValidationExceptionMapper;
 import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.ldap.LdapConnector;
@@ -75,7 +70,6 @@ import org.graylog2.system.shutdown.GracefulShutdown;
 
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
-import javax.ws.rs.ext.ExceptionMapper;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -104,16 +98,10 @@ public class ServerBindings extends AbstractModule {
     protected void configure() {
         bindInterfaces();
         bindSingletons();
-        bindProviders();
         bindFactoryModules();
         bindDynamicFeatures();
         bindContainerResponseFilters();
-        bindExceptionMappers();
         bindPluginMetaData();
-    }
-
-    private void bindProviders() {
-        bind(ObjectMapper.class).toProvider(ServerObjectMapperProvider.class);
     }
 
     private void bindFactoryModules() {
@@ -134,6 +122,7 @@ public class ServerBindings extends AbstractModule {
         bind(BaseConfiguration.class).toInstance(configuration);
 
         bind(MongoConnection.class).toInstance(mongoConnection);
+        bind(OutputRegistry.class).toInstance(new OutputRegistry());
 
         ServerStatus serverStatus = new ServerStatus(configuration);
         serverStatus.addCapability(ServerStatus.Capability.SERVER);
@@ -152,9 +141,6 @@ public class ServerBindings extends AbstractModule {
         bind(SystemJobFactory.class).toProvider(SystemJobFactoryProvider.class);
         bind(AsyncHttpClient.class).toProvider(AsyncHttpClientProvider.class);
         bind(GracefulShutdown.class).in(Scopes.SINGLETON);
-
-        bind(InputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
-        bind(OutputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
     }
 
     private void bindInterfaces() {
@@ -162,7 +148,6 @@ public class ServerBindings extends AbstractModule {
         bind(SecurityContextFactory.class).to(ShiroSecurityContextFactory.class);
         bind(AlertSender.class).to(FormattedEmailAlertSender.class);
         bind(StreamRouter.class);
-        bind(FilterService.class).to(FilterServiceImpl.class).in(Scopes.SINGLETON);
     }
 
     private MongoConnection getMongoConnection() {
@@ -180,15 +165,6 @@ public class ServerBindings extends AbstractModule {
         TypeLiteral<Class<? extends ContainerResponseFilter>> type = new TypeLiteral<Class<? extends ContainerResponseFilter>>(){};
         Multibinder<Class<? extends ContainerResponseFilter>> setBinder = Multibinder.newSetBinder(binder(), type);
         setBinder.addBinding().toInstance(RestAccessLogFilter.class);
-    }
-
-    private void bindExceptionMappers() {
-        TypeLiteral<Class<? extends ExceptionMapper>> type = new TypeLiteral<Class<? extends ExceptionMapper>>(){};
-        Multibinder<Class<? extends ExceptionMapper>> setBinder = Multibinder.newSetBinder(binder(), type);
-        setBinder.addBinding().toInstance(NotFoundExceptionMapper.class);
-        setBinder.addBinding().toInstance(ValidationExceptionMapper.class);
-        setBinder.addBinding().toInstance(JsonParseExceptionMapper.class);
-        setBinder.addBinding().toInstance(JsonMappingExceptionMapper.class);
     }
 
     private void bindPluginMetaData() {
