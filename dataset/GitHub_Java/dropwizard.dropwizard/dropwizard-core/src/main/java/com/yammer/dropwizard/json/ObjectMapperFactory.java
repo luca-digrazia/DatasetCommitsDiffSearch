@@ -17,7 +17,6 @@ import com.fasterxml.jackson.databind.ser.FilterProvider;
 import com.fasterxml.jackson.databind.ser.SerializerFactory;
 import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.fasterxml.jackson.datatype.guava.GuavaModule;
-import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
@@ -90,7 +89,6 @@ public class ObjectMapperFactory {
         registerModule(new GuavaModule());
         registerModule(new LogbackModule());
         registerModule(new GuavaExtrasModule());
-        registerModule(new JodaModule());
     }
 
     public AnnotationIntrospector getAnnotationIntrospector() {
@@ -489,26 +487,8 @@ public class ObjectMapperFactory {
      * @return a configured {@link ObjectMapper} instance
      */
     public ObjectMapper build(JsonFactory factory) {
-        return configure(new ObjectMapper(factory));
-    }
+        final ObjectMapper mapper = new ObjectMapper(factory);
 
-    /**
-     * Builds a new {@link ObjectMapper} instance with a default {@link JsonFactory} instance.
-     *
-     * @return a configured {@link ObjectMapper} instance
-     */
-    public ObjectMapper build() {
-        return build(new JsonFactory());
-    }
-
-    /**
-     * Configures the given {@link ObjectMapper} instance according to the configuration of this
-     * {@code ObjectMapperFactory}.
-     *
-     * @param mapper the {@link ObjectMapper} to configure.
-     * @return the configured {@link ObjectMapper}
-     */
-    public ObjectMapper configure(ObjectMapper mapper) {
         for (Module module : modules) {
             mapper.registerModule(module);
         }
@@ -611,6 +591,15 @@ public class ObjectMapperFactory {
 
 
         return mapper;
+    }
+
+    /**
+     * Builds a new {@link ObjectMapper} instance with a default {@link JsonFactory} instance.
+     *
+     * @return a configured {@link ObjectMapper} instance
+     */
+    public ObjectMapper build() {
+        return build(new JsonFactory());
     }
 
     /**
