@@ -28,7 +28,7 @@ import javax.ws.rs.core.Response;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 public class FreemarkerViewRendererTest extends JerseyTest {
     static {
@@ -92,40 +92,52 @@ public class FreemarkerViewRendererTest extends JerseyTest {
     }
 
     @Test
-    public void rendersViewsWithAbsoluteTemplatePaths() {
+    public void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
         final String response = target("/test/absolute")
                 .request().get(String.class);
         assertThat(response).isEqualTo("Woop woop. yay\n");
     }
 
     @Test
-    public void rendersViewsWithRelativeTemplatePaths() {
+    public void rendersViewsWithRelativeTemplatePaths() throws Exception {
         final String response = target("/test/relative")
                 .request().get(String.class);
         assertThat(response).isEqualTo("Ok.\n");
     }
 
     @Test
-    public void returnsA500ForViewsWithBadTemplatePaths() {
-        assertThatExceptionOfType(WebApplicationException.class)
-            .isThrownBy(() -> target("/test/bad").request().get(String.class))
-            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(500))
-            .satisfies(e -> assertThat(e.getResponse().readEntity(String.class))
-                .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG));
+    public void returnsA500ForViewsWithBadTemplatePaths() throws Exception {
+        try {
+            target("/test/bad")
+                    .request().get(String.class);
+
+            failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
+            assertThat(e.getResponse().getStatus())
+                    .isEqualTo(500);
+
+            assertThat(e.getResponse().readEntity(String.class))
+                .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG);
+        }
     }
 
     @Test
     @Disabled("Flaky on JUnit5")
-    public void returnsA500ForViewsThatCantCompile() {
-        assertThatExceptionOfType(WebApplicationException.class)
-            .isThrownBy(() -> target("/test/error").request().get(String.class))
-            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(500))
-            .satisfies(e -> assertThat(e.getResponse().readEntity(String.class))
-                .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG));
+    public void returnsA500ForViewsThatCantCompile() throws Exception {
+        try {
+            target("/test/error").request().get(String.class);
+            failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
+            assertThat(e.getResponse().getStatus())
+                    .isEqualTo(500);
+
+            assertThat(e.getResponse().readEntity(String.class))
+                    .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG);
+        }
     }
 
     @Test
-    public void rendersViewsUsingUnsafeInputWithAutoEscapingEnabled() {
+    public void rendersViewsUsingUnsafeInputWithAutoEscapingEnabled() throws Exception {
         final String unsafe = "<script>alert(\"hello\")</script>";
         final Response response = target("/test/auto-escaping")
             .request().post(Entity.form(new Form("input", unsafe)));
