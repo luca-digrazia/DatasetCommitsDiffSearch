@@ -70,7 +70,6 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
-import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
@@ -858,7 +857,7 @@ public abstract class CompilationSupport {
         extraLinkArgs,
         extraLinkInputs,
         dsymOutputType,
-        CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext));
+        CppHelper.getToolchain(ruleContext, ":cc_toolchain"));
   }
 
   /**
@@ -1466,10 +1465,8 @@ public abstract class CompilationSupport {
   @Nullable
   private CcToolchainProvider maybeGetCcToolchain() {
     // TODO(rduan): Remove this check once all rules are using the crosstool support.
-    if (ruleContext
-        .attributes()
-        .has(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, BuildType.LABEL)) {
-      return CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
+    if (ruleContext.attributes().has(":cc_toolchain", BuildType.LABEL)) {
+      return CppHelper.getToolchain(ruleContext, ":cc_toolchain");
     } else {
       return null;
     }
@@ -1478,10 +1475,8 @@ public abstract class CompilationSupport {
   @Nullable
   private FdoSupportProvider maybeGetFdoSupport() {
     // TODO(rduan): Remove this check once all rules are using the crosstool support.
-    if (ruleContext
-        .attributes()
-        .has(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, BuildType.LABEL)) {
-      return CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext);
+    if (ruleContext.attributes().has(":cc_toolchain", BuildType.LABEL)) {
+      return CppHelper.getFdoSupport(ruleContext, ":cc_toolchain");
     } else {
       return null;
     }
