@@ -26,10 +26,7 @@ public class VerboseCsrfProtectionFilter extends CsrfProtectionFilter {
     @Override
     public void filter(ContainerRequestContext rc) throws IOException {
         try {
-            // Backward compatibility for Sidecars < 0.1.7
-            if (!rc.getHeaders().containsKey("X-Graylog-Collector-Version")) {
-                super.filter(rc);
-            }
+            super.filter(rc);
         } catch (BadRequestException badRequestException) {
             throw new BadRequestException(
                     "CSRF protection header is missing. Please add a \"" + HEADER_NAME + "\" header to your request.",
