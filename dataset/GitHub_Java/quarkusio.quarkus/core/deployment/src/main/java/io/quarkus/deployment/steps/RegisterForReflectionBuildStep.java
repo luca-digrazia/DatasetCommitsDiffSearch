@@ -20,10 +20,13 @@ public class RegisterForReflectionBuildStep {
     private static final Logger log = Logger.getLogger(RegisterForReflectionBuildStep.class);
 
     @Inject
+    BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
+
+    @Inject
     CombinedIndexBuildItem combinedIndexBuildItem;
 
     @BuildStep
-    public void build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+    public void build() {
         for (AnnotationInstance i : combinedIndexBuildItem.getIndex()
                 .getAnnotations(DotName.createSimple(RegisterForReflection.class.getName()))) {
 
@@ -37,21 +40,21 @@ public class RegisterForReflectionBuildStep {
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
             if (targetsValue == null && classNamesValue == null) {
                 ClassInfo classInfo = i.target().asClass();
-                registerClass(classLoader, classInfo.name().toString(), methods, fields, ignoreNested, reflectiveClass);
+                registerClass(classLoader, classInfo.name().toString(), methods, fields, ignoreNested);
                 continue;
             }
 
             if (targetsValue != null) {
                 Type[] targets = targetsValue.asClassArray();
                 for (Type type : targets) {
-                    registerClass(classLoader, type.name().toString(), methods, fields, ignoreNested, reflectiveClass);
+                    registerClass(classLoader, type.name().toString(), methods, fields, ignoreNested);
                 }
             }
 
             if (classNamesValue != null) {
                 String[] classNames = classNamesValue.asStringArray();
                 for (String className : classNames) {
-                    registerClass(classLoader, className, methods, fields, ignoreNested, reflectiveClass);
+                    registerClass(classLoader, className, methods, fields, ignoreNested);
                 }
             }
         }
@@ -61,7 +64,7 @@ public class RegisterForReflectionBuildStep {
      * BFS Recursive Method to register a class and it's inner classes for Reflection.
      */
     private void registerClass(ClassLoader classLoader, String className, boolean methods, boolean fields,
-            boolean ignoreNested, final BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+            boolean ignoreNested) {
         reflectiveClass.produce(new ReflectiveClassBuildItem(methods, fields, className));
 
         if (ignoreNested) {
@@ -71,7 +74,7 @@ public class RegisterForReflectionBuildStep {
         try {
             Class<?>[] declaredClasses = classLoader.loadClass(className).getDeclaredClasses();
             for (Class<?> clazz : declaredClasses) {
-                registerClass(classLoader, clazz.getName(), methods, fields, false, reflectiveClass);
+                registerClass(classLoader, clazz.getName(), methods, fields, false);
             }
         } catch (ClassNotFoundException e) {
             log.warnf(e, "Failed to load Class %s", className);
