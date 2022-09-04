@@ -49,7 +49,9 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.rules.cpp.Link.Picness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.LinkingInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -77,7 +79,13 @@ public final class CcLinkingHelper {
   public static final String DYNAMIC_LIBRARY_OUTPUT_GROUP_NAME = "dynamic_library";
 
   /** Contains the providers as well as the linking outputs. */
-  public static final class LinkingInfo implements LinkingInfoApi {
+  @SkylarkModule(
+    name = "linking_info",
+    documented = false,
+    category = SkylarkModuleCategory.BUILTIN,
+    doc = "Helper class containing CC linking providers."
+  )
+  public static final class LinkingInfo {
     private final TransitiveInfoProviderMap providers;
     private final Map<String, NestedSet<Artifact>> outputGroups;
     private final CcLinkingOutputs linkingOutputs;
@@ -99,7 +107,7 @@ public final class CcLinkingHelper {
       return providers;
     }
 
-    @Override
+    @SkylarkCallable(name = "cc_linking_info", documented = false)
     public CcLinkingInfo getCcLinkParamsInfo() {
       return (CcLinkingInfo) providers.getProvider(CcLinkingInfo.PROVIDER.getKey());
     }
@@ -167,6 +175,7 @@ public final class CcLinkingHelper {
   private boolean checkDepsGenerateCpp = true;
   private boolean emitLinkActionsIfEmpty;
   private boolean emitCcNativeLibrariesProvider;
+  private boolean emitCcSpecificLinkParamsProvider;
   private boolean emitInterfaceSharedObjects;
   private boolean shouldCreateDynamicLibrary = true;
   private boolean shouldCreateStaticLibraries = true;
@@ -372,6 +381,15 @@ public final class CcLinkingHelper {
   }
 
   /**
+   * This adds the {@link CcSpecificLinkParamsProvider} to the providers created by this class.
+   * Otherwise the result will contain an instance of {@link CcLinkParamsStore}.
+   */
+  public CcLinkingHelper enableCcSpecificLinkParamsProvider() {
+    this.emitCcSpecificLinkParamsProvider = true;
+    return this;
+  }
+
+  /**
    * Enables or disables generation of link actions if there are no object files. Some rules declare
    * a <code>.a</code> or <code>.so</code> implicit output, which requires that these files are
    * created even if there are no object files, so be careful when calling this.
@@ -529,9 +547,15 @@ public final class CcLinkingHelper {
 
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     boolean forcePic = cppConfiguration.forcePic();
-    ccLinkingInfoBuilder.setCcLinkParamsStore(
-        new CcLinkParamsStore(
-            createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContext, forcePic)));
+    if (emitCcSpecificLinkParamsProvider) {
+      providers.add(
+          new CcSpecificLinkParamsProvider(
+              createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContext, forcePic)));
+    } else {
+      ccLinkingInfoBuilder.setCcLinkParamsStore(
+          new CcLinkParamsStore(
+              createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContext, forcePic)));
+    }
     providers.put(ccLinkingInfoBuilder.build());
     return new LinkingInfo(
         providers.build(), outputGroups, ccLinkingOutputs, originalLinkingOutputs);
@@ -554,24 +578,21 @@ public final class CcLinkingHelper {
    * output groups.
    */
   private void addLinkerOutputArtifacts(
-      Map<String, NestedSet<Artifact>> outputGroups, CcCompilationOutputs ccOutputs)
-      throws RuleErrorException {
+      Map<String, NestedSet<Artifact>> outputGroups, CcCompilationOutputs ccOutputs) {
     NestedSetBuilder<Artifact> archiveFile = new NestedSetBuilder<>(Order.STABLE_ORDER);
     NestedSetBuilder<Artifact> dynamicLibrary = new NestedSetBuilder<>(Order.STABLE_ORDER);
 
     if (ruleContext.attributes().get("alwayslink", Type.BOOLEAN)) {
       archiveFile.add(
-          CppHelper.getLinkedArtifact(
+          CppHelper.getLinuxLinkedArtifact(
               ruleContext,
-              ccToolchain,
               configuration,
               Link.LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY,
               linkedArtifactNameSuffix));
     } else {
       archiveFile.add(
-          CppHelper.getLinkedArtifact(
+          CppHelper.getLinuxLinkedArtifact(
               ruleContext,
-              ccToolchain,
               configuration,
               Link.LinkTargetType.STATIC_LIBRARY,
               linkedArtifactNameSuffix));
@@ -579,9 +600,8 @@ public final class CcLinkingHelper {
 
     if (!ruleContext.attributes().get("linkstatic", Type.BOOLEAN) && !ccOutputs.isEmpty()) {
       dynamicLibrary.add(
-          CppHelper.getLinkedArtifact(
+          CppHelper.getLinuxLinkedArtifact(
               ruleContext,
-              ccToolchain,
               configuration,
               Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY,
               linkedArtifactNameSuffix));
@@ -589,9 +609,8 @@ public final class CcLinkingHelper {
       if (CppHelper.useInterfaceSharedObjects(ccToolchain.getCppConfiguration(), ccToolchain)
           && emitInterfaceSharedObjects) {
         dynamicLibrary.add(
-            CppHelper.getLinkedArtifact(
+            CppHelper.getLinuxLinkedArtifact(
                 ruleContext,
-                ccToolchain,
                 configuration,
                 LinkTargetType.INTERFACE_DYNAMIC_LIBRARY,
                 linkedArtifactNameSuffix));
@@ -624,7 +643,8 @@ public final class CcLinkingHelper {
       protected void collect(
           CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
         builder.addLinkstamps(linkstamps.build(), ccCompilationContext);
-        builder.addTransitiveTargets(deps, CcLinkParamsStore.TO_LINK_PARAMS);
+        builder.addTransitiveTargets(
+            deps, CcLinkParamsStore.TO_LINK_PARAMS, CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
         if (!neverlink) {
           builder.addLibraries(
               ccLinkingOutputs.getPreferredLibraries(
@@ -835,9 +855,8 @@ public final class CcLinkingHelper {
     if (CppHelper.useInterfaceSharedObjects(cppConfiguration, ccToolchain)
         && emitInterfaceSharedObjects) {
       soInterface =
-          CppHelper.getLinkedArtifact(
+          CppHelper.getLinuxLinkedArtifact(
               ruleContext,
-              ccToolchain,
               configuration,
               LinkTargetType.INTERFACE_DYNAMIC_LIBRARY,
               linkedArtifactNameSuffix);
@@ -983,6 +1002,10 @@ public final class CcLinkingHelper {
    */
   private Artifact getLinkedArtifact(LinkTargetType linkTargetType) throws RuleErrorException {
     Artifact result = null;
+    Artifact linuxDefault =
+        CppHelper.getLinuxLinkedArtifact(
+            ruleContext, configuration, linkTargetType, linkedArtifactNameSuffix);
+
     try {
       String maybePicName = ruleContext.getLabel().getName() + linkedArtifactNameSuffix;
       if (linkTargetType.picness() == Picness.PIC) {
@@ -1009,9 +1032,6 @@ public final class CcLinkingHelper {
     // If the linked artifact is not the linux default, then a FailAction is generated for the
     // linux default to satisfy the requirement of the implicit output.
     // TODO(b/30132703): Remove the implicit outputs of cc_library.
-    Artifact linuxDefault =
-        CppHelper.getLinuxLinkedArtifact(
-            ruleContext, configuration, linkTargetType, linkedArtifactNameSuffix);
     if (!result.equals(linuxDefault)) {
       ruleContext.registerAction(
           new FailAction(
