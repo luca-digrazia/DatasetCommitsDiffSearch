@@ -952,7 +952,12 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    public ImmutableSet<TreeFileArtifact> getExpandedOutputs(Artifact artifact) {
+    public void addExpandedTreeOutput(TreeFileArtifact output) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Iterable<TreeFileArtifact> getExpandedOutputs(Artifact artifact) {
       throw new UnsupportedOperationException();
     }
 
@@ -969,7 +974,7 @@ public final class ActionsTestUtil {
 
     @Override
     public void injectRemoteDirectory(
-        SpecialArtifact treeArtifact, Map<TreeFileArtifact, RemoteFileArtifactValue> children) {
+        SpecialArtifact treeArtifact, Map<PathFragment, RemoteFileArtifactValue> children) {
       throw new UnsupportedOperationException();
     }
 

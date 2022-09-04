@@ -187,12 +187,17 @@ public class RemoteSpawnCacheTest {
             @Override
             public void injectRemoteDirectory(
                 Artifact.SpecialArtifact output,
-                Map<TreeFileArtifact, RemoteFileArtifactValue> children) {
+                Map<PathFragment, RemoteFileArtifactValue> children) {
               throw new UnsupportedOperationException();
             }
 
             @Override
             public void markOmitted(ActionInput output) {
+              throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void addExpandedTreeOutput(TreeFileArtifact output) {
               throw new UnsupportedOperationException();
             }
 

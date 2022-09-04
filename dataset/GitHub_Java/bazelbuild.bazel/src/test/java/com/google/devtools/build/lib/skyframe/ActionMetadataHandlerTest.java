@@ -390,10 +390,11 @@ public class ActionMetadataHandlerTest {
         new RemoteFileArtifactValue(new byte[] {1, 2, 3}, 5, 1, "foo");
     RemoteFileArtifactValue barValue =
         new RemoteFileArtifactValue(new byte[] {4, 5, 6}, 10, 1, "bar");
-    Map<TreeFileArtifact, RemoteFileArtifactValue> children =
-        ImmutableMap.of(
-            ActionInputHelper.treeFileArtifact(treeArtifact, "foo"), fooValue,
-            ActionInputHelper.treeFileArtifact(treeArtifact, "bar"), barValue);
+    Map<PathFragment, RemoteFileArtifactValue> children =
+        ImmutableMap.<PathFragment, RemoteFileArtifactValue>builder()
+            .put(PathFragment.create("foo"), fooValue)
+            .put(PathFragment.create("bar"), barValue)
+            .build();
 
     handler.injectRemoteDirectory(treeArtifact, children);
 

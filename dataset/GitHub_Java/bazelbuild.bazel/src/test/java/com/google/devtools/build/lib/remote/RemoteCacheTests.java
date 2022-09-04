@@ -44,7 +44,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
@@ -974,7 +973,6 @@ public class RemoteCacheTests {
             PathFragment.create("outputs/dir"),
             ActionsTestUtil.NULL_ARTIFACT_OWNER,
             SpecialArtifactType.TREE);
-    dir.setGeneratingActionKey(ActionLookupData.create(ActionsTestUtil.NULL_ARTIFACT_OWNER, 0));
 
     MetadataInjector injector = mock(MetadataInjector.class);
 
@@ -993,12 +991,15 @@ public class RemoteCacheTests {
     // assert
     assertThat(inMemoryOutput).isNull();
 
-    Map<Artifact.TreeFileArtifact, RemoteFileArtifactValue> m =
-        ImmutableMap.of(
-            ActionInputHelper.treeFileArtifact(dir, "file1"),
-            new RemoteFileArtifactValue(toBinaryDigest(d1), d1.getSizeBytes(), 1, "action-id"),
-            ActionInputHelper.treeFileArtifact(dir, "a/file2"),
-            new RemoteFileArtifactValue(toBinaryDigest(d2), d2.getSizeBytes(), 1, "action-id"));
+    Map<PathFragment, RemoteFileArtifactValue> m =
+        ImmutableMap.<PathFragment, RemoteFileArtifactValue>builder()
+            .put(
+                PathFragment.create("file1"),
+                new RemoteFileArtifactValue(toBinaryDigest(d1), d1.getSizeBytes(), 1, "action-id"))
+            .put(
+                PathFragment.create("a/file2"),
+                new RemoteFileArtifactValue(toBinaryDigest(d2), d2.getSizeBytes(), 1, "action-id"))
+            .build();
     verify(injector).injectRemoteDirectory(eq(dir), eq(m));
 
     Path outputBase = artifactRoot.getRoot().asPath();
@@ -1044,7 +1045,6 @@ public class RemoteCacheTests {
             PathFragment.create("outputs/dir"),
             ActionsTestUtil.NULL_ARTIFACT_OWNER,
             SpecialArtifactType.TREE);
-    dir.setGeneratingActionKey(ActionLookupData.create(ActionsTestUtil.NULL_ARTIFACT_OWNER, 0));
     MetadataInjector injector = mock(MetadataInjector.class);
 
     // act
