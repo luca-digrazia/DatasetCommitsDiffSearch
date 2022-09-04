@@ -47,8 +47,6 @@ public class AndroidDataContext implements AndroidDataContextApi {
   private final FilesToRunProvider busybox;
   private final AndroidSdkProvider sdk;
   private final boolean persistentBusyboxToolsEnabled;
-  private final boolean throwOnProguardApplyDictionary;
-  private final boolean throwOnProguardApplyMapping;
   private final boolean throwOnResourceConflict;
   private final boolean useDataBindingV2;
 
@@ -57,8 +55,9 @@ public class AndroidDataContext implements AndroidDataContextApi {
   }
 
   public static AndroidDataContext makeContext(RuleContext ruleContext) {
-    AndroidConfiguration androidConfig =
-        ruleContext.getConfiguration().getFragment(AndroidConfiguration.class);
+    AndroidConfiguration androidConfig = ruleContext
+        .getConfiguration()
+        .getFragment(AndroidConfiguration.class);
 
     return new AndroidDataContext(
         ruleContext.getLabel(),
@@ -66,17 +65,14 @@ public class AndroidDataContext implements AndroidDataContextApi {
         ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST),
         androidConfig.persistentBusyboxTools(),
         AndroidSdkProvider.fromRuleContext(ruleContext),
-        shouldThrowIfNotOnWhitelist(ruleContext, "allow_proguard_apply_dictionary"),
-        shouldThrowIfNotOnWhitelist(ruleContext, "allow_proguard_apply_mapping"),
-        shouldThrowIfNotOnWhitelist(ruleContext, "allow_resource_conflicts")
+        shouldThrowOnResourceConflictFromWhitelist(ruleContext)
             || androidConfig.throwOnResourceConflict(),
         androidConfig.useDataBindingV2());
   }
 
-  private static boolean shouldThrowIfNotOnWhitelist(
-      RuleContext ruleContext, String whitelistName) {
-    return Whitelist.hasWhitelist(ruleContext, whitelistName)
-        && !Whitelist.isAvailable(ruleContext, whitelistName);
+  private static boolean shouldThrowOnResourceConflictFromWhitelist(RuleContext ruleContext) {
+    return Whitelist.hasWhitelist(ruleContext, "allow_resource_conflicts")
+        && !Whitelist.isAvailable(ruleContext, "allow_resource_conflicts");
   }
 
   protected AndroidDataContext(
@@ -85,8 +81,6 @@ public class AndroidDataContext implements AndroidDataContextApi {
       FilesToRunProvider busybox,
       boolean persistentBusyboxToolsEnabled,
       AndroidSdkProvider sdk,
-      boolean throwOnProguardApplyDictionary,
-      boolean throwOnProguardApplyMapping,
       boolean throwOnResourceConflict,
       boolean useDataBindingV2) {
     this.label = label;
@@ -94,8 +88,6 @@ public class AndroidDataContext implements AndroidDataContextApi {
     this.ruleContext = ruleContext;
     this.busybox = busybox;
     this.sdk = sdk;
-    this.throwOnProguardApplyDictionary = throwOnProguardApplyDictionary;
-    this.throwOnProguardApplyMapping = throwOnProguardApplyMapping;
     this.throwOnResourceConflict = throwOnResourceConflict;
     this.useDataBindingV2 = useDataBindingV2;
   }
@@ -171,14 +163,6 @@ public class AndroidDataContext implements AndroidDataContextApi {
 
   public boolean isPersistentBusyboxToolsEnabled() {
     return persistentBusyboxToolsEnabled;
-  }
-
-  public boolean throwOnProguardApplyDictionary() {
-    return throwOnProguardApplyDictionary;
-  }
-
-  public boolean throwOnProguardApplyMapping() {
-    return throwOnProguardApplyMapping;
   }
 
   public boolean throwOnResourceConflict() {
