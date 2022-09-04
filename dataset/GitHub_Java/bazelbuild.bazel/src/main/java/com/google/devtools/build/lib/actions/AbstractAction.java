@@ -34,10 +34,10 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 import com.google.devtools.build.lib.skylarkbuildapi.ActionApi;
 import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.Symlinks;
@@ -520,22 +520,24 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public Depset getSkylarkInputs() {
-    return Depset.of(Artifact.TYPE, NestedSetBuilder.wrap(Order.STABLE_ORDER, getInputs()));
+  public SkylarkNestedSet getSkylarkInputs() {
+    return SkylarkNestedSet.of(Artifact.class, NestedSetBuilder.wrap(
+        Order.STABLE_ORDER, getInputs()));
   }
 
   @Override
-  public Depset getSkylarkOutputs() {
-    return Depset.of(Artifact.TYPE, NestedSetBuilder.wrap(Order.STABLE_ORDER, getOutputs()));
+  public SkylarkNestedSet getSkylarkOutputs() {
+    return SkylarkNestedSet.of(Artifact.class, NestedSetBuilder.wrap(
+        Order.STABLE_ORDER, getOutputs()));
   }
 
   @Override
-  public Sequence<String> getSkylarkArgv() throws EvalException {
+  public SkylarkList<String> getSkylarkArgv() throws EvalException {
     return null;
   }
 
   @Override
-  public Sequence<CommandLineArgsApi> getStarlarkArgs() throws EvalException {
+  public SkylarkList<CommandLineArgsApi> getStarlarkArgs() throws EvalException {
     // Not all action types support returning Args.
     return null;
   }
@@ -546,13 +548,13 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public Dict<String, String> getSkylarkSubstitutions() {
+  public SkylarkDict<String, String> getSkylarkSubstitutions() {
     return null;
   }
 
   @Override
-  public Dict<String, String> getEnv() {
-    return Dict.copyOf(null, env.getFixedEnv().toMap());
+  public SkylarkDict<String, String> getEnv() {
+    return SkylarkDict.copyOf(null, env.getFixedEnv().toMap());
   }
 
   @Override

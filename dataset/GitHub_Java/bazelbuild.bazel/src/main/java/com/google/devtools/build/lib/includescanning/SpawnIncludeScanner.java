@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.includescanning.IncludeParser.GrepIncludesFileType;
 import com.google.devtools.build.lib.includescanning.IncludeParser.Inclusion;
 import com.google.devtools.build.lib.util.io.FileOutErr;
@@ -181,12 +180,12 @@ public class SpawnIncludeScanner {
     }
 
     @Override
-    public NestedSet<Artifact> getTools() {
+    public Iterable<Artifact> getTools() {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public NestedSet<Artifact> getInputs() {
+    public Iterable<Artifact> getInputs() {
       throw new UnsupportedOperationException();
     }
 

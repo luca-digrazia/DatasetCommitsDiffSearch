@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.SourceCategory;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -85,7 +84,7 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
     this.mandatoryInputs = cppCompileActionBuilder.buildMandatoryInputs();
     this.allInputs =
         NestedSetBuilder.fromNestedSet(mandatoryInputs)
-            .addTransitive(cppCompileActionBuilder.buildInputsForInvalidation())
+            .addAll(cppCompileActionBuilder.buildInputsForInvalidation())
             .build();
   }
 
@@ -274,12 +273,12 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
   }
 
   @Override
-  public NestedSet<Artifact> getTools() {
-    return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+  public Iterable<Artifact> getTools() {
+    return ImmutableList.<Artifact>of();
   }
 
   @Override
-  public NestedSet<Artifact> getInputs() {
+  public Iterable<Artifact> getInputs() {
     return NestedSetBuilder.<Artifact>stableOrder()
         .add(sourceTreeArtifact)
         .addTransitive(allInputs)

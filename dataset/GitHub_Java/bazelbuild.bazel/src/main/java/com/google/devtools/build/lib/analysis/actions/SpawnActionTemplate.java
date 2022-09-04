@@ -182,12 +182,12 @@ public final class SpawnActionTemplate extends ActionKeyCacher
   }
 
   @Override
-  public NestedSet<Artifact> getTools() {
+  public Iterable<Artifact> getTools() {
     return commonTools;
   }
 
   @Override
-  public NestedSet<Artifact> getInputs() {
+  public Iterable<Artifact> getInputs() {
     return allInputs;
   }
 

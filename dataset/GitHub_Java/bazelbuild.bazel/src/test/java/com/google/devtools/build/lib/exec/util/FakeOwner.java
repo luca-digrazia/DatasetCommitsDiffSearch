@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import javax.annotation.Nullable;
 
@@ -110,12 +109,12 @@ public final class FakeOwner implements ActionExecutionMetadata {
   }
 
   @Override
-  public NestedSet<Artifact> getTools() {
+  public Iterable<Artifact> getTools() {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public NestedSet<Artifact> getInputs() {
+  public Iterable<Artifact> getInputs() {
     throw new UnsupportedOperationException();
   }
 
