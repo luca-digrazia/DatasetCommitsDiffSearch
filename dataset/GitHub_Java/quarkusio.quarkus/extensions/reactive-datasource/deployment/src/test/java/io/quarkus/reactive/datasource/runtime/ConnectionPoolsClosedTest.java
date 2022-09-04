@@ -1,12 +1,10 @@
 package io.quarkus.reactive.datasource.runtime;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.wildfly.common.Assert;
@@ -50,14 +48,13 @@ public class ConnectionPoolsClosedTest {
     public void connectionsThatAreNotTheLastGetClosedSuccessfully()
             throws ExecutionException, InterruptedException {
         ExecutorService e = Executors.newFixedThreadPool(3);
-        Set<Thread> threads = new HashSet<>();
         try {
             TestableThreadLocalPool globalPool = new TestableThreadLocalPool();
             Assert.assertTrue(globalPool.trackedSize() == 0);
-            final TestPoolInterface p1 = grabPoolFromLongLivingThread(globalPool, e, threads);
+            final TestPoolInterface p1 = grabPoolFromLongLivingThread(globalPool, e);
             Assert.assertFalse(p1.isClosed());
             Assert.assertTrue(globalPool.trackedSize() == 1);
-            final TestPoolInterface p2 = grabPoolFromLongLivingThread(globalPool, e, threads);
+            final TestPoolInterface p2 = grabPoolFromLongLivingThread(globalPool, e);
             Assert.assertFalse(p1.isClosed());
             Assert.assertFalse(p2.isClosed());
             Assert.assertFalse(p1.isClosed());
@@ -66,9 +63,6 @@ public class ConnectionPoolsClosedTest {
             e.shutdown();
             while (!e.isTerminated()) {
                 Thread.sleep(1);
-            }
-            for (Thread thread : threads) {
-                waitForThreadStop(thread);
             }
             final TestPoolInterface p3 = grabPoolFromOtherThread(globalPool);
             Assert.assertTrue(p1.isClosed());
@@ -113,35 +107,30 @@ public class ConnectionPoolsClosedTest {
     private TestPoolInterface grabPoolFromOtherThread(TestableThreadLocalPool globalPool)
             throws ExecutionException, InterruptedException {
         final ExecutorService e = Executors.newSingleThreadExecutor();
-        CompletableFuture<Thread> thread = new CompletableFuture<>();
+        AtomicReference<Thread> thread = new AtomicReference<>();
         final Future<TestPoolInterface> creation = e.submit(() -> {
-            thread.complete(Thread.currentThread());
+            thread.set(Thread.currentThread());
             return globalPool.pool();
         });
         final TestPoolInterface poolInstance = creation.get();
         e.shutdown();
-        waitForThreadStop(thread.get());
-        return poolInstance;
-    }
-
-    private void waitForThreadStop(Thread thread) throws InterruptedException {
-        while (thread.isAlive()) {
+        while (thread.get().isAlive()) {
             //even after the pool is shutdown the thread may not actually report itself
             //as being dead yet, which can lead to race conditions
             //so we wait just to be sure
             Thread.sleep(1);
         }
+        return poolInstance;
     }
 
     private TestPoolInterface grabPoolFromLongLivingThread(TestableThreadLocalPool globalPool,
-            ExecutorService e, Set<Thread> allThreads)
+            ExecutorService e)
             throws InterruptedException, ExecutionException {
-        CompletableFuture<Thread> thread = new CompletableFuture<>();
+        AtomicReference<Thread> thread = new AtomicReference<>();
         final Future<TestPoolInterface> creation = e.submit(() -> {
-            thread.complete(Thread.currentThread());
+            thread.set(Thread.currentThread());
             return globalPool.pool();
         });
-        allThreads.add(thread.get());
         return creation.get();
     }
 

@@ -72,18 +72,12 @@ public abstract class ThreadLocalPool<PoolType extends Pool> implements Pool {
     }
 
     private final void scanForAbandonedConnections() {
-        ArrayList<PoolAndThread> garbage = new ArrayList<>();
-        for (PoolAndThread pair : allConnections) {
+        for (PoolAndThread pair : new ArrayList<>(allConnections)) {
             if (pair.isDead()) {
-                garbage.add(pair);
+                //This might potentially close the connection a second time,
+                //so we need to ensure implementations allow it.
+                pair.close();
             }
-        }
-        //This needs a second loop, as the close() operation
-        //will otherwise trigger a concurrent modification on the iterator.
-        for (PoolAndThread dead : garbage) {
-            //This might potentially close the connection a second time,
-            //so we need to ensure implementations allow it.
-            dead.close();
         }
     }
 
