@@ -132,7 +132,7 @@ public class SubclassGenerator extends AbstractGenerator {
         Optional<Injection> constructorInjection = bean.getConstructorInjection();
         if (constructorInjection.isPresent()) {
             for (InjectionPointInfo injectionPoint : constructorInjection.get().injectionPoints) {
-                parameterTypes.add(injectionPoint.getType().name().toString());
+                parameterTypes.add(injectionPoint.getRequiredType().name().toString());
             }
         }
         int superParamsSize = parameterTypes.size();
