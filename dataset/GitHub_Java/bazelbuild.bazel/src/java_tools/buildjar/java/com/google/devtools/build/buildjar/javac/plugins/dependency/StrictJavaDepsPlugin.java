@@ -127,6 +127,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
     errWriter = log.getWriter(WriterKind.ERROR);
     implicitDependencyExtractor =
         new ImplicitDependencyExtractor(
+            dependencyModule.getUsedClasspath(),
             dependencyModule.getImplicitDependenciesMap(),
             dependencyModule.getPlatformJars());
     checkingTreeScanner = context.get(CheckingTreeScanner.class);
