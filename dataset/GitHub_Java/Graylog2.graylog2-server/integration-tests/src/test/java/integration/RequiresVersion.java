@@ -22,10 +22,20 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Used to specify a <a href="https://github.com/zafarkhaja/jsemver#semver-expressions-api-ranges">semver expression</a> for a test class or method.
+ * Use a semantic versioning number in the fields. They need to have three digits, otherwise parsing will fail.
+ * <p>
+ *     So instead of saying <code>"0.93"</code> do <code>"0.93.0"</code>.
+ * </p>
  */
 @Target({ElementType.METHOD, ElementType.CONSTRUCTOR, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RequiresVersion {
-    String value() default "";
+
+    String orLater() default "";
+
+    String laterThan() default "";
+
+    String orEarlier() default "";
+
+    String earlierThan() default "";
 }
