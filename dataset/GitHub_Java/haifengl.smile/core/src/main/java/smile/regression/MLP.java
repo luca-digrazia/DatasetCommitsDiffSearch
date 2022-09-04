@@ -99,7 +99,7 @@ import smile.util.Strings;
     @Override
     public void update(double[] x, double y) {
         propagate(x);
-        setTarget(y);
+        target.get()[0] = scaler == null ? y : scaler.f(y);
         backpropagate(x, true);
         t++;
     }
@@ -107,23 +107,15 @@ import smile.util.Strings;
     /** Updates the model with a mini-batch. RMSProp is applied if {@code rho > 0}. */
     @Override
     public void update(double[][] x, double[] y) {
+        double[] target = this.target.get();
         for (int i = 0; i < x.length; i++) {
             propagate(x[i]);
-            setTarget(y[i]);
+            target[0] = scaler == null ? y[i] : scaler.f(y[i]);
             backpropagate(x[i], false);
         }
 
         update(x.length);
         t++;
-    }
-
-    /**
-     * Sets the network target value.
-     *
-     * @param y the raw responsible variable.
-     */
-    private void setTarget(double y) {
-        target.get()[0] = scaler == null ? y : scaler.f(y);
     }
 
     /**
@@ -139,7 +131,6 @@ import smile.util.Strings;
         Scaler scaler = Scaler.of(prop.getProperty("smile.mlp.scaler"), y);
         LayerBuilder[] layers = Layer.of(0, prop.getProperty("smile.mlp.layers", "ReLU(100)"));
         MLP model = new MLP(scaler, p, layers);
-        model.setProperties(prop);
 
         int epochs = Integer.parseInt(prop.getProperty("smile.mlp.epochs", "100"));
         int batch = Integer.parseInt(prop.getProperty("smile.mlp.mini_batch", "256"));
