@@ -189,7 +189,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public NestedSet<Artifact> getAllowedDerivedInputs() {
+  public Iterable<Artifact> getAllowedDerivedInputs() {
     throw new IllegalStateException(
         "Method must be overridden for actions that may have unknown inputs.");
   }

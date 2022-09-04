@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import static java.util.Collections.unmodifiableSet;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -378,7 +380,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    * {@link #discoverInputs(ActionExecutionContext)} must be called before this method is called on
    * each action execution.
    */
-  public NestedSet<Artifact> getAdditionalInputs() {
+  public Iterable<Artifact> getAdditionalInputs() {
     return Preconditions.checkNotNull(additionalInputs);
   }
 
@@ -1182,14 +1184,18 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   @Override
-  public NestedSet<Artifact> getAllowedDerivedInputs() {
-    return NestedSetBuilder.fromNestedSet(mandatoryInputs)
-        .addTransitive(additionalPrunableHeaders)
-        .addTransitive(inputsForInvalidation)
-        .addTransitive(getDeclaredIncludeSrcs())
-        .addTransitive(ccCompilationContext.getTransitiveModules(usePic))
-        .add(getSourceFile())
-        .build();
+  public Iterable<Artifact> getAllowedDerivedInputs() {
+    Set<Artifact> result = CompactHashSet.create();
+    addNonSources(result, mandatoryInputs.toList());
+    addNonSources(result, additionalPrunableHeaders.toList());
+    addNonSources(result, inputsForInvalidation);
+    addNonSources(result, getDeclaredIncludeSrcs().toList());
+    addNonSources(result, ccCompilationContext.getTransitiveModules(usePic).toList());
+    Artifact artifact = getSourceFile();
+    if (!artifact.isSourceArtifact()) {
+      result.add(artifact);
+    }
+    return unmodifiableSet(result);
   }
 
   /**
@@ -1207,6 +1213,14 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
           NestedSetBuilder.wrap(
               Order.STABLE_ORDER,
               Iterables.filter(inputs, input -> input.isFileType(CppFileTypes.CPP_MODULE)));
+    }
+  }
+
+  private static void addNonSources(Set<Artifact> result, Iterable<Artifact> artifacts) {
+    for (Artifact a : artifacts) {
+      if (!a.isSourceArtifact()) {
+        result.add(a);
+      }
     }
   }
 
@@ -1406,16 +1420,19 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   protected Spawn createSpawn(Map<String, String> clientEnv) throws ActionExecutionException {
     // Intentionally not adding {@link CppCompileAction#inputsForInvalidation}, those are not needed
     // for execution.
-    NestedSetBuilder<ActionInput> inputsBuilder =
-        NestedSetBuilder.<ActionInput>stableOrder()
-            .addTransitive(getMandatoryInputs())
-            .addTransitive(getAdditionalInputs());
+    ImmutableList.Builder<ActionInput> inputsBuilder =
+        new ImmutableList.Builder<ActionInput>()
+            .addAll(getMandatoryInputs())
+            .addAll(getAdditionalInputs());
     if (getParamFileActionInput() != null) {
       inputsBuilder.add(getParamFileActionInput());
     }
-    NestedSet<ActionInput> inputs = inputsBuilder.build();
+    ImmutableList<ActionInput> inputs = inputsBuilder.build();
 
     ImmutableMap<String, String> executionInfo = getExecutionInfo();
+    ImmutableList.Builder<ActionInput> outputs =
+        ImmutableList.builderWithExpectedSize(getOutputs().size() + 1);
+    outputs.addAll(getOutputs());
     if (getDotdFile() != null && useInMemoryDotdFiles()) {
       /*
        * CppCompileAction does dotd file scanning locally inside the Bazel process and thus
@@ -1441,7 +1458,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
           getEnvironment(clientEnv),
           executionInfo,
           inputs,
-          getOutputs(),
+          outputs.build(),
           estimateResourceConsumptionLocal());
     } catch (CommandLineExpansionException e) {
       throw new ActionExecutionException(
@@ -1473,7 +1490,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
             .setSourceFile(getSourceFile())
             .setDependencies(dependencies.build())
             .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
-            .setAllowedDerivedInputs(getAllowedDerivedInputs());
+            .setAllowedDerivedinputs(getAllowedDerivedInputs());
 
     if (needsIncludeValidation) {
       discoveryBuilder.shouldValidateInclusions();
@@ -1499,7 +1516,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
             .setDependencies(
                 processDepset(actionExecutionContext, execRoot, dotDContents).getDependencies())
             .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
-            .setAllowedDerivedInputs(getAllowedDerivedInputs());
+            .setAllowedDerivedinputs(getAllowedDerivedInputs());
 
     if (needsIncludeValidation) {
       discoveryBuilder.shouldValidateInclusions();

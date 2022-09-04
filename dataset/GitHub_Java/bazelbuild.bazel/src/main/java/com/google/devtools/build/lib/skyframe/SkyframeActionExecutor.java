@@ -1172,7 +1172,6 @@ public final class SkyframeActionExecutor {
             primaryOutputPath,
             action,
             actionResult,
-            actionFileSystemType().inMemoryFileSystem(),
             null,
             fileOutErr,
             ErrorTiming.NO_ERROR);
@@ -1183,7 +1182,6 @@ public final class SkyframeActionExecutor {
             primaryOutputPath,
             action,
             actionResult,
-            actionFileSystemType().inMemoryFileSystem(),
             actionException,
             fileOutErr,
             ErrorTiming.AFTER_EXECUTION);
@@ -1195,7 +1193,6 @@ public final class SkyframeActionExecutor {
             primaryOutputPath,
             action,
             actionResult,
-            actionFileSystemType().inMemoryFileSystem(),
             new ActionExecutionException(exception, action, true),
             fileOutErr,
             ErrorTiming.AFTER_EXECUTION);
@@ -1459,14 +1456,7 @@ public final class SkyframeActionExecutor {
     }
 
     reportActionExecution(
-        eventHandler,
-        primaryOutputPath,
-        action,
-        null,
-        actionFileSystemType().inMemoryFileSystem(),
-        e,
-        outErrBuffer,
-        errorTiming);
+        eventHandler, primaryOutputPath, action, null, e, outErrBuffer, errorTiming);
     boolean reported = reportErrorIfNotAbortingMode(e, outErrBuffer);
 
     ActionExecutionException toThrow = e;
@@ -1677,7 +1667,6 @@ public final class SkyframeActionExecutor {
       Path primaryOutputPath,
       Action action,
       @Nullable ActionResult actionResult,
-      boolean isInMemoryFs,
       ActionExecutionException exception,
       FileOutErr outErr,
       ErrorTiming errorTiming) {
@@ -1707,8 +1696,7 @@ public final class SkyframeActionExecutor {
             stdout,
             stderr,
             logs,
-            errorTiming,
-            isInMemoryFs));
+            errorTiming));
   }
 
   /**

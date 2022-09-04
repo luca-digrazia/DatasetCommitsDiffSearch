@@ -110,10 +110,11 @@ public final class LtoBackendAction extends SpawnAction {
     return imports != null;
   }
 
-  private NestedSet<Artifact> computeBitcodeInputs(HashSet<PathFragment> inputPaths) {
+  private NestedSet<Artifact> computeBitcodeInputs(Collection<PathFragment> inputPaths) {
     NestedSetBuilder<Artifact> bitcodeInputs = NestedSetBuilder.stableOrder();
-    for (Artifact inputArtifact : bitcodeFiles.getFiles().toList()) {
-      if (inputPaths.contains(inputArtifact.getExecPath())) {
+    for (PathFragment inputPath : inputPaths) {
+      Artifact inputArtifact = bitcodeFiles.lookup(inputPath);
+      if (inputArtifact != null) {
         bitcodeInputs.add(inputArtifact);
       }
     }
@@ -123,7 +124,7 @@ public final class LtoBackendAction extends SpawnAction {
   @Nullable
   @Override
   public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException {
+      throws ActionExecutionException, InterruptedException {
     // Build set of files this LTO backend artifact will import from.
     HashSet<PathFragment> importSet = new HashSet<>();
     try {
@@ -156,7 +157,7 @@ public final class LtoBackendAction extends SpawnAction {
 
     // Convert the import set of paths to the set of bitcode file artifacts.
     NestedSet<Artifact> bitcodeInputSet = computeBitcodeInputs(importSet);
-    if (bitcodeInputSet.memoizedFlattenAndGetSize() != importSet.size()) {
+    if (bitcodeInputSet.toList().size() != importSet.size()) {
       throw new ActionExecutionException(
           "error computing inputs from imports file "
               + actionExecutionContext.getInputPath(imports),
@@ -176,7 +177,7 @@ public final class LtoBackendAction extends SpawnAction {
   }
 
   @Override
-  public NestedSet<Artifact> getAllowedDerivedInputs() {
+  public Iterable<Artifact> getAllowedDerivedInputs() {
     return bitcodeFiles.getFiles();
   }
 

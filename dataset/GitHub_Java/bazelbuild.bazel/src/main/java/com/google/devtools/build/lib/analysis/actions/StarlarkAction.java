@@ -133,7 +133,7 @@ public final class StarlarkAction extends SpawnAction {
   }
 
   @Override
-  public NestedSet<Artifact> getAllowedDerivedInputs() {
+  public Iterable<Artifact> getAllowedDerivedInputs() {
     return getInputs();
   }
 
@@ -206,7 +206,8 @@ public final class StarlarkAction extends SpawnAction {
 
   @Override
   public Iterable<Artifact> getInputFilesForExtraAction(
-      ActionExecutionContext actionExecutionContext) {
+      ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException {
     return allInputs;
   }
 

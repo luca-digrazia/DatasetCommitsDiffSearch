@@ -148,7 +148,7 @@ public final class ExtraAction extends SpawnAction {
   }
 
   @Override
-  public NestedSet<Artifact> getAllowedDerivedInputs() {
+  public Iterable<Artifact> getAllowedDerivedInputs() {
     return shadowedAction.getAllowedDerivedInputs();
   }
 
