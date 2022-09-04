@@ -170,9 +170,8 @@ public class CompilationSupport {
    * Frameworks implicitly linked to iOS, watchOS, and tvOS binaries when using legacy compilation.
    */
   @VisibleForTesting
-  static final NestedSet<SdkFramework> AUTOMATIC_SDK_FRAMEWORKS =
-      NestedSetBuilder.create(
-          Order.STABLE_ORDER, new SdkFramework("Foundation"), new SdkFramework("UIKit"));
+  static final ImmutableList<SdkFramework> AUTOMATIC_SDK_FRAMEWORKS =
+      ImmutableList.of(new SdkFramework("Foundation"), new SdkFramework("UIKit"));
 
   /** Selects cc libraries that have alwayslink=1. */
   private static final Predicate<Artifact> ALWAYS_LINKED_CC_LIBRARY =
@@ -284,7 +283,7 @@ public class CompilationSupport {
       ExtraCompileArgs extraCompileArgs,
       CcToolchainProvider ccToolchain,
       FdoContext fdoContext,
-      List<PathFragment> priorityHeaders,
+      Iterable<PathFragment> priorityHeaders,
       Collection<Artifact> sources,
       Collection<Artifact> privateHdrs,
       Collection<Artifact> publicHdrs,
@@ -316,7 +315,7 @@ public class CompilationSupport {
             .addPublicHeaders(publicHdrs)
             .addPrivateHeadersUnchecked(dependentGeneratedHdrs)
             .addCcCompilationContexts(
-                AnalysisUtils.getProviders(deps, CcInfo.PROVIDER).stream()
+                Streams.stream(AnalysisUtils.getProviders(deps, CcInfo.PROVIDER))
                     .map(CcInfo::getCcCompilationContext)
                     .collect(ImmutableList.toImmutableList()))
             .setCopts(
@@ -358,20 +357,19 @@ public class CompilationSupport {
       ExtraCompileArgs extraCompileArgs,
       CcToolchainProvider ccToolchain,
       FdoContext fdoContext,
-      List<PathFragment> priorityHeaders,
+      Iterable<PathFragment> priorityHeaders,
       LinkTargetType linkType,
       Artifact linkActionInput)
       throws RuleErrorException, InterruptedException {
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
-    ImmutableSortedSet<Artifact> arcSources =
-        ImmutableSortedSet.copyOf(compilationArtifacts.getSrcs());
-    ImmutableSortedSet<Artifact> nonArcSources =
+    Collection<Artifact> arcSources = ImmutableSortedSet.copyOf(compilationArtifacts.getSrcs());
+    Collection<Artifact> nonArcSources =
         ImmutableSortedSet.copyOf(compilationArtifacts.getNonArcSrcs());
-    ImmutableSortedSet<Artifact> privateHdrs =
+    Collection<Artifact> privateHdrs =
         ImmutableSortedSet.copyOf(compilationArtifacts.getPrivateHdrs());
-    ImmutableSortedSet<Artifact> publicHdrs =
+    Collection<Artifact> publicHdrs =
         Stream.concat(
-                attributes.hdrs().toList().stream(),
+                Streams.stream(attributes.hdrs()),
                 Streams.stream(compilationArtifacts.getAdditionalHdrs()))
             .collect(toImmutableSortedSet(naturalOrder()));
     // This is a hack to inject generated headers into the action graph for include scanning.  This
@@ -679,18 +677,23 @@ public class CompilationSupport {
   }
 
   /** Returns a list of framework header search path fragments. */
-  static ImmutableList<PathFragment> frameworkHeaderSearchPathFragments(ObjcProvider provider) {
-    return uniqueParentDirectories(provider.get(FRAMEWORK_SEARCH_PATHS)).asList();
+  static ImmutableList<PathFragment> frameworkHeaderSearchPathFragments(ObjcProvider provider)
+      throws InterruptedException {
+    ImmutableList.Builder<PathFragment> searchPaths = new ImmutableList.Builder<>();
+    return searchPaths
+        .addAll(uniqueParentDirectories(provider.get(FRAMEWORK_SEARCH_PATHS)))
+        .build();
   }
 
   /** Returns a list of framework library search paths. */
-  static ImmutableList<String> frameworkLibrarySearchPaths(ObjcProvider provider) {
+  static ImmutableList<String> frameworkLibrarySearchPaths(ObjcProvider provider)
+      throws InterruptedException {
     ImmutableList.Builder<String> searchPaths = new ImmutableList.Builder<>();
     return searchPaths
         // Add library search paths corresponding to custom (non-SDK) frameworks. For each framework
         // foo/bar.framework, include "foo" as a search path.
-        .addAll(provider.staticFrameworkPaths().toList())
-        .addAll(provider.dynamicFrameworkPaths().toList())
+        .addAll(provider.staticFrameworkPaths())
+        .addAll(provider.dynamicFrameworkPaths())
         .build();
   }
 
@@ -909,13 +912,13 @@ public class CompilationSupport {
    */
   CompilationSupport validateAttributes() throws RuleErrorException {
     for (PathFragment absoluteInclude :
-        Iterables.filter(attributes.includes().toList(), PathFragment::isAbsolute)) {
+        Iterables.filter(attributes.includes(), PathFragment::isAbsolute)) {
       ruleContext.attributeError(
           "includes", String.format(ABSOLUTE_INCLUDES_PATH_FORMAT, absoluteInclude));
     }
 
     if (ruleContext.attributes().has("srcs", BuildType.LABEL_LIST)) {
-      ImmutableSet<Artifact> hdrsSet = attributes.hdrs().toSet();
+      ImmutableSet<Artifact> hdrsSet = ImmutableSet.copyOf(attributes.hdrs());
       ImmutableSet<Artifact> srcsSet =
           ImmutableSet.copyOf(ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list());
 
@@ -986,7 +989,7 @@ public class CompilationSupport {
    * @throws RuleErrorException for invalid crosstool files
    */
   CompilationSupport registerCompileAndArchiveActions(
-      ObjcCommon common, List<PathFragment> priorityHeaders)
+      ObjcCommon common, Iterable<PathFragment> priorityHeaders)
       throws RuleErrorException, InterruptedException {
     return registerCompileAndArchiveActions(common, ExtraCompileArgs.NONE, priorityHeaders);
   }
@@ -1005,7 +1008,7 @@ public class CompilationSupport {
       CompilationArtifacts compilationArtifacts,
       ObjcProvider objcProvider,
       ExtraCompileArgs extraCompileArgs,
-      List<PathFragment> priorityHeaders)
+      Iterable<PathFragment> priorityHeaders)
       throws RuleErrorException, InterruptedException {
     Preconditions.checkNotNull(toolchain);
     Preconditions.checkNotNull(toolchain.getFdoContext());
@@ -1037,8 +1040,7 @@ public class CompilationSupport {
 
       // TODO(b/30783125): Signal the need for this action in the CROSSTOOL.
       registerObjFilelistAction(
-          ImmutableSet.copyOf(compilationInfo.getFirst().getObjectFiles(/* usePic= */ false)),
-          objList);
+          compilationInfo.getFirst().getObjectFiles(/* usePic= */ false), objList);
     } else {
       compilationInfo =
           ccCompileAndLink(
@@ -1069,7 +1071,7 @@ public class CompilationSupport {
    * @throws RuleErrorException for invalid crosstool files
    */
   CompilationSupport registerCompileAndArchiveActions(
-      ObjcCommon common, ExtraCompileArgs extraCompileArgs, List<PathFragment> priorityHeaders)
+      ObjcCommon common, ExtraCompileArgs extraCompileArgs, Iterable<PathFragment> priorityHeaders)
       throws RuleErrorException, InterruptedException {
     if (common.getCompilationArtifacts().isPresent()) {
       registerCompileAndArchiveActions(
@@ -1127,16 +1129,13 @@ public class CompilationSupport {
     Artifact inputFileList = intermediateArtifacts.linkerObjList();
     ImmutableSet<Artifact> forceLinkArtifacts = getForceLoadArtifacts(objcProvider);
 
+    Iterable<Artifact> objFiles =
+        Iterables.concat(
+            bazelBuiltLibraries, objcProvider.get(IMPORTED_LIBRARY), objcProvider.getCcLibraries());
     // Clang loads archives specified in filelists and also specified as -force_load twice,
     // resulting in duplicate symbol errors unless they are deduped.
-    ImmutableSet<Artifact> objFiles =
-        ImmutableSet.copyOf(
-            Iterables.filter(
-                Iterables.concat(
-                    bazelBuiltLibraries,
-                    objcProvider.get(IMPORTED_LIBRARY).toList(),
-                    objcProvider.getCcLibraries()),
-                Predicates.not(Predicates.in(forceLinkArtifacts))));
+    objFiles = Iterables.filter(objFiles, Predicates.not(Predicates.in(forceLinkArtifacts)));
+
     registerObjFilelistAction(objFiles, inputFileList);
 
     LinkTargetType linkType =
@@ -1260,13 +1259,13 @@ public class CompilationSupport {
    * Registers an action that writes given set of object files to the given objList. This objList is
    * suitable to signal symbols to archive in a libtool archiving invocation.
    */
-  // TODO(ulfjack): Use NestedSet for objFiles.
   private CompilationSupport registerObjFilelistAction(
-      ImmutableSet<Artifact> objFiles, Artifact objList) {
+      Iterable<Artifact> objFiles, Artifact objList) {
+    ImmutableSet<Artifact> dedupedObjFiles = ImmutableSet.copyOf(objFiles);
     CustomCommandLine.Builder objFilesToLinkParam = new CustomCommandLine.Builder();
     NestedSetBuilder<Artifact> treeObjFiles = NestedSetBuilder.stableOrder();
 
-    for (Artifact objFile : objFiles) {
+    for (Artifact objFile : dedupedObjFiles) {
       // If the obj file is a tree artifact, we need to expand it into the contained individual
       // files properly.
       if (objFile.isTreeArtifact()) {
@@ -1356,16 +1355,16 @@ public class CompilationSupport {
    */
   private Set<String> frameworkNames(ObjcProvider provider) {
     Set<String> names = new LinkedHashSet<>();
-    names.addAll(SdkFramework.names(provider.get(SDK_FRAMEWORK)));
-    names.addAll(provider.staticFrameworkNames().toList());
-    names.addAll(provider.dynamicFrameworkNames().toList());
+    Iterables.addAll(names, SdkFramework.names(provider.get(SDK_FRAMEWORK)));
+    Iterables.addAll(names, provider.staticFrameworkNames());
+    Iterables.addAll(names, provider.dynamicFrameworkNames());
     return names;
   }
 
   /** Returns libraries that should be passed to the linker. */
   private ImmutableList<String> libraryNames(ObjcProvider objcProvider) {
     ImmutableList.Builder<String> args = new ImmutableList.Builder<>();
-    for (String dylib : objcProvider.get(SDK_DYLIB).toList()) {
+    for (String dylib : objcProvider.get(SDK_DYLIB)) {
       if (dylib.startsWith("lib")) {
         // remove lib prefix if it exists which is standard
         // for libraries (libxml.dylib -> -lxml).
@@ -1383,7 +1382,7 @@ public class CompilationSupport {
         Iterables.filter(ccLibraries, ALWAYS_LINKED_CC_LIBRARY);
 
     return ImmutableSet.<Artifact>builder()
-        .addAll(objcProvider.get(FORCE_LOAD_LIBRARY).toList())
+        .addAll(objcProvider.get(FORCE_LOAD_LIBRARY))
         .addAll(ccLibrariesToForceLoad)
         .build();
   }
@@ -1391,7 +1390,7 @@ public class CompilationSupport {
   /** Returns pruned J2Objc archives for this target. */
   private ImmutableList<Artifact> j2objcPrunedLibraries(ObjcProvider objcProvider) {
     ImmutableList.Builder<Artifact> j2objcPrunedLibraryBuilder = ImmutableList.builder();
-    for (Artifact j2objcLibrary : objcProvider.get(ObjcProvider.J2OBJC_LIBRARY).toList()) {
+    for (Artifact j2objcLibrary : objcProvider.get(ObjcProvider.J2OBJC_LIBRARY)) {
       j2objcPrunedLibraryBuilder.add(intermediateArtifacts.j2objcPrunedArchive(j2objcLibrary));
     }
     return j2objcPrunedLibraryBuilder.build();
@@ -1421,13 +1420,13 @@ public class CompilationSupport {
     NestedSet<Artifact> j2ObjcArchiveSourceMappingFiles =
         j2ObjcMappingFileProvider.getArchiveSourceMappingFiles();
 
-    for (Artifact j2objcArchive : objcProvider.get(ObjcProvider.J2OBJC_LIBRARY).toList()) {
+    for (Artifact j2objcArchive : objcProvider.get(ObjcProvider.J2OBJC_LIBRARY)) {
       Artifact prunedJ2ObjcArchive = intermediateArtifacts.j2objcPrunedArchive(j2objcArchive);
       Artifact dummyArchive =
-          ruleContext
-              .getPrerequisite("$dummy_lib", Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR)
-              .get(LIBRARY)
-              .getSingleton();
+          Iterables.getOnlyElement(
+              ruleContext
+                  .getPrerequisite("$dummy_lib", Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR)
+                  .get(LIBRARY));
 
       CustomCommandLine commandLine =
           CustomCommandLine.builder()
@@ -1605,9 +1604,7 @@ public class CompilationSupport {
     // TODO(bazel-team): Include textual headers in the module map when Xcode 6 support is
     // dropped.
     // TODO(b/32225593): Include private headers in the module map.
-    // Both registerGenerateModuleMapAction and registerGenerateUmbrellaHeaderAction make a copy,
-    // so flattening eagerly here using toList() is acceptable.
-    Iterable<Artifact> publicHeaders = attributes.hdrs().toList();
+    Iterable<Artifact> publicHeaders = attributes.hdrs();
     publicHeaders = Iterables.concat(publicHeaders, compilationArtifacts.getAdditionalHdrs());
     CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
     registerGenerateModuleMapAction(moduleMap, publicHeaders);
@@ -1628,18 +1625,6 @@ public class CompilationSupport {
    * @return this compilation support
    */
   public CompilationSupport registerGenerateModuleMapAction(
-      CppModuleMap moduleMap, NestedSet<Artifact> publicHeaders) {
-    return registerGenerateModuleMapAction(moduleMap, publicHeaders.toList());
-  }
-
-  /**
-   * Registers an action that will generate a clang module map.
-   *
-   * @param moduleMap the module map to generate
-   * @param publicHeaders the headers that should be directly accessible by dependers
-   * @return this compilation support
-   */
-  public CompilationSupport registerGenerateModuleMapAction(
       CppModuleMap moduleMap, Iterable<Artifact> publicHeaders) {
     publicHeaders = Iterables.filter(publicHeaders, CppFileTypes.MODULE_MAP_HEADER);
     ruleContext.registerAction(
@@ -1648,7 +1633,7 @@ public class CompilationSupport {
             moduleMap,
             ImmutableList.<Artifact>of(),
             publicHeaders,
-            attributes.moduleMapsForDirectDeps().toList(),
+            attributes.moduleMapsForDirectDeps(),
             ImmutableList.<PathFragment>of(),
             /*compiledModule=*/ true,
             /*moduleMapHomeIsCwd=*/ false,
@@ -1678,9 +1663,9 @@ public class CompilationSupport {
     }
   }
 
-  private static ImmutableSet<PathFragment> uniqueParentDirectories(NestedSet<PathFragment> paths) {
+  private static Iterable<PathFragment> uniqueParentDirectories(Iterable<PathFragment> paths) {
     ImmutableSet.Builder<PathFragment> parents = new ImmutableSet.Builder<>();
-    for (PathFragment path : paths.toList()) {
+    for (PathFragment path : paths) {
       parents.add(path.getParentDirectory());
     }
     return parents.build();

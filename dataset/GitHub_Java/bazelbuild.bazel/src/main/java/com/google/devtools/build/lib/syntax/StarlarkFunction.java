@@ -15,13 +15,11 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
-import javax.annotation.Nullable;
 
 /** A StarlarkFunction is the function value created by a Starlark {@code def} statement. */
 public final class StarlarkFunction extends BaseFunction {
 
   private final String name;
-  private final FunctionSignature signature;
   private final Location location;
   private final ImmutableList<Statement> statements;
   private final Module module; // a function closes over its defining module
@@ -36,8 +34,8 @@ public final class StarlarkFunction extends BaseFunction {
       Tuple<Object> defaultValues,
       ImmutableList<Statement> statements,
       Module module) {
+    super(signature);
     this.name = name;
-    this.signature = signature;
     this.location = location;
     this.statements = statements;
     this.module = module;
@@ -47,11 +45,6 @@ public final class StarlarkFunction extends BaseFunction {
   @Override
   public Tuple<Object> getDefaultValues() {
     return defaultValues;
-  }
-
-  @Override
-  public FunctionSignature getSignature() {
-    return signature;
   }
 
   @Override
@@ -76,8 +69,7 @@ public final class StarlarkFunction extends BaseFunction {
   }
 
   @Override
-  public Object fastcall(
-      StarlarkThread thread, @Nullable FuncallExpression call, Object[] positional, Object[] named)
+  protected Object call(Object[] arguments, FuncallExpression ast, StarlarkThread thread)
       throws EvalException, InterruptedException {
     if (thread.mutability().isFrozen()) {
       throw new EvalException(null, "Trying to call in frozen environment");
@@ -86,11 +78,8 @@ public final class StarlarkFunction extends BaseFunction {
       throw new EvalException(null, String.format("function '%s' called recursively", name));
     }
 
-    // Compute the effective parameter values
-    // and update the corresponding variables.
-    Object[] arguments =
-        Starlark.matchSignature(
-            getSignature(), this, getDefaultValues(), thread.mutability(), positional, named);
+    // Registering the functions's arguments as variables in the local StarlarkThread
+    // foreach loop is not used to avoid iterator overhead
     ImmutableList<String> names = getSignature().getParameterNames();
     for (int i = 0; i < names.size(); ++i) {
       thread.update(names.get(i), arguments[i]);

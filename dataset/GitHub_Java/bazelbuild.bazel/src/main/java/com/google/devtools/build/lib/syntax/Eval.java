@@ -14,16 +14,17 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.util.SpellChecker;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
 
 /** A syntax-tree-walking evaluator. */
 // TODO(adonovan): make this class the sole locus of tree-based evaluation logic.
@@ -49,7 +50,6 @@ final class Eval {
 
   static void execFile(StarlarkThread thread, StarlarkFile file)
       throws EvalException, InterruptedException {
-    checkInterrupt();
     for (Statement stmt : file.getStatements()) {
       execToplevelStatement(thread, stmt);
     }
@@ -57,7 +57,6 @@ final class Eval {
 
   static Object execStatements(StarlarkThread thread, List<Statement> statements)
       throws EvalException, InterruptedException {
-    checkInterrupt();
     Eval eval = new Eval(thread);
     eval.execStatementsInternal(statements);
     return eval.result;
@@ -108,7 +107,6 @@ final class Eval {
           case PASS:
           case CONTINUE:
             // Stay in loop.
-            checkInterrupt();
             continue;
           case BREAK:
             // Finish loop, execute next statement after loop.
@@ -133,7 +131,7 @@ final class Eval {
     // They may be discontinuous:
     // def f(a, b=1, *, c, d=2) has a defaults tuple of (1, 2).
     // TODO(adonovan): record the gaps (e.g. c) with a sentinel
-    // to simplify Starlark.matchSignature.
+    // to simplify processArguments.
     Tuple<Object> defaults = Tuple.empty();
     int ndefaults = node.getSignature().numOptionals();
     if (ndefaults > 0) {
@@ -173,7 +171,7 @@ final class Eval {
     return TokenKind.PASS;
   }
 
-  private void execLoad(LoadStatement node) throws EvalException {
+  private void execLoad(LoadStatement node) throws EvalException, InterruptedException {
     for (LoadStatement.Binding binding : node.getBindings()) {
       Identifier orig = binding.getOriginalName();
 
@@ -509,85 +507,20 @@ final class Eval {
 
       case FUNCALL:
         {
-          checkInterrupt();
-
           FuncallExpression call = (FuncallExpression) expr;
           Object fn = eval(thread, call.getFunction());
-
-          // StarStar and Star args are guaranteed to be last, if they occur.
-          ImmutableList<Argument> arguments = call.getArguments();
-          int n = arguments.size();
-          Argument.StarStar starstar = null;
-          if (n > 0 && arguments.get(n - 1) instanceof Argument.StarStar) {
-            starstar = (Argument.StarStar) arguments.get(n - 1);
-            n--;
-          }
-          Argument.Star star = null;
-          if (n > 0 && arguments.get(n - 1) instanceof Argument.Star) {
-            star = (Argument.Star) arguments.get(n - 1);
-            n--;
-          }
-          // Inv: n = |positional| + |named|
-
-          // Allocate assuming no *args/**kwargs.
-          int npos = call.getNumPositionalArguments();
-          int i;
-
-          // f(expr) -- positional args
-          Object[] positional = npos == 0 ? EMPTY : new Object[npos];
-          for (i = 0; i < npos; i++) {
-            Argument arg = arguments.get(i);
-            Object value = eval(thread, arg.getValue());
-            positional[i] = value;
-          }
-
-          // f(id=expr) -- named args
-          Object[] named = n == npos ? EMPTY : new Object[2 * (n - npos)];
-          for (int j = 0; i < n; i++) {
-            Argument.Keyword arg = (Argument.Keyword) arguments.get(i);
-            Object value = eval(thread, arg.getValue());
-            named[j++] = arg.getName();
-            named[j++] = value;
-          }
-
-          // f(*args) -- varargs
-          if (star != null) {
-            Object value = eval(thread, star.getValue());
-            if (!(value instanceof StarlarkIterable)) {
-              throw new EvalException(
-                  call.getLocation(),
-                  "argument after * must be an iterable, not " + EvalUtils.getDataTypeName(value));
-            }
-            // TODO(adonovan): opt: if value.size is known, preallocate (and skip if empty).
-            ArrayList<Object> list = new ArrayList<>();
-            Collections.addAll(list, positional);
-            Iterables.addAll(list, ((Iterable<?>) value));
-            positional = list.toArray();
-          }
-
-          // f(**kwargs)
-          if (starstar != null) {
-            Object value = eval(thread, starstar.getValue());
-            if (!(value instanceof Dict)) {
-              throw new EvalException(
-                  call.getLocation(),
-                  "argument after ** must be a dict, not " + EvalUtils.getDataTypeName(value));
-            }
-            Dict<?, ?> kwargs = (Dict<?, ?>) value;
-            int j = named.length;
-            named = Arrays.copyOf(named, j + 2 * kwargs.size());
-            for (Map.Entry<?, ?> e : kwargs.entrySet()) {
-              if (!(e.getKey() instanceof String)) {
-                throw new EvalException(
-                    call.getLocation(),
-                    "keywords must be strings, not " + EvalUtils.getDataTypeName(e.getKey()));
-              }
-              named[j++] = e.getKey();
-              named[j++] = e.getValue();
-            }
-          }
-
-          return Starlark.fastcall(thread, fn, call, positional, named);
+          ArrayList<Object> posargs = new ArrayList<>();
+          Map<String, Object> kwargs = new LinkedHashMap<>();
+          // TODO(adonovan): optimize the calling convention to pass a contiguous array of
+          // positional and named arguments with an array of Strings for the names (which is
+          // constant for all non-**kwargs call sites). The caller would remain responsible for
+          // flattening f(*args) and f(**kwargs), but the callee would become responsible for
+          // duplicate name checking.
+          // Callees already need to do this work anyway---see BaseFunction.processArguments and
+          // CallUtils.convertStarlarkArgumentsToJavaMethodArguments---and this avoids constructing
+          // another hash table in nearly every call
+          evalArguments(thread, call, posargs, kwargs);
+          return Starlark.call(thread, fn, call, posargs, kwargs);
         }
 
       case IDENTIFIER:
@@ -737,8 +670,6 @@ final class Eval {
       // execClauses(index) recursively executes the clauses starting at index,
       // and finally evaluates the body and adds its value to the result.
       void execClauses(int index) throws EvalException, InterruptedException {
-        checkInterrupt();
-
         // recursive case: one or more clauses
         if (index < comp.getClauses().size()) {
           Comprehension.Clause clause = comp.getClauses().get(index);
@@ -792,8 +723,6 @@ final class Eval {
     return comp.isDict() ? dict : StarlarkList.copyOf(thread.mutability(), list);
   }
 
-  private static final Object[] EMPTY = {};
-
   /** Returns an exception which should be thrown instead of the original one. */
   private static EvalException maybeTransformException(Node node, EvalException original) {
     // If there is already a non-empty stack trace, we only add this node iff it describes a
@@ -813,9 +742,114 @@ final class Eval {
     }
   }
 
-  private static void checkInterrupt() throws InterruptedException {
-    if (Thread.interrupted()) {
-      throw new InterruptedException();
+  /**
+   * Add one named argument to the keyword map, and returns whether that name has been encountered
+   * before.
+   */
+  private static boolean addKeywordArgAndCheckIfDuplicate(
+      Map<String, Object> kwargs, String name, Object value) {
+    return kwargs.put(name, value) != null;
+  }
+
+  /**
+   * Add multiple arguments to the keyword map (**kwargs), and returns all the names of those
+   * arguments that have been encountered before or {@code null} if there are no such names.
+   */
+  @Nullable
+  private static ImmutableList<String> addKeywordArgsAndReturnDuplicates(
+      Map<String, Object> kwargs, Object items, Location location) throws EvalException {
+    if (!(items instanceof Map<?, ?>)) {
+      throw new EvalException(
+          location,
+          "argument after ** must be a dictionary, not '" + EvalUtils.getDataTypeName(items) + "'");
+    }
+    ImmutableList.Builder<String> duplicatesBuilder = null;
+    for (Map.Entry<?, ?> entry : ((Map<?, ?>) items).entrySet()) {
+      if (!(entry.getKey() instanceof String)) {
+        throw new EvalException(
+            location,
+            "keywords must be strings, not '" + EvalUtils.getDataTypeName(entry.getKey()) + "'");
+      }
+      String argName = (String) entry.getKey();
+      if (addKeywordArgAndCheckIfDuplicate(kwargs, argName, entry.getValue())) {
+        if (duplicatesBuilder == null) {
+          duplicatesBuilder = ImmutableList.builder();
+        }
+        duplicatesBuilder.add(argName);
+      }
+    }
+    return duplicatesBuilder == null ? null : duplicatesBuilder.build();
+  }
+
+  /**
+   * Evaluate this FuncallExpression's arguments, and put the resulting evaluated expressions into
+   * the given {@code posargs} and {@code kwargs} collections.
+   *
+   * @param posargs a list to which all positional arguments will be added
+   * @param kwargs a mutable map to which all keyword arguments will be added. A mutable map is used
+   *     here instead of an immutable map builder to deal with duplicates without memory overhead
+   * @param thread the Starlark thread for the call
+   */
+  private static void evalArguments(
+      StarlarkThread thread,
+      FuncallExpression call,
+      List<Object> posargs,
+      Map<String, Object> kwargs)
+      throws EvalException, InterruptedException {
+
+    // Optimize allocations for the common case where they are no duplicates.
+    ImmutableList.Builder<String> duplicatesBuilder = null;
+    // Iterate over the arguments. We assume all positional arguments come before any keyword
+    // or star arguments, because the argument list was already validated by the Parser,
+    // which should be the only place that build FuncallExpressions.
+    // Argument lists are typically short and functions are frequently called, so go by index
+    // (O(1) for ImmutableList) to avoid the iterator overhead.
+    List<Argument> args = call.getArguments();
+    for (int i = 0; i < args.size(); i++) {
+      Argument arg = args.get(i);
+      Object value = eval(thread, arg.getValue());
+      if (arg instanceof Argument.Positional) {
+        // f(expr)
+        posargs.add(value);
+      } else if (arg instanceof Argument.Keyword) {
+        // f(id=expr)
+        String name = arg.getName();
+        if (addKeywordArgAndCheckIfDuplicate(kwargs, name, value)) {
+          if (duplicatesBuilder == null) {
+            duplicatesBuilder = ImmutableList.builder();
+          }
+          duplicatesBuilder.add(name);
+        }
+      } else if (arg instanceof Argument.Star) {
+        // f(*args): expand args
+        if (!(value instanceof StarlarkIterable)) {
+          throw new EvalException(
+              call.getLocation(),
+              "argument after * must be an iterable, not " + EvalUtils.getDataTypeName(value));
+        }
+        Iterables.addAll(posargs, ((Iterable<?>) value));
+      } else {
+        // f(**kwargs): expand kwargs
+        ImmutableList<String> duplicates =
+            addKeywordArgsAndReturnDuplicates(kwargs, value, call.getLocation());
+        if (duplicates != null) {
+          if (duplicatesBuilder == null) {
+            duplicatesBuilder = ImmutableList.builder();
+          }
+          duplicatesBuilder.addAll(duplicates);
+        }
+      }
+    }
+    if (duplicatesBuilder != null) {
+      ImmutableList<String> dups = duplicatesBuilder.build();
+      throw new EvalException(
+          call.getLocation(),
+          "duplicate keyword"
+              + (dups.size() > 1 ? "s" : "")
+              + " '"
+              + Joiner.on("', '").join(dups)
+              + "' in call to "
+              + call.getFunction());
     }
   }
 }
