@@ -15,8 +15,8 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.concurrent.ForkJoinQuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import com.google.devtools.build.skyframe.ThinNodeEntry.MarkedDirtyResult;
 import java.util.ArrayList;
@@ -99,6 +100,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
       Function<ExecutorParams, ? extends ExecutorService> executorFactory) {
     this.executor =
         new AbstractQueueVisitor(
+            /*concurrent=*/ true,
             /*parallelism=*/ DEFAULT_THREAD_COUNT,
             /*keepAliveTime=*/ 1,
             /*units=*/ TimeUnit.SECONDS,
@@ -242,7 +244,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
     @Override
     public void visit(Iterable<SkyKey> keys, InvalidationType invalidationType) {
       Preconditions.checkState(invalidationType == InvalidationType.DELETED, keys);
-      ImmutableList.Builder<SkyKey> unvisitedKeysBuilder = ImmutableList.builder();
+      Builder<SkyKey> unvisitedKeysBuilder = ImmutableList.builder();
       for (SkyKey key : keys) {
         if (visited.add(key)) {
           unvisitedKeysBuilder.add(key);

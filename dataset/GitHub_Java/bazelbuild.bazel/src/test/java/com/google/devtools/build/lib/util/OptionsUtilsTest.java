@@ -124,7 +124,7 @@ public class OptionsUtilsTest {
   }
 
   private PathFragment fragment(String string) {
-    return PathFragment.create(string);
+    return new PathFragment(string);
   }
 
   private List<PathFragment> convert(String input) throws Exception {
@@ -155,7 +155,7 @@ public class OptionsUtilsTest {
   @Test
   public void valueisUnmodifiable() throws Exception {
     try {
-      new PathFragmentListConverter().convert("value").add(PathFragment.create("other"));
+      new PathFragmentListConverter().convert("value").add(new PathFragment("other"));
       fail("could modify value");
     } catch (UnsupportedOperationException expected) {}
   }

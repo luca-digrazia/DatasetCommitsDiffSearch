@@ -13,13 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import javax.annotation.Nullable;
 
 /**
@@ -56,7 +57,7 @@ public class DelegatingWalkableGraph implements WalkableGraph {
     Map<SkyKey, ? extends NodeEntry> batchGet =
         graph.getBatch(null, Reason.WALKABLE_GRAPH_VALUE, keys);
     Map<SkyKey, SkyValue> result = Maps.newHashMapWithExpectedSize(batchGet.size());
-    for (Map.Entry<SkyKey, ? extends NodeEntry> entryPair : batchGet.entrySet()) {
+    for (Entry<SkyKey, ? extends NodeEntry> entryPair : batchGet.entrySet()) {
       SkyValue value = getValue(entryPair.getValue());
       if (value != null) {
         result.put(entryPair.getKey(), value);
@@ -112,7 +113,7 @@ public class DelegatingWalkableGraph implements WalkableGraph {
     Map<SkyKey, ? extends NodeEntry> entries =
         graph.getBatch(null, Reason.WALKABLE_GRAPH_DEPS, keys);
     Map<SkyKey, Iterable<SkyKey>> result = new HashMap<>(entries.size());
-    for (Map.Entry<SkyKey, ? extends NodeEntry> entry : entries.entrySet()) {
+    for (Entry<SkyKey, ? extends NodeEntry> entry : entries.entrySet()) {
       Preconditions.checkState(entry.getValue().isDone(), entry);
       result.put(entry.getKey(), entry.getValue().getDirectDeps());
     }
@@ -125,7 +126,7 @@ public class DelegatingWalkableGraph implements WalkableGraph {
     Map<SkyKey, ? extends NodeEntry> entries =
         graph.getBatch(null, Reason.WALKABLE_GRAPH_RDEPS, keys);
     Map<SkyKey, Iterable<SkyKey>> result = new HashMap<>(entries.size());
-    for (Map.Entry<SkyKey, ? extends NodeEntry> entry : entries.entrySet()) {
+    for (Entry<SkyKey, ? extends NodeEntry> entry : entries.entrySet()) {
       Preconditions.checkState(entry.getValue().isDone(), entry);
       result.put(entry.getKey(), entry.getValue().getReverseDepsForDoneEntry());
     }

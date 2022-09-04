@@ -28,7 +28,7 @@ public abstract class DelegatingNodeEntry implements NodeEntry {
   }
 
   @Override
-  public KeepEdgesPolicy keepEdges() {
+  public boolean keepEdges() {
     return getDelegate().keepEdges();
   }
 
