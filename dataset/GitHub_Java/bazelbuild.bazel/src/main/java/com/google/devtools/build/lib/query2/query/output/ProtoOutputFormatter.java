@@ -171,7 +171,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       Build.Rule.Builder rulePb = Build.Rule.newBuilder()
           .setName(rule.getLabel().toString())
           .setRuleClass(rule.getRuleClass());
-      if (includeLocations) {
+      if (includeLocation()) {
         rulePb.setLocation(FormatUtils.getLocation(target, relativeLocations));
       }
       addAttributes(rulePb, rule, extraDataForPostProcess);
@@ -207,7 +207,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       }
       rulePb.addAllAttribute(
           attributes.stream().distinct().sorted(ATTRIBUTE_NAME).collect(Collectors.toList()));
-      if (includeRuleInputsAndOutputs) {
+      if (includeRuleInputsAndOutputs()) {
         // Add all deps from aspects as rule inputs of current target.
          aspectsDependencies
              .values()
@@ -242,7 +242,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
                        .setGeneratingRule(generatingRule.getLabel().toString())
                        .setName(label.toString());
 
-      if (includeLocations) {
+      if (includeLocation()) {
         output.setLocation(FormatUtils.getLocation(target, relativeLocations));
       }
       targetPb.setType(GENERATED_FILE);
@@ -254,7 +254,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       Build.SourceFile.Builder input = Build.SourceFile.newBuilder()
           .setName(label.toString());
 
-      if (includeLocations) {
+      if (includeLocation()) {
         input.setLocation(FormatUtils.getLocation(target, relativeLocations));
       }
 
@@ -289,7 +289,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       SourceFile.Builder input = SourceFile.newBuilder()
                                            .setName(label.toString());
 
-      if (includeLocations) {
+      if (includeLocation()) {
         input.setLocation(FormatUtils.getLocation(target, relativeLocations));
       }
       targetPb.setType(SOURCE_FILE);
@@ -403,6 +403,14 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
 
   protected boolean includeRuleDefinitionEnvironment() {
     return true;
+  }
+
+  protected boolean includeRuleInputsAndOutputs() {
+    return includeRuleInputsAndOutputs;
+  }
+
+  protected boolean includeLocation() {
+    return includeLocations;
   }
 
   /**
