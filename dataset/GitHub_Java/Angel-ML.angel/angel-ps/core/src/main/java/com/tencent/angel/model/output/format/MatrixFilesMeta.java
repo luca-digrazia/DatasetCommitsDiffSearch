@@ -237,7 +237,7 @@ public class MatrixFilesMeta {
     try {
       int length = input.readInt();
       byte[] b = new byte[length];
-      input.readFully(b);
+      input.read(b);
       String js = new String(b, "utf-8");
       JSONObject jsonObject = new JSONObject(js);
       matrixId = jsonObject.getInt("matrixId");
