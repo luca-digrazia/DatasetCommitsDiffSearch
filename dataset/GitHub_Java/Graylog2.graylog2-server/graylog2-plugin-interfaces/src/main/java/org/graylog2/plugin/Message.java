@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -183,15 +182,8 @@ public class Message {
         obj.put(FIELD_SOURCE, getSource());
         obj.putAll(fields);
 
-        final Object timestampValue = getField(FIELD_TIMESTAMP);
-        DateTime dateTime = null;
-        if (timestampValue instanceof Date) {
-            dateTime = new DateTime(timestampValue);
-        } else if (timestampValue instanceof DateTime) {
-            dateTime = (DateTime) timestampValue;
-        }
-        if (dateTime != null) {
-            obj.put(FIELD_TIMESTAMP, buildElasticSearchTimeFormat(dateTime.withZone(UTC)));
+        if (getField(FIELD_TIMESTAMP) instanceof DateTime) {
+            obj.put(FIELD_TIMESTAMP, buildElasticSearchTimeFormat(((DateTime) getField(FIELD_TIMESTAMP)).withZone(UTC)));
         }
 
         // Manually converting stream ID to string - caused strange problems without it.
