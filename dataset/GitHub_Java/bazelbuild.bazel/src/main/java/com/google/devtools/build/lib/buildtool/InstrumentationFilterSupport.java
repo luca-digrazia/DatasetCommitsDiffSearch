@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
@@ -38,18 +37,18 @@ public final class InstrumentationFilterSupport {
   public static final String INSTRUMENTATION_FILTER_FLAG = "instrumentation_filter";
 
   /**
-   * Method implements a heuristic used to set default value of the
-   * --instrumentation_filter option. Following algorithm is used:
-   * 1) Identify all test targets on the command line.
-   * 2) Expand all test suites into the individual test targets
-   * 3) Calculate list of package names containing all test targets above.
-   * 4) Replace all "javatests/" substrings in package names with "java/".
-   * 5) If two packages reside in the same directory, use filter based on
-   *    the parent directory name instead. Doing so significantly simplifies
-   *    instrumentation filter in majority of real-life scenarios (in
-   *    particular when dealing with my/package/... wildcards).
-   * 6) Set --instrumentation_filter default value to instrument everything
-   *    in those packages.
+   * Method implements a heuristic used to set default value of the --instrumentation_filter option.
+   * The following algorithm is used:
+   *
+   * <ul>
+   *   <li>Identify all test targets on the command line.
+   *   <li>Expand all test suites into the individual test targets.
+   *   <li>Calculate list of package names containing all test targets above.
+   *   <li>Replace all "javatests" directories in packages with "java". Similarly, replace
+   *       "test/java/" with "main/java". Also, strip trailing "/internal", "/public", and "/tests"
+   *       from packages. (See {@link #getInstrumentedPrefix}.)
+   *   <li>Set --instrumentation_filter default value to instrument everything in those packages.
+   * </ul>
    */
   @VisibleForTesting
   public static String computeInstrumentationFilter(
@@ -58,7 +57,17 @@ public final class InstrumentationFilterSupport {
     collectInstrumentedPackages(testTargets, packageFilters);
     optimizeFilterSet(packageFilters);
 
-    String instrumentationFilter = "//" + Joiner.on(",//").join(packageFilters);
+    String instrumentationFilter =
+        Joiner.on("[/:],^//")
+            .appendTo(new StringBuilder("^//"), packageFilters)
+            .append("[/:]")
+            .toString();
+    // Fix up if one of the test targets is a top-level target. "//foo[/:]" matches everything
+    // under //foo and subpackages, but "//[/:]" only matches targets directly under the top-level
+    // package.
+    if (instrumentationFilter.equals("^//[/:]")) {
+      instrumentationFilter = "^//";
+    }
     if (!packageFilters.isEmpty()) {
       eventHandler.handle(
           Event.info("Using default value for --instrumentation_filter: \""
@@ -73,10 +82,7 @@ public final class InstrumentationFilterSupport {
       Collection<Target> targets, Set<String> packageFilters) {
     for (Target target : targets) {
       // Add package-based filters for every test target.
-      String prefix = getInstrumentedPrefix(target.getLabel().getPackageName());
-      if (!prefix.isEmpty()) {
-        packageFilters.add(prefix);
-      }
+      packageFilters.add(getInstrumentedPrefix(target.getLabel().getPackageName()));
       if (TargetUtils.isTestSuiteRule(target)) {
         AttributeMap attributes = NonconfigurableAttributeMapper.of((Rule) target);
         // We don't need to handle $implicit_tests attribute since we already added
@@ -116,24 +122,6 @@ public final class InstrumentationFilterSupport {
   private static void optimizeFilterSet(SortedSet<String> packageFilters) {
     Iterator<String> iterator = packageFilters.iterator();
     if (iterator.hasNext()) {
-      // Find common parent filters to reduce number of filter expressions. In practice this
-      // still produces nicely constrained instrumentation filter while making final
-      // filter value much more user-friendly - especially in case of /my/package/... wildcards.
-      Set<String> parentFilters = Sets.newTreeSet();
-      String filterString = iterator.next();
-      PathFragment parent = PathFragment.create(filterString).getParentDirectory();
-      while (iterator.hasNext()) {
-        String current = iterator.next();
-        if (parent != null && parent.getPathString().length() > 0
-            && !current.startsWith(filterString) && current.startsWith(parent.getPathString())) {
-          parentFilters.add(parent.getPathString());
-        } else {
-          filterString = current;
-          parent = PathFragment.create(filterString).getParentDirectory();
-        }
-      }
-      packageFilters.addAll(parentFilters);
-
       // Optimize away nested filters.
       iterator = packageFilters.iterator();
       String prev = iterator.next();
