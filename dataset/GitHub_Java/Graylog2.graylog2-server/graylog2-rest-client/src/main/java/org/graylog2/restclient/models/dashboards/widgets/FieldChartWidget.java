@@ -23,39 +23,47 @@ import org.graylog2.restclient.models.dashboards.Dashboard;
 
 import java.util.Map;
 
-public class FieldChartWidget extends ChartWidget {
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+public class FieldChartWidget extends DashboardWidget {
 
-    private final String field;
-    private final String statisticalFunction;
-    private final String renderer;
-    private final String interpolation;
+    private static final int DEFAULT_WIDTH = 2;
+    private static final int DEFAULT_HEIGHT = 1;
+
+    private final String streamId;
+    private final Map<String, Object> config;
 
     public FieldChartWidget(Dashboard dashboard, String query, TimeRange timerange, String description, String streamId, Map<String, Object> config) {
         this(dashboard, null, description, 0, query, timerange, streamId, config, null);
     }
 
     public FieldChartWidget(Dashboard dashboard, String id, String description, int cacheTime, String query, TimeRange timerange, String streamId, Map<String, Object> config, String creatorUserId) {
-        super(Type.FIELD_CHART, id, description, cacheTime, dashboard, creatorUserId, query, timerange, streamId, (String) config.get("interval"));
+        super(Type.FIELD_CHART, id, description, cacheTime, dashboard, creatorUserId, query, timerange);
 
-        this.field = (String) config.get("field");
-        this.statisticalFunction = (String) config.get("valuetype");
-        this.renderer = (String) config.get("renderer");
-        this.interpolation = (String) config.get("interpolation");
+        this.config = config;
+
+        if (streamId != null && !streamId.isEmpty()) {
+            this.streamId = streamId;
+        } else {
+            this.streamId = null;
+        }
     }
 
     @Override
     public Map<String, Object> getConfig() {
-        Map<String, Object> config = Maps.newHashMap();
-        config.putAll(getTimerange().getQueryParams());
-        config.putAll(super.getConfig());
-        config.put("query", getQuery());
+        Map<String, Object> c = Maps.newHashMap();
+        c.putAll(getTimerange().getQueryParams());
+        c.put("query", getQuery());
+        c.put("stream_id", streamId);
 
-        config.put("field", field);
-        config.put("valuetype", statisticalFunction);
-        config.put("renderer", renderer);
-        config.put("interpolation", interpolation);
+        c.put("field", config.get("field"));
+        c.put("valuetype", config.get("valuetype"));
+        c.put("renderer", config.get("renderer"));
+        c.put("interpolation", config.get("interpolation"));
+        c.put("interval", config.get("interval"));
 
-        return config;
+        return c;
     }
 
     @Override
@@ -68,6 +76,11 @@ public class FieldChartWidget extends ChartWidget {
     public int getHeight() {
         int storedHeight = super.getHeight();
         return storedHeight == 0 ? DEFAULT_HEIGHT : storedHeight;
+    }
+
+    @Override
+    public String getStreamId() {
+        return streamId;
     }
 
     @Override

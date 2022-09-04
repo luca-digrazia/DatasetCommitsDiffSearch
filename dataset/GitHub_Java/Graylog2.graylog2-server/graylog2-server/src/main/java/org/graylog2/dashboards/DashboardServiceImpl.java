@@ -23,7 +23,6 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.dashboards.widgets.DashboardWidget;
-import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
@@ -31,7 +30,7 @@ import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.plugin.database.ValidationException;
-import org.graylog2.rest.models.dashboards.requests.WidgetPositionsRequest;
+import org.graylog2.rest.resources.dashboards.requests.WidgetPositions;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,17 +43,14 @@ public class DashboardServiceImpl extends PersistedServiceImpl implements Dashbo
     private static final Logger LOG = LoggerFactory.getLogger(DashboardServiceImpl.class);
     private final MetricRegistry metricRegistry;
     private final Searches searches;
-    private final DashboardWidgetCreator dashboardWidgetCreator;
 
     @Inject
     public DashboardServiceImpl(MongoConnection mongoConnection,
                                 MetricRegistry metricRegistry,
-                                Searches searches,
-                                DashboardWidgetCreator dashboardWidgetCreator) {
+                                Searches searches) {
         super(mongoConnection);
         this.metricRegistry = metricRegistry;
         this.searches = searches;
-        this.dashboardWidgetCreator = dashboardWidgetCreator;
     }
 
     @Override
@@ -93,7 +89,7 @@ public class DashboardServiceImpl extends PersistedServiceImpl implements Dashbo
                 for (BasicDBObject widgetFields : (List<BasicDBObject>) fields.get(DashboardImpl.EMBEDDED_WIDGETS)) {
                     DashboardWidget widget = null;
                     try {
-                        widget = dashboardWidgetCreator.fromPersisted(searches, widgetFields);
+                        widget = DashboardWidget.fromPersisted(metricRegistry, searches, widgetFields);
                     } catch (DashboardWidget.NoSuchWidgetTypeException e) {
                         LOG.error("No such widget type: [" + widgetFields.get("type") + "] - Dashboard: [" + dashboard.getId() + "]", e);
                         continue;
@@ -116,10 +112,10 @@ public class DashboardServiceImpl extends PersistedServiceImpl implements Dashbo
     }
 
     @Override
-    public void updateWidgetPositions(Dashboard dashboard, WidgetPositionsRequest positions) throws ValidationException {
+    public void updateWidgetPositions(Dashboard dashboard, WidgetPositions positions) throws ValidationException {
         Map<String, Map<String, Object>> map = Maps.newHashMap();
 
-        for (WidgetPositionsRequest.WidgetPosition position : positions.positions()) {
+        for (WidgetPositions.WidgetPosition position : positions.positions()) {
             Map<String, Object> x = Maps.newHashMap();
             x.put("col", position.col());
             x.put("row", position.row());

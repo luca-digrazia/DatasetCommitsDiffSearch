@@ -31,7 +31,7 @@ public class DashboardWidget {
     private String description;
     @JsonProperty
     @NotNull
-    private String type;
+    private org.graylog2.dashboards.widgets.DashboardWidget.Type type;
     @JsonProperty
     @Min(0)
     private int cacheTime = 10;
@@ -59,11 +59,11 @@ public class DashboardWidget {
         this.description = description;
     }
 
-    public String getType() {
+    public org.graylog2.dashboards.widgets.DashboardWidget.Type getType() {
         return type;
     }
 
-    public void setType(String type) {
+    public void setType(org.graylog2.dashboards.widgets.DashboardWidget.Type type) {
         this.type = type;
     }
 

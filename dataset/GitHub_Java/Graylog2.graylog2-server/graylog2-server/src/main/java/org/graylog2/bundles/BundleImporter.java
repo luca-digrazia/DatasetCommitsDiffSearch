@@ -24,7 +24,6 @@ import org.bson.types.ObjectId;
 import org.graylog2.dashboards.DashboardImpl;
 import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.dashboards.DashboardService;
-import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
@@ -43,7 +42,7 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.rest.models.dashboards.requests.WidgetPositionsRequest;
+import org.graylog2.rest.resources.dashboards.requests.WidgetPositions;
 import org.graylog2.shared.inputs.InputLauncher;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
@@ -79,7 +78,6 @@ public class BundleImporter {
     private final OutputService outputService;
     private final DashboardService dashboardService;
     private final DashboardRegistry dashboardRegistry;
-    private final DashboardWidgetCreator dashboardWidgetCreator;
     private final ServerStatus serverStatus;
     private final MetricRegistry metricRegistry;
     private final Searches searches;
@@ -102,7 +100,6 @@ public class BundleImporter {
                           final OutputService outputService,
                           final DashboardService dashboardService,
                           final DashboardRegistry dashboardRegistry,
-                          final DashboardWidgetCreator dashboardWidgetCreator,
                           final ServerStatus serverStatus,
                           final MetricRegistry metricRegistry,
                           final Searches searches,
@@ -116,7 +113,6 @@ public class BundleImporter {
         this.outputService = outputService;
         this.dashboardService = dashboardService;
         this.dashboardRegistry = dashboardRegistry;
-        this.dashboardWidgetCreator = dashboardWidgetCreator;
         this.serverStatus = serverStatus;
         this.metricRegistry = metricRegistry;
         this.searches = searches;
@@ -468,12 +464,12 @@ public class BundleImporter {
         final org.graylog2.dashboards.Dashboard dashboard = new DashboardImpl(dashboardData);
         final String dashboardId = dashboardService.save(dashboard);
 
-        final ImmutableList.Builder<WidgetPositionsRequest.WidgetPosition> widgetPositions = ImmutableList.builder();
+        final ImmutableList.Builder<WidgetPositions.WidgetPosition> widgetPositions = ImmutableList.builder();
         for (DashboardWidget dashboardWidget : dashboardDescription.getDashboardWidgets()) {
             final org.graylog2.dashboards.widgets.DashboardWidget widget = createDashboardWidget(dashboardWidget, userName);
             dashboardService.addWidget(dashboard, widget);
 
-            final WidgetPositionsRequest.WidgetPosition widgetPosition = WidgetPositionsRequest.WidgetPosition.create(widget.getId(),
+            final WidgetPositions.WidgetPosition widgetPosition = WidgetPositions.WidgetPosition.create(widget.getId(),
                     dashboardWidget.getCol(), dashboardWidget.getRow(), dashboardWidget.getHeight(), dashboardWidget.getWidth());
             widgetPositions.add(widgetPosition);
         }
@@ -483,7 +479,7 @@ public class BundleImporter {
         final org.graylog2.dashboards.Dashboard persistedDashboard;
         try {
             persistedDashboard = dashboardService.load(dashboardId);
-            dashboardService.updateWidgetPositions(persistedDashboard, WidgetPositionsRequest.create(widgetPositions.build()));
+            dashboardService.updateWidgetPositions(persistedDashboard, WidgetPositions.create(widgetPositions.build()));
         } catch (NotFoundException e) {
             LOG.error("Failed to load dashboard with id " + dashboardId, e);
         }
@@ -538,7 +534,7 @@ public class BundleImporter {
         }
 
         final String widgetId = UUID.randomUUID().toString();
-        return dashboardWidgetCreator.buildDashboardWidget(type, searches,
+        return org.graylog2.dashboards.widgets.DashboardWidget.buildDashboardWidget(type, metricRegistry, searches,
                 widgetId, dashboardWidget.getDescription(), dashboardWidget.getCacheTime(),
                 config, (String) config.get("query"), timeRange, userName);
     }
