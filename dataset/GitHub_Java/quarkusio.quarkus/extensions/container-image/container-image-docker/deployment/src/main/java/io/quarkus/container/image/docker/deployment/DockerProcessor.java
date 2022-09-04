@@ -116,10 +116,9 @@ public class DockerProcessor {
         if (pushRequested || containerImageConfig.execution == ContainerImageConfig.Execution.PUSH) {
             // Check if we need to login first
             if (containerImageConfig.username.isPresent() && containerImageConfig.password.isPresent()) {
-                boolean loginSuccessful = ExecUtil.exec("docker", "-u", containerImageConfig.username.get(),
-                        "-p" + containerImageConfig.password.get());
-                if (!loginSuccessful) {
-                    throw dockerException(new String[] { "-u", containerImageConfig.username.get(), "-p", "********" });
+                boolean loginSuccesful = ExecUtil.exec("docker", "-u", containerImageConfig.username.get(), "-p" + containerImageConfig.password.get());
+                if (!loginSuccesful) {
+                    throw dockerException(new String[] {"-u", containerImageConfig.username.get(), "-p", "********"});
                 }
             }
             String[] pushArgs = { "push", image };
@@ -173,7 +172,7 @@ public class DockerProcessor {
                             BufferedReader reader = new BufferedReader(isr)) {
 
                         for (String line = reader.readLine(); line != null; line = reader.readLine()) {
-                            if (line.startsWith("Successfully built")) {
+                            if (line.startsWith("Succesfully built")) {
                                 String[] parts = line.split(" ");
                                 if (parts.length == 3)
                                     id.set(parts[2]);
@@ -278,7 +277,7 @@ public class DockerProcessor {
 
     /**
      * Return a Map.Entry (which is used as a Tuple) containing the main sources root as the key
-     * and the project root as the value
+     * and the project root as the valyue
      */
     private static AbstractMap.SimpleEntry<Path, Path> findMainSourcesRoot(Path outputDirectory) {
         Path currentPath = outputDirectory;
