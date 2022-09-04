@@ -15,9 +15,7 @@ package com.google.devtools.build.lib.remote.blobstore.http;
 
 import com.google.auth.Credentials;
 import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableList;
 import com.google.common.io.BaseEncoding;
-import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandler;
 import io.netty.channel.ChannelPromise;
@@ -31,22 +29,15 @@ import java.net.URI;
 import java.nio.channels.ClosedChannelException;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
 /** Common functionality shared by concrete classes. */
 abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelInboundHandler<T>
     implements ChannelOutboundHandler {
 
-  private static final String USER_AGENT_VALUE =
-      "bazel/" + BlazeVersionInfo.instance().getVersion();
-
   private final Credentials credentials;
-  private final ImmutableList<Entry<String, String>> extraHttpHeaders;
 
-  public AbstractHttpHandler(
-      Credentials credentials, ImmutableList<Entry<String, String>> extraHttpHeaders) {
+  public AbstractHttpHandler(Credentials credentials) {
     this.credentials = credentials;
-    this.extraHttpHeaders = extraHttpHeaders;
   }
 
   protected ChannelPromise userPromise;
@@ -59,8 +50,8 @@ abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelIn
     userPromise = null;
   }
 
-  @SuppressWarnings("FutureReturnValueIgnored")
-  protected void succeedAndResetUserPromise() {
+  @SuppressWarnings("FutureReturnValueIgnored") 
+  protected void succeedAndResetUserPromise() {  
     userPromise.setSuccess();
     userPromise = null;
   }
@@ -85,16 +76,6 @@ abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelIn
         request.headers().add(name, value);
       }
     }
-  }
-
-  protected void addExtraRemoteHeaders(HttpRequest request) {
-    for (Map.Entry<String, String> header : extraHttpHeaders) {
-      request.headers().add(header.getKey(), header.getValue());
-    }
-  }
-
-  protected void addUserAgentHeader(HttpRequest request) {
-    request.headers().set(HttpHeaderNames.USER_AGENT, USER_AGENT_VALUE);
   }
 
   protected String constructPath(URI uri, String hash, boolean isCas) {

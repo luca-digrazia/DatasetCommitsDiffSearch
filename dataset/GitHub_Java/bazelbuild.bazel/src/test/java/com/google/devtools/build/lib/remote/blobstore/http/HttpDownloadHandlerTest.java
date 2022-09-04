@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.net.HttpHeaders;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -55,7 +54,7 @@ public class HttpDownloadHandlerTest extends AbstractHttpHandlerTest {
    */
   @Test
   public void downloadShouldWork() throws IOException {
-    EmbeddedChannel ch = new EmbeddedChannel(new HttpDownloadHandler(null, ImmutableList.of()));
+    EmbeddedChannel ch = new EmbeddedChannel(new HttpDownloadHandler(null));
     downloadShouldWork(true, ch);
     downloadShouldWork(false, ch);
   }
@@ -94,7 +93,7 @@ public class HttpDownloadHandlerTest extends AbstractHttpHandlerTest {
   /** Test that the handler correctly supports http error codes i.e. 404 (NOT FOUND). */
   @Test
   public void httpErrorsAreSupported() throws IOException {
-    EmbeddedChannel ch = new EmbeddedChannel(new HttpDownloadHandler(null, ImmutableList.of()));
+    EmbeddedChannel ch = new EmbeddedChannel(new HttpDownloadHandler(null));
     ByteArrayOutputStream out = Mockito.spy(new ByteArrayOutputStream());
     DownloadCommand cmd = new DownloadCommand(CACHE_URI, true, "abcdef", out);
     ChannelPromise writePromise = ch.newPromise();
@@ -124,7 +123,7 @@ public class HttpDownloadHandlerTest extends AbstractHttpHandlerTest {
    */
   @Test
   public void httpErrorsWithContentAreSupported() throws IOException {
-    EmbeddedChannel ch = new EmbeddedChannel(new HttpDownloadHandler(null, ImmutableList.of()));
+    EmbeddedChannel ch = new EmbeddedChannel(new HttpDownloadHandler(null));
     ByteArrayOutputStream out = Mockito.spy(new ByteArrayOutputStream());
     DownloadCommand cmd = new DownloadCommand(CACHE_URI, true, "abcdef", out);
     ChannelPromise writePromise = ch.newPromise();
