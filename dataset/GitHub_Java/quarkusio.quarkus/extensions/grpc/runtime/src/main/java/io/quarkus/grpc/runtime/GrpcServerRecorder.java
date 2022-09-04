@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +27,6 @@ import org.jboss.logging.Logger;
 import grpc.health.v1.HealthOuterClass;
 import io.grpc.BindableService;
 import io.grpc.ServerInterceptor;
-import io.grpc.ServerInterceptors;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.quarkus.arc.Arc;
@@ -38,7 +36,6 @@ import io.quarkus.grpc.runtime.devmode.GrpcHotReplacementInterceptor;
 import io.quarkus.grpc.runtime.devmode.GrpcServerReloader;
 import io.quarkus.grpc.runtime.health.GrpcHealthStorage;
 import io.quarkus.grpc.runtime.reflection.ReflectionService;
-import io.quarkus.grpc.runtime.supports.BlockingServerInterceptor;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
@@ -59,12 +56,10 @@ public class GrpcServerRecorder {
     private static final Logger LOGGER = Logger.getLogger(GrpcServerRecorder.class.getName());
 
     private static final AtomicInteger grpcVerticleCount = new AtomicInteger(0);
-    private Map<String, List<String>> blockingMethodsPerService = Collections.emptyMap();
 
     public void initializeGrpcServer(RuntimeValue<Vertx> vertxSupplier,
             GrpcConfiguration cfg,
-            ShutdownContext shutdown,
-            Map<String, List<String>> blockingMethodsPerServiceImplementationClass) {
+            ShutdownContext shutdown) {
         GrpcContainer grpcContainer = Arc.container().instance(GrpcContainer.class).get();
         if (grpcContainer == null) {
             throw new IllegalStateException("gRPC not initialized, GrpcContainer not found");
@@ -74,8 +69,6 @@ public class GrpcServerRecorder {
             throw new IllegalStateException(
                     "Unable to find beans exposing the `BindableService` interface - not starting the gRPC server");
         }
-
-        this.blockingMethodsPerService = blockingMethodsPerServiceImplementationClass;
 
         GrpcServerConfiguration configuration = cfg.server;
         final boolean devMode = ProfileManager.getLaunchMode() == LaunchMode.DEVELOPMENT;
@@ -210,48 +203,37 @@ public class GrpcServerRecorder {
                         && services.get().bindService().getServiceDescriptor().getName().equals("grpc.health.v1.Health");
     }
 
-    private static List<GrpcServiceDefinition> collectServiceDefinitions(Instance<BindableService> services) {
-        List<GrpcServiceDefinition> definitions = new ArrayList<>();
-        for (BindableService service : services) {
-            ServerServiceDefinition definition = service.bindService();
-            definitions.add(new GrpcServiceDefinition(service, definition));
-        }
+    private static List<ServerServiceDefinition> gatherServices(Instance<BindableService> services) {
+        List<ServerServiceDefinition> definitions = new ArrayList<>();
+
+        services.forEach(new Consumer<BindableService>() { // NOSONAR
+            @Override
+            public void accept(BindableService bindable) {
+                ServerServiceDefinition definition = bindable.bindService();
+                LOGGER.debugf("Registered gRPC service '%s'", definition.getServiceDescriptor().getName());
+                definitions.add(definition);
+            }
+        });
         return definitions;
     }
 
-    private static class GrpcServiceDefinition {
-        public final BindableService service;
-        public final ServerServiceDefinition definition;
-
-        GrpcServiceDefinition(BindableService service, ServerServiceDefinition definition) {
-            this.service = service;
-            this.definition = definition;
-        }
-
-        public String getImplementationClassName() {
-            return service.getClass().getName();
-        }
-    }
-
     private static void devModeReload(GrpcContainer grpcContainer) {
-        List<GrpcServiceDefinition> svc = collectServiceDefinitions(grpcContainer.getServices());
+        List<ServerServiceDefinition> serviceDefinitions = gatherServices(grpcContainer.getServices());
 
-        List<ServerServiceDefinition> definitions = new ArrayList<>();
         Map<String, ServerMethodDefinition<?, ?>> methods = new HashMap<>();
-        for (GrpcServiceDefinition service : svc) {
-            for (ServerMethodDefinition<?, ?> method : service.definition.getMethods()) {
+        for (ServerServiceDefinition service : serviceDefinitions) {
+            for (ServerMethodDefinition<?, ?> method : service.getMethods()) {
                 methods.put(method.getMethodDescriptor().getFullMethodName(), method);
             }
-            definitions.add(service.definition);
         }
 
-        ServerServiceDefinition reflectionService = new ReflectionService(definitions).bindService();
+        ServerServiceDefinition reflectionService = new ReflectionService(serviceDefinitions).bindService();
 
         for (ServerMethodDefinition<?, ?> method : reflectionService.getMethods()) {
             methods.put(method.getMethodDescriptor().getFullMethodName(), method);
         }
 
-        GrpcServerReloader.reinitialize(definitions, methods, grpcContainer.getSortedInterceptors());
+        GrpcServerReloader.reinitialize(serviceDefinitions, methods, grpcContainer.getSortedInterceptors());
     }
 
     public static int getVerticleCount() {
@@ -278,11 +260,6 @@ public class GrpcServerRecorder {
         if (configuration.maxInboundMessageSize.isPresent()) {
             builder.maxInboundMessageSize(configuration.maxInboundMessageSize.getAsInt());
         }
-
-        if (configuration.maxInboundMetadataSize.isPresent()) {
-            builder.maxInboundMetadataSize(configuration.maxInboundMetadataSize.getAsInt());
-        }
-
         Optional<Duration> handshakeTimeout = configuration.handshakeTimeout;
         if (handshakeTimeout.isPresent()) {
             builder.handshakeTimeout(handshakeTimeout.get().toMillis(), TimeUnit.MILLISECONDS);
@@ -292,25 +269,9 @@ public class GrpcServerRecorder {
 
         boolean reflectionServiceEnabled = configuration.enableReflectionService
                 || ProfileManager.getLaunchMode() == LaunchMode.DEVELOPMENT;
-        List<GrpcServiceDefinition> toBeRegistered = collectServiceDefinitions(grpcContainer.getServices());
-        List<ServerServiceDefinition> definitions = new ArrayList<>();
-        for (GrpcServiceDefinition service : toBeRegistered) {
-            // We only register the blocking interceptor if needed by at least one method of the service.
-            if (blockingMethodsPerService.isEmpty()) {
-                // Fast track - no usage of @Blocking
-                builder.addService(service.definition);
-            } else {
-                List<String> list = blockingMethodsPerService.get(service.getImplementationClassName());
-                if (list == null) {
-                    // The service does not contain any methods annotated with @Blocking - no need for the itcp
-                    builder.addService(service.definition);
-                } else {
-                    builder.addService(
-                            ServerInterceptors.intercept(service.definition, new BlockingServerInterceptor(vertx, list)));
-                }
-            }
-            LOGGER.debugf("Registered gRPC service '%s'", service.definition.getServiceDescriptor().getName());
-            definitions.add(service.definition);
+        List<ServerServiceDefinition> definitions = gatherServices(grpcContainer.getServices());
+        for (ServerServiceDefinition definition : definitions) {
+            builder.addService(definition);
         }
 
         if (reflectionServiceEnabled) {
@@ -323,24 +284,14 @@ public class GrpcServerRecorder {
         }
 
         if (devMode) {
-            builder.commandDecorator(new Consumer<Runnable>() {
+            builder.commandDecorator(command -> vertx.executeBlocking(new Handler<Promise<Boolean>>() {
                 @Override
-                public void accept(Runnable command) {
-                    vertx.executeBlocking(new Handler<Promise<Boolean>>() {
-                        @Override
-                        public void handle(Promise<Boolean> event) {
-                            event.complete(GrpcHotReplacementInterceptor.fire());
-                        }
-                    },
-                            false,
-                            new Handler<AsyncResult<Boolean>>() {
-                                @Override
-                                public void handle(AsyncResult<Boolean> result) {
-                                    command.run();
-                                }
-                            });
+                public void handle(Promise<Boolean> event) {
+                    event.complete(GrpcHotReplacementInterceptor.fire());
                 }
-            });
+            },
+                    false,
+                    result -> command.run()));
         }
 
         LOGGER.debugf("Starting gRPC Server on %s:%d  [SSL enabled: %s]...",
