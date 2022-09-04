@@ -50,8 +50,6 @@ public class OutputBuffer extends Buffer {
 
     private final ExecutorService executor;
 
-    private final OutputBufferWatermark outputBufferWatermark;
-
     private final Configuration configuration;
     private final OutputCache overflowCache;
 
@@ -64,11 +62,9 @@ public class OutputBuffer extends Buffer {
     @Inject
     public OutputBuffer(OutputBufferProcessor.Factory outputBufferProcessorFactory,
                         MetricRegistry metricRegistry,
-                        OutputBufferWatermark outputBufferWatermark,
                         Configuration configuration,
                         OutputCache overflowCache) {
         this.outputBufferProcessorFactory = outputBufferProcessorFactory;
-        this.outputBufferWatermark = outputBufferWatermark;
         this.configuration = configuration;
         this.overflowCache = overflowCache;
         this.executor = executorService(metricRegistry);
@@ -94,7 +90,7 @@ public class OutputBuffer extends Buffer {
     }
 
     public void initialize() {
-        Disruptor disruptor = new Disruptor<MessageEvent>(
+        Disruptor<MessageEvent> disruptor = new Disruptor<>(
                 MessageEvent.EVENT_FACTORY,
                 configuration.getRingSize(),
                 executor,
@@ -129,6 +125,7 @@ public class OutputBuffer extends Buffer {
         }
 
         insert(message);
+        afterInsert(1);
     }
 
     @Override
@@ -140,6 +137,7 @@ public class OutputBuffer extends Buffer {
         }
 
         insert(message);
+        afterInsert(1);
     }
 
     @Override
@@ -153,6 +151,7 @@ public class OutputBuffer extends Buffer {
         }
 
         insert(messages.toArray(new Message[length]));
+        afterInsert(length);
     }
 
     @Override
@@ -165,15 +164,11 @@ public class OutputBuffer extends Buffer {
         }
 
         insert(messages.toArray(new Message[length]));
-    }
-
-    public void insertBlocking(Message message) {
-        insert(message);
+        afterInsert(length);
     }
 
     @Override
     protected void afterInsert(int n) {
-        outputBufferWatermark.addAndGet(n);
         incomingMessages.mark(n);
     }
 }

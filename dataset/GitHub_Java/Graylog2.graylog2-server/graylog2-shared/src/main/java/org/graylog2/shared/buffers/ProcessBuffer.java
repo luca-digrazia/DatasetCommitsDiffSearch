@@ -20,7 +20,6 @@ import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -35,8 +34,6 @@ import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.buffers.ProcessingDisabledException;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.journal.RawMessage;
-import org.graylog2.shared.buffers.processors.DecodingProcessor;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,16 +47,12 @@ import java.util.concurrent.ThreadFactory;
 import static com.codahale.metrics.MetricRegistry.name;
 
 public class ProcessBuffer extends Buffer {
-    private final Timer parseTime;
-    private final Timer decodeTime;
-
     private static final Logger LOG = LoggerFactory.getLogger(ProcessBuffer.class);
 
     public static String SOURCE_INPUT_ATTR_NAME;
     public static String SOURCE_NODE_ATTR_NAME;
 
     private final BaseConfiguration configuration;
-    private final DecodingProcessor.Factory decodingProcessorFactory;
     private final InputCache inputCache;
     private final ExecutorService executor;
 
@@ -73,20 +66,15 @@ public class ProcessBuffer extends Buffer {
     public ProcessBuffer(MetricRegistry metricRegistry,
                          ServerStatus serverStatus,
                          BaseConfiguration configuration,
-                         DecodingProcessor.Factory decodingProcessorFactory,
                          InputCache inputCache) {
         this.serverStatus = serverStatus;
         this.configuration = configuration;
-        this.decodingProcessorFactory = decodingProcessorFactory;
         this.inputCache = inputCache;
 
         this.executor = executorService(metricRegistry);
         this.incomingMessages = metricRegistry.meter(name(ProcessBuffer.class, "incomingMessages"));
         this.rejectedMessages = metricRegistry.meter(name(ProcessBuffer.class, "rejectedMessages"));
         this.cachedMessages = metricRegistry.meter(name(ProcessBuffer.class, "cachedMessages"));
-
-        this.parseTime = metricRegistry.timer(name(ProcessBuffer.class, "parseTime"));
-        this.decodeTime = metricRegistry.timer(name(ProcessBuffer.class, "decodeTime"));
 
         if (serverStatus.hasCapability(ServerStatus.Capability.RADIO)) {
             SOURCE_INPUT_ATTR_NAME = "gl2_source_radio_input";
@@ -111,10 +99,7 @@ public class ProcessBuffer extends Buffer {
         return inputCache;
     }
 
-    public void initialize(ProcessBufferProcessor[] processors,
-                           int ringBufferSize,
-                           WaitStrategy waitStrategy) {
-        this.ringBufferSize = ringBufferSize;
+    public void initialize(ProcessBufferProcessor[] processors, int ringBufferSize, WaitStrategy waitStrategy, int processBufferProcessors) {
         Disruptor<MessageEvent> disruptor = new Disruptor<>(
                 MessageEvent.EVENT_FACTORY,
                 ringBufferSize,
@@ -127,7 +112,7 @@ public class ProcessBuffer extends Buffer {
                         + "and wait strategy <{}>.", ringBufferSize,
                 waitStrategy.getClass().getSimpleName());
 
-        disruptor.handleEventsWith(decodingProcessorFactory.create(decodeTime, parseTime)).then(processors);
+        disruptor.handleEventsWith(processors);
 
         ringBuffer = disruptor.start();
     }
@@ -246,17 +231,8 @@ public class ProcessBuffer extends Buffer {
         afterInsert(length);
     }
 
-    public void insertBlocking(RawMessage rawMessage) {
-        long sequence = ringBuffer.next();
-        MessageEvent event = ringBuffer.get(sequence);
-        event.setRaw(rawMessage);
-        ringBuffer.publish(sequence);
-        afterInsert(1);
-    }
-
     @Override
     protected void afterInsert(int n) {
         incomingMessages.mark(n);
     }
-
 }
