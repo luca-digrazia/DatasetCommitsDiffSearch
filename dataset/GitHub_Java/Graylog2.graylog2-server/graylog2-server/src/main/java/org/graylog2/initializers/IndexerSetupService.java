@@ -32,14 +32,15 @@ import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.node.Node;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.DocsHelper;
 import org.graylog2.plugin.Tools;
+import org.graylog2.rest.models.system.indexer.responses.ClusterHealth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -155,12 +156,14 @@ public class IndexerSetupService extends AbstractIdleService {
                     final URI esUri = URI.create("http://" + HostAndPort.fromString(host).getHostText() + ":9200/");
 
                     LOG.info("Checking Elasticsearch HTTP API at {}", esUri);
-                    // Try the HTTP API endpoint
-                    final Request request = new Request.Builder()
-                            .get()
-                            .url(esUri.resolve("/_nodes").toString())
-                            .build();
-                    try (final Response response = httpClient.newCall(request).execute()) {
+                    try {
+                        // Try the HTTP API endpoint
+                        final Request request = new Request.Builder()
+                                .get()
+                                .url(esUri.resolve("/_nodes").toString())
+                                .build();
+                        final Response response = httpClient.newCall(request).execute();
+
                         if (response.isSuccessful()) {
                             final JsonNode resultTree = objectMapper.readTree(response.body().byteStream());
                             final JsonNode nodesList = resultTree.get("nodes");
