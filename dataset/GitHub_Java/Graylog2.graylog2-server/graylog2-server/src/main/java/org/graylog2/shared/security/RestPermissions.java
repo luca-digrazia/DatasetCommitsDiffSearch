@@ -19,6 +19,8 @@ package org.graylog2.shared.security;
 import com.google.common.collect.ImmutableSet;
 import org.graylog2.plugin.security.Permission;
 import org.graylog2.plugin.security.PluginPermissions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -26,11 +28,12 @@ import java.util.stream.Collectors;
 import static org.graylog2.plugin.security.Permission.create;
 
 public class RestPermissions implements PluginPermissions {
+    private static final Logger LOG = LoggerFactory.getLogger(RestPermissions.class);
+
     /**
      * These should all be in the form of "group:action", because {@link Permissions#allPermissionsMap()} below depends on it.
      * Should this ever change, you need to adapt the code below, too.
      */
-    public static final String AUTHENTICATION_READ = "authentication:read";
     public static final String AUTHENTICATION_EDIT = "authentication:edit";
     public static final String BLACKLISTENTRY_CREATE = "blacklistentry:create";
     public static final String BLACKLISTENTRY_DELETE = "blacklistentry:delete";
@@ -67,7 +70,6 @@ public class RestPermissions implements PluginPermissions {
     public static final String INDICES_DELETE = "indices:delete";
     public static final String INDICES_FAILURES = "indices:failures";
     public static final String INDICES_READ = "indices:read";
-    public static final String INPUTS_CHANGESTATE = "inputs:changestate";
     public static final String INPUTS_CREATE = "inputs:create";
     public static final String INPUTS_EDIT = "inputs:edit";
     public static final String INPUTS_READ = "inputs:read";
@@ -79,10 +81,6 @@ public class RestPermissions implements PluginPermissions {
     public static final String LDAP_EDIT = "ldap:edit";
     public static final String LDAPGROUPS_EDIT = "ldapgroups:edit";
     public static final String LDAPGROUPS_READ = "ldapgroups:read";
-    public static final String LOOKUP_TABLES_CREATE = "lookuptables:create";
-    public static final String LOOKUP_TABLES_DELETE = "lookuptables:delete";
-    public static final String LOOKUP_TABLES_EDIT = "lookuptables:edit";
-    public static final String LOOKUP_TABLES_READ = "lookuptables:read";
     public static final String LOGGERS_EDIT = "loggers:edit";
     public static final String LOGGERS_EDITSUBSYSTEM = "loggers:editsubsystem";
     public static final String LOGGERS_READ = "loggers:read";
@@ -173,7 +171,6 @@ public class RestPermissions implements PluginPermissions {
         .add(create(INDICES_DELETE, ""))
         .add(create(INDICES_FAILURES, ""))
         .add(create(INDICES_READ, ""))
-        .add(create(INPUTS_CHANGESTATE, ""))
         .add(create(INPUTS_CREATE, ""))
         .add(create(INPUTS_EDIT, ""))
         .add(create(INPUTS_READ, ""))
@@ -185,10 +182,6 @@ public class RestPermissions implements PluginPermissions {
         .add(create(LDAP_EDIT, ""))
         .add(create(LDAPGROUPS_EDIT, ""))
         .add(create(LDAPGROUPS_READ, ""))
-        .add(create(LOOKUP_TABLES_CREATE, ""))
-        .add(create(LOOKUP_TABLES_DELETE, ""))
-        .add(create(LOOKUP_TABLES_EDIT, ""))
-        .add(create(LOOKUP_TABLES_READ, ""))
         .add(create(LOGGERS_EDIT, ""))
         .add(create(LOGGERS_EDITSUBSYSTEM, ""))
         .add(create(LOGGERS_READ, ""))
