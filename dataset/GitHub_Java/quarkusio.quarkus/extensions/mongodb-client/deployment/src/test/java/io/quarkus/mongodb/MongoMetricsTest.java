@@ -2,6 +2,7 @@ package io.quarkus.mongodb;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import javax.inject.Inject;
 
@@ -46,9 +47,8 @@ public class MongoMetricsTest extends MongoTestBase {
 
     @Test
     void testMetricsInitialization() {
-        // Clients are created eagerly, this metric should always be initialized to zero once connected
-        assertEquals(0L, getGaugeValueOrNull("mongodb.connection-pool.size", getTags()));
-        assertEquals(0L, getGaugeValueOrNull("mongodb.connection-pool.checked-out-count", getTags()));
+        assertNull(getGaugeValueOrNull("mongodb.connection-pool.size", getTags()));
+        assertNull(getGaugeValueOrNull("mongodb.connection-pool.checked-out-count", getTags()));
 
         // Just need to execute something so that an connection is opened
         String name = client.listDatabaseNames().first();
