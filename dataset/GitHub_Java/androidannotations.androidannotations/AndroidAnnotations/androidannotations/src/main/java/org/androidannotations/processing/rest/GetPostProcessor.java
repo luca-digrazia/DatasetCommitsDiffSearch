@@ -1,3 +1,18 @@
+/**
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package org.androidannotations.processing.rest;
 
 import java.util.ArrayList;
@@ -19,6 +34,7 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.WildcardType;
 
+import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.processing.EBeanHolder;
 
@@ -26,6 +42,7 @@ import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JPackage;
 
@@ -38,8 +55,11 @@ public abstract class GetPostProcessor extends MethodProcessor {
 	 */
 	protected JPackage restClientPackage;
 
+	protected APTCodeModelHelper helper;
+
 	public GetPostProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationsHolder) {
 		super(processingEnv, restImplementationsHolder);
+		helper = new APTCodeModelHelper();
 	}
 
 	@Override
@@ -80,7 +100,7 @@ public abstract class GetPostProcessor extends MethodProcessor {
 		String returnTypeString = returnType.toString();
 
 		JClass expectedClass = null;
-		JClass returnClass = holder.refClass(returnTypeString);
+		JClass returnClass = helper.typeMirrorToJClass(returnType, holder);
 
 		if (returnTypeString.startsWith(CanonicalNameConstants.RESPONSE_ENTITY)) {
 			DeclaredType declaredReturnType = (DeclaredType) returnType;
@@ -129,13 +149,13 @@ public abstract class GetPostProcessor extends MethodProcessor {
 
 			// is NOT a generics, return directly
 			if (typeArguments.isEmpty()) {
-				return holder.refClass(declaredType.toString());
+				return helper.typeMirrorToJClass(declaredType, holder);
 			}
 
 			// is a generics, must generate a new super class
 			TypeElement declaredElement = (TypeElement) declaredType.asElement();
 
-			JClass baseClass = holder.refClass(declaredType.toString()).erasure();
+			JClass baseClass = helper.typeMirrorToJClass(declaredType, holder).erasure();
 			JClass decoratedExpectedClass = retrieveDecoratedExpectedClass(declaredType, declaredElement);
 			if (decoratedExpectedClass == null) {
 				decoratedExpectedClass = baseClass;
@@ -147,7 +167,7 @@ public abstract class GetPostProcessor extends MethodProcessor {
 		}
 
 		// is not a class nor an interface, return directly
-		return holder.refClass(expectedType.toString());
+		return helper.typeMirrorToJClass(expectedType, holder);
 	}
 
 	/**
@@ -185,18 +205,15 @@ public abstract class GetPostProcessor extends MethodProcessor {
 			String decoratedClassNameSuffix = "";
 			JClass decoratedSuperClass = holder.refClass(decoratedClassName);
 			for (TypeMirror typeArgument : declaredType.getTypeArguments()) {
-				String typeArgumentName = typeArgument.toString();
 				if (typeArgument instanceof WildcardType) {
 					WildcardType wildcardType = (WildcardType) typeArgument;
 					if (wildcardType.getExtendsBound() != null) {
-						typeArgumentName = wildcardType.getExtendsBound().toString();
+						typeArgument = wildcardType.getExtendsBound();
 					} else if (wildcardType.getSuperBound() != null) {
-						typeArgumentName = wildcardType.getSuperBound().toString();
-					} else {
-						typeArgumentName = CanonicalNameConstants.OBJECT;
+						typeArgument = wildcardType.getSuperBound();
 					}
 				}
-				JClass narrowJClass = holder.refClass(typeArgumentName);
+				JClass narrowJClass = helper.typeMirrorToJClass(typeArgument, holder);
 				decoratedSuperClass = decoratedSuperClass.narrow(narrowJClass);
 				decoratedClassNameSuffix += plainName(narrowJClass);
 			}
@@ -251,7 +268,7 @@ public abstract class GetPostProcessor extends MethodProcessor {
 	}
 
 	@Override
-	protected JInvocation addResultCallMethod(JInvocation restCall, MethodProcessorHolder methodHolder) {
+	protected JExpression addResultCallMethod(JExpression restCall, MethodProcessorHolder methodHolder) {
 		JClass generatedReturnType = methodHolder.getMethodReturnClass();
 		if (generatedReturnType == null) {
 			return restCall;
