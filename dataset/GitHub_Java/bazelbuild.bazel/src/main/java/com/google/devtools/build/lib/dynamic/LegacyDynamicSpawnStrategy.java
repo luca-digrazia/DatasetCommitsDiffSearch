@@ -19,13 +19,15 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.io.Files;
+import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.DynamicStrategyRegistry;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
+import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext.StopConcurrentSpawns;
 import com.google.devtools.build.lib.actions.Spawn;
@@ -38,7 +40,10 @@ import com.google.devtools.build.lib.exec.ExecutionPolicy;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -121,8 +126,9 @@ public class LegacyDynamicSpawnStrategy implements SpawnActionContext {
   private final Function<Spawn, ExecutionPolicy> getExecutionPolicy;
   private final AtomicBoolean delayLocalExecution = new AtomicBoolean(false);
 
-  // TODO(steinman): This field is never assigned and canExec() would throw if trying to access it.
   private @Nullable SandboxedSpawnActionContext workerStrategy;
+  private Map<String, List<SandboxedSpawnActionContext>> localStrategiesByMnemonic;
+  private Map<String, List<SandboxedSpawnActionContext>> remoteStrategiesByMnemonic;
 
   /**
    * Constructs a {@code DynamicSpawnStrategy}.
@@ -138,8 +144,56 @@ public class LegacyDynamicSpawnStrategy implements SpawnActionContext {
     this.getExecutionPolicy = getExecutionPolicy;
   }
 
+  /**
+   * Searches for a sandboxed spawn strategy with the given name.
+   *
+   * @param usedContexts the action contexts used during the build
+   * @param name the name of the spawn strategy we are interested in
+   * @return a sandboxed spawn strategy
+   * @throws ExecutorInitException if the spawn strategy does not exist, or if it exists but is not
+   *     sandboxed
+   */
+  private static SandboxedSpawnActionContext findStrategy(
+      Iterable<ActionContext> usedContexts, String name) throws ExecutorInitException {
+    for (ActionContext context : usedContexts) {
+      ExecutionStrategy strategy = context.getClass().getAnnotation(ExecutionStrategy.class);
+      if (strategy != null && Arrays.asList(strategy.name()).contains(name)) {
+        if (!(context instanceof SandboxedSpawnActionContext)) {
+          throw new ExecutorInitException("Requested strategy " + name + " exists but does not "
+              + "support sandboxing");
+        }
+        return (SandboxedSpawnActionContext) context;
+      }
+    }
+    throw new ExecutorInitException("Requested strategy " + name + " does not exist");
+  }
+
+  private static Map<String, List<SandboxedSpawnActionContext>> buildStrategiesMap(
+      Iterable<ActionContext> usedContexts, List<Map.Entry<String, List<String>>> optionVals)
+      throws ExecutorInitException {
+    Map<String, List<SandboxedSpawnActionContext>> strategiesByMnemonic = new HashMap<>();
+    for (Map.Entry<String, List<String>> entry : optionVals) {
+      List<SandboxedSpawnActionContext> strategies = Lists.newArrayList();
+      if (!entry.getValue().isEmpty()) {
+        for (String element : entry.getValue()) {
+          strategies.add(findStrategy(usedContexts, element));
+        }
+        strategiesByMnemonic.put(entry.getKey(), strategies);
+      }
+    }
+    return strategiesByMnemonic;
+  }
+
   @Override
-  public ImmutableList<SpawnResult> exec(
+  public void executorCreated(Iterable<ActionContext> usedContexts) throws ExecutorInitException {
+    localStrategiesByMnemonic =
+        buildStrategiesMap(usedContexts, DynamicExecutionModule.localStrategiesByMnemonic);
+    remoteStrategiesByMnemonic =
+        buildStrategiesMap(usedContexts, DynamicExecutionModule.remoteStrategiesByMnemonic);
+  }
+
+  @Override
+  public List<SpawnResult> exec(
       final Spawn spawn, final ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
     if (options.requireAvailabilityInfo) {
@@ -307,26 +361,33 @@ public class LegacyDynamicSpawnStrategy implements SpawnActionContext {
     return dynamicExecutionResult.spawnResults();
   }
 
-  @Override
-  public boolean canExec(Spawn spawn, ActionExecutionContext actionExecutionContext) {
-    DynamicStrategyRegistry dynamicStrategyRegistry =
-        actionExecutionContext.getContext(DynamicStrategyRegistry.class);
+  private static List<SandboxedSpawnActionContext> getValidStrategies(
+      Map<String, List<SandboxedSpawnActionContext>> strategiesByMnemonic, Spawn spawn) {
+    List<SandboxedSpawnActionContext> validStrategies = Lists.newArrayList();
+    if (strategiesByMnemonic.get(spawn.getMnemonic()) != null) {
+      validStrategies.addAll(strategiesByMnemonic.get(spawn.getMnemonic()));
+    }
+    if (strategiesByMnemonic.get("") != null) {
+      validStrategies.addAll(strategiesByMnemonic.get(""));
+    }
+    return validStrategies;
+  }
 
+  @Override
+  public boolean canExec(Spawn spawn) {
     for (SandboxedSpawnActionContext strategy :
-        dynamicStrategyRegistry.getDynamicSpawnActionContexts(
-            spawn, DynamicStrategyRegistry.DynamicMode.LOCAL)) {
-      if (strategy.canExec(spawn, actionExecutionContext)) {
+        getValidStrategies(localStrategiesByMnemonic, spawn)) {
+      if (strategy.canExec(spawn)) {
         return true;
       }
     }
     for (SandboxedSpawnActionContext strategy :
-        dynamicStrategyRegistry.getDynamicSpawnActionContexts(
-            spawn, DynamicStrategyRegistry.DynamicMode.REMOTE)) {
-      if (strategy.canExec(spawn, actionExecutionContext)) {
+        getValidStrategies(remoteStrategiesByMnemonic, spawn)) {
+      if (strategy.canExec(spawn)) {
         return true;
       }
     }
-    return workerStrategy.canExec(spawn, actionExecutionContext);
+    return workerStrategy.canExec(spawn);
   }
 
   private void moveFileOutErr(ActionExecutionContext actionExecutionContext, FileOutErr outErr)
@@ -372,17 +433,13 @@ public class LegacyDynamicSpawnStrategy implements SpawnActionContext {
     }
   }
 
-  private static ImmutableList<SpawnResult> runLocally(
+  private List<SpawnResult> runLocally(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
       @Nullable AtomicReference<Class<? extends SpawnActionContext>> outputWriteBarrier)
       throws ExecException, InterruptedException {
-    DynamicStrategyRegistry dynamicStrategyRegistry =
-        actionExecutionContext.getContext(DynamicStrategyRegistry.class);
-
     for (SandboxedSpawnActionContext strategy :
-        dynamicStrategyRegistry.getDynamicSpawnActionContexts(
-            spawn, DynamicStrategyRegistry.DynamicMode.LOCAL)) {
+        getValidStrategies(localStrategiesByMnemonic, spawn)) {
       if (!strategy.toString().contains("worker") || supportsWorkers(spawn)) {
         return strategy.exec(
             spawn,
@@ -394,17 +451,13 @@ public class LegacyDynamicSpawnStrategy implements SpawnActionContext {
         "executorCreated not yet called or no default dynamic_local_strategy set");
   }
 
-  private static ImmutableList<SpawnResult> runRemotely(
+  private List<SpawnResult> runRemotely(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
       @Nullable AtomicReference<Class<? extends SpawnActionContext>> outputWriteBarrier)
       throws ExecException, InterruptedException {
-    DynamicStrategyRegistry dynamicStrategyRegistry =
-        actionExecutionContext.getContext(DynamicStrategyRegistry.class);
-
     for (SandboxedSpawnActionContext strategy :
-        dynamicStrategyRegistry.getDynamicSpawnActionContexts(
-            spawn, DynamicStrategyRegistry.DynamicMode.REMOTE)) {
+        getValidStrategies(remoteStrategiesByMnemonic, spawn)) {
       return strategy.exec(
           spawn, actionExecutionContext, lockOutputFiles(strategy.getClass(), outputWriteBarrier));
     }
