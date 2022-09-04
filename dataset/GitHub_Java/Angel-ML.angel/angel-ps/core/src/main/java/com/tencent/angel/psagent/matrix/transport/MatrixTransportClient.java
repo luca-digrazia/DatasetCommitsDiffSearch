@@ -1255,12 +1255,8 @@ public class MatrixTransportClient implements MatrixTransportInterface {
 
   private void returnBuffer(Request item) {
     ByteBuf buf = item.getContext().getSerializedData();
-    if(buf != null && buf.refCnt() > 0) {
-      try {
-        buf.release();
-      } catch (Throwable x) {
-        LOG.error("Release Buffer failed." , x);
-      }
+    if(buf != null) {
+      buf.release();
       item.getContext().setSerializedData(null);
     }
   }
