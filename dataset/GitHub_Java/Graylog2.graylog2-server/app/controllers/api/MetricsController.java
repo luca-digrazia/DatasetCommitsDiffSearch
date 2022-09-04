@@ -4,11 +4,10 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
-import com.google.common.collect.Sets;
 import controllers.AuthenticatedController;
-import lib.SockJSUtils;
 import lib.security.RedirectAuthenticator;
 import lib.sockjs.SockJsRouter;
 import models.sockjs.CreateSessionCommand;
@@ -36,6 +35,7 @@ import javax.inject.Inject;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -61,7 +61,7 @@ public class MetricsController extends AuthenticatedController {
     }
 
     private static class PushResponse {
-        public final Set<MetricValuesUpdate> metrics = Sets.newHashSet();
+        public final List<MetricValuesUpdate> metrics = Lists.newArrayList();
         public boolean hasError = false;
     }
 
@@ -150,7 +150,9 @@ public class MetricsController extends AuthenticatedController {
         }
 
         private MetricValuesUpdate createMetricUpdate(String nodeId, Set<Map.Entry<String, Metric>> metrics) {
-            final MetricValuesUpdate valuesUpdate = new MetricValuesUpdate(nodeId);
+            final MetricValuesUpdate valuesUpdate = new MetricValuesUpdate();
+            valuesUpdate.nodeId = nodeId;
+            valuesUpdate.values = Lists.newArrayList();
             for (Map.Entry<String, Metric> entry : metrics) {
                 valuesUpdate.values.add(new MetricValuesUpdate.NamedMetric(entry.getKey(), entry.getValue()));
             }
@@ -175,7 +177,7 @@ public class MetricsController extends AuthenticatedController {
 
                 @Override
                 public boolean websocket() {
-                    return Boolean.valueOf(SockJSUtils.isWebsocketsEnabled());
+                    return Boolean.valueOf(System.getProperty("websockets.enabled", "true"));
                 }
 
                 @Override
