@@ -109,7 +109,7 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(GradientTreeBoost.class);
 
     /**
-     * The model formula.
+     * Design matrix formula
      */
     private Formula formula;
 
@@ -207,7 +207,6 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
             throw new IllegalArgumentException("Invalid sampling fraction: " + subsample);
         }
 
-        formula = formula.expand(data.schema());
         DataFrame x = formula.x(data);
         double[] y = formula.y(data).toDoubleArray();
 
@@ -217,8 +216,9 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
 
         int[] permutation = IntStream.range(0, n).toArray();
         int[] samples = new int[n];
-
+        
         StructField field = new StructField("residual", DataTypes.DoubleType);
+
         double b = loss.intercept(y);
         double[] residual = loss.residual();
 
