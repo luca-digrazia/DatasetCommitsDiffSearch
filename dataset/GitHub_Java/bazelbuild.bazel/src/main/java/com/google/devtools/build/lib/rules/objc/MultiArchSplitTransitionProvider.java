@@ -46,11 +46,6 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
   static final String UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT =
       "Unsupported platform type \"%s\"";
   
-  @VisibleForTesting
-  static final String INVALID_VERSION_STRING_ERROR_FORMAT =
-      "Invalid version string \"%s\". Version must be of the form 'x.y' without alphabetic "
-          + "characters, such as '4.3'.";
-  
   private static final ImmutableSet<PlatformType> SUPPORTED_PLATFORM_TYPES =
       ImmutableSet.of(
           PlatformType.IOS, PlatformType.WATCHOS, PlatformType.TVOS, PlatformType.MACOS);
@@ -84,14 +79,12 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
     // TODO(b/37096178): This should be a mandatory attribute.
     if (!Strings.isNullOrEmpty(attributeValue)) {
       try {
-        DottedVersion minimumOsVersion = DottedVersion.fromString(attributeValue);
-        if (minimumOsVersion.hasAlphabeticCharacters() || minimumOsVersion.numComponents() > 2) {
-          throw ruleContext.throwWithAttributeError(MultiArchPlatformRule.MINIMUM_OS_VERSION,
-              String.format(INVALID_VERSION_STRING_ERROR_FORMAT, attributeValue));
-        }
+        // TODO(cparsons): Do more rigorous validation. For example, "8.2beta.3" is invalid, but
+        // will pass this validation.
+        DottedVersion.fromString(attributeValue);
       } catch (IllegalArgumentException exception) {
-        throw ruleContext.throwWithAttributeError(MultiArchPlatformRule.MINIMUM_OS_VERSION,
-            String.format(INVALID_VERSION_STRING_ERROR_FORMAT, attributeValue));
+        throw ruleContext.throwWithAttributeError(MultiArchPlatformRule.PLATFORM_TYPE_ATTR_NAME,
+            String.format(UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT, attributeValue));
       }
     }
   }
