@@ -3,8 +3,7 @@ package io.dropwizard.jetty;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
-
-import io.dropwizard.configuration.YamlConfigurationFactory;
+import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.logging.ConsoleAppenderFactory;
@@ -48,12 +47,11 @@ public class HttpConnectorFactoryTest {
     @Test
     public void testParseMinimalConfiguration() throws Exception {
         HttpConnectorFactory http =
-                new YamlConfigurationFactory<>(HttpConnectorFactory.class, validator, objectMapper, "dw")
+                new ConfigurationFactory<>(HttpConnectorFactory.class, validator, objectMapper, "dw")
                 .build(new File(Resources.getResource("yaml/http-connector-minimal.yml").toURI()));
 
         assertThat(http.getPort()).isEqualTo(8080);
         assertThat(http.getBindHost()).isNull();
-        assertThat(http.isInheritChannel()).isEqualTo(false);
         assertThat(http.getHeaderCacheSize()).isEqualTo(Size.bytes(512));
         assertThat(http.getOutputBufferSize()).isEqualTo(Size.kilobytes(32));
         assertThat(http.getMaxRequestHeaderSize()).isEqualTo(Size.kilobytes(8));
@@ -76,12 +74,11 @@ public class HttpConnectorFactoryTest {
     @Test
     public void testParseFullConfiguration() throws Exception {
         HttpConnectorFactory http =
-                new YamlConfigurationFactory<>(HttpConnectorFactory.class, validator, objectMapper, "dw")
+                new ConfigurationFactory<>(HttpConnectorFactory.class, validator, objectMapper, "dw")
                 .build(new File(Resources.getResource("yaml/http-connector.yml").toURI()));
 
         assertThat(http.getPort()).isEqualTo(9090);
         assertThat(http.getBindHost()).isEqualTo("127.0.0.1");
-        assertThat(http.isInheritChannel()).isEqualTo(true);
         assertThat(http.getHeaderCacheSize()).isEqualTo(Size.bytes(256));
         assertThat(http.getOutputBufferSize()).isEqualTo(Size.kilobytes(128));
         assertThat(http.getMaxRequestHeaderSize()).isEqualTo(Size.kilobytes(4));
