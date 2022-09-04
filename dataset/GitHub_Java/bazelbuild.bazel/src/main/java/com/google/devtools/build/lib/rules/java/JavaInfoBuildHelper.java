@@ -40,7 +40,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -81,9 +81,9 @@ final class JavaInfoBuildHelper {
       Artifact compileJar,
       @Nullable Artifact sourceJar,
       Boolean neverlink,
-      Sequence<JavaInfo> compileTimeDeps,
-      Sequence<JavaInfo> runtimeDeps,
-      Sequence<JavaInfo> exports,
+      SkylarkList<JavaInfo> compileTimeDeps,
+      SkylarkList<JavaInfo> runtimeDeps,
+      SkylarkList<JavaInfo> exports,
       @Nullable Artifact jdeps,
       Location location) {
     compileJar = compileJar != null ? compileJar : outputJar;
@@ -243,7 +243,7 @@ final class JavaInfoBuildHelper {
             "The value of use_ijar is True. Make sure the java_toolchain argument is valid.");
       }
       NestedSetBuilder<Artifact> builder = NestedSetBuilder.naiveLinkOrder();
-      for (Artifact compileJar : compileTimeJars.toList()) {
+      for (Artifact compileJar : compileTimeJars) {
         builder.add(
             buildIjar((SkylarkActionFactory) actions, compileJar, null, javaToolchain, location));
       }
@@ -265,7 +265,7 @@ final class JavaInfoBuildHelper {
                 JavaSourceJarsProvider.class,
                 JavaSourceJarsProvider.create(
                     NestedSetBuilder.emptySet(Order.STABLE_ORDER), sourceJars))
-            .setRuntimeJars(runtimeJars.toList())
+            .setRuntimeJars(ImmutableList.copyOf(runtimeJars))
             .build();
     return javaInfo;
   }
@@ -349,7 +349,9 @@ final class JavaInfoBuildHelper {
             javaInfoBuilder,
             // Include JavaGenJarsProviders from both deps and exports in the JavaGenJarsProvider
             // added to javaInfoBuilder for this target.
-            JavaInfo.fetchProvidersFromList(concat(deps, exports), JavaGenJarsProvider.class),
+            NestedSetBuilder.wrap(
+                Order.STABLE_ORDER,
+                JavaInfo.fetchProvidersFromList(concat(deps, exports), JavaGenJarsProvider.class)),
             ImmutableList.copyOf(annotationProcessorAdditionalInputs));
 
     JavaCompilationArgsProvider javaCompilationArgsProvider =

@@ -137,10 +137,8 @@ public class FakeAppleCommon implements AppleCommonApi<
   }
 
   @Override
-  public AppleDynamicFrameworkInfoApi<?> newDynamicFrameworkProvider(
-      Object dylibBinary,
-      ObjcProviderApi<?> depsObjcProvider,
-      Object dynamicFrameworkDirs,
+  public AppleDynamicFrameworkInfoApi<?, ?> newDynamicFrameworkProvider(Object dylibBinary,
+      ObjcProviderApi<?> depsObjcProvider, Object dynamicFrameworkDirs,
       Object dynamicFrameworkFiles) {
     return new FakeAppleDynamicFrameworkInfo();
   }
