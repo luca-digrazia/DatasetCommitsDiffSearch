@@ -26,7 +26,6 @@ import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
@@ -190,7 +189,6 @@ public class SmallRyeGraphQLProcessor {
         routeProducer.produce(new RouteBuildItem.Builder()
                 .route(graphQLConfig.rootPath + SCHEMA_PATH)
                 .handler(schemaHandler)
-                .displayOnNotFoundPage("MicroProfile GraphQL Schema")
                 .blockingRoute()
                 .build());
 
@@ -198,15 +196,17 @@ public class SmallRyeGraphQLProcessor {
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    @Consume(BeanContainerBuildItem.class)
     void buildExecutionEndpoint(
             BuildProducer<RouteBuildItem> routeProducer,
+            BuildProducer<NotFoundPageDisplayableEndpointBuildItem> notFoundPageDisplayableEndpointProducer,
             SmallRyeGraphQLInitializedBuildItem graphQLInitializedBuildItem,
             SmallRyeGraphQLRecorder recorder,
             ShutdownContextBuildItem shutdownContext,
             LaunchModeBuildItem launchMode,
             BodyHandlerBuildItem bodyHandlerBuildItem,
-            SmallRyeGraphQLConfig graphQLConfig) {
+            SmallRyeGraphQLConfig graphQLConfig,
+            BeanContainerBuildItem beanContainerBuildItem // don't remove this - makes sure beanContainer is initialized
+    ) {
 
         /*
          * <em>Ugly Hack</em>
@@ -220,15 +220,23 @@ public class SmallRyeGraphQLProcessor {
         if (launchMode.getLaunchMode() == LaunchMode.DEVELOPMENT) {
             recorder.setupClDevMode(shutdownContext);
         }
+        // add graphql endpoint for not found display in dev or test mode
+        if (launchMode.getLaunchMode().isDevOrTest()) {
+            notFoundPageDisplayableEndpointProducer
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(graphQLConfig.rootPath,
+                            "MicroProfile GraphQL Endpoint"));
+            notFoundPageDisplayableEndpointProducer
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(graphQLConfig.rootPath + SCHEMA_PATH,
+                            "MicroProfile GraphQL Schema"));
+        }
 
         Boolean allowGet = ConfigProvider.getConfig().getOptionalValue(ConfigKey.ALLOW_GET, boolean.class).orElse(false);
 
         Handler<RoutingContext> executionHandler = recorder.executionHandler(graphQLInitializedBuildItem.getInitialized(),
                 allowGet);
         routeProducer.produce(new RouteBuildItem.Builder()
-                .routeFunction(graphQLConfig.rootPath, recorder.routeFunction(bodyHandlerBuildItem.getHandler()))
+                .routeFunction(recorder.routeFunction(graphQLConfig.rootPath, bodyHandlerBuildItem.getHandler()))
                 .handler(executionHandler)
-                .displayOnNotFoundPage("MicroProfile GraphQL Endpoint")
                 .blockingRoute()
                 .build());
 
@@ -268,7 +276,6 @@ public class SmallRyeGraphQLProcessor {
         classes.add(graphql.schema.GraphQLSchema.class);
         classes.add(graphql.schema.GraphQLTypeReference.class);
         classes.add(List.class);
-        classes.add(Collection.class);
         return classes.toArray(new Class[] {});
     }
 
@@ -462,8 +469,9 @@ public class SmallRyeGraphQLProcessor {
                         "quarkus.smallrye-graphql.root-path-ui was set to \"/\", this is not allowed as it blocks the application from serving anything else.");
             }
 
-            String graphQLPath = httpRootPath.resolvePath(graphQLConfig.rootPath);
-            String graphQLUiPath = nonApplicationRootPathBuildItem.resolvePath(graphQLConfig.ui.rootPath);
+            String graphQLPath = httpRootPath.adjustPath(graphQLConfig.rootPath);
+            String graphQLUiPath = httpRootPath
+                    .adjustPath(nonApplicationRootPathBuildItem.adjustPath(graphQLConfig.ui.rootPath));
 
             AppArtifact artifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, GRAPHQL_UI_WEBJAR_GROUP_ID,
                     GRAPHQL_UI_WEBJAR_ARTIFACT_ID);
@@ -476,6 +484,10 @@ public class SmallRyeGraphQLProcessor {
 
                 smallRyeGraphQLBuildProducer
                         .produce(new SmallRyeGraphQLBuildItem(tempPath.toAbsolutePath().toString(), graphQLUiPath));
+                notFoundPageDisplayableEndpointProducer
+                        .produce(new NotFoundPageDisplayableEndpointBuildItem(
+                                nonApplicationRootPathBuildItem.adjustPath(graphQLConfig.ui.rootPath) + "/",
+                                "MicroProfile GraphQL UI"));
 
                 // Handle live reload of branding files
                 if (liveReloadBuildItem.isLiveReload() && !liveReloadBuildItem.getChangedResources().isEmpty()) {
@@ -520,22 +532,20 @@ public class SmallRyeGraphQLProcessor {
             SmallRyeGraphQLRuntimeConfig runtimeConfig,
             SmallRyeGraphQLBuildItem smallRyeGraphQLBuildItem,
             LaunchModeBuildItem launchMode,
-            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
             SmallRyeGraphQLConfig graphQLConfig) throws Exception {
 
         if (shouldInclude(launchMode, graphQLConfig)) {
             Handler<RoutingContext> handler = recorder.uiHandler(smallRyeGraphQLBuildItem.getGraphqlUiFinalDestination(),
                     smallRyeGraphQLBuildItem.getGraphqlUiPath(), runtimeConfig);
-            routeProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
+            routeProducer.produce(new RouteBuildItem.Builder()
+                    .nonApplicationRoute(true)
                     .route(graphQLConfig.ui.rootPath)
-                    .displayOnNotFoundPage("MicroProfile GraphQL UI")
                     .handler(handler)
-                    .requiresLegacyRedirect()
                     .build());
-            routeProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
+            routeProducer.produce(new RouteBuildItem.Builder()
+                    .nonApplicationRoute(true)
                     .route(graphQLConfig.ui.rootPath + "/*")
                     .handler(handler)
-                    .requiresLegacyRedirect()
                     .build());
         }
     }
