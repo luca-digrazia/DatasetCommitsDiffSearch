@@ -38,10 +38,6 @@ public final class Bazel {
   public static final ImmutableList<Class<? extends BlazeModule>> BAZEL_MODULES =
       ImmutableList.of(
           BazelStartupOptionsModule.class,
-          // This module needs to be registered before any module providing a SpawnCache
-          // implementation.
-          com.google.devtools.build.lib.runtime.NoSpawnCacheModule.class,
-          com.google.devtools.build.lib.runtime.CommandLogModule.class,
           com.google.devtools.build.lib.platform.SleepPreventionModule.class,
           com.google.devtools.build.lib.runtime.BazelFileSystemModule.class,
           com.google.devtools.build.lib.runtime.mobileinstall.MobileInstallModule.class,
@@ -65,7 +61,6 @@ public final class Bazel {
           com.google.devtools.build.lib.sandbox.SandboxModule.class,
           com.google.devtools.build.lib.runtime.BuildSummaryStatsModule.class,
           com.google.devtools.build.lib.dynamic.DynamicExecutionModule.class,
-          com.google.devtools.build.lib.bazel.rules.ninja.actions.NinjaRulesModule.class,
           com.google.devtools.build.lib.bazel.rules.BazelRulesModule.class,
           com.google.devtools.build.lib.bazel.rules.BazelStrategyModule.class,
           com.google.devtools.build.lib.network.NoOpConnectivityModule.class,
