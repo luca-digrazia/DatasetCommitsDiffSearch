@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.system;
 
@@ -21,13 +21,11 @@ import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.plugin.ProcessingPauseLockedException;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -38,19 +36,12 @@ import javax.ws.rs.Path;
 public class SystemProcessingResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(SystemProcessingResource.class);
 
-    private final ServerStatus serverStatus;
-
-    @Inject
-    public SystemProcessingResource(ServerStatus serverStatus) {
-        this.serverStatus = serverStatus;
-    }
-
     // TODO Change to @POST
     @PUT
     @Timed
     @ApiOperation(value = "Pauses message processing",
-            notes = "If the message journal is enabled, incoming messages will be spooled on disk, if it is disabled, " +
-                    "you might lose messages from inputs which cannot buffer themselves, like AMQP or Kafka-based inputs.")
+            notes = "Inputs that are able to reject or requeue messages will do so, others will buffer messages in " +
+                    "memory. Keep an eye on the heap space utilization while message processing is paused.")
     @Path("pause")
     public void pauseProcessing() {
         checkPermission(RestPermissions.PROCESSING_CHANGESTATE, serverStatus.getNodeId().toString());
