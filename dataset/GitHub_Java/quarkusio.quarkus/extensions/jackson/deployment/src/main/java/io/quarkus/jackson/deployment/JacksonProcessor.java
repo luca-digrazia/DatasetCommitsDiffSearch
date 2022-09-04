@@ -30,10 +30,9 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
-import io.quarkus.deployment.Capability;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
@@ -53,7 +52,6 @@ public class JacksonProcessor {
     private static final DotName JSON_DESERIALIZE = DotName.createSimple(JsonDeserialize.class.getName());
     private static final DotName JSON_SERIALIZE = DotName.createSimple(JsonSerialize.class.getName());
     private static final DotName JSON_CREATOR = DotName.createSimple("com.fasterxml.jackson.annotation.JsonCreator");
-    private static final DotName JSON_NAMING = DotName.createSimple("com.fasterxml.jackson.databind.annotation.JsonNaming");
     private static final DotName BUILDER_VOID = DotName.createSimple(Void.class.getName());
 
     private static final String TIME_MODULE = "com.fasterxml.jackson.datatype.jsr310.JavaTimeModule";
@@ -82,8 +80,8 @@ public class JacksonProcessor {
     @Inject
     List<IgnoreJsonDeserializeClassBuildItem> ignoreJsonDeserializeClassBuildItems;
 
-    @BuildStep
-    CapabilityBuildItem register() {
+    @BuildStep(providesCapabilities = Capabilities.JACKSON)
+    void register() {
         addReflectiveClass(true, false,
                 "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector",
                 "com.fasterxml.jackson.databind.ser.std.SqlDateSerializer",
@@ -141,26 +139,13 @@ public class JacksonProcessor {
             }
         }
 
-        // register @JsonNaming strategy implementations for reflection
-        for (AnnotationInstance jsonNamingInstance : index.getAnnotations(JSON_NAMING)) {
-            AnnotationValue strategyValue = jsonNamingInstance.value("value");
-            if (strategyValue != null) {
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, strategyValue.asClass().name().toString()));
-            }
-        }
-
         // this needs to be registered manually since the runtime module is not indexed by Jandex
         additionalBeans.produce(new AdditionalBeanBuildItem(ObjectMapperProducer.class));
-
-        return new CapabilityBuildItem(Capability.JACKSON);
     }
 
     private void addReflectiveHierarchyClass(DotName className) {
         Type jandexType = Type.create(className, Type.Kind.CLASS);
-        reflectiveHierarchyClass.produce(new ReflectiveHierarchyBuildItem.Builder()
-                .type(jandexType)
-                .source(getClass().getSimpleName() + " > " + jandexType.name().toString())
-                .build());
+        reflectiveHierarchyClass.produce(new ReflectiveHierarchyBuildItem(jandexType));
     }
 
     private void addReflectiveClass(boolean methods, boolean fields, String... className) {
