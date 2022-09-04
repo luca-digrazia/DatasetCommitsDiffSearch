@@ -5,14 +5,14 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import org.graylog.plugins.enterprise.search.Parameter;
 import org.graylog.plugins.enterprise.search.Query;
+import org.graylog.plugins.enterprise.search.QueryInfo;
+import org.graylog.plugins.enterprise.search.QueryParameter;
 import org.graylog.plugins.enterprise.search.Search;
 import org.graylog.plugins.enterprise.search.SearchJob;
-import org.graylog.plugins.enterprise.search.QueryMetadata;
 import org.graylog.plugins.enterprise.search.SearchType;
 import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.ESDateHistogram;
 import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.ESMessageList;
 import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.ESSearchTypeHandler;
-import org.graylog.plugins.enterprise.search.errors.SearchException;
 import org.graylog.plugins.enterprise.search.params.QueryReferenceBinding;
 import org.graylog.plugins.enterprise.search.params.ValueBinding;
 import org.graylog.plugins.enterprise.search.searchtypes.DateHistogram;
@@ -47,14 +47,16 @@ public class ElasticsearchBackendTest {
 
     @Test
     public void parse() throws Exception {
-        final QueryMetadata queryMetadata = backend.parse(ImmutableSet.of(), Query.builder()
+        final QueryInfo queryInfo = backend.parse(Query.builder()
                 .id("abc123")
                 .query(ElasticsearchQueryString.builder().queryString("user_name:$username$ http_method:$foo$").build())
                 .timerange(RelativeRange.create(600))
                 .build());
 
-        assertThat(queryMetadata.usedParameterNames())
-                .containsOnly("username", "foo");
+        assertThat(queryInfo.parameters())
+                .containsOnly(
+                        Maps.immutableEntry("username", QueryParameter.any("username")),
+                        Maps.immutableEntry("foo", QueryParameter.any("foo")));
     }
 
     @Test
@@ -74,7 +76,7 @@ public class ElasticsearchBackendTest {
 
             backend.generate(job, query, Collections.emptySet());
             fail("Must throw exception");
-        } catch (SearchException e) {
+        } catch (IllegalStateException e) {
             assertThat(e).hasMessageContaining("TESTPARAM");
         }
     }
