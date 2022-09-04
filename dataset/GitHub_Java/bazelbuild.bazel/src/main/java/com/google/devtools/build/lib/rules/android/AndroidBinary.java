@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidB
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
-import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
@@ -92,12 +91,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   protected abstract JavaSemantics createJavaSemantics();
   protected abstract AndroidSemantics createAndroidSemantics();
 
-  protected abstract CppSemantics createCppSemantics();
-
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    CppSemantics cppSemantics = createCppSemantics();
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
     if (!AndroidSdkProvider.verifyPresence(ruleContext)) {
@@ -110,21 +106,19 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     javaSemantics.checkRule(ruleContext, javaCommon);
     javaSemantics.checkForProtoLibraryAndJavaProtoLibraryOnSameProto(ruleContext, javaCommon);
 
-    AndroidCommon androidCommon =
-        new AndroidCommon(javaCommon, /* asNeverLink= */ true, /* exportDeps= */ true);
-    ResourceDependencies resourceDeps =
-        LocalResourceContainer.definesAndroidResources(ruleContext.attributes())
-            ? ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink= */ false)
-            : ResourceDependencies.fromRuleResourceAndDeps(ruleContext, /* neverlink= */ false);
-    RuleConfiguredTargetBuilder builder =
-        init(
-            ruleContext,
-            filesBuilder,
-            resourceDeps,
-            androidCommon,
-            cppSemantics,
-            javaSemantics,
-            androidSemantics);
+    AndroidCommon androidCommon = new AndroidCommon(
+        javaCommon, true /* asNeverLink */, true /* exportDeps */);
+    ResourceDependencies resourceDeps = LocalResourceContainer.definesAndroidResources(
+        ruleContext.attributes())
+        ? ResourceDependencies.fromRuleDeps(ruleContext, false /* neverlink */)
+        : ResourceDependencies.fromRuleResourceAndDeps(ruleContext, false /* neverlink */);
+    RuleConfiguredTargetBuilder builder = init(
+        ruleContext,
+        filesBuilder,
+        resourceDeps,
+        androidCommon,
+        javaSemantics,
+        androidSemantics);
     return builder.build();
   }
 
@@ -178,7 +172,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       NestedSetBuilder<Artifact> filesBuilder,
       ResourceDependencies resourceDeps,
       AndroidCommon androidCommon,
-      CppSemantics cppSemantics,
       JavaSemantics javaSemantics,
       AndroidSemantics androidSemantics)
       throws InterruptedException, RuleErrorException {
@@ -213,8 +206,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             androidSemantics.getNativeDepsFileName(),
             depsByArchitecture,
             toolchainMap,
-            configurationMap,
-            cppSemantics);
+            configurationMap);
 
     // TODO(bazel-team): Resolve all the different cases of resource handling so this conditional
     // can go away: recompile from android_resources, and recompile from android_binary attributes.
@@ -246,7 +238,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               resourceDeps,
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
               ResourceFilter.fromRuleContext(ruleContext),
-              ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"),
+              ruleContext.getTokenizedStringListAttr("nocompress_extensions"),
               ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
               ProguardHelper.getProguardConfigArtifact(ruleContext, ""),
               createMainDexProguardSpec(ruleContext),
@@ -266,7 +258,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                   ruleContext,
                   getDxArtifact(ruleContext, "android_instant_run.ap_"),
                   resourceDeps,
-                  ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"),
+                  ruleContext.getTokenizedStringListAttr("nocompress_extensions"),
                   ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
                   ProguardHelper.getProguardConfigArtifact(ruleContext, "instant_run"));
       ruleContext.assertNoErrors();
@@ -894,7 +886,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               .setTargetAaptVersion(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
               .setResourceFilter(ResourceFilter.fromRuleContext(ruleContext))
               .setUncompressedExtensions(
-                  ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"))
+                  ruleContext.getTokenizedStringListAttr("nocompress_extensions"))
               .build();
       filesBuilder.add(ruleContext.getImplicitOutputArtifact(
           AndroidRuleClasses.ANDROID_RESOURCE_SHRINKER_LOG));
@@ -938,7 +930,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       Function<Artifact, Artifact> derivedJarFunction,
       @Nullable  Artifact proguardOutputMap)
       throws InterruptedException, RuleErrorException {
-    List<String> dexopts = ruleContext.getExpander().withDataLocations().tokenized("dexopts");
+    List<String> dexopts = ruleContext.getTokenizedStringListAttr("dexopts");
     MultidexMode multidexMode = getMultidexMode(ruleContext);
     if (!supportsMultidexMode(ruleContext, multidexMode)) {
       ruleContext.throwWithRuleError("Multidex mode \"" + multidexMode.getAttributeValue()
@@ -1456,9 +1448,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                     .addExecPath(mainDexList)
                     .addExecPath(strippedJar)
                     .addExecPath(jar)
-                    .addAll(
-                        ruleContext
-                            .getExpander().withDataLocations().tokenized("main_dex_list_opts"))
+                    .addAll(ruleContext.getTokenizedStringListAttr("main_dex_list_opts"))
                     .build())
             .build(ruleContext));
     return mainDexList;
