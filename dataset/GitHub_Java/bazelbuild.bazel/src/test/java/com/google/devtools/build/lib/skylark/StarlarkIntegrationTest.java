@@ -33,8 +33,8 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkAttributeTransitionProvider;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleTransitionProvider;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkAttributeTransitionProvider;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleTransitionProvider;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
 import com.google.devtools.build.lib.analysis.test.AnalysisTestResultInfo;
@@ -796,8 +796,6 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
   public void testInstrumentedFilesInfo_coverageEnabled() throws Exception {
     scratch.file(
         "test/starlark/extension.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
-        "",
         "def custom_rule_impl(ctx):",
         "  return [coverage_common.instrumented_files_info(ctx,",
         "      extensions = ['txt'],",
@@ -807,37 +805,30 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "custom_rule = rule(implementation = custom_rule_impl,",
         "  attrs = {",
         "      'attr1': attr.label_list(mandatory = True, allow_files=True),",
-        "      'attr2': attr.label_list(mandatory = True)})",
-        "",
-        "def test_rule_impl(ctx):",
-        "  return [MyInfo(",
-        // The point of this is to assert that these fields can be read in analysistest.
-        // Normally, this information wouldn't be forwarded via a different provider.
-        "    instrumented_files = ctx.attr.target[InstrumentedFilesInfo].instrumented_files,",
-        "    metadata_files = ctx.attr.target[InstrumentedFilesInfo].metadata_files)]",
-        "",
-        "test_rule = rule(implementation = test_rule_impl,",
-        "  attrs = {'target': attr.label(mandatory = True)})");
+        "      'attr2': attr.label_list(mandatory = True)})");
 
     scratch.file(
         "test/starlark/BUILD",
-        "load('//test/starlark:extension.bzl', 'custom_rule', 'test_rule')",
+        "load('//test/starlark:extension.bzl', 'custom_rule')",
         "",
         "cc_library(name='cl', srcs = [':A.cc'])",
-        "custom_rule(name = 'cr', attr1 = [':a.txt', ':a.random'], attr2 = [':cl'])",
-        "test_rule(name = 'test', target = ':cr')");
+        "custom_rule(name = 'cr', attr1 = [':a.txt', ':a.random'], attr2 = [':cl'])");
 
     useConfiguration("--collect_code_coverage");
 
-    ConfiguredTarget target = getConfiguredTarget("//test/starlark:test");
-    StructImpl myInfo = getMyInfoFromTarget(target);
-    assertThat(
-            ActionsTestUtil.baseArtifactNames(
-                ((Depset) myInfo.getValue("instrumented_files")).getSet(Artifact.class)))
+    ConfiguredTarget target = getConfiguredTarget("//test/starlark:cr");
+
+    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR);
+    assertWithMessage("InstrumentedFilesInfo should be set.").that(provider).isNotNull();
+    assertThat(ActionsTestUtil.baseArtifactNames(provider.getInstrumentedFiles()))
         .containsExactly("a.txt", "A.cc");
     assertThat(
             ActionsTestUtil.baseArtifactNames(
-                ((Depset) myInfo.getValue("metadata_files")).getSet(Artifact.class)))
+                ((Depset) provider.getValue("instrumented_files")).getSet(Artifact.class)))
+        .containsExactly("a.txt", "A.cc");
+    assertThat(
+            ActionsTestUtil.baseArtifactNames(
+                ((Depset) provider.getValue("metadata_files")).getSet(Artifact.class)))
         .containsExactly("A.gcno");
   }
 
@@ -2603,9 +2594,9 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
   @Test
   public void testBadAllowlistTransition_noAllowlist() throws Exception {
     scratch.file(
-        "tools/allowlists/function_transition_allowlist/BUILD",
+        "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
-        "    name = 'function_transition_allowlist',",
+        "    name = 'function_transition_whitelist',",
         "    packages = [",
         "        '//test/...',",
         "    ],",
@@ -2622,8 +2613,8 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "  implementation = _my_rule_impl,",
         "  attrs = {",
         "    'dep':  attr.label(cfg = my_transition),",
-        "#   '_allowlist_function_transition': attr.label(",
-        "#       default = '//tools/allowlists/function_transition_allowlist',",
+        "#   '_whitelist_function_transition': attr.label(",
+        "#       default = '//tools/whitelists/function_transition_whitelist',",
         "#   ),",
         "  })",
         "def _simple_rule_impl(ctx):",
@@ -2646,9 +2637,9 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
   public void testPrintFromTransitionImpl() throws Exception {
     setStarlarkSemanticsOptions("--experimental_starlark_config_transitions");
     scratch.file(
-        "tools/allowlists/function_transition_allowlist/BUILD",
+        "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
-        "    name = 'function_transition_allowlist',",
+        "    name = 'function_transition_whitelist',",
         "    packages = [",
         "        '//test/...',",
         "    ],",
@@ -2671,8 +2662,8 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "  cfg = my_transition,",
         "  attrs = {",
         "    'dep': attr.label(cfg = my_transition),",
-        "    '_allowlist_function_transition': attr.label(",
-        "        default = '//tools/allowlists/function_transition_allowlist',",
+        "    '_whitelist_function_transition': attr.label(",
+        "        default = '//tools/whitelists/function_transition_whitelist',",
         "    ),",
         "  }",
         ")");
@@ -2698,9 +2689,9 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
   public void testTransitionEquality() throws Exception {
     setStarlarkSemanticsOptions("--experimental_starlark_config_transitions");
     scratch.file(
-        "tools/allowlists/function_transition_allowlist/BUILD",
+        "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
-        "    name = 'function_transition_allowlist',",
+        "    name = 'function_transition_whitelist',",
         "    packages = [",
         "        '//test/...',",
         "    ],",
@@ -2721,8 +2712,8 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "  cfg = my_transition,",
         "  attrs = {",
         "    'dep': attr.label(cfg = my_transition),",
-        "    '_allowlist_function_transition': attr.label(",
-        "        default = '//tools/allowlists/function_transition_allowlist',",
+        "    '_whitelist_function_transition': attr.label(",
+        "        default = '//tools/whitelists/function_transition_whitelist',",
         "    ),",
         "  }",
         ")");
@@ -2757,9 +2748,9 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
   @Test
   public void testBadAllowlistTransition_allowlistNoCfg() throws Exception {
     scratch.file(
-        "tools/allowlists/function_transition_allowlist/BUILD",
+        "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
-        "    name = 'function_transition_allowlist',",
+        "    name = 'function_transition_whitelist',",
         "    packages = [",
         "        '//test/...',",
         "    ],",
@@ -2772,8 +2763,8 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "  implementation = _my_rule_impl,",
         "  attrs = {",
         "#   'dep':  attr.label(cfg = my_transition),",
-        "    '_allowlist_function_transition': attr.label(",
-        "        default = '//tools/allowlists/function_transition_allowlist',",
+        "    '_whitelist_function_transition': attr.label(",
+        "        default = '//tools/whitelists/function_transition_whitelist',",
         "    ),",
         "  })",
         "def _simple_rule_impl(ctx):",
@@ -3090,6 +3081,28 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:r");
     assertContainsEvent("unhashable type: 'dict'");
+  }
+
+  @Test
+  public void testDisabledPartitionDefaultParameter() throws Exception {
+    scratch.file("test/extension.bzl", "y = 'abc'.partition()");
+
+    scratch.file("test/BUILD", "load('//test:extension.bzl', 'y')", "cc_library(name = 'r')");
+
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test:r");
+    assertContainsEvent("parameter 'sep' has no default value");
+  }
+
+  @Test
+  public void testDisabledPartitionDefaultParameter2() throws Exception {
+    scratch.file("test/extension.bzl", "y = 'abc'.rpartition()");
+
+    scratch.file("test/BUILD", "load('//test:extension.bzl', 'y')", "cc_library(name = 'r')");
+
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test:r");
+    assertContainsEvent("parameter 'sep' has no default value");
   }
 
   @Test
@@ -3434,52 +3447,5 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "load('//test/starlark:extension.bzl', 'malloc_rule')",
         "",
         "malloc_rule(name = 'malloc')");
-  }
-
-  // Test for an interesting situation for the inlining implementation's attempt to process
-  // subsequent load statements even when an earlier one has a missing Skyframe dep.
-  @Test
-  public void bzlFileWithErrorsLoadedThroughMultipleLoadPathsWithTheLatterOneHavingMissingDeps()
-      throws Exception {
-    scratch.file("test/starlark/error.bzl", "nope");
-    scratch.file("test/starlark/ok.bzl", "ok = 42");
-    scratch.file(
-        "test/starlark/loads-error-and-has-missing-deps.bzl",
-        "load('//test/starlark:error.bzl', 'doesntmatter')",
-        "load('//test/starlark:ok.bzl', 'ok')");
-    scratch.file(
-        "test/starlark/BUILD",
-        "load('//test/starlark:error.bzl', 'doesntmatter')",
-        "load('//test/starlark:loads-error-and-has-missing-deps.bzl', 'doesntmatter')");
-
-    reporter.removeHandler(failFastHandler);
-    BuildFileContainsErrorsException e =
-        assertThrows(
-            BuildFileContainsErrorsException.class, () -> getTarget("//test/starlark:BUILD"));
-    assertThat(e).hasMessageThat().contains("Extension 'test/starlark/error.bzl' has errors");
-  }
-
-  // Test for an interesting situation for the inlining implementation's attempt to process
-  // subsequent load statements even when an earlier one has a missing Skyframe dep.
-  @Test
-  public void bzlFileWithErrorsLoadedThroughMultipleLoadPathsWithTheLatterOneNotHavingMissingDeps()
-      throws Exception {
-    scratch.file("test/starlark/error.bzl", "nope");
-    scratch.file("test/starlark/ok.bzl", "ok = 42");
-    scratch.file(
-        "test/starlark/loads-error-and-has-missing-deps.bzl",
-        "load('//test/starlark:error.bzl', 'doesntmatter')",
-        "load('//test/starlark:ok.bzl', 'ok')");
-    scratch.file(
-        "test/starlark/BUILD",
-        "load('//test/starlark:ok.bzl', 'ok')",
-        "load('//test/starlark:error.bzl', 'doesntmatter')",
-        "load('//test/starlark:loads-error-and-has-missing-deps.bzl', 'doesntmatter')");
-
-    reporter.removeHandler(failFastHandler);
-    BuildFileContainsErrorsException e =
-        assertThrows(
-            BuildFileContainsErrorsException.class, () -> getTarget("//test/starlark:BUILD"));
-    assertThat(e).hasMessageThat().contains("Extension 'test/starlark/error.bzl' has errors");
   }
 }

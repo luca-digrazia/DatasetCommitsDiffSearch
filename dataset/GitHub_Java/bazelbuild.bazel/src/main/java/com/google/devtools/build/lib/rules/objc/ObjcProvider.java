@@ -39,7 +39,7 @@ import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
-import com.google.devtools.build.lib.starlarkbuildapi.apple.ObjcProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.apple.ObjcProviderApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -1063,6 +1063,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     /** Return an EvalException for having a bad key in the direct dependency provider. */
     private static <E> EvalException badDirectDependencyKeyError(Key<E> key) {
       return new EvalException(
+          null,
           String.format(
               AppleStarlarkCommon.BAD_DIRECT_DEPENDENCY_KEY_ERROR, key.getStarlarkKeyName()));
     }
@@ -1195,6 +1196,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
         if (getStarlarkSemantics().incompatibleObjcProviderRemoveCompileInfo()) {
           if (!KEYS_FOR_DIRECT.contains(key)) {
             throw new EvalException(
+                null,
                 String.format(AppleStarlarkCommon.DEPRECATED_KEY_ERROR, key.getStarlarkKeyName()));
           }
         } else {
@@ -1235,7 +1237,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
         for (PathFragment framework : frameworks) {
           if (!framework.getSafePathString().endsWith(FRAMEWORK_SUFFIX)) {
             throw new EvalException(
-                String.format(AppleStarlarkCommon.BAD_FRAMEWORK_PATH_ERROR, framework));
+                null, String.format(AppleStarlarkCommon.BAD_FRAMEWORK_PATH_ERROR, framework));
           }
           frameworkSearchPaths.add(framework.getParentDirectory());
         }
@@ -1277,12 +1279,14 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     void addProvidersFromStarlark(Object toAdd) throws EvalException {
       if (!(toAdd instanceof Iterable)) {
         throw new EvalException(
+            null,
             String.format(AppleStarlarkCommon.BAD_PROVIDERS_ITER_ERROR, Starlark.type(toAdd)));
       } else {
         Iterable<Object> toAddIterable = (Iterable<Object>) toAdd;
         for (Object toAddObject : toAddIterable) {
           if (!(toAddObject instanceof ObjcProvider)) {
             throw new EvalException(
+                null,
                 String.format(
                     AppleStarlarkCommon.BAD_PROVIDERS_ELEM_ERROR, Starlark.type(toAddObject)));
           } else {
@@ -1303,12 +1307,14 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     void addDirectDepProvidersFromStarlark(Object toAdd) throws EvalException {
       if (!(toAdd instanceof Iterable)) {
         throw new EvalException(
+            null,
             String.format(AppleStarlarkCommon.BAD_PROVIDERS_ITER_ERROR, Starlark.type(toAdd)));
       } else {
         Iterable<Object> toAddIterable = (Iterable<Object>) toAdd;
         for (Object toAddObject : toAddIterable) {
           if (!(toAddObject instanceof ObjcProvider)) {
             throw new EvalException(
+                null,
                 String.format(
                     AppleStarlarkCommon.BAD_PROVIDERS_ELEM_ERROR, Starlark.type(toAddObject)));
           } else {
