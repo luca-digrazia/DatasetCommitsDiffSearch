@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp.proto;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.devtools.build.lib.analysis.TransitionMode.TARGET;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 
@@ -42,7 +43,6 @@ import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.cpp.AspectLegalCppSemantics;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper;
@@ -125,7 +125,6 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
             .requiresConfigurationFragments(CppConfiguration.class, ProtoConfiguration.class)
             .requireStarlarkProviders(ProtoInfo.PROVIDER.id())
             .addRequiredToolchains(ccToolchainType)
-            .useToolchainTransition(true)
             .add(
                 attr(PROTO_TOOLCHAIN_ATTR, LABEL)
                     .mandatoryNativeProviders(ImmutableList.of(ProtoLangToolchainProvider.class))
@@ -168,7 +167,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       if (runtime != null) {
         depsBuilder.add(runtime);
       }
-      depsBuilder.addAll(ruleContext.getPrerequisites("deps"));
+      depsBuilder.addAll(ruleContext.getPrerequisites("deps", TARGET));
       ImmutableList<TransitiveInfoCollection> deps = depsBuilder.build();
 
       checkProtoLibrariesInDeps(ruleContext, deps);
@@ -203,7 +202,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
         // that it depends on.
         NestedSetBuilder<Artifact> transitiveHeaders = NestedSetBuilder.stableOrder();
         for (ProtoCcHeaderProvider provider :
-            ruleContext.getPrerequisites("deps", ProtoCcHeaderProvider.class)) {
+            ruleContext.getPrerequisites("deps", TARGET, ProtoCcHeaderProvider.class)) {
           compilationHelper.addPublicTextualHeaders(provider.getHeaders());
           transitiveHeaders.addTransitive(provider.getHeaders());
         }
@@ -214,8 +213,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       filesBuilder.addAll(outputs);
       createProtoCompileAction(outputs);
 
-      CompilationInfo compilationInfo =
-          compilationHelper.compile(ruleContext, ruleContext::ruleError);
+      CompilationInfo compilationInfo = compilationHelper.compile(ruleContext::ruleError);
       CcCompilationOutputs ccCompilationOutputs = compilationInfo.getCcCompilationOutputs();
       CcLinkingHelper ccLinkingHelper = initializeLinkingHelper(featureConfiguration, deps);
       if (ccToolchain(ruleContext).supportsInterfaceSharedLibraries(featureConfiguration)) {
@@ -350,7 +348,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
                   ruleContext
                       .getAnalysisEnvironment()
                       .getStarlarkSemantics()
-                      .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
+                      .experimentalSiblingRepositoryLayout());
       if (protoRoot.equals(".") || protoRoot.equals(repositoryRoot.getPathString())) {
         return helper;
       }
@@ -369,7 +367,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
                   ruleContext
                       .getAnalysisEnvironment()
                       .getStarlarkSemantics()
-                      .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
+                      .experimentalSiblingRepositoryLayout());
       if (protoRootFragment.startsWith(repositoryPath)) {
         protoRootFragment = protoRootFragment.relativeTo(repositoryPath);
       }
@@ -414,7 +412,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
     private CcToolchainProvider ccToolchain(RuleContext ruleContext) {
       return CppHelper.getToolchain(
           ruleContext,
-          ruleContext.getPrerequisite(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME),
+          ruleContext.getPrerequisite(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, TARGET),
           ccToolchainType);
     }
 
@@ -458,7 +456,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
         throws InterruptedException {
       PathFragment protoRootFragment = PathFragment.create(protoInfo.getDirectProtoSourceRoot());
       String genfilesPath;
-      PathFragment genfilesFragment = ruleContext.getGenfilesFragment();
+      PathFragment genfilesFragment = ruleContext.getConfiguration().getGenfilesFragment();
       if (protoRootFragment.startsWith(genfilesFragment)) {
         genfilesPath = protoRootFragment.getPathString();
       } else {
@@ -480,7 +478,8 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
     }
 
     private ProtoLangToolchainProvider getProtoToolchainProvider() {
-      return ruleContext.getPrerequisite(PROTO_TOOLCHAIN_ATTR, ProtoLangToolchainProvider.class);
+      return ruleContext.getPrerequisite(
+          PROTO_TOOLCHAIN_ATTR, TARGET, ProtoLangToolchainProvider.class);
     }
 
     public void addProviders(ConfiguredAspect.Builder builder) {
