@@ -31,10 +31,12 @@ import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.annotation.Nullable;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.Processor;
@@ -46,6 +48,8 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
@@ -94,19 +98,20 @@ public class AutoCodecProcessor extends AbstractProcessor {
     for (Element element : roundEnv.getElementsAnnotatedWith(AutoCodecUtil.ANNOTATION)) {
       AutoCodec annotation = element.getAnnotation(AutoCodecUtil.ANNOTATION);
       TypeElement encodedType = (TypeElement) element;
+      @Nullable TypeElement dependencyType = getDependencyType(annotation);
       TypeSpec.Builder codecClassBuilder = null;
       switch (annotation.strategy()) {
         case INSTANTIATOR:
-          codecClassBuilder = buildClassWithInstantiatorStrategy(encodedType);
+          codecClassBuilder = buildClassWithInstantiatorStrategy(encodedType, dependencyType);
           break;
         case PUBLIC_FIELDS:
-          codecClassBuilder = buildClassWithPublicFieldsStrategy(encodedType);
+          codecClassBuilder = buildClassWithPublicFieldsStrategy(encodedType, dependencyType);
           break;
         case POLYMORPHIC:
-          codecClassBuilder = buildClassWithPolymorphicStrategy(encodedType);
+          codecClassBuilder = buildClassWithPolymorphicStrategy(encodedType, dependencyType);
           break;
         case SINGLETON:
-          codecClassBuilder = buildClassWithSingletonStrategy(encodedType);
+          codecClassBuilder = buildClassWithSingletonStrategy(encodedType, dependencyType);
           break;
         default:
           throw new IllegalArgumentException("Unknown strategy: " + annotation.strategy());
@@ -132,27 +137,84 @@ public class AutoCodecProcessor extends AbstractProcessor {
     return true;
   }
 
-  private TypeSpec.Builder buildClassWithInstantiatorStrategy(TypeElement encodedType) {
-    ExecutableElement constructor = selectInstantiator(encodedType);
-    List<? extends VariableElement> fields = constructor.getParameters();
+  /** Returns the type of the annotation dependency or null if the type is {@link Void}. */
+  @Nullable
+  private TypeElement getDependencyType(AutoCodec annotation) {
+    try {
+      annotation.dependency();
+      throw new AssertionError("Expected MirroredTypeException!");
+    } catch (MirroredTypeException e) {
+      DeclaredType dependencyMirror = (DeclaredType) e.getTypeMirror();
+      if (matchesType(dependencyMirror, Void.class)) {
+        return null;
+      }
+      return (TypeElement) dependencyMirror.asElement();
+    }
+  }
 
-    TypeSpec.Builder codecClassBuilder = AutoCodecUtil.initializeCodecClassBuilder(encodedType);
+  private TypeSpec.Builder buildClassWithInstantiatorStrategy(
+      TypeElement encodedType, @Nullable TypeElement dependency) {
+    ExecutableElement constructor = selectInstantiator(encodedType);
+    PartitionedParameters parameters = isolateDependency(constructor);
+    if (dependency != null) {
+      if (parameters.dependency != null) {
+        throw new IllegalArgumentException(
+            encodedType.getQualifiedName()
+                + " has both a @Dependency annotated constructor parameter "
+                + "and a non-Void dependency element "
+                + dependency.getQualifiedName());
+      }
+      parameters.dependency = dependency;
+    }
+
+    TypeSpec.Builder codecClassBuilder =
+        AutoCodecUtil.initializeCodecClassBuilder(encodedType, parameters.dependency);
 
     if (encodedType.getAnnotation(AutoValue.class) == null) {
-      initializeUnsafeOffsets(codecClassBuilder, encodedType, fields);
-      codecClassBuilder.addMethod(buildSerializeMethodWithInstantiator(encodedType, fields));
+      initializeUnsafeOffsets(codecClassBuilder, encodedType, parameters.fields);
+      codecClassBuilder.addMethod(buildSerializeMethodWithInstantiator(encodedType, parameters));
     } else {
       codecClassBuilder.addMethod(
-          buildSerializeMethodWithInstantiatorForAutoValue(encodedType, fields));
+          buildSerializeMethodWithInstantiatorForAutoValue(encodedType, parameters));
     }
 
     MethodSpec.Builder deserializeBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType);
-    buildDeserializeBody(deserializeBuilder, fields);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, parameters.dependency);
+    buildDeserializeBody(deserializeBuilder, parameters.fields);
     addReturnNew(deserializeBuilder, encodedType, constructor);
     codecClassBuilder.addMethod(deserializeBuilder.build());
 
     return codecClassBuilder;
+  }
+
+  private static class PartitionedParameters {
+    /** Non-dependency parameters. */
+    List<VariableElement> fields;
+    /** Dependency for this codec or null if no such dependency exists. */
+    @Nullable TypeElement dependency;
+  }
+
+  /** Separates any dependency from the constructor parameters. */
+  private static PartitionedParameters isolateDependency(ExecutableElement constructor) {
+    Map<Boolean, List<VariableElement>> splitParameters =
+        constructor
+            .getParameters()
+            .stream()
+            .collect(
+                Collectors.partitioningBy(
+                    p -> p.getAnnotation(AutoCodec.Dependency.class) != null));
+    PartitionedParameters result = new PartitionedParameters();
+    result.fields = splitParameters.get(Boolean.FALSE);
+    List<VariableElement> dependencies = splitParameters.get(Boolean.TRUE);
+    if (dependencies.size() > 1) {
+      throw new IllegalArgumentException(
+          ((TypeElement) constructor.getEnclosingElement()).getQualifiedName()
+              + " constructor has multiple Dependency annotations.");
+    }
+    if (!dependencies.isEmpty()) {
+      result.dependency = (TypeElement) ((DeclaredType) dependencies.get(0).asType()).asElement();
+    }
+    return result;
   }
 
   private ExecutableElement selectInstantiator(TypeElement encodedType) {
@@ -201,54 +263,47 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   private MethodSpec buildSerializeMethodWithInstantiator(
-      TypeElement encodedType, List<? extends VariableElement> fields) {
+      TypeElement encodedType, PartitionedParameters parameters) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
-    for (VariableElement parameter : fields) {
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, parameters.dependency);
+    for (VariableElement parameter : parameters.fields) {
       TypeKind typeKind = parameter.asType().getKind();
-      Optional<FieldValueAndClass> hasField =
-          getFieldByNameRecursive(encodedType, parameter.getSimpleName().toString());
-      if (hasField.isPresent()) {
-        switch (typeKind) {
-          case BOOLEAN:
-            serializeBuilder.addStatement(
-                "codedOut.writeBoolNoTag($T.getInstance().getBoolean(input, $L_offset))",
-                UnsafeProvider.class,
-                parameter.getSimpleName());
-            break;
-          case INT:
-            serializeBuilder.addStatement(
-                "codedOut.writeInt32NoTag($T.getInstance().getInt(input, $L_offset))",
-                UnsafeProvider.class,
-                parameter.getSimpleName());
-            break;
-          case ARRAY:
-            // fall through
-          case DECLARED:
-            serializeBuilder.addStatement(
-                "$T unsafe_$L = ($T) $T.getInstance().getObject(input, $L_offset)",
-                parameter.asType(),
-                parameter.getSimpleName(),
-                parameter.asType(),
-                UnsafeProvider.class,
-                parameter.getSimpleName());
-            marshallers.writeSerializationCode(
-                new Marshaller.Context(
-                    serializeBuilder, parameter.asType(), "unsafe_" + parameter.getSimpleName()));
-            break;
-          default:
-            throw new UnsupportedOperationException("Unimplemented or invalid kind: " + typeKind);
-        }
-      } else {
-        addSerializeParameterWithGetter(encodedType, parameter, serializeBuilder);
+      switch (typeKind) {
+        case BOOLEAN:
+          serializeBuilder.addStatement(
+              "codedOut.writeBoolNoTag($T.getInstance().getBoolean(input, $L_offset))",
+              UnsafeProvider.class,
+              parameter.getSimpleName());
+          break;
+        case INT:
+          serializeBuilder.addStatement(
+              "codedOut.writeInt32NoTag($T.getInstance().getInt(input, $L_offset))",
+              UnsafeProvider.class,
+              parameter.getSimpleName());
+          break;
+        case ARRAY:
+          // fall through
+        case DECLARED:
+          serializeBuilder.addStatement(
+              "$T unsafe_$L = ($T) $T.getInstance().getObject(input, $L_offset)",
+              parameter.asType(),
+              parameter.getSimpleName(),
+              parameter.asType(),
+              UnsafeProvider.class,
+              parameter.getSimpleName());
+          marshallers.writeSerializationCode(
+              new Marshaller.Context(
+                  serializeBuilder, parameter.asType(), "unsafe_" + parameter.getSimpleName()));
+          break;
+        default:
+          throw new UnsupportedOperationException("Unimplemented or invalid kind: " + typeKind);
       }
     }
     return serializeBuilder.build();
   }
 
-  private String findGetterForClass(VariableElement parameter, TypeElement type) {
-    List<ExecutableElement> methods =
-        ElementFilter.methodsIn(env.getElementUtils().getAllMembers(type));
+  private String findGetterForAutoValue(VariableElement parameter, TypeElement type) {
+    List<ExecutableElement> methods = ElementFilter.methodsIn(type.getEnclosedElements());
 
     ImmutableList.Builder<String> possibleGetterNamesBuilder =
         ImmutableList.<String>builder().add(parameter.getSimpleName().toString());
@@ -269,7 +324,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
     }
 
     throw new IllegalArgumentException(
-        type + ": No getter found corresponding to parameter " + parameter.getSimpleName());
+        "No AutoValue getter found corresponding to parameter " + parameter.getSimpleName());
   }
 
   private String addCamelCasePrefix(String name, String prefix) {
@@ -280,48 +335,46 @@ public class AutoCodecProcessor extends AbstractProcessor {
     }
   }
 
-  private void addSerializeParameterWithGetter(
-      TypeElement encodedType, VariableElement parameter, MethodSpec.Builder serializeBuilder) {
-    TypeKind typeKind = parameter.asType().getKind();
-    String getter = "input." + findGetterForClass(parameter, encodedType) + "()";
-    switch (typeKind) {
-      case BOOLEAN:
-        serializeBuilder.addStatement("codedOut.writeBoolNoTag($L)", getter);
-        break;
-      case INT:
-        serializeBuilder.addStatement("codedOut.writeInt32NoTag($L)", getter);
-        break;
-      case ARRAY:
-        // fall through
-      case DECLARED:
-        marshallers.writeSerializationCode(
-            new Marshaller.Context(serializeBuilder, parameter.asType(), getter));
-        break;
-      default:
-        throw new UnsupportedOperationException("Unimplemented or invalid kind: " + typeKind);
-    }
-  }
-
   private MethodSpec buildSerializeMethodWithInstantiatorForAutoValue(
-      TypeElement encodedType, List<? extends VariableElement> fields) {
+      TypeElement encodedType, PartitionedParameters parameters) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
-    for (VariableElement parameter : fields) {
-      addSerializeParameterWithGetter(encodedType, parameter, serializeBuilder);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, parameters.dependency);
+    for (VariableElement parameter : parameters.fields) {
+      TypeKind typeKind = parameter.asType().getKind();
+      String getter = "input." + findGetterForAutoValue(parameter, encodedType) + "()";
+      switch (typeKind) {
+        case BOOLEAN:
+          serializeBuilder.addStatement("codedOut.writeBoolNoTag($L)", getter);
+          break;
+        case INT:
+          serializeBuilder.addStatement("codedOut.writeInt32NoTag($L)", getter);
+          break;
+        case ARRAY:
+          // fall through
+        case DECLARED:
+          marshallers.writeSerializationCode(
+              new Marshaller.Context(serializeBuilder, parameter.asType(), getter));
+          break;
+        default:
+          throw new UnsupportedOperationException("Unimplemented or invalid kind: " + typeKind);
+      }
     }
     return serializeBuilder.build();
   }
 
-  private TypeSpec.Builder buildClassWithPublicFieldsStrategy(TypeElement encodedType) {
-    TypeSpec.Builder codecClassBuilder = AutoCodecUtil.initializeCodecClassBuilder(encodedType);
+  private TypeSpec.Builder buildClassWithPublicFieldsStrategy(
+      TypeElement encodedType, @Nullable TypeElement dependency) {
+    TypeSpec.Builder codecClassBuilder =
+        AutoCodecUtil.initializeCodecClassBuilder(encodedType, dependency);
     ImmutableList<? extends VariableElement> publicFields =
         ElementFilter.fieldsIn(env.getElementUtils().getAllMembers(encodedType))
             .stream()
             .filter(this::isPublicField)
             .collect(toImmutableList());
-    codecClassBuilder.addMethod(buildSerializeMethodWithPublicFields(encodedType, publicFields));
+    codecClassBuilder.addMethod(
+        buildSerializeMethodWithPublicFields(encodedType, publicFields, dependency));
     MethodSpec.Builder deserializeBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, dependency);
     buildDeserializeBody(deserializeBuilder, publicFields);
     addInstantiatePopulateFieldsAndReturn(deserializeBuilder, encodedType, publicFields);
     codecClassBuilder.addMethod(deserializeBuilder.build());
@@ -337,10 +390,12 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   private MethodSpec buildSerializeMethodWithPublicFields(
-      TypeElement encodedType, List<? extends VariableElement> fields) {
+      TypeElement encodedType,
+      List<? extends VariableElement> parameters,
+      @Nullable TypeElement dependency) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
-    for (VariableElement parameter : fields) {
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, dependency);
+    for (VariableElement parameter : parameters) {
       String paramAccessor = "input." + parameter.getSimpleName();
       TypeKind typeKind = parameter.asType().getKind();
       switch (typeKind) {
@@ -356,7 +411,8 @@ public class AutoCodecProcessor extends AbstractProcessor {
           break;
         case DECLARED:
           marshallers.writeSerializationCode(
-              new Marshaller.Context(serializeBuilder, parameter.asType(), paramAccessor));
+              new Marshaller.Context(
+                  serializeBuilder, (DeclaredType) parameter.asType(), paramAccessor));
           break;
         default:
           throw new UnsupportedOperationException("Unimplemented or invalid kind: " + typeKind);
@@ -373,8 +429,8 @@ public class AutoCodecProcessor extends AbstractProcessor {
    * is to avoid name collisions with variables used internally by AutoCodec.
    */
   private void buildDeserializeBody(
-      MethodSpec.Builder builder, List<? extends VariableElement> fields) {
-    for (VariableElement parameter : fields) {
+      MethodSpec.Builder builder, List<? extends VariableElement> parameters) {
+    for (VariableElement parameter : parameters) {
       String paramName = parameter.getSimpleName() + "_";
       TypeKind typeKind = parameter.asType().getKind();
       switch (typeKind) {
@@ -390,7 +446,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
           break;
         case DECLARED:
           marshallers.writeDeserializationCode(
-              new Marshaller.Context(builder, parameter.asType(), paramName));
+              new Marshaller.Context(builder, (DeclaredType) parameter.asType(), paramName));
           break;
         default:
           throw new IllegalArgumentException("Unimplemented or invalid kind: " + typeKind);
@@ -438,9 +494,14 @@ public class AutoCodecProcessor extends AbstractProcessor {
 
   /**
    * Coverts a constructor parameter to a String representing its handle within deserialize.
+   *
+   * <p>Uses the handle {@code dependency} for any parameter with the {@link AutoCodec.Dependency}
+   * annotation.
    */
   private static String handleFromParameter(VariableElement parameter) {
-    return parameter.getSimpleName() + "_";
+    return parameter.getAnnotation(AutoCodec.Dependency.class) != null
+        ? "dependency"
+        : (parameter.getSimpleName() + "_");
   }
 
   /**
@@ -474,12 +535,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
       List<? extends VariableElement> parameters) {
     MethodSpec.Builder constructor = MethodSpec.constructorBuilder();
     for (VariableElement param : parameters) {
-      Optional<FieldValueAndClass> field =
-          getFieldByNameRecursive(encodedType, param.getSimpleName().toString());
-      if (!field.isPresent()) {
-        // Will attempt to use a getter for this field instead.
-        continue;
-      }
+      FieldValueAndClass field = getFieldByName(encodedType, param.getSimpleName().toString());
       builder.addField(
           TypeName.LONG, param.getSimpleName() + "_offset", Modifier.PRIVATE, Modifier.FINAL);
       constructor.beginControlFlow("try");
@@ -487,7 +543,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
           "this.$L_offset = $T.getInstance().objectFieldOffset($T.class.getDeclaredField(\"$L\"))",
           param.getSimpleName(),
           UnsafeProvider.class,
-          ClassName.get(field.get().declaringClassType),
+          ClassName.get(field.declaringClassType),
           param.getSimpleName());
       constructor.nextControlFlow("catch ($T e)", NoSuchFieldException.class);
       constructor.addStatement("throw new $T(e)", IllegalStateException.class);
@@ -505,6 +561,19 @@ public class AutoCodecProcessor extends AbstractProcessor {
       this.value = value;
       this.declaringClassType = declaringClassType;
     }
+  }
+
+  /**
+   * Returns the VariableElement for the field named {@code name}.
+   *
+   * <p>Throws IllegalArgumentException if no such field is found.
+   */
+  private FieldValueAndClass getFieldByName(TypeElement type, String name) {
+    return getFieldByNameRecursive(type, name)
+        .orElseThrow(
+            () ->
+                new IllegalArgumentException(
+                    type.getQualifiedName() + ": no field with name matching " + name));
   }
 
   private Optional<FieldValueAndClass> getFieldByNameRecursive(TypeElement type, String name) {
@@ -527,43 +596,66 @@ public class AutoCodecProcessor extends AbstractProcessor {
     return Optional.empty();
   }
 
-  private TypeSpec.Builder buildClassWithPolymorphicStrategy(TypeElement encodedType) {
+  private static TypeSpec.Builder buildClassWithPolymorphicStrategy(
+      TypeElement encodedType, @Nullable TypeElement dependency) {
     if (!encodedType.getModifiers().contains(Modifier.ABSTRACT)) {
       throw new IllegalArgumentException(
           encodedType + " is not abstract, but POLYMORPHIC was selected as the strategy.");
     }
-    TypeSpec.Builder codecClassBuilder = AutoCodecUtil.initializeCodecClassBuilder(encodedType);
-    codecClassBuilder.addMethod(buildPolymorphicSerializeMethod(encodedType));
-    codecClassBuilder.addMethod(buildPolymorphicDeserializeMethod(encodedType));
+    TypeSpec.Builder codecClassBuilder =
+        AutoCodecUtil.initializeCodecClassBuilder(encodedType, dependency);
+    codecClassBuilder.addMethod(buildPolymorphicSerializeMethod(encodedType, dependency));
+    codecClassBuilder.addMethod(buildPolymorphicDeserializeMethod(encodedType, dependency));
     return codecClassBuilder;
   }
 
-  private MethodSpec buildPolymorphicSerializeMethod(TypeElement encodedType) {
-    MethodSpec.Builder builder = AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
-    TypeName polyClass = TypeName.get(env.getTypeUtils().erasure(encodedType.asType()));
+  private static MethodSpec buildPolymorphicSerializeMethod(
+      TypeElement encodedType, @Nullable TypeElement dependency) {
+    MethodSpec.Builder builder =
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, dependency);
+    if (dependency == null) {
+      builder.addStatement("$T.serialize(input, codedOut, null)", PolymorphicHelper.class);
+    } else {
       builder.addStatement(
-          "$T.serialize(context, input, $T.class, codedOut, null)",
+          "$T.serialize(input, codedOut, $T.ofNullable(dependency))",
           PolymorphicHelper.class,
-          polyClass);
+          Optional.class);
+    }
     return builder.build();
   }
 
-  private static MethodSpec buildPolymorphicDeserializeMethod(TypeElement encodedType) {
-    MethodSpec.Builder builder = AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType);
+  private static MethodSpec buildPolymorphicDeserializeMethod(
+      TypeElement encodedType, @Nullable TypeElement dependency) {
+    MethodSpec.Builder builder =
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, dependency);
+    if (dependency == null) {
       builder.addStatement(
-          "return ($T) $T.deserialize(context, codedIn, null)",
+          "return ($T) $T.deserialize(codedIn, null)",
           TypeName.get(encodedType.asType()),
           PolymorphicHelper.class);
+    } else {
+      builder.addStatement(
+          "return ($T) $T.deserialize(codedIn, $T.ofNullable(dependency))",
+          TypeName.get(encodedType.asType()),
+          PolymorphicHelper.class,
+          Optional.class);
+    }
     return builder.build();
   }
 
-  private static TypeSpec.Builder buildClassWithSingletonStrategy(TypeElement encodedType) {
-    TypeSpec.Builder codecClassBuilder = AutoCodecUtil.initializeCodecClassBuilder(encodedType);
+  private static TypeSpec.Builder buildClassWithSingletonStrategy(
+      TypeElement encodedType, @Nullable TypeElement dependency) {
+    if (dependency != null) {
+      throw new IllegalArgumentException(
+          encodedType + " specifies a dependency, but SINGLETON is selected as the strategy.");
+    }
+    TypeSpec.Builder codecClassBuilder =
+        AutoCodecUtil.initializeCodecClassBuilder(encodedType, dependency);
     // Serialization is a no-op.
     codecClassBuilder.addMethod(
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType).build());
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, dependency).build());
     MethodSpec.Builder deserializeMethodBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, dependency);
     deserializeMethodBuilder.addStatement("return $T.INSTANCE", TypeName.get(encodedType.asType()));
     codecClassBuilder.addMethod(deserializeMethodBuilder.build());
     return codecClassBuilder;
