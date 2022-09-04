@@ -16,53 +16,76 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Objects;
-import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
+import com.google.common.graph.ImmutableGraph;
 import com.google.common.util.concurrent.Callables;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
+import com.google.devtools.build.lib.actions.ActionLookupData;
+import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.testutil.TimestampGranularityUtils;
+import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
+import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
+import com.google.devtools.build.skyframe.GraphInconsistencyReceiver;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-
+import com.google.devtools.build.skyframe.ValueOrException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
-
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /** Tests for {@link SkyframeAwareAction}. */
+@RunWith(JUnit4.class)
 public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
   private Builder builder;
   private Executor executor;
-  private TrackingEvaluationProgressReceiver invalidationReceiver;
+  private TrackingEvaluationProgressReceiver progressReceiver;
 
-  @Override
-  protected void setUp() throws Exception {
-    super.setUp();
-    invalidationReceiver = new TrackingEvaluationProgressReceiver();
-    builder = createBuilder(inMemoryCache, 1, /*keepGoing=*/ false, invalidationReceiver);
-    executor = new DummyExecutor(rootDirectory);
+  @Before
+  public final void createBuilder() throws Exception {
+    progressReceiver = new TrackingEvaluationProgressReceiver();
+    builder =
+        createBuilder(
+            inMemoryCache,
+            1,
+            /*keepGoing=*/ false,
+            progressReceiver,
+            GraphInconsistencyReceiver.THROWING);
+  }
+
+  @Before
+  public final void createExecutor() throws Exception {
+    executor = new DummyExecutor(fileSystem, rootDirectory);
   }
 
   private static final class TrackingEvaluationProgressReceiver
@@ -90,14 +113,14 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
       }
     }
 
-    public static final class EvaluatedEntry {
+    private static final class EvaluatedEntry {
       public final SkyKey skyKey;
-      public final SkyValue value;
+      final EvaluationSuccessState successState;
       public final EvaluationState state;
 
-      EvaluatedEntry(SkyKey skyKey, SkyValue value, EvaluationState state) {
+      EvaluatedEntry(SkyKey skyKey, EvaluationSuccessState successState, EvaluationState state) {
         this.skyKey = skyKey;
-        this.value = value;
+        this.successState = successState;
         this.state = state;
       }
 
@@ -105,13 +128,13 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
       public boolean equals(Object obj) {
         return obj instanceof EvaluatedEntry
             && this.skyKey.equals(((EvaluatedEntry) obj).skyKey)
-            && this.value.equals(((EvaluatedEntry) obj).value)
+            && this.successState.equals(((EvaluatedEntry) obj).successState)
             && this.state.equals(((EvaluatedEntry) obj).state);
       }
 
       @Override
       public int hashCode() {
-        return Objects.hashCode(skyKey, value, state);
+        return Objects.hashCode(skyKey, successState, state);
       }
     }
 
@@ -154,12 +177,13 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    public void computed(SkyKey skyKey, long elapsedTimeNanos) {}
-
-    @Override
     public void evaluated(
-        SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
-      evaluated.add(new EvaluatedEntry(skyKey, skyValueSupplier.get(), state));
+        SkyKey skyKey,
+        @Nullable SkyValue value,
+        @Nullable ErrorInfo error,
+        Supplier<EvaluationSuccessState> evaluationSuccessState,
+        EvaluationState state) {
+      evaluated.add(new EvaluatedEntry(skyKey, evaluationSuccessState.get(), state));
     }
   }
 
@@ -168,12 +192,15 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     private final AtomicInteger executionCounter;
 
     ExecutionCountingAction(Artifact input, Artifact output, AtomicInteger executionCounter) {
-      super(ActionsTestUtil.NULL_ACTION_OWNER, ImmutableList.of(input), ImmutableList.of(output));
+      super(
+          ActionsTestUtil.NULL_ACTION_OWNER,
+          NestedSetBuilder.create(Order.STABLE_ORDER, input),
+          ImmutableSet.of(output));
       this.executionCounter = executionCounter;
     }
 
     @Override
-    public void execute(ActionExecutionContext actionExecutionContext)
+    public ActionResult execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException, InterruptedException {
       executionCounter.incrementAndGet();
 
@@ -181,10 +208,11 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
       // tests we assume that the input file is short, maybe just 10 bytes long.
       byte[] input = new byte[10];
       int inputLen = 0;
-      try (InputStream in = Iterables.getOnlyElement(getInputs()).getPath().getInputStream()) {
+      try (InputStream in = getInputs().getSingleton().getPath().getInputStream()) {
         inputLen = in.read(input);
       } catch (IOException e) {
-        throw new ActionExecutionException(e, this, false);
+        throw new ActionExecutionException(
+            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
       }
 
       // This action then writes the contents of the input to the (only) output file, and appends an
@@ -193,13 +221,10 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         out.write(input, 0, inputLen);
         out.write('x');
       } catch (IOException e) {
-        throw new ActionExecutionException(e, this, false);
+        throw new ActionExecutionException(
+            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
       }
-    }
-
-    @Override
-    public String describeStrategy(Executor executor) {
-      return null;
+      return ActionResult.EMPTY;
     }
 
     @Override
@@ -208,13 +233,12 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    protected String computeKey() {
-      return getPrimaryOutput().getExecPathString() + executionCounter.get();
-    }
-
-    @Override
-    public ResourceSet estimateResourceConsumption(Executor executor) {
-      return ResourceSet.ZERO;
+    protected void computeKey(
+        ActionKeyContext actionKeyContext,
+        @Nullable Artifact.ArtifactExpander artifactExpander,
+        Fingerprint fp) {
+      fp.addString(getPrimaryOutput().getExecPathString());
+      fp.addInt(executionCounter.get());
     }
   }
 
@@ -237,7 +261,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
 
   /** A mock skyframe-aware action that counts how many times it was executed. */
   private static class SkyframeAwareExecutionCountingAction
-      extends ExecutionCountingCacheBypassingAction implements SkyframeAwareAction {
+      extends ExecutionCountingCacheBypassingAction implements SkyframeAwareAction<IOException> {
     private final SkyKey actionDepKey;
 
     SkyframeAwareExecutionCountingAction(
@@ -247,10 +271,28 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    public void establishSkyframeDependencies(Environment env) throws ExceptionBase {
-      // Establish some Skyframe dependency. A real action would then use this to compute and
-      // cache data for the execute(...) method.
-      env.getValue(actionDepKey);
+    public Object processSkyframeValues(
+        ImmutableList<? extends SkyKey> keys,
+        Map<SkyKey, ValueOrException<IOException>> values,
+        boolean valuesMissing) {
+      assertThat(keys).containsExactly(actionDepKey);
+      assertThat(values.keySet()).containsExactly(actionDepKey);
+      return null;
+    }
+
+    @Override
+    public ImmutableList<SkyKey> getDirectSkyframeDependencies() {
+      return ImmutableList.of(actionDepKey);
+    }
+
+    @Override
+    public Class<IOException> getExceptionType() {
+      return IOException.class;
+    }
+
+    @Override
+    public ImmutableGraph<SkyKey> getSkyframeDependenciesForRewinding(SkyKey self) {
+      throw new UnsupportedOperationException();
     }
   }
 
@@ -336,19 +378,37 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
   }
 
+  /** Ensure that a file's ctime was updated from an older value. */
+  private static void checkCtimeUpdated(Path path, long oldCtime) throws IOException {
+    if (oldCtime >= path.stat().getLastChangeTime()) {
+      throw new IllegalStateException(String.format("path=(%s), ctime=(%d)", path, oldCtime));
+    }
+  }
+
   private void maybeChangeFile(Artifact file, ChangeArtifact changeRequest) throws Exception {
     if (changeRequest == ChangeArtifact.DONT_CHANGE) {
       return;
     }
 
+    Path path = file.getPath();
+
     if (changeRequest.changeMtime()) {
-      // 1000000 should be larger than the filesystem timestamp granularity.
-      file.getPath().setLastModifiedTime(file.getPath().getLastModifiedTime() + 1000000);
-      tsgm.waitForTimestampGranularity(reporter.getOutErr());
+      long ctime = path.stat().getLastChangeTime();
+      // Ensure enough time elapsed for file updates to have a visible effect on the file's ctime.
+      TimestampGranularityUtils.waitForTimestampGranularity(ctime, reporter.getOutErr());
+      // waitForTimestampGranularity waits long enough for System.currentTimeMillis() to be greater
+      // than the time at the setCommandStartTime() call. Therefore setting
+      // System.currentTimeMillis() is guaranteed to advance the file's ctime.
+      path.setLastModifiedTime(System.currentTimeMillis());
+      checkCtimeUpdated(path, ctime);
     }
 
     if (changeRequest.changeContent()) {
-      appendToFile(file.getPath());
+      long ctime = path.stat().getLastChangeTime();
+      // Ensure enough time elapsed for file updates to have a visible effect on the file's ctime.
+      TimestampGranularityUtils.waitForTimestampGranularity(ctime, reporter.getOutErr());
+      appendToFile(path);
+      checkCtimeUpdated(path, ctime);
     }
 
     // Invalidate the file state value to inform Skyframe that the file may have changed.
@@ -356,7 +416,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     differencer.invalidate(
         ImmutableList.of(
             FileStateValue.key(
-                RootedPath.toRootedPath(file.getRoot().getPath(), file.getRootRelativePath()))));
+                RootedPath.toRootedPath(file.getRoot().getRoot(), file.getRootRelativePath()))));
   }
 
   private void assertActionExecutions(
@@ -385,17 +445,20 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         null,
         null,
         null,
+        null,
         executor,
         null,
-        false,
-        null);
+        null,
+        options,
+        null,
+        null,
+        /* trustRemoteArtifacts= */ false);
 
-    // Sanity check that our invalidation receiver is working correctly. We'll rely on it again.
-    SkyKey actionKey = ActionExecutionValue.key(action);
+    // Check that our invalidation receiver is working correctly. We'll rely on it again.
+    SkyKey actionKey = ActionLookupData.create(ACTION_LOOKUP_KEY, 0);
     TrackingEvaluationProgressReceiver.EvaluatedEntry evaluatedAction =
-        invalidationReceiver.getEvalutedEntry(actionKey);
+        progressReceiver.getEvalutedEntry(actionKey);
     assertThat(evaluatedAction).isNotNull();
-    SkyValue actionValue = evaluatedAction.value;
 
     // Mutate the action input if requested.
     maybeChangeFile(actionInput, changeActionInput);
@@ -404,7 +467,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     betweenBuilds.call();
 
     // Rebuild the output.
-    invalidationReceiver.reset();
+    progressReceiver.reset();
     builder.buildArtifacts(
         reporter,
         ImmutableSet.of(actionOutput),
@@ -412,30 +475,32 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         null,
         null,
         null,
+        null,
         executor,
         null,
-        false,
-        null);
+        null,
+        options,
+        null,
+        null,
+        /* trustRemoteArtifacts= */ false);
 
     if (expectActionIs.dirtied()) {
-      assertThat(invalidationReceiver.wasInvalidated(actionKey)).isTrue();
+      assertThat(progressReceiver.wasInvalidated(actionKey)).isTrue();
 
       TrackingEvaluationProgressReceiver.EvaluatedEntry newEntry =
-          invalidationReceiver.getEvalutedEntry(actionKey);
+          progressReceiver.getEvalutedEntry(actionKey);
       assertThat(newEntry).isNotNull();
       if (expectActionIs.actuallyClean()) {
         // Action was dirtied but verified clean.
         assertThat(newEntry.state).isEqualTo(EvaluationState.CLEAN);
-        assertThat(newEntry.value).isEqualTo(actionValue);
       } else {
         // Action was dirtied and rebuilt. It was either reexecuted or was an action cache hit,
         // doesn't matter here.
         assertThat(newEntry.state).isEqualTo(EvaluationState.BUILT);
-        assertThat(newEntry.value).isNotEqualTo(actionValue);
       }
     } else {
       // Action was not dirtied.
-      assertThat(invalidationReceiver.wasInvalidated(actionKey)).isFalse();
+      assertThat(progressReceiver.wasInvalidated(actionKey)).isFalse();
     }
 
     // Assert that the action was executed the right number of times. Whether the action execution
@@ -445,19 +510,21 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
 
   private RootedPath createSkyframeDepOfAction() throws Exception {
     scratch.file(rootDirectory.getRelative("action.dep").getPathString(), "blah");
-    return RootedPath.toRootedPath(rootDirectory, new PathFragment("action.dep"));
+    return RootedPath.toRootedPath(Root.fromPath(rootDirectory), PathFragment.create("action.dep"));
   }
 
-  private void appendToFile(Path path) throws Exception {
+  private static void appendToFile(Path path) throws Exception {
     try (OutputStream stm = path.getOutputStream(/*append=*/ true)) {
       stm.write("blah".getBytes(StandardCharsets.UTF_8));
     }
   }
 
+  @Test
   public void testCacheCheckingActionWithContentChangingInput() throws Exception {
     assertActionWithContentChangingInput(/* unconditionalExecution */ false);
   }
 
+  @Test
   public void testCacheBypassingActionWithContentChangingInput() throws Exception {
     assertActionWithContentChangingInput(/* unconditionalExecution */ true);
   }
@@ -481,10 +548,12 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         ExpectActionIs.REEXECUTED);
   }
 
+  @Test
   public void testCacheCheckingActionWithMtimeChangingInput() throws Exception {
     assertActionWithMtimeChangingInput(/* unconditionalExecution */ false);
   }
 
+  @Test
   public void testCacheBypassingActionWithMtimeChangingInput() throws Exception {
     assertActionWithMtimeChangingInput(/* unconditionalExecution */ true);
   }
@@ -505,10 +574,22 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         },
         ChangeArtifact.CHANGE_MTIME,
         Callables.<Void>returning(null),
-        ExpectActionIs.DIRTIED_BUT_VERIFIED_CLEAN);
+        unconditionalExecution
+            ? ExpectActionIs.REEXECUTED
+            : ExpectActionIs.DIRTIED_BUT_VERIFIED_CLEAN);
   }
 
-  public void testActionWithNonChangingInput(final boolean unconditionalExecution)
+  @Test
+  public void testCacheCheckingActionWithNonChangingInput() throws Exception {
+    assertActionWithNonChangingInput(/* unconditionalExecution */ false);
+  }
+
+  @Test
+  public void testCacheBypassingActionWithNonChangingInput() throws Exception {
+    assertActionWithNonChangingInput(/* unconditionalExecution */ true);
+  }
+
+  private void assertActionWithNonChangingInput(final boolean unconditionalExecution)
       throws Exception {
     // Assert that a simple, non-skyframe-aware action is executed only once
     // if its input does not change at all between builds.
@@ -558,19 +639,23 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         ExpectActionIs.REEXECUTED);
   }
 
+  @Test
   public void testActionWithNonChangingInputButChangingSkyframeDeps() throws Exception {
     assertActionWithMaybeChangingInputAndChangingSkyframeDeps(ChangeArtifact.DONT_CHANGE);
   }
 
+  @Test
   public void testActionWithChangingInputMtimeAndChangingSkyframeDeps() throws Exception {
     assertActionWithMaybeChangingInputAndChangingSkyframeDeps(ChangeArtifact.CHANGE_MTIME);
   }
 
+  @Test
   public void testActionWithChangingInputAndChangingSkyframeDeps() throws Exception {
     assertActionWithMaybeChangingInputAndChangingSkyframeDeps(
         ChangeArtifact.CHANGE_MTIME_AND_CONTENT);
   }
 
+  @Test
   public void testActionWithNonChangingInputAndNonChangingSkyframeDeps() throws Exception {
     final SkyKey skyframeDep = FileStateValue.key(createSkyframeDepOfAction());
 
@@ -602,8 +687,10 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     SingleOutputAction(@Nullable Artifact input, Artifact output) {
       super(
           ActionsTestUtil.NULL_ACTION_OWNER,
-          input == null ? ImmutableList.<Artifact>of() : ImmutableList.of(input),
-          ImmutableList.of(output));
+          input == null
+              ? NestedSetBuilder.emptySet(Order.STABLE_ORDER)
+              : NestedSetBuilder.create(Order.STABLE_ORDER, input),
+          ImmutableSet.of(output));
     }
 
     protected static final class Buffer {
@@ -622,7 +709,8 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
       try (InputStream in = getPrimaryInput().getPath().getInputStream()) {
         inputLen = in.read(input, 0, input.length);
       } catch (IOException e) {
-        throw new ActionExecutionException(e, this, false);
+        throw new ActionExecutionException(
+            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
       }
       return new Buffer(input, inputLen);
     }
@@ -634,13 +722,9 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         }
         out.write(data.getBytes(StandardCharsets.UTF_8), 0, data.length());
       } catch (IOException e) {
-        throw new ActionExecutionException(e, this, false);
+        throw new ActionExecutionException(
+            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
       }
-    }
-
-    @Override
-    public String describeStrategy(Executor executor) {
-      return null;
     }
 
     @Override
@@ -649,18 +733,16 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    protected String computeKey() {
-      return new Fingerprint().addInt(42).hexDigestAndReset();
-    }
-
-    @Override
-    public ResourceSet estimateResourceConsumption(Executor executor) {
-      return ResourceSet.ZERO;
+    protected void computeKey(
+        ActionKeyContext actionKeyContext,
+        @Nullable Artifact.ArtifactExpander artifactExpander,
+        Fingerprint fp) {
+      fp.addInt(42);
     }
   }
 
   private abstract static class SingleOutputSkyframeAwareAction extends SingleOutputAction
-      implements SkyframeAwareAction {
+      implements SkyframeAwareAction<IOException> {
     SingleOutputSkyframeAwareAction(@Nullable Artifact input, Artifact output) {
       super(input, output);
     }
@@ -673,6 +755,11 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     @Override
     public boolean isVolatile() {
       return true;
+    }
+
+    @Override
+    public Class<IOException> getExceptionType() {
+      return IOException.class;
     }
   }
 
@@ -688,6 +775,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
    * are missing, request also the skyframe-dependencies. The race is described in this method's
    * body.
    */
+  @Test
   public void testRaceConditionBetweenInputAcquisitionAndSkyframeDeps() throws Exception {
     // Sequence of events on threads A and B, showing SkyFunctions and requested SkyKeys, leading
     // to an InconsistentFilesystemException:
@@ -730,7 +818,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     // ArtifactFunction(genfiles/gen0)           | return FileValue(genfiles/foo:non-existent)
     // CONFIGURED_TARGET://foo:gen0              |
     // ACTION_EXECUTION:gen0_action              | MockFunction()
-    // return ArtifactValue(genfiles/gen0)       | FILE:genfiles/foo
+    // return ArtifactSkyKey(genfiles/gen0)      | FILE:genfiles/foo
     //                                           | FILE:genfiles/foo/bar/gen1
     // ActionExecutionFunction(gen1_action)      | env.valuesMissing():yes ==> return
     // ARTIFACT:genfiles/gen0                    |
@@ -760,27 +848,59 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     registerAction(
         new SingleOutputAction(null, genFile1) {
           @Override
-          public void execute(ActionExecutionContext actionExecutionContext)
+          public ActionResult execute(ActionExecutionContext actionExecutionContext)
               throws ActionExecutionException, InterruptedException {
             writeOutput(null, "gen1");
+            return ActionResult.EMPTY;
           }
         });
 
     registerAction(
         new SingleOutputSkyframeAwareAction(genFile1, genFile2) {
+
           @Override
-          public void establishSkyframeDependencies(Environment env) throws ExceptionBase {
-            assertThat(env.valuesMissing()).isFalse();
+          public ImmutableList<SkyKey> getDirectSkyframeDependencies() {
+            return ImmutableList.of();
           }
 
           @Override
-          public void execute(ActionExecutionContext actionExecutionContext)
-              throws ActionExecutionException, InterruptedException {
+          public Object processSkyframeValues(
+              ImmutableList<? extends SkyKey> keys,
+              Map<SkyKey, ValueOrException<IOException>> values,
+              boolean valuesMissing) {
+            assertThat(keys).isEmpty();
+            assertThat(values).isEmpty();
+            assertThat(valuesMissing).isFalse();
+            return null;
+          }
+
+          @Override
+          public ImmutableGraph<SkyKey> getSkyframeDependenciesForRewinding(SkyKey self) {
+            throw new UnsupportedOperationException();
+          }
+
+          @Override
+          public ActionResult execute(ActionExecutionContext actionExecutionContext)
+              throws ActionExecutionException {
             writeOutput(readInput(), "gen2");
+            return ActionResult.EMPTY;
           }
         });
 
     builder.buildArtifacts(
-        reporter, ImmutableSet.of(genFile2), null, null, null, null, executor, null, false, null);
+        reporter,
+        ImmutableSet.of(genFile2),
+        null,
+        null,
+        null,
+        null,
+        null,
+        executor,
+        null,
+        null,
+        options,
+        null,
+        null,
+        /* trustRemoteArtifacts= */ false);
   }
 }

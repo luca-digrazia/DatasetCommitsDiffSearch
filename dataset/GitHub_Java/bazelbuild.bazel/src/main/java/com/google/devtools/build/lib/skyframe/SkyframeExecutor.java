@@ -554,7 +554,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
             actionOnIOExceptionReadingBuildFile,
             tracksStateForIncrementality()
                 ? IncrementalityIntent.INCREMENTAL
-                : IncrementalityIntent.NON_INCREMENTAL));
+                : IncrementalityIntent.NON_INCREMENTAL,
+            externalPackageHelper));
     map.put(SkyFunctions.PACKAGE_ERROR, new PackageErrorFunction());
     map.put(SkyFunctions.PACKAGE_ERROR_MESSAGE, new PackageErrorMessageFunction());
     map.put(SkyFunctions.TARGET_PATTERN_ERROR, new TargetPatternErrorFunction());

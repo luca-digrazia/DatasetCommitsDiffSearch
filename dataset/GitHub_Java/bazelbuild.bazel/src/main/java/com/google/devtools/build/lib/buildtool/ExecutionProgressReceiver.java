@@ -13,26 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.buildtool;
 
-import com.google.common.base.Supplier;
 import com.google.common.collect.Sets;
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionLookupData;
-import com.google.devtools.build.lib.analysis.AspectCompleteEvent;
-import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.TargetCompleteEvent;
-import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
-import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
-import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsToBuild;
+import com.google.devtools.build.lib.actions.MiddlemanType;
 import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog;
 import com.google.devtools.build.lib.skyframe.AspectCompletionValue;
-import com.google.devtools.build.lib.skyframe.AspectValue;
+import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor;
 import com.google.devtools.build.lib.skyframe.TargetCompletionValue;
-import com.google.devtools.build.lib.util.BlazeClock;
+import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -42,50 +35,44 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+import javax.annotation.Nullable;
 
 /**
- * Listener for executed actions and built artifacts. We use a listener so that we have an
- * accurate set of successfully run actions and built artifacts, even if the build is interrupted.
+ * Listener for executed actions and built artifacts. We use a listener so that we have an accurate
+ * set of successfully run actions and built artifacts, even if the build is interrupted.
  */
 public final class ExecutionProgressReceiver
-    extends EvaluationProgressReceiver.NullEvaluationProgressReceiver
     implements SkyframeActionExecutor.ProgressSupplier,
-        SkyframeActionExecutor.ActionCompletedReceiver {
-  private static final NumberFormat PROGRESS_MESSAGE_NUMBER_FORMATTER;
+        SkyframeActionExecutor.ActionCompletedReceiver,
+        EvaluationProgressReceiver {
+  private static final ThreadLocal<NumberFormat> PROGRESS_MESSAGE_NUMBER_FORMATTER =
+      ThreadLocal.withInitial(
+          () -> {
+            NumberFormat numberFormat = NumberFormat.getIntegerInstance(Locale.ENGLISH);
+            numberFormat.setGroupingUsed(true);
+            return numberFormat;
+          });
 
   // Must be thread-safe!
-  private final Set<ConfiguredTarget> builtTargets;
+  private final Set<ConfiguredTargetKey> builtTargets;
+  private final Set<AspectKey> builtAspects;
   private final Set<ActionLookupData> enqueuedActions = Sets.newConcurrentHashSet();
   private final Set<ActionLookupData> completedActions = Sets.newConcurrentHashSet();
   private final Set<ActionLookupData> ignoredActions = Sets.newConcurrentHashSet();
 
-  private final Object activityIndicator = new Object();
   /** Number of exclusive tests. To be accounted for in progress messages. */
   private final int exclusiveTestsCount;
-  private final Set<ConfiguredTarget> testedTargets;
-  private final EventBus eventBus;
-  private final TopLevelArtifactContext topLevelArtifactContext;
-
-  static {
-    PROGRESS_MESSAGE_NUMBER_FORMATTER = NumberFormat.getIntegerInstance(Locale.ENGLISH);
-    PROGRESS_MESSAGE_NUMBER_FORMATTER.setGroupingUsed(true);
-  }
 
   /**
    * {@code builtTargets} is accessed through a synchronized set, and so no other access to it is
    * permitted while this receiver is active.
    */
   ExecutionProgressReceiver(
-      Set<ConfiguredTarget> builtTargets,
-      int exclusiveTestsCount,
-      Set<ConfiguredTarget> testedTargets,
-      TopLevelArtifactContext topLevelArtifactContext,
-      EventBus eventBus) {
+      Set<ConfiguredTargetKey> builtTargets, Set<AspectKey> builtAspects, int exclusiveTestsCount) {
     this.builtTargets = Collections.synchronizedSet(builtTargets);
+    this.builtAspects = Collections.synchronizedSet(builtAspects);
     this.exclusiveTestsCount = exclusiveTestsCount;
-    this.testedTargets = testedTargets;
-    this.topLevelArtifactContext = topLevelArtifactContext;
-    this.eventBus = eventBus;
   }
 
   @Override
@@ -108,34 +95,26 @@ public final class ExecutionProgressReceiver
       ignoredActions.add(actionLookupData);
       // There is no race here because this is called synchronously during action execution, so no
       // other thread can concurrently enqueue the action for execution under the Skyframe model.
+      completedActions.remove(actionLookupData);
       enqueuedActions.remove(actionLookupData);
     }
   }
 
   @Override
-  public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
+  public void evaluated(
+      SkyKey skyKey,
+      @Nullable SkyValue newValue,
+      @Nullable ErrorInfo newError,
+      Supplier<EvaluationSuccessState> evaluationSuccessState,
+      EvaluationState state) {
     SkyFunctionName type = skyKey.functionName();
     if (type.equals(SkyFunctions.TARGET_COMPLETION)) {
-      TargetCompletionValue value = (TargetCompletionValue) skyValueSupplier.get();
-      if (value == null) {
-        return;
-      }
-
-      ConfiguredTarget target = value.getConfiguredTarget();
-      builtTargets.add(target);
-
-      if (testedTargets.contains(target)) {
-        postTestTargetComplete(target);
-      } else {
-        postBuildTargetComplete(target);
+      if (evaluationSuccessState.get().succeeded()) {
+        builtTargets.add(((TargetCompletionValue.TargetCompletionKey) skyKey).actionLookupKey());
       }
     } else if (type.equals(SkyFunctions.ASPECT_COMPLETION)) {
-      AspectCompletionValue value = (AspectCompletionValue) skyValueSupplier.get();
-      if (value != null) {
-        AspectValue aspectValue = value.getAspectValue();
-        ArtifactsToBuild artifacts =
-            TopLevelArtifactHelper.getAllArtifactsToBuild(aspectValue, topLevelArtifactContext);
-        eventBus.post(AspectCompleteEvent.createSuccessful(aspectValue, artifacts));
+      if (evaluationSuccessState.get().succeeded()) {
+        builtAspects.add(((AspectCompletionValue.AspectCompletionKey) skyKey).actionLookupKey());
       }
     } else if (type.equals(SkyFunctions.ACTION_EXECUTION)) {
       // Remember all completed actions, even those in error, regardless of having been cached or
@@ -160,10 +139,8 @@ public final class ExecutionProgressReceiver
   @Override
   public void actionCompleted(ActionLookupData actionLookupData) {
     if (!ignoredActions.contains(actionLookupData)) {
+      enqueuedActions.add(actionLookupData);
       completedActions.add(actionLookupData);
-      synchronized (activityIndicator) {
-        activityIndicator.notifyAll();
-      }
     }
   }
 
@@ -175,8 +152,10 @@ public final class ExecutionProgressReceiver
   public String getProgressString() {
     return String.format(
         "[%s / %s]",
-        PROGRESS_MESSAGE_NUMBER_FORMATTER.format(completedActions.size()),
-        PROGRESS_MESSAGE_NUMBER_FORMATTER.format(exclusiveTestsCount + enqueuedActions.size()));
+        PROGRESS_MESSAGE_NUMBER_FORMATTER.get().format(completedActions.size()),
+        PROGRESS_MESSAGE_NUMBER_FORMATTER
+            .get()
+            .format(exclusiveTestsCount + enqueuedActions.size()));
   }
 
   ActionExecutionInactivityWatchdog.InactivityMonitor createInactivityMonitor(
@@ -194,27 +173,17 @@ public final class ExecutionProgressReceiver
       }
 
       @Override
-      public int waitForNextCompletion(int timeoutMilliseconds) throws InterruptedException {
-        synchronized (activityIndicator) {
-          int before = completedActions.size();
-          long startTime = BlazeClock.instance().currentTimeMillis();
-          while (true) {
-            activityIndicator.wait(timeoutMilliseconds);
-
-            int completed = completedActions.size() - before;
-            long now = 0;
-            if (completed > 0
-                || (startTime + timeoutMilliseconds)
-                    <= (now = BlazeClock.instance().currentTimeMillis())) {
-              // Some actions completed, or timeout fully elapsed.
-              return completed;
-            } else {
-              // Spurious Wakeup -- no actions completed and there's still time to wait.
-              timeoutMilliseconds -= now - startTime; // account for elapsed wait time
-              startTime = now;
-            }
+      public int waitForNextCompletion(int timeoutSeconds) throws InterruptedException {
+        int before = completedActions.size();
+        // Otherwise, wake up once per second to see whether something completed.
+        for (int i = 0; i < timeoutSeconds; i++) {
+          Thread.sleep(1000);
+          int count = completedActions.size() - before;
+          if (count > 0) {
+            return count;
           }
         }
+        return 0;
       }
     };
   }
@@ -233,17 +202,5 @@ public final class ExecutionProgressReceiver
         }
       }
     };
-  }
-
-  private void postTestTargetComplete(ConfiguredTarget target) {
-    eventBus.post(TargetCompleteEvent.createSuccessfulTestTarget(target));
-  }
-
-  private void postBuildTargetComplete(ConfiguredTarget target) {
-    ArtifactsToBuild artifactsToBuild =
-        TopLevelArtifactHelper.getAllArtifactsToBuild(target, topLevelArtifactContext);
-    eventBus.post(
-        TargetCompleteEvent.createSuccessfulTarget(
-            target, artifactsToBuild.getAllArtifactsByOutputGroup()));
   }
 }
