@@ -11,7 +11,6 @@ import io.quarkus.arc.InjectableInterceptor;
 import io.quarkus.arc.InjectableObserverMethod;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.ManagedContext;
-import io.quarkus.arc.RemovedBean;
 import io.quarkus.arc.ResourceReferenceProvider;
 import io.quarkus.arc.impl.ArcCDIProvider.ArcCDI;
 import java.lang.annotation.Annotation;
@@ -23,7 +22,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -39,7 +37,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.BeforeDestroyed;
-import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.context.Destroyed;
 import javax.enterprise.context.Initialized;
@@ -74,7 +71,6 @@ public class ArcContainerImpl implements ArcContainer {
     private final AtomicBoolean running;
 
     private final List<InjectableBean<?>> beans;
-    private final List<RemovedBean> removedBeans;
     private final List<InjectableInterceptor<?>> interceptors;
     private final List<InjectableObserverMethod<?>> observers;
     private final Map<Class<? extends Annotation>, Set<Annotation>> transitiveInterceptorBindings;
@@ -99,7 +95,6 @@ public class ArcContainerImpl implements ArcContainer {
         id = "" + ID_GENERATOR.incrementAndGet();
         running = new AtomicBoolean(true);
         beans = new ArrayList<>();
-        removedBeans = new ArrayList<>();
         interceptors = new ArrayList<>();
         observers = new ArrayList<>();
         transitiveInterceptorBindings = new HashMap<>();
@@ -119,7 +114,6 @@ public class ArcContainerImpl implements ArcContainer {
                     beans.add(bean);
                 }
             }
-            removedBeans.addAll(components.getRemovedBeans());
             observers.addAll(components.getObservers());
             // Add custom contexts
             for (InjectableContext context : components.getContexts()) {
@@ -182,17 +176,18 @@ public class ArcContainerImpl implements ArcContainer {
         } else if (Singleton.class.equals(scopeType)) {
             return singletonContext;
         }
-        InjectableContext selected = null;
+        List<InjectableContext> active = new ArrayList<>();
         for (InjectableContext context : contexts) {
             if (scopeType.equals(context.getScope()) && context.isActive()) {
-                if (selected != null) {
-                    throw new IllegalArgumentException(
-                            "More than one context object for the given scope: " + selected + " " + context);
-                }
-                selected = context;
+                active.add(context);
             }
         }
-        return selected;
+        if (active.isEmpty()) {
+            return null;
+        } else if (active.size() == 1) {
+            return active.get(0);
+        }
+        throw new IllegalArgumentException("More than one context object for the given scope: " + active);
     }
 
     @Override
@@ -261,39 +256,6 @@ public class ArcContainerImpl implements ArcContainer {
         Objects.requireNonNull(bean);
         requireRunning();
         return (InstanceHandle<T>) beanInstanceHandle(bean, null);
-    }
-
-    @Override
-    public <T> T normalScopedInstance(InjectableBean<T> bean) {
-        requireRunning();
-        Class<? extends Annotation> scopeType = bean.getScope();
-        // Application/Singleton context is always active
-        if (ApplicationScoped.class.equals(scopeType)) {
-            return applicationContext.getOrCreate(bean);
-        } else if (Singleton.class.equals(scopeType)) {
-            return applicationContext.getOrCreate(bean);
-        }
-        T result = null;
-        InjectableContext selectedContext = null;
-        for (InjectableContext context : contexts) {
-            if (scopeType.equals(context.getScope())) {
-                if (result != null) {
-                    if (context.isActive()) {
-                        throw new IllegalArgumentException(
-                                "More than one context object for the given scope: " + selectedContext + " " + context);
-                    }
-                } else {
-                    result = context.getOrCreate(bean);
-                    if (result != null) {
-                        selectedContext = context;
-                    }
-                }
-            }
-        }
-        if (result == null) {
-            throw new ContextNotActiveException();
-        }
-        return result;
     }
 
     @Override
@@ -394,11 +356,9 @@ public class ArcContainerImpl implements ArcContainer {
             Reflections.clearCaches();
             contexts.clear();
             beans.clear();
-            removedBeans.clear();
             resolved.clear();
             observers.clear();
             running.set(false);
-            InterceptedStaticMethods.clear();
 
             LOGGER.debugf("ArC DI container shut down");
         }
@@ -406,10 +366,6 @@ public class ArcContainerImpl implements ArcContainer {
 
     public List<InjectableBean<?>> getBeans() {
         return new ArrayList<>(beans);
-    }
-
-    public List<RemovedBean> getRemovedBeans() {
-        return Collections.unmodifiableList(removedBeans);
     }
 
     public List<InjectableInterceptor<?>> getInterceptors() {
@@ -526,11 +482,6 @@ public class ArcContainerImpl implements ArcContainer {
                 return bean;
             }
         }
-        for (InjectableInterceptor<?> interceptorBean : interceptors) {
-            if (interceptorBean.getIdentifier().equals(identifier)) {
-                return interceptorBean;
-            }
-        }
         return null;
     }
 
@@ -623,37 +574,10 @@ public class ArcContainerImpl implements ArcContainer {
     }
 
     List<InjectableBean<?>> getMatchingBeans(Resolvable resolvable) {
-        List<InjectableBean<?>> matching = new LinkedList<>();
+        List<InjectableBean<?>> matching = new ArrayList<>();
         for (InjectableBean<?> bean : beans) {
             if (matches(bean, resolvable.requiredType, resolvable.qualifiers)) {
                 matching.add(bean);
-            }
-        }
-        if (matching.isEmpty() && !removedBeans.isEmpty()) {
-            List<RemovedBean> removedMatching = new LinkedList<>();
-            for (RemovedBean removedBean : removedBeans) {
-                if (matches(removedBean.getTypes(), removedBean.getQualifiers(), resolvable.requiredType,
-                        resolvable.qualifiers)) {
-                    removedMatching.add(removedBean);
-                }
-            }
-            if (!removedMatching.isEmpty()) {
-                String separator = "====================";
-                String msg = "\n%1$s%1$s%1$s%1$s\n"
-                        + "CDI: programmatic lookup problem detected\n"
-                        + "-----------------------------------------\n"
-                        + "At least one bean matched the required type and qualifiers but was marked as unused and removed during build\n"
-                        + "Removed beans:\n\t- %2$s\n"
-                        + "Required type: %3$s\n"
-                        + "Required qualifiers: %4$s\n"
-                        + "Solutions:\n"
-                        + "\t- Application developers can eliminate false positives via the @Unremovable annotation\n"
-                        + "\t- Extensions can eliminate false positives via build items, e.g. using the UnremovableBeanBuildItem\n"
-                        + "\t- See also https://quarkus.io/guides/cdi-reference#remove_unused_beans\n"
-                        + "%1$s%1$s%1$s%1$s\n";
-                LOGGER.warnf(msg, separator,
-                        removedMatching.stream().map(Object::toString).collect(Collectors.joining("\n\t- ")),
-                        resolvable.requiredType, Arrays.toString(resolvable.qualifiers));
             }
         }
         return matching;
@@ -753,14 +677,10 @@ public class ArcContainerImpl implements ArcContainer {
     }
 
     private boolean matches(InjectableBean<?> bean, Type requiredType, Annotation... qualifiers) {
-        return matches(bean.getTypes(), bean.getQualifiers(), requiredType, qualifiers);
-    }
-
-    private boolean matches(Set<Type> beanTypes, Set<Annotation> beanQualifiers, Type requiredType, Annotation... qualifiers) {
-        if (!BeanTypeAssignabilityRules.matches(requiredType, beanTypes)) {
+        if (!BeanTypeAssignabilityRules.matches(requiredType, bean.getTypes())) {
             return false;
         }
-        return Qualifiers.hasQualifiers(beanQualifiers, qualifiers);
+        return Qualifiers.hasQualifiers(bean, qualifiers);
     }
 
     static ArcContainerImpl unwrap(ArcContainer container) {
@@ -768,23 +688,6 @@ public class ArcContainerImpl implements ArcContainer {
             return (ArcContainerImpl) container;
         } else {
             throw new IllegalArgumentException();
-        }
-    }
-
-    public static void mockObservers(String beanIdentifier, boolean mock) {
-        instance().mockObserversFor(beanIdentifier, mock);
-    }
-
-    private void mockObserversFor(String beanIdentifier, boolean mock) {
-        for (InjectableObserverMethod<?> observer : observers) {
-            if (observer instanceof Mockable && beanIdentifier.equals(observer.getDeclaringBeanIdentifier())) {
-                Mockable mockable = (Mockable) observer;
-                if (mock) {
-                    mockable.arc$setMock(null);
-                } else {
-                    mockable.arc$clearMock();
-                }
-            }
         }
     }
 
