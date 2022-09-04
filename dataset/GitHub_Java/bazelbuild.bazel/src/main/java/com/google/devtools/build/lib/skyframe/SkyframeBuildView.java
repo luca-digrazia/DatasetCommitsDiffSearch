@@ -294,14 +294,14 @@ public final class SkyframeBuildView {
           Event.info(
               "--discard_analysis_cache was used in the previous build, "
               + "discarding analysis cache."));
-      skyframeExecutor.handleAnalysisInvalidatingChange();
+      skyframeExecutor.handleConfiguredTargetChange();
     } else {
       String diff = describeConfigurationDifference(configurations, maxDifferencesToShow);
       if (diff != null) {
         // Clearing cached ConfiguredTargets when the configuration changes is not required for
         // correctness, but prevents unbounded memory usage.
         eventHandler.handle(Event.info(diff + ", discarding analysis cache."));
-        skyframeExecutor.handleAnalysisInvalidatingChange();
+        skyframeExecutor.handleConfiguredTargetChange();
       }
     }
     skyframeAnalysisWasDiscarded = false;
@@ -751,7 +751,6 @@ public final class SkyframeBuildView {
       Target target,
       BuildConfiguration configuration,
       CachingAnalysisEnvironment analysisEnvironment,
-      ConfiguredTargetKey configuredTargetKey,
       OrderedSetMultimap<Attribute, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       @Nullable ToolchainContext toolchainContext)
@@ -767,7 +766,6 @@ public final class SkyframeBuildView {
         target,
         configuration,
         getHostConfiguration(configuration),
-        configuredTargetKey,
         prerequisiteMap,
         configConditions,
         toolchainContext);

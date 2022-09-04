@@ -2315,19 +2315,15 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm)
       throws AbruptExitException {
-    try (SilentCloseable c = Profiler.instance().profile("preparePackageLoading")) {
-      preparePackageLoading(
-          pathPackageLocator,
-          packageCacheOptions,
-          skylarkSemanticsOptions,
-          defaultsPackageContents,
-          commandId,
-          clientEnv,
-          tsgm);
-    }
-    try (SilentCloseable c = Profiler.instance().profile("setDeletedPackages")) {
-      setDeletedPackages(packageCacheOptions.getDeletedPackages());
-    }
+    preparePackageLoading(
+        pathPackageLocator,
+        packageCacheOptions,
+        skylarkSemanticsOptions,
+        defaultsPackageContents,
+        commandId,
+        clientEnv,
+        tsgm);
+    setDeletedPackages(packageCacheOptions.getDeletedPackages());
 
     incrementalBuildMonitor = new SkyframeIncrementalBuildMonitor();
     invalidateTransientErrors();
