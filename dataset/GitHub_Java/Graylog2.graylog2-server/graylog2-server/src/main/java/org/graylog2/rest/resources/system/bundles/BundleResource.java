@@ -25,8 +25,6 @@ import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.auditlog.Actions;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.bundles.BundleService;
 import org.graylog2.bundles.ConfigurationBundle;
 import org.graylog2.bundles.ExportBundle;
@@ -74,7 +72,6 @@ public class BundleResource extends RestResource {
             @ApiResponse(code = 400, message = "Missing or invalid content pack"),
             @ApiResponse(code = 500, message = "Error while saving content pack")
     })
-    @AuditLog(object = "content pack", captureResponseEntity = true)
     public Response createBundle(
             @ApiParam(name = "Request body", value = "Content pack", required = true)
             @NotNull @Valid
@@ -131,7 +128,6 @@ public class BundleResource extends RestResource {
             @ApiResponse(code = 400, message = "Missing or invalid content pack"),
             @ApiResponse(code = 500, message = "Error while updating content pack")
     })
-    @AuditLog(object = "content pack")
     public void updateBundle(
             @ApiParam(name = "bundleId", value = "Content pack ID", required = true)
             @NotNull
@@ -155,7 +151,6 @@ public class BundleResource extends RestResource {
             @ApiResponse(code = 404, message = "Missing or invalid content pack"),
             @ApiResponse(code = 500, message = "Error while applying content pack")
     })
-    @AuditLog(object = "content pack")
     public void deleteBundle(
             @ApiParam(name = "bundleId", value = "Content pack ID", required = true)
             @NotNull
@@ -174,7 +169,6 @@ public class BundleResource extends RestResource {
             @ApiResponse(code = 404, message = "Missing or invalid content pack"),
             @ApiResponse(code = 500, message = "Error while applying content pack")
     })
-    @AuditLog(action = Actions.APPLY, object = "content pack")
     public void applyBundle(
             @ApiParam(name = "bundleId", value = "Content pack ID", required = true)
             @NotNull
@@ -191,7 +185,6 @@ public class BundleResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 500, message = "Error while exporting content pack")
     })
-    @AuditLog(action = Actions.EXPORT, object = "content pack")
     public ConfigurationBundle exportBundle(
             @ApiParam(name = "exportBundle", value = "Export content pack", required = true)
             @NotNull
