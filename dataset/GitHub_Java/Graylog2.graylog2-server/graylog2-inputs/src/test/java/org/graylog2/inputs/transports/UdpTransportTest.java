@@ -16,9 +16,12 @@
  */
 package org.graylog2.inputs.transports;
 
+import com.github.joschi.jadconfig.util.Size;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.Callables;
 import com.google.common.util.concurrent.Uninterruptibles;
+import org.apache.commons.lang3.SystemUtils;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -42,6 +45,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,12 +54,13 @@ import java.util.concurrent.TimeUnit;
 
 import static com.jayway.awaitility.Awaitility.await;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assume.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class UdpTransportTest {
     private static final String BIND_ADDRESS = "127.0.0.1";
-    private static final int PORT = 5555;
+    private static final int PORT = 0;
     private static final int RECV_BUFFER_SIZE = 1024;
     private static final ImmutableMap<String, Object> CONFIG_SOURCE = ImmutableMap.<String, Object>of(
             NettyTransport.CK_BIND_ADDRESS, BIND_ADDRESS,
@@ -78,8 +83,9 @@ public class UdpTransportTest {
     public void transportReceivesDataSmallerThanRecvBufferSize() throws Exception {
         final CountingChannelUpstreamHandler handler = new CountingChannelUpstreamHandler();
         final UdpTransport transport = launchTransportForBootStrapTest(handler);
+        final InetSocketAddress localAddress = (InetSocketAddress) transport.getLocalAddress();
 
-        sendUdpDatagram(BIND_ADDRESS, PORT, 100);
+        sendUdpDatagram(BIND_ADDRESS, localAddress.getPort(), 100);
         await().atMost(5, TimeUnit.SECONDS).until(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
@@ -95,12 +101,13 @@ public class UdpTransportTest {
     public void transportReceivesDataExactlyRecvBufferSize() throws Exception {
         final CountingChannelUpstreamHandler handler = new CountingChannelUpstreamHandler();
         final UdpTransport transport = launchTransportForBootStrapTest(handler);
+        final InetSocketAddress localAddress = (InetSocketAddress) transport.getLocalAddress();
 
         // This will be variable depending on the version of the IP protocol and the UDP packet size.
         final int udpOverhead = 16;
         final int maxPacketSize = RECV_BUFFER_SIZE - udpOverhead;
 
-        sendUdpDatagram(BIND_ADDRESS, PORT, maxPacketSize);
+        sendUdpDatagram(BIND_ADDRESS, localAddress.getPort(), maxPacketSize);
         await().atMost(5, TimeUnit.SECONDS).until(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
@@ -113,16 +120,39 @@ public class UdpTransportTest {
     }
 
     @Test
-    public void transportDiscardsDataLargerRecvBufferSize() throws Exception {
+    public void transportDiscardsDataLargerRecvBufferSizeOnMacOsX() throws Exception {
+        assumeTrue(SystemUtils.IS_OS_MAC_OSX);
+
         final CountingChannelUpstreamHandler handler = new CountingChannelUpstreamHandler();
         final UdpTransport transport = launchTransportForBootStrapTest(handler);
+        final InetSocketAddress localAddress = (InetSocketAddress) transport.getLocalAddress();
 
-        sendUdpDatagram(BIND_ADDRESS, PORT, 2 * RECV_BUFFER_SIZE);
+        sendUdpDatagram(BIND_ADDRESS, localAddress.getPort(), 2 * RECV_BUFFER_SIZE);
         Uninterruptibles.sleepUninterruptibly(2, TimeUnit.SECONDS);
 
         transport.stop();
 
         assertThat(handler.getBytesWritten()).isEmpty();
+    }
+
+    @Test
+    public void transportTruncatesDataLargerRecvBufferSizeOnLinux() throws Exception {
+        assumeTrue(SystemUtils.IS_OS_LINUX);
+
+        final CountingChannelUpstreamHandler handler = new CountingChannelUpstreamHandler();
+        final UdpTransport transport = launchTransportForBootStrapTest(handler);
+        final InetSocketAddress localAddress = (InetSocketAddress) transport.getLocalAddress();
+
+        sendUdpDatagram(BIND_ADDRESS, localAddress.getPort(), 2 * RECV_BUFFER_SIZE);
+        await().atMost(5, TimeUnit.SECONDS).until(new Callable<Boolean>() {
+            @Override
+            public Boolean call() throws Exception {
+                return !handler.getBytesWritten().isEmpty();
+            }
+        });
+        transport.stop();
+
+        assertThat(handler.getBytesWritten()).containsExactly(RECV_BUFFER_SIZE);
     }
 
     private UdpTransport launchTransportForBootStrapTest(final ChannelHandler channelHandler) throws MisfireException {
@@ -151,6 +181,19 @@ public class UdpTransportTest {
     }
 
     @Test
+    public void receiveBufferSizeIsNotLimited() throws Exception {
+        final int recvBufferSize = Ints.saturatedCast(Size.megabytes(1L).toBytes());
+        ImmutableMap<String, Object> source = ImmutableMap.<String, Object>of(
+                NettyTransport.CK_BIND_ADDRESS, BIND_ADDRESS,
+                NettyTransport.CK_PORT, PORT,
+                NettyTransport.CK_RECV_BUFFER_SIZE, recvBufferSize);
+        Configuration config = new Configuration(source);
+        UdpTransport udpTransport = new UdpTransport(config, throughputCounter, new LocalMetricRegistry());
+
+        assertThat(udpTransport.getBootstrap().getOption("receiveBufferSize")).isEqualTo(recvBufferSize);
+    }
+
+    @Test
     public void receiveBufferSizePredictorIsUsingDefaultSize() throws Exception {
         ReceiveBufferSizePredictorFactory receiveBufferSizePredictorFactory =
                 (ReceiveBufferSizePredictorFactory) udpTransport.getBootstrap().getOption("receiveBufferSizePredictorFactory");
@@ -168,7 +211,7 @@ public class UdpTransportTest {
         final UdpTransport.Config config = new UdpTransport.Config();
         final ConfigurationRequest requestedConfiguration = config.getRequestedConfiguration();
 
-        assertThat(requestedConfiguration.getField(NettyTransport.CK_RECV_BUFFER_SIZE).getDefaultValue()).isEqualTo(65535);
+        assertThat(requestedConfiguration.getField(NettyTransport.CK_RECV_BUFFER_SIZE).getDefaultValue()).isEqualTo(262144);
     }
 
     private void sendUdpDatagram(String hostname, int port, int size) throws IOException {
