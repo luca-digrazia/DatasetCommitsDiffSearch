@@ -886,12 +886,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     ccCompilationInfoBuilder.setCcCompilationContext(ccCompilationContext);
 
     CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-    if (cppConfiguration.enableCcDynamicLibrariesForRuntime()) {
-      ccLinkingInfoBuilder.setCcDynamicLibrariesForRuntime(
-          new CcDynamicLibrariesForRuntime(
-              collectDynamicLibrariesForRuntimeArtifacts(
-                  ruleContext, linkingOutputs.getDynamicLibrariesForRuntime())));
-    }
+    ccLinkingInfoBuilder.setCcDynamicLibrariesForRuntime(
+        new CcDynamicLibrariesForRuntime(
+            collectDynamicLibrariesForRuntimeArtifacts(
+                ruleContext, linkingOutputs.getDynamicLibrariesForRuntime())));
 
     builder
         .setFilesToBuild(filesToBuild)

@@ -39,7 +39,7 @@ import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
-import com.google.devtools.build.lib.rules.cpp.FdoProvider;
+import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
 import com.google.devtools.build.lib.rules.cpp.Link;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
@@ -216,7 +216,8 @@ public abstract class NativeDepsHelper {
     } else {
       sharedLibrary = nativeDeps;
     }
-    FdoProvider fdoProvider = toolchain.getFdoProvider();
+    FdoSupportProvider fdoSupport =
+        CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext);
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(
             ruleContext,
@@ -232,7 +233,7 @@ public abstract class NativeDepsHelper {
             sharedLibrary,
             configuration,
             toolchain,
-            fdoProvider,
+            fdoSupport,
             featureConfiguration,
             cppSemantics);
     if (useDynamicRuntime) {

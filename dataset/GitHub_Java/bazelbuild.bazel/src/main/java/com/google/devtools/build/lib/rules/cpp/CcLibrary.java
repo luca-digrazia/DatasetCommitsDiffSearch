@@ -76,7 +76,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         context,
         builder,
         /* additionalCopts= */ ImmutableList.of(),
-        /* soFilename= */ null,
         context.attributes().get("alwayslink", Type.BOOLEAN),
         /* neverLink= */ false,
         linkStatic,
@@ -89,7 +88,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       RuleConfiguredTargetBuilder targetBuilder,
       ImmutableList<String> additionalCopts,
-      PathFragment soFilename,
       boolean alwaysLink,
       boolean neverLink,
       boolean linkStatic,
@@ -159,12 +157,20 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             && supportsDynamicLinker
             && (appearsToHaveObjectFiles(ruleContext.attributes())
                 || featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULE_CODEGEN));
-    if (soFilename != null) {
-      if (!soFilename.getPathString().endsWith(".so")) { // Sanity check.
-        ruleContext.attributeError("outs", "file name must end in '.so'");
-      }
-      if (createDynamicLibrary) {
-        soImplArtifact = ruleContext.getBinArtifact(soFilename);
+    if (ruleContext.getRule().isAttrDefined("outs", Type.STRING_LIST)) {
+      List<String> outs = ruleContext.attributes().get("outs", Type.STRING_LIST);
+      if (outs.size() > 1) {
+        ruleContext.attributeError("outs", "must be a singleton list");
+      } else if (outs.size() == 1) {
+        PathFragment soImplFilename = PathFragment.create(ruleContext.getLabel().getName());
+        soImplFilename = soImplFilename.replaceName(outs.get(0));
+        if (!soImplFilename.getPathString().endsWith(".so")) { // Sanity check.
+          ruleContext.attributeError("outs", "file name must end in '.so'");
+        }
+
+        if (createDynamicLibrary) {
+          soImplArtifact = ruleContext.getBinArtifact(soImplFilename);
+        }
       }
     }
 
@@ -174,16 +180,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     if (ruleContext.getRule().isAttrDefined("textual_hdrs", BuildType.LABEL_LIST)) {
       compilationHelper.addPublicTextualHeaders(
           ruleContext.getPrerequisiteArtifacts("textual_hdrs", Mode.TARGET).list());
-    }
-    if (ruleContext.getRule().isAttrDefined("include_prefix", Type.STRING)
-        && ruleContext.attributes().isAttributeValueExplicitlySpecified("include_prefix")) {
-      compilationHelper.setIncludePrefix(
-          ruleContext.attributes().get("include_prefix", Type.STRING));
-    }
-    if (ruleContext.getRule().isAttrDefined("strip_include_prefix", Type.STRING)
-        && ruleContext.attributes().isAttributeValueExplicitlySpecified("strip_include_prefix")) {
-      compilationHelper.setStripIncludePrefix(
-          ruleContext.attributes().get("strip_include_prefix", Type.STRING));
     }
 
     if (common.getLinkopts().contains("-static")) {

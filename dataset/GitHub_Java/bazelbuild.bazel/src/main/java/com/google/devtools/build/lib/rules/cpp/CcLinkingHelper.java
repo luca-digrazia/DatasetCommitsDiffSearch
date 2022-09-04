@@ -106,7 +106,6 @@ public final class CcLinkingHelper {
       return outputGroups;
     }
 
-    @Override
     public CcLinkingOutputs getCcLinkingOutputs() {
       return linkingOutputs;
     }
