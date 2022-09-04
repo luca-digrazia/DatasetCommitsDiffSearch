@@ -45,7 +45,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Api(value = "Views/Sharing")
+@Api(value = "Enterprise/Views", description = "View Sharing management")
 @Path("/views/{id}/share")
 @Produces(MediaType.APPLICATION_JSON)
 @RequiresAuthentication
