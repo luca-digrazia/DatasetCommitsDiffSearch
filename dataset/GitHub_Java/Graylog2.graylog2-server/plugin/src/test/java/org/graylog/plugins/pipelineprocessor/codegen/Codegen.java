@@ -20,7 +20,6 @@ import org.graylog.plugins.pipelineprocessor.parser.FunctionRegistry;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.reflections.ReflectionUtils;
 import org.slf4j.Logger;
@@ -37,7 +36,6 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Ignore("Replaced by CodegenPipelineRuleParserTest")
 public class Codegen extends BaseParserTest {
     private static final Logger log = LoggerFactory.getLogger(Codegen.class);
     private static final Path PARENT = Paths.get("/Users/kroepke/projects/graylog/graylog-project-repos/graylog-plugin-pipeline-processor/plugin/");
@@ -64,9 +62,9 @@ public class Codegen extends BaseParserTest {
 
     @Test
     public void runCodegen() throws IOException {
-        final Rule rule = parser.parseRule(ruleForTest(), true).withId("1");
+        final Rule rule = parser.parseRule(ruleForTest(), true);
 
-        final String sourceCode = CodeGenerator.sourceCodeForRule(rule);
+        final String sourceCode = CodeGenerator.codeForRule(rule);
         Files.write(sourceCode,
                 OUTFILE.toFile(),
                 StandardCharsets.UTF_8);

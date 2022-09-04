@@ -93,7 +93,6 @@ public class CodeGenerator {
         private Set<TypeSpec> functionArgsHolderTypes = Sets.newHashSet();
         private MethodSpec.Builder constructorBuilder;
         private CodeBlock.Builder lateConstructorBlock;
-        private Set<CodeBlock> functionReferences = Sets.newHashSet();
 
         public String getSource() {
             return generatedFile.toString();
@@ -129,12 +128,8 @@ public class CodeGenerator {
             // TODO these can be shared and should potentially created by an AnnotationProcessor for each defined function instead of every rule
             classFile.addTypes(functionArgsHolderTypes);
 
-            // resolve functions (but only do so once for each function)
-            functionReferences.forEach(block -> constructorBuilder.addStatement("$L", block));
             // add initializers for fields that depend on the functions being set
             constructorBuilder.addCode(lateConstructorBlock.build());
-
-
             classFile.addMethod(constructorBuilder.build());
 
             generatedFile = JavaFile.builder("org.graylog.plugins.pipelineprocessor.$dynamic.rules", classFile.build())
@@ -265,15 +260,14 @@ public class CodeGenerator {
             } else {
                 currentMethod.addStatement("$T $L = $L", ClassName.get(function.returnType()), functionValueVarName, functionInvocation);
             }
-            // create a field/initializer block for the function reference
             functionMembers.add(
-                    FieldSpec.builder(expr.getFunction().getClass(), mangledFunctionName, Modifier.PRIVATE, Modifier.FINAL)
+                    FieldSpec.builder(expr.getFunction().getClass(), mangledFunctionName, Modifier.PRIVATE)
                             .build());
-            functionReferences.add(CodeBlock.of("$L = ($T) functionRegistry.resolve($S)",
+            codeSnippet.put(expr, CodeBlock.of("$L", functionValueVarName));
+            constructorBuilder.addStatement("$L = ($T) functionRegistry.resolve($S)",
                     mangledFunctionName,
                     expr.getFunction().getClass(),
-                    function.name()));
-            codeSnippet.put(expr, CodeBlock.of("$L", functionValueVarName));
+                    function.name());
         }
 
         @Nonnull
