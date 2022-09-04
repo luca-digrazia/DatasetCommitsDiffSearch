@@ -343,7 +343,7 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
                     @Override
                     public void run() {
                         if (mTrackSelector == null) {
-                            mTrackSelector = new DefaultTrackSelector(mAppContext);
+                            mTrackSelector = new DefaultTrackSelector();
                         }
                         mEventLogger = new EventLogger(mTrackSelector);
                         boolean preferExtensionDecoders = true;
@@ -371,8 +371,8 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
                         }
                         if (mSurface != null)
                             mInternalPlayer.setVideoSurface(mSurface);
-                        mInternalPlayer.setMediaSource(mMediaSource);
-                        mInternalPlayer.prepare();
+
+                        mInternalPlayer.prepare(mMediaSource);
                         mInternalPlayer.setPlayWhenReady(false);
                     }
                 }
