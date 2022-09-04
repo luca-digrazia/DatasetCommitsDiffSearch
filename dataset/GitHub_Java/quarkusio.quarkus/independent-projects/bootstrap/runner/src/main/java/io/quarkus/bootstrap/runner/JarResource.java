@@ -100,15 +100,4 @@ public class JarResource implements ClassLoadingResource {
         }
         return zipFile;
     }
-
-    @Override
-    public void close() {
-        if (zipFile != null) {
-            try {
-                zipFile.close();
-            } catch (IOException e) {
-                //ignore
-            }
-        }
-    }
 }
