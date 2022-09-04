@@ -98,8 +98,9 @@ public class CppLinkActionBuilder {
 
   // can be null for CppLinkAction.createTestBuilder()
   @Nullable private final CcToolchainProvider toolchain;
-  private final FdoContext fdoContext;
+  private final FdoProvider fdoProvider;
   private Artifact interfaceOutput;
+  private Artifact symbolCounts;
   /** Directory where toolchain stores language-runtime libraries (libstdc++, libc++ ...) */
   private PathFragment toolchainLibrariesSolibDir;
 
@@ -147,14 +148,14 @@ public class CppLinkActionBuilder {
    * @param ruleContext the rule that owns the action
    * @param output the output artifact
    * @param toolchain the C++ toolchain provider
-   * @param fdoContext the C++ FDO optimization support
+   * @param fdoProvider the C++ FDO optimization support
    * @param cppSemantics to be used for linkstamp compiles
    */
   public CppLinkActionBuilder(
       RuleContext ruleContext,
       Artifact output,
       CcToolchainProvider toolchain,
-      FdoContext fdoContext,
+      FdoProvider fdoProvider,
       FeatureConfiguration featureConfiguration,
       CppSemantics cppSemantics) {
     this(
@@ -163,7 +164,7 @@ public class CppLinkActionBuilder {
         ruleContext.getConfiguration(),
         ruleContext.getAnalysisEnvironment(),
         toolchain,
-        fdoContext,
+        fdoProvider,
         featureConfiguration,
         cppSemantics);
   }
@@ -175,7 +176,7 @@ public class CppLinkActionBuilder {
    * @param output the output artifact
    * @param configuration build configuration
    * @param toolchain C++ toolchain provider
-   * @param fdoContext the C++ FDO optimization support
+   * @param fdoProvider the C++ FDO optimization support
    * @param cppSemantics to be used for linkstamp compiles
    */
   public CppLinkActionBuilder(
@@ -183,7 +184,7 @@ public class CppLinkActionBuilder {
       Artifact output,
       BuildConfiguration configuration,
       CcToolchainProvider toolchain,
-      FdoContext fdoContext,
+      FdoProvider fdoProvider,
       FeatureConfiguration featureConfiguration,
       CppSemantics cppSemantics) {
     this(
@@ -192,7 +193,7 @@ public class CppLinkActionBuilder {
         configuration,
         ruleContext.getAnalysisEnvironment(),
         toolchain,
-        fdoContext,
+        fdoProvider,
         featureConfiguration,
         cppSemantics);
   }
@@ -205,7 +206,7 @@ public class CppLinkActionBuilder {
    * @param configuration the configuration used to determine the tool chain and the default link
    *     options
    * @param toolchain the C++ toolchain provider
-   * @param fdoContext the C++ FDO optimization support
+   * @param fdoProvider the C++ FDO optimization support
    * @param cppSemantics to be used for linkstamp compiles
    */
   private CppLinkActionBuilder(
@@ -214,7 +215,7 @@ public class CppLinkActionBuilder {
       BuildConfiguration configuration,
       AnalysisEnvironment analysisEnvironment,
       CcToolchainProvider toolchain,
-      FdoContext fdoContext,
+      FdoProvider fdoProvider,
       FeatureConfiguration featureConfiguration,
       CppSemantics cppSemantics) {
     this.ruleContext = ruleContext;
@@ -223,7 +224,7 @@ public class CppLinkActionBuilder {
     this.configuration = Preconditions.checkNotNull(configuration);
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
     this.toolchain = toolchain;
-    this.fdoContext = fdoContext;
+    this.fdoProvider = fdoProvider;
     if (featureConfiguration.isEnabled(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES)) {
       toolchainLibrariesSolibDir = toolchain.getDynamicRuntimeSolibDir();
     }
@@ -386,7 +387,7 @@ public class CppLinkActionBuilder {
                 SHAREABLE_LINK_ARTIFACT_FACTORY,
                 featureConfiguration,
                 toolchain,
-                fdoContext,
+            fdoProvider,
                 usePicForLtoBackendActions,
                 toolchain.shouldCreatePerObjectDebugInfo(featureConfiguration),
                 argv)
@@ -399,7 +400,7 @@ public class CppLinkActionBuilder {
                 linkArtifactFactory,
                 featureConfiguration,
                 toolchain,
-                fdoContext,
+                fdoProvider,
                 usePicForLtoBackendActions,
                 toolchain.shouldCreatePerObjectDebugInfo(featureConfiguration),
                 argv);
@@ -764,7 +765,8 @@ public class CppLinkActionBuilder {
           constructOutputs(
               output,
               linkActionOutputs.build(),
-              interfaceOutputLibrary == null ? null : interfaceOutputLibrary.getArtifact());
+              interfaceOutputLibrary == null ? null : interfaceOutputLibrary.getArtifact(),
+              symbolCounts);
     }
 
     // Linker inputs without any start/end lib expansions.
@@ -854,6 +856,7 @@ public class CppLinkActionBuilder {
               thinltoParamFile != null ? thinltoParamFile.getExecPathString() : null,
               thinltoMergedObjectFile != null ? thinltoMergedObjectFile.getExecPathString() : null,
               mustKeepDebug,
+              symbolCounts,
               toolchain,
               featureConfiguration,
               useTestOnlyFlags,
@@ -863,7 +866,7 @@ public class CppLinkActionBuilder {
               interfaceOutput != null ? interfaceOutput.getExecPathString() : null,
               ltoOutputRootPrefix,
               defFile != null ? defFile.getExecPathString() : null,
-              fdoContext,
+              fdoProvider,
               collectedLibrariesToLink.getRuntimeLibrarySearchDirectories(),
               collectedLibrariesToLink.getLibrariesToLink(),
               collectedLibrariesToLink.getLibrarySearchDirectories(),
@@ -895,6 +898,8 @@ public class CppLinkActionBuilder {
 
       Preconditions.checkArgument(
           linkingMode == Link.LinkingMode.STATIC, "static library link must be static");
+      Preconditions.checkArgument(
+          symbolCounts == null, "the symbol counts output must be null for static links");
       Preconditions.checkArgument(
           !isNativeDeps, "the native deps flag must be false for static links");
       Preconditions.checkArgument(
@@ -1006,7 +1011,7 @@ public class CppLinkActionBuilder {
                 toolchain,
                 configuration.isCodeCoverageEnabled(),
                 cppConfiguration,
-                CppHelper.getFdoBuildStamp(ruleContext, fdoContext, featureConfiguration),
+                CppHelper.getFdoBuildStamp(ruleContext, fdoProvider, featureConfiguration),
                 featureConfiguration,
                 cppConfiguration.forcePic()
                     || (linkType.isDynamicLibrary()
@@ -1207,6 +1212,11 @@ public class CppLinkActionBuilder {
    */
   public CppLinkActionBuilder setInterfaceOutput(Artifact interfaceOutput) {
     this.interfaceOutput = interfaceOutput;
+    return this;
+  }
+
+  public CppLinkActionBuilder setSymbolCountsOutput(Artifact symbolCounts) {
+    this.symbolCounts = symbolCounts;
     return this;
   }
 
