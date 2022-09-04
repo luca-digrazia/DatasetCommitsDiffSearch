@@ -495,14 +495,8 @@ public final class SkyframeBuildView {
     if (!badActions.isEmpty()) {
       // In order to determine the set of configured targets transitively error free from action
       // conflict issues, we run a post-processing update() that uses the bad action map.
-      EvaluationResult<PostConfiguredTargetValue> actionConflictResult;
-      enableAnalysis(true);
-      try {
-        actionConflictResult =
-            skyframeExecutor.postConfigureTargets(eventHandler, ctKeys, keepGoing, badActions);
-      } finally {
-        enableAnalysis(false);
-      }
+      EvaluationResult<PostConfiguredTargetValue> actionConflictResult =
+          skyframeExecutor.postConfigureTargets(eventHandler, ctKeys, keepGoing, badActions);
 
       cts = Lists.newArrayListWithCapacity(ctKeys.size());
       for (ConfiguredTargetKey value : ctKeys) {

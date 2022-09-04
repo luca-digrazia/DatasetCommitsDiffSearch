@@ -208,12 +208,14 @@ public final class TargetCompleteEvent
    * Construct a target completion event for a failed target, with the given non-empty root causes.
    */
   public static TargetCompleteEvent createFailed(
-      ConfiguredTargetAndData ct,
-      NestedSet<Cause> rootCauses,
-      NestedSet<ArtifactsInOutputGroup> outputs) {
+      ConfiguredTargetAndData ct, NestedSet<Cause> rootCauses) {
     Preconditions.checkArgument(!rootCauses.isEmpty());
     return new TargetCompleteEvent(
-        ct, rootCauses, CompletionContext.FAILED_COMPLETION_CTX, outputs, false);
+        ct,
+        rootCauses,
+        CompletionContext.FAILED_COMPLETION_CTX,
+        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        false);
   }
 
   /** Returns the label of the target associated with the event. */
@@ -333,7 +335,10 @@ public final class TargetCompleteEvent
                 name == null
                     ? artifact.getRootRelativePath().getRelative(relPath).getPathString()
                     : name);
-    builder.addAllPathPrefix(artifact.getRoot().getComponents());
+    if (artifact.getRoot().getComponents() != null) {
+      builder.addAllPathPrefix(
+          Iterables.transform(artifact.getRoot().getComponents(), PathFragment::getPathString));
+    }
     return builder;
   }
 
@@ -387,16 +392,11 @@ public final class TargetCompleteEvent
       builder.setTestTimeoutSeconds(testTimeoutSeconds);
     }
 
-    Iterable<Artifact> filteredImportantArtifacts = getLegacyFilteredImportantArtifacts();
-    for (Artifact artifact : filteredImportantArtifacts) {
-      if (artifact.isDirectory()) {
-        builder.addDirectoryOutput(newFileFromArtifact(artifact).build());
-      }
-    }
     // TODO(aehlig): remove direct reporting of artifacts as soon as clients no longer
     // need it.
     if (converters.getOptions().legacyImportantOutputs) {
-      addImportantOutputs(completionContext, builder, converters, filteredImportantArtifacts);
+      addImportantOutputs(
+          completionContext, builder, converters, getLegacyFilteredImportantArtifacts());
       if (baselineCoverageArtifacts != null) {
         addImportantOutputs(
             completionContext,
