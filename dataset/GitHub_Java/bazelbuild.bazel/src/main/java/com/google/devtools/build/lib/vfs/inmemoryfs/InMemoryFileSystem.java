@@ -377,9 +377,8 @@ public class InMemoryFileSystem extends FileSystem {
         if (traversals > MAX_TRAVERSALS) {
           throw Error.ELOOP.exception(path);
         }
-        List<String> segments = linkTarget.getSegments();
-        for (int ii = segments.size() - 1; ii >= 0; --ii) {
-          stack.push(segments.get(ii)); // Note this may include ".." segments.
+        for (int ii = linkTarget.segmentCount() - 1; ii >= 0; --ii) {
+          stack.push(linkTarget.getSegment(ii)); // Note this may include ".." segments.
         }
       } else {
         inode = child;
