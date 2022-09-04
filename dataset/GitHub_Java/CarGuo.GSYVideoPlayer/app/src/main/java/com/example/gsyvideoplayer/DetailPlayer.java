@@ -18,6 +18,7 @@ import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
+import com.shuyu.gsyvideoplayer.video.CustomGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 
@@ -54,7 +55,6 @@ public class DetailPlayer extends AppCompatActivity {
         ButterKnife.bind(this);
 
         String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
-        //String url = "http://vr.tudou.com/v2proxy/v?sid=95001&id=496378919&st=3&pw=";
         //String url = "http://pl-ali.youku.com/playlist/m3u8?type=mp4&ts=1490185963&keyframe=0&vid=XMjYxOTQ1Mzg2MA==&ep=ciadGkiFU8cF4SvajD8bYyuwJiYHXJZ3rHbN%2FrYDAcZuH%2BrC6DPcqJ21TPs%3D&sid=04901859548541247bba8&token=0524&ctype=12&ev=1&oip=976319194";
         //String url = "http://hls.ciguang.tv/hdtv/video.m3u8";
         //String url = "https://res.exexm.com/cw_145225549855002";
@@ -87,7 +87,7 @@ public class DetailPlayer extends AppCompatActivity {
         detailPlayer.setLockLand(false);
         detailPlayer.setShowFullAnimation(false);
         detailPlayer.setNeedLockFull(true);
-        //detailPlayer.setOpenPreView(false);
+        detailPlayer.setOpenPreView(false);
         detailPlayer.getFullscreenButton().setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -169,7 +169,7 @@ public class DetailPlayer extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         GSYVideoPlayer.releaseAllVideos();
-        //GSYPreViewManager.instance().releaseMediaPlayer();
+        GSYPreViewManager.instance().releaseMediaPlayer();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
     }
