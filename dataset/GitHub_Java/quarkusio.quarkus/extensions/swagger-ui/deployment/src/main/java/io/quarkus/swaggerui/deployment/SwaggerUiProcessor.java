@@ -86,12 +86,11 @@ public class SwaggerUiProcessor {
                     "quarkus.swagger-ui.path was set to \"/\", this is not allowed as it blocks the application from serving anything else.");
         }
 
-        String openApiPath = httpRootPathBuildItem.adjustPath(openapi.path);
         if (launch.getLaunchMode().isDevOrTest()) {
             CachedSwaggerUI cached = liveReloadBuildItem.getContextObject(CachedSwaggerUI.class);
 
             boolean extractionNeeded = cached == null;
-            if (cached != null && !cached.cachedOpenAPIPath.equals(openApiPath)) {
+            if (cached != null && !cached.cachedOpenAPIPath.equals(openapi.path)) {
                 try {
                     FileUtil.deleteDirectory(Paths.get(cached.cachedDirectory));
                 } catch (IOException e) {
@@ -109,9 +108,9 @@ public class SwaggerUiProcessor {
                     ResolvedArtifact artifact = getSwaggerUiArtifact();
                     Path tempDir = Files.createTempDirectory(TEMP_DIR_PREFIX).toRealPath();
                     extractSwaggerUi(artifact, tempDir);
-                    updateApiUrl(tempDir.resolve("index.html"), openApiPath);
+                    updateApiUrl(tempDir.resolve("index.html"), httpRootPathBuildItem);
                     cached.cachedDirectory = tempDir.toAbsolutePath().toString();
-                    cached.cachedOpenAPIPath = openApiPath;
+                    cached.cachedOpenAPIPath = openapi.path;
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
@@ -135,7 +134,7 @@ public class SwaggerUiProcessor {
                             String filename = entry.getName().replace(versionedSwaggerUiWebjarPrefix, "");
                             byte[] content = FileUtil.readFileContents(inputStream);
                             if (entry.getName().endsWith("index.html")) {
-                                content = updateApiUrl(new String(content, StandardCharsets.UTF_8), openApiPath)
+                                content = updateApiUrl(new String(content, StandardCharsets.UTF_8), httpRootPathBuildItem)
                                         .getBytes(StandardCharsets.UTF_8);
                             }
                             String fileName = SWAGGER_UI_FINAL_DESTINATION + "/" + filename;
@@ -178,19 +177,19 @@ public class SwaggerUiProcessor {
         }
     }
 
-    private void updateApiUrl(Path indexHtml, String openApiPath) throws IOException {
+    private void updateApiUrl(Path indexHtml, HttpRootPathBuildItem httpRoot) throws IOException {
         String content = new String(Files.readAllBytes(indexHtml), StandardCharsets.UTF_8);
-        String result = updateApiUrl(content, openApiPath);
+        String result = updateApiUrl(content, httpRoot);
         if (result != null) {
             Files.write(indexHtml, result.getBytes(StandardCharsets.UTF_8));
         }
     }
 
-    public String updateApiUrl(String original, String openApiPath) {
+    public String updateApiUrl(String original, HttpRootPathBuildItem httpRoot) {
 
         Matcher uriMatcher = SWAGGER_UI_DEFAULT_API_URL_PATTERN.matcher(original);
         if (uriMatcher.matches()) {
-            return uriMatcher.replaceFirst("$1" + openApiPath + "$3");
+            return uriMatcher.replaceFirst("$1" + httpRoot.adjustPath(openapi.path) + "$3");
         } else {
             log.warn("Unable to replace the default URL of Swagger UI");
             return null;
