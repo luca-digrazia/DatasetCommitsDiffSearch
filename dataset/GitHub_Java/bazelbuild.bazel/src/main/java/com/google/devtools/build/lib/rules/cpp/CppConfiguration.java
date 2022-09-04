@@ -159,8 +159,6 @@ public final class CppConfiguration extends Fragment
   private final Label fdoOptimizeLabel;
 
   private final PathFragment csFdoAbsolutePath;
-  private final PathFragment propellerOptimizeAbsoluteCCProfile;
-  private final PathFragment propellerOptimizeAbsoluteLdProfile;
 
   private final ImmutableList<String> conlyopts;
 
@@ -231,46 +229,10 @@ public final class CppConfiguration extends Fragment
       }
     }
 
-    PathFragment propellerOptimizeAbsoluteCCProfile = null;
-    if (cppOptions.propellerOptimizeAbsoluteCCProfile != null) {
-      propellerOptimizeAbsoluteCCProfile =
-          PathFragment.create(cppOptions.propellerOptimizeAbsoluteCCProfile);
-      if (!propellerOptimizeAbsoluteCCProfile.isAbsolute()) {
-        throw new InvalidConfigurationException(
-            "Path of '"
-                + propellerOptimizeAbsoluteCCProfile.getPathString()
-                + "' in --propeller_optimize_absolute_cc_profile is not an absolute path.");
-      }
-      try {
-        FileSystemUtils.checkBaseName(propellerOptimizeAbsoluteCCProfile.getBaseName());
-      } catch (IllegalArgumentException e) {
-        throw new InvalidConfigurationException(e);
-      }
-    }
-
-    PathFragment propellerOptimizeAbsoluteLdProfile = null;
-    if (cppOptions.propellerOptimizeAbsoluteLdProfile != null) {
-      propellerOptimizeAbsoluteLdProfile =
-          PathFragment.create(cppOptions.propellerOptimizeAbsoluteLdProfile);
-      if (!propellerOptimizeAbsoluteLdProfile.isAbsolute()) {
-        throw new InvalidConfigurationException(
-            "Path of '"
-                + propellerOptimizeAbsoluteLdProfile.getPathString()
-                + "' in --propeller_optimize_absolute_ld_profile is not an absolute path.");
-      }
-      try {
-        FileSystemUtils.checkBaseName(propellerOptimizeAbsoluteLdProfile.getBaseName());
-      } catch (IllegalArgumentException e) {
-        throw new InvalidConfigurationException(e);
-      }
-    }
-
     this.cpu = commonOptions.cpu;
     this.fdoPath = fdoPath;
     this.fdoOptimizeLabel = fdoProfileLabel;
     this.csFdoAbsolutePath = csFdoAbsolutePath;
-    this.propellerOptimizeAbsoluteCCProfile = propellerOptimizeAbsoluteCCProfile;
-    this.propellerOptimizeAbsoluteLdProfile = propellerOptimizeAbsoluteLdProfile;
     this.conlyopts = ImmutableList.copyOf(cppOptions.conlyoptList);
     this.copts = ImmutableList.copyOf(cppOptions.coptList);
     this.cxxopts = ImmutableList.copyOf(cppOptions.cxxoptList);
@@ -587,14 +549,6 @@ public final class CppConfiguration extends Fragment
     return csFdoAbsolutePath;
   }
 
-  public PathFragment getPropellerOptimizeAbsoluteCCProfile() {
-    return propellerOptimizeAbsoluteCCProfile;
-  }
-
-  public PathFragment getPropellerOptimizeAbsoluteLdProfile() {
-    return propellerOptimizeAbsoluteLdProfile;
-  }
-
   Label getFdoPrefetchHintsLabel() {
     if (isToolConfigurationDoNotUseWillBeRemovedFor129045294()) {
       // We don't want FDO in the host configuration
@@ -831,4 +785,3 @@ public final class CppConfiguration extends Fragment
     return fissionIsActiveForCurrentCompilationMode();
   }
 }
-
