@@ -21,6 +21,7 @@ import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -47,10 +48,12 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -63,13 +66,26 @@ public class SpawnInputExpanderTest {
   private static final ArtifactExpander NO_ARTIFACT_EXPANDER =
       (a, b) -> fail("expected no interactions");
 
-  private final FileSystem fs = new InMemoryFileSystem();
-  private final Path execRoot = fs.getPath("/root");
-  private final ArtifactRoot rootDir =
-      ArtifactRoot.asDerivedRoot(execRoot, fs.getPath("/root/out"));
+  private FileSystem fs;
+  private Path execRoot;
+  private ArtifactRoot rootDir;
+  private SpawnInputExpander expander;
+  private Map<PathFragment, ActionInput> inputMappings;
 
-  private SpawnInputExpander expander = new SpawnInputExpander(execRoot, /*strict=*/ true);
-  private Map<PathFragment, ActionInput> inputMappings = new HashMap<>();
+  @Before
+  public final void createSpawnInputExpander() {
+    fs = new InMemoryFileSystem();
+    execRoot = fs.getPath("/root");
+    rootDir = ArtifactRoot.asDerivedRoot(execRoot, fs.getPath("/root/out"));
+    expander = new SpawnInputExpander(execRoot, /*strict=*/ true);
+    inputMappings = Maps.newHashMap();
+  }
+
+  private void scratchFile(String file, String... lines) throws Exception {
+    Path path = fs.getPath(file);
+    path.getParentDirectory().createDirectoryAndParents();
+    FileSystemUtils.writeLinesAs(path, StandardCharsets.UTF_8, lines);
+  }
 
   @Test
   public void testEmptyRunfiles() throws Exception {
@@ -313,52 +329,63 @@ public class SpawnInputExpanderTest {
 
   @Test
   public void testEmptyManifest() throws Exception {
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings =
-        ImmutableMap.of(createFileset("out"), ImmutableList.of());
+    // See AnalysisUtils for the mapping from "foo" to "_foo/MANIFEST".
+    scratchFile("/root/out/_foo/MANIFEST");
 
-    expander.addFilesetManifests(filesetMappings, inputMappings);
-
+    ArtifactRoot outputRoot =
+        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
+    expander.parseFilesetManifest(inputMappings, artifact, "workspace");
     assertThat(inputMappings).isEmpty();
   }
 
   @Test
   public void testManifestWithSingleFile() throws Exception {
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings =
-        ImmutableMap.of(
-            createFileset("out"), ImmutableList.of(filesetSymlink("foo/bar", "/dir/file")));
+    // See AnalysisUtils for the mapping from "foo" to "_foo/MANIFEST".
+    scratchFile("/root/out/_foo/MANIFEST", "workspace/bar /dir/file", "<some digest>");
 
-    expander.addFilesetManifests(filesetMappings, inputMappings);
-
+    ArtifactRoot outputRoot =
+        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
+    expander.parseFilesetManifest(inputMappings, artifact, "workspace");
+    assertThat(inputMappings).hasSize(1);
     assertThat(inputMappings)
-        .containsExactly(
-            PathFragment.create("out/foo/bar"), ActionInputHelper.fromPath("/dir/file"));
+        .containsEntry(PathFragment.create("out/foo/bar"), ActionInputHelper.fromPath("/dir/file"));
   }
 
   @Test
   public void testManifestWithTwoFiles() throws Exception {
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings =
-        ImmutableMap.of(
-            createFileset("out"),
-            ImmutableList.of(
-                filesetSymlink("foo/bar", "/dir/file"), filesetSymlink("foo/baz", "/dir/file")));
+    // See AnalysisUtils for the mapping from "foo" to "_foo/MANIFEST".
+    scratchFile(
+        "/root/out/_foo/MANIFEST",
+        "workspace/bar /dir/file",
+        "<some digest>",
+        "workspace/baz /dir/file",
+        "<some digest>");
 
-    expander.addFilesetManifests(filesetMappings, inputMappings);
-
+    ArtifactRoot outputRoot =
+        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
+    expander.parseFilesetManifest(inputMappings, artifact, "workspace");
+    assertThat(inputMappings).hasSize(2);
     assertThat(inputMappings)
-        .containsExactly(
-            PathFragment.create("out/foo/bar"), ActionInputHelper.fromPath("/dir/file"),
-            PathFragment.create("out/foo/baz"), ActionInputHelper.fromPath("/dir/file"));
+        .containsEntry(PathFragment.create("out/foo/bar"), ActionInputHelper.fromPath("/dir/file"));
+    assertThat(inputMappings)
+        .containsEntry(PathFragment.create("out/foo/baz"), ActionInputHelper.fromPath("/dir/file"));
   }
 
   @Test
   public void testManifestWithDirectory() throws Exception {
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings =
-        ImmutableMap.of(createFileset("out"), ImmutableList.of(filesetSymlink("foo/bar", "/some")));
+    // See AnalysisUtils for the mapping from "foo" to "_foo/MANIFEST".
+    scratchFile("/root/out/_foo/MANIFEST", "workspace/bar /some", "<some digest>");
 
-    expander.addFilesetManifests(filesetMappings, inputMappings);
-
+    ArtifactRoot outputRoot =
+        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
+    expander.parseFilesetManifest(inputMappings, artifact, "workspace");
+    assertThat(inputMappings).hasSize(1);
     assertThat(inputMappings)
-        .containsExactly(PathFragment.create("out/foo/bar"), ActionInputHelper.fromPath("/some"));
+        .containsEntry(PathFragment.create("out/foo/bar"), ActionInputHelper.fromPath("/some"));
   }
 
   private static FilesetOutputSymlink filesetSymlink(String from, String to) {
@@ -385,7 +412,7 @@ public class SpawnInputExpanderTest {
   public void testManifestWithErrorOnRelativeSymlink() throws Exception {
     expander = new SpawnInputExpander(execRoot, /*strict=*/ true, ERROR);
     try {
-      expander.addFilesetManifests(simpleFilesetManifest(), inputMappings);
+      expander.addFilesetManifests(simpleFilesetManifest(), new HashMap<>());
       fail();
     } catch (IOException e) {
       assertThat(e).hasMessageThat().contains("runfiles target is not absolute: foo");
@@ -395,8 +422,9 @@ public class SpawnInputExpanderTest {
   @Test
   public void testManifestWithIgnoredRelativeSymlink() throws Exception {
     expander = new SpawnInputExpander(execRoot, /*strict=*/ true, IGNORE);
-    expander.addFilesetManifests(simpleFilesetManifest(), inputMappings);
-    assertThat(inputMappings)
+    Map<PathFragment, ActionInput> entries = new HashMap<>();
+    expander.addFilesetManifests(simpleFilesetManifest(), entries);
+    assertThat(entries)
         .containsExactly(
             PathFragment.create("out/workspace/foo"), ActionInputHelper.fromPath("/root/bar"));
   }
@@ -404,8 +432,9 @@ public class SpawnInputExpanderTest {
   @Test
   public void testManifestWithResolvedRelativeSymlink() throws Exception {
     expander = new SpawnInputExpander(execRoot, /*strict=*/ true, RESOLVE);
-    expander.addFilesetManifests(simpleFilesetManifest(), inputMappings);
-    assertThat(inputMappings)
+    Map<PathFragment, ActionInput> entries = new HashMap<>();
+    expander.addFilesetManifests(simpleFilesetManifest(), entries);
+    assertThat(entries)
         .containsExactly(
             PathFragment.create("out/workspace/bar"), ActionInputHelper.fromPath("/root/bar"),
             PathFragment.create("out/workspace/foo"), ActionInputHelper.fromPath("/root/bar"));
