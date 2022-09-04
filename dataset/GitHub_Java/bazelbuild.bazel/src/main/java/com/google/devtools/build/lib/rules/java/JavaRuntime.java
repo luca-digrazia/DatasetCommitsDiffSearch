@@ -81,8 +81,6 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
       javaHome = javaBinaryExecPath.getParentDirectory().getParentDirectory();
       filesBuilder.add(java);
     }
-    PathFragment javaHomeRunfilesPath =
-        javaBinaryRunfilesPath.getParentDirectory().getParentDirectory();
 
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
     NestedSet<Artifact> middleman =
@@ -96,12 +94,7 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
 
     JavaRuntimeInfo javaRuntime =
         JavaRuntimeInfo.create(
-            filesToBuild,
-            middleman,
-            javaHome,
-            javaBinaryExecPath,
-            javaHomeRunfilesPath,
-            javaBinaryRunfilesPath);
+            filesToBuild, middleman, javaHome, javaBinaryExecPath, javaBinaryRunfilesPath);
 
     TemplateVariableInfo templateVariableInfo = new TemplateVariableInfo(
         ImmutableMap.of(
