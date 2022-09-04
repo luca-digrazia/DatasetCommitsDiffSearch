@@ -75,26 +75,6 @@ public class BazelJavaRuleClasses {
           JavaSemantics.JAVA_LIBRARY_SOURCE_JAR);
 
   /**
-   * Meant to be an element of {@code mandatoryProvidersLists} in order to accept rules providing
-   * a {@link JavaProvider} through an attribute. Other providers can be included in
-   * {@code mandatoryProvidersLists} as well.
-   */
-  public static final ImmutableList<SkylarkProviderIdentifier> CONTAINS_JAVA_PROVIDER =
-      ImmutableList.of(SkylarkProviderIdentifier.forKey(JavaProvider.JAVA_PROVIDER.getKey()));
-
-  public static final ImmutableList<SkylarkProviderIdentifier> CONTAINS_CC_LINK_PARAMS =
-      ImmutableList.of(
-          SkylarkProviderIdentifier.forKey(CcLinkParamsProvider.CC_LINK_PARAMS.getKey()));
-
-  /**
-   * Meant to be the value of {@code mandatoryProvidersLists} in order for the rule to provide only
-   * a {@link JavaProvider} through an attribute.
-   */
-  public static final ImmutableList<ImmutableList<SkylarkProviderIdentifier>>
-      MANDATORY_JAVA_PROVIDER_ONLY = ImmutableList.of(CONTAINS_JAVA_PROVIDER);
-
-
-  /**
    * Common attributes for rules that depend on ijar.
    */
   public static final class IjarBaseRule implements RuleDefinition {
@@ -129,8 +109,8 @@ public class BazelJavaRuleClasses {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(attr(":jvm", LABEL).value(JavaSemantics.jvmAttribute(env)).useOutputLicenses())
-          .add(attr(":host_jdk", LABEL).cfg(HOST).value(JavaSemantics.hostJdkAttribute(env)))
+          .add(attr(":jvm", LABEL).value(JavaSemantics.JVM).useOutputLicenses())
+          .add(attr(":host_jdk", LABEL).cfg(HOST).value(JavaSemantics.HOST_JDK))
           .add(attr("$jacoco_instrumentation", LABEL).cfg(HOST))
           .build();
     }
@@ -178,7 +158,13 @@ public class BazelJavaRuleClasses {
                   .allowedFileTypes(JavaSemantics.JAR)
                   .allowedRuleClasses(ALLOWED_RULES_IN_DEPS)
                   .mandatoryProvidersList(
-                      ImmutableList.of(CONTAINS_CC_LINK_PARAMS, CONTAINS_JAVA_PROVIDER))
+                      ImmutableList.of(
+                          ImmutableList.of(
+                              SkylarkProviderIdentifier.forKey(
+                                  CcLinkParamsProvider.CC_LINK_PARAMS.getKey())),
+                          ImmutableList.of(
+                              SkylarkProviderIdentifier.forKey(
+                                  JavaProvider.JAVA_PROVIDER.getKey()))))
                   .skipAnalysisTimeFileTypeCheck())
           /* <!-- #BLAZE_RULE($java_rule).ATTRIBUTE(runtime_deps) -->
           Libraries to make available to the final binary or test at runtime only.
@@ -191,7 +177,11 @@ public class BazelJavaRuleClasses {
               attr("runtime_deps", LABEL_LIST)
                   .allowedFileTypes(JavaSemantics.JAR)
                   .allowedRuleClasses(ALLOWED_RULES_IN_DEPS)
-                  .mandatoryProvidersList(MANDATORY_JAVA_PROVIDER_ONLY)
+                  .mandatoryProvidersList(
+                      ImmutableList.of(
+                          ImmutableList.of(
+                              SkylarkProviderIdentifier.forKey(
+                                  JavaProvider.JAVA_PROVIDER.getKey()))))
                   .skipAnalysisTimeFileTypeCheck())
 
           /* <!-- #BLAZE_RULE($java_rule).ATTRIBUTE(srcs) -->
