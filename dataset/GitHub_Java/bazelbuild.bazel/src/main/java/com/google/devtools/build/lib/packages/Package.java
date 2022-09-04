@@ -777,11 +777,7 @@ public class Package {
       String runfilesPrefix,
       StarlarkSemantics starlarkSemantics) {
     return new Builder(
-            helper,
-            LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
-            runfilesPrefix,
-            starlarkSemantics,
-            Builder.EMPTY_REPOSITORY_MAPPING)
+            helper, LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, runfilesPrefix, starlarkSemantics)
         .setFilename(workspacePath);
   }
 
@@ -790,9 +786,6 @@ public class Package {
    * {@link com.google.devtools.build.lib.skyframe.PackageFunction}.
    */
   public static class Builder {
-
-    public static final ImmutableMap<RepositoryName, RepositoryName> EMPTY_REPOSITORY_MAPPING =
-        ImmutableMap.of();
 
     public interface Helper {
       /**
@@ -850,13 +843,10 @@ public class Package {
     // This is only used in the //external package, it is an empty map for all other packages.
     public final HashMap<RepositoryName, HashMap<RepositoryName, RepositoryName>>
         externalPackageRepositoryMappings = new HashMap<>();
-    /**
-     * The map of repository reassignments for BUILD packages loaded within external repositories.
-     * It contains an entry from "@<main workspace name>" to "@" for packages within the main
-     * workspace.
-     */
-    private final ImmutableMap<RepositoryName, RepositoryName> repositoryMapping;
-
+    // The map of repository reassignments for BUILD packages loaded within external repositories.
+    // It contains an entry from "@<main workspace name>" to "@" for packages within
+    // the main workspace.
+    private ImmutableMap<RepositoryName, RepositoryName> repositoryMapping = ImmutableMap.of();
     private RootedPath filename = null;
     private Label buildFileLabel = null;
     private InputFile buildFile = null;
@@ -932,11 +922,9 @@ public class Package {
         Helper helper,
         PackageIdentifier id,
         String runfilesPrefix,
-        StarlarkSemantics starlarkSemantics,
-        ImmutableMap<RepositoryName, RepositoryName> repositoryMapping) {
+        StarlarkSemantics starlarkSemantics) {
       this.pkg = helper.createFreshPackage(id, runfilesPrefix);
       this.starlarkSemantics = starlarkSemantics;
-      this.repositoryMapping = repositoryMapping;
       if (pkg.getName().startsWith("javatests/")) {
         setDefaultTestonly(true);
       }
@@ -987,6 +975,15 @@ public class Package {
               repositoryNameRepositoryNameEntry.getValue());
         }
       }
+      return this;
+    }
+
+    /**
+     * Sets the repository mapping for a regular, BUILD file package (i.e. not the //external
+     * package)
+     */
+    Builder setRepositoryMapping(ImmutableMap<RepositoryName, RepositoryName> repositoryMapping) {
+      this.repositoryMapping = Preconditions.checkNotNull(repositoryMapping);
       return this;
     }
 

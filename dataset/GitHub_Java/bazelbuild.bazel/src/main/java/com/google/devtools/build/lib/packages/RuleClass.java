@@ -44,8 +44,8 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
-import com.google.devtools.build.lib.packages.Attribute.StarlarkComputedDefaultTemplate;
-import com.google.devtools.build.lib.packages.Attribute.StarlarkComputedDefaultTemplate.CannotPrecomputeDefaultsException;
+import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate;
+import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate.CannotPrecomputeDefaultsException;
 import com.google.devtools.build.lib.packages.BuildType.LabelConversionContext;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
@@ -150,9 +150,10 @@ public class RuleClass {
   public static final PathFragment EXPERIMENTAL_PREFIX = PathFragment.create("experimental");
   public static final String EXEC_COMPATIBLE_WITH_ATTR = "exec_compatible_with";
   public static final String EXEC_PROPERTIES = "exec_properties";
-  /*
-   * The attribute that declares the set of license labels which apply to this target.
-   */
+
+  /** The attribute that declares the set of license labels which apply to this target. */
+  // TODO(b/149505729): Determine the right semantics for someone trying to define their own
+  // attribute named applicable_licenses.
   public static final String APPLICABLE_LICENSES_ATTR = "applicable_licenses";
 
   /**
@@ -678,7 +679,7 @@ public class RuleClass {
     /** This field and the next are null iff the rule is native. */
     @Nullable private Label ruleDefinitionEnvironmentLabel;
 
-    @Nullable private byte[] ruleDefinitionEnvironmentDigest = null;
+    @Nullable private String ruleDefinitionEnvironmentHashCode = null;
     private ConfigurationFragmentPolicy.Builder configurationFragmentPolicy =
         new ConfigurationFragmentPolicy.Builder();
 
@@ -819,7 +820,7 @@ public class RuleClass {
         Preconditions.checkState(externalBindingsFunction == NO_EXTERNAL_BINDINGS);
       }
       if (type == RuleClassType.PLACEHOLDER) {
-        Preconditions.checkNotNull(ruleDefinitionEnvironmentDigest, this.name);
+        Preconditions.checkNotNull(ruleDefinitionEnvironmentHashCode, this.name);
       }
 
       if (buildSetting != null) {
@@ -865,7 +866,7 @@ public class RuleClass {
           externalBindingsFunction,
           optionReferenceFunction,
           ruleDefinitionEnvironmentLabel,
-          ruleDefinitionEnvironmentDigest,
+          ruleDefinitionEnvironmentHashCode,
           configurationFragmentPolicy.build(),
           supportsConstraintChecking,
           thirdPartyLicenseExistencePolicy,
@@ -962,8 +963,8 @@ public class RuleClass {
      */
     public Builder requiresConfigurationFragmentsByStarlarkModuleName(
         Collection<String> configurationFragmentNames) {
-      configurationFragmentPolicy.requiresConfigurationFragmentsByStarlarkBuiltinName(
-          configurationFragmentNames);
+      configurationFragmentPolicy
+          .requiresConfigurationFragmentsBySkylarkModuleName(configurationFragmentNames);
       return this;
     }
 
@@ -987,8 +988,8 @@ public class RuleClass {
      */
     public Builder requiresConfigurationFragmentsByStarlarkModuleName(
         ConfigurationTransition transition, Collection<String> configurationFragmentNames) {
-      configurationFragmentPolicy.requiresConfigurationFragmentsByStarlarkBuiltinName(
-          transition, configurationFragmentNames);
+      configurationFragmentPolicy.requiresConfigurationFragmentsBySkylarkModuleName(transition,
+          configurationFragmentNames);
       return this;
     }
 
@@ -1147,7 +1148,7 @@ public class RuleClass {
 
     public Builder advertiseStarlarkProvider(StarlarkProviderIdentifier... starlarkProviders) {
       for (StarlarkProviderIdentifier starlarkProviderIdentifier : starlarkProviders) {
-        advertisedProviders.addStarlark(starlarkProviderIdentifier);
+        advertisedProviders.addSkylark(starlarkProviderIdentifier);
       }
       return this;
     }
@@ -1251,12 +1252,10 @@ public class RuleClass {
       return this;
     }
 
-    /**
-     * Sets the rule definition environment label and transitive digest. Meant for Starlark usage.
-     */
-    public Builder setRuleDefinitionEnvironmentLabelAndDigest(Label label, byte[] digest) {
+    /** Sets the rule definition environment label and hash code. Meant for Starlark usage. */
+    public Builder setRuleDefinitionEnvironmentLabelAndHashCode(Label label, String hashCode) {
       this.ruleDefinitionEnvironmentLabel = Preconditions.checkNotNull(label, this.name);
-      this.ruleDefinitionEnvironmentDigest = Preconditions.checkNotNull(digest, this.name);
+      this.ruleDefinitionEnvironmentHashCode = Preconditions.checkNotNull(hashCode, this.name);
       return this;
     }
 
@@ -1585,7 +1584,7 @@ public class RuleClass {
    */
   @Nullable private final Label ruleDefinitionEnvironmentLabel;
 
-  @Nullable private final byte[] ruleDefinitionEnvironmentDigest;
+  @Nullable private final String ruleDefinitionEnvironmentHashCode;
   private final OutputFile.Kind outputFileKind;
 
   /**
@@ -1654,7 +1653,7 @@ public class RuleClass {
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
       Function<? super Rule, ? extends Set<String>> optionReferenceFunction,
       @Nullable Label ruleDefinitionEnvironmentLabel,
-      @Nullable byte[] ruleDefinitionEnvironmentDigest,
+      String ruleDefinitionEnvironmentHashCode,
       ConfigurationFragmentPolicy configurationFragmentPolicy,
       boolean supportsConstraintChecking,
       ThirdPartyLicenseExistencePolicy thirdPartyLicenseExistencePolicy,
@@ -1685,7 +1684,7 @@ public class RuleClass {
     this.externalBindingsFunction = externalBindingsFunction;
     this.optionReferenceFunction = optionReferenceFunction;
     this.ruleDefinitionEnvironmentLabel = ruleDefinitionEnvironmentLabel;
-    this.ruleDefinitionEnvironmentDigest = ruleDefinitionEnvironmentDigest;
+    this.ruleDefinitionEnvironmentHashCode = ruleDefinitionEnvironmentHashCode;
     this.outputFileKind = outputFileKind;
     validateNoClashInPublicNames(attributes);
     this.attributes = ImmutableList.copyOf(attributes);
@@ -1943,7 +1942,12 @@ public class RuleClass {
       boolean checkThirdPartyRulesHaveLicenses)
       throws LabelSyntaxException, InterruptedException, CannotPrecomputeDefaultsException {
     Rule rule = pkgBuilder.createRule(ruleLabel, this, location, callstack, attributeContainer);
-    populateRuleAttributeValues(rule, pkgBuilder, attributeValues, eventHandler);
+    populateRuleAttributeValues(
+        rule,
+        pkgBuilder.getRepositoryMapping(),
+        attributeValues,
+        pkgBuilder.getListInterner(),
+        eventHandler);
     checkAspectAllowedValues(rule, eventHandler);
     rule.populateOutputFiles(eventHandler, pkgBuilder);
     checkForDuplicateLabels(rule, eventHandler);
@@ -1983,7 +1987,12 @@ public class RuleClass {
     Rule rule =
         pkgBuilder.createRule(
             ruleLabel, this, location, callstack, attributeContainer, implicitOutputsFunction);
-    populateRuleAttributeValues(rule, pkgBuilder, attributeValues, NullEventHandler.INSTANCE);
+    populateRuleAttributeValues(
+        rule,
+        pkgBuilder.getRepositoryMapping(),
+        attributeValues,
+        pkgBuilder.getListInterner(),
+        NullEventHandler.INSTANCE);
     rule.populateOutputFilesUnchecked(NullEventHandler.INSTANCE, pkgBuilder);
     return rule;
   }
@@ -1997,18 +2006,15 @@ public class RuleClass {
    */
   private <T> void populateRuleAttributeValues(
       Rule rule,
-      Package.Builder pkgBuilder,
+      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       AttributeValues<T> attributeValues,
+      Interner<ImmutableList<?>> packageListInterner,
       EventHandler eventHandler)
       throws InterruptedException, CannotPrecomputeDefaultsException {
     BitSet definedAttrIndices =
         populateDefinedRuleAttributeValues(
-            rule,
-            pkgBuilder.getRepositoryMapping(),
-            attributeValues,
-            pkgBuilder.getListInterner(),
-            eventHandler);
-    populateDefaultRuleAttributeValues(rule, pkgBuilder, definedAttrIndices, eventHandler);
+            rule, repositoryMapping, attributeValues, packageListInterner, eventHandler);
+    populateDefaultRuleAttributeValues(rule, definedAttrIndices, eventHandler);
     // Now that all attributes are bound to values, collect and store configurable attribute keys.
     populateConfigDependenciesAttribute(rule);
   }
@@ -2086,7 +2092,7 @@ public class RuleClass {
    * <p>Errors are reported on {@code eventHandler}.
    */
   private void populateDefaultRuleAttributeValues(
-      Rule rule, Package.Builder pkgBuilder, BitSet definedAttrIndices, EventHandler eventHandler)
+      Rule rule, BitSet definedAttrIndices, EventHandler eventHandler)
       throws InterruptedException, CannotPrecomputeDefaultsException {
     // Set defaults; ensure that every mandatory attribute has a value. Use the default if none
     // is specified.
@@ -2119,7 +2125,7 @@ public class RuleClass {
       } else if (attr.isLateBound()) {
         rule.setAttributeValue(attr, attr.getLateBoundDefault(), /*explicit=*/ false);
       } else {
-        Object defaultValue = getAttributeNoncomputedDefaultValue(attr, pkgBuilder);
+        Object defaultValue = attr.getDefaultValue(/*rule=*/ null);
         rule.setAttributeValue(attr, defaultValue, /*explicit=*/ false);
         checkAllowedValues(rule, attr, eventHandler);
       }
@@ -2144,8 +2150,8 @@ public class RuleClass {
       // be discovered and propagated here.
       Object valueToSet;
       Object defaultValue = attr.getDefaultValue(rule);
-      if (defaultValue instanceof StarlarkComputedDefaultTemplate) {
-        StarlarkComputedDefaultTemplate template = (StarlarkComputedDefaultTemplate) defaultValue;
+      if (defaultValue instanceof SkylarkComputedDefaultTemplate) {
+        SkylarkComputedDefaultTemplate template = (SkylarkComputedDefaultTemplate) defaultValue;
         valueToSet = template.computePossibleValues(attr, rule, eventHandler);
       } else if (defaultValue instanceof ComputedDefault) {
         // Compute all possible values to verify that the ComputedDefault is well-defined. This was
@@ -2291,27 +2297,6 @@ public class RuleClass {
             eventHandler);
       }
     }
-  }
-
-  /**
-   * Returns the default value for the specified rule attribute.
-   *
-   * <p>For most rule attributes, the default value is either explicitly specified
-   * in the attribute, or implicitly based on the type of the attribute, except
-   * for some special cases (e.g. "licenses", "distribs") where it comes from
-   * some other source, such as state in the package.
-   *
-   * <p>Precondition: {@code !attr.hasComputedDefault()}.  (Computed defaults are
-   * evaluated in second pass.)
-   */
-  private static Object getAttributeNoncomputedDefaultValue(Attribute attr,
-      Package.Builder pkgBuilder) {
-    // TODO(b/149505729): Determine the right semantics for someone trying to define their own
-    // attribute named applicable_licenses.
-    if (attr.getName().equals("applicable_licenses")) {
-      return pkgBuilder.getDefaultApplicableLicenses();
-    }
-    return attr.getDefaultValue(null);
   }
 
   /**
@@ -2542,13 +2527,12 @@ public class RuleClass {
   }
 
   /**
-   * Returns the digest for the RuleClass's rule definition environment, a hash of the .bzl file
-   * defining the rule class and all the .bzl files it transitively loads. Null for native rules'
-   * RuleClass objects.
+   * Returns the hash code for the RuleClass's rule definition environment. Will be null for native
+   * rules' RuleClass objects.
    */
   @Nullable
-  public byte[] getRuleDefinitionEnvironmentDigest() {
-    return ruleDefinitionEnvironmentDigest;
+  public String getRuleDefinitionEnvironmentHashCode() {
+    return ruleDefinitionEnvironmentHashCode;
   }
 
   /** Returns true if this RuleClass is a Starlark-defined RuleClass. */
