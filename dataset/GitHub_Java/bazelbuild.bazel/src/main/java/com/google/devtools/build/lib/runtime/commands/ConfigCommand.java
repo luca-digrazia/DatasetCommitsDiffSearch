@@ -79,6 +79,9 @@ public class ConfigCommand implements BlazeCommand {
   }
 
   @Override
+  public void editOptions(OptionsParser optionsParser) {}
+
+  @Override
   public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
     ImmutableMap<String, BuildConfiguration> configurations = findConfigurations(env);
 
