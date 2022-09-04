@@ -25,7 +25,7 @@ import javax.annotation.Nullable;
  */
 public class DirtyTrackingProgressReceiver implements EvaluationProgressReceiver {
 
-  @Nullable protected final EvaluationProgressReceiver progressReceiver;
+  @Nullable private final EvaluationProgressReceiver progressReceiver;
   private final Set<SkyKey> dirtyKeys = Sets.newConcurrentHashSet();
   private Set<SkyKey> inflightKeys = Sets.newConcurrentHashSet();
 
