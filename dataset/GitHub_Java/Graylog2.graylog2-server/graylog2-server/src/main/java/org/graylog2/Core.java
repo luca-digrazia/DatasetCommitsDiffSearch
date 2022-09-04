@@ -50,7 +50,6 @@ import org.graylog2.inputs.Cache;
 import org.graylog2.inputs.InputRegistry;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
-import org.graylog2.lifecycles.Lifecycle;
 import org.graylog2.metrics.jersey2.MetricsDynamicBinding;
 import org.graylog2.periodical.Periodicals;
 import org.graylog2.rest.RestAccessLogFilter;
@@ -117,8 +116,6 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Core implements GraylogServer, InputHost {
 
     private static final Logger LOG = LoggerFactory.getLogger(Core.class);
-
-    private Lifecycle lifecycle = Lifecycle.UNINITIALIZED;
 
     private MongoConnection mongoConnection;
     private MongoBridge mongoBridge;
@@ -323,6 +320,19 @@ public class Core implements GraylogServer, InputHost {
 
         // Load persisted inputs.
         inputs().launchPersisted();
+
+        /*
+        // Initialize all registered inputs.
+        for (MessageInput input : this.inputs) {
+            try {
+                // This is a plugin. Initialize with custom config from Mongo.
+                input.initialize(PluginConfiguration.load(this, input.getClass().getCanonicalName()), this);
+                LOG.debug("Initialized input: {}", input.getName());
+            } catch (MessageInputConfigurationException e) {
+                LOG.error("Could not initialize input <{}>.", input.getClass().getCanonicalName(), e);
+            }
+        }}
+        */
     }
 
     public void setLdapConnector(LdapConnector ldapConnector) {
@@ -627,8 +637,8 @@ public class Core implements GraylogServer, InputHost {
     }
 
     public void pauseMessageProcessing(boolean locked) {
+        // TODO: properly pause and restart AMQP inputs.
         isProcessing.set(false);
-        setLifecycle(Lifecycle.PAUSED);
 
         // Never override pause lock if already locked.
         if (!processingPauseLocked.get()) {
@@ -643,7 +653,6 @@ public class Core implements GraylogServer, InputHost {
         }
 
         isProcessing.set(true);
-        setLifecycle(Lifecycle.RUNNING);
     }
 
     public boolean processingPauseLocked() {
@@ -705,13 +714,4 @@ public class Core implements GraylogServer, InputHost {
 
         return dashboards;
     }
-
-    public Lifecycle getLifecycle() {
-        return lifecycle;
-    }
-
-    public void setLifecycle(Lifecycle lifecycle) {
-        this.lifecycle = lifecycle;
-    }
-
 }
