@@ -38,12 +38,9 @@ import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.audit.jersey.NoAuditEvent;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.events.ClusterEventBus;
-import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
-import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
@@ -51,7 +48,6 @@ import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.rest.models.alarmcallbacks.requests.AlertReceivers;
 import org.graylog2.rest.models.alarmcallbacks.requests.CreateAlarmCallbackRequest;
 import org.graylog2.rest.models.streams.alerts.AlertConditionSummary;
-import org.graylog2.rest.models.streams.alerts.requests.CreateConditionRequest;
 import org.graylog2.rest.models.streams.requests.UpdateStreamRequest;
 import org.graylog2.rest.models.system.outputs.responses.OutputSummary;
 import org.graylog2.rest.resources.streams.requests.CloneStreamRequest;
@@ -73,8 +69,6 @@ import org.hibernate.validator.constraints.NotEmpty;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.ISODateTimeFormat;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
@@ -98,7 +92,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -109,12 +102,9 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 @Api(value = "Streams", description = "Manage streams")
 @Path("/streams")
 public class StreamResource extends RestResource {
-    private static final Logger LOG = LoggerFactory.getLogger(StreamResource.class);
-
     private final StreamService streamService;
     private final StreamRuleService streamRuleService;
     private final StreamRouterEngine.Factory streamRouterEngineFactory;
-    private final IndexSetRegistry indexSetRegistry;
     private final AlarmCallbackConfigurationService alarmCallbackConfigurationService;
     private final AlertService alertService;
     private final ClusterEventBus clusterEventBus;
@@ -123,14 +113,12 @@ public class StreamResource extends RestResource {
     public StreamResource(StreamService streamService,
                           StreamRuleService streamRuleService,
                           StreamRouterEngine.Factory streamRouterEngineFactory,
-                          IndexSetRegistry indexSetRegistry,
                           AlarmCallbackConfigurationService alarmCallbackConfigurationService,
                           AlertService alertService,
                           ClusterEventBus clusterEventBus) {
         this.streamService = streamService;
         this.streamRuleService = streamRuleService;
         this.streamRouterEngineFactory = streamRouterEngineFactory;
-        this.indexSetRegistry = indexSetRegistry;
         this.alarmCallbackConfigurationService = alarmCallbackConfigurationService;
         this.alertService = alertService;
         this.clusterEventBus = clusterEventBus;
@@ -147,10 +135,6 @@ public class StreamResource extends RestResource {
         // Create stream.
         final Stream stream = streamService.create(cr, getCurrentUser().getName());
         stream.setDisabled(true);
-
-        if (!stream.getIndexSet().getConfig().isWritable()) {
-            throw new BadRequestException("Assigned index set must be writable!");
-        }
 
         final String id = streamService.save(stream);
 
@@ -265,14 +249,6 @@ public class StreamResource extends RestResource {
         // id if it's null/empty in the update request.
         if (!Strings.isNullOrEmpty(cr.indexSetId())) {
             stream.setIndexSetId(cr.indexSetId());
-        }
-
-        final Optional<IndexSet> indexSet = indexSetRegistry.get(stream.getIndexSetId());
-
-        if (!indexSet.isPresent()) {
-            throw new BadRequestException("Index set with ID <" + stream.getIndexSetId() + "> does not exist!");
-        } else if (!indexSet.get().getConfig().isWritable()) {
-            throw new BadRequestException("Assigned index set must be writable!");
         }
 
         streamService.save(stream);
@@ -397,13 +373,12 @@ public class StreamResource extends RestResource {
         checkNotDefaultStream(streamId, "The default stream cannot be cloned.");
 
         final Stream sourceStream = streamService.load(streamId);
-        final String creatorUser = getCurrentUser().getName();
 
         // Create stream.
         final Map<String, Object> streamData = Maps.newHashMap();
         streamData.put(StreamImpl.FIELD_TITLE, cr.title());
         streamData.put(StreamImpl.FIELD_DESCRIPTION, cr.description());
-        streamData.put(StreamImpl.FIELD_CREATOR_USER_ID, creatorUser);
+        streamData.put(StreamImpl.FIELD_CREATOR_USER_ID, getCurrentUser().getName());
         streamData.put(StreamImpl.FIELD_CREATED_AT, Tools.nowUTC());
         streamData.put(StreamImpl.FIELD_MATCHING_TYPE, sourceStream.getMatchingType().toString());
         streamData.put(StreamImpl.FIELD_REMOVE_MATCHES_FROM_DEFAULT_STREAM, cr.removeMatchesFromDefaultStream());
@@ -430,16 +405,7 @@ public class StreamResource extends RestResource {
         }
 
         for (AlertCondition alertCondition : streamService.getAlertConditions(sourceStream)) {
-            try {
-                final AlertCondition clonedAlertCondition = alertService.fromRequest(
-                    CreateConditionRequest.create(alertCondition.getType(), alertCondition.getTitle(), alertCondition.getParameters()),
-                    stream,
-                    creatorUser
-                );
-                streamService.addAlertCondition(stream, clonedAlertCondition);
-            } catch (ConfigurationException e) {
-                LOG.warn("Unable to clone alert condition <" + alertCondition + "> - skipping: ", e);
-            }
+            streamService.addAlertCondition(stream, alertCondition);
         }
 
         for (AlarmCallbackConfiguration alarmCallbackConfiguration : alarmCallbackConfigurationService.getForStream(sourceStream)) {
