@@ -30,11 +30,9 @@ import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
-import com.google.devtools.build.lib.actions.AnalyzingActionEvent;
+import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.RunningActionEvent;
-import com.google.devtools.build.lib.actions.SchedulingActionEvent;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.bazel.repository.downloader.DownloadProgressEvent;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
@@ -487,7 +485,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
     stateTracker.actionStarted(
         new ActionStartedEvent(mockAction("Some random action", primaryOutput), clock.nanoTime()));
-    stateTracker.runningAction(new RunningActionEvent(actionMetadata, strategy));
+    stateTracker.actionStatusMessage(ActionStatusMessage.runningStrategy(actionMetadata, strategy));
 
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
     stateTracker.writeProgressBar(terminalWriter);
@@ -591,7 +589,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
     // Action foo being analyzed.
     stateTracker.actionStarted(new ActionStartedEvent(actionFoo, 123456700));
-    stateTracker.analyzingAction(new AnalyzingActionEvent(actionFoo));
+    stateTracker.actionStatusMessage(ActionStatusMessage.analysisStrategy(actionFoo));
 
     terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
     stateTracker.writeProgressBar(terminalWriter);
@@ -602,7 +600,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
     // Then action bar gets scheduled.
     stateTracker.actionStarted(new ActionStartedEvent(actionBar, 123456701));
-    stateTracker.schedulingAction(new SchedulingActionEvent(actionBar, "bar-sandbox"));
+    stateTracker.actionStatusMessage(ActionStatusMessage.schedulingStrategy(actionBar));
 
     terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
     stateTracker.writeProgressBar(terminalWriter);
@@ -621,7 +619,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
         .isTrue();
 
     // Then foo starts.
-    stateTracker.runningAction(new RunningActionEvent(actionFoo, "xyz-sandbox"));
+    stateTracker.actionStatusMessage(ActionStatusMessage.runningStrategy(actionFoo, "xyz-sandbox"));
     stateTracker.writeProgressBar(terminalWriter);
 
     terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
@@ -664,10 +662,10 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     when(actionBar.getOwner()).thenReturn(ownerBar);
 
     stateTracker.actionStarted(new ActionStartedEvent(actionFoo, clock.nanoTime()));
-    stateTracker.runningAction(new RunningActionEvent(actionFoo, "foo-sandbox"));
+    stateTracker.actionStatusMessage(ActionStatusMessage.runningStrategy(actionFoo, "foo-sandbox"));
     clock.advanceMillis(TimeUnit.SECONDS.toMillis(7));
     stateTracker.actionStarted(new ActionStartedEvent(actionBar, clock.nanoTime()));
-    stateTracker.schedulingAction(new SchedulingActionEvent(actionBar, "bar-sandbox"));
+    stateTracker.actionStatusMessage(ActionStatusMessage.schedulingStrategy(actionBar));
     clock.advanceMillis(TimeUnit.SECONDS.toMillis(21));
 
     terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
@@ -680,7 +678,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
         .that(output.contains("21s"))
         .isTrue();
 
-    stateTracker.runningAction(new RunningActionEvent(actionBar, "bar-sandbox"));
+    stateTracker.actionStatusMessage(ActionStatusMessage.runningStrategy(actionBar, "bar-sandbox"));
     terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
     stateTracker.writeProgressBar(terminalWriter);
     output = terminalWriter.getTranscript();
@@ -716,7 +714,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     String output;
 
     // Early status announcement
-    stateTracker.runningAction(new RunningActionEvent(actionFoo, "foo-sandbox"));
+    stateTracker.actionStatusMessage(ActionStatusMessage.runningStrategy(actionFoo, "foo-sandbox"));
 
     // Here we don't expect any particular output, just some description; in particular, we do
     // not expect the state tracker to hit an internal error.
@@ -748,7 +746,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
       ActionOwner owner = Mockito.mock(ActionOwner.class);
       when(action.getOwner()).thenReturn(owner);
       stateTracker.actionStarted(new ActionStartedEvent(action, 123456789 + i));
-      stateTracker.schedulingAction(new SchedulingActionEvent(action, "xyz-sandbox"));
+      stateTracker.actionStatusMessage(ActionStatusMessage.schedulingStrategy(action));
     }
 
     for (int i = 0; i < 3; i++) {
@@ -756,7 +754,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
       ActionOwner owner = Mockito.mock(ActionOwner.class);
       when(action.getOwner()).thenReturn(owner);
       stateTracker.actionStarted(new ActionStartedEvent(action, 123457000 + i));
-      stateTracker.runningAction(new RunningActionEvent(action, "xyz-sandbox"));
+      stateTracker.actionStatusMessage(ActionStatusMessage.runningStrategy(action, "xyz-sandbox"));
 
       LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
       stateTracker.writeProgressBar(terminalWriter);
