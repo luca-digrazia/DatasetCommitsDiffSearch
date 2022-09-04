@@ -8,7 +8,6 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 import android.util.AttributeSet;
-import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -66,6 +65,9 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     //触摸显示后隐藏的时间
     protected int mDismissControlTime = 2500;
 
+    //已点击次数
+    protected int mTapCount;
+
     //触摸的X
     protected float mDownX;
 
@@ -80,6 +82,12 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
     //触摸滑动进度的比例系数
     protected float mSeekRatio = 1;
+
+    //第一次点击时间
+    protected long mFirstTapTime;
+
+    //第二次点击时间
+    protected long mSecondTapTime;
 
     //触摸的是否进度条
     protected boolean mTouchingProgressBar = false;
@@ -401,17 +409,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     }
 
     /**
-     * 双击
-     */
-    protected GestureDetector gestureDetector = new GestureDetector(getContext(),new GestureDetector.SimpleOnGestureListener(){
-        @Override
-        public boolean onDoubleTap(MotionEvent e) {
-            touchDoubleUp();
-            return super.onDoubleTap(e);
-        }
-    });
-
-    /**
      * 亮度、进度、音频
      */
     @Override
@@ -461,13 +458,13 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
                     startProgressTimer();
 
+                    touchDoubleUp();
                     //不要和隐藏虚拟按键后，滑出虚拟按键冲突
                     if (mHideKey && mShowVKey) {
                         return true;
                     }
                     break;
             }
-            gestureDetector.onTouchEvent(event);
         } else if (id == R.id.progress) {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -716,10 +713,18 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
      * 如果不需要，重载为空方法即可
      */
     protected void touchDoubleUp() {
-        if (!mHadPlay) {
-            return;
+        mTapCount++;
+        if (mTapCount == 1) {
+            mFirstTapTime = System.currentTimeMillis();
+        } else if (mTapCount == 2) {
+            mSecondTapTime = System.currentTimeMillis();
+            if (mSecondTapTime - mFirstTapTime < 600) {
+                clickStartIcon();
+            }
+            mTapCount = 0;
+            mFirstTapTime = 0;
+            mSecondTapTime = 0;
         }
-        clickStartIcon();
     }
 
     /**
