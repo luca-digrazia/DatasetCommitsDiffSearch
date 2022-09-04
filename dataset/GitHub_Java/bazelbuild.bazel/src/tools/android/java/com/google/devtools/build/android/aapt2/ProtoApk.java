@@ -43,7 +43,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.xml.XmlEscapers;
 import com.google.devtools.build.android.AndroidResourceOutputs.UniqueZipBuilder;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.ExtensionRegistry;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -123,9 +122,7 @@ public class ProtoApk implements Closeable {
         final UniqueZipBuilder dstZip = UniqueZipBuilder.createFor(destination)) {
       final ResourceTable.Builder dstTableBuilder = ResourceTable.newBuilder();
       final ResourceTable resourceTable =
-          ResourceTable.parseFrom(
-              Files.newInputStream(apkFileSystem.getPath(RESOURCE_TABLE)),
-              ExtensionRegistry.getEmptyRegistry());
+          ResourceTable.parseFrom(Files.newInputStream(apkFileSystem.getPath(RESOURCE_TABLE)));
       dstTableBuilder.setSourcePool(resourceTable.getSourcePool());
       for (Package pkg : resourceTable.getPackageList()) {
         Package dstPkg = copyPackage(resourceFilter, dstZip, pkg);
@@ -214,16 +211,11 @@ public class ProtoApk implements Closeable {
     }
   }
 
-  public XmlNode getManifest() throws IOException {
-    try (InputStream in = Files.newInputStream(apkFileSystem.getPath(MANIFEST))) {
-      return XmlNode.parseFrom(in, ExtensionRegistry.getEmptyRegistry());
-    }
-  }
-
   /** Copy manifest as xml to an external directory. */
   public Path writeManifestAsXmlTo(Path directory) {
-    try (XmlWriter out = XmlWriter.openNew(Files.createDirectories(directory).resolve(MANIFEST))) {
-      out.write(getManifest());
+    try (InputStream in = Files.newInputStream(apkFileSystem.getPath(MANIFEST));
+        XmlWriter out = XmlWriter.openNew(Files.createDirectories(directory).resolve(MANIFEST))) {
+      out.write(XmlNode.parseFrom(in));
       return directory.resolve(MANIFEST);
     } catch (IOException e) {
       throw new ProtoApkException(e);
@@ -367,9 +359,7 @@ public class ProtoApk implements Closeable {
 
     // visit resource table and associated files.
     final ResourceTable resourceTable =
-        ResourceTable.parseFrom(
-            Files.newInputStream(apkFileSystem.getPath(RESOURCE_TABLE)),
-            ExtensionRegistry.getEmptyRegistry());
+        ResourceTable.parseFrom(Files.newInputStream(apkFileSystem.getPath(RESOURCE_TABLE)));
 
     final List<String> sourcePool =
         resourceTable.hasSourcePool()
@@ -590,7 +580,7 @@ public class ProtoApk implements Closeable {
     }
 
     try (InputStream in = Files.newInputStream(path)) {
-      visit(XmlNode.parseFrom(in, ExtensionRegistry.getEmptyRegistry()), visitor);
+      visit(XmlNode.parseFrom(in), visitor);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
