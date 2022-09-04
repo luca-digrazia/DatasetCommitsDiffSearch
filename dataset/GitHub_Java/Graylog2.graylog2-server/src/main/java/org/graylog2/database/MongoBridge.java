@@ -30,7 +30,6 @@ import com.mongodb.DBObject;
 import java.util.Map;
 import org.graylog2.Core;
 import org.graylog2.activities.Activity;
-import org.joda.time.DateTime;
 
 
 /**
@@ -111,13 +110,8 @@ public class MongoBridge {
     }
 
     public synchronized void writeMessageCounts(int total, Map<String, Integer> streams, Map<String, Integer> hosts) {
-        // We store the first second of the current minute, to allow syncing (summing) message counts
-        // from different graylog-server nodes later
-        DateTime dt = new DateTime();
-        int startOfMinute = Tools.getUTCTimestamp()-dt.getSecondOfMinute();;
-        
         BasicDBObject obj = new BasicDBObject();
-        obj.put("timestamp", startOfMinute);
+        obj.put("timestamp", Tools.getUTCTimestamp());
         obj.put("total", total);
         obj.put("streams", streams);
         obj.put("hosts", hosts);
