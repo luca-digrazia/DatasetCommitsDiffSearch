@@ -52,15 +52,6 @@ public interface GoPackageInfoApi extends StructApi {
               named = true,
               allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)}),
           @Param(name = "imports", positional = false, named = true),
-          @Param(
-              name = "library",
-              positional = false,
-              named = true,
-              allowedTypes = {
-                @ParamType(type = GoPackageInfoApi.class),
-                @ParamType(type = NoneType.class)
-              },
-              defaultValue = "None"),
           @Param(name = "test", positional = false, named = true),
           @Param(
               name = "is_proto_library",
@@ -75,7 +66,6 @@ public interface GoPackageInfoApi extends StructApi {
         Sequence<?> srcs,
         Object exportDataObject,
         Sequence<?> imports,
-        Object library,
         boolean test,
         boolean isProtolibrary)
         throws EvalException;
