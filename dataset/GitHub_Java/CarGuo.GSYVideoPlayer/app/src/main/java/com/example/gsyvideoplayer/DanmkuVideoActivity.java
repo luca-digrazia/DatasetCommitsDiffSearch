@@ -11,7 +11,6 @@ import android.widget.RelativeLayout;
 
 import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.video.DanmakuVideoPlayer;
-import com.example.gsyvideoplayer.video.SampleControlVideo;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
@@ -146,14 +145,12 @@ public class DanmkuVideoActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        getCurPlay().onVideoPause();
         super.onPause();
         isPause = true;
     }
 
     @Override
     protected void onResume() {
-        getCurPlay().onVideoResume();
         super.onResume();
         isPause = false;
     }
@@ -161,14 +158,10 @@ public class DanmkuVideoActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (isPlay) {
-            getCurPlay().release();
-        }
-        //GSYPreViewManager.instance().releaseMediaPlayer();
+        GSYVideoPlayer.releaseAllVideos();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
     }
-
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
@@ -184,13 +177,6 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         //增加title
         danmakuVideoPlayer.getTitleTextView().setVisibility(View.GONE);
         danmakuVideoPlayer.getBackButton().setVisibility(View.GONE);
-    }
-
-    private GSYVideoPlayer getCurPlay() {
-        if (danmakuVideoPlayer.getFullWindowPlayer() != null) {
-            return  danmakuVideoPlayer.getFullWindowPlayer();
-        }
-        return danmakuVideoPlayer;
     }
 
 }

@@ -11,8 +11,6 @@ import android.widget.RelativeLayout;
 
 import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.video.LandLayoutVideo;
-import com.shuyu.gsyvideoplayer.GSYVideoManager;
-import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
@@ -22,12 +20,8 @@ import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 
-import java.util.ArrayList;
-import java.util.List;
-
 import butterknife.BindView;
 import butterknife.ButterKnife;
-import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 
 
 public class DetailPlayer extends AppCompatActivity {
@@ -54,10 +48,8 @@ public class DetailPlayer extends AppCompatActivity {
         setContentView(R.layout.activity_detail_player);
         ButterKnife.bind(this);
 
-        //断网自动重新链接，url前接上ijkhttphook:
-        //String url = "ijkhttphook:http://baobab.wdjcdn.com/14564977406580.mp4";
 
-        //String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
+        String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
 
         //String url = "http://hcjs2ra2rytd8v8np1q.exp.bcevod.com/mda-hegtjx8n5e8jt9zv/mda-hegtjx8n5e8jt9zv.m3u8";
         //String url = "http://7xse1z.com1.z0.glb.clouddn.com/1491813192";
@@ -72,14 +64,11 @@ public class DetailPlayer extends AppCompatActivity {
         //detailPlayer.setUp(url, false, null, "测试视频");
         //detailPlayer.setLooping(true);
         //detailPlayer.setShowPauseCover(false);
-
-        //如果视频帧数太高导致卡画面不同步
-        //VideoOptionModel videoOptionModel = new VideoOptionModel(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 5);
-        //如果视频seek之后从头播放
-        //VideoOptionModel videoOptionModel = new VideoOptionModel(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "enable-accurate-seek", 1);
-        //List<VideoOptionModel> list = new ArrayList<>();
-        //list.add(videoOptionModel);
-        //GSYVideoManager.instance().setOptionModelList(list);
+        /*VideoOptionModel videoOptionModel =
+                new VideoOptionModel(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 5);
+        List<VideoOptionModel> list = new ArrayList<>();
+        list.add(videoOptionModel);
+        GSYVideoManager.instance().setOptionModelList(list);*/
 
         //GSYVideoManager.instance().setTimeOut(4000, true);
 

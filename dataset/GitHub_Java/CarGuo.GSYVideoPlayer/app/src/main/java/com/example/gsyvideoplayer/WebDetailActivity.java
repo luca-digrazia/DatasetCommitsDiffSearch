@@ -12,7 +12,6 @@ import android.widget.ImageView;
 import android.widget.RelativeLayout;
 
 import com.example.gsyvideoplayer.listener.SampleListener;
-import com.example.gsyvideoplayer.video.PreViewGSYVideoPlayer;
 import com.example.gsyvideoplayer.view.ScrollWebView;
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
@@ -34,7 +33,7 @@ public class WebDetailActivity extends AppCompatActivity {
     @BindView(R.id.scroll_webView)
     ScrollWebView webView;
     @BindView(R.id.web_player)
-    PreViewGSYVideoPlayer webPlayer;
+    NormalGSYVideoPlayer webPlayer;
     @BindView(R.id.web_top_layout)
     NestedScrollView webTopLayout;
     @BindView(R.id.web_top_layout_video)
@@ -178,14 +177,12 @@ public class WebDetailActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        getCurPlay().onVideoPause();
         super.onPause();
         isPause = true;
     }
 
     @Override
     protected void onResume() {
-        getCurPlay().onVideoResume();
         super.onResume();
         isPause = false;
     }
@@ -193,10 +190,7 @@ public class WebDetailActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (isPlay) {
-            getCurPlay().release();
-        }
-        //GSYPreViewManager.instance().releaseMediaPlayer();
+        GSYVideoPlayer.releaseAllVideos();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
     }
@@ -208,15 +202,6 @@ public class WebDetailActivity extends AppCompatActivity {
         if (isPlay && !isPause && !isSamll) {
             webPlayer.onConfigurationChanged(this, newConfig, orientationUtils);
         }
-    }
-
-
-
-    private GSYVideoPlayer getCurPlay() {
-        if (webPlayer.getFullWindowPlayer() != null) {
-            return  webPlayer.getFullWindowPlayer();
-        }
-        return webPlayer;
     }
 
 

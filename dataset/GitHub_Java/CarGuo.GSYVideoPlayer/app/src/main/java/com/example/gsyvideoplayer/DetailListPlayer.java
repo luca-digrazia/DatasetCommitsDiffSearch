@@ -151,14 +151,12 @@ public class DetailListPlayer extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        getCurPlay().onVideoPause();
         super.onPause();
         isPause = true;
     }
 
     @Override
     protected void onResume() {
-        getCurPlay().onVideoResume();
         super.onResume();
         isPause = false;
     }
@@ -166,14 +164,10 @@ public class DetailListPlayer extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (isPlay) {
-            getCurPlay().release();
-        }
-        //GSYPreViewManager.instance().releaseMediaPlayer();
+        GSYVideoPlayer.releaseAllVideos();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
     }
-
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
@@ -190,13 +184,5 @@ public class DetailListPlayer extends AppCompatActivity {
         detailPlayer.getTitleTextView().setVisibility(View.VISIBLE);
         detailPlayer.getBackButton().setVisibility(View.VISIBLE);
     }
-
-    private GSYVideoPlayer getCurPlay() {
-        if (detailPlayer.getFullWindowPlayer() != null) {
-            return  detailPlayer.getFullWindowPlayer();
-        }
-        return detailPlayer;
-    }
-
 
 }
