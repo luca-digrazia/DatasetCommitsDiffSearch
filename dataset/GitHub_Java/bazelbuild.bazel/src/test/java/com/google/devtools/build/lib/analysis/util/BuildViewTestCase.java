@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirs
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
@@ -124,6 +123,7 @@ import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -139,7 +139,6 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
@@ -150,7 +149,6 @@ import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -407,14 +405,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         ImmutableMap.<String, String>of(),
         tsgm);
     skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.OUTPUT_VERIFICATION_REPOSITORY_RULES,
-                ImmutableSet.<String>of()),
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_FOR_VERIFICATION,
-                Optional.<RootedPath>absent())));
   }
 
   protected void setPackageCacheOptions(String... options) throws Exception {
@@ -1740,13 +1730,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
     AnalysisOptions viewOptions = Options.getDefaults(AnalysisOptions.class);
 
-    TargetPatternPhaseValue loadingResult =
+    LoadingResult loadingResult =
         skyframeExecutor.loadTargetPatterns(
             reporter,
             targets,
             PathFragment.EMPTY_FRAGMENT,
             loadingOptions,
-            loadingPhaseThreads,
             keepGoing,
             /*determineTests=*/ false);
     if (!doAnalysis) {

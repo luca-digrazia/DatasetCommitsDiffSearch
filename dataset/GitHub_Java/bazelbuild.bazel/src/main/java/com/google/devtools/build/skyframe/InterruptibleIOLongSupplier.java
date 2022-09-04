@@ -15,16 +15,7 @@ package com.google.devtools.build.skyframe;
 
 import java.io.IOException;
 
-/** Readable view of transitive version information. */
-public interface TransitiveVersionTable {
-
-  VersionAggregator get(SkyKey key);
-
-  /** Encapsulates transitive version information. */
-  interface VersionAggregator {
-    /** @return the maximum transitive source version or -1 if no sources were found */
-    long getMaxTransitiveVersion(
-        long baselineVersion, InterruptibleIOLongSupplier deferredMaxDepVersion)
-        throws InterruptedException, IOException;
-  }
+/** Wraps a deferred computation that returns a long and throws the noted exceptions. */
+public interface InterruptibleIOLongSupplier {
+  long getLong() throws InterruptedException, IOException;
 }

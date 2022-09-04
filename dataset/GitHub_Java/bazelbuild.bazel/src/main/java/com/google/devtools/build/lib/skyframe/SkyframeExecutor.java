@@ -104,6 +104,7 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -114,7 +115,6 @@ import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.rules.repository.ResolvedHashesFunction;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.FileDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
@@ -515,7 +515,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.REGISTERED_TOOLCHAINS, new RegisteredToolchainsFunction());
     map.put(SkyFunctions.TOOLCHAIN_RESOLUTION, new ToolchainResolutionFunction());
     map.put(SkyFunctions.REPOSITORY_MAPPING, new RepositoryMappingFunction());
-    map.put(SkyFunctions.RESOLVED_HASH_VALUES, new ResolvedHashesFunction());
     map.putAll(extraSkyFunctions);
     return map.build();
   }
@@ -2195,12 +2194,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   public abstract void deleteOldNodes(long versionWindowForDirtyGc);
 
-  public TargetPatternPhaseValue loadTargetPatterns(
+  public LoadingResult loadTargetPatterns(
       ExtendedEventHandler eventHandler,
       List<String> targetPatterns,
       PathFragment relativeWorkingDirectory,
       LoadingOptions options,
-      int threadCount,
       boolean keepGoing,
       boolean determineTests)
       throws TargetParsingException, InterruptedException {
@@ -2220,7 +2218,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     eventHandler.post(new LoadingPhaseStartedEvent(packageProgress));
     evalResult =
         buildDriver.evaluate(
-            ImmutableList.of(key), keepGoing, threadCount, eventHandler);
+            ImmutableList.of(key), keepGoing, /*numThreads=*/ DEFAULT_THREAD_COUNT, eventHandler);
     if (evalResult.hasError()) {
       ErrorInfo errorInfo = evalResult.getError(key);
       TargetParsingException exc;
@@ -2254,7 +2252,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     eventHandler.post(new TargetParsingPhaseTimeEvent(timeMillis));
 
     TargetPatternPhaseValue patternParsingValue = evalResult.get(key);
-    return patternParsingValue;
+    return patternParsingValue.toLoadingResult(eventHandler, packageManager);
   }
 
   public Consumer<Artifact.SourceArtifact> getSourceDependencyListener(SkyKey key) {
