@@ -14,9 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -35,10 +33,10 @@ import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * Encapsulates the filesystem operations needed to get state for a path. This is equivalent to an
- * 'lstat' that does not follow symlinks to determine what type of file the path is.
+ * Encapsulates the filesystem operations needed to get state for a path. This is at least a
+ * 'lstat' to determine what type of file the path is.
  * <ul>
- *   <li> For a non-existent file, the non-existence is noted.
+ *   <li> For a non-existent file, the non existence is noted.
  *   <li> For a symlink, the symlink target is noted.
  *   <li> For a directory, the existence is noted.
  *   <li> For a file, the existence is noted, along with metadata about the file (e.g.
@@ -59,6 +57,15 @@ public abstract class FileStateValue implements SkyValue {
       new DirectoryFileStateValue();
   public static final NonexistentFileStateValue NONEXISTENT_FILE_STATE_NODE =
       new NonexistentFileStateValue();
+
+  /** Type of a path. */
+  public enum Type {
+    REGULAR_FILE,
+    SPECIAL_FILE,
+    DIRECTORY,
+    SYMLINK,
+    NONEXISTENT,
+  }
 
   protected FileStateValue() {
   }
@@ -99,9 +106,8 @@ public abstract class FileStateValue implements SkyValue {
     return LegacySkyKey.create(SkyFunctions.FILE_STATE, rootedPath);
   }
 
-  public abstract FileStateType getType();
+  public abstract Type getType();
 
-  /** Returns the target of the symlink, or throws an exception if this is not a symlink. */
   PathFragment getSymlinkTarget() {
     throw new IllegalStateException();
   }
@@ -199,8 +205,8 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public FileStateType getType() {
-      return FileStateType.REGULAR_FILE;
+    public Type getType() {
+      return Type.REGULAR_FILE;
     }
 
     @Override
@@ -224,31 +230,17 @@ public abstract class FileStateValue implements SkyValue {
 
     @Override
     public boolean equals(Object obj) {
-      if (obj == this) {
-        return true;
+      if (obj instanceof RegularFileStateValue) {
+        RegularFileStateValue other = (RegularFileStateValue) obj;
+        return size == other.size && mtime == other.mtime && Arrays.equals(digest, other.digest)
+            && Objects.equals(contentsProxy, other.contentsProxy);
       }
-      if (!(obj instanceof RegularFileStateValue)) {
-        return false;
-      }
-      RegularFileStateValue other = (RegularFileStateValue) obj;
-      return size == other.size
-          && mtime == other.mtime
-          && Arrays.equals(digest, other.digest)
-          && Objects.equals(contentsProxy, other.contentsProxy);
+      return false;
     }
 
     @Override
     public int hashCode() {
       return Objects.hash(size, mtime, Arrays.hashCode(digest), contentsProxy);
-    }
-
-    @Override
-    public String toString() {
-      return MoreObjects.toStringHelper(this)
-          .add("digest", digest)
-          .add("size", size)
-          .add("mtime", mtime)
-          .add("contentsProxy", contentsProxy).toString();
     }
 
     @Override
@@ -269,10 +261,11 @@ public abstract class FileStateValue implements SkyValue {
       this.contentsProxy = contentsProxy;
     }
 
-    static SpecialFileStateValue fromStat(PathFragment path, FileStatus stat,
+    static SpecialFileStateValue fromStat(PathFragment path, FileStatusWithDigest stat,
         @Nullable TimestampGranularityMonitor tsgm) throws IOException {
       long mtime = stat.getLastModifiedTime();
-      // Note that TimestampGranularityMonitor#notifyDependenceOnFileTime is a thread-safe method.
+      // Note that TimestampGranularityMonitor#notifyDependenceOnFileTime is a thread-safe
+      // method.
       if (tsgm != null) {
         tsgm.notifyDependenceOnFileTime(path, mtime);
       }
@@ -280,8 +273,8 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public FileStateType getType() {
-      return FileStateType.SPECIAL_FILE;
+    public Type getType() {
+      return Type.SPECIAL_FILE;
     }
 
     @Override
@@ -301,14 +294,11 @@ public abstract class FileStateValue implements SkyValue {
 
     @Override
     public boolean equals(Object obj) {
-      if (obj == this) {
-        return true;
+      if (obj instanceof SpecialFileStateValue) {
+        SpecialFileStateValue other = (SpecialFileStateValue) obj;
+        return Objects.equals(contentsProxy, other.contentsProxy);
       }
-      if (!(obj instanceof SpecialFileStateValue)) {
-        return false;
-      }
-      SpecialFileStateValue other = (SpecialFileStateValue) obj;
-      return Objects.equals(contentsProxy, other.contentsProxy);
+      return false;
     }
 
     @Override
@@ -329,8 +319,8 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public FileStateType getType() {
-      return FileStateType.DIRECTORY;
+    public Type getType() {
+      return Type.DIRECTORY;
     }
 
     @Override
@@ -360,8 +350,8 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public FileStateType getType() {
-      return FileStateType.SYMLINK;
+    public Type getType() {
+      return Type.SYMLINK;
     }
 
     @Override
@@ -396,8 +386,8 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public FileStateType getType() {
-      return FileStateType.NONEXISTENT;
+    public Type getType() {
+      return Type.NONEXISTENT;
     }
 
     @Override
@@ -408,9 +398,6 @@ public abstract class FileStateValue implements SkyValue {
     // This object is normally a singleton, but deserialization produces copies.
     @Override
     public boolean equals(Object obj) {
-      if (obj == this) {
-        return true;
-      }
       return obj instanceof NonexistentFileStateValue;
     }
 

@@ -99,7 +99,6 @@ import com.google.devtools.build.lib.skyframe.TargetPatternValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.skyframe.TransitiveTraversalValue;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.EvaluationResult;
@@ -248,21 +247,24 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private void beforeEvaluateQuery(QueryExpression expr)
       throws QueryException, InterruptedException {
     Set<SkyKey> roots = getGraphRootsFromExpression(expr);
+    if (graph == null || !graphFactory.isUpToDate(roots)) {
+      // If this environment is uninitialized or the graph factory needs to evaluate, do so. We
+      // assume here that this environment cannot be initialized-but-stale if the factory is up
+      // to date.
+      EvaluationResult<SkyValue> result;
+      try (AutoProfiler p = AutoProfiler.logged("evaluation and walkable graph", logger)) {
+        result = graphFactory.prepareAndGet(roots, loadingPhaseThreads, universeEvalEventHandler);
+      }
 
-    EvaluationResult<SkyValue> result;
-    try (AutoProfiler p = AutoProfiler.logged("evaluation and walkable graph", logger)) {
-      result = graphFactory.prepareAndGet(roots, loadingPhaseThreads, universeEvalEventHandler);
-    }
-
-    if (graph == null || graph != result.getWalkableGraph()) {
       checkEvaluationResult(roots, result);
+
       packageSemaphore = makeFreshPackageMultisetSemaphore();
       graph = result.getWalkableGraph();
       blacklistPatternsSupplier = InterruptibleSupplier.Memoize.of(new BlacklistSupplier(graph));
+
       graphBackedRecursivePackageProvider =
           new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys, pkgPath);
     }
-
     if (executor == null) {
       executor = MoreExecutors.listeningDecorator(
           new ThreadPoolExecutor(
@@ -758,26 +760,15 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         }
 
         for (Label subinclude : extensions) {
+          addIfUniqueLabel(getSubincludeTarget(subinclude, pkg), seenLabels, dependentFiles);
 
-          Target subincludeTarget = getSubincludeTarget(subinclude, pkg);
-          addIfUniqueLabel(subincludeTarget, seenLabels, dependentFiles);
-
-          // Also add the BUILD file of the subinclude.
           if (buildFiles) {
-            Path buildFileForSubinclude = null;
-            try {
-              buildFileForSubinclude =
-                  pkgPath.getPackageBuildFile(subincludeTarget.getLabel().getPackageIdentifier());
-            } catch (NoSuchPackageException e) {
-              throw new QueryException(
-                  subincludeTarget.getLabel().getPackageIdentifier() + " does not exist in graph");
-            }
-            Label buildFileLabel =
-                Label.createUnvalidated(
-                    subincludeTarget.getLabel().getPackageIdentifier(),
-                    buildFileForSubinclude.getBaseName());
-
-            addIfUniqueLabel(new FakeLoadTarget(buildFileLabel, pkg), seenLabels, dependentFiles);
+            // Also add the BUILD file of the subinclude.
+            addIfUniqueLabel(
+                getSubincludeTarget(
+                    Label.createUnvalidated(subinclude.getPackageIdentifier(), "BUILD"), pkg),
+                seenLabels,
+                dependentFiles);
           }
         }
       }
@@ -791,7 +782,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     }
   }
 
-  private Target getSubincludeTarget(Label label, Package pkg) {
+  private static Target getSubincludeTarget(Label label, Package pkg) {
     return new FakeLoadTarget(label, pkg);
   }
 
@@ -802,36 +793,30 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @ThreadSafe
-  private Package getPackage(PackageIdentifier packageIdentifier)
-      throws InterruptedException, QueryException, NoSuchPackageException {
-    SkyKey packageKey = PackageValue.key(packageIdentifier);
+  @Override
+  public Target getTarget(Label label)
+      throws TargetNotFoundException, QueryException, InterruptedException {
+    SkyKey packageKey = PackageValue.key(label.getPackageIdentifier());
+    try {
       PackageValue packageValue = (PackageValue) graph.getValue(packageKey);
       if (packageValue != null) {
         Package pkg = packageValue.getPackage();
         if (pkg.containsErrors()) {
-        throw new BuildFileContainsErrorsException(packageIdentifier);
+          throw new BuildFileContainsErrorsException(label.getPackageIdentifier());
         }
-      return pkg;
+        return packageValue.getPackage().getTarget(label.getName());
       } else {
-      NoSuchPackageException exception = (NoSuchPackageException) graph.getException(packageKey);
+        NoSuchThingException exception = (NoSuchThingException) graph.getException(packageKey);
         if (exception != null) {
           throw exception;
         }
         if (graph.isCycle(packageKey)) {
-        throw new NoSuchPackageException(packageIdentifier, "Package depends on a cycle");
+          throw new NoSuchPackageException(
+              label.getPackageIdentifier(), "Package depends on a cycle");
         } else {
           throw new QueryException(packageKey + " does not exist in graph");
         }
       }
-  }
-
-  @ThreadSafe
-  @Override
-  public Target getTarget(Label label)
-      throws TargetNotFoundException, QueryException, InterruptedException {
-    try {
-      Package pkg = getPackage(label.getPackageIdentifier());
-      return pkg.getTarget(label.getName());
     } catch (NoSuchThingException e) {
       throw new TargetNotFoundException(e);
     }
