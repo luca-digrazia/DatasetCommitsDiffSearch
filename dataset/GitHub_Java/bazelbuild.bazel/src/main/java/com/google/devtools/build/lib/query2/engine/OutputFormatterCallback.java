@@ -14,15 +14,12 @@
 package com.google.devtools.build.lib.query2.engine;
 
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-
-import java.io.Closeable;
 import java.io.IOException;
-
 import javax.annotation.Nullable;
 
 /** A callback that can receive a finish event when there are no more partial results */
 @ThreadCompatible
-public abstract class OutputFormatterCallback<T> implements Callback<T>, Closeable {
+public abstract class OutputFormatterCallback<T> implements Callback<T> {
 
   private IOException ioException;
 
@@ -31,15 +28,16 @@ public abstract class OutputFormatterCallback<T> implements Callback<T>, Closeab
    *
    * <p>It should be used for opening resources or sending a header to the output.
    */
-  public void start() throws IOException { }
+  public void start() throws IOException {
+  }
 
   /**
-   * Same as start but for closing resources or writting a footer.
+   * Same as start but for closing resources or writing a footer.
    *
    * <p>Will be called even in the case of an error.
    */
-  @Override
-  public void close() throws IOException{}
+  public void close(boolean failFast) throws InterruptedException, IOException {
+  }
 
   /**
    * Note that {@link Callback} interface does not throw IOExceptions. What this implementation does
@@ -48,7 +46,7 @@ public abstract class OutputFormatterCallback<T> implements Callback<T>, Closeab
    * disambiguate between real interruptions or IO Exceptions.
    */
   @Override
-  public final void process(Iterable<T> partialResult) throws QueryException, InterruptedException {
+  public void process(Iterable<T> partialResult) throws QueryException, InterruptedException {
     try {
       processOutput(partialResult);
     } catch (IOException e) {
@@ -57,7 +55,7 @@ public abstract class OutputFormatterCallback<T> implements Callback<T>, Closeab
     }
   }
 
-  protected abstract void processOutput(Iterable<T> partialResult)
+  public abstract void processOutput(Iterable<T> partialResult)
       throws IOException, InterruptedException;
 
   @Nullable
@@ -69,14 +67,16 @@ public abstract class OutputFormatterCallback<T> implements Callback<T>, Closeab
    * Use an {@code OutputFormatterCallback} with an already computed set of targets. Note that this
    * does not work in stream mode, as the {@code targets} would already be computed.
    *
-   * <p>The intended usage of this method is to use {@code StreamedFormatter} formaters in non
+   * <p>The intended usage of this method is to use {@code StreamedFormatter} formatters in non
    * streaming contexts.
    */
-  public static <T> void processAllTargets(OutputFormatterCallback<T> callback,
-      Iterable<T> targets) throws IOException, InterruptedException {
+  public static <T> void processAllTargets(OutputFormatterCallback<T> callback, Iterable<T> targets)
+      throws IOException, InterruptedException {
+    boolean failFast = true;
     try {
       callback.start();
       callback.process(targets);
+      failFast = false;
     } catch (InterruptedException e) {
       IOException ioException = callback.getIoException();
       if (ioException != null) {
@@ -87,7 +87,7 @@ public abstract class OutputFormatterCallback<T> implements Callback<T>, Closeab
       throw new IllegalStateException("This should not happen, as we are not running any query,"
           + " only printing the results:" + e.getMessage(), e);
     } finally {
-      callback.close();
+      callback.close(failFast);
     }
   }
 }

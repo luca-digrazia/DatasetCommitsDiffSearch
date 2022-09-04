@@ -19,6 +19,7 @@ import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.EquivalenceRelation;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.DotOutputVisitor;
 import com.google.devtools.build.lib.graph.LabelSerializer;
@@ -59,9 +60,11 @@ class GraphOutputFormatter extends OutputFormatter {
       Digraph<Target> result,
       OutputStream out,
       AspectResolver aspectProvider,
-      ConditionalEdges conditionalEdges) {
+      EventHandler eventHandler) {
     this.graphNodeStringLimit = options.graphNodeStringLimit;
     this.graphConditionalEdgesLimit = options.graphConditionalEdgesLimit;
+
+    ConditionalEdges conditionalEdges = new ConditionalEdges(result);
 
     boolean sortLabels = options.orderOutput == OrderOutput.FULL;
     if (options.graphFactored) {
@@ -103,15 +106,15 @@ class GraphOutputFormatter extends OutputFormatter {
                 getConditionsGraphLabel(
                     ImmutableSet.of(lhs), ImmutableSet.of(rhs), conditionalEdges);
             if (!outputLabel.isEmpty()) {
-              out.printf(" [label=\"%s\"];\n", outputLabel);
+              out.printf("  [label=\"%s\"];\n", outputLabel);
             }
           }
         },
-        sortLabels ? new TargetOrdering() : null);
+        sortLabels ? new FormatUtils.TargetOrdering() : null);
   }
 
   private static final Ordering<Node<Target>> NODE_COMPARATOR =
-      Ordering.from(new TargetOrdering()).onResultOf(EXTRACT_NODE_LABEL);
+      Ordering.from(new FormatUtils.TargetOrdering()).onResultOf(Node::getLabel);
 
   private static final Comparator<Iterable<Node<Target>>> ITERABLE_COMPARATOR =
       NODE_COMPARATOR.lexicographical();
@@ -195,7 +198,7 @@ class GraphOutputFormatter extends OutputFormatter {
             String outputLabel =
                 getConditionsGraphLabel(lhs.getLabel(), rhs.getLabel(), conditionalEdges);
             if (!outputLabel.isEmpty()) {
-              out.printf(" [label=\"%s\"];\n", outputLabel);
+              out.printf("  [label=\"%s\"];\n", outputLabel);
             }
           }
         },

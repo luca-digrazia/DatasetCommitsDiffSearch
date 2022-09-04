@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.query.output;
 
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.profiler.Profiler;
@@ -21,11 +22,11 @@ import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.query.aspectresolvers.AspectResolver;
-import com.google.devtools.build.lib.query2.query.output.OutputFormatter.StreamedFormatter;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions.OrderOutput;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 /** Static utility methods for outputting a query. */
 public class QueryOutputUtils {
@@ -33,13 +34,19 @@ public class QueryOutputUtils {
   private QueryOutputUtils() {}
 
   public static boolean shouldStreamResults(QueryOptions queryOptions, OutputFormatter formatter) {
-    return queryOptions.orderOutput == OrderOutput.NO
+    return (queryOptions.orderOutput == OrderOutput.NO
+            || (queryOptions.orderOutput == OrderOutput.AUTO && queryOptions.preferUnorderedOutput))
         && formatter instanceof StreamedFormatter;
   }
 
-  public static void output(QueryOptions queryOptions, QueryEvalResult result,
-      Set<Target> targetsResult, OutputFormatter formatter, OutputStream outputStream,
-      AspectResolver aspectResolver)
+  public static void output(
+      QueryOptions queryOptions,
+      QueryEvalResult result,
+      Set<Target> targetsResult,
+      OutputFormatter formatter,
+      OutputStream outputStream,
+      AspectResolver aspectResolver,
+      @Nullable EventHandler eventHandler)
       throws IOException, InterruptedException {
     /*
      * This is not really streaming, but we are using the streaming interface for writing into the
@@ -49,10 +56,11 @@ public class QueryOutputUtils {
     if (shouldStreamResults(queryOptions, formatter)) {
       StreamedFormatter streamedFormatter = (StreamedFormatter) formatter;
       streamedFormatter.setOptions(queryOptions, aspectResolver);
+      streamedFormatter.setEventHandler(eventHandler);
       OutputFormatterCallback.processAllTargets(
           streamedFormatter.createPostFactoStreamCallback(outputStream, queryOptions),
           targetsResult);
-    } else if (result instanceof DigraphQueryEvalResult) {
+    } else {
       @SuppressWarnings("unchecked")
       DigraphQueryEvalResult<Target> digraphQueryEvalResult =
           (DigraphQueryEvalResult<Target>) result;
@@ -62,28 +70,8 @@ public class QueryOutputUtils {
         subgraph = digraphQueryEvalResult.getGraph().extractSubgraph(targetsResult);
       }
 
-      // Building ConditionalEdges involves traversing the subgraph and so we only do this when
-      // needed.
-      //
-      // TODO(bazel-team): Remove this while adding support for conditional edges in other
-      // formatters.
-      ConditionalEdges conditionalEdges;
-      if (formatter instanceof GraphOutputFormatter) {
-        conditionalEdges = new ConditionalEdges(subgraph);
-      } else {
-        conditionalEdges = new ConditionalEdges();
-      }
-
       try (SilentCloseable closeable = Profiler.instance().profile("formatter.output")) {
-        formatter.output(queryOptions, subgraph, outputStream, aspectResolver, conditionalEdges);
-      }
-    } else {
-      if (formatter instanceof GraphOutputFormatter) {
-        throw new IllegalStateException();
-      }
-
-      try (SilentCloseable closeable = Profiler.instance().profile("formatter.outputUnordered")) {
-        formatter.outputUnordered(queryOptions, targetsResult, outputStream, aspectResolver);
+        formatter.output(queryOptions, subgraph, outputStream, aspectResolver, eventHandler);
       }
     }
   }

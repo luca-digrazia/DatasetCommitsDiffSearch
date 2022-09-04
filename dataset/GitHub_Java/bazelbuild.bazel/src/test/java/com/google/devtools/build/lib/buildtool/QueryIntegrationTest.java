@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.buildtool;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -24,11 +24,9 @@ import com.google.devtools.build.lib.buildtool.util.BuildIntegrationTestCase;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.common.AbstractBlazeQueryEnvironment;
-import com.google.devtools.build.lib.query2.common.UniverseScope;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
-import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryUtil;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
@@ -45,6 +43,8 @@ import com.google.devtools.build.lib.runtime.GotOptionsEvent;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.commands.QueryCommand;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
+import com.google.devtools.build.lib.testutil.Suite;
+import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.ByteArrayInputStream;
@@ -71,6 +71,7 @@ import org.w3c.dom.NodeList;
 /**
  * Integration tests for 'blaze query'.
  */
+@TestSpec(size = Suite.MEDIUM_TESTS)
 @RunWith(JUnit4.class)
 public class QueryIntegrationTest extends BuildIntegrationTestCase {
   private QueryOptions queryOptions;
@@ -255,7 +256,7 @@ public class QueryIntegrationTest extends BuildIntegrationTestCase {
     OptionsParser optionsParser = runtimeWrapper.createOptionsParser();
     Command command = QueryCommand.class.getAnnotation(Command.class);
     CommandEnvironment env =
-        getBlazeWorkspace().initCommand(command, optionsParser, new ArrayList<>(), 0L, 0L);
+        getBlazeWorkspace().initCommand(command, optionsParser, new ArrayList<>());
     for (BlazeModule module : getRuntime().getBlazeModules()) {
       module.beforeCommand(env);
     }
@@ -280,7 +281,7 @@ public class QueryIntegrationTest extends BuildIntegrationTestCase {
       // Ignored, as we know the test deviates from normal calling order.
     }
 
-    env.syncPackageLoading(optionsParser);
+    env.setupPackageCache(optionsParser);
 
     OutputFormatter formatter =
         OutputFormatters.getFormatter(
@@ -292,14 +293,13 @@ public class QueryIntegrationTest extends BuildIntegrationTestCase {
             env,
             keepGoing,
             !QueryOutputUtils.shouldStreamResults(queryOptions, formatter),
-            UniverseScope.EMPTY,
+            /*universeScope=*/ ImmutableList.of(),
             /*loadingPhaseThreads=*/ 1,
             settings,
             /*useGraphlessQuery=*/ false);
     AggregateAllOutputFormatterCallback<Target, ?> callback =
         QueryUtil.newOrderedAggregateAllOutputFormatterCallback(queryEnv);
-    QueryEvalResult result =
-        queryEnv.evaluateQuery(QueryExpression.parse(queryString, queryEnv), callback);
+    QueryEvalResult result = queryEnv.evaluateQuery(queryString, callback);
 
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 

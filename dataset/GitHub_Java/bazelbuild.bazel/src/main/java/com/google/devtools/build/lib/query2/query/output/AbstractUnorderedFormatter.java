@@ -15,28 +15,26 @@
 package com.google.devtools.build.lib.query2.query.output;
 
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.Node;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.CommonQueryOptions;
+import com.google.devtools.build.lib.query2.common.CommonQueryOptions;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.query.aspectresolvers.AspectResolver;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions.OrderOutput;
 import java.io.IOException;
 import java.io.OutputStream;
+import javax.annotation.Nullable;
 
 abstract class AbstractUnorderedFormatter extends OutputFormatter implements StreamedFormatter {
-  protected CommonQueryOptions options;
-  protected AspectResolver aspectResolver;
-  protected DependencyFilter dependencyFilter;
 
   @Override
-  public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
-    this.options = options;
-    this.aspectResolver = aspectResolver;
-    this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
-  }
+  public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {}
+
+  /** Optionally sets a handler for reporting status output / errors. */
+  @Override
+  public void setEventHandler(@Nullable EventHandler eventHandler) {}
 
   @Override
   public void output(
@@ -44,9 +42,10 @@ abstract class AbstractUnorderedFormatter extends OutputFormatter implements Str
       Digraph<Target> result,
       OutputStream out,
       AspectResolver aspectResolver,
-      ConditionalEdges conditionalEdges)
+      @Nullable EventHandler eventHandler)
       throws IOException, InterruptedException {
     setOptions(options, aspectResolver);
+    setEventHandler(eventHandler);
     OutputFormatterCallback.processAllTargets(
         createPostFactoStreamCallback(out, options), getOrderedTargets(result, options));
   }
@@ -55,7 +54,7 @@ abstract class AbstractUnorderedFormatter extends OutputFormatter implements Str
     Iterable<Node<Target>> orderedResult =
         options.orderOutput == OrderOutput.DEPS
             ? result.getTopologicalOrder()
-            : result.getTopologicalOrder(new TargetOrdering());
-    return Iterables.transform(orderedResult, EXTRACT_NODE_LABEL);
+            : result.getTopologicalOrder(new FormatUtils.TargetOrdering());
+    return Iterables.transform(orderedResult, Node::getLabel);
   }
 }
