@@ -24,16 +24,16 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.Context;
+import javax.ws.rs.Priorities;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.Variant;
-import javax.ws.rs.ext.ExceptionMapper;
 
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.common.util.ServerMediaType;
+import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.jboss.resteasy.reactive.server.core.request.ServerDrivenNegotiation;
 import org.jboss.resteasy.reactive.server.handlers.RestInitialHandler;
 import org.jboss.resteasy.reactive.server.mapping.RequestMapper;
@@ -42,28 +42,25 @@ import org.jboss.resteasy.reactive.server.util.RuntimeResourceVisitor;
 
 import io.quarkus.runtime.TemplateHtmlBuilder;
 import io.quarkus.runtime.util.ClassPathUtils;
+import io.quarkus.vertx.http.runtime.devmode.AdditionalRouteDescription;
 import io.quarkus.vertx.http.runtime.devmode.RouteDescription;
 
-public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundException> {
+public class NotFoundExceptionMapper {
 
-    protected static final String META_INF_RESOURCES_SLASH = "META-INF/resources/";
     protected static final String META_INF_RESOURCES = "META-INF/resources";
 
     private final static Variant JSON_VARIANT = new Variant(MediaType.APPLICATION_JSON_TYPE, (String) null, null);
     private final static Variant HTML_VARIANT = new Variant(MediaType.TEXT_HTML_TYPE, (String) null, null);
-    private final static List<Variant> VARIANTS = Arrays.asList(JSON_VARIANT, HTML_VARIANT);
+    private final static List<Variant> VARIANTS = List.of(JSON_VARIANT, HTML_VARIANT);
     static volatile List<RequestMapper.RequestPath<RestInitialHandler.InitialMatch>> classMappers;
 
     private volatile static String httpRoot = "";
     private volatile static List<String> servletMappings = Collections.emptyList();
     private volatile static Set<java.nio.file.Path> staticResourceRoots = Collections.emptySet();
-    private volatile static List<String> additionalEndpoints = Collections.emptyList();
+    private volatile static List<AdditionalRouteDescription> additionalEndpoints = Collections.emptyList();
     private volatile static List<RouteDescription> reactiveRoutes = Collections.emptyList();
 
     private static final Logger LOG = Logger.getLogger(NotFoundExceptionMapper.class);
-
-    @Context
-    private HttpHeaders headers;
 
     public static void setHttpRoot(String rootPath) {
         httpRoot = rootPath;
@@ -84,15 +81,15 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
         }
     }
 
-    @Override
-    public Response toResponse(NotFoundException exception) {
+    @ServerExceptionMapper(value = NotFoundException.class, priority = Priorities.USER + 1)
+    public Response toResponse(HttpHeaders headers) {
         if ((classMappers == null) || classMappers.isEmpty()) {
-            return respond();
+            return respond(headers);
         }
-        return respond(ResourceDescription.fromClassMappers(classMappers));
+        return respond(ResourceDescription.fromClassMappers(classMappers), headers);
     }
 
-    private Response respond() {
+    private Response respond(HttpHeaders headers) {
         Variant variant = selectVariant(headers);
 
         if (variant == JSON_VARIANT) {
@@ -107,7 +104,7 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
         return Response.status(Status.NOT_FOUND).build();
     }
 
-    private Response respond(List<ResourceDescription> descriptions) {
+    private Response respond(List<ResourceDescription> descriptions, HttpHeaders headers) {
         Variant variant = selectVariant(headers);
 
         if (variant == JSON_VARIANT) {
@@ -175,8 +172,9 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
 
             if (!additionalEndpoints.isEmpty()) {
                 sb.resourcesStart("Additional endpoints");
-                for (String additionalEndpoint : additionalEndpoints) {
-                    sb.staticResourcePath(adjustRoot(httpRoot, additionalEndpoint));
+                for (AdditionalRouteDescription additionalEndpoint : additionalEndpoints) {
+                    sb.staticResourcePath(additionalEndpoint.getUri(),
+                            additionalEndpoint.getDescription());
                 }
                 sb.resourcesEnd();
             }
@@ -267,7 +265,7 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
         }
     }
 
-    public static void setAdditionalEndpoints(List<String> additionalEndpoints) {
+    public static void setAdditionalEndpoints(List<AdditionalRouteDescription> additionalEndpoints) {
         NotFoundExceptionMapper.additionalEndpoints = additionalEndpoints;
     }
 

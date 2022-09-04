@@ -39,7 +39,6 @@ import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.resteasy.reactive.server.common.runtime.EndpointInvokerFactory;
 import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
@@ -109,7 +108,7 @@ public class QuarkusServerEndpointIndexer
     protected boolean handleCustomParameter(Map<DotName, AnnotationInstance> anns, ServerIndexedParameter builder,
             Type paramType, boolean field, Map<String, Object> methodContext) {
         methodContext.put(GeneratedClassBuildItem.class.getName(), generatedClassBuildItemBuildProducer);
-        methodContext.put(EndpointInvokerFactory.class.getName(), resteasyReactiveRecorder);
+        methodContext.put(ResteasyReactiveRecorder.class.getName(), resteasyReactiveRecorder);
         return super.handleCustomParameter(anns, builder, paramType, field, methodContext);
     }
 
@@ -230,8 +229,7 @@ public class QuarkusServerEndpointIndexer
         }
         reflectiveClassProducer.produce(new ReflectiveClassBuildItem(false, false, className));
         String populatorClassName = MultipartPopulatorGenerator.generate(multipartClassInfo,
-                new GeneratedClassGizmoAdaptor(generatedClassBuildItemBuildProducer, applicationClassPredicate.test(className)),
-                index);
+                new GeneratedClassGizmoAdaptor(generatedClassBuildItemBuildProducer, true), index);
         multipartGeneratedPopulators.put(className, populatorClassName);
 
         // transform the multipart pojo (and any super-classes) so we can access its fields no matter what
