@@ -180,9 +180,10 @@ public final class CommandHelper {
       String command, @Nullable String attribute, boolean allowDataInLabel) {
     LocationExpander expander;
     if (allowDataInLabel) {
-      expander = LocationExpander.withExecPathsAndData(ruleContext, labelMap);
+      expander = new LocationExpander(ruleContext, labelMap,
+          LocationExpander.Options.EXEC_PATHS, LocationExpander.Options.ALLOW_DATA);
     } else {
-      expander = LocationExpander.withExecPaths(ruleContext, labelMap);
+      expander = new LocationExpander(ruleContext, labelMap, LocationExpander.Options.EXEC_PATHS);
     }
     if (attribute != null) {
       command = expander.expandAttribute(attribute, command);
