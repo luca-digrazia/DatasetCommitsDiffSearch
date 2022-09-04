@@ -40,7 +40,6 @@ import javax.inject.Provider;
 import java.util.List;
 import java.util.concurrent.Executor;
 
-import static org.jboss.netty.channel.Channels.fireMessageReceived;
 import static org.jboss.netty.handler.codec.http.HttpHeaders.*;
 import static org.jboss.netty.handler.codec.http.HttpResponseStatus.*;
 
@@ -75,7 +74,7 @@ public class HttpTransport extends AbstractTcpTransport {
         final List<Pair<String, ? extends ChannelHandler>> baseChannelHandlers = super.getBaseChannelHandlers(input);
 
         baseChannelHandlers.add(Pair.of("decoder", new HttpRequestDecoder()));
-        baseChannelHandlers.add(Pair.of("encoder", new HttpResponseEncoder()));
+        baseChannelHandlers.add(Pair.of("encoder", new HttpRequestEncoder()));
         baseChannelHandlers.add(Pair.of("decompressor", new HttpContentDecompressor()));
 
         return baseChannelHandlers;
@@ -132,11 +131,12 @@ public class HttpTransport extends AbstractTcpTransport {
 
             if ("/gelf".equals(request.getUri())) {
                 // send on to raw message handler
-                writeResponse(channel, keepAlive, httpRequestVersion, ACCEPTED, origin);
-                fireMessageReceived(ctx, buffer);
+                Channels.fireMessageReceived(ctx, buffer);
             } else {
                 writeResponse(channel, keepAlive, httpRequestVersion, NOT_FOUND, origin);
+                return;
             }
+            writeResponse(channel, keepAlive, httpRequestVersion, ACCEPTED, origin);
         }
 
         private void writeResponse(Channel channel,
