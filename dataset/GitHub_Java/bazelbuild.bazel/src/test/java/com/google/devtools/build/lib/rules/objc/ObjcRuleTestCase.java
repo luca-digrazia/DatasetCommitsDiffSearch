@@ -14,9 +14,7 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth8.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MODULE_MAP;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.LIPO;
@@ -541,29 +539,19 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         getConfiguredTarget("//x:x", getAppleCrosstoolConfiguration())
             .get(CcInfo.PROVIDER)
             .getCcCompilationContext();
-    List<String> declaredIncludeSrcs =
-        ccCompilationContext.getDeclaredIncludeSrcs().toList().stream()
-            .map(x -> removeConfigFragment(x.getExecPathString()))
-            .collect(toImmutableList());
     if (privateHdr.isPresent()) {
-      assertThat(declaredIncludeSrcs)
-          .containsExactly(
-              getSourceArtifact("x/a.h").getExecPathString(),
-              getSourceArtifact(privateHdr.get()).getExecPathString());
+      assertThat(ccCompilationContext.getDeclaredIncludeSrcs().toList())
+          .containsExactly(getSourceArtifact("x/a.h"), getSourceArtifact(privateHdr.get()));
     } else {
-      assertThat(declaredIncludeSrcs)
-          .containsExactly(getSourceArtifact("x/a.h").getExecPathString());
+      assertThat(ccCompilationContext.getDeclaredIncludeSrcs().toList())
+          .containsExactly(getSourceArtifact("x/a.h"));
     }
-    assertThat(
-            ccCompilationContext.getIncludeDirs().stream()
-                .map(x -> removeConfigFragment(x.toString())))
+    assertThat(ccCompilationContext.getIncludeDirs())
         .containsExactly(
-            PathFragment.create("x/incdir").toString(),
-            removeConfigFragment(
-                getAppleCrosstoolConfiguration()
-                    .getGenfilesFragment(RepositoryName.MAIN)
-                    .getRelative("x/incdir")
-                    .toString()));
+            PathFragment.create("x/incdir"),
+            getAppleCrosstoolConfiguration()
+                .getGenfilesFragment(RepositoryName.MAIN)
+                .getRelative("x/incdir"));
   }
 
   protected void checkCompilesWithHdrs(RuleType ruleType) throws Exception {
@@ -938,11 +926,10 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       rootedPaths
           .add(unrootedPath)
           .add(
-              removeConfigFragment(
-                  configuration
-                      .getGenfilesFragment(RepositoryName.MAIN)
-                      .getRelative(unrootedPath)
-                      .getSafePathString()));
+              configuration
+                  .getGenfilesFragment(RepositoryName.MAIN)
+                  .getRelative(unrootedPath)
+                  .getSafePathString());
     }
     return rootedPaths.build();
   }
@@ -1997,13 +1984,5 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "  }),",
         "  transitive_configs = [':flag1', ':flag2'],",
         ")");
-  }
-
-  protected String removeConfigFragment(String text) {
-    return text.replaceAll("-out/.*/bin", "-out//bin").replaceAll("-out/.*/gen", "-out//gen");
-  }
-
-  protected List<String> removeConfigFragment(List<String> text) {
-    return text.stream().map(this::removeConfigFragment).collect(toImmutableList());
   }
 }

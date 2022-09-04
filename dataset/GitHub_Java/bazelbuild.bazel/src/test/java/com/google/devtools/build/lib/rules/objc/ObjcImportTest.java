@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Optional;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.testutil.Scratch;
@@ -63,8 +64,9 @@ public class ObjcImportTest extends ObjcRuleTestCase {
         "    deps = ['//imp:imp'],",
         ")");
     ObjcProvider provider = providerForTarget("//lib:lib");
-    assertThat(Artifact.toExecPaths(provider.get(ObjcProvider.IMPORTED_LIBRARY)))
-        .containsExactly("imp/precomp_lib.a").inOrder();
+    assertThat(Artifact.asExecPaths(provider.get(ObjcProvider.IMPORTED_LIBRARY)))
+        .containsExactly("imp/precomp_lib.a")
+        .inOrder();
   }
 
   @Test
@@ -72,23 +74,8 @@ public class ObjcImportTest extends ObjcRuleTestCase {
     addTrivialImportLibrary();
     createBinaryTargetWriter("//bin:bin").setList("deps", "//imp:imp").write();
     CommandAction linkBinAction = linkAction("//bin:bin");
-    verifyObjlist(linkBinAction, "bin-linker.objlist", "imp/precomp_lib.a");
-    assertThat(Artifact.toExecPaths(linkBinAction.getInputs()))
-        .contains("imp/precomp_lib.a");
-  }
-
-  @Test
-  public void testNoDepsAllowed() throws Exception {
-    createLibraryTargetWriter("//lib:lib")
-        .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
-        .write();
-    checkError("imp", "imp",
-        "//imp:imp: no such attribute 'deps' in 'objc_import' rule",
-        "objc_import(",
-        "    name = 'imp',",
-        "    archives = ['library.a'],",
-        "    deps = ['//lib:lib'],",
-        ")");
+    verifyObjlist(linkBinAction, "imp/precomp_lib.a");
+    assertThat(Artifact.asExecPaths(linkBinAction.getInputs())).contains("imp/precomp_lib.a");
   }
 
   @Test
@@ -110,22 +97,32 @@ public class ObjcImportTest extends ObjcRuleTestCase {
         "    sdk_dylibs = ['libdy1', 'libdy2'],",
         ")");
     ObjcProvider provider = providerForTarget("//imp:imp");
-    assertThat(provider.get(ObjcProvider.SDK_DYLIB)).containsExactly("libdy1", "libdy2").inOrder();
+    assertThat(provider.get(ObjcProvider.SDK_DYLIB).toList())
+        .containsExactly("libdy1", "libdy2")
+        .inOrder();
   }
 
   @Test
   public void testProvidesHdrsAndIncludes() throws Exception {
-    checkProvidesHdrsAndIncludes(RULE_TYPE);
+    checkProvidesHdrsAndIncludes(RULE_TYPE, Optional.absent());
   }
 
   @Test
-  public void testProvidesStoryboardObjects() throws Exception {
-    checkProvidesStoryboardObjects(RULE_TYPE);
+  public void testSdkIncludesUsedInCompileActionsOfDependers() throws Exception {
+    checkSdkIncludesUsedInCompileActionsOfDependers(RULE_TYPE);
   }
 
   @Test
-  public void testNestedBundleInformationPropagatedToDependers() throws Exception {
-    checkNestedBundleInformationPropagatedToDependers(RULE_TYPE);
+  public void testObjcImportLoadedThroughMacro() throws Exception {
+    setupTestObjcImportLoadedThroughMacro(/* loadMacro= */ true);
+    assertThat(getConfiguredTarget("//a:a")).isNotNull();
+    assertNoEvents();
   }
 
+  private void setupTestObjcImportLoadedThroughMacro(boolean loadMacro) throws Exception {
+    scratch.file(
+        "a/BUILD",
+        getAnalysisMock().ccSupport().getMacroLoadStatement(loadMacro, "objc_import"),
+        "objc_import(name='a', archives=['a.a'])");
+  }
 }

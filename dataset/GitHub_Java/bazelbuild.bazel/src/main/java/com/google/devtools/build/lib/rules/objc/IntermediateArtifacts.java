@@ -272,8 +272,8 @@ public final class IntermediateArtifacts {
     return moduleName;
   }
 
-  /** {@link CppModuleMap} for swift. */
-  public CppModuleMap swiftModuleMap() {
+  /** {@link CppModuleMap} that provides the clang module map for this target. */
+  public CppModuleMap moduleMap() {
     String moduleName = getModuleName();
     Optional<Artifact> customModuleMap = CompilationSupport.getCustomModuleMap(ruleContext);
     if (customModuleMap.isPresent()) {
@@ -291,7 +291,7 @@ public final class IntermediateArtifacts {
     }
   }
 
-  /** {@link CppModuleMap} for layering check and modules. */
+  /** {@link CppModuleMap} for internal use. */
   public CppModuleMap internalModuleMap() {
     return new CppModuleMap(appendExtensionInGenfiles(".internal.cppmap"), getModuleName());
   }
