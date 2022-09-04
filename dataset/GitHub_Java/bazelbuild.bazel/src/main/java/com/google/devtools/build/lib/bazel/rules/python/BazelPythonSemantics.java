@@ -44,17 +44,14 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.python.PyCcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.python.PyCommon;
-import com.google.devtools.build.lib.rules.python.PyRuntimeInfo;
 import com.google.devtools.build.lib.rules.python.PythonConfiguration;
 import com.google.devtools.build.lib.rules.python.PythonSemantics;
-import com.google.devtools.build.lib.rules.python.PythonVersion;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import javax.annotation.Nullable;
 
 /**
  * Functionality specific to the Python rules in Bazel.
@@ -75,13 +72,12 @@ public class BazelPythonSemantics implements PythonSemantics {
   @Override
   public void collectRunfilesForBinary(
       RuleContext ruleContext, Runfiles.Builder builder, PyCommon common, CcInfo ccInfo) {
-    addRuntime(ruleContext, common, builder);
+    addRuntime(ruleContext, builder);
   }
 
   @Override
-  public void collectDefaultRunfilesForBinary(
-      RuleContext ruleContext, PyCommon common, Runfiles.Builder builder) {
-    addRuntime(ruleContext, common, builder);
+  public void collectDefaultRunfilesForBinary(RuleContext ruleContext, Runfiles.Builder builder) {
+    addRuntime(ruleContext, builder);
   }
 
   @Override
@@ -124,85 +120,64 @@ public class BazelPythonSemantics implements PythonSemantics {
     return result;
   }
 
-  /**
-   * Returns an artifact next to the executable file with ".temp" suffix. Used only if we're
-   * building a zip.
-   */
-  public Artifact getPythonIntermediateStubArtifact(RuleContext ruleContext, Artifact executable) {
+  /** @return An artifact next to the executable file with ".temp" suffix */
+  public Artifact getPythonTemplateMainArtifact(RuleContext ruleContext, Artifact executable) {
     return ruleContext.getRelatedArtifact(executable.getRootRelativePath(), ".temp");
   }
 
-  private static String booleanToPythonLiteral(boolean value) {
-    return value ? "True" : "False";
-  }
-
   @Override
-  public void createExecutable(
-      RuleContext ruleContext, PyCommon common, CcInfo ccInfo, Runfiles.Builder runfilesBuilder)
+  public Artifact createExecutable(
+      RuleContext ruleContext,
+      PyCommon common,
+      CcInfo ccInfo,
+      Runfiles.Builder runfilesBuilder)
       throws InterruptedException {
-    PythonConfiguration config = ruleContext.getFragment(PythonConfiguration.class);
-    BazelPythonConfiguration bazelConfig = ruleContext.getFragment(BazelPythonConfiguration.class);
-    boolean buildPythonZip = config.buildPythonZip();
-
-    /*
-     * Python executable targets are launched in two stages. The first stage is the stub script that
-     * locates (and possibly extracts) the runfiles tree, sets up environment variables, and passes
-     * control to the second stage. The second stage is payload user code, i.e. the main Python
-     * file.
-     *
-     * When a zip file is built (--build_python_zip), the stub script becomes the __main__.py of the
-     * resulting zip, so that it runs when a Python interpreter executes the zip file. The stub
-     * logic will extract the zip's runfiles into a temporary directory.
-     *
-     * The stub script has a shebang pointing to a first-stage Python interpreter (as of this
-     * writing "#!/usr/bin/env python"). When a zip file is built on unix, this shebang is also
-     * prepended to the final zip artifact. On Windows shebangs are ignored, and the launcher
-     * runs the first stage with an interpreter whose path is passed in as LaunchInfo.
-     */
-
-    // The initial entry point, which is the launcher on Windows, or the stub or zip file on Unix.
+    String main = common.determineMainExecutableSource(/*withWorkspaceName=*/ true);
     Artifact executable = common.getExecutable();
-    // The artifact holding the result of expanding the stub template.
-    Artifact stubOutput;
-    if (buildPythonZip) {
-      stubOutput = getPythonIntermediateStubArtifact(ruleContext, executable);
+    BazelPythonConfiguration config = ruleContext.getFragment(BazelPythonConfiguration.class);
+    String pythonBinary = getPythonBinary(ruleContext, config);
+
+    if (!ruleContext.getFragment(PythonConfiguration.class).buildPythonZip()) {
+      Artifact stubOutput = executable;
+      if (OS.getCurrent() == OS.WINDOWS) {
+        // On Windows, use a Windows native binary to launch the python launcher script (stub file).
+        stubOutput = common.getPythonLauncherArtifact(executable);
+        executable =
+            createWindowsExeLauncher(ruleContext, pythonBinary, executable, /*useZipFile*/ false);
+      }
+
+      ruleContext.registerAction(
+          new TemplateExpansionAction(
+              ruleContext.getActionOwner(),
+              stubOutput,
+              STUB_TEMPLATE,
+              ImmutableList.of(
+                  Substitution.of("%main%", main),
+                  Substitution.of("%python_binary%", pythonBinary),
+                  Substitution.of("%imports%", Joiner.on(":").join(common.getImports())),
+                  Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
+                  Substitution.of("%is_zipfile%", "False"),
+                  Substitution.of(
+                      "%import_all%", config.getImportAllRepositories() ? "True" : "False")),
+              true));
     } else {
-      stubOutput =
-          OS.getCurrent() == OS.WINDOWS
-              ? common.getPythonStubArtifactForWindows(executable)
-              : executable;
-    }
-    // The second-stage Python interpreter, which may be a system absolute path or a runfiles
-    // workspace-relative path. On Windows this is also passed to the launcher to use for the
-    // first-stage.
-    String pythonBinary = getPythonBinary(ruleContext, common, bazelConfig);
-
-    // Create the stub file.
-    ruleContext.registerAction(
-        new TemplateExpansionAction(
-            ruleContext.getActionOwner(),
-            stubOutput,
-            STUB_TEMPLATE,
-            ImmutableList.of(
-                Substitution.of(
-                    "%main%", common.determineMainExecutableSource(/*withWorkspaceName=*/ true)),
-                Substitution.of("%python_binary%", pythonBinary),
-                Substitution.of("%imports%", Joiner.on(":").join(common.getImports())),
-                Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
-                Substitution.of("%is_zipfile%", booleanToPythonLiteral(buildPythonZip)),
-                Substitution.of(
-                    "%import_all%", booleanToPythonLiteral(bazelConfig.getImportAllRepositories())),
-                Substitution.of(
-                    "%enable_host_version_warning%",
-                    booleanToPythonLiteral(common.shouldWarnAboutHostVersionUponFailure())),
-                Substitution.of(
-                    "%python_version%", common.getVersion() == PythonVersion.PY3 ? "'3'" : "'2'")),
-            true));
-
-    // Create the zip file if requested. On unix, copy it from the intermediate artifact to the
-    // final executable while prepending the shebang.
-    if (buildPythonZip) {
       Artifact zipFile = common.getPythonZipArtifact(executable);
+      Artifact templateMain = getPythonTemplateMainArtifact(ruleContext, executable);
+      // The executable zip file will unzip itself into a tmp directory and then run from there
+      ruleContext.registerAction(
+          new TemplateExpansionAction(
+              ruleContext.getActionOwner(),
+              templateMain,
+              STUB_TEMPLATE,
+              ImmutableList.of(
+                  Substitution.of("%main%", main),
+                  Substitution.of("%python_binary%", pythonBinary),
+                  Substitution.of("%imports%", Joiner.on(":").join(common.getImports())),
+                  Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
+                  Substitution.of("%is_zipfile%", "True"),
+                  Substitution.of(
+                      "%import_all%", config.getImportAllRepositories() ? "True" : "False")),
+              true));
 
       if (OS.getCurrent() != OS.WINDOWS) {
         PathFragment shExecutable = ShToolchain.getPathOrError(ruleContext);
@@ -219,37 +194,16 @@ public class BazelPythonSemantics implements PythonSemantics {
                 .useDefaultShellEnvironment()
                 .setMnemonic("BuildBinary")
                 .build(ruleContext));
+      } else {
+        return createWindowsExeLauncher(ruleContext, pythonBinary, executable, true);
       }
     }
 
-    // On Windows, create the launcher.
-    if (OS.getCurrent() == OS.WINDOWS) {
-      createWindowsExeLauncher(
-          ruleContext,
-          // In the case where the second-stage interpreter is in runfiles, the launcher is passed
-          // a workspace-relative path that it combines with its own CWD to produce the full path to
-          // the real interpreter executable. (It can't use a path to the runfiles since they aren't
-          // yet extracted from the zip, assuming buildPythonZip is set.)
-          //
-          // TODO(#7947): Fix how this path is constructed for the case of a runfile interpreter in
-          // a remote repo -- probably need to pass an absolute path to the launcher instead of a
-          // workspace-relative one. Also ensure this is ok for remote execution, and if not, maybe
-          // change the launcher to use a separate system-installed first-stage interpreter like on
-          // unix. See also https://github.com/bazelbuild/bazel/issues/7947#issuecomment-491385802.
-          pythonBinary,
-          executable,
-          /*useZipFile=*/ buildPythonZip,
-          /*windowsEscapePythonArgs=*/ config.windowsEscapePythonArgs());
-    }
+    return executable;
   }
 
-  /** Registers an action to create a Windows Python launcher at {@code pythonLauncher}. */
-  private static void createWindowsExeLauncher(
-      RuleContext ruleContext,
-      String pythonBinary,
-      Artifact pythonLauncher,
-      boolean useZipFile,
-      boolean windowsEscapePythonArgs)
+  private static Artifact createWindowsExeLauncher(
+      RuleContext ruleContext, String pythonBinary, Artifact pythonLauncher, boolean useZipFile)
       throws InterruptedException {
     LaunchInfo launchInfo =
         LaunchInfo.builder()
@@ -260,9 +214,9 @@ public class BazelPythonSemantics implements PythonSemantics {
                 ruleContext.getConfiguration().runfilesEnabled() ? "1" : "0")
             .addKeyValuePair("python_bin_path", pythonBinary)
             .addKeyValuePair("use_zip_file", useZipFile ? "1" : "0")
-            .addKeyValuePair("escape_args", windowsEscapePythonArgs ? "1" : "0")
             .build();
     LauncherFileWriteAction.createAndRegister(ruleContext, pythonLauncher, launchInfo);
+    return pythonLauncher;
   }
 
   @Override
@@ -276,7 +230,7 @@ public class BazelPythonSemantics implements PythonSemantics {
             ruleContext,
             executable,
             common.getPythonZipArtifact(executable),
-            getPythonIntermediateStubArtifact(ruleContext, executable),
+            getPythonTemplateMainArtifact(ruleContext, executable),
             zipper,
             runfilesSupport);
       }
@@ -310,15 +264,15 @@ public class BazelPythonSemantics implements PythonSemantics {
       RuleContext ruleContext,
       Artifact executable,
       Artifact zipFile,
-      Artifact stubFile,
+      Artifact templateMain,
       FilesToRunProvider zipper,
       RunfilesSupport runfilesSupport) {
 
     NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
     PathFragment workspaceName = runfilesSupport.getWorkspaceName();
     CustomCommandLine.Builder argv = new CustomCommandLine.Builder();
-    inputsBuilder.add(stubFile);
-    argv.addPrefixedExecPath("__main__.py=", stubFile);
+    inputsBuilder.add(templateMain);
+    argv.addPrefixedExecPath("__main__.py=", templateMain);
 
     // Creating __init__.py files under each directory
     argv.add("__init__.py=");
@@ -358,55 +312,45 @@ public class BazelPythonSemantics implements PythonSemantics {
             .build(ruleContext));
   }
 
-  /**
-   * Returns the Python runtime to use, either from the toolchain or the legacy flag-based
-   * mechanism.
-   *
-   * <p>Can only be called for an executable Python rule.
-   *
-   * <p>Returns {@code null} if there's a problem retrieving the runtime.
-   */
-  @Nullable
-  private static PyRuntimeInfo getRuntime(RuleContext ruleContext, PyCommon common) {
-    return common.shouldGetRuntimeFromToolchain()
-        ? common.getRuntimeFromToolchain()
-        : ruleContext.getPrerequisite(":py_interpreter", Mode.TARGET, PyRuntimeInfo.PROVIDER);
-  }
-
-  private static void addRuntime(
-      RuleContext ruleContext, PyCommon common, Runfiles.Builder builder) {
-    PyRuntimeInfo provider = getRuntime(ruleContext, common);
-    if (provider != null && provider.isInBuild()) {
-      builder.addArtifact(provider.getInterpreter());
+  private static void addRuntime(RuleContext ruleContext, Runfiles.Builder builder) {
+    BazelPyRuntimeProvider provider = ruleContext.getPrerequisite(
+        ":py_interpreter", Mode.TARGET, BazelPyRuntimeProvider.class);
+    if (provider != null && provider.interpreter() != null) {
+      builder.addArtifact(provider.interpreter());
       // WARNING: we are adding the all Python runtime files here,
       // and it would fail if the filenames of them contain spaces.
       // Currently, we need to exclude them in py_runtime rules.
       // Possible files in Python runtime which contain spaces in filenames:
       // - https://github.com/pypa/setuptools/blob/master/setuptools/script%20(dev).tmpl
       // - https://github.com/pypa/setuptools/blob/master/setuptools/command/launcher%20manifest.xml
-      builder.addTransitiveArtifacts(provider.getFiles());
+      builder.addTransitiveArtifacts(provider.files());
     }
   }
 
   private static String getPythonBinary(
-      RuleContext ruleContext, PyCommon common, BazelPythonConfiguration bazelConfig) {
+      RuleContext ruleContext,
+      BazelPythonConfiguration config) {
+
     String pythonBinary;
-    PyRuntimeInfo provider = getRuntime(ruleContext, common);
+
+    BazelPyRuntimeProvider provider = ruleContext.getPrerequisite(
+        ":py_interpreter", Mode.TARGET, BazelPyRuntimeProvider.class);
+
     if (provider != null) {
       // make use of py_runtime defined by --python_top
-      if (!provider.isInBuild()) {
+      if (!provider.interpreterPath().isEmpty()) {
         // absolute Python path in py_runtime
-        pythonBinary = provider.getInterpreterPath().getPathString();
+        pythonBinary = provider.interpreterPath();
       } else {
         // checked in Python interpreter in py_runtime
         PathFragment workspaceName =
             PathFragment.create(ruleContext.getRule().getPackage().getWorkspaceName());
         pythonBinary =
-            workspaceName.getRelative(provider.getInterpreter().getRunfilesPath()).getPathString();
+            workspaceName.getRelative(provider.interpreter().getRunfilesPath()).getPathString();
       }
     } else  {
       // make use of the Python interpreter in an absolute path
-      pythonBinary = bazelConfig.getPythonPath();
+      pythonBinary = config.getPythonPath();
     }
 
     return pythonBinary;

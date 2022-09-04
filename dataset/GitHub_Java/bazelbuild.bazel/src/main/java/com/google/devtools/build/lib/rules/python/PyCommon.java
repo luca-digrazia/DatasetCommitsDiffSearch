@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.python;
 
-import static com.google.devtools.build.lib.syntax.Runtime.NONE;
-
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -35,10 +33,8 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -51,7 +47,6 @@ import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.OS;
@@ -158,21 +153,6 @@ public final class PyCommon {
   private final boolean hasPy3OnlySources;
 
   /**
-   * Information about the runtime, as obtained from the toolchain.
-   *
-   * <p>This is non-null only if
-   *
-   * <ol>
-   *   <li>the configuration says to pull the runtime from the toolchain (rather than from the
-   *       legacy flags),
-   *   <li>the target defines the attribute "$py_toolchain_type" (in which case it MUST also declare
-   *       that it requires the Python toolchain type), and
-   *   <li>we can successfully read the runtime info from the toolchain provider.
-   * </ol>
-   */
-  @Nullable private final PyRuntimeInfo runtimeFromToolchain;
-
-  /**
    * Symlink map from root-relative paths to 2to3 converted source artifacts.
    *
    * <p>Null if no 2to3 conversion is required.
@@ -192,15 +172,14 @@ public final class PyCommon {
   public PyCommon(RuleContext ruleContext, PythonSemantics semantics) {
     this.ruleContext = ruleContext;
     this.semantics = semantics;
-    this.version = ruleContext.getFragment(PythonConfiguration.class).getPythonVersion();
     this.sourcesVersion = initSrcsVersionAttr(ruleContext);
+    this.version = ruleContext.getFragment(PythonConfiguration.class).getPythonVersion();
     this.dependencyTransitivePythonSources = initDependencyTransitivePythonSources(ruleContext);
     this.transitivePythonSources = initTransitivePythonSources(ruleContext);
     this.usesSharedLibraries = initUsesSharedLibraries(ruleContext);
     this.imports = initImports(ruleContext, semantics);
     this.hasPy2OnlySources = initHasPy2OnlySources(ruleContext, this.sourcesVersion);
     this.hasPy3OnlySources = initHasPy3OnlySources(ruleContext, this.sourcesVersion);
-    this.runtimeFromToolchain = initRuntimeFromToolchain(ruleContext, this.version);
     this.convertedFiles = makeAndInitConvertedFiles(ruleContext, version, this.sourcesVersion);
     maybeValidateVersionCompatibleWithOwnSourcesAttr();
     validateTargetPythonVersionAttr(DEFAULT_PYTHON_VERSION_ATTRIBUTE);
@@ -357,122 +336,6 @@ public final class PyCommon {
       }
     }
     return false;
-  }
-
-  /**
-   * Retrieves the {@link PyRuntimeInfo} object in the given field of the given {@link
-   * ToolchainInfo}.
-   *
-   * <p>If the field holds {@code None}, null is returned instead.
-   *
-   * <p>If the field does not exist on the given {@code ToolchainInfo}, or is not a {@code
-   * PyRuntimeInfo} and not {@code None}, an error is reported on the {@code ruleContext} and null
-   * is returned.
-   *
-   * <p>If the {@code PyRuntimeInfo} does not have {@code expectedVersion} as its Python version, an
-   * error is reported on the {@code ruleContext} (but the provider is still returned).
-   */
-  @Nullable
-  private static PyRuntimeInfo parseRuntimeField(
-      RuleContext ruleContext,
-      PythonVersion expectedVersion,
-      ToolchainInfo toolchainInfo,
-      String field) {
-    Object fieldValue;
-    try {
-      fieldValue = toolchainInfo.getValue(field);
-    } catch (EvalException e) {
-      ruleContext.ruleError(
-          String.format(
-              "Error parsing the Python toolchain's ToolchainInfo: Could not retrieve field "
-                  + "'%s': %s",
-              field, e.getMessage()));
-      return null;
-    }
-    if (fieldValue == null) {
-      ruleContext.ruleError(
-          String.format(
-              "Error parsing the Python toolchain's ToolchainInfo: field '%s' is missing", field));
-      return null;
-    }
-    if (fieldValue == NONE) {
-      return null;
-    }
-    if (!(fieldValue instanceof PyRuntimeInfo)) {
-      ruleContext.ruleError(
-          String.format(
-              "Error parsing the Python toolchain's ToolchainInfo: Expected a PyRuntimeInfo in "
-                  + "field '%s', but got '%s'",
-              field, EvalUtils.getDataTypeName(fieldValue)));
-      return null;
-    }
-    PyRuntimeInfo pyRuntimeInfo = (PyRuntimeInfo) fieldValue;
-    if (pyRuntimeInfo.getPythonVersion() != expectedVersion) {
-      ruleContext.ruleError(
-          String.format(
-              "Error retrieving the Python runtime from the toolchain: Expected field '%s' to have "
-                  + "a runtime with python_version = '%s', but got python_version = '%s'",
-              field, expectedVersion.name(), pyRuntimeInfo.getPythonVersion().name()));
-    }
-    return pyRuntimeInfo;
-  }
-
-  /**
-   * Returns a {@link PyRuntimeInfo} representing the runtime to use for this target, as retrieved
-   * from the resolved Python toolchain.
-   *
-   * <p>If the configuration says to use the legacy mechanism for obtaining the runtime rather than
-   * the toolchain mechanism, OR if this target's rule class does not define the
-   * "$py_toolchain_type" attribute, then null is returned. In this case no attempt is made to
-   * retrieve any toolchain information, and no errors are reported.
-   *
-   * <p>Otherwise, the toolchain provider structure is retrieved and validated, and any errors are
-   * reported on the rule context. If we're unable to determine the runtime due to an error, or if
-   * the toolchain does not specify a runtime for the version of Python we need, null is returned.
-   *
-   * @throws IllegalArgumentException if the rule class defines the "$py_toolchain_type" attribute
-   *     but does not declare a requirement on the toolchain type
-   */
-  @Nullable
-  private static PyRuntimeInfo initRuntimeFromToolchain(
-      RuleContext ruleContext, PythonVersion version) {
-    if (!shouldGetRuntimeFromToolchain(ruleContext)
-        || !ruleContext.attributes().has("$py_toolchain_type", BuildType.NODEP_LABEL)) {
-      return null;
-    }
-    Label toolchainType = ruleContext.attributes().get("$py_toolchain_type", BuildType.NODEP_LABEL);
-    ToolchainInfo toolchainInfo = ruleContext.getToolchainContext().forToolchainType(toolchainType);
-    Preconditions.checkArgument(
-        toolchainInfo != null,
-        "Could not retrieve a Python toolchain for '%s' rule",
-        ruleContext.getRule().getRuleClass());
-
-    PyRuntimeInfo py2RuntimeInfo =
-        parseRuntimeField(ruleContext, PythonVersion.PY2, toolchainInfo, "py2_runtime");
-    PyRuntimeInfo py3RuntimeInfo =
-        parseRuntimeField(ruleContext, PythonVersion.PY3, toolchainInfo, "py3_runtime");
-    Preconditions.checkState(version == PythonVersion.PY2 || version == PythonVersion.PY3);
-    PyRuntimeInfo result = version == PythonVersion.PY2 ? py2RuntimeInfo : py3RuntimeInfo;
-    if (result == null) {
-      ruleContext.ruleError(
-          String.format(
-              "The Python toolchain does not provide a runtime for Python version %s",
-              version.name()));
-    }
-
-    // Hack around the fact that the autodetecting Python toolchain, which is automatically
-    // registered, does not yet support windows. In this case, we want to return null so that
-    // BazelPythonSemantics falls back on --python_path. See toolchain.bzl.
-    // TODO(#7844): Remove this hack when the autodetecting toolchain has a windows implementation.
-    if (py2RuntimeInfo != null
-        && py2RuntimeInfo.getInterpreterPathString() != null
-        && py2RuntimeInfo
-            .getInterpreterPathString()
-            .equals("/_magic_pyruntime_sentinel_do_not_use")) {
-      return null;
-    }
-
-    return result;
   }
 
   /**
@@ -649,46 +512,6 @@ public final class PyCommon {
   }
 
   /**
-   * Returns whether, in the case that a user Python program fails, the stub script should emit a
-   * warning that the failure may have been caused by the host configuration using the wrong Python
-   * version.
-   *
-   * <p>This method should only be called for executable Python rules.
-   *
-   * <p>Background: Executable Python rules have a rule transition that sets the version to the one
-   * declared by the target's attributes ({@code python_version} / {@code default_python_version}).
-   * If there's any discrepancy, that means the rule transition didn't actually have any effect.
-   * This can only happen in the host configuration, when the target's version is the opposite of
-   * the value of {@code --host_force_python}. Running a program under the wrong Python interpreter
-   * version can lead to confusing tracebacks, therefore we try to be helpful by appending a
-   * diagnostic message to stderr. See #7899 for context.
-   *
-   * <p>This method only returns true when 1) a version mismatch is detected, and 2) Python
-   * toolchains are enabled. Toolchains make it more likely that the Python runtime invoked at
-   * execution time matches the version decided at analysis time (fixing #4815). Therefore, when
-   * toolchains are enabled the warning is 1) more important, because many builds start failing due
-   * to getting the "correct" interpreter for the first time (see #7899), and 2) more accurate,
-   * because it correctly describes which interpreter version was actually used.
-   *
-   * @throws IllegalArgumentException if there is a problem parsing the Python version from the
-   *     attributes; see {@link #readPythonVersionFromAttributes}.
-   */
-  // TODO(#6443): Remove this logic and the corresponding stub script logic once we no longer have
-  // the possibility of Python binaries appearing in the host configuration.
-  public boolean shouldWarnAboutHostVersionUponFailure() {
-    PythonConfiguration config = ruleContext.getFragment(PythonConfiguration.class);
-    if (!config.useToolchains()) {
-      return false;
-    }
-    PythonVersion configVersion = config.getPythonVersion();
-    PythonVersion attrVersion = readPythonVersionFromAttributes(ruleContext.attributes());
-    if (attrVersion == null) {
-      attrVersion = config.getDefaultPythonVersion();
-    }
-    return configVersion != attrVersion;
-  }
-
-  /**
    * Returns the transitive Python sources collected from the deps attribute, not including sources
    * from the srcs attribute (unless they were separately reached via deps).
    */
@@ -717,44 +540,6 @@ public final class PyCommon {
     return hasPy3OnlySources;
   }
 
-  /**
-   * Returns {@code true} if the Python runtime should be obtained from the Python toolchain (as per
-   * {@code --incompatible_use_python_toolchains}), as opposed to through the legacy mechanism
-   * specified in the {@link PythonSemantics} (e.g., {@code --python_top}).
-   */
-  public boolean shouldGetRuntimeFromToolchain() {
-    return shouldGetRuntimeFromToolchain(ruleContext);
-  }
-
-  private static boolean shouldGetRuntimeFromToolchain(RuleContext ruleContext) {
-    return ruleContext.getFragment(PythonConfiguration.class).useToolchains();
-  }
-
-  /**
-   * Returns a {@link PyRuntimeInfo} representing the runtime to use for this target, as retrieved
-   * from the resolved toolchain.
-   *
-   * <p>This may only be called for executable Python rules (rules defining the attribute
-   * "$py_toolchain_type", i.e. {@code py_binary} and {@code py_test}). In addition, it may not be
-   * called if {@link #shouldGetRuntimeFromToolchain()} returns false.
-   *
-   * <p>If there was a problem retrieving the runtime information from the toolchain, null is
-   * returned. An error would have already been reported on the rule context at {@code PyCommon}
-   * initialization time.
-   */
-  @Nullable
-  public PyRuntimeInfo getRuntimeFromToolchain() {
-    Preconditions.checkArgument(
-        ruleContext.attributes().has("$py_toolchain_type", BuildType.NODEP_LABEL),
-        "Cannot retrieve Python toolchain information for '%s' rule",
-        ruleContext.getRule().getRuleClass());
-    Preconditions.checkArgument(
-        shouldGetRuntimeFromToolchain(),
-        "Access to the Python toolchain is disabled by --incompatible_use_python_toolchains=false");
-
-    return runtimeFromToolchain;
-  }
-
   public Map<PathFragment, Artifact> getConvertedFiles() {
     return convertedFiles;
   }
@@ -778,7 +563,7 @@ public final class PyCommon {
     } else if (OS.getCurrent() == OS.WINDOWS) {
       // TODO(bazel-team): Here we should check target platform instead of using OS.getCurrent().
       // On Windows, add the python stub launcher in the set of files to build.
-      filesToBuildBuilder.add(getPythonStubArtifactForWindows(executable));
+      filesToBuildBuilder.add(getPythonLauncherArtifact(executable));
     }
 
     filesToBuild = filesToBuildBuilder.build();
@@ -795,8 +580,8 @@ public final class PyCommon {
     return ruleContext.getRelatedArtifact(executable.getRootRelativePath(), ".zip");
   }
 
-  /** Returns an artifact next to the executable file with no suffix. Only called for Windows. */
-  public Artifact getPythonStubArtifactForWindows(Artifact executable) {
+  /** @return An artifact next to the executable file with no suffix, only used on Windows */
+  public Artifact getPythonLauncherArtifact(Artifact executable) {
     return ruleContext.getRelatedArtifact(executable.getRootRelativePath(), "");
   }
 
@@ -976,11 +761,13 @@ public final class PyCommon {
    * trigger an execution-time failure. See {@link
    * #maybeCreateFailActionDueToTransitiveSourcesVersion}.
    */
-  public void createExecutable(CcInfo ccInfo, Runfiles.Builder defaultRunfilesBuilder)
+  public Artifact createExecutable(CcInfo ccInfo, Runfiles.Builder defaultRunfilesBuilder)
       throws InterruptedException, RuleErrorException {
     boolean failed = maybeCreateFailActionDueToTransitiveSourcesVersion();
-    if (!failed) {
-      semantics.createExecutable(ruleContext, this, ccInfo, defaultRunfilesBuilder);
+    if (failed) {
+      return executable;
+    } else {
+      return semantics.createExecutable(ruleContext, this, ccInfo, defaultRunfilesBuilder);
     }
   }
 
