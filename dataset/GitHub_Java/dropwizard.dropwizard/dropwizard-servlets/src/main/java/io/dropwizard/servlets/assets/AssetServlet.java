@@ -215,12 +215,7 @@ public class AssetServlet extends HttpServlet {
 
         // zero out the millis since the date we get back from If-Modified-Since will not have them
         lastModified = (lastModified / 1000) * 1000;
-        return new CachedAsset(readResource(requestedResourceURL), lastModified);
-    }
-
-    protected byte[] readResource(URL requestedResourceURL) throws IOException
-    {
-        return Resources.toByteArray(requestedResourceURL);
+        return new CachedAsset(Resources.toByteArray(requestedResourceURL), lastModified);
     }
 
     private boolean isCachedClientSide(HttpServletRequest req, CachedAsset cachedAsset) {

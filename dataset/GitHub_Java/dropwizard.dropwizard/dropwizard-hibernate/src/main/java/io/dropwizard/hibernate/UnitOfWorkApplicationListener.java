@@ -32,48 +32,32 @@ import org.hibernate.context.internal.ManagedSessionContext;
 @Provider
 public class UnitOfWorkApplicationListener implements ApplicationEventListener {
 
-    private Map<Method, UnitOfWork> methodMap = new HashMap<>();
-    private Map<String, SessionFactory> sessionFactories = new HashMap<>();
-
-    public UnitOfWorkApplicationListener() {
-    }
+    private final SessionFactory sessionFactory;
 
     /**
-     * Construct an application event listener using the given name and session factory.
+     * Construct an application event listener using the given session factory.
      *
      * <p/>
      * When using this constructor, the {@link UnitOfWorkApplicationListener}
      * should be added to a Jersey {@code ResourceConfig} as a singleton.
      *
-     * @param name a name of a Hibernate bundle
      * @param sessionFactory a {@link SessionFactory}
      */
-    public UnitOfWorkApplicationListener(String name, SessionFactory sessionFactory) {
-        registerSessionFactory(name, sessionFactory);
-    }
-
-    /**
-     * Register a session factory with the given name.
-     *
-     * @param name a name of a Hibernate bundle
-     * @param sessionFactory a {@link SessionFactory}
-     */
-    public void registerSessionFactory(String name, SessionFactory sessionFactory) {
-        sessionFactories.put(name, sessionFactory);
+    public UnitOfWorkApplicationListener(SessionFactory sessionFactory) {
+        this.sessionFactory = sessionFactory;
     }
 
     private static class UnitOfWorkEventListener implements RequestEventListener {
         private final Map<Method, UnitOfWork> methodMap;
-        private final Map<String, SessionFactory> sessionFactories;
-
+        private final SessionFactory sessionFactory;
         private UnitOfWork unitOfWork;
         private Session session;
-        private SessionFactory sessionFactory;
+
 
         public UnitOfWorkEventListener(Map<Method, UnitOfWork> methodMap,
-                                       Map<String, SessionFactory> sessionFactories) {
+                                       SessionFactory sessionFactory) {
             this.methodMap = methodMap;
-            this.sessionFactories = sessionFactories;
+            this.sessionFactory = sessionFactory;
         }
 
         @Override
@@ -82,17 +66,6 @@ public class UnitOfWorkApplicationListener implements ApplicationEventListener {
                 this.unitOfWork = this.methodMap.get(event.getUriInfo()
                         .getMatchedResourceMethod().getInvocable().getDefinitionMethod());
                 if (unitOfWork != null) {
-                    sessionFactory = sessionFactories.get(unitOfWork.value());
-                    if (sessionFactory == null) {
-                        // If the user didn't specify the name of a session factory,
-                        // and we have only one registered, we can assume that it's the right one.
-                        if (unitOfWork.value().equals(HibernateBundle.DEFAULT_NAME) && sessionFactories.size() == 1) {
-                            sessionFactory = sessionFactories.values().iterator().next();
-                        } else {
-                            throw new IllegalArgumentException("Unregistered Hibernate bundle: '" +
-                                    unitOfWork.value() + "'");
-                        }
-                    }
                     this.session = this.sessionFactory.openSession();
                     try {
                         configureSession();
@@ -162,6 +135,8 @@ public class UnitOfWorkApplicationListener implements ApplicationEventListener {
         }
     }
 
+    private Map<Method, UnitOfWork> methodMap = new HashMap<>();
+
     @Override
     public void onEvent(ApplicationEvent event) {
         if (event.getType() == ApplicationEvent.Type.INITIALIZATION_APP_FINISHED) {
@@ -181,7 +156,7 @@ public class UnitOfWorkApplicationListener implements ApplicationEventListener {
 
     @Override
     public RequestEventListener onRequest(RequestEvent event) {
-        return new UnitOfWorkEventListener(methodMap, sessionFactories);
+        return new UnitOfWorkEventListener(methodMap, sessionFactory);
     }
 
     private void registerUnitOfWorkAnnotations(ResourceMethod method) {

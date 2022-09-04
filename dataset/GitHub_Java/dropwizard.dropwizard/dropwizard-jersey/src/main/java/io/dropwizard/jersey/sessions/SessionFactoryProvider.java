@@ -28,7 +28,7 @@ public class SessionFactoryProvider extends AbstractValueFactoryProvider {
     protected Factory<?> createValueFactory(final Parameter parameter) {
         final Class<?> classType = parameter.getRawType();
 
-        final Session sessionAnnotation = parameter.getAnnotation(Session.class);
+        Session sessionAnnotation = parameter.getAnnotation(Session.class);
         if (sessionAnnotation == null) {
             return null;
         }

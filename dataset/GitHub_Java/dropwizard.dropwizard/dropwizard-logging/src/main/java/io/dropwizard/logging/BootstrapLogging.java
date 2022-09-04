@@ -56,7 +56,7 @@ public class BootstrapLogging {
             appender.addFilter(filter);
             appender.setContext(root.getLoggerContext());
 
-            final LayoutWrappingEncoder<ILoggingEvent> layoutEncoder = new LayoutWrappingEncoder<>();
+            LayoutWrappingEncoder<ILoggingEvent> layoutEncoder = new LayoutWrappingEncoder<>();
             layoutEncoder.setLayout(formatter);
             appender.setEncoder(layoutEncoder);
             appender.start();

@@ -2,20 +2,25 @@ package io.dropwizard.views.mustache;
 
 import com.github.mustachejava.DefaultMustacheFactory;
 import com.github.mustachejava.Mustache;
+import com.github.mustachejava.MustacheException;
 import com.github.mustachejava.MustacheFactory;
 import com.google.common.base.Charsets;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.dropwizard.views.View;
 import io.dropwizard.views.ViewRenderer;
 
+import javax.ws.rs.WebApplicationException;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 /**
  * A {@link ViewRenderer} which renders Mustache ({@code .mustache}) templates.
@@ -47,8 +52,8 @@ public class MustacheViewRenderer implements ViewRenderer {
             try (OutputStreamWriter writer = new OutputStreamWriter(output, charset)) {
                 template.execute(writer, view);
             }
-        } catch (Throwable e) {
-            throw new RuntimeException("Mustache template error: " + view.getTemplateName(), e);
+        } catch (ExecutionException | UncheckedExecutionException | MustacheException ignored) {
+            throw new FileNotFoundException("Template " + view.getTemplateName() + " not found.");
         }
     }
 

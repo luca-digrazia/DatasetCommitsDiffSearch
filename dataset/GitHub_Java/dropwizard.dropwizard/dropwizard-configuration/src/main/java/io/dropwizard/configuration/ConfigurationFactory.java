@@ -59,18 +59,11 @@ public class ConfigurationFactory<T> {
                                 ObjectMapper objectMapper,
                                 String propertyPrefix) {
         this.klass = klass;
-        this.propertyPrefix = (propertyPrefix == null || propertyPrefix.endsWith("."))
-                ? propertyPrefix : (propertyPrefix + '.');
-        // Sub-classes may choose to omit data-binding; if so, null ObjectMapper passed:
-        if (objectMapper == null) { // sub-class has no need for mapper
-            mapper = null;
-            yamlFactory = null;
-        } else {
-            mapper = objectMapper.copy()
-                    .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-            yamlFactory = new YAMLFactory();
-        }
+        this.propertyPrefix = propertyPrefix.endsWith(".") ? propertyPrefix : propertyPrefix + '.';
+        this.mapper = objectMapper.copy();
+        mapper.enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         this.validator = validator;
+        this.yamlFactory = new YAMLFactory();
     }
 
     /**
@@ -135,7 +128,7 @@ public class ConfigurationFactory<T> {
         }
     }
 
-    protected T build(JsonNode node, String path) throws IOException, ConfigurationException {
+    private T build(JsonNode node, String path) throws IOException, ConfigurationException {
         for (Map.Entry<Object, Object> pref : System.getProperties().entrySet()) {
             final String prefName = (String) pref.getKey();
             if (prefName.startsWith(propertyPrefix)) {
@@ -180,7 +173,7 @@ public class ConfigurationFactory<T> {
         }
     }
 
-    protected void addOverride(JsonNode root, String name, String value) {
+    private void addOverride(JsonNode root, String name, String value) {
         JsonNode node = root;
         final Iterable<String> split = Splitter.on('.').trimResults().split(name);
         final String[] parts = Iterables.toArray(split, String.class);
@@ -253,11 +246,9 @@ public class ConfigurationFactory<T> {
     }
 
     private void validate(String path, T config) throws ConfigurationValidationException {
-        if (validator != null) {
-            final Set<ConstraintViolation<T>> violations = validator.validate(config);
-            if (!violations.isEmpty()) {
-                throw new ConfigurationValidationException(path, violations);
-            }
+        final Set<ConstraintViolation<T>> violations = validator.validate(config);
+        if (!violations.isEmpty()) {
+            throw new ConfigurationValidationException(path, violations);
         }
     }
 }

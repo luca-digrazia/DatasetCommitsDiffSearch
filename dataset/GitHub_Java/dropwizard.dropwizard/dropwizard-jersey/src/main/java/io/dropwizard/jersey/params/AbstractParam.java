@@ -1,13 +1,13 @@
 package io.dropwizard.jersey.params;
 
-import io.dropwizard.jersey.errors.ErrorMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
+
+import io.dropwizard.jersey.errors.ErrorMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * An abstract base class from which to build Jersey parameter classes.
@@ -16,12 +16,7 @@ import javax.ws.rs.core.Response.Status;
  */
 public abstract class AbstractParam<T> {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractParam.class);
-    private final String parameterName;
     private final T value;
-
-    protected AbstractParam(String input) {
-        this(input, "Parameter");
-    }
 
     /**
      * Given an input value from a client, creates a parameter wrapping its parsed value.
@@ -29,8 +24,7 @@ public abstract class AbstractParam<T> {
      * @param input an input value from a client request
      */
     @SuppressWarnings({"AbstractMethodCallInConstructor", "OverriddenMethodCallDuringObjectConstruction"})
-    protected AbstractParam(String input, String parameterName) {
-        this.parameterName = parameterName;
+    protected AbstractParam(String input) {
         try {
             this.value = parse(input);
         } catch (Exception e) {
@@ -51,13 +45,9 @@ public abstract class AbstractParam<T> {
      */
     protected Response error(String input, Exception e) {
         LOGGER.debug("Invalid input received: {}", input);
-        String errorMessage = errorMessage(e);
-        if (errorMessage.contains("%s")) {
-            errorMessage = String.format(errorMessage, parameterName);
-        }
         return Response.status(getErrorStatus())
                        .entity(new ErrorMessage(getErrorStatus().getStatusCode(),
-                               errorMessage))
+                               errorMessage(e)))
                        .type(mediaType())
                        .build();
     }
@@ -79,7 +69,7 @@ public abstract class AbstractParam<T> {
      * @return the error message to be sent the client
      */
     protected String errorMessage(Exception e) {
-        return String.format("%s is invalid: %s", parameterName, e.getMessage());
+        return String.format("Invalid parameter: %s", e.getMessage());
     }
 
     /**

@@ -14,12 +14,9 @@ import javax.servlet.Filter;
 import javax.servlet.FilterRegistration;
 import javax.servlet.Servlet;
 import javax.servlet.ServletRegistration;
-import java.util.Arrays;
-import java.util.EventListener;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
-import static java.util.Objects.requireNonNull;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class ServletEnvironment {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServletEnvironment.class);
@@ -42,7 +39,7 @@ public class ServletEnvironment {
      *         configuration
      */
     public ServletRegistration.Dynamic addServlet(String name, Servlet servlet) {
-        final ServletHolder holder = new NonblockingServletHolder(requireNonNull(servlet));
+        final ServletHolder holder = new NonblockingServletHolder(checkNotNull(servlet));
         holder.setName(name);
         handler.getServletHandler().addServlet(holder);
 
@@ -60,7 +57,7 @@ public class ServletEnvironment {
      * @return a {@link javax.servlet.ServletRegistration.Dynamic} instance allowing for further configuration
      */
     public ServletRegistration.Dynamic addServlet(String name, Class<? extends Servlet> klass) {
-        final ServletHolder holder = new ServletHolder(requireNonNull(klass));
+        final ServletHolder holder = new ServletHolder(checkNotNull(klass));
         holder.setName(name);
         handler.getServletHandler().addServlet(holder);
 
@@ -79,7 +76,7 @@ public class ServletEnvironment {
      *         configuration
      */
     public FilterRegistration.Dynamic addFilter(String name, Filter filter) {
-        final FilterHolder holder = new FilterHolder(requireNonNull(filter));
+        final FilterHolder holder = new FilterHolder(checkNotNull(filter));
         holder.setName(name);
         handler.getServletHandler().addFilter(holder);
 
@@ -97,7 +94,7 @@ public class ServletEnvironment {
      * @return a {@link javax.servlet.FilterRegistration.Dynamic} instance allowing for further configuration
      */
     public FilterRegistration.Dynamic addFilter(String name, Class<? extends Filter> klass) {
-        final FilterHolder holder = new FilterHolder(requireNonNull(klass));
+        final FilterHolder holder = new FilterHolder(checkNotNull(klass));
         holder.setName(name);
         handler.getServletHandler().addFilter(holder);
 

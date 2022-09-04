@@ -1,8 +1,12 @@
 package io.dropwizard.auth;
 
+import com.google.common.base.Function;
+
 import javax.annotation.Priority;
 import javax.ws.rs.Priorities;
+import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
+import javax.ws.rs.core.SecurityContext;
 import java.security.Principal;
 
 @Priority(Priorities.AUTHENTICATION)
@@ -10,7 +14,7 @@ public abstract class AuthFilter<C, P extends Principal> implements ContainerReq
     protected String prefix;
     protected String realm;
     protected Authenticator<C, P> authenticator;
-    protected Authorizer<P> authorizer;
+    protected Function<Tuple, SecurityContext> securityContextFunction;
     protected UnauthorizedHandler unauthorizedHandler = new DefaultUnauthorizedHandler();
 
     protected void setPrefix(String prefix) {
@@ -25,15 +29,37 @@ public abstract class AuthFilter<C, P extends Principal> implements ContainerReq
         this.authenticator = authenticator;
     }
 
-    protected void setAuthorizer(Authorizer<P> authorizer) {
-        this.authorizer = authorizer;
+    protected void setSecurityContextFunction(Function<Tuple, SecurityContext> securityContextFunction) {
+        this.securityContextFunction = securityContextFunction;
+    }
+
+    protected Function<Tuple, SecurityContext> getSecurityContextFunction() {
+        return securityContextFunction;
+    }
+
+    public static class Tuple {
+        private ContainerRequestContext containerRequestContext;
+        private Principal principal;
+
+        public Tuple(ContainerRequestContext containerRequestContext, Principal principal) {
+            this.containerRequestContext = containerRequestContext;
+            this.principal = principal;
+        }
+
+        public ContainerRequestContext getContainerRequestContext() {
+            return containerRequestContext;
+        }
+
+        public Principal getPrincipal() {
+            return principal;
+        }
     }
 
     public abstract static class AuthFilterBuilder<C, P extends Principal, T extends AuthFilter<C, P>, A extends Authenticator<C, P>> {
         protected String realm = "realm";
         protected String prefix = "Basic";
         protected Authenticator<C, P> authenticator;
-        protected Authorizer<P> authorizer;
+        protected Function<Tuple, SecurityContext> securityContextFunction;
 
         public AuthFilterBuilder<C, P, T, A>  setRealm(String realm) {
             this.realm = realm;
@@ -45,8 +71,8 @@ public abstract class AuthFilter<C, P extends Principal> implements ContainerReq
             return this;
         }
 
-        public AuthFilterBuilder<C, P, T, A>  setAuthorizer(Authorizer<P> authorizer) {
-            this.authorizer = authorizer;
+        public AuthFilterBuilder<C, P, T, A>  setSecurityContextFunction(Function<Tuple, SecurityContext> securityContextFunction) {
+            this.securityContextFunction = securityContextFunction;
             return this;
         }
 

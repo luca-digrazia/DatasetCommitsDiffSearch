@@ -1,28 +1,46 @@
 package io.dropwizard.jersey.jackson;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreType;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider;
+import io.dropwizard.validation.ConstraintViolations;
+import io.dropwizard.validation.Validated;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.validation.ConstraintViolation;
+import javax.validation.ConstraintViolationException;
+import javax.validation.Valid;
+import javax.validation.Validator;
+import javax.validation.groups.Default;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
+import java.util.*;
 
 /**
  * A Jersey provider which enables using Jackson to parse request entities into objects and generate
- * response entities from objects.
+ * response entities from objects. Any request entity method parameters annotated with
+ * {@code @Valid} are validated, and an informative 422 Unprocessable Entity response is returned
+ * should the entity be invalid.
  * <p/>
- * (Essentially, extends {@link JacksonJaxbJsonProvider} with support for {@link JsonIgnoreType}.)
+ * (Essentially, extends {@link JacksonJaxbJsonProvider} with validation and support for
+ * {@link JsonIgnoreType}.)
  */
 public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JacksonMessageBodyProvider.class);
+    /**
+     * The default group array used in case any of the validate methods is called without a group.
+     */
+    private static final Class<?>[] DEFAULT_GROUP_ARRAY = new Class<?>[]{Default.class};
     private final ObjectMapper mapper;
+    private final Validator validator;
 
-    public JacksonMessageBodyProvider(ObjectMapper mapper) {
+    public JacksonMessageBodyProvider(ObjectMapper mapper, Validator validator) {
+        this.validator = validator;
         this.mapper = mapper;
         setMapper(mapper);
     }
@@ -36,31 +54,84 @@ public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
     }
 
     @Override
-    public boolean isWriteable(Class<?> type,
-                               Type genericType,
-                               Annotation[] annotations,
-                               MediaType mediaType) {
-        return isProvidable(type) && super.isWriteable(type, genericType, annotations, mediaType);
-    }
-
-    @Override
     public Object readFrom(Class<Object> type,
                            Type genericType,
                            Annotation[] annotations,
                            MediaType mediaType,
                            MultivaluedMap<String, String> httpHeaders,
                            InputStream entityStream) throws IOException {
-        try {
-            return super.readFrom(type, genericType, annotations, mediaType, httpHeaders, entityStream);
-        } catch (IOException e) {
-            if (e instanceof JsonProcessingException) {
-                throw e;
+        return validate(annotations, super.readFrom(type,
+                                                    genericType,
+                                                    annotations,
+                                                    mediaType,
+                                                    httpHeaders,
+                                                    entityStream));
+    }
+
+    private Object validate(Annotation[] annotations, Object value) {
+        if (null == value) {
+            throw new ConstraintViolationException("The request entity was empty",
+                    Collections.<ConstraintViolation<Object>>emptySet());
+        }
+
+        final Class<?>[] classes = findValidationGroups(annotations);
+
+        if (classes != null) {
+            Set<ConstraintViolation<Object>> violations = null;
+
+            if (value instanceof Map) {
+                violations = validate(((Map) value).values(), classes);
+            } else if (value instanceof Iterable) {
+                violations = validate((Iterable) value, classes);
+            } else if (value.getClass().isArray()) {
+                violations = new HashSet<>();
+
+                Object[] values = (Object[]) value;
+                for (Object item : values) {
+                    violations.addAll(validator.validate(item, classes));
+                }
+            } else {
+                violations = validator.validate(value, classes);
             }
 
-            // Deserializing malformatted URLs, for instance, will result in an IOException so
-            // wrap in an exception we can handle
-            throw JsonMappingException.fromUnexpectedIOE(e);
+            if (violations != null && !violations.isEmpty()) {
+                Set<ConstraintViolation<?>> constraintViolations = ConstraintViolations.copyOf(violations);
+                LOGGER.trace("Validation failed: {}; original data was {}",
+                        ConstraintViolations.formatUntyped(constraintViolations), value);
+                throw new ConstraintViolationException("The request entity had the following errors:",
+                        constraintViolations);
+            }
         }
+
+        return value;
+    }
+
+    private Set<ConstraintViolation<Object>> validate(Iterable values, Class<?>[] classes) {
+        Set<ConstraintViolation<Object>> violations = new HashSet<>();
+        for (Object value : values) {
+            violations.addAll(validator.validate(value, classes));
+        }
+
+        return violations;
+    }
+
+    private Class<?>[] findValidationGroups(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            if (annotation.annotationType() == Valid.class) {
+                return DEFAULT_GROUP_ARRAY;
+            } else if (annotation.annotationType() == Validated.class) {
+                return ((Validated) annotation).value();
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public boolean isWriteable(Class<?> type,
+                               Type genericType,
+                               Annotation[] annotations,
+                               MediaType mediaType) {
+        return isProvidable(type) && super.isWriteable(type, genericType, annotations, mediaType);
     }
 
     private boolean isProvidable(Class<?> type) {

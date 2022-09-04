@@ -11,7 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Objects.requireNonNull;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class Duration implements Comparable<Duration> {
     private static final Pattern DURATION_PATTERN = Pattern.compile("(\\d+)\\s*(\\S+)");
@@ -87,7 +87,7 @@ public class Duration implements Comparable<Duration> {
 
     private Duration(long count, TimeUnit unit) {
         this.count = count;
-        this.unit = requireNonNull(unit);
+        this.unit = checkNotNull(unit);
     }
 
     public long getQuantity() {

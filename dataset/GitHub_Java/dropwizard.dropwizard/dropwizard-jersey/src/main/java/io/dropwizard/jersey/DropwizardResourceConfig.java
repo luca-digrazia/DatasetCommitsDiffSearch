@@ -45,6 +45,7 @@ public class DropwizardResourceConfig extends ResourceConfig {
         this(true, null);
     }
 
+    @SuppressWarnings("unchecked")
     public DropwizardResourceConfig(boolean testOnly, MetricRegistry metricRegistry) {
         super();
 
@@ -183,9 +184,6 @@ public class DropwizardResourceConfig extends ResourceConfig {
         }
 
         private String normalizePath(String basePath, String path) {
-            if (path == null) {
-                return basePath;
-            }
             if (basePath.endsWith("/")) {
                 return path.startsWith("/") ? basePath + path.substring(1) : basePath + path;
             }
