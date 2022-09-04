@@ -461,8 +461,7 @@ class Desugar {
                 visitor, loader, visitedExceptionTypes, numOfTryWithResourcesInvoked);
       }
       if (options.desugarInterfaceMethodBodiesIfNeeded) {
-        visitor =
-            new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader, loader);
+        visitor = new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader);
         visitor = new InterfaceDesugaring(visitor, bootclasspathReader, store);
       }
     }
@@ -510,8 +509,7 @@ class Desugar {
                   visitor, loader, visitedExceptionTypes, numOfTryWithResourcesInvoked);
         }
         if (options.desugarInterfaceMethodBodiesIfNeeded) {
-          visitor =
-              new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader, loader);
+          visitor = new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader);
           visitor = new InterfaceDesugaring(visitor, bootclasspathReader, store);
         }
       }
