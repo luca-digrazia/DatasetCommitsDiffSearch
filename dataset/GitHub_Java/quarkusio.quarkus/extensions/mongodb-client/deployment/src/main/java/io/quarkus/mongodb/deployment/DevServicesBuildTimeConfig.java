@@ -1,5 +1,6 @@
 package io.quarkus.mongodb.deployment;
 
+import java.util.Map;
 import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigGroup;
@@ -23,4 +24,19 @@ public class DevServicesBuildTimeConfig {
      */
     @ConfigItem
     public Optional<String> imageName;
+
+    /**
+     * Optional fixed port the dev service will listen to.
+     * <p>
+     * If not defined, the port will be chosen randomly.
+     */
+    @ConfigItem
+    public Optional<Integer> port;
+
+    /**
+     * Generic properties that are added to the connection URL.
+     */
+    @ConfigItem
+    public Map<String, String> properties;
+
 }
