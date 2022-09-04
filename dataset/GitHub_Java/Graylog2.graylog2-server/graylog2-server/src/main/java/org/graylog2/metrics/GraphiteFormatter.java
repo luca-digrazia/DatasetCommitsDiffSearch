@@ -1,4 +1,6 @@
 /**
+ * Copyright 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,7 +15,9 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
+
 package org.graylog2.metrics;
 
 import org.graylog2.plugin.Tools;
@@ -21,18 +25,19 @@ import com.google.common.collect.Lists;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import org.graylog2.plugin.MessageCounter;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GraphiteFormatter extends MetricsFormatter {
 
-    //private final MessageCounter counter;
+    private final MessageCounter counter;
     private final String prefix;
     private final Map<String, String> streamNames;
     
-    public GraphiteFormatter(String prefix, Map<String, String> streamNames) {
-        //this.counter = counter;
+    public GraphiteFormatter(MessageCounter counter, String prefix, Map<String, String> streamNames) {
+        this.counter = counter;
         this.prefix = prefix;
         this.streamNames = streamNames;
     }
@@ -40,9 +45,7 @@ public class GraphiteFormatter extends MetricsFormatter {
     public List<String> getAllMetrics() {
         List<String> r = Lists.newArrayList();
 
-        // TODO
-
-        /*int now = Tools.getUTCTimestamp();
+        int now = Tools.getUTCTimestamp();
 
         // Overall count.
         String overall = prefix() + "total " + counter.getTotalCount() + " " + now;
@@ -58,7 +61,7 @@ public class GraphiteFormatter extends MetricsFormatter {
         for(Entry<String, Integer> host : counter.getSourceCounts().entrySet()) {
             String hval = prefix() + "hosts." + buildHostMetricName(Tools.decodeBase64(host.getKey())) + " " + host.getValue() + " " + now;
             r.add(hval);
-        }*/
+        }
 
         return r;
     }

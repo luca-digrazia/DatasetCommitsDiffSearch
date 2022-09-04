@@ -1,4 +1,6 @@
 /**
+ * Copyright 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,7 +15,9 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
+
 package org.graylog2.metrics;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -21,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.graylog2.plugin.Tools;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.graylog2.plugin.MessageCounter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,14 +42,14 @@ public class LibratoMetricsFormatter extends MetricsFormatter {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    //private MessageCounter counter;
+    private MessageCounter counter;
     private List<String> streamFilter;
     private String hostFilter;
     private String source;
     private Map<String, String> streamNames;
 
-    public LibratoMetricsFormatter (String prefix, List<String> streamFilter, String hostFilter, Map<String, String> streamNames) {
-        //this.counter = counter;
+    public LibratoMetricsFormatter (MessageCounter counter, String prefix, List<String> streamFilter, String hostFilter, Map<String, String> streamNames) {
+        this.counter = counter;
         this.streamFilter = streamFilter;
         this.hostFilter = hostFilter;
         this.source = prefix + "graylog2-server";
@@ -71,10 +76,7 @@ public class LibratoMetricsFormatter extends MetricsFormatter {
      */
     public String asJson() {
         Map<String, Object> m = Maps.newHashMap();
-
-        // TODO
-
-        /*List<Map<String, Object>> gauges = Lists.newArrayList();
+        List<Map<String, Object>> gauges = Lists.newArrayList();
 
         // Overall
         Map<String, Object> overall = Maps.newHashMap();
@@ -120,9 +122,7 @@ public class LibratoMetricsFormatter extends MetricsFormatter {
             LOG.error("Error while generating JSON data", e);
         }
 
-        return result;*/
-
-        return "";
+        return result;
     }
     
 }
