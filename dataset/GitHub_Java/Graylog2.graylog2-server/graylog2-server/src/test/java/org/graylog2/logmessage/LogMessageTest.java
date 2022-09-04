@@ -1,4 +1,6 @@
 /**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,65 +15,65 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
+
 package org.graylog2.logmessage;
 
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Tools;
-import org.joda.time.DateTime;
-import org.testng.annotations.Test;
-
-import java.util.HashMap;
 import java.util.Map;
+import java.util.HashMap;
 
-import static org.testng.AssertJUnit.*;
+import org.joda.time.DateTime;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
 public class LogMessageTest {
 
     @Test
     public void testIdGetsSet() {
-        Message lm = new Message("foo", "bar", Tools.iso8601());
+        Message lm = new Message("foo", "bar", new DateTime());
         assertNotNull(lm.getId());
         assertFalse(lm.getId().isEmpty());
     }
 
     @Test
     public void testIsCompleteSucceeds() {
-        Message lm = new Message("foo", "bar", Tools.iso8601());
+        Message lm = new Message("foo", "bar", new DateTime());
         assertTrue(lm.isComplete());
     }
 
     @Test
     public void testIsCompleteFails() {
-        Message lm = new Message("foo", null, Tools.iso8601());
+        Message lm = new Message("foo", null, new DateTime());
         assertFalse(lm.isComplete());
 
-        lm = new Message("foo", "", Tools.iso8601());
+        lm = new Message("foo", "", new DateTime());
         assertFalse(lm.isComplete());
 
-        lm = new Message(null, "bar", Tools.iso8601());
+        lm = new Message(null, "bar", new DateTime());
         assertFalse(lm.isComplete());
 
-        lm = new Message("", "bar", Tools.iso8601());
+        lm = new Message("", "bar", new DateTime());
         assertFalse(lm.isComplete());
 
-        lm = new Message("", "", Tools.iso8601());
+        lm = new Message("", "", new DateTime());
         assertFalse(lm.isComplete());
 
-        lm = new Message(null, null, Tools.iso8601());
+        lm = new Message(null, null, new DateTime());
         assertFalse(lm.isComplete());
     }
 
     @Test
     public void testAddField() {
-        Message lm = new Message("foo", "bar", Tools.iso8601());
+        Message lm = new Message("foo", "bar", new DateTime());
         lm.addField("ohai", "thar");
         assertEquals("thar", lm.getField("ohai"));
     }
 
     @Test
     public void testAddFieldsWithMap() {
-        Message lm = new Message("foo", "bar", Tools.iso8601());
+        Message lm = new Message("foo", "bar", new DateTime());
         lm.addField("ohai", "hai");
 
         Map<String, Object> map = new HashMap<String, Object>();
@@ -87,7 +89,7 @@ public class LogMessageTest {
 
     @Test
     public void testRemoveField() {
-        Message lm = new Message("foo", "bar", Tools.iso8601());
+        Message lm = new Message("foo", "bar", new DateTime());
         lm.addField("something", "foo");
         lm.addField("something_else", "bar");
 
@@ -99,7 +101,7 @@ public class LogMessageTest {
 
     @Test
     public void testRemoveFieldWithNonExistentKey() {
-        Message lm = new Message("foo", "bar", Tools.iso8601());
+        Message lm = new Message("foo", "bar", new DateTime());
         lm.addField("something", "foo");
         lm.addField("something_else", "bar");
 
@@ -110,7 +112,7 @@ public class LogMessageTest {
     
     @Test
     public void testRemoveFieldDoesNotDeleteReservedFields() {
-        DateTime time = Tools.iso8601();
+        DateTime time = new DateTime();
         Message lm = new Message("foo", "bar", time);
         lm.removeField("source");
         lm.removeField("timestamp");
@@ -125,7 +127,7 @@ public class LogMessageTest {
 
     @Test
     public void testToString() {
-        Message lm = new Message("foo", "bar", Tools.iso8601());
+        Message lm = new Message("foo", "bar", new DateTime());
         lm.toString();
         // Fine if it does not crash.
     }
