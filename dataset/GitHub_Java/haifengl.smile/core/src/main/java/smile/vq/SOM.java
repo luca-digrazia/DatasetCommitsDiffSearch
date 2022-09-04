@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.vq;
 
@@ -144,7 +144,7 @@ public class SOM implements VectorQuantizer {
      * The current iteration.
      */
     private int t = 0;
-    /*
+    /**
      * The threshold to update neuron if alpha * theta > eps.
      */
     private double eps = 1E-5;
@@ -223,9 +223,9 @@ public class SOM implements VectorQuantizer {
         int j = bmu.j;
 
         int d = bmu.w.length;
-        double alpha = this.alpha.apply(t);
+        double rate = alpha.of(t);
         Arrays.stream(neurons).parallel().forEach(neuron -> {
-            double delta = alpha * theta.of(neuron.i - i, neuron.j - j, t);
+            double delta = rate * theta.of(neuron.i - i, neuron.j - j, t);
             if (delta > eps) {
                 double[] w = neuron.w;
                 for (int k = 0; k < d; k++) {
