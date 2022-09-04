@@ -78,6 +78,7 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.analysis.config.transitions.ComposingTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
@@ -1925,22 +1926,19 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         if (key.getTransition() == NullTransition.INSTANCE) {
           continue;
         }
-        List<BuildOptions> toOptions =
-            ConfigurationResolver.applyTransition(
-                fromOptions, key.getTransition(), depFragments, ruleClassProvider, true);
-        for (BuildOptions toOption : toOptions) {
+        for (BuildOptions toOptions : ConfigurationResolver.applyTransition(
+            fromOptions, key.getTransition(), depFragments, ruleClassProvider, true)) {
+          StarlarkTransition.postProcessStarlarkTransitions(eventHandler, key.getTransition());
           configSkyKeys.add(
               BuildConfigurationValue.key(
-                  depFragments, BuildOptions.diffForReconstruction(defaultBuildOptions, toOption)));
+                  depFragments,
+                  BuildOptions.diffForReconstruction(defaultBuildOptions, toOptions)));
         }
-        ImmutableSet<SkyKey> buildSettingPackageKeys =
-            StarlarkTransition.getBuildSettingPackageKeys(key.getTransition());
-        EvaluationResult<SkyValue> buildSettingsResult =
-            evaluateSkyKeys(eventHandler, buildSettingPackageKeys, true);
-        ImmutableMap.Builder<SkyKey, SkyValue> buildSettingValues = new ImmutableMap.Builder<>();
-        buildSettingPackageKeys.forEach(k -> buildSettingValues.put(k, buildSettingsResult.get(k)));
-        StarlarkTransition.validate(
-            key.getTransition(), buildSettingValues.build(), toOptions, eventHandler);
+        ImmutableList<ConfigurationTransition> transitions =
+            ComposingTransition.decomposeTransition(key.getTransition());
+        transitions.stream()
+            .filter(t -> t instanceof StarlarkTransition)
+            .forEach(t -> ((StarlarkTransition) t).replayOn(eventHandler));
       }
     }
     EvaluationResult<SkyValue> configsResult =

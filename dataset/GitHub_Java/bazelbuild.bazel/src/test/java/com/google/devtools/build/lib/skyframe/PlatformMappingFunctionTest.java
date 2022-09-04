@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.analysis.PlatformOptions.LEGACY_DEFAULT_TARGET_PLATFORM;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Optional;
@@ -63,8 +64,6 @@ public class PlatformMappingFunctionTest extends BuildViewTestCase {
   private static final BuildOptions.OptionsDiffForReconstruction EMPTY_DIFF =
       BuildOptions.diffForReconstruction(
           DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS, DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
-  private static final Label DEFAULT_TARGET_PLATFORM =
-      Label.parseAbsoluteUnchecked("@bazel_tools//platforms:target_platform");
 
   @Test
   public void testMappingFileDoesNotExist() throws Exception {
@@ -89,7 +88,7 @@ public class PlatformMappingFunctionTest extends BuildViewTestCase {
         platformMappingValue.map(key, DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
 
     assertThat(toMappedOptions(mapped).get(PlatformOptions.class).platforms)
-        .containsExactly(DEFAULT_TARGET_PLATFORM);
+        .containsExactly(LEGACY_DEFAULT_TARGET_PLATFORM);
   }
 
   @Test

@@ -20,12 +20,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -52,6 +52,12 @@ import javax.annotation.Nullable;
  */
 public class PlatformMappingFunction implements SkyFunction {
 
+  private final BlazeDirectories blazeDirectories;
+
+  public PlatformMappingFunction(BlazeDirectories blazeDirectories) {
+    this.blazeDirectories = blazeDirectories;
+  }
+
   @Nullable
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
@@ -60,8 +66,7 @@ public class PlatformMappingFunction implements SkyFunction {
     PathFragment workspaceRelativeMappingPath =
         platformMappingKey.getWorkspaceRelativeMappingPath();
 
-    PathPackageLocator pkgLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
-    Root workspaceRoot = Root.fromPath(pkgLocator.getWorkspaceFile().getParentDirectory());
+    Root workspaceRoot = Root.fromPath(blazeDirectories.getWorkspace());
     RootedPath rootedMappingPath =
         RootedPath.toRootedPath(workspaceRoot, workspaceRelativeMappingPath);
     FileValue fileValue = (FileValue) env.getValue(FileValue.key(rootedMappingPath));
@@ -180,12 +185,7 @@ public class PlatformMappingFunction implements SkyFunction {
         platformsToFlags.put(platform, flags);
       }
 
-      try {
-        return platformsToFlags.build();
-      } catch (IllegalArgumentException e) {
-        throw throwParsingException(
-            e, "Got duplicate platform entries but each platform key must be unique");
-      }
+      return platformsToFlags.build();
     }
 
     private Label platform() throws PlatformMappingException {
@@ -202,7 +202,9 @@ public class PlatformMappingFunction implements SkyFunction {
         // mappings however only apply within a repository imported by the root repository.
         platform = Label.parseAbsolute(label, emptyRepositoryMapping);
       } catch (LabelSyntaxException e) {
-        throw throwParsingException(e, "Expected platform label but got " + label);
+        throw new PlatformMappingException(
+            new PlatformMappingParsingException("Expected platform label but got " + label, e),
+            SkyFunctionException.Transience.PERSISTENT);
       }
       return platform;
     }
@@ -232,12 +234,7 @@ public class PlatformMappingFunction implements SkyFunction {
         Label platform = platform();
         flagsToPlatforms.put(flags, platform);
       }
-      try {
-        return flagsToPlatforms.build();
-      } catch (IllegalArgumentException e) {
-        throw throwParsingException(
-            e, "Got duplicate flags entries but each flags key must be unique");
-      }
+      return flagsToPlatforms.build();
     }
 
     private String consume() {
@@ -252,13 +249,6 @@ public class PlatformMappingFunction implements SkyFunction {
       Preconditions.checkState(
           line.isPresent(), "Must make sure that a line exists before peeking.");
       return line.get();
-    }
-
-    private AssertionError throwParsingException(Exception e, String message)
-        throws PlatformMappingException {
-      throw new PlatformMappingException(
-          new PlatformMappingParsingException(message, e),
-          SkyFunctionException.Transience.PERSISTENT);
     }
 
     private void throwParsingException(String message) throws PlatformMappingException {
