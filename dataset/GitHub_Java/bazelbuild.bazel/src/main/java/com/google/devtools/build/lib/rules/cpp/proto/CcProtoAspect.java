@@ -61,7 +61,7 @@ import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoSourceFileBlacklist;
 import com.google.devtools.build.lib.rules.proto.ProtoSupportDataProvider;
 import com.google.devtools.build.lib.rules.proto.SupportData;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -89,11 +89,11 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
+      ConfiguredTargetAndTarget ctatBase, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException {
     // Get SupportData, which is provided by the proto_library rule we attach to.
     SupportData supportData =
-        checkNotNull(ctadBase.getConfiguredTarget().getProvider(ProtoSupportDataProvider.class))
+        checkNotNull(ctatBase.getConfiguredTarget().getProvider(ProtoSupportDataProvider.class))
             .getSupportData();
 
     try {
@@ -194,7 +194,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
           initializeLinkingHelper(featureConfiguration)
               .link(
                   compilationInfo.getCcCompilationOutputs(),
-                  compilationInfo.getCcCompilationInfo());
+                  compilationInfo.getCppCompilationContext());
 
       ccLibraryProviders =
           new TransitiveInfoProviderMapBuilder()

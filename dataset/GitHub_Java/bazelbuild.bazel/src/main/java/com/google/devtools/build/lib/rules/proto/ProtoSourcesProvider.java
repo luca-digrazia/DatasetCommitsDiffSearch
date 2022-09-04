@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 
@@ -32,28 +31,26 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 @AutoValue
 @Immutable
 @SkylarkModule(name = "ProtoSourcesProvider", doc = "")
-@AutoCodec
 public abstract class ProtoSourcesProvider implements TransitiveInfoProvider {
   /** The name of the field in Skylark used to access this class. */
   public static final String SKYLARK_NAME = "proto";
 
-  @AutoCodec.Instantiator
   public static ProtoSourcesProvider create(
       NestedSet<Artifact> transitiveImports,
       NestedSet<Artifact> transitiveProtoSources,
-      ImmutableList<Artifact> directProtoSources,
+      ImmutableList<Artifact> protoSources,
       NestedSet<Artifact> checkDepsProtoSources,
       Artifact directDescriptorSet,
       NestedSet<Artifact> transitiveDescriptorSets,
-      NestedSet<String> transitiveProtoPathFlags) {
+      NestedSet<String> protoPathFlags) {
     return new AutoValue_ProtoSourcesProvider(
         transitiveImports,
         transitiveProtoSources,
-        directProtoSources,
+        protoSources,
         checkDepsProtoSources,
         directDescriptorSet,
         transitiveDescriptorSets,
-        transitiveProtoPathFlags);
+        protoPathFlags);
   }
 
   /**

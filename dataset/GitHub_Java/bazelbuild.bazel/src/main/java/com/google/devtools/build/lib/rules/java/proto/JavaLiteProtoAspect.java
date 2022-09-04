@@ -55,7 +55,7 @@ import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoSupportDataProvider;
 import com.google.devtools.build.lib.rules.proto.SupportData;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import javax.annotation.Nullable;
 
 /** An Aspect which JavaLiteProtoLibrary injects to build Java Lite protos. */
@@ -87,13 +87,13 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
+      ConfiguredTargetAndTarget ctatBase, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException {
     ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(this, parameters, ruleContext);
 
     // Get SupportData, which is provided by the proto_library rule we attach to.
     SupportData supportData =
-        checkNotNull(ctadBase.getConfiguredTarget().getProvider(ProtoSupportDataProvider.class))
+        checkNotNull(ctatBase.getConfiguredTarget().getProvider(ProtoSupportDataProvider.class))
             .getSupportData();
 
     JavaProtoAspectCommon aspectCommon =

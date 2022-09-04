@@ -54,7 +54,7 @@ import com.google.devtools.build.lib.rules.proto.ProtoSourceFileBlacklist;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoSupportDataProvider;
 import com.google.devtools.build.lib.rules.proto.SupportData;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import javax.annotation.Nullable;
 
 /** An Aspect which JavaProtoLibrary injects to build Java SPEED protos. */
@@ -90,7 +90,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
+      ConfiguredTargetAndTarget ctatBase, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException {
     ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(this, parameters, ruleContext);
 
@@ -100,14 +100,14 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
     // Get SupportData, which is provided by the proto_library rule we attach to.
     SupportData supportData =
-        checkNotNull(ctadBase.getConfiguredTarget().getProvider(ProtoSupportDataProvider.class))
+        checkNotNull(ctatBase.getConfiguredTarget().getProvider(ProtoSupportDataProvider.class))
             .getSupportData();
 
     JavaProtoAspectCommon aspectCommon =
         JavaProtoAspectCommon.getSpeedInstance(ruleContext, javaSemantics, rpcSupport);
     Impl impl = new Impl(ruleContext, supportData, aspectCommon, rpcSupport);
     if (impl.shouldGenerateCode()
-        && ActionReuser.reuseExistingActions(ctadBase.getConfiguredTarget(), ruleContext, aspect)) {
+        && ActionReuser.reuseExistingActions(ctatBase.getConfiguredTarget(), ruleContext, aspect)) {
       return aspect.build();
     }
     impl.addProviders(aspect);

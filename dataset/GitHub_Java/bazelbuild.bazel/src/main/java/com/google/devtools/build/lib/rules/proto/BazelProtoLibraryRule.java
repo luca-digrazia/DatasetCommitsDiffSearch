@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.util.FileType;
 
 /**
@@ -45,16 +46,15 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
                   : DEFAULT_PROTO_COMPILER);
 
   @Override
-  public RuleClass build(RuleClass.Builder builder, final RuleDefinitionEnvironment env) {
+  public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
 
     return builder
         .requiresConfigurationFragments(ProtoConfiguration.class)
         .setOutputToGenfiles()
-        .add(
-            attr(":proto_compiler", LABEL)
-                .cfg(HostTransition.INSTANCE)
-                .exec()
-                .value(PROTO_COMPILER))
+        .add(attr(":proto_compiler", LABEL)
+            .cfg(HostTransition.INSTANCE)
+            .exec()
+            .value(PROTO_COMPILER))
         /* <!-- #BLAZE_RULE(proto_library).ATTRIBUTE(deps) -->
         The list of other <code>proto_library</code> rules that the target depends upon.
         A <code>proto_library</code> may only depend on other
@@ -78,11 +78,6 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
         the source root will be the workspace directory (default).
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("proto_source_root", STRING))
-        /* <!-- #BLAZE_RULE(proto_library).ATTRIBUTE(exports) -->
-        List of proto_library targets that can be referenced via "import public" in the proto
-        source.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("exports", LABEL_LIST).allowedRuleClasses("proto_library").allowedFileTypes())
         .advertiseProvider(ProtoSourcesProvider.class, ProtoSupportDataProvider.class)
         .build();
   }
@@ -116,16 +111,5 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
 <code>proto_library</code> rule; the collection of transitive descriptor sets is available through
 the <code>proto.transitive_descriptor_sets</code> Skylark provider.
 See documentation in <code>ProtoSourcesProvider.java</code>.</p>
-
-<p>Recommended code organization:</p>
-
-<ul>
-<li> One <code>proto_library</code> rule per <code>.proto</code> file.
-<li> A file named <code>foo.proto</code> will be in a rule named <code>foo_proto</code>, which
-   is located in the same package.
-<li> A <code>[language]_proto_library</code> that wraps a <code>proto_library</code> named
-  <code>foo_proto</code> should be called
-   <code>foo_[language]_proto</code>, and be located in the same package.
-</ul>
 
 <!-- #END_BLAZE_RULE -->*/

@@ -20,7 +20,6 @@ import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
@@ -36,7 +35,7 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     ImmutableList<Artifact> protoSources =
         ruleContext.getPrerequisiteArtifacts("srcs", TARGET).list();
     NestedSet<Artifact> checkDepsProtoSources =
@@ -51,7 +50,7 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
 
     final SupportData supportData =
         SupportData.create(
-            /* nonWeakDepsPredicate= */ Predicates.<TransitiveInfoCollection>alwaysTrue(),
+            Predicates.<TransitiveInfoCollection>alwaysTrue() /* nonWeakDepsPredicate */,
             protoSources,
             protosInDirectDeps,
             transitiveImports,
@@ -73,7 +72,7 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
         transitiveImports,
         protosInDirectDeps,
         descriptorSetOutput,
-        /* allowServices= */ true,
+        true /* allowServices */,
         dependenciesDescriptorSets,
         protoPathFlags);
 

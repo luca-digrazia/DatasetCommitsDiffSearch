@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
+import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
@@ -135,8 +136,7 @@ public class JavaProtoSkylarkCommon {
       @Param(name = "java_toolchain_attr", positional = false, named = true, type = String.class)
     }
   )
-  // TODO(b/78512644): migrate callers to passing explicit proto javacopts or using custom
-  // toolchains, and delete
+  // TODO(elenairina): Consider a nicer way of returning this, taking in a JavaToolchainProvider.
   public static ImmutableList<String> getJavacOpts(
       SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) throws EvalException {
     ConfiguredTarget javaToolchainConfigTarget =
@@ -144,7 +144,10 @@ public class JavaProtoSkylarkCommon {
     JavaToolchainProvider toolchain =
         checkNotNull(JavaToolchainProvider.from(javaToolchainConfigTarget));
 
-    return ProtoJavacOpts.constructJavacOpts(skylarkRuleContext.getRuleContext(), toolchain);
+    return ImmutableList.<String>builder()
+        .addAll(toolchain.getJavacOptions())
+        .addAll(toolchain.getCompatibleJavacOptions(JavaSemantics.PROTO_JAVACOPTS_KEY))
+        .build();
   }
 
   private static ProtoLangToolchainProvider getProtoToolchainProvider(
