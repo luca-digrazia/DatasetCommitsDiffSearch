@@ -22,8 +22,7 @@ public class PackageConfig {
     /**
      * The requested output type.
      *
-     * The default built in types are 'jar', 'fast-jar' (a prototype more performant version of the default 'jar' type),
-     * 'uber-jar' and 'native'.
+     * The default built in types are jar and native
      */
     @ConfigItem(defaultValue = JAR)
     public String type;
