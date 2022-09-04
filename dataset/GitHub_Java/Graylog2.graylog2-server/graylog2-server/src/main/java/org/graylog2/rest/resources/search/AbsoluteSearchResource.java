@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.resources.search;
 
@@ -35,7 +36,6 @@ import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import java.util.List;
@@ -50,15 +50,10 @@ public class AbsoluteSearchResource extends SearchResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(AbsoluteSearchResource.class);
 
-    @Inject
-    public AbsoluteSearchResource(Indexer indexer) {
-        super(indexer);
-    }
-
     @GET @Timed
     @ApiOperation(value = "Message search with absolute timerange.",
             notes = "Search for messages using an absolute timerange, specified as from/to " +
-                    "with format yyyy-MM-ddTHH:mm:ss.SSSZ (e.g. 2014-01-23T15:34:49.000Z) or yyyy-MM-dd HH:mm:ss.")
+                    "with format yyyy-MM-ddTHH:mm:ss.SSSZ (e.g. 2014-01-23T15:34:49.000Z) or yyyy-MM-dd HH-mm-ss.")
     @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Invalid timerange parameters provided.")
@@ -82,11 +77,11 @@ public class AbsoluteSearchResource extends SearchResource {
 
             if (filter == null) {
                 searchResponse = buildSearchResponse(
-                        indexer.searches().search(query, buildAbsoluteTimeRange(from, to), limit, offset, sorting)
+                        core.getIndexer().searches().search(query, buildAbsoluteTimeRange(from, to), limit, offset, sorting)
                 );
             } else {
                 searchResponse = buildSearchResponse(
-                        indexer.searches().search(query, filter, buildAbsoluteTimeRange(from, to), limit, offset, sorting)
+                        core.getIndexer().searches().search(query, filter, buildAbsoluteTimeRange(from, to), limit, offset, sorting)
                 );
             }
 
@@ -102,7 +97,7 @@ public class AbsoluteSearchResource extends SearchResource {
     @GET @Timed
     @ApiOperation(value = "Message search with absolute timerange.",
                   notes = "Search for messages using an absolute timerange, specified as from/to " +
-                          "with format yyyy-MM-ddTHH:mm:ss.SSSZ (e.g. 2014-01-23T15:34:49.000Z) or yyyy-MM-dd HH:mm:ss.")
+                          "with format yyyy-MM-ddTHH:mm:ss.SSSZ (e.g. 2014-01-23T15:34:49.000Z) or yyyy-MM-dd HH-mm-ss.")
     @Produces("text/csv")
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Invalid timerange parameters provided.")
@@ -122,7 +117,7 @@ public class AbsoluteSearchResource extends SearchResource {
         final TimeRange timeRange = buildAbsoluteTimeRange(from, to);
 
         try {
-            final ScrollResult scroll = indexer.searches()
+            final ScrollResult scroll = core.getIndexer().searches()
                     .scroll(query, timeRange, limit, offset, fieldList, filter);
             final ChunkedOutput<ScrollResult.ScrollChunk> output = new ChunkedOutput<>(ScrollResult.ScrollChunk.class);
 
@@ -157,7 +152,7 @@ public class AbsoluteSearchResource extends SearchResource {
 
         try {
             return json(buildTermsResult(
-                    indexer.searches().terms(field, size, query, filter, buildAbsoluteTimeRange(from, to))
+                    core.getIndexer().searches().terms(field, size, query, filter, buildAbsoluteTimeRange(from, to))
             ));
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
@@ -215,7 +210,7 @@ public class AbsoluteSearchResource extends SearchResource {
 
         try {
             return json(buildHistogramResult(
-                    indexer.searches().histogram(
+                    core.getIndexer().searches().histogram(
                             query,
                             Indexer.DateHistogramInterval.valueOf(interval),
                             filter,

@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.resources.search;
 
@@ -35,7 +36,6 @@ import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import java.util.List;
@@ -49,11 +49,6 @@ import java.util.List;
 public class KeywordSearchResource extends SearchResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(KeywordSearchResource.class);
-
-    @Inject
-    public KeywordSearchResource(Indexer indexer) {
-        super(indexer);
-    }
 
     @GET @Timed
     @ApiOperation(value = "Message search with keyword as timerange.",
@@ -78,11 +73,11 @@ public class KeywordSearchResource extends SearchResource {
         try {
             if (filter == null) {
                 return buildSearchResponse(
-                        indexer.searches().search(query, buildKeywordTimeRange(keyword), limit, offset, sorting)
+                        core.getIndexer().searches().search(query, buildKeywordTimeRange(keyword), limit, offset, sorting)
                 );
             } else {
                 return buildSearchResponse(
-                        indexer.searches().search(query, filter, buildKeywordTimeRange(keyword), limit, offset, sorting)
+                        core.getIndexer().searches().search(query, filter, buildKeywordTimeRange(keyword), limit, offset, sorting)
                 );
             }
         } catch (IndexHelper.InvalidRangeFormatException e) {
@@ -114,7 +109,7 @@ public class KeywordSearchResource extends SearchResource {
         final TimeRange timeRange = buildKeywordTimeRange(keyword);
 
         try {
-            final ScrollResult scroll = indexer.searches()
+            final ScrollResult scroll = core.getIndexer().searches()
                     .scroll(query, timeRange, limit, offset, fieldList, filter);
             final ChunkedOutput<ScrollResult.ScrollChunk> output = new ChunkedOutput<>(ScrollResult.ScrollChunk.class);
 
@@ -150,7 +145,7 @@ public class KeywordSearchResource extends SearchResource {
 
         try {
             return json(buildHistogramResult(
-                    indexer.searches().histogram(
+                    core.getIndexer().searches().histogram(
                             query,
                             Indexer.DateHistogramInterval.valueOf(interval),
                             filter,
@@ -181,36 +176,7 @@ public class KeywordSearchResource extends SearchResource {
 
         try {
             return json(buildTermsResult(
-                    indexer.searches().terms(field, size, query, filter, buildKeywordTimeRange(keyword))
-            ));
-        } catch (IndexHelper.InvalidRangeFormatException e) {
-            LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
-            throw new WebApplicationException(400);
-        }
-    }
-
-    @GET @Path("/termsstats") @Timed
-    @ApiOperation(value = "Ordered field terms of a query computed on another field using a keyword timerange.")
-    @ApiResponses(value = {
-            @ApiResponse(code = 400, message = "Invalid timerange parameters provided.")
-    })
-    @Produces(MediaType.APPLICATION_JSON)
-    public String termsStatsRelative(
-            @ApiParam(title = "key_field", description = "Message field of to return terms of", required = true) @QueryParam("key_field") String keyField,
-            @ApiParam(title = "value_field", description = "Value field used for computation", required = true) @QueryParam("value_field") String valueField,
-            @ApiParam(title = "order", description = "What to order on (Allowed values: TERM, REVERSE_TERM, COUNT, REVERSE_COUNT, TOTAL, REVERSE_TOTAL, MIN, REVERSE_MIN, MAX, REVERSE_MAX, MEAN, REVERSE_MEAN)", required = true) @QueryParam("order") String order,
-            @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
-            @ApiParam(title = "size", description = "Maximum number of terms to return", required = false) @QueryParam("size") int size,
-            @ApiParam(title = "keyword", description = "Keyword timeframe", required = true) @QueryParam("keyword") String keyword,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) throws IndexHelper.InvalidRangeFormatException {
-        checkSearchPermission(filter, RestPermissions.SEARCHES_KEYWORD);
-
-        checkTermsStatsFields(keyField, valueField, order);
-        checkQuery(query);
-
-        try {
-            return json(buildTermsStatsResult(
-                    indexer.searches().termsStats(keyField, valueField, Indexer.TermsStatsOrder.valueOf(order.toUpperCase()), size, query, filter, buildKeywordTimeRange(keyword))
+                    core.getIndexer().searches().terms(field, size, query, filter, buildKeywordTimeRange(keyword))
             ));
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
