@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.spi.ResteasyDeployment;
@@ -16,7 +15,6 @@ import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
-import io.quarkus.vertx.http.runtime.ThreadLocalHandler;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.ext.web.Route;
@@ -82,10 +80,8 @@ public class ResteasyStandaloneRecorder {
     private static String contextPath;
 
     public void staticInit(ResteasyDeployment dep, String path, Set<String> known) {
-        if (dep != null) {
-            deployment = dep;
-            deployment.start();
-        }
+        deployment = dep;
+        deployment.start();
         knownPaths = known;
         contextPath = path;
     }
@@ -98,9 +94,7 @@ public class ResteasyStandaloneRecorder {
         shutdown.addShutdownTask(new Runnable() {
             @Override
             public void run() {
-                if (deployment != null) {
-                    deployment.stop();
-                }
+                deployment.stop();
             }
         });
         Vertx vertx = vertxValue.getValue();
@@ -110,16 +104,10 @@ public class ResteasyStandaloneRecorder {
         if (hotDeploymentResourcePaths != null && !hotDeploymentResourcePaths.isEmpty()) {
             for (Path resourcePath : hotDeploymentResourcePaths) {
                 String root = resourcePath.toAbsolutePath().toString();
-                ThreadLocalHandler staticHandler = new ThreadLocalHandler(new Supplier<Handler<RoutingContext>>() {
-                    @Override
-                    public Handler<RoutingContext> get() {
-                        StaticHandler staticHandler = StaticHandler.create();
-                        staticHandler.setCachingEnabled(false);
-                        staticHandler.setAllowRootFileSystemAccess(true);
-                        staticHandler.setWebRoot(root);
-                        return staticHandler;
-                    }
-                });
+                StaticHandler staticHandler = StaticHandler.create();
+                staticHandler.setCachingEnabled(false);
+                staticHandler.setAllowRootFileSystemAccess(true);
+                staticHandler.setWebRoot(root);
                 handlers.add(event -> {
                     try {
                         staticHandler.handle(event);
@@ -132,12 +120,7 @@ public class ResteasyStandaloneRecorder {
             }
         }
         if (!knownPaths.isEmpty()) {
-            ThreadLocalHandler staticHandler = new ThreadLocalHandler(new Supplier<Handler<RoutingContext>>() {
-                @Override
-                public Handler<RoutingContext> get() {
-                    return StaticHandler.create(META_INF_RESOURCES);
-                }
-            });
+            StaticHandler staticHandler = StaticHandler.create(META_INF_RESOURCES);
             handlers.add(ctx -> {
                 if (knownPaths.contains(ctx.normalisedPath())) {
                     staticHandler.handle(ctx);
@@ -147,11 +130,9 @@ public class ResteasyStandaloneRecorder {
             });
         }
 
-        if (deployment != null) {
-            VertxRequestHandler requestHandler = new VertxRequestHandler(vertx, beanContainer, deployment, contextPath,
-                    ALLOCATOR);
-            handlers.add(requestHandler);
-        }
+        VertxRequestHandler requestHandler = new VertxRequestHandler(vertx, beanContainer, deployment, contextPath, ALLOCATOR);
+
+        handlers.add(requestHandler);
         return new Consumer<Route>() {
 
             @Override
