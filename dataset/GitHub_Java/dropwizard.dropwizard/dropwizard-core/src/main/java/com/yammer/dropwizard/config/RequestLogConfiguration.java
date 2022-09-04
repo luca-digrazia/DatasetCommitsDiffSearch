@@ -2,43 +2,32 @@ package com.yammer.dropwizard.config;
 
 import org.codehaus.jackson.annotate.JsonProperty;
 
+import javax.validation.constraints.Max;
+import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
-
-import java.util.TimeZone;
-
-import static com.yammer.dropwizard.config.LoggingConfiguration.*;
 
 @SuppressWarnings({ "FieldMayBeFinal", "FieldCanBeLocal" })
 public class RequestLogConfiguration {
-    @NotNull
     @JsonProperty
-    protected ConsoleConfiguration console = new ConsoleConfiguration();
+    private boolean enabled = false;
 
-    @NotNull
     @JsonProperty
-    protected FileConfiguration file = new FileConfiguration();
+    private String filenamePattern = "./logs/yyyy_mm_dd.log";
 
-    @NotNull
+    @Min(1)
+    @Max(50)
     @JsonProperty
-    protected SyslogConfiguration syslog = new SyslogConfiguration();
+    private int retainedFileCount = 5;
 
-    @NotNull
-    @JsonProperty
-    protected TimeZone timeZone = UTC;
-
-    public ConsoleConfiguration getConsoleConfiguration() {
-        return console;
+    public boolean isEnabled() {
+        return enabled;
     }
 
-    public FileConfiguration getFileConfiguration() {
-        return file;
+    public String getFilenamePattern() {
+        return filenamePattern;
     }
 
-    public SyslogConfiguration getSyslogConfiguration() {
-        return syslog;
-    }
-
-    public TimeZone getTimeZone() {
-        return timeZone;
+    public int getRetainedFileCount() {
+        return retainedFileCount;
     }
 }
