@@ -44,7 +44,7 @@ public class MustacheViewRenderer implements ViewRenderer {
     }
 
     @Override
-    public void render(View view, Locale locale, OutputStream output) throws IOException {
+    public void render(View view, Locale locale, OutputStream output) throws IOException, WebApplicationException {
         try {
             final Mustache template = factories.get(view.getClass())
                                                .compile(view.getTemplateName());
@@ -58,9 +58,7 @@ public class MustacheViewRenderer implements ViewRenderer {
     }
 
     @Override
-    public void configure(Map<String, String> options) {
-
-    }
+    public void configure(Map<String, String> options) {}
 
     @Override
     public String getSuffix() {

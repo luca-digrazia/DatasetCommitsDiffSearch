@@ -70,7 +70,8 @@ public abstract class Application<T extends Configuration> {
      */
     public void run(String... arguments) throws Exception {
         final Bootstrap<T> bootstrap = new Bootstrap<>(this);
-        addDefaultCommands(bootstrap);
+        bootstrap.addCommand(new ServerCommand<>(this));
+        bootstrap.addCommand(new CheckCommand<>(this));
         initialize(bootstrap);
         // Should by called after initialize to give an opportunity to set a custom metric registry
         bootstrap.registerMetrics();
@@ -80,17 +81,6 @@ public abstract class Application<T extends Configuration> {
             // only exit if there's an error running the command
             System.exit(1);
         }
-    }
-
-    /**
-     * Called by {@link #run(String...)} to add the standard "server" and "check" commands
-     *
-     * @param bootstrap the bootstrap instance
-     */
-    protected void addDefaultCommands(Bootstrap<T> bootstrap)
-    {
-        bootstrap.addCommand(new ServerCommand<>(this));
-        bootstrap.addCommand(new CheckCommand<>(this));
     }
 
 
