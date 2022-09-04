@@ -36,7 +36,6 @@ import io.quarkus.bootstrap.util.ZipUtils;
 import io.quarkus.container.image.deployment.ContainerImageConfig;
 import io.quarkus.container.image.deployment.util.NativeBinaryUtil;
 import io.quarkus.container.spi.ContainerImageBuildRequestBuildItem;
-import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageLabelBuildItem;
 import io.quarkus.container.spi.ContainerImagePushRequestBuildItem;
 import io.quarkus.deployment.Capabilities;
@@ -46,7 +45,6 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.MainClassBuildItem;
-import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.JarBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageBuildItem;
@@ -68,8 +66,6 @@ public class JibProcessor {
 
     @BuildStep(onlyIf = { IsNormal.class, JibBuild.class }, onlyIfNot = NativeBuild.class)
     public void buildFromJar(ContainerImageConfig containerImageConfig, JibConfig jibConfig,
-            PackageConfig packageConfig,
-            ContainerImageInfoBuildItem containerImage,
             JarBuildItem sourceJar,
             MainClassBuildItem mainClass,
             OutputTargetBuildItem outputTarget, ApplicationInfoBuildItem applicationInfo,
@@ -83,19 +79,9 @@ public class JibProcessor {
             return;
         }
 
-        JibContainerBuilder jibContainerBuilder;
-        String packageType = packageConfig.type;
-        if (packageType.equalsIgnoreCase(PackageConfig.LEGACY)
-                || packageType.equalsIgnoreCase(PackageConfig.JAR)) {
-            jibContainerBuilder = createContainerBuilderFromLegacyJar(jibConfig,
-                    sourceJar, outputTarget, mainClass, containerImageLabels);
-        } else if (packageType.equalsIgnoreCase(PackageConfig.FAST_JAR)) {
-            jibContainerBuilder = createContainerBuilderFromFastJar(jibConfig, sourceJar, containerImageLabels);
-        } else {
-            throw new IllegalArgumentException(
-                    "Package type '" + packageType + "' is not supported by the container-image-jib extension");
-        }
-        containerize(applicationInfo, containerImageConfig, containerImage, jibContainerBuilder,
+        JibContainerBuilder jibContainerBuilder = createContainerBuilderFromJar(jibConfig,
+                sourceJar, outputTarget, mainClass, containerImageLabels);
+        JibContainer container = containerize(applicationInfo, containerImageConfig, jibContainerBuilder,
                 pushRequest.isPresent());
 
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
@@ -103,7 +89,6 @@ public class JibProcessor {
 
     @BuildStep(onlyIf = { IsNormal.class, JibBuild.class, NativeBuild.class })
     public void buildFromNative(ContainerImageConfig containerImageConfig, JibConfig jibConfig,
-            ContainerImageInfoBuildItem containerImage,
             NativeImageBuildItem nativeImage,
             ApplicationInfoBuildItem applicationInfo,
             Optional<ContainerImageBuildRequestBuildItem> buildRequest,
@@ -124,18 +109,14 @@ public class JibProcessor {
         JibContainerBuilder jibContainerBuilder = createContainerBuilderFromNative(containerImageConfig, jibConfig,
                 nativeImage, containerImageLabels);
 
-        containerize(applicationInfo, containerImageConfig, containerImage, jibContainerBuilder,
-                pushRequest.isPresent());
+        containerize(applicationInfo, containerImageConfig, jibContainerBuilder, pushRequest.isPresent());
 
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
     }
 
     private JibContainer containerize(ApplicationInfoBuildItem applicationInfo, ContainerImageConfig containerImageConfig,
-            ContainerImageInfoBuildItem containerImage, JibContainerBuilder jibContainerBuilder, boolean pushRequested) {
-        Containerizer containerizer = createContainerizer(containerImageConfig, containerImage, applicationInfo, pushRequested);
-        for (String additionalTag : containerImage.getAdditionalTags()) {
-            containerizer.withAdditionalTag(additionalTag);
-        }
+            JibContainerBuilder jibContainerBuilder, boolean pushRequested) {
+        Containerizer containerizer = createContainerizer(containerImageConfig, applicationInfo, pushRequested);
         try {
             log.info("Starting container image build");
             JibContainer container = jibContainerBuilder.containerize(containerizer);
@@ -150,17 +131,9 @@ public class JibProcessor {
     }
 
     private Containerizer createContainerizer(ContainerImageConfig containerImageConfig,
-            ContainerImageInfoBuildItem containerImage,
             ApplicationInfoBuildItem applicationInfo, boolean pushRequested) {
         Containerizer containerizer;
-        ImageReference imageReference = getImageReference(containerImageConfig, containerImage, applicationInfo);
-
-        for (String additionalTag : containerImage.getAdditionalTags()) {
-            if (!ImageReference.isValidTag(additionalTag)) {
-                throw new IllegalArgumentException(
-                        "The supplied container-image additional tag '" + additionalTag + "' is invalid");
-            }
-        }
+        ImageReference imageReference = getImageReference(containerImageConfig, applicationInfo);
 
         if (pushRequested || containerImageConfig.push) {
             if (!containerImageConfig.registry.isPresent()) {
@@ -208,7 +181,6 @@ public class JibProcessor {
     }
 
     private ImageReference getImageReference(ContainerImageConfig containerImageConfig,
-            ContainerImageInfoBuildItem containerImage,
             ApplicationInfoBuildItem applicationInfo) {
 
         String registry = containerImageConfig.registry.orElse(null);
@@ -222,63 +194,15 @@ public class JibProcessor {
             throw new IllegalArgumentException("The supplied container-image repository '" + repository + "' is invalid");
         }
 
-        final String tag = containerImage.getTag();
-        if (!ImageReference.isValidTag(tag)) {
+        String tag = containerImageConfig.tag.orElse(applicationInfo.getVersion());
+        if (tag != null && !ImageReference.isValidTag(tag)) {
             throw new IllegalArgumentException("The supplied container-image tag '" + tag + "' is invalid");
         }
 
         return ImageReference.of(registry, repository, tag);
     }
 
-    // TODO createContainerBuilderFromJar won't work with fast-jar so we are better off just using our own
-    //  containerBuilder with the proper layering (lib -> boot-lib -> quarkus-run -> transformed-bytecode -> generated-bytecode -> app)
-
-    /**
-     * We don't use Jib's JavaContainerBuilder here because we need to support the custom fast-jar format
-     * We create the following layers (least likely to change to most likely to change):
-     *
-     * <ul>
-     * <li>lib</li>
-     * <li>boot-lib</li>
-     * <li>quarkus-run.jar</li>
-     * <li>quarkus</li>
-     * <li>app</li>
-     * </ul>
-     */
-    private JibContainerBuilder createContainerBuilderFromFastJar(JibConfig jibConfig,
-            JarBuildItem sourceJarBuildItem,
-            List<ContainerImageLabelBuildItem> containerImageLabels) {
-        Path componentsPath = sourceJarBuildItem.getPath().getParent().getParent();
-
-        AbsoluteUnixPath workDirInContainer = AbsoluteUnixPath.get("/work");
-        List<String> entrypoint = new ArrayList<>(3 + jibConfig.jvmArguments.size());
-        entrypoint.add("java");
-        entrypoint.addAll(jibConfig.jvmArguments);
-        entrypoint.add("-jar");
-        entrypoint.add("quarkus-run.jar");
-
-        try {
-            return Jib.from(toRegistryImage(ImageReference.parse(jibConfig.baseJvmImage), jibConfig.baseRegistryUsername,
-                    jibConfig.baseRegistryPassword))
-                    .addLayer(Collections.singletonList(componentsPath.resolve("lib")), workDirInContainer)
-                    .addLayer(Collections.singletonList(componentsPath.resolve("boot-lib")), workDirInContainer)
-                    .addLayer(Collections.singletonList(componentsPath.resolve("quarkus-run.jar")), workDirInContainer)
-                    .addLayer(Collections.singletonList(componentsPath.resolve("quarkus")), workDirInContainer)
-                    .addLayer(Collections.singletonList(componentsPath.resolve("app")), workDirInContainer)
-                    .setWorkingDirectory(workDirInContainer)
-                    .setEntrypoint(entrypoint)
-                    .setEnvironment(jibConfig.environmentVariables)
-                    .setLabels(allLabels(jibConfig, containerImageLabels))
-                    .setCreationTime(Instant.now());
-
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        } catch (InvalidImageReferenceException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private JibContainerBuilder createContainerBuilderFromLegacyJar(JibConfig jibConfig,
+    private JibContainerBuilder createContainerBuilderFromJar(JibConfig jibConfig,
             JarBuildItem sourceJarBuildItem,
             OutputTargetBuildItem outputTargetBuildItem, MainClassBuildItem mainClassBuildItem,
             List<ContainerImageLabelBuildItem> containerImageLabels) {
