@@ -48,7 +48,7 @@ public class JPAFunctionalityTestEndpoint extends HttpServlet {
         try {
             doStuffWithHibernate(entityManagerFactory);
         } catch (Exception e) {
-            reportException("Oops, shit happened, No boot for you!", e, resp);
+            reportException("An error occurred while performing Hibernate operations", e, resp);
         }
         resp.getWriter().write("OK");
     }
@@ -105,7 +105,7 @@ public class JPAFunctionalityTestEndpoint extends HttpServlet {
         EntityManager em = emf.createEntityManager();
         EntityTransaction transaction = em.getTransaction();
         transaction.begin();
-        persistNewPerson(em, "Protean");
+        persistNewPerson(em, "Gizmo");
         persistNewPerson(em, "Shamrock");
         persistNewPerson(em, "Hibernate ORM");
         transaction.commit();
@@ -132,7 +132,7 @@ public class JPAFunctionalityTestEndpoint extends HttpServlet {
         if ( allpersons.size() != 3 ) {
             throw new RuntimeException("Incorrect number of results");
         }
-        if ( ! allpersons.get(0).getName().equals("Hibernate ORM") ) {
+        if ( ! allpersons.get(0).getName().equals("Gizmo") ) {
             throw new RuntimeException("Incorrect order of results");
         }
         StringBuilder sb = new StringBuilder("list of stored Person names:\n\t");

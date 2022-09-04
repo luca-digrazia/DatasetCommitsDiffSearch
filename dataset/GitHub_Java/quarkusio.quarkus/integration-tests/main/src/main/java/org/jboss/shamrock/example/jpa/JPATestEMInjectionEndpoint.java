@@ -50,14 +50,13 @@ public class JPATestEMInjectionEndpoint extends HttpServlet {
         try {
             testStoreLoadOnJPA();
         } catch (Exception e) {
-            reportException("Oops, shit happened, No boot for you!", e, resp);
+            reportException("An error occurred while performing Hibernate operations", e, resp);
         }
         resp.getWriter().write("OK");
     }
 
     public void testStoreLoadOnJPA() throws Exception {
         doStuffWithHibernate();
-        System.out.println("Hibernate EntityManagerFactory: shut down");
 
     }
 

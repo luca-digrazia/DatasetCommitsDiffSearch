@@ -53,7 +53,7 @@ public class JPATestBootstrapEndpoint extends HttpServlet {
         }
         catch (Exception e) {
             e.printStackTrace();
-           reportException("Oops, shit happened, No boot for you!", e, resp);
+           reportException("An error occurred while performing Hibernate operations", e, resp);
         }
 
 
@@ -62,7 +62,6 @@ public class JPATestBootstrapEndpoint extends HttpServlet {
 
     public void testStoreLoadOnJPA() throws Exception {
         doStuffWithHibernate( entityManagerFactory );
-        System.out.println( "Hibernate EntityManagerFactory: shut down" );
 
     }
 
