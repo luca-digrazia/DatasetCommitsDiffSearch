@@ -17,6 +17,7 @@ import com.google.common.base.Strings;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Formattable;
@@ -71,9 +72,50 @@ public class Printer {
 
   // These static methods proxy to the similar methods of BasePrinter
 
-  /** Format an object with Skylark's {@code debugPrint}. */
-  static String debugPrint(Object x) {
+  /**
+   * Format an object with Skylark's {@code debugPrint}.
+   */
+  public static String debugPrint(Object x) {
     return getPrinter().debugPrint(x).toString();
+  }
+
+  /**
+   * Format an object with Skylark's {@code str}.
+   */
+  public static String str(Object x) {
+    return getPrinter().str(x).toString();
+  }
+
+  /**
+   * Format an object with Skylark's {@code repr}.
+   */
+  public static String repr(Object x) {
+    return getPrinter().repr(x).toString();
+  }
+
+
+  /**
+   * Perform Python-style string formatting, as per pattern % tuple Limitations: only %d %s %r %%
+   * are supported.
+   *
+   * @param pattern a format string.
+   * @param arguments an array containing positional arguments.
+   * @return the formatted string.
+   */
+  public static String format(String pattern, Object... arguments) {
+    return getPrinter().format(pattern, arguments).toString();
+  }
+
+  /**
+   * Perform Python-style string formatting, as per pattern % tuple Limitations: only %d %s %r %%
+   * are supported.
+   *
+   * @param pattern a format string.
+   * @param arguments a tuple containing positional arguments.
+   * @return the formatted string.
+   */
+  public static String formatWithList(String pattern, List<?> arguments) {
+    return getPrinter().formatWithList(pattern, arguments).toString();
   }
 
   /**
@@ -88,7 +130,7 @@ public class Printer {
     return new Formattable() {
       @Override
       public String toString() {
-        return Starlark.formatWithList(pattern, args);
+        return formatWithList(pattern, args);
       }
 
       @Override
@@ -464,9 +506,9 @@ public class Printer {
             if (a >= argLength) {
               throw new MissingFormatWidthException(
                   "not enough arguments for format pattern "
-                      + Starlark.repr(pattern)
+                      + Printer.repr(pattern)
                       + ": "
-                      + Starlark.repr(Tuple.copyOf(arguments)));
+                      + Printer.repr(Tuple.copyOf(arguments)));
             }
             Object argument = arguments.get(a++);
             switch (directive) {
@@ -476,7 +518,7 @@ public class Printer {
                   continue;
                 } else {
                   throw new MissingFormatWidthException(
-                      "invalid argument " + Starlark.repr(argument) + " for format pattern %d");
+                      "invalid argument " + Printer.repr(argument) + " for format pattern %d");
                 }
               case 'r':
                 this.repr(argument);
@@ -488,11 +530,10 @@ public class Printer {
             // fall through
           default:
             throw new MissingFormatWidthException(
-                // The call to Starlark.repr doesn't cause an infinite recursion because it's
+                // The call to Printer.repr doesn't cause an infinite recursion because it's
                 // only used to format a string properly
-                String.format(
-                    "unsupported format character \"%s\" at index %s in %s",
-                    String.valueOf(directive), p + 1, Starlark.repr(pattern)));
+                String.format("unsupported format character \"%s\" at index %s in %s",
+                    String.valueOf(directive), p + 1, Printer.repr(pattern)));
         }
       }
       if (a < argLength) {
