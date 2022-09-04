@@ -16,8 +16,8 @@
  */
 package org.graylog.plugins.pipelineprocessor.functions;
 
+import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -57,6 +57,7 @@ import org.graylog.plugins.pipelineprocessor.functions.dates.periods.PeriodParse
 import org.graylog.plugins.pipelineprocessor.functions.dates.periods.Seconds;
 import org.graylog.plugins.pipelineprocessor.functions.dates.periods.Weeks;
 import org.graylog.plugins.pipelineprocessor.functions.dates.periods.Years;
+import org.graylog.plugins.pipelineprocessor.functions.debug.MetricCounterIncrement;
 import org.graylog.plugins.pipelineprocessor.functions.encoding.Base16Decode;
 import org.graylog.plugins.pipelineprocessor.functions.encoding.Base16Encode;
 import org.graylog.plugins.pipelineprocessor.functions.encoding.Base32Decode;
@@ -93,15 +94,20 @@ import org.graylog.plugins.pipelineprocessor.functions.messages.RouteToStream;
 import org.graylog.plugins.pipelineprocessor.functions.messages.SetField;
 import org.graylog.plugins.pipelineprocessor.functions.messages.SetFields;
 import org.graylog.plugins.pipelineprocessor.functions.messages.StreamCacheService;
+import org.graylog.plugins.pipelineprocessor.functions.messages.TrafficAccountingSize;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Abbreviate;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Capitalize;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Concat;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Contains;
 import org.graylog.plugins.pipelineprocessor.functions.strings.EndsWith;
 import org.graylog.plugins.pipelineprocessor.functions.strings.GrokMatch;
+import org.graylog.plugins.pipelineprocessor.functions.strings.Join;
 import org.graylog.plugins.pipelineprocessor.functions.strings.KeyValue;
+import org.graylog.plugins.pipelineprocessor.functions.strings.Length;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Lowercase;
 import org.graylog.plugins.pipelineprocessor.functions.strings.RegexMatch;
+import org.graylog.plugins.pipelineprocessor.functions.strings.RegexReplace;
+import org.graylog.plugins.pipelineprocessor.functions.strings.Replace;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Split;
 import org.graylog.plugins.pipelineprocessor.functions.strings.StartsWith;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Substring;
@@ -114,9 +120,10 @@ import org.graylog.plugins.pipelineprocessor.functions.syslog.SyslogPriorityConv
 import org.graylog.plugins.pipelineprocessor.functions.syslog.SyslogPriorityToStringConversion;
 import org.graylog.plugins.pipelineprocessor.functions.urls.IsUrl;
 import org.graylog.plugins.pipelineprocessor.functions.urls.UrlConversion;
+import org.graylog.plugins.pipelineprocessor.functions.urls.UrlDecode;
+import org.graylog.plugins.pipelineprocessor.functions.urls.UrlEncode;
 import org.graylog.plugins.pipelineprocessor.parser.FunctionRegistry;
 import org.graylog.plugins.pipelineprocessor.parser.ParseException;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.grok.GrokPattern;
 import org.graylog2.grok.GrokPatternRegistry;
 import org.graylog2.grok.GrokPatternService;
@@ -124,21 +131,21 @@ import org.graylog2.plugin.InstantMillisProvider;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.streams.Stream;
+import org.graylog2.shared.SuppressForbidden;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.graylog2.streams.StreamService;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.Duration;
 import org.joda.time.Period;
-import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.mockito.ArgumentMatchers;
 
 import javax.inject.Provider;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executors;
 
@@ -146,7 +153,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -156,8 +162,10 @@ public class FunctionsSnippetsTest extends BaseParserTest {
     private static final EventBus eventBus = new EventBus();
     private static StreamCacheService streamCacheService;
     private static Stream otherStream;
+    private static MetricRegistry metricRegistry = new MetricRegistry();
 
     @BeforeClass
+    @SuppressForbidden("Allow using default thread factory")
     public static void registerFunctions() {
         final Map<String, Function<?>> functions = commonFunctions();
 
@@ -177,6 +185,7 @@ public class FunctionsSnippetsTest extends BaseParserTest {
         functions.put(DropMessage.NAME, new DropMessage());
         functions.put(CreateMessage.NAME, new CreateMessage());
         functions.put(CloneMessage.NAME, new CloneMessage());
+        functions.put(TrafficAccountingSize.NAME, new TrafficAccountingSize());
 
         // route to stream mocks
         final StreamService streamService = mock(StreamService.class);
@@ -188,13 +197,6 @@ public class FunctionsSnippetsTest extends BaseParserTest {
 
         when(streamService.loadAll()).thenReturn(Lists.newArrayList(defaultStream, otherStream));
         when(streamService.loadAllEnabled()).thenReturn(Lists.newArrayList(defaultStream, otherStream));
-        try {
-            when(streamService.load(anyString())).thenThrow(new NotFoundException());
-            when(streamService.load(ArgumentMatchers.eq(Stream.DEFAULT_STREAM_ID))).thenReturn(defaultStream);
-            when(streamService.load(ArgumentMatchers.eq("id2"))).thenReturn(otherStream);
-        } catch (NotFoundException ignored) {
-            // oh well, checked exceptions <3
-        }
         streamCacheService = new StreamCacheService(eventBus, streamService, null);
         streamCacheService.startAsync().awaitRunning();
         final Provider<Stream> defaultStreamProvider = () -> defaultStream;
@@ -206,6 +208,7 @@ public class FunctionsSnippetsTest extends BaseParserTest {
 
         // generic functions
         functions.put(RegexMatch.NAME, new RegexMatch());
+        functions.put(RegexReplace.NAME, new RegexReplace());
 
         // string functions
         functions.put(Abbreviate.NAME, new Abbreviate());
@@ -219,8 +222,11 @@ public class FunctionsSnippetsTest extends BaseParserTest {
         functions.put(Uncapitalize.NAME, new Uncapitalize());
         functions.put(Uppercase.NAME, new Uppercase());
         functions.put(KeyValue.NAME, new KeyValue());
+        functions.put(Join.NAME, new Join());
         functions.put(Split.NAME, new Split());
         functions.put(StartsWith.NAME, new StartsWith());
+        functions.put(Replace.NAME, new Replace());
+        functions.put(Length.NAME, new Length());
 
         final ObjectMapper objectMapper = new ObjectMapperProvider().get();
         functions.put(JsonParse.NAME, new JsonParse(objectMapper));
@@ -275,6 +281,8 @@ public class FunctionsSnippetsTest extends BaseParserTest {
         functions.put(SyslogLevelConversion.NAME, new SyslogLevelConversion());
 
         functions.put(UrlConversion.NAME, new UrlConversion());
+        functions.put(UrlDecode.NAME, new UrlDecode());
+        functions.put(UrlEncode.NAME, new UrlEncode());
 
         functions.put(IsBoolean.NAME, new IsBoolean());
         functions.put(IsNumber.NAME, new IsNumber());
@@ -291,19 +299,25 @@ public class FunctionsSnippetsTest extends BaseParserTest {
         functions.put(IsUrl.NAME, new IsUrl());
 
         final GrokPatternService grokPatternService = mock(GrokPatternService.class);
+        final GrokPattern greedyPattern = GrokPattern.create("GREEDY", ".*");
         Set<GrokPattern> patterns = Sets.newHashSet(
+                greedyPattern,
                 GrokPattern.create("GREEDY", ".*"),
                 GrokPattern.create("BASE10NUM", "(?<![0-9.+-])(?>[+-]?(?:(?:[0-9]+(?:\\.[0-9]+)?)|(?:\\.[0-9]+)))"),
                 GrokPattern.create("NUMBER", "(?:%{BASE10NUM:UNWANTED})"),
+                GrokPattern.create("UNDERSCORE", "(?<test_field>test)"),
                 GrokPattern.create("NUM", "%{BASE10NUM}")
         );
         when(grokPatternService.loadAll()).thenReturn(patterns);
+        when(grokPatternService.loadByName("GREEDY")).thenReturn(Optional.of(greedyPattern));
         final EventBus clusterBus = new EventBus();
         final GrokPatternRegistry grokPatternRegistry = new GrokPatternRegistry(clusterBus,
                                                                                 grokPatternService,
                                                                                 Executors.newScheduledThreadPool(1));
         functions.put(GrokMatch.NAME, new GrokMatch(grokPatternRegistry));
+        functions.put(GrokExists.NAME, new GrokExists(grokPatternRegistry));
 
+        functions.put(MetricCounterIncrement.NAME, new MetricCounterIncrement(metricRegistry));
         functionRegistry = new FunctionRegistry(functions);
     }
 
@@ -427,6 +441,7 @@ public class FunctionsSnippetsTest extends BaseParserTest {
             assertThat(message.getField("german_year")).isEqualTo(1983);
             assertThat(message.getField("german_month")).isEqualTo(7);
             assertThat(message.getField("german_day")).isEqualTo(24);
+            assertThat(message.getField("german_weekday")).isEqualTo(7);
             assertThat(message.getField("english_year")).isEqualTo(1983);
             assertThat(message.getField("english_month")).isEqualTo(7);
             assertThat(message.getField("english_day")).isEqualTo(24);
@@ -459,6 +474,22 @@ public class FunctionsSnippetsTest extends BaseParserTest {
     }
 
     @Test
+    public void grok_exists() {
+        final Rule rule = parser.parseRule(ruleForTest(), false);
+        evaluateRule(rule);
+
+        assertThat(actionsTriggered.get()).isTrue();
+    }
+
+    @Test
+    public void grok_exists_not() {
+        final Rule rule = parser.parseRule(ruleForTest(), false);
+        evaluateRule(rule);
+
+        assertThat(actionsTriggered.get()).isFalse();
+    }
+
+    @Test
     public void encodings() {
         final Rule rule = parser.parseRule(ruleForTest(), false);
         evaluateRule(rule);
@@ -468,16 +499,19 @@ public class FunctionsSnippetsTest extends BaseParserTest {
 
     @Test
     public void regexMatch() {
-        try {
-            final Rule rule = parser.parseRule(ruleForTest(), false);
-            final Message message = evaluateRule(rule);
-            assertNotNull(message);
-            assertTrue(message.hasField("matched_regex"));
-            assertTrue(message.hasField("group_1"));
-            assertThat((String) message.getField("named_group")).isEqualTo("cd.e");
-        } catch (ParseException e) {
-            Assert.fail("Should parse");
-        }
+        final Rule rule = parser.parseRule(ruleForTest(), false);
+        final Message message = evaluateRule(rule);
+        assertNotNull(message);
+        assertTrue(message.hasField("matched_regex"));
+        assertTrue(message.hasField("group_1"));
+        assertThat((String) message.getField("named_group")).isEqualTo("cd.e");
+    }
+
+    @Test
+    public void regexReplace() {
+        final Rule rule = parser.parseRule(ruleForTest(), false);
+        evaluateRule(rule);
+        assertThat(actionsTriggered.get()).isTrue();
     }
 
     @Test
@@ -494,22 +528,34 @@ public class FunctionsSnippetsTest extends BaseParserTest {
     }
 
     @Test
+    public void stringLength() {
+        final Rule rule = parser.parseRule(ruleForTest(), false);
+        final Message message = evaluateRule(rule);
+
+        assertThat(message).isNotNull();
+        assertThat(message.getField("chars_utf8")).isEqualTo(5L);
+        assertThat(message.getField("bytes_utf8")).isEqualTo(6L);
+        assertThat(message.getField("chars_ascii")).isEqualTo(5L);
+        assertThat(message.getField("bytes_ascii")).isEqualTo(5L);
+    }
+
+    @Test
     public void split() {
         final Rule rule = parser.parseRule(ruleForTest(), false);
         final Message message = evaluateRule(rule);
 
         assertThat(actionsTriggered.get()).isTrue();
         assertThat(message).isNotNull();
-        assertThat(message.getField("limit_0")).isInstanceOf(String[].class);
-        assertThat((String[]) message.getField("limit_0"))
+        assertThat(message.getField("limit_0"))
+                .asList()
                 .isNotEmpty()
                 .containsExactly("foo", "bar", "baz");
-        assertThat(message.getField("limit_1")).isInstanceOf(String[].class);
-        assertThat((String[]) message.getField("limit_1"))
+        assertThat(message.getField("limit_1"))
+                .asList()
                 .isNotEmpty()
                 .containsExactly("foo:bar:baz");
-        assertThat(message.getField("limit_2")).isInstanceOf(String[].class);
-        assertThat((String[]) message.getField("limit_2"))
+        assertThat(message.getField("limit_2"))
+                .asList()
                 .isNotEmpty()
                 .containsExactly("foo", "bar|baz");
     }
@@ -617,11 +663,15 @@ public class FunctionsSnippetsTest extends BaseParserTest {
         final Message message = evaluateRule(rule);
 
         assertThat(message).isNotNull();
-        assertThat(message.getFieldCount()).isEqualTo(5);
+        assertThat(message.getFieldCount()).isEqualTo(6);
         assertThat(message.getTimestamp()).isEqualTo(DateTime.parse("2015-07-31T10:05:36.773Z"));
         // named captures only
         assertThat(message.hasField("num")).isTrue();
         assertThat(message.hasField("BASE10NUM")).isFalse();
+
+        // Test for issue 5563 and 5794
+        // ensure named groups with underscore work
+        assertThat(message.hasField("test_field")).isTrue();
     }
 
     @Test
@@ -835,7 +885,8 @@ public class FunctionsSnippetsTest extends BaseParserTest {
         assertThat(message.getField("e")).isEqualTo("4");
         assertThat(message.getField("f")).isEqualTo("1");
         assertThat(message.getField("g")).isEqualTo("3");
-        assertThat(message.hasField("h")).isFalse();
+        assertThat(message.getField("h")).isEqualTo("3=:3");
+        assertThat(message.hasField("i")).isFalse();
 
         assertThat(message.getField("dup_first")).isEqualTo("1");
         assertThat(message.getField("dup_last")).isEqualTo("2");
@@ -904,8 +955,6 @@ public class FunctionsSnippetsTest extends BaseParserTest {
         assertThat(message.getStreams()).isNotEmpty();
         assertThat(message.getStreams().size()).isEqualTo(2);
 
-        streamCacheService.updateStreams(ImmutableSet.of("id"));
-
         final Message message2 = evaluateRule(rule);
         assertThat(message2).isNotNull();
         assertThat(message2.getStreams().size()).isEqualTo(2);
@@ -919,8 +968,6 @@ public class FunctionsSnippetsTest extends BaseParserTest {
         assertThat(message).isNotNull();
         assertThat(message.getStreams()).isNotEmpty();
         assertThat(message.getStreams().size()).isEqualTo(1);
-
-        streamCacheService.updateStreams(ImmutableSet.of(Stream.DEFAULT_STREAM_ID));
 
         final Message message2 = evaluateRule(rule);
         assertThat(message2).isNotNull();
@@ -943,5 +990,30 @@ public class FunctionsSnippetsTest extends BaseParserTest {
 
         assertThat(message).isNotNull();
         assertThat(message.getStreams()).containsOnly(defaultStream);
+    }
+
+    @Test
+    public void int2ipv4() {
+        final Rule rule = parser.parseRule(ruleForTest(), true);
+        evaluateRule(rule);
+
+        assertThat(actionsTriggered.get()).isTrue();
+    }
+
+    @Test
+    public void accountingSize() {
+        final Rule rule = parser.parseRule(ruleForTest(), true);
+        final Message message = evaluateRule(rule);
+
+        // this can change if either the test message content changes or traffic accounting calculation is changed!
+        assertThat(message.getField("accounting_size")).isEqualTo(54L);
+    }
+
+    @Test
+    public void metricCounter() {
+        final Rule rule = parser.parseRule(ruleForTest(), true);
+        evaluateRule(rule);
+
+        assertThat(metricRegistry.getCounters().get("org.graylog.rulemetrics.foo").getCount()).isEqualTo(42);
     }
 }
