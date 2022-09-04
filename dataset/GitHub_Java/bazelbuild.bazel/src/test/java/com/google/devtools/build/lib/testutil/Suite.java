@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.testutil;
 
+import com.google.devtools.build.lib.util.OS;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
@@ -54,17 +55,10 @@ public enum Suite {
   }
 
   /**
-   * Given a class, determine the suite it belongs to.
+   * Given a class, determine the list of operating systems its tests can run under.
    */
-  public static String getSuiteName(Class<?> clazz) {
-    return getAnnotationElementOrDefault(clazz, "suite");
-  }
-
-  /**
-   * Given a class, determine if it is flaky.
-   */
-  public static boolean isFlaky(Class<?> clazz) {
-    return getAnnotationElementOrDefault(clazz, "flaky");
+  public static OS[] getSupportedOs(Class<?> clazz) {
+    return getAnnotationElementOrDefault(clazz, "supportedOs");
   }
 
   /**

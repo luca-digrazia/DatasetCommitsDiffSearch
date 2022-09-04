@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.testutil;
 
+import com.google.devtools.build.lib.util.OS;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
@@ -35,14 +36,8 @@ public @interface TestSpec {
   Suite size() default Suite.SMALL_TESTS;
 
   /**
-   * The name of the suite to which this test belongs.  Useful for creating
-   * test suites organised by function.
+   * An array of operating systems that the test can run under. If not specified, the test can
+   * run under all operating systems.
    */
-  String suite() default "";
-
-  /**
-   * If the test will pass consistently without outside changes.
-   * This should be fixed as soon as possible.
-   */
-  boolean flaky() default false;
+  OS[] supportedOs() default {};
 }
