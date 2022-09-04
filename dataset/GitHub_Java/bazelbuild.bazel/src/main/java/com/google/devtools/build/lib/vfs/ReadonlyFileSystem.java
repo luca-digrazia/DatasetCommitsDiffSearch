@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
-import com.google.devtools.build.lib.vfs.DigestHashFunction.DefaultHashFunctionNotSetException;
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -37,7 +36,8 @@ import java.io.OutputStream;
  */
 public abstract class ReadonlyFileSystem extends AbstractFileSystem {
 
-  protected ReadonlyFileSystem() throws DefaultHashFunctionNotSetException {}
+  protected ReadonlyFileSystem() {
+  }
 
   public ReadonlyFileSystem(DigestHashFunction digestFunction) {
     super(digestFunction);
