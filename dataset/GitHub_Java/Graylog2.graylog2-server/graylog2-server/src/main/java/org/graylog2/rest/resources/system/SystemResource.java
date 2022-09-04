@@ -27,8 +27,13 @@ import com.google.common.collect.Sets;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresGuest;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.ServerVersion;
+import org.graylog2.Configuration;
+import org.graylog2.Core;
+import org.graylog2.buffers.Buffers;
+import org.graylog2.caches.Caches;
 import org.graylog2.indexer.Indexer;
+import org.graylog2.inputs.ServerInputRegistry;
+import org.graylog2.periodical.Periodicals;
 import org.graylog2.plugin.Tools;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
@@ -38,6 +43,7 @@ import org.graylog2.rest.resources.system.responses.ReaderPermissionResponse;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.ProcessingPauseLockedException;
 import org.graylog2.shared.ServerStatus;
+import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.shutdown.GracefulShutdown;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,17 +72,32 @@ public class SystemResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(SystemResource.class);
 
+    private final Buffers bufferSynchronizer;
     private final ServerStatus serverStatus;
+    private final ActivityWriter activityWriter;
+    private final Configuration configuration;
     private final Indexer indexer;
-    private final GracefulShutdown gracefulShutdown;
+    private final Caches cacheSynchronizer;
+    private final ServerInputRegistry inputs;
+    private final Periodicals periodicals;
 
     @Inject
-    public SystemResource(ServerStatus serverStatus,
+    public SystemResource(Buffers bufferSynchronizer,
+                          ServerStatus serverStatus,
+                          ActivityWriter activityWriter,
+                          Configuration configuration,
                           Indexer indexer,
-                          GracefulShutdown gracefulShutdown) {
+                          Caches cacheSynchronizer,
+                          ServerInputRegistry inputs,
+                          Periodicals periodicals) {
+        this.bufferSynchronizer = bufferSynchronizer;
         this.serverStatus = serverStatus;
+        this.activityWriter = activityWriter;
+        this.configuration = configuration;
         this.indexer = indexer;
-        this.gracefulShutdown = gracefulShutdown;
+        this.cacheSynchronizer = cacheSynchronizer;
+        this.inputs = inputs;
+        this.periodicals = periodicals;
     }
 
     @GET @Timed
@@ -86,15 +107,14 @@ public class SystemResource extends RestResource {
         checkPermission(RestPermissions.SYSTEM_READ, serverStatus.getNodeId().toString());
         Map<String, Object> result = Maps.newHashMap();
         result.put("facility", "graylog2-server");
-        result.put("codename", ServerVersion.CODENAME);
+        result.put("codename", Core.GRAYLOG2_CODENAME);
         result.put("server_id", serverStatus.getNodeId().toString());
-       	result.put("version", ServerVersion.VERSION.toString());
+       	result.put("version", Core.GRAYLOG2_VERSION.toString());
         result.put("started_at", Tools.getISO8601String(serverStatus.getStartedAt()));
         result.put("is_processing", serverStatus.isProcessing());
         result.put("hostname", Tools.getLocalCanonicalHostname());
         result.put("lifecycle", serverStatus.getLifecycle().getName().toLowerCase());
         result.put("lb_status", serverStatus.getLifecycle().getLoadbalancerStatus().toString().toLowerCase());
-        result.put("timezone", serverStatus.getTimezone().getID());
 
         return json(result);
     }
@@ -248,7 +268,8 @@ public class SystemResource extends RestResource {
     public Response shutdown() {
         checkPermission(RestPermissions.NODE_SHUTDOWN, serverStatus.getNodeId().toString());
 
-        new Thread(gracefulShutdown).start();
+        new Thread(new GracefulShutdown(serverStatus, activityWriter, configuration, bufferSynchronizer,
+                cacheSynchronizer, indexer, periodicals, inputs)).start();
         return accepted().build();
     }
 

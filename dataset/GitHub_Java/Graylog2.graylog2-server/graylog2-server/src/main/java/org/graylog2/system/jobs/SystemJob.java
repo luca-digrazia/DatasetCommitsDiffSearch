@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -17,7 +19,7 @@
 package org.graylog2.system.jobs;
 
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.shared.ServerStatus;
 import org.joda.time.DateTime;
 
 import java.util.HashMap;

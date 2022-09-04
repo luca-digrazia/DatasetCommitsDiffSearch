@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2012-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -15,17 +15,14 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.rest.resources.search;
 
 import com.codahale.metrics.annotation.Timed;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.elasticsearch.action.search.SearchPhaseExecutionException;
-import org.glassfish.jersey.server.ChunkedOutput;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.Indexer;
-import org.graylog2.indexer.results.ScrollResult;
 import org.graylog2.indexer.searches.Sorting;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
@@ -36,9 +33,9 @@ import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
-import java.util.List;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -50,6 +47,11 @@ public class RelativeSearchResource extends SearchResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(RelativeSearchResource.class);
 
+    @Inject
+    public RelativeSearchResource(Indexer indexer) {
+        super(indexer);
+    }
+
     @GET @Timed
     @ApiOperation(value = "Message search with relative timerange.",
                   notes = "Search for messages in a relative timerange, specified as seconds from now. " +
@@ -57,14 +59,14 @@ public class RelativeSearchResource extends SearchResource {
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Invalid timerange parameters provided.")
     })
-    @Produces(MediaType.APPLICATION_JSON)
+    @Produces({ MediaType.APPLICATION_JSON, "text/csv" })
     public SearchResponse searchRelative(
             @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
             @ApiParam(title = "range", description = "Relative timeframe to search in. See method description.", required = true) @QueryParam("range") int range,
             @ApiParam(title = "limit", description = "Maximum number of messages to return.", required = false) @QueryParam("limit") int limit,
             @ApiParam(title = "offset", description = "Offset", required = false) @QueryParam("offset") int offset,
             @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter,
-            @ApiParam(title = "sort", description = "Sorting (field:asc / field:desc)", required = false) @QueryParam("sort") String sort) throws IndexHelper.InvalidRangeFormatException {
+            @ApiParam(title = "sort", description = "Sorting (field:asc / field:desc)", required = false) @QueryParam("sort") String sort) {
         checkSearchPermission(filter, RestPermissions.SEARCHES_RELATIVE);
 
         checkQuery(query);
@@ -76,52 +78,20 @@ public class RelativeSearchResource extends SearchResource {
 
             if (filter == null) {
                 searchResponse = buildSearchResponse(
-                        core.getIndexer().searches().search(query, buildRelativeTimeRange(range), limit, offset, sorting)
+                        indexer.searches().search(query, buildRelativeTimeRange(range), limit, offset, sorting)
                 );
             } else {
                 searchResponse = buildSearchResponse(
-                        core.getIndexer().searches().search(query, filter, buildRelativeTimeRange(range), limit, offset, sorting)
+                        indexer.searches().search(query, filter, buildRelativeTimeRange(range), limit, offset, sorting)
                 );
             }
 
             return searchResponse;
-        } catch (SearchPhaseExecutionException e) {
-            throw createRequestExceptionForParseFailure(query, e);
-        }
-    }
-
-    /**
-     * CSV search result, needs to be chunked because these tend to be file exports and would cause heap problems if buffered.
-     */
-    @GET @Timed
-    @Produces("text/csv")
-    public ChunkedOutput<ScrollResult.ScrollChunk> searchRelativeChunked(
-            @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
-            @ApiParam(title = "range", description = "Relative timeframe to search in. See method description.", required = true) @QueryParam("range") int range,
-            @ApiParam(title = "limit", description = "Maximum number of messages to return.", required = false) @QueryParam("limit") int limit,
-            @ApiParam(title = "offset", description = "Offset", required = false) @QueryParam("offset") int offset,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter,
-            @ApiParam(title = "fields", description = "Comma separated list of fields to return", required = true) @QueryParam("fields") String fields) {
-        checkSearchPermission(filter, RestPermissions.SEARCHES_RELATIVE);
-
-        checkQuery(query);
-        final List<String> fieldList = parseFields(fields);
-        final TimeRange timeRange = buildRelativeTimeRange(range);
-
-        try {
-            final ScrollResult scroll = core.getIndexer().searches()
-                    .scroll(query, timeRange, limit, offset, fieldList, filter);
-            final ChunkedOutput<ScrollResult.ScrollChunk> output = new ChunkedOutput<>(ScrollResult.ScrollChunk.class);
-
-            LOG.debug("[{}] Scroll result contains a total of {} messages", scroll.getQueryHash(), scroll.totalHits());
-            Runnable scrollIterationAction = createScrollChunkProducer(scroll, output, limit);
-            // TODO use a shared executor for async responses here instead of a single thread that's not limited
-            new Thread(scrollIterationAction).start();
-            return output;
-        } catch (SearchPhaseExecutionException e) {
-            throw createRequestExceptionForParseFailure(query, e);
         } catch (IndexHelper.InvalidRangeFormatException e) {
-            throw new BadRequestException(e);
+            LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
+            throw new WebApplicationException(400);
+        } catch (SearchPhaseExecutionException e) {
+            throw createRequestExceptionForParseFailure(query, e);
         }
     }
 
@@ -136,14 +106,14 @@ public class RelativeSearchResource extends SearchResource {
             @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
             @ApiParam(title = "size", description = "Maximum number of terms to return", required = false) @QueryParam("size") int size,
             @ApiParam(title = "range", description = "Relative timeframe to search in. See search method description.", required = true) @QueryParam("range") int range,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) throws IndexHelper.InvalidRangeFormatException {
+            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) {
         checkSearchPermission(filter, RestPermissions.SEARCHES_RELATIVE);
 
         checkQueryAndField(query, field);
 
         try {
             return json(buildTermsResult(
-                    core.getIndexer().searches().terms(field, size, query, filter, buildRelativeTimeRange(range))
+                    indexer.searches().terms(field, size, query, filter, buildRelativeTimeRange(range))
             ));
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
@@ -199,7 +169,7 @@ public class RelativeSearchResource extends SearchResource {
 
         try {
             return json(buildHistogramResult(
-                    core.getIndexer().searches().histogram(
+                    indexer.searches().histogram(
                             query,
                             Indexer.DateHistogramInterval.valueOf(interval),
                             filter,

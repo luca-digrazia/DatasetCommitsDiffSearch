@@ -29,6 +29,7 @@ import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.session.UnknownSessionException;
 import org.apache.shiro.subject.Subject;
 import org.apache.shiro.util.ThreadContext;
+import org.graylog2.Core;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.documentation.annotations.ApiParam;
@@ -115,7 +116,7 @@ public class SessionsResource extends RestResource {
             result.validUntil = new DateTime(session.getLastAccessTime()).plus(session.getTimeout()).toDate();
             return result;
         }
-        throw new NotAuthorizedException("Invalid username or password", "Basic realm=\"Graylog2 Server session\"");
+        throw new NotAuthorizedException("Invalid username or password", "Graylog2 Server session");
     }
 
     @DELETE

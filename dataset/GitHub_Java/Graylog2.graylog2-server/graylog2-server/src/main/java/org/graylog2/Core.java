@@ -1,5 +1,5 @@
-/**
- * Copyright 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
+/*
+ * Copyright 2012-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -15,70 +15,99 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
 package org.graylog2;
 
-import org.glassfish.grizzly.http.server.HttpServer;
-import org.graylog2.plugin.Tools;
-
-import java.io.IOException;
-import java.net.URI;
-import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.codahale.metrics.MetricRegistry;
+import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.inject.Injector;
+import com.google.inject.internal.util.$Nullable;
+import com.google.inject.name.Named;
+import org.apache.shiro.mgt.DefaultSecurityManager;
+import org.cliffc.high_scale_lib.Counter;
+import org.glassfish.hk2.extension.ServiceLocatorGenerator;
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
+import org.glassfish.jersey.internal.inject.Injections;
+import org.glassfish.jersey.message.GZipEncoder;
+import org.glassfish.jersey.server.ContainerFactory;
+import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.server.filter.EncodingFilter;
+import org.glassfish.jersey.server.internal.scanning.PackageNamesScanner;
+import org.graylog2.alerts.AlertSender;
 import org.graylog2.blacklists.BlacklistCache;
+import org.graylog2.buffers.Buffers;
 import org.graylog2.buffers.OutputBuffer;
-import org.graylog2.buffers.ProcessBuffer;
-import org.graylog2.database.MongoBridge;
+import org.graylog2.buffers.OutputBufferWatermark;
+import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
+import org.graylog2.caches.Caches;
+import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.Indexer;
+import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
+import org.graylog2.initializers.Initializers;
+import org.graylog2.inputs.ServerInputRegistry;
+import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
+import org.graylog2.jersey.container.netty.NettyContainer;
+import org.graylog2.jersey.container.netty.SecurityContextFactory;
+import org.graylog2.metrics.MongoDbMetricsReporter;
+import org.graylog2.metrics.jersey2.MetricsDynamicBinding;
+import org.graylog2.outputs.OutputRegistry;
+import org.graylog2.periodical.Periodicals;
+import org.graylog2.plugin.*;
+import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
+import org.graylog2.plugin.alarms.transports.Transport;
+import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.initializers.Initializer;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.gelf.GELFChunkManager;
 import org.graylog2.plugin.outputs.MessageOutput;
-import org.graylog2.streams.StreamCache;
+import org.graylog2.plugin.rest.AnyExceptionClassMapper;
+import org.graylog2.plugin.rest.JacksonPropertyExceptionMapper;
+import org.graylog2.plugins.LegacyPluginLoader;
+import org.graylog2.rest.CORSFilter;
+import org.graylog2.rest.ObjectMapperProvider;
+import org.graylog2.rest.RestAccessLogFilter;
+import org.graylog2.security.ShiroSecurityBinding;
+import org.graylog2.security.ldap.LdapConnector;
+import org.graylog2.security.realm.LdapUserAuthenticator;
+import org.graylog2.shared.ServerStatus;
+import org.graylog2.shared.bindings.OwnServiceLocatorGenerator;
+import org.graylog2.shared.buffers.ProcessBuffer;
+import org.graylog2.shared.buffers.ProcessBufferWatermark;
+import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
+import org.graylog2.shared.filters.FilterRegistry;
+import org.graylog2.shared.plugins.PluginLoader;
+import org.graylog2.shared.stats.ThroughputStats;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
+import org.graylog2.system.jobs.SystemJobFactory;
+import org.graylog2.system.jobs.SystemJobManager;
+import org.graylog2.system.shutdown.GracefulShutdown;
+import org.jboss.netty.bootstrap.ServerBootstrap;
+import org.jboss.netty.channel.ChannelPipeline;
+import org.jboss.netty.channel.ChannelPipelineFactory;
+import org.jboss.netty.channel.Channels;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.jboss.netty.handler.codec.http.HttpRequestDecoder;
+import org.jboss.netty.handler.codec.http.HttpResponseEncoder;
+import org.jboss.netty.handler.stream.ChunkedWriteHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Lists;
-import java.util.concurrent.atomic.AtomicInteger;
-import com.google.common.collect.Maps;
-import java.util.Map;
-
-import javax.ws.rs.core.UriBuilder;
-
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.sun.jersey.api.container.grizzly2.GrizzlyServerFactory;
-import com.sun.jersey.api.core.PackagesResourceConfig;
-import com.sun.jersey.api.core.ResourceConfig;
-
-import org.cliffc.high_scale_lib.Counter;
-import org.graylog2.activities.Activity;
-import org.graylog2.activities.ActivityWriter;
-import org.graylog2.buffers.BasicCache;
-import org.graylog2.buffers.Cache;
-import org.graylog2.cluster.Cluster;
-import org.graylog2.database.HostCounterCacheImpl;
-import org.graylog2.indexer.Deflector;
-import org.graylog2.initializers.*;
-import org.graylog2.inputs.StandardInputSet;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
-import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
-import org.graylog2.plugin.alarms.transports.Transport;
-import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
-import org.graylog2.plugin.buffers.Buffer;
-import org.graylog2.plugin.filters.MessageFilter;
-import org.graylog2.plugin.indexer.MessageGateway;
-import org.graylog2.plugin.initializers.InitializerConfigurationException;
-import org.graylog2.plugin.inputs.MessageInputConfigurationException;
-import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.plugins.PluginConfiguration;
-import org.graylog2.plugins.PluginLoader;
-import org.graylog2.streams.StreamImpl;
+import javax.inject.Inject;
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.net.InetSocketAddress;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Server core, handling and holding basically everything.
@@ -91,131 +120,167 @@ public class Core implements GraylogServer {
 
     private static final Logger LOG = LoggerFactory.getLogger(Core.class);
 
+    @Inject
     private MongoConnection mongoConnection;
-    private MongoBridge mongoBridge;
+    @Inject
     private Configuration configuration;
-    private RulesEngineImpl rulesEngine;
-    private ServerValue serverValues;
+    @Inject
+    private ServerStatus serverStatus;
+//    @Inject @$Nullable
+//    private RulesEngine rulesEngine;
+
+    @Inject
     private GELFChunkManager gelfChunkManager;
 
-    private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
+    @Inject
+    @Named("scheduler")
     private ScheduledExecutorService scheduler;
 
-    public static final String GRAYLOG2_VERSION = "0.20.0-dev";
-    public static final String GRAYLOG2_CODENAME = "Amigo Humanos (Flipper)";
+    @Inject
+    @Named("daemonScheduler")
+    private ScheduledExecutorService daemonScheduler;
 
-    public static final String MASTER_COUNTER_NAME = "master";
+    public static final Version GRAYLOG2_VERSION = ServerVersion.VERSION;
+    public static final String GRAYLOG2_CODENAME = "Moose";
 
+    @Inject
     private Indexer indexer;
 
-    private HostCounterCacheImpl hostCounterCache;
+//    private Counter benchmarkCounter = new Counter();
+//    private Counter throughputCounter = new Counter();
+    @Inject
+    private FilterRegistry filterRegistry;
 
-    private MessageCounterManagerImpl messageCounterManager;
-
-    private Cluster cluster;
-    
-    private Counter benchmarkCounter = new Counter();
-    
-    private List<Initializer> initializers = Lists.newArrayList();
-    private List<MessageInput> inputs = Lists.newArrayList();
-    private List<MessageFilter> filters = Lists.newArrayList();
-    private List<MessageOutput> outputs = Lists.newArrayList();
     private List<Transport> transports = Lists.newArrayList();
     private List<AlarmCallback> alarmCallbacks = Lists.newArrayList();
-    
+
+    @Inject
+    private Initializers initializers;
+    @Inject
+    private ServerInputRegistry inputs;
+
+    @Inject
+    private OutputRegistry outputs;
+    @Inject
+    private Periodicals periodicals;
+
+    @Inject
     private ProcessBuffer processBuffer;
+    @Inject
     private OutputBuffer outputBuffer;
-    private AtomicInteger outputBufferWatermark = new AtomicInteger();
-    private AtomicInteger processBufferWatermark = new AtomicInteger();
+
+//    @Inject
+//    private OutputBufferWatermark outputBufferWatermark;
+    @Inject
+    private ProcessBufferWatermark processBufferWatermark;
     
-    private Cache inputCache;
-    private Cache outputCache;
-    
+    @Inject
     private Deflector deflector;
     
+    @Inject
     private ActivityWriter activityWriter;
 
-    private String serverId;
-    
-    private boolean localMode = false;
-    private boolean statsMode = false;
-    
-    private int startedAt;
+//    @Inject
+//    private SystemJobManager systemJobManager;
 
-    public void initialize(Configuration configuration) {
-    	startedAt = Tools.getUTCTimestamp();
-        serverId = Tools.generateServerId();
-        
-        this.configuration = configuration; // TODO use dependency injection
+//    private boolean localMode = false;
+//    private boolean statsMode = false;
 
-        mongoConnection = new MongoConnection();    // TODO use dependency injection
-        mongoConnection.setUser(configuration.getMongoUser());
-        mongoConnection.setPassword(configuration.getMongoPassword());
-        mongoConnection.setHost(configuration.getMongoHost());
-        mongoConnection.setPort(configuration.getMongoPort());
-        mongoConnection.setDatabase(configuration.getMongoDatabase());
-        mongoConnection.setUseAuth(configuration.isMongoUseAuth());
-        mongoConnection.setMaxConnections(configuration.getMongoMaxConnections());
-        mongoConnection.setThreadsAllowedToBlockMultiplier(configuration.getMongoThreadsAllowedToBlockMultiplier());
-        mongoConnection.setReplicaSet(configuration.getMongoReplicaSet());
+    @Inject
+    private MetricRegistry metricRegistry;
+//    private LdapUserAuthenticator ldapUserAuthenticator;
+//    private LdapConnector ldapConnector;
+//    private DefaultSecurityManager securityManager;
+//    private MongoDbMetricsReporter metricsReporter;
 
-        mongoBridge = new MongoBridge(this);
-        mongoBridge.setConnection(mongoConnection); // TODO use dependency injection
-        mongoConnection.connect();
-        
-        cluster = new Cluster(this);
-        
-        activityWriter = new ActivityWriter(this);
-        
-        messageCounterManager = new MessageCounterManagerImpl();
-        messageCounterManager.register(MASTER_COUNTER_NAME);
+//    @Inject
+//    private ProcessBuffer.Factory processBufferFactory;
+    @Inject
+    private ServerProcessBufferProcessor.Factory processBufferProcessorFactory;
+//    @Inject
+//    private OutputBuffer.Factory outputBufferFactory;
 
-        hostCounterCache = new HostCounterCacheImpl();
-        
-        inputCache = new BasicCache();
-        outputCache = new BasicCache();
-    
-        processBuffer = new ProcessBuffer(this, inputCache);
-        processBuffer.initialize();
+//    @Inject
+//    private ThroughputStats throughputStats;
 
-        outputBuffer = new OutputBuffer(this, outputCache);
+    @Inject
+    private DashboardRegistry dashboardRegistry;
+
+    @Inject
+    private Buffers bufferSynchronizer;
+
+    @Inject
+    private Caches cacheSynchronizer;
+
+    @Inject
+    private SystemJobFactory systemJobFactory;
+
+//    @Inject
+//    private RebuildIndexRangesJob.Factory rebuildIndexRangesJobFactory;
+
+//    @Inject
+//    private AlertSender alertSender;
+
+    @Inject
+    private SecurityContextFactory shiroSecurityContextFactory;
+
+    public void initialize() {
+        final MongoDbMetricsReporter metricsReporter;
+        if (configuration.isMetricsCollectionEnabled()) {
+            metricsReporter = MongoDbMetricsReporter.forRegistry(metricRegistry, mongoConnection, serverStatus).build();
+            metricsReporter.start(1, TimeUnit.SECONDS);
+        }
+
+        if (this.configuration.getRestTransportUri() == null) {
+                String guessedIf;
+                try {
+                    guessedIf = Tools.guessPrimaryNetworkAddress().getHostAddress();
+                } catch (Exception e) {
+                    LOG.error("Could not guess primary network address for rest_transport_uri. Please configure it in your graylog2.conf.", e);
+                    throw new RuntimeException("No rest_transport_uri.");
+                }
+
+                String transportStr = "http://" + guessedIf + ":" + configuration.getRestListenUri().getPort();
+                LOG.info("No rest_transport_uri set. Falling back to [{}].", transportStr);
+                this.configuration.setRestTransportUri(transportStr);
+        }
+
+        if (serverStatus.hasCapability(ServerStatus.Capability.MASTER)) {
+            dashboardRegistry.loadPersisted();
+        }
+
         outputBuffer.initialize();
 
-        gelfChunkManager = new GELFChunkManager(this);
+        int processBufferProcessorCount = configuration.getProcessBufferProcessors();
 
-        indexer = new Indexer(this);
-        serverValues = new ServerValue(this);
-                
+        ProcessBufferProcessor[] processors = new ProcessBufferProcessor[processBufferProcessorCount];
+
+        for (int i = 0; i < processBufferProcessorCount; i++) {
+            processors[i] = processBufferProcessorFactory.create(outputBuffer, this, processBufferWatermark, i, processBufferProcessorCount);
+        }
+
+        processBuffer.initialize(processors, configuration.getRingSize(),
+                configuration.getProcessorWaitStrategy(),
+                configuration.getProcessBufferProcessors()
+        );
+
+        indexer.start();
+
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                activityWriter.write(new Activity("Shutting down.", GraylogServer.class));
+                String msg = "SIGNAL received. Shutting down.";
+                LOG.info(msg);
+                activityWriter.write(new Activity(msg, Core.class));
+
+                GracefulShutdown gs = new GracefulShutdown(serverStatus, activityWriter, configuration,
+                        bufferSynchronizer, cacheSynchronizer, indexer, periodicals, inputs);
+                gs.run();
             }
         });
     }
-    
-    public void registerInitializer(Initializer initializer) {
-        if (initializer.masterOnly() && !this.isMaster()) {
-            LOG.info("Not registering initializer {} because it is marked as master only.", initializer.getClass().getSimpleName());
-            return;
-        }
-        
-        this.initializers.add(initializer);
-    }
 
-    public void registerInput(MessageInput input) {
-        this.inputs.add(input);
-    }
-
-    public void registerFilter(MessageFilter filter) {
-        this.filters.add(filter);
-    }
-
-    public void registerOutput(MessageOutput output) {
-        this.outputs.add(output);
-    }
-    
-    public void registerTransport(Transport transport) {
+    private void registerTransport(Transport transport) {
         this.transports.add(transport);
     }
     
@@ -228,318 +293,195 @@ public class Core implements GraylogServer {
 
         gelfChunkManager.start();
         BlacklistCache.initialize(this);
-        StreamCache.initialize(this);
-        
+
         // Set up deflector.
         LOG.info("Setting up deflector.");
-        deflector = new Deflector(this);
-        deflector.setUp();
-
-        scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
-                new ThreadFactoryBuilder().setNameFormat("scheduled-%d").build()
-        );
+        deflector.setUp(indexer);
 
         // Load and register plugins.
-        loadPlugins(MessageFilter.class, "filters");
-        loadPlugins(MessageOutput.class, "outputs");
-        loadPlugins(AlarmCallback.class, "alarm_callbacks");
-        loadPlugins(Transport.class, "transports");
-        loadPlugins(Initializer.class, "initializers");
-        loadPlugins(MessageInput.class, "inputs");
-        
-        // Initialize all registered transports.
-        for (Transport transport : this.transports) {
-            try {
-                Map<String, String> config;
-                
-                // The built in transport methods get a more convenient configuration from graylog2.conf.
-                if (transport.getClass().getCanonicalName().equals("org.graylog2.alarms.transports.EmailTransport")) {
-                    config = configuration.getEmailTransportConfiguration();
-                } else if (transport.getClass().getCanonicalName().equals("org.graylog2.alarms.transports.JabberTransport")) {
-                    config = configuration.getJabberTransportConfiguration();
-                } else {
-                    // Load custom plugin config.
-                    config = PluginConfiguration.load(this, transport.getClass().getCanonicalName());
-                }
-                
-                transport.initialize(config);
-                LOG.debug("Initialized transport: {}", transport.getName());
-            } catch (TransportConfigurationException e) {
-                LOG.error("Could not initialize transport <" + transport.getName() + ">"
-                        + " because of missing or invalid configuration.", e);
-            }
-        }
-        
-        // Initialize all registered alarm callbacks.
-        for (AlarmCallback callback : this.alarmCallbacks) {
-            try {
-                callback.initialize(PluginConfiguration.load(this, callback.getClass().getCanonicalName()));
-                LOG.debug("Initialized alarm callback: {}", callback.getName());
-            } catch(AlarmCallbackConfigurationException e) {
-                LOG.error("Could not initialize alarm callback <" + callback.getName() + ">"
-                        + " because of missing or invalid configuration.", e);
-            }
-        }
-        
-        // Initialize all registered initializers.
-        for (Initializer initializer : this.initializers) {
-            try {
-                if (StandardInitializerSet.get().contains(initializer.getClass())) {
-                    // This is a built-in initializer. We don't need special configs for them.
-                    initializer.initialize(this, null);
-                } else {
-                    // This is a plugin. Initialize with custom config from Mongo.
-                    initializer.initialize(this, PluginConfiguration.load(
-                            this,
-                            initializer.getClass().getCanonicalName())
-                    );
-                }
-                
-                LOG.debug("Initialized initializer: {}", initializer.getClass().getSimpleName());
-            } catch (InitializerConfigurationException e) {
-                
-            }
-            
-        }
+        registerPlugins(MessageInput.class, "inputs");
 
-        // Initialize all registered inputs.
-        for (MessageInput input : this.inputs) {
-            try {
-                if (StandardInputSet.get().contains(input.getClass())) {
-                    // This is a built-in input. Initialize with config from graylog2.conf.
-                    input.initialize(configuration.getInputConfig(input.getClass()), this);
-                } else {
-                    // This is a plugin. Initialize with custom config from Mongo.
-                    input.initialize(PluginConfiguration.load(
-                            this,
-                            input.getClass().getCanonicalName()),
-                            this
-                    );
-                }
-                
-                LOG.debug("Initialized input: {}", input.getName());
-            } catch (MessageInputConfigurationException e) {
-                LOG.error("Could not initialize input <{}>.", input.getClass().getCanonicalName(), e);
-            }
-        }
-        
-        // Initialize all registered outputs.
-        for (MessageOutput output : this.outputs) {
-            try {
-                output.initialize(PluginConfiguration.load(this, output.getClass().getCanonicalName()));
-                LOG.debug("Initialized output: {}", output.getName());
-            } catch(MessageOutputConfigurationException e) {
-                LOG.error("Could not initialize output <" + output.getName() + ">"
-                        + " because of missing or invalid configuration.", e);
-            }
-        }
+        // Ramp it all up. (both plugins and built-in types)
+        initializers.initialize();
+        outputs.initialize();
 
-        activityWriter.write(new Activity("Started up.", GraylogServer.class));
-        LOG.info("Graylog2 up and running.");
-
-        while (true) {
-            try { Thread.sleep(1000); } catch (InterruptedException e) { /* lol, i don't care */ }
-        }
-
+        // Load persisted inputs.
+        inputs.launchAllPersisted();
     }
-    
-    public void startRestApi() throws IOException {
-        URI restUri = UriBuilder.fromUri(configuration.getRestListenUri()).port(configuration.getRestListenPort()).build();
-        startRestServer(restUri);
-        LOG.info("Started REST API at <{}>", restUri);
+
+    private class Graylog2Binder extends AbstractBinder {
+        @Override
+        protected void configure() {
+            bind(systemJobFactory).to(SystemJobFactory.class);
+            //bind(Core.this).to(Core.class);
+            /*bind(metricRegistry).to(MetricRegistry.class);
+            bind(throughputStats).to(ThroughputStats.class);
+            bind(new StreamServiceImpl(mongoConnection)).to(StreamService.class);
+            bind(new StreamRuleServiceImpl(mongoConnection)).to(StreamRuleService.class);
+            bind(new DashboardServiceImpl(mongoConnection)).to(DashboardService.class);
+            bind(new NodeServiceImpl(mongoConnection)).to(NodeService.class);
+            bind(new LdapSettingsServiceImpl(mongoConnection)).to(LdapSettingsService.class);
+            bind(new SystemMessageServiceImpl(mongoConnection)).to(SystemMessageService.class);
+            bind(new NotificationServiceImpl(mongoConnection)).to(NotificationService.class);
+            bind(new InputServiceImpl(mongoConnection)).to(InputService.class);
+            bind(new AlertServiceImpl(mongoConnection)).to(AlertService.class);
+            bind(new UserServiceImpl(mongoConnection, configuration)).to(UserService.class);
+            bind(new AccessTokenServiceImpl(mongoConnection)).to(AccessTokenService.class);
+            bind(new IndexRangeServiceImpl(mongoConnection, activityWriter)).to(IndexRangeService.class);
+            bind(new SavedSearchServiceImpl(mongoConnection)).to(SavedSearchService.class);
+            bind(new IndexFailureServiceImpl(mongoConnection)).to(IndexFailureService.class);
+            bind(dashboardRegistry).to(DashboardRegistry.class);
+            bind(activityWriter).to(ActivityWriter.class);
+            bind(serverStatus).to(ServerStatus.class);
+            bind(outputBufferWatermark).to(OutputBufferWatermark.class);
+            bind(processBufferWatermark).to(ProcessBufferWatermark.class);
+            bind(deflector).to(Deflector.class);
+            bind(indexer).to(Indexer.class);
+            bind(systemJobFactory).to(SystemJobFactory.class);
+            bind(bufferSynchronizer).to(Buffers.class);
+            bind(configuration).to(Configuration.class);
+            bind(systemJobManager).to(SystemJobManager.class);
+            bind(rebuildIndexRangesJobFactory).to(RebuildIndexRangesJob.Factory.class);
+            bind(cacheSynchronizer).to(Caches.class);
+            bind(inputs).to(ServerInputRegistry.class);
+            bind(alertSender).to(AlertSender.class);
+            bind(periodicals).to(Periodicals.class);
+            bind(mongoConnection).to(MongoConnection.class);
+            bind(serverStatus.getNodeId()).to(NodeId.class);
+            bind((InputCache)getInputCache()).to(InputCache.class);
+            bind((OutputCache)getOutputCache()).to(OutputCache.class);
+            bind(processBuffer).to(ProcessBuffer.class);
+            bind(outputBuffer).to(OutputBuffer.class);*/
+        }
     }
-    
-    private <A> void loadPlugins(Class<A> type, String subDirectory) {
-        PluginLoader<A> pl = new PluginLoader<A>(configuration.getPluginDir(), subDirectory, type);
+
+    public void startRestApi(Injector injector) throws IOException {
+        ServiceLocatorGenerator ownGenerator = new OwnServiceLocatorGenerator(injector);
+        try {
+            Field field = Injections.class.getDeclaredField("generator");
+            field.setAccessible(true);
+            Field modifiers = Field.class.getDeclaredField("modifiers");
+            modifiers.setAccessible(true);
+            modifiers.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+
+            field.set(null, ownGenerator);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            LOG.error("Monkey patching Jersey's HK2 failed: ", e);
+            System.exit(-1);
+        }
+
+        /*ServiceLocatorFactory factory = ServiceLocatorFactory.getInstance();
+        factory.addListener(new HK2ServiceLocatorListener(injector));*/
+
+        final ExecutorService bossExecutor = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                        .setNameFormat("restapi-boss-%d")
+                        .build());
+
+        final ExecutorService workerExecutor = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                        .setNameFormat("restapi-worker-%d")
+                        .build());
+
+        final ServerBootstrap bootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(
+                bossExecutor,
+                workerExecutor
+        ));
+
+        ResourceConfig rc = new ResourceConfig()
+                .property(NettyContainer.PROPERTY_BASE_URI, configuration.getRestListenUri())
+                .registerClasses(MetricsDynamicBinding.class,
+                        JacksonPropertyExceptionMapper.class,
+                        AnyExceptionClassMapper.class,
+                        ShiroSecurityBinding.class,
+                        RestAccessLogFilter.class)
+                .register(new Graylog2Binder())
+                .register(ObjectMapperProvider.class)
+                .register(JacksonJsonProvider.class)
+                .registerFinder(new PackageNamesScanner(new String[]{"org.graylog2.rest.resources"}, true));
+
+        if (configuration.isRestEnableGzip())
+            EncodingFilter.enableFor(rc, GZipEncoder.class);
+
+        if (configuration.isRestEnableCors()) {
+            LOG.info("Enabling CORS for REST API");
+            rc.register(CORSFilter.class);
+        }
+
+        /*rc = rc.registerFinder(new PackageNamesScanner(new String[]{"org.graylog2.rest.resources"}, true));*/
+
+        final NettyContainer jerseyHandler = ContainerFactory.createContainer(NettyContainer.class, rc);
+        jerseyHandler.setSecurityContextFactory(shiroSecurityContextFactory);
+
+        bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
+            @Override
+            public ChannelPipeline getPipeline() throws Exception {
+                ChannelPipeline pipeline = Channels.pipeline();
+                pipeline.addLast("decoder", new HttpRequestDecoder());
+                pipeline.addLast("encoder", new HttpResponseEncoder());
+                pipeline.addLast("chunks", new ChunkedWriteHandler());
+                pipeline.addLast("jerseyHandler", jerseyHandler);
+                return pipeline;
+            }
+        }) ;
+        bootstrap.setOption("child.tcpNoDelay", true);
+        bootstrap.setOption("child.keepAlive", true);
+
+        bootstrap.bind(new InetSocketAddress(
+                configuration.getRestListenUri().getHost(),
+                configuration.getRestListenUri().getPort()
+        ));
+
+        LOG.info("Started REST API at <{}>", configuration.getRestListenUri());
+    }
+
+
+    private <A> void registerPlugins(Class<A> type, String subDirectory) {
+        LegacyPluginLoader<A> pl = new LegacyPluginLoader<A>(configuration.getPluginDir(), subDirectory, type);
         for (A plugin : pl.getPlugins()) {
-            LOG.info("Registering <{}> plugin [{}].", type.getSimpleName(), plugin.getClass().getCanonicalName());
-            
+            LOG.info("Loaded <{}> plugin [{}].", type.getSimpleName(), plugin.getClass().getCanonicalName());
+
             if (plugin instanceof MessageFilter) {
-                registerFilter((MessageFilter) plugin);
+                filterRegistry.register((MessageFilter) plugin);
+            } else if (plugin instanceof MessageInput) {
+                inputs.register(plugin.getClass(), ((MessageInput) plugin).getName());
             } else if (plugin instanceof MessageOutput) {
-                registerOutput((MessageOutput) plugin);
+                outputs.register((MessageOutput) plugin);
             } else if (plugin instanceof AlarmCallback) {
                 registerAlarmCallback((AlarmCallback) plugin);
             } else if (plugin instanceof Initializer) {
-                registerInitializer((Initializer) plugin);
-            } else if (plugin instanceof MessageInput) {
-                registerInput((MessageInput) plugin);
+                initializers.register((Initializer) plugin);
             } else if (plugin instanceof Transport) {
                 registerTransport((Transport) plugin);
             } else {
                 LOG.error("Could not load plugin [{}] - Not supported type.", plugin.getClass().getCanonicalName());
             }
         }
-    }
 
-    private HttpServer startRestServer(URI restUri) throws IOException {
-        ResourceConfig rc = new PackagesResourceConfig("org.graylog2.rest.resources");
-        rc.getProperties().put("core", this);
-        return GrizzlyServerFactory.createHttpServer(restUri, rc);
+        PluginLoader pluginLoader = new PluginLoader(new File(configuration.getPluginDir()));
+        for (Plugin plugin : pluginLoader.loadPlugins()) {
+            for (Class<? extends MessageInput> inputClass : plugin.inputs()) {
+                final MessageInput messageInput;
+                try {
+                    messageInput = inputClass.newInstance();
+                    inputs.register(inputClass, messageInput.getName());
+                } catch (Exception e) {
+                    LOG.error("Unable to register message input " + inputClass.getCanonicalName(), e);
+                }
+            }
+        }
     }
 
     public MongoConnection getMongoConnection() {
         return mongoConnection;
     }
 
-    public MongoBridge getMongoBridge() {
-        return mongoBridge;
-    }
-
-    public ScheduledExecutorService getScheduler() {
-        return scheduler;
-    }
-    
-    public void setConfiguration(Configuration configuration) {
-        this.configuration = configuration;
-    }
-
-    public Configuration getConfiguration() {
-        return configuration;
-    }
-
-    public void setRulesEngine(RulesEngineImpl engine) {
-        rulesEngine = engine;
-    }
-
-    public RulesEngineImpl getRulesEngine() {
-        return rulesEngine;
-    }
-
-    public Indexer getIndexer() {
-        return indexer;
-    }
-
-    public ServerValue getServerValues() {
-        return serverValues;
-    }
-
-    public GELFChunkManager getGELFChunkManager() {
-        return this.gelfChunkManager;
-    }
-
     @Override
-    public Buffer getProcessBuffer() {
-        return this.processBuffer;
-    }
-
-    @Override
-    public Buffer getOutputBuffer() {
-        return this.outputBuffer;
+    public String getNodeId() {
+        return serverStatus.getNodeId().toString();
     }
     
-    public AtomicInteger outputBufferWatermark() {
-        return outputBufferWatermark;
+    public MetricRegistry metrics() {
+        return metricRegistry;
     }
-    
-    public AtomicInteger processBufferWatermark() {
-        return processBufferWatermark;
-    }
-
-    public List<Initializer> getInitializers() {
-        return this.initializers;
-    }
-    
-    public List<Transport> getTransports() {
-        return this.transports;
-    }
-    
-    public List<MessageInput> getInputs() {
-        return this.inputs;
-    }
-    
-    public List<MessageFilter> getFilters() {
-        return this.filters;
-    }
-
-    public List<MessageOutput> getOutputs() {
-        return this.outputs;
-    }
-
-    public List<AlarmCallback> getAlarmCallbacks() {
-        return this.alarmCallbacks;
-    }
-    
-    @Override
-    public MessageCounterManagerImpl getMessageCounterManager() {
-        return this.messageCounterManager;
-    }
-
-    public HostCounterCacheImpl getHostCounterCache() {
-        return this.hostCounterCache;
-    }
-    
-    public Deflector getDeflector() {
-        return this.deflector;
-    }
-    
-    public Cluster cluster() {
-        return this.cluster;
-    }
-    
-    public ActivityWriter getActivityWriter() {
-        return this.activityWriter;
-    }
-    
-    @Override
-    public boolean isMaster() {
-        return this.configuration.isMaster();
-    }
-    
-    @Override
-    public String getServerId() {
-        return this.serverId;
-    }
-    
-    @Override
-    public MessageGateway getMessageGateway() {
-        return this.indexer.getMessageGateway();
-    }
-    
-    public void setLocalMode(boolean mode) {
-        this.localMode = mode;
-    }
-   
-    public boolean isLocalMode() {
-        return localMode;
-    }
-
-    public void setStatsMode(boolean mode) {
-        this.statsMode = mode;
-    }
-   
-    public boolean isStatsMode() {
-        return statsMode;
-    }
-    
-    /*
-     * For plugins that need a list of all active streams. Could be moved somewhere
-     * more appropiate.
-     */
-    @Override
-    public Map<String, Stream> getEnabledStreams() {
-        Map<String, Stream> streams = Maps.newHashMap();
-        for (Stream stream : StreamImpl.loadAllEnabled(this)) {
-            streams.put(stream.getId().toString(), stream);
-        }
-        
-        return streams;
-    }
-    
-    public Counter getBenchmarkCounter() {
-        return benchmarkCounter;
-    }
-
-    public Cache getInputCache() {
-        return inputCache;
-    }
-    
-    public Cache getOutputCache() {
-        return outputCache;
-    }
-    
-    public int getStartedAt() {
-    	return startedAt;
-    }
-    
 }

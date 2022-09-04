@@ -26,22 +26,11 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.commons.mail.EmailException;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.alarmcallbacks.AlarmCallbackConfiguration;
-import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
-import org.graylog2.alarmcallbacks.AlarmCallbackFactory;
-import org.graylog2.alarmcallbacks.EmailAlarmCallback;
-import org.graylog2.alerts.AbstractAlertCondition;
-import org.graylog2.alerts.Alert;
-import org.graylog2.alerts.AlertImpl;
-import org.graylog2.alerts.AlertService;
+import org.graylog2.alerts.*;
 import org.graylog2.alerts.types.DummyAlertCondition;
 import org.graylog2.database.ValidationException;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.alarms.AlertCondition;
-import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
-import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
-import org.graylog2.plugin.alarms.callbacks.AlarmCallbackException;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.documentation.annotations.*;
@@ -76,6 +65,7 @@ public class StreamAlertResource extends RestResource {
 
     private final StreamService streamService;
     private final AlertService alertService;
+    private final AlertSender alertSender;
     private final Indexer indexer;
 
     private static final String CACHE_KEY_BASE = "alerts";
@@ -87,10 +77,61 @@ public class StreamAlertResource extends RestResource {
     @Inject
     public StreamAlertResource(StreamService streamService,
                                AlertService alertService,
+                               AlertSender alertSender,
                                Indexer indexer) {
         this.streamService = streamService;
         this.alertService = alertService;
+        this.alertSender = alertSender;
         this.indexer = indexer;
+    }
+
+    @POST @Timed
+    @Path("conditions")
+    @ApiOperation(value = "Create a alert condition")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Stream not found."),
+            @ApiResponse(code = 400, message = "Invalid ObjectId.")
+    })
+    public Response create(@ApiParam(title = "streamId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid,
+                           @ApiParam(title = "JSON body", required = true) String body) {
+        CreateConditionRequest ccr;
+        checkPermission(RestPermissions.STREAMS_EDIT, streamid);
+
+        try {
+            ccr = objectMapper.readValue(body, CreateConditionRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
+        Stream stream;
+        try {
+            stream = streamService.load(streamid);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
+
+        final AlertCondition alertCondition;
+        try {
+            alertCondition = alertService.fromRequest(ccr, stream);
+        } catch (AlertCondition.NoSuchAlertConditionTypeException e) {
+            LOG.error("Invalid alarm condition type.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
+        try {
+            streamService.addAlertCondition(stream, alertCondition);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("alert_condition_id", alertCondition.getId());
+
+        return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
 
     @GET @Timed
@@ -188,4 +229,161 @@ public class StreamAlertResource extends RestResource {
         return Response.status(Response.Status.OK).entity(json(result)).build();
     }
 
+    @GET @Timed
+    @Path("conditions")
+    @ApiOperation(value = "Get all alert conditions of this stream")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Stream not found."),
+            @ApiResponse(code = 400, message = "Invalid ObjectId.")
+    })
+    public Response listConditions(@ApiParam(title = "streamId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid) {
+        checkPermission(RestPermissions.STREAMS_READ, streamid);
+
+        Stream stream;
+        try {
+            stream = streamService.load(streamid);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
+
+        List<Map<String, Object>> conditions = Lists.newArrayList();
+        for (AlertCondition alertCondition : streamService.getAlertConditions(stream)) {
+            conditions.add(alertService.asMap(alertCondition));
+        }
+
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("conditions", conditions);
+        result.put("total", conditions.size());
+
+        return Response.status(Response.Status.OK).entity(json(result)).build();
+    }
+
+    @DELETE @Timed
+    @Path("conditions/{conditionId}")
+    @ApiOperation(value = "Delete an alert condition")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Stream not found."),
+            @ApiResponse(code = 400, message = "Invalid ObjectId.")
+    })
+    public Response list(@ApiParam(title = "streamId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid,
+                         @ApiParam(title = "conditionId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("conditionId") String conditionId) {
+        checkPermission(RestPermissions.STREAMS_READ, streamid);
+
+        Stream stream;
+        try {
+            stream = streamService.load(streamid);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
+
+        streamService.removeAlertCondition(stream, conditionId);
+
+        return Response.status(Response.Status.NO_CONTENT).build();
+    }
+
+    @POST @Timed
+    @Path("receivers")
+    @ApiOperation(value = "Add an alert receiver")
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Stream not found."),
+            @ApiResponse(code = 400, message = "Invalid ObjectId.")
+    })
+    public Response addReceiver(
+            @ApiParam(title = "streamId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid,
+            @ApiParam(title = "entity", description = "Name/ID of user or email address to add as alert receiver.", required = true) @QueryParam("entity") String entity,
+            @ApiParam(title = "type", description = "Type: users or emails", required = true) @QueryParam("type") String type
+            ) {
+        checkPermission(RestPermissions.STREAMS_EDIT, streamid);
+
+        if(type == null || (!type.equals("users") && !type.equals("emails"))) {
+            LOG.warn("No such type: [{}]", type);
+            throw new WebApplicationException(400);
+        }
+
+        Stream stream;
+        try {
+            stream = streamService.load(streamid);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
+
+        // Maybe the list already contains this receiver?
+        if (stream.getAlertReceivers().containsKey(type) || stream.getAlertReceivers().get(type) != null) {
+            if (stream.getAlertReceivers().get(type).contains(entity)) {
+                return Response.status(Response.Status.CREATED).build();
+            }
+        }
+
+        streamService.addAlertReceiver(stream, type, entity);
+
+        return Response.status(Response.Status.CREATED).build();
+    }
+
+    @DELETE @Timed
+    @Path("receivers")
+    @ApiOperation(value = "Remove an alert receiver")
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Stream not found."),
+            @ApiResponse(code = 400, message = "Invalid ObjectId.")
+    })
+    public Response removeReceiver(
+            @ApiParam(title = "streamId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid,
+            @ApiParam(title = "entity", description = "Name/ID of user or email address to remove from alert receivers.", required = true) @QueryParam("entity") String entity,
+            @ApiParam(title = "type", description = "Type: users or emails", required = true) @QueryParam("type") String type) {
+        checkPermission(RestPermissions.STREAMS_EDIT, streamid);
+
+        if(!type.equals("users") && !type.equals("emails")) {
+            LOG.warn("No such type: [{}]", type);
+            throw new WebApplicationException(400);
+        }
+
+        Stream stream;
+        try {
+            stream = streamService.load(streamid);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
+
+        streamService.removeAlertReceiver(stream, type, entity);
+
+        return Response.status(Response.Status.NO_CONTENT).build();
+    }
+
+    @GET @Timed
+    @Path("sendDummyAlert")
+    @ApiOperation(value = "Send a test mail for a given stream")
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Stream not found."),
+            @ApiResponse(code = 400, message = "Invalid ObjectId.")
+    })
+    public Response sendDummyAlert(@ApiParam(title = "streamId",
+            description = "The stream id this new alert condition belongs to.",
+            required = true) @PathParam("streamId") String streamid)
+            throws TransportConfigurationException, EmailException {
+        checkPermission(RestPermissions.STREAMS_EDIT, streamid);
+
+        Stream stream;
+        try {
+            stream = streamService.load(streamid);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
+
+        Map<String, Object> parameters = Maps.newHashMap();
+        DummyAlertCondition dummyAlertCondition = new DummyAlertCondition(stream, null, null, Tools.iso8601(), "admin", parameters);
+
+        try {
+            AlertCondition.CheckResult checkResult = dummyAlertCondition.runCheck(indexer);
+            alertSender.sendEmails(stream,checkResult);
+        } catch (TransportConfigurationException e) {
+            return Response.serverError().entity("E-Mail transport is not or improperly configured.").build();
+        } catch (EmailException e) {
+            LOG.error("Sending dummy alert failed: {}", e);
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+
+        return Response.status(Response.Status.NO_CONTENT).build();
+    }
 }

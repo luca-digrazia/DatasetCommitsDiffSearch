@@ -16,21 +16,21 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.rest.resources.streams;
 
+import com.beust.jcommander.internal.Lists;
+import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.bson.types.ObjectId;
 import org.cliffc.high_scale_lib.Counter;
+import org.graylog2.alerts.AlertCondition;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.rest.documentation.annotations.*;
@@ -39,6 +39,7 @@ import org.graylog2.rest.resources.streams.requests.CreateRequest;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.stats.ThroughputStats;
 import org.graylog2.streams.*;
+import org.graylog2.system.jobs.SystemJobFactory;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -65,17 +66,17 @@ public class StreamResource extends RestResource {
     private final StreamService streamService;
     private final StreamRuleService streamRuleService;
     private final ThroughputStats throughputStats;
-    private final StreamRouter.Factory streamRouterFactory;
+    private final MetricRegistry metricRegistry;
 
     @Inject
     public StreamResource(StreamService streamService,
                           StreamRuleService streamRuleService,
                           ThroughputStats throughputStats,
-                          StreamRouter.Factory streamRouterFactory) {
+                          MetricRegistry metricRegistry) {
         this.streamService = streamService;
         this.streamRuleService = streamRuleService;
         this.throughputStats = throughputStats;
-        this.streamRouterFactory = streamRouterFactory;
+        this.metricRegistry = metricRegistry;
     }
 
     @POST @Timed
@@ -344,7 +345,7 @@ public class StreamResource extends RestResource {
         Stream stream = fetchStream(streamId);
         Message message = new Message(serialisedMessage.get("message"));
 
-        StreamRouter router = streamRouterFactory.create(false);
+        StreamRouter router = new StreamRouter(false, streamService, streamRuleService, metricRegistry);
 
         Map<StreamRule, Boolean> ruleMatches = router.getRuleMatches(stream, message);
         Map<String, Boolean> rules = Maps.newHashMap();

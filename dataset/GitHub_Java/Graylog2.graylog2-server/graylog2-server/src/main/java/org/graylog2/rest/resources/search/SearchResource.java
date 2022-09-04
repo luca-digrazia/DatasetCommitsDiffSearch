@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@socketfeed.com>
+/*
+ * Copyright 2012-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -15,13 +15,10 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
 package org.graylog2.rest.resources.search;
 
-import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.Token;
@@ -29,10 +26,12 @@ import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.ShardSearchFailure;
 import org.elasticsearch.search.SearchParseException;
-import org.glassfish.jersey.server.ChunkedOutput;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.Indexer;
-import org.graylog2.indexer.results.*;
+import org.graylog2.indexer.results.FieldStatsResult;
+import org.graylog2.indexer.results.HistogramResult;
+import org.graylog2.indexer.results.SearchResult;
+import org.graylog2.indexer.results.TermsResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.Sorting;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
@@ -44,13 +43,11 @@ import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -58,6 +55,12 @@ import java.util.Map;
  */
 public class SearchResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(SearchResource.class);
+    protected final Indexer indexer;
+
+    @Inject
+    public SearchResource(Indexer indexer) {
+        this.indexer = indexer;
+    }
 
     protected void validateInterval(String interval) {
         try {
@@ -103,31 +106,13 @@ public class SearchResource extends RestResource {
         }
     }
 
-    protected List<String> parseFields(String fields) {
-        if (fields == null || fields.isEmpty()) {
-            LOG.warn("Missing fields parameter. Returning HTTP 400");
-            throw new BadRequestException("Missing required parameter `fields`");
-        }
-        final Iterable<String> split = Splitter.on(',').omitEmptyStrings().trimResults().split(fields);
-        final ArrayList<String> fieldList = Lists.newArrayList("timestamp", "source");
-        // skip the mandatory fields timestamp and source
-        for (String field : split) {
-            if ("timestamp".equals(field) || "source".equals(field)) {
-                continue;
-            }
-            fieldList.add(field);
-        }
-
-        return fieldList;
-    }
-
     protected FieldStatsResult fieldStats(String field, String query, TimeRange timeRange) throws IndexHelper.InvalidRangeFormatException {
         return fieldStats(field, query, null, timeRange);
     }
 
     protected FieldStatsResult fieldStats(String field, String query, String filter, TimeRange timeRange) throws IndexHelper.InvalidRangeFormatException {
         try {
-            return core.getIndexer().searches().fieldStats(field, query, filter, timeRange);
+            return indexer.searches().fieldStats(field, query, filter, timeRange);
         } catch(Searches.FieldTypeException e) {
             LOG.error("Stats query failed. Make sure that field [{}] is a numeric type.", field);
             throw new WebApplicationException(400);
@@ -136,7 +121,7 @@ public class SearchResource extends RestResource {
 
     protected HistogramResult fieldHistogram(String field, String query, String interval, String filter, TimeRange timeRange) throws IndexHelper.InvalidRangeFormatException {
         try {
-            return core.getIndexer().searches().fieldHistogram(
+            return indexer.searches().fieldHistogram(
                     query,
                     field,
                     Indexer.DateHistogramInterval.valueOf(interval),
@@ -293,41 +278,4 @@ public class SearchResource extends RestResource {
         }
     }
 
-    protected Runnable createScrollChunkProducer(final ScrollResult scroll,
-                                                 final ChunkedOutput<ScrollResult.ScrollChunk> output,
-                                                 final int limit) {
-        return new Runnable() {
-            private int collectedHits = 0;
-
-            @Override
-            public void run() {
-                try {
-                    ScrollResult.ScrollChunk chunk = scroll.nextChunk();
-                    while (chunk != null) {
-                        LOG.debug("[{}] Writing scroll chunk with {} messages",
-                                  scroll.getQueryHash(),
-                                  chunk.getMessages().size());
-                        if (output.isClosed()) {
-                            LOG.debug("[{}] Client connection is closed, client disconnected. Aborting scroll.",
-                                      scroll.getQueryHash());
-                            scroll.cancel();
-                            return;
-                        }
-                        output.write(chunk);
-                        collectedHits += chunk.getMessages().size();
-                        if (limit != 0 && collectedHits >= limit) {
-                            scroll.cancel();
-                            output.close();
-                            return;
-                        }
-                        chunk = scroll.nextChunk();
-                    }
-                    LOG.debug("[{}] Reached end of scroll result.", scroll.getQueryHash());
-                    output.close();
-                } catch (IOException e) {
-                    LOG.warn("[{}] Could not close chunked output stream for query scroll.", scroll.getQueryHash());
-                }
-            }
-        };
-    }
 }
