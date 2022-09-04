@@ -201,7 +201,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private final FileSystem fileSystem;
   private final BlazeDirectories directories;
   protected final ExternalFilesHelper externalFilesHelper;
-  private final GraphInconsistencyReceiver graphInconsistencyReceiver;
   @Nullable protected OutputService outputService;
 
   // TODO(bazel-team): Figure out how to handle value builders that block internally. Blocking
@@ -340,7 +339,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       List<BuildFileName> buildFilesByPriority,
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
       boolean shouldUnblockCpuWorkWhenFetchingDeps,
-      GraphInconsistencyReceiver graphInconsistencyReceiver,
       BuildOptions defaultBuildOptions,
       @Nullable PackageProgressReceiver packageProgress,
       MutableArtifactFactorySupplier artifactResolverSupplier,
@@ -350,7 +348,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.evaluatorSupplier = evaluatorSupplier;
     this.pkgFactory = pkgFactory;
     this.shouldUnblockCpuWorkWhenFetchingDeps = shouldUnblockCpuWorkWhenFetchingDeps;
-    this.graphInconsistencyReceiver = graphInconsistencyReceiver;
     this.pkgFactory.setSyscalls(syscalls);
     this.workspaceStatusActionFactory = workspaceStatusActionFactory;
     this.packageManager = new SkyframePackageManager(
@@ -658,7 +655,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             skyFunctions,
             evaluatorDiffer(),
             progressReceiver,
-            graphInconsistencyReceiver,
+            GraphInconsistencyReceiver.THROWING,
             emittedEventState,
             tracksStateForIncrementality());
     buildDriver = getBuildDriver();

@@ -263,11 +263,8 @@ public final class BlazeRuntime {
   /**
    * Conditionally enable profiling.
    */
-  private final boolean initProfiler(
-      CommandEnvironment env,
-      CommonCommandOptions options,
-      UUID buildID,
-      long execStartTimeNanos) {
+  private final boolean initProfiler(CommandEnvironment env, CommonCommandOptions options,
+      UUID buildID, long execStartTimeNanos) {
     OutputStream out = null;
     boolean recordFullProfilerData = false;
     ProfiledTaskKinds profiledTasks = ProfiledTaskKinds.NONE;
@@ -286,14 +283,10 @@ public final class BlazeRuntime {
         profiledTasks = ProfiledTaskKinds.SLOWEST;
       }
       if (profiledTasks != ProfiledTaskKinds.NONE) {
-        Profiler.instance().start(
-            profiledTasks,
-            out,
+        Profiler.instance().start(profiledTasks, out,
             getProductName() + " profile for " + env.getOutputBase() + " at " + new Date()
             + ", build ID: " + buildID,
-            recordFullProfilerData,
-            clock,
-            execStartTimeNanos);
+            recordFullProfilerData, clock, execStartTimeNanos);
         return true;
       }
     } catch (IOException e) {
@@ -967,11 +960,11 @@ public final class BlazeRuntime {
   /**
    * Parses the command line arguments into a {@link OptionsParser} object.
    *
-   * <p>This function needs to parse the --option_sources option manually so that the real option
+   *  <p>This function needs to parse the --option_sources option manually so that the real option
    * parser can set the source for every option correctly. If that cannot be parsed or is missing,
    * we just report an unknown source for every startup option.
    */
-  private static OptionsProvider parseStartupOptions(
+  private static OptionsProvider parseOptions(
       Iterable<BlazeModule> modules, List<String> args) throws OptionsParsingException {
     ImmutableList<Class<? extends OptionsBase>> optionClasses =
         BlazeCommandUtils.getStartupOptions(modules);
@@ -1013,7 +1006,7 @@ public final class BlazeRuntime {
   private static BlazeRuntime newRuntime(Iterable<BlazeModule> blazeModules, List<String> args,
       Runnable abruptShutdownHandler)
       throws AbruptExitException, OptionsParsingException {
-    OptionsProvider options = parseStartupOptions(blazeModules, args);
+    OptionsProvider options = parseOptions(blazeModules, args);
     for (BlazeModule module : blazeModules) {
       module.globalInit(options);
     }

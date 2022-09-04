@@ -62,10 +62,6 @@ public class BuildRequestOptions extends OptionsBase {
   )
   public int jobs;
 
-  public int getJobs() {
-    return jobs == 0 ? 1 : jobs; // Treat 0 jobs as a single task.
-  }
-
   @Option(
     name = "progress_report_interval",
     defaultValue = "0",
@@ -371,21 +367,6 @@ public class BuildRequestOptions extends OptionsBase {
   }
 
   @Option(
-    name = "print_workspace_in_output_paths_if_needed",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
-    help =
-        "If enabled, when the current working directory is deeper than the workspace (for example, "
-            + "when running from <workspace>/foo instead of <workspace>), printed output paths "
-            + "include the absolute path to the workspace (for example, "
-            + "<workspace>/<symlink_prefix>-bin/foo/binary instead of "
-            + "<symlink_prefix>-bin/foo/binary)."
-  )
-  public boolean printWorkspaceInOutputPathsIfNeeded;
-
-
-  @Option(
     name = "use_action_cache",
     defaultValue = "true",
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -403,22 +384,11 @@ public class BuildRequestOptions extends OptionsBase {
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       metadataTags = OptionMetadataTag.INCOMPATIBLE_CHANGE,
       effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help = "This option is deprecated and has no effect.")
+      help =
+          "If true, Blaze will clear actions from memory after it executes them. Has no effect "
+              + "unless --notrack_incremental_state is also specified. Do not use unless instructed"
+              + " by the Blaze team.")
   public boolean discardActionsAfterExecution;
-
-  @Option(
-      name = "incompatible_use_per_action_file_cache",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "Whether to use the per action file cache. We saw issues with a previous rollout "
-          + "attempt (which we could not track down to a root cause), so we are extra careful now "
-          + "and use a flag to enable the new code path.")
-  public boolean usePerActionFileCache;
 
   /** Converter for jobs: [0, MAX_JOBS] or "auto". */
   public static class JobsConverter extends RangeConverter {
