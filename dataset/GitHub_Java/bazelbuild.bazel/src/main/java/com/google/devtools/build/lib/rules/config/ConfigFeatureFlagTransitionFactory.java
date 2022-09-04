@@ -105,13 +105,6 @@ public class ConfigFeatureFlagTransitionFactory implements RuleTransitionFactory
     }
   }
 
-  /**
-   * Returns the attribute examined by this transition factory.
-   */
-  public String getAttributeName() {
-    return this.attributeName;
-  }
-
   @Override
   public boolean equals(Object other) {
     return other instanceof ConfigFeatureFlagTransitionFactory

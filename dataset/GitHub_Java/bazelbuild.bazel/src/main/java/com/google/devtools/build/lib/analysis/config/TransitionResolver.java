@@ -222,8 +222,9 @@ public final class TransitionResolver {
     }
     if (transitionFactory != null) {
       PatchTransition ruleClassTransition =
-          Preconditions.checkNotNull(
-              transitionFactory.buildTransitionFor(toTarget.getAssociatedRule()));
+          (PatchTransition)
+              Preconditions.checkNotNull(
+                  transitionFactory.buildTransitionFor(toTarget.getAssociatedRule()));
       if (currentTransition == NoTransition.INSTANCE) {
         return ruleClassTransition;
       } else if (ruleClassTransition != NoTransition.INSTANCE) {
