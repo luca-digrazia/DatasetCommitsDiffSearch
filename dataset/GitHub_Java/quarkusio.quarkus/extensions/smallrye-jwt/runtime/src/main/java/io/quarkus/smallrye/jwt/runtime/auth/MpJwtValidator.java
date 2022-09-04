@@ -32,7 +32,7 @@ public class MpJwtValidator implements IdentityProvider<TokenAuthenticationReque
 
     final JWTAuthContextInfo authContextInfo;
 
-    private final DefaultJWTTokenParser parser = new DefaultJWTTokenParser();
+    private DefaultJWTTokenParser parser = new DefaultJWTTokenParser();
 
     public MpJwtValidator() {
         authContextInfo = null;
