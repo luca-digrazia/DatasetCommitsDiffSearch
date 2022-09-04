@@ -1,13 +1,12 @@
 package io.quarkus.grpc.deployment;
 
-import static io.quarkus.deployment.Feature.GRPC_CLIENT;
+import static io.quarkus.deployment.builditem.FeatureBuildItem.GRPC_CLIENT;
 import static io.quarkus.grpc.deployment.GrpcDotNames.CREATE_CHANNEL_METHOD;
 import static io.quarkus.grpc.deployment.GrpcDotNames.RETRIEVE_CHANNEL_METHOD;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 import javax.enterprise.inject.spi.DeploymentException;
 import javax.inject.Singleton;
@@ -38,6 +37,11 @@ public class GrpcClientProcessor {
     private static final Logger LOGGER = Logger.getLogger(GrpcClientProcessor.class.getName());
 
     @BuildStep
+    public FeatureBuildItem registerFeature() {
+        return new FeatureBuildItem(GRPC_CLIENT);
+    }
+
+    @BuildStep
     void registerBeans(BuildProducer<AdditionalBeanBuildItem> beans) {
         beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcService.class));
         beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcClientConfigProvider.class));
@@ -46,8 +50,7 @@ public class GrpcClientProcessor {
     @BuildStep
     void discoverInjectedGrpcServices(
             BeanRegistrationPhaseBuildItem phase,
-            BuildProducer<GrpcServiceBuildItem> services,
-            BuildProducer<FeatureBuildItem> features) {
+            BuildProducer<GrpcServiceBuildItem> services) {
 
         Map<String, GrpcServiceBuildItem> items = new HashMap<>();
 
@@ -90,17 +93,10 @@ public class GrpcClientProcessor {
             }
         }
 
-        items.values().forEach(new Consumer<GrpcServiceBuildItem>() {
-            @Override
-            public void accept(GrpcServiceBuildItem item) {
-                services.produce(item);
-                LOGGER.debugf("Detected GrpcService associated with the '%s' configuration prefix", item.name);
-            }
+        items.values().forEach(item -> {
+            services.produce(item);
+            LOGGER.debugf("Detected GrpcService associated with the '%s' configuration prefix", item.name);
         });
-
-        if (!items.isEmpty()) {
-            features.produce(new FeatureBuildItem(GRPC_CLIENT));
-        }
     }
 
     private boolean isMutinyStub(DotName name) {
@@ -127,12 +123,7 @@ public class GrpcClientProcessor {
                     .addQualifier().annotation(GrpcDotNames.GRPC_SERVICE).addValue("value", svc.getServiceName()).done()
                     .scope(Singleton.class)
                     .unremovable()
-                    .creator(new Consumer<MethodCreator>() {
-                        @Override
-                        public void accept(MethodCreator mc) {
-                            GrpcClientProcessor.this.generateChannelProducer(mc, svc);
-                        }
-                    });
+                    .creator(mc -> generateChannelProducer(mc, svc));
             channelProducer.done();
             beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(channelProducer));
 
@@ -142,12 +133,7 @@ public class GrpcClientProcessor {
                         .types(svc.blockingStubClass)
                         .addQualifier().annotation(GrpcDotNames.GRPC_SERVICE).addValue("value", svc.getServiceName()).done()
                         .scope(Singleton.class)
-                        .creator(new Consumer<MethodCreator>() {
-                            @Override
-                            public void accept(MethodCreator mc) {
-                                GrpcClientProcessor.this.generateStubProducer(mc, svc, false);
-                            }
-                        });
+                        .creator(mc -> generateStubProducer(mc, svc, false));
                 blockingStubProducer.done();
                 beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(blockingStubProducer));
             }
@@ -158,12 +144,7 @@ public class GrpcClientProcessor {
                         .types(svc.mutinyStubClass)
                         .addQualifier().annotation(GrpcDotNames.GRPC_SERVICE).addValue("value", svc.getServiceName()).done()
                         .scope(Singleton.class)
-                        .creator(new Consumer<MethodCreator>() {
-                            @Override
-                            public void accept(MethodCreator mc) {
-                                GrpcClientProcessor.this.generateStubProducer(mc, svc, true);
-                            }
-                        });
+                        .creator(mc -> generateStubProducer(mc, svc, true));
                 blockingStubProducer.done();
                 beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(blockingStubProducer));
             }
