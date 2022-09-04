@@ -22,7 +22,6 @@ package org.graylog2.inputs.gelf;
 
 import org.graylog2.gelf.GELFProcessor;
 import org.graylog2.gelf.GELFMessage;
-import org.graylog2.inputs.InputStub;
 import org.graylog2.plugin.Tools;
 import org.graylog2.GraylogServerStub;
 import org.graylog2.TestHelper;
@@ -45,8 +44,8 @@ public class GELFProcessorTest {
         GraylogServerStub serverStub = new GraylogServerStub();
         GELFProcessor processor = new GELFProcessor(serverStub);
 
-        processor.messageReceived(new GELFMessage(TestHelper.zlibCompress(GELF_JSON_COMPLETE)), new InputStub());
-        processor.messageReceived(new GELFMessage(TestHelper.gzipCompress(GELF_JSON_COMPLETE)), new InputStub());
+        processor.messageReceived(new GELFMessage(TestHelper.zlibCompress(GELF_JSON_COMPLETE)), null);
+        processor.messageReceived(new GELFMessage(TestHelper.gzipCompress(GELF_JSON_COMPLETE)), null);
         // All GELF types are tested in GELFMessageTest.
 
         Message lm = serverStub.lastInsertedToProcessBuffer;
@@ -70,7 +69,7 @@ public class GELFProcessorTest {
         GraylogServerStub serverStub = new GraylogServerStub();
         GELFProcessor processor = new GELFProcessor(serverStub);
 
-        processor.messageReceived(new GELFMessage(TestHelper.zlibCompress(GELF_JSON_INCOMPLETE)), new InputStub());
+        processor.messageReceived(new GELFMessage(TestHelper.zlibCompress(GELF_JSON_INCOMPLETE)), null);
         // All GELF types are tested in GELFMessageTest.
 
         Message lm = serverStub.lastInsertedToProcessBuffer;
@@ -87,7 +86,7 @@ public class GELFProcessorTest {
         GraylogServerStub serverStub = new GraylogServerStub();
         GELFProcessor processor = new GELFProcessor(serverStub);
 
-        processor.messageReceived(new GELFMessage(TestHelper.zlibCompress(GELF_JSON_INCOMPLETE_WITH_ID)), new InputStub());
+        processor.messageReceived(new GELFMessage(TestHelper.zlibCompress(GELF_JSON_INCOMPLETE_WITH_ID)), null);
         // All GELF types are tested in GELFMessageTest.
 
         Message lm = serverStub.lastInsertedToProcessBuffer;
@@ -103,7 +102,7 @@ public class GELFProcessorTest {
         GraylogServerStub serverStub = new GraylogServerStub();
         GELFProcessor processor = new GELFProcessor(serverStub);
 
-        processor.messageReceived(new GELFMessage(TestHelper.zlibCompress(GELF_JSON_WITH_MAP)), new InputStub());
+        processor.messageReceived(new GELFMessage(TestHelper.zlibCompress(GELF_JSON_WITH_MAP)), null);
         // All GELF types are tested in GELFMessageTest.
 
         Message lm = serverStub.lastInsertedToProcessBuffer;
