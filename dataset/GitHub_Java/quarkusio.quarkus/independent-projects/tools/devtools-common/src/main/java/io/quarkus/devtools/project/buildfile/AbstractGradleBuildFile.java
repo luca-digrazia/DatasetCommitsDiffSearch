@@ -24,7 +24,7 @@ public abstract class AbstractGradleBuildFile extends BuildFile {
 
     private final Path rootProjectPath;
 
-    private final AtomicReference<Model> modelReference = new AtomicReference<>();
+    private AtomicReference<Model> modelReference = new AtomicReference<>();
 
     public AbstractGradleBuildFile(final Path projectDirPath, final QuarkusPlatformDescriptor platformDescriptor) {
         this(projectDirPath, platformDescriptor, null);
@@ -161,7 +161,7 @@ public abstract class AbstractGradleBuildFile extends BuildFile {
         this.modelReference.set(null);
     }
 
-    private boolean hasRootProjectFile(final String fileName) {
+    private boolean hasRootProjectFile(final String fileName) throws IOException {
         if (rootProjectPath == null) {
             return false;
         }
@@ -207,17 +207,17 @@ public abstract class AbstractGradleBuildFile extends BuildFile {
         return new Model(settingsContent, buildContent, propertiesContent, rootSettingsContent, rootPropertiesContent);
     }
 
-    protected String getBuildContent() {
+    protected String getBuildContent() throws IOException {
         return getModel().getBuildContent();
     }
 
     static class Model {
         private String settingsContent;
         private String buildContent;
-        private final Properties propertiesContent;
+        private Properties propertiesContent;
 
-        private final String rootSettingsContent;
-        private final Properties rootPropertiesContent;
+        private String rootSettingsContent;
+        private Properties rootPropertiesContent;
 
         public Model(String settingsContent, String buildContent, Properties propertiesContent, String rootSettingsContent,
                 Properties rootPropertiesContent) {
