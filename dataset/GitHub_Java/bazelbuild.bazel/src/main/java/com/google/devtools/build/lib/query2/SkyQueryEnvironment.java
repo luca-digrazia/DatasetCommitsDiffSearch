@@ -163,7 +163,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private GraphBackedRecursivePackageProvider graphBackedRecursivePackageProvider;
   private ListeningExecutorService executor;
   private RecursivePackageProviderBackedTargetPatternResolver resolver;
-  protected final SkyKey universeKey;
+  private final SkyKey universeKey;
   private final ImmutableList<TargetPatternKey> universeTargetPatternKeys;
 
   public SkyQueryEnvironment(
@@ -239,27 +239,17 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     }
   }
 
-  /** Gets roots of graph which contains all nodes needed to evaluate {@code expr}. */
-  protected Set<SkyKey> getGraphRootsFromExpression(QueryExpression expr)
-      throws QueryException, InterruptedException {
-    return ImmutableSet.of(universeKey);
-  }
-
-  private void beforeEvaluateQuery(QueryExpression expr)
-      throws QueryException, InterruptedException {
-    Set<SkyKey> roots = getGraphRootsFromExpression(expr);
-    if (graph == null || !graphFactory.isUpToDate(roots)) {
+  private void beforeEvaluateQuery() throws InterruptedException {
+    if (graph == null || !graphFactory.isUpToDate(universeKey)) {
       // If this environment is uninitialized or the graph factory needs to evaluate, do so. We
       // assume here that this environment cannot be initialized-but-stale if the factory is up
       // to date.
       EvaluationResult<SkyValue> result;
       try (AutoProfiler p = AutoProfiler.logged("evaluation and walkable graph", LOG)) {
-        result = graphFactory.prepareAndGet(roots, loadingPhaseThreads, universeEvalEventHandler);
+        result =
+            graphFactory.prepareAndGet(universeKey, loadingPhaseThreads, universeEvalEventHandler);
       }
-
-      if (roots.size() == 1 && Iterables.getOnlyElement(roots).equals(universeKey)) {
-        checkEvaluationResult(result);
-      }
+      checkEvaluationResult(result);
 
       packageSemaphore = makeFreshPackageMultisetSemaphore();
       graph = result.getWalkableGraph();
@@ -345,7 +335,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     }
 
     @Override
-    public QueryExpression visit(FunctionExpression functionExpression) {
+    public QueryExpression map(FunctionExpression functionExpression) {
       if (functionExpression.getFunction().getName().equals(new RdepsFunction().getName())) {
         List<Argument> args = functionExpression.getArgs();
         QueryExpression universeExpression = args.get(0).getExpression();
@@ -359,14 +349,14 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
           }
         }
       }
-      return super.visit(functionExpression);
+      return super.map(functionExpression);
     }
   }
 
   @Override
   public final QueryExpression transformParsedQuery(QueryExpression queryExpression) {
     QueryExpressionMapper mapper = getQueryExpressionMapper();
-    QueryExpression transformedQueryExpression = queryExpression.accept(mapper);
+    QueryExpression transformedQueryExpression = queryExpression.getMapped(mapper);
     LOG.info(String.format(
         "transformed query [%s] to [%s]",
         Ascii.truncate(
@@ -416,7 +406,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   public QueryEvalResult evaluateQuery(
       QueryExpression expr, ThreadSafeOutputFormatterCallback<Target> callback)
           throws QueryException, InterruptedException, IOException {
-    beforeEvaluateQuery(expr);
+    beforeEvaluateQuery();
 
     // SkyQueryEnvironment batches callback invocations using a BatchStreamedCallback, created here
     // so that there's one per top-level evaluateQuery call. The batch size is large enough that
@@ -1163,7 +1153,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       implements InterruptibleSupplier<ImmutableSet<PathFragment>> {
     private final WalkableGraph graph;
 
-    private BlacklistSupplier(WalkableGraph graph) {
+    BlacklistSupplier(WalkableGraph graph) {
       this.graph = graph;
     }
 
