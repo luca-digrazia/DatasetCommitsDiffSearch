@@ -31,7 +31,6 @@ import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.event.Event;
 import javax.enterprise.inject.Instance;
-import javax.enterprise.inject.UnsatisfiedResolutionException;
 import javax.enterprise.inject.spi.AnnotatedField;
 import javax.enterprise.inject.spi.AnnotatedMember;
 import javax.enterprise.inject.spi.AnnotatedMethod;
@@ -67,8 +66,9 @@ public class BeanManagerImpl implements BeanManager {
     @SuppressWarnings({ "unchecked", "rawtypes" })
     @Override
     public Object getReference(Bean<?> bean, Type beanType, CreationalContext<?> ctx) {
-        Objects.requireNonNull(bean, "Bean is null");
-        Objects.requireNonNull(beanType, "Bean type is null");
+        if (bean == null) {
+            throw new NullPointerException("Managed Bean [" + beanType + "] is null");
+        }
         Objects.requireNonNull(ctx, "CreationalContext is null");
         if (bean instanceof InjectableBean && ctx instanceof CreationalContextImpl) {
             return ArcContainerImpl.instance().beanInstanceHandle((InjectableBean) bean, (CreationalContextImpl) ctx).get();
@@ -78,26 +78,9 @@ public class BeanManagerImpl implements BeanManager {
                         + bean + "\nctx: " + ctx);
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
     @Override
     public Object getInjectableReference(InjectionPoint ij, CreationalContext<?> ctx) {
-        Objects.requireNonNull(ij, "InjectionPoint is null");
-        Objects.requireNonNull(ctx, "CreationalContext is null");
-        if (ctx instanceof CreationalContextImpl) {
-            Set<Bean<?>> beans = getBeans(ij.getType(), ij.getQualifiers().toArray(new Annotation[] {}));
-            if (beans.isEmpty()) {
-                throw new UnsatisfiedResolutionException();
-            }
-            InjectableBean<?> bean = (InjectableBean<?>) resolve(beans);
-            InjectionPoint prev = InjectionPointProvider.set(ij);
-            try {
-                return ArcContainerImpl.instance().beanInstanceHandle(bean, (CreationalContextImpl) ctx, false).get();
-            } finally {
-                InjectionPointProvider.set(prev);
-            }
-        }
-        throw new IllegalArgumentException(
-                "CreationalContext must be an instances of " + CreationalContextImpl.class);
+        throw new UnsupportedOperationException();
     }
 
     @Override
