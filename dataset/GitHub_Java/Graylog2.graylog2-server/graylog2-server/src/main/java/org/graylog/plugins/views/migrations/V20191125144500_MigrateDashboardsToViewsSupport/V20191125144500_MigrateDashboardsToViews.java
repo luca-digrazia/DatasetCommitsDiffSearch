@@ -59,11 +59,11 @@ public class V20191125144500_MigrateDashboardsToViews extends Migration {
         final Map<String, Set<String>> widgetIdMigrationMapping = new HashMap<>();
         final Consumer<Map<String, Set<String>>> recordMigratedWidgetIds = widgetIdMigrationMapping::putAll;
 
-        final Set<View> newViews = this.dashboardsService.streamAll()
-                .map(dashboard -> migrateDashboard(dashboard, recordMigratedDashboardIds, recordMigratedWidgetIds))
-                .collect(Collectors.toSet());
-
-        final MigrationCompleted migrationCompleted = MigrationCompleted.create(dashboardIdToViewId, widgetIdMigrationMapping);
+        this.dashboardsService.streamAll()
+                .map(dashboard -> {
+                    System.out.println("Hello dashboard " + dashboard.id());
+                    return migrateDashboard(dashboard, recordMigratedDashboardIds, recordMigratedWidgetIds);
+                });
     }
 
     private View migrateDashboard(Dashboard dashboard,

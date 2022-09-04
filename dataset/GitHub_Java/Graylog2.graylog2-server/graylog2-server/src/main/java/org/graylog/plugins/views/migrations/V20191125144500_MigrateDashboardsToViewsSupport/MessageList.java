@@ -79,8 +79,6 @@ abstract class MessageList implements SearchType {
 
         abstract Builder sort(@Nullable List<Sort> sort);
 
-        abstract Builder name(@Nullable String name);
-
         abstract MessageList build();
     }
 }
