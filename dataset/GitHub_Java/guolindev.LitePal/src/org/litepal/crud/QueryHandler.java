@@ -12,7 +12,7 @@ class QueryHandler extends DataHandler {
 
 	<T> T onFind(Class<T> modelClass, long id) {
 		List<T> dataList = query(modelClass, null, "id = ?", new String[] { String.valueOf(id) },
-				null, null, null, null);
+				null, null, null);
 		if (dataList.size() > 0) {
 			return dataList.get(0);
 		}
@@ -20,7 +20,7 @@ class QueryHandler extends DataHandler {
 	}
 
 	<T> T onFindFirst(Class<T> modelClass) {
-		List<T> dataList = query(modelClass, null, null, null, null, null, "id", "1");
+		List<T> dataList = query(modelClass, null, "id = ?", null, null, null, null);
 		if (dataList.size() > 0) {
 			return dataList.get(0);
 		}
@@ -28,7 +28,7 @@ class QueryHandler extends DataHandler {
 	}
 
 	<T> T onFindLast(Class<T> modelClass) {
-		List<T> dataList = query(modelClass, null, null, null, null, null, "id desc", "1");
+		List<T> dataList = query(modelClass, null, "id = ?", null, null, null, null);
 		if (dataList.size() > 0) {
 			return dataList.get(0);
 		}
@@ -38,10 +38,9 @@ class QueryHandler extends DataHandler {
 	<T> List<T> onFindAll(Class<T> modelClass, long[] ids) {
 		List<T> dataList;
 		if (isAffectAllLines(ids)) {
-			dataList = query(modelClass, null, null, null, null, null, "id", null);
+			dataList = query(modelClass, null, null, null, null, null, null);
 		} else {
-			dataList = query(modelClass, null, getWhereOfIdsWithOr(ids), null, null, null, "id",
-					null);
+			dataList = query(modelClass, null, getWhereOfIdsWithOr(ids), null, null, null, null);
 		}
 		return dataList;
 	}
