@@ -31,7 +31,6 @@ import org.graylog2.dashboards.Dashboard;
 import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
-import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
@@ -43,7 +42,7 @@ import org.graylog2.rest.models.dashboards.requests.AddWidgetRequest;
 import org.graylog2.rest.models.dashboards.requests.CreateDashboardRequest;
 import org.graylog2.rest.models.dashboards.requests.UpdateDashboardRequest;
 import org.graylog2.rest.models.dashboards.requests.UpdateWidgetRequest;
-import org.graylog2.rest.models.dashboards.requests.WidgetPositionsRequest;
+import org.graylog2.rest.resources.dashboards.requests.WidgetPositions;
 import org.graylog2.rest.models.dashboards.responses.DashboardList;
 import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.shared.security.RestrictToMaster;
@@ -80,7 +79,6 @@ public class DashboardsResource extends RestResource {
 
     private DashboardService dashboardService;
     private DashboardRegistry dashboardRegistry;
-    private final DashboardWidgetCreator dashboardWidgetCreator;
     private ActivityWriter activityWriter;
     private MetricRegistry metricRegistry;
     private final Searches searches;
@@ -88,13 +86,11 @@ public class DashboardsResource extends RestResource {
     @Inject
     public DashboardsResource(DashboardService dashboardService,
                               DashboardRegistry dashboardRegistry,
-                              DashboardWidgetCreator dashboardWidgetCreator,
                               ActivityWriter activityWriter,
                               MetricRegistry metricRegistry,
                               Searches searches) {
         this.dashboardService = dashboardService;
         this.dashboardRegistry = dashboardRegistry;
-        this.dashboardWidgetCreator = dashboardWidgetCreator;
         this.activityWriter = activityWriter;
         this.metricRegistry = metricRegistry;
         this.searches = searches;
@@ -222,7 +218,7 @@ public class DashboardsResource extends RestResource {
             @ApiParam(name = "dashboardId", required = true)
             @PathParam("dashboardId") String dashboardId,
             @ApiParam(name = "JSON body", required = true)
-            @Valid WidgetPositionsRequest uwpr) throws NotFoundException, ValidationException {
+            @Valid WidgetPositions uwpr) throws NotFoundException, ValidationException {
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
         final Dashboard dashboard = dashboardService.load(dashboardId);
@@ -259,7 +255,7 @@ public class DashboardsResource extends RestResource {
 
         DashboardWidget widget;
         try {
-            widget = dashboardWidgetCreator.fromRequest(searches, awr, getCurrentUser().getName());
+            widget = DashboardWidget.fromRequest(metricRegistry, searches, awr, getCurrentUser().getName());
 
             Dashboard dashboard = dashboardRegistry.get(dashboardId);
 
@@ -391,8 +387,8 @@ public class DashboardsResource extends RestResource {
         }
 
         try {
-            final DashboardWidget updatedWidget = dashboardWidgetCreator.fromRequest(searches,
-                    widgetId, awr, widget.getCreatorUserId());
+            final DashboardWidget updatedWidget = DashboardWidget.fromRequest(metricRegistry,
+                    searches, widgetId, awr, widget.getCreatorUserId());
             updatedWidget.setCacheTime(awr.cacheTime());
 
             dashboardService.removeWidget(dashboard, widget);
