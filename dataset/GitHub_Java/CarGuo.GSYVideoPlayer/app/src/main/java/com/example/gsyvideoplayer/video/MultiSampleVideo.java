@@ -60,10 +60,20 @@ public class MultiSampleVideo extends StandardGSYVideoPlayer {
                     case AudioManager.AUDIOFOCUS_GAIN:
                         break;
                     case AudioManager.AUDIOFOCUS_LOSS:
-                        //todo 判断如果不是外界造成的就不处理
+                        post(new Runnable() {
+                            @Override
+                            public void run() {
+                                //todo 判断如果不是外界造成的就不处理
+                            }
+                        });
                         break;
                     case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                        //todo 判断如果不是外界造成的就不处理
+                        post(new Runnable() {
+                            @Override
+                            public void run() {
+                                //todo 判断如果不是外界造成的就不处理
+                            }
+                        });
                         break;
                     case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
                         break;
