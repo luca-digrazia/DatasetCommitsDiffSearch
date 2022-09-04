@@ -20,11 +20,20 @@ public class CommandLineArguments {
     @Parameter(names = {"-p", "--pidfile"}, description = "File containing the PID of graylog2")
     private String pidFile = TMPDIR + FILE_SEPARATOR + "graylog2.pid";
 
+    @Parameter(names = {"-np", "--no-pid-file"}, description = "Do not write a PID file (overrides -p/--pidfile)")
+    private boolean noPidFile = false;
+
     @Parameter(names = {"-t", "--configtest"}, description = "Validate graylog2 configuration and exit")
     private boolean configTest = false;
 
     @Parameter(names = {"-d", "--debug"}, description = "Run graylog2 in debug mode")
     private boolean debug = false;
+    
+    @Parameter(names = {"-l", "--local"}, description = "Run graylog2 in local mode. Only interesting for Graylog2 developers.")
+    private boolean local = false;
+
+    @Parameter(names = {"-r", "--no-retention"}, description = "Do not automatically remove messages from index that are older than the retention time")
+    private boolean noRetention = false;
 
     @Parameter(names = "--version", description = "Show version of graylog2 and exit")
     private boolean showVersion = false;
@@ -48,6 +57,14 @@ public class CommandLineArguments {
         this.pidFile = pidFile;
     }
 
+    public boolean isNoPidFile() {
+        return noPidFile;
+    }
+
+    public void setNoPidFile(final boolean noPidFile) {
+        this.noPidFile = noPidFile;
+    }
+
     public boolean isConfigTest() {
         return configTest;
     }
@@ -59,9 +76,17 @@ public class CommandLineArguments {
     public boolean isDebug() {
         return debug;
     }
+    
+    public boolean isLocal() {
+        return local;
+    }
 
     public void setDebug(boolean debug) {
         this.debug = debug;
+    }
+
+    public boolean performRetention() {
+        return !noRetention;
     }
 
     public boolean isShowVersion() {
