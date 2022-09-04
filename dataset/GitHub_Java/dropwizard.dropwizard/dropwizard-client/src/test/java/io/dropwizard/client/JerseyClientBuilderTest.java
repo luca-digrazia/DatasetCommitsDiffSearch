@@ -31,7 +31,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
-import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
@@ -62,10 +61,10 @@ import java.util.concurrent.Executors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 public class JerseyClientBuilderTest {
     private final JerseyClientBuilder builder = new JerseyClientBuilder(new MetricRegistry());
@@ -264,32 +263,23 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void usesACustomHostnameVerifier() {
-        final HostnameVerifier customHostnameVerifier = new NoopHostnameVerifier();
-        builder.using(customHostnameVerifier);
-        verify(apacheHttpClientBuilder).using(customHostnameVerifier);
-    }
-
-    @Test
     public void usesACustomConnectionFactoryRegistry() throws Exception {
         final SSLContext ctx = SSLContext.getInstance(SSLConnectionSocketFactory.TLS);
-        ctx.init(null, new TrustManager[]{
-            new X509TrustManager() {
+        ctx.init(null, new TrustManager[]{new X509TrustManager() {
 
-                @Override
-                public void checkClientTrusted(X509Certificate[] xcs, String string) throws CertificateException {
-                }
-
-                @Override
-                public void checkServerTrusted(X509Certificate[] xcs, String string) throws CertificateException {
-                }
-
-                @Override
-                public X509Certificate[] getAcceptedIssuers() {
-                    return null;
-                }
+            @Override
+            public void checkClientTrusted(X509Certificate[] xcs, String string) throws CertificateException {
             }
-        }, null);
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] xcs, String string) throws CertificateException {
+            }
+
+            @Override
+            public X509Certificate[] getAcceptedIssuers() {
+                return null;
+            }
+        }}, null);
         final Registry<ConnectionSocketFactory> customRegistry = RegistryBuilder.<ConnectionSocketFactory>create()
                 .register("http", PlainConnectionSocketFactory.getSocketFactory())
                 .register("https", new SSLConnectionSocketFactory(ctx, new NoopHostnameVerifier()))
@@ -307,23 +297,23 @@ public class JerseyClientBuilderTest {
 
     @Test
     public void usesACustomHttpRoutePlanner() {
-        final HttpRoutePlanner customHttpRoutePlanner = new SystemDefaultRoutePlanner(new ProxySelector() {
-            @Override
-            public List<Proxy> select(URI uri) {
-                return ImmutableList.of(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("192.168.53.12", 8080)));
-            }
+       final HttpRoutePlanner customHttpRoutePlanner = new SystemDefaultRoutePlanner(new ProxySelector() {
+           @Override
+           public List<Proxy> select(URI uri) {
+               return ImmutableList.of(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("192.168.53.12", 8080)));
+           }
 
-            @Override
-            public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+           @Override
+           public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
 
-            }
-        });
+           }
+       });
         builder.using(customHttpRoutePlanner);
         verify(apacheHttpClientBuilder).using(customHttpRoutePlanner);
     }
 
     @Test
-    public void usesACustomCredentialsProvider() {
+    public void usesACustomCredentialsProvider(){
         CredentialsProvider customCredentialsProvider = new SystemDefaultCredentialsProvider();
         builder.using(customCredentialsProvider);
         verify(apacheHttpClientBuilder).using(customCredentialsProvider);
