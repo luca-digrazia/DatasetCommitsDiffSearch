@@ -146,62 +146,64 @@ public abstract class SkylarkType implements Serializable {
   // Notable types
 
   /** A singleton for the TOP type, that at analysis time means that any type is possible. */
-  @AutoCodec public static final Simple TOP = new Top();
+  public static final Simple TOP = new Top();
 
   /** A singleton for the BOTTOM type, that contains no element */
-  @AutoCodec public static final Simple BOTTOM = new Bottom();
+  public static final Simple BOTTOM = new Bottom();
 
   /** NONE, the Unit type, isomorphic to Void, except its unique element prints as None */
   // Note that we currently consider at validation time that None is in every type,
   // by declaring its type as TOP instead of NONE, even though at runtime,
   // we reject None from all types but NONE, and in particular from e.g. lists of Files.
   // TODO(bazel-team): resolve this inconsistency, one way or the other.
-  @AutoCodec public static final Simple NONE = Simple.forClass(Runtime.NoneType.class);
+  public static final Simple NONE = Simple.forClass(Runtime.NoneType.class);
 
   /** The STRING type, for strings */
-  @AutoCodec public static final Simple STRING = Simple.forClass(String.class);
+  public static final Simple STRING = Simple.forClass(String.class);
 
   /** The INTEGER type, for 32-bit signed integers */
-  @AutoCodec public static final Simple INT = Simple.forClass(Integer.class);
+  public static final Simple INT = Simple.forClass(Integer.class);
 
   /** The BOOLEAN type, that contains TRUE and FALSE */
-  @AutoCodec public static final Simple BOOL = Simple.forClass(Boolean.class);
+  public static final Simple BOOL = Simple.forClass(Boolean.class);
 
   /** The FUNCTION type, that contains all functions, otherwise dynamically typed at call-time */
-  @AutoCodec
   public static final SkylarkFunctionType FUNCTION = new SkylarkFunctionType("unknown", TOP);
 
   /** The DICT type, that contains SkylarkDict */
-  @AutoCodec public static final Simple DICT = Simple.forClass(SkylarkDict.class);
+  public static final Simple DICT = Simple.forClass(SkylarkDict.class);
 
   /** The SEQUENCE type, that contains lists and tuples */
   // TODO(bazel-team): this was added for backward compatibility with the BUILD language,
   // that doesn't make a difference between list and tuple, so that functions can be declared
   // that keep not making the difference. Going forward, though, we should investigate whether
   // we ever want to use this type, and if not, make sure no existing client code uses it.
-  @AutoCodec public static final Simple SEQUENCE = Simple.forClass(SkylarkList.class);
+  public static final Simple SEQUENCE = Simple.forClass(SkylarkList.class);
 
   /** The LIST type, that contains all MutableList-s */
-  @AutoCodec public static final Simple LIST = Simple.forClass(MutableList.class);
+  public static final Simple LIST = Simple.forClass(MutableList.class);
 
   /** The TUPLE type, that contains all Tuple-s */
-  @AutoCodec public static final Simple TUPLE = Simple.forClass(Tuple.class);
+  public static final Simple TUPLE = Simple.forClass(Tuple.class);
 
   /** The STRING_LIST type, a MutableList of strings */
-  @AutoCodec public static final SkylarkType STRING_LIST = Combination.of(LIST, STRING);
+  public static final SkylarkType STRING_LIST = Combination.of(LIST, STRING);
 
   /** The INT_LIST type, a MutableList of integers */
-  @AutoCodec public static final SkylarkType INT_LIST = Combination.of(LIST, INT);
+  public static final SkylarkType INT_LIST = Combination.of(LIST, INT);
 
   /** The SET type, that contains all SkylarkNestedSet-s, and the generic combinator for them */
-  @AutoCodec public static final Simple SET = Simple.forClass(SkylarkNestedSet.class);
+  public static final Simple SET = Simple.forClass(SkylarkNestedSet.class);
 
   // Common subclasses of SkylarkType
 
   /** the Top type contains all objects */
-  private static class Top extends Simple {
+  @AutoCodec
+  @VisibleForSerialization
+  static class Top extends Simple {
 
-    private Top() {
+    @VisibleForSerialization
+    Top() {
       super(Object.class);
     }
 
@@ -217,9 +219,12 @@ public abstract class SkylarkType implements Serializable {
   }
 
   /** the Bottom type contains no element */
-  private static class Bottom extends Simple {
+  @AutoCodec
+  @VisibleForSerialization
+  static class Bottom extends Simple {
 
-    private Bottom() {
+    @VisibleForSerialization
+    Bottom() {
       super(Empty.class);
     }
 
@@ -232,11 +237,12 @@ public abstract class SkylarkType implements Serializable {
   }
 
   /** a Simple type contains the instance of a Java class */
-  @VisibleForSerialization
-  static class Simple extends SkylarkType {
+  @AutoCodec
+  public static class Simple extends SkylarkType {
     private final Class<?> type;
 
-    private Simple(Class<?> type) {
+    @VisibleForSerialization
+    Simple(Class<?> type) {
       this.type = type;
     }
 
@@ -247,9 +253,6 @@ public abstract class SkylarkType implements Serializable {
       return type;
     }
     @Override public boolean equals(Object other) {
-      if (other == null) {
-        return false;
-      }
       return this == other
           || (this.getClass() == other.getClass() && this.type.equals(((Simple) other).getType()));
     }
@@ -362,9 +365,6 @@ public abstract class SkylarkType implements Serializable {
     }
 
     @Override public boolean equals(Object other) {
-      if (other == null) {
-        return false;
-      }
       if (this == other) {
         return true;
       } else if (this.getClass() == other.getClass()) {
@@ -430,9 +430,6 @@ public abstract class SkylarkType implements Serializable {
       return false;
     }
     @Override public boolean equals(Object other) {
-      if (other == null) {
-        return false;
-      }
       if (this.getClass() == other.getClass()) {
         Union o = (Union) other;
         if (types.containsAll(o.types) && o.types.containsAll(types)) {

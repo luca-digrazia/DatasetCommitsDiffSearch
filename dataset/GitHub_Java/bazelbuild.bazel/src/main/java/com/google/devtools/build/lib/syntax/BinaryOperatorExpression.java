@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Strings;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Concatable.Concatter;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
@@ -22,6 +23,7 @@ import java.io.IOException;
 import java.util.IllegalFormatException;
 
 /** Syntax node for a binary operator expression. */
+@AutoCodec
 public final class BinaryOperatorExpression extends Expression {
 
   private final Expression lhs;
@@ -157,6 +159,22 @@ public final class BinaryOperatorExpression extends Expression {
     return evaluate(operator, lhs, rhs, env, loc, /*isAugmented=*/false);
   }
 
+  /**
+   * Evaluates {@code lhs @= rhs} and returns the result, possibly mutating {@code lhs}.
+   *
+   * <p>Whether or not {@code lhs} is mutated depends on its type. If it is mutated, then it is also
+   * the return value.
+   */
+  public static Object evaluateAugmented(
+      Operator operator,
+      Object lhs,
+      Object rhs,
+      Environment env,
+      Location loc)
+      throws EvalException, InterruptedException {
+    return evaluate(operator, lhs, rhs, env, loc, /*isAugmented=*/true);
+  }
+
   private static Object evaluate(
       Operator operator,
       Object lhs,
@@ -167,8 +185,8 @@ public final class BinaryOperatorExpression extends Expression {
       throws EvalException, InterruptedException {
     try {
       switch (operator) {
-          // AND and OR are included for completeness, but should normally be handled using
-          // evaluateWithShortCircuiting() instead of this method.
+        // AND and OR are included for completeness, but should normally be handled using
+        // evaluateWithShortCircuiting() instead of this method.
 
         case AND:
           return EvalUtils.toBoolean(lhs) ? rhs : lhs;
@@ -189,15 +207,6 @@ public final class BinaryOperatorExpression extends Expression {
           return mult(lhs, rhs, env, location);
 
         case DIVIDE:
-          if (env.getSemantics().incompatibleDisallowSlashOperator()) {
-            throw new EvalException(
-                location,
-                "The `/` operator has been removed. Please use the `//` operator for integer "
-                    + "division. You can temporarily enable the `/` operator by passing "
-                    + "the flag --incompatible_disallow_slash_operator=false");
-          }
-          return divide(lhs, rhs, location);
-
         case FLOOR_DIVIDE:
           return divide(lhs, rhs, location);
 
@@ -234,18 +243,6 @@ public final class BinaryOperatorExpression extends Expression {
     } catch (ArithmeticException e) {
       throw new EvalException(location, e.getMessage());
     }
-  }
-
-  /**
-   * Evaluates {@code lhs @= rhs} and returns the result, possibly mutating {@code lhs}.
-   *
-   * <p>Whether or not {@code lhs} is mutated depends on its type. If it is mutated, then it is also
-   * the return value.
-   */
-  public static Object evaluateAugmented(
-      Operator operator, Object lhs, Object rhs, Environment env, Location loc)
-      throws EvalException, InterruptedException {
-    return evaluate(operator, lhs, rhs, env, loc, /*isAugmented=*/ true);
   }
 
   @Override
@@ -384,7 +381,7 @@ public final class BinaryOperatorExpression extends Expression {
       } else if (otherFactor instanceof String) {
         // Similar to Python, a factor < 1 leads to an empty string.
         return Strings.repeat((String) otherFactor, Math.max(0, number));
-      } else if (otherFactor instanceof SkylarkList && !(otherFactor instanceof RangeList)) {
+      } else if (otherFactor instanceof SkylarkList) {
         // Similar to Python, a factor < 1 leads to an empty string.
         return ((SkylarkList<?>) otherFactor).repeat(number, env.mutability());
       }
