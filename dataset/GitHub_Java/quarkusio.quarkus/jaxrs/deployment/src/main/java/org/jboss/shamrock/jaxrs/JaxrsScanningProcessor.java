@@ -21,8 +21,6 @@
  */
 package org.jboss.shamrock.jaxrs;
 
-import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
-
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -33,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Enumeration;
-import java.util.List;
 
 import javax.servlet.Servlet;
 import javax.ws.rs.container.DynamicFeature;
@@ -49,25 +46,14 @@ import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
-import org.jboss.shamrock.annotations.BuildProducer;
-import org.jboss.shamrock.annotations.BuildStep;
-import org.jboss.shamrock.annotations.ExecutionTime;
-import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
-import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
-import org.jboss.shamrock.deployment.builditem.ProxyDefinitionBuildItem;
-import org.jboss.shamrock.deployment.builditem.ReflectiveClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.ReflectiveHierarchyBuildItem;
-import org.jboss.shamrock.deployment.builditem.ResourceBuildItem;
-import org.jboss.shamrock.deployment.builditem.SubstrateConfigBuildItem;
-import org.jboss.shamrock.deployment.recording.BeanFactory;
-import org.jboss.shamrock.deployment.recording.BytecodeRecorder;
+import org.jboss.shamrock.deployment.ArchiveContext;
+import org.jboss.shamrock.deployment.ProcessorContext;
+import org.jboss.shamrock.deployment.ResourceProcessor;
+import org.jboss.shamrock.deployment.RuntimePriority;
+import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
 import org.jboss.shamrock.jaxrs.runtime.graal.JaxrsTemplate;
 import org.jboss.shamrock.jaxrs.runtime.graal.ShamrockInjectorFactory;
 import org.jboss.shamrock.runtime.InjectionInstance;
-import org.jboss.shamrock.undertow.DeploymentInfoBuildItem;
-import org.jboss.shamrock.undertow.ServletBuildItem;
-import org.jboss.shamrock.undertow.ServletContextParamBuildItem;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
 import io.undertow.servlet.api.InstanceFactory;
@@ -77,7 +63,7 @@ import io.undertow.servlet.api.InstanceFactory;
  *
  * @author Stuart Douglas
  */
-public class JaxrsScanningProcessor {
+public class JaxrsScanningProcessor implements ResourceProcessor {
 
     private static final String JAX_RS_SERVLET_NAME = "javax.ws.rs.Application";
 
@@ -100,43 +86,17 @@ public class JaxrsScanningProcessor {
             DotName.createSimple("javax.ws.rs.PUT"),
     };
 
-
-    @BuildStep
-    ServletContextParamBuildItem registerProviders(List<JaxrsProviderBuildItem> providers) {
-        StringBuilder sb = new StringBuilder();
-        for(int i = 0; i < providers.size(); ++i) {
-            if(i != 0) {
-                sb.append(",");
-            }
-            sb.append(providers.get(i).getName());
-        }
-        return new ServletContextParamBuildItem("resteasy.providers", sb.toString());
-    }
-
-    @BuildStep
-    SubstrateConfigBuildItem config() {
-        return SubstrateConfigBuildItem.builder()
-                .addResourceBundle("messages")
-                .build();
-    }
-
-    @BuildStep
-    public void build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-                      BuildProducer<ProxyDefinitionBuildItem> proxyDefinition,
-                      BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
-                      BuildProducer<ResourceBuildItem> resource,
-                      BuildProducer<ServletBuildItem> servletProducer,
-                      CombinedIndexBuildItem combinedIndexBuildItem,
-                      BuildProducer<ServletContextParamBuildItem> servletContextParams
-    ) throws Exception {
+    @Override
+    public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
         //this is pretty yuck, and does not really belong here, but it is needed to get the json-p
         //provider to work
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "org.glassfish.json.JsonProviderImpl",
+        processorContext.addReflectiveClass(true, false, "org.glassfish.json.JsonProviderImpl",
                 "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector",
-                "com.fasterxml.jackson.databind.ser.std.SqlDateSerializer"));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ArrayList.class.getName()));
-        resource.produce(new ResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
-        IndexView index = combinedIndexBuildItem.getIndex();
+                "com.fasterxml.jackson.databind.ser.std.SqlDateSerializer");
+        processorContext.addReflectiveClass(false, false, ArrayList.class.getName());
+        processorContext.addResourceBundle("messages"); //for JSONB
+        processorContext.addResource("META-INF/services/javax.ws.rs.client.ClientBuilder");
+        IndexView index = archiveContext.getCombinedIndex();
 
         Collection<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
         if (app.isEmpty()) {
@@ -144,12 +104,12 @@ public class JaxrsScanningProcessor {
         }
         Collection<AnnotationInstance> xmlRoot = index.getAnnotations(XML_ROOT);
         if (!xmlRoot.isEmpty()) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "com.sun.xml.bind.v2.ContextFactory", "com.sun.xml.internal.bind.v2.ContextFactory"));
+            processorContext.addReflectiveClass(true, false, "com.sun.xml.bind.v2.ContextFactory", "com.sun.xml.internal.bind.v2.ContextFactory");
         }
         for (DotName i : Arrays.asList(XML_ROOT, JSONB_ANNOTATION)) {
             for (AnnotationInstance anno : index.getAnnotations(i)) {
                 if (anno.target().kind() == AnnotationTarget.Kind.CLASS) {
-                    reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, anno.target().asClass().name().toString()));
+                    processorContext.addReflectiveClass(true, true, anno.target().asClass().name().toString());
                 }
             }
         }
@@ -172,14 +132,14 @@ public class JaxrsScanningProcessor {
                 ClassInfo type = index.getClassByName(typeName);
                 if (type != null) {
                     if (Modifier.isInterface(type.flags())) {
-                        proxyDefinition.produce(new ProxyDefinitionBuildItem(type.toString()));
+                        processorContext.addProxyDefinition(type.toString());
                     }
                 } else {
                     //might be a framework class, which should be loadable
                     try {
                         Class<?> typeClass = Class.forName(typeName.toString());
                         if (typeClass.isInterface()) {
-                            proxyDefinition.produce(new ProxyDefinitionBuildItem(typeName.toString()));
+                            processorContext.addProxyDefinition(typeName.toString());
                         }
                     } catch (Exception e) {
                         //ignore
@@ -189,59 +149,71 @@ public class JaxrsScanningProcessor {
         }
 
         for (ClassInfo implementation : index.getAllKnownImplementors(DYNAMIC_FEATURE)) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, implementation.name().toString()));
+            processorContext.addReflectiveClass(false, false, implementation.name().toString());
         }
 
         AnnotationInstance appPath = app.iterator().next();
         String path = appPath.value().asString();
         String appClass = appPath.target().asClass().name().toString();
-        String mappingPath;
-        if (path.endsWith("/")) {
-            mappingPath = path + "*";
-        } else {
-            mappingPath = path + "/*";
-        }
-        servletProducer.produce(new ServletBuildItem(JAX_RS_SERVLET_NAME, HttpServlet30Dispatcher.class.getName()).setLoadOnStartup(1).addMapping(mappingPath).setAsyncSupported(true));
-        Collection<AnnotationInstance> paths = index.getAnnotations(PATH);
-        if (paths != null) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, HttpServlet30Dispatcher.class.getName()));
-            StringBuilder sb = new StringBuilder();
-            boolean first = true;
-            for (AnnotationInstance annotation : paths) {
-                if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
-                    ClassInfo clazz = annotation.target().asClass();
-                    if (!Modifier.isInterface(clazz.flags())) {
-                        if (first) {
-                            first = false;
-                        } else {
-                            sb.append(",");
+        try (BytecodeRecorder recorder = processorContext.addStaticInitTask(RuntimePriority.JAXRS_DEPLOYMENT)) {
+            UndertowDeploymentTemplate undertow = recorder.getRecordingProxy(UndertowDeploymentTemplate.class);
+            InjectionInstance<? extends Servlet> instanceFactory = (InjectionInstance<? extends Servlet>) recorder.newInstanceFactory(HttpServlet30Dispatcher.class.getName());
+            InstanceFactory<? extends Servlet> factory = undertow.createInstanceFactory(instanceFactory);
+            undertow.registerServlet(null, JAX_RS_SERVLET_NAME, recorder.classProxy(HttpServlet30Dispatcher.class.getName()), true, 1, factory);
+            String mappingPath;
+            if (path.endsWith("/")) {
+                mappingPath = path + "*";
+            } else {
+                mappingPath = path + "/*";
+            }
+
+            undertow.addServletMapping(null, JAX_RS_SERVLET_NAME, mappingPath);
+            Collection<AnnotationInstance> paths = index.getAnnotations(PATH);
+            if (paths != null) {
+                processorContext.addReflectiveClass(false, false, HttpServlet30Dispatcher.class.getName());
+                StringBuilder sb = new StringBuilder();
+                boolean first = true;
+                for (AnnotationInstance annotation : paths) {
+                    if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
+                        ClassInfo clazz = annotation.target().asClass();
+                        if (!Modifier.isInterface(clazz.flags())) {
+                            if (first) {
+                                first = false;
+                            } else {
+                                sb.append(",");
+                            }
+                            String className = clazz.name().toString();
+                            sb.append(className);
+                            processorContext.addReflectiveClass(true, true, className);
                         }
-                        String className = clazz.name().toString();
-                        sb.append(className);
-                        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, className));
                     }
                 }
-            }
 
-            if (sb.length() > 0) {
-                servletContextParams.produce(new ServletContextParamBuildItem(ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString()));
-            }
-            servletContextParams.produce(new ServletContextParamBuildItem("resteasy.servlet.mapping.prefix", path));
-            servletContextParams.produce(new ServletContextParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
-            servletContextParams.produce(new ServletContextParamBuildItem(Application.class.getName(), appClass));
+                if (sb.length() > 0) {
+                    undertow.addServletContextParameter(null, ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString());
+                }
+                undertow.addServletContextParameter(null, "resteasy.servlet.mapping.prefix", path);
+                undertow.addServletContextParameter(null, "resteasy.injector.factory", ShamrockInjectorFactory.class.getName());
+                undertow.addServletContextParameter(null, Application.class.getName(), appClass);
 
+            }
         }
         for (DotName annotationType : METHOD_ANNOTATIONS) {
             Collection<AnnotationInstance> instances = index.getAnnotations(annotationType);
             for (AnnotationInstance instance : instances) {
                 MethodInfo method = instance.target().asMethod();
-                reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType()));
+                processorContext.addReflectiveHierarchy(method.returnType());
                 for (Type param : method.parameters()) {
                     if (param.kind() != Type.Kind.PRIMITIVE) {
-                        reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(param));
+                        processorContext.addReflectiveHierarchy(param);
                     }
                 }
             }
+        }
+
+        try (BytecodeRecorder recorder = processorContext.addStaticInitTask(RuntimePriority.JAXRS_DEPLOYMENT)) {
+            JaxrsTemplate jaxrs = recorder.getRecordingProxy(JaxrsTemplate.class);
+            jaxrs.setupIntegration(null);
         }
 
         //register providers for reflection
@@ -257,7 +229,7 @@ public class JaxrsScanningProcessor {
                     }
                     line = line.trim();
                     if (line.equals("")) continue;
-                    reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, line));
+                    processorContext.addReflectiveClass(false, false, line);
                 }
             }
         }
@@ -265,10 +237,9 @@ public class JaxrsScanningProcessor {
 
     }
 
-
-    @Record(STATIC_INIT)
-    @BuildStep
-    void integrate(JaxrsTemplate template, BeanContainerBuildItem beanContainerBuildItem) {
-        template.setupIntegration(beanContainerBuildItem.getValue());
+    @Override
+    public int getPriority() {
+        return RuntimePriority.JAXRS_DEPLOYMENT;
     }
+
 }

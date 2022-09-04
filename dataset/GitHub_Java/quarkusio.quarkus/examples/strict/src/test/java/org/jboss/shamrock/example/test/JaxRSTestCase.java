@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.example.test;
 
 import java.io.InputStream;
@@ -23,8 +7,8 @@ import javax.json.JsonObject;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
-import org.jboss.shamrock.test.URLTester;
-import org.jboss.shamrock.test.ShamrockTest;
+import org.jboss.shamrock.example.testutils.URLTester;
+import org.jboss.shamrock.junit.ShamrockTest;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -43,13 +27,6 @@ public class JaxRSTestCase {
     @Test
     public void testInteger() {
         Assert.assertEquals("11", URLTester.relative("rest/test/int/10").invokeURL().asString());
-    }
-
-    @Test
-    public void testNonCdiBeansAreApplicationScoped() {
-        Assert.assertEquals("1", URLTester.relative("rest/test/count").invokeURL().asString());
-        Assert.assertEquals("2", URLTester.relative("rest/test/count").invokeURL().asString());
-        Assert.assertEquals("3", URLTester.relative("rest/test/count").invokeURL().asString());
     }
 
     @Test
