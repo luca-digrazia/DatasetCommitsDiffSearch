@@ -43,13 +43,12 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
-import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -115,15 +114,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       boolean addDynamicRuntimeInputArtifactsToRunfiles)
       throws RuleErrorException, InterruptedException {
     CcCommon.checkRuleLoadedThroughMacro(ruleContext);
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("linked_statically_by")
-        && !ruleContext
-            .getAnalysisEnvironment()
-            .getSkylarkSemantics()
-            .experimentalCcSharedLibrary()) {
-      ruleContext.ruleError(
-          "The attribute 'linked_statically_by' can only be used with the flag"
-              + " --experimental_cc_shared_library.");
-    }
     semantics.validateDeps(ruleContext);
     if (ruleContext.hasErrors()) {
       return;
@@ -167,9 +157,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 semantics,
                 featureConfiguration,
                 ccToolchain,
-                fdoContext,
-                TargetUtils.getExecutionInfo(
-                    ruleContext.getRule(), ruleContext.isAllowTagsPropagation()))
+                fdoContext)
             .fromCommon(common, additionalCopts)
             .addSources(common.getSources())
             .addPrivateHeaders(common.getPrivateHeaders())
@@ -195,9 +183,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 fdoContext,
                 ruleContext.getConfiguration(),
                 ruleContext.getFragment(CppConfiguration.class),
-                ruleContext.getSymbolGenerator(),
-                TargetUtils.getExecutionInfo(
-                    ruleContext.getRule(), ruleContext.isAllowTagsPropagation()))
+                ruleContext.getSymbolGenerator())
             .fromCommon(ruleContext, common)
             .setGrepIncludes(CppHelper.getGrepIncludes(ruleContext))
             .setTestOrTestOnlyTarget(ruleContext.isTestOnlyTarget())
@@ -320,9 +306,11 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     if (ruleContext.getRule().getImplicitOutputsFunction() != ImplicitOutputsFunction.NONE
         || !ccCompilationOutputs.isEmpty()) {
       if (featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-        Artifact generatedDefFile = null;
+        // If user specifies a custom DEF file, then we use it.
+        Artifact defFile = common.getWinDefFile();
 
         Artifact defParser = common.getDefParser();
+        Artifact generatedDefFile = null;
         if (defParser != null) {
           try {
             generatedDefFile =
@@ -339,9 +327,18 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             throw ruleContext.throwWithRuleError(e.getMessage());
           }
         }
-        linkingHelper.setDefFile(
-            CppHelper.getWindowsDefFileForLinking(
-                ruleContext, common.getWinDefFile(), generatedDefFile, featureConfiguration));
+
+        // If no DEF file is specified and the windows_export_all_symbols feature is enabled, parse
+        // object files to generate DEF file and use it to export symbols - if we have a parser.
+        // Otherwise, use no DEF file.
+        if (defFile == null
+            && CppHelper.shouldUseGeneratedDefFile(ruleContext, featureConfiguration)) {
+          defFile = generatedDefFile;
+        }
+
+        if (defFile != null) {
+          linkingHelper.setDefFile(defFile);
+        }
       }
       ccLinkingOutputs = linkingHelper.link(ccCompilationOutputs);
     }

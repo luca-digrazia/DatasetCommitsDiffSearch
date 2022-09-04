@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.Expander;
 import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
@@ -46,7 +47,6 @@ import com.google.devtools.build.lib.analysis.StaticallyLinkedMarkerProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -69,6 +68,7 @@ import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -886,45 +886,6 @@ public class CppHelper {
   }
 
   /**
-   * Create action for generating an empty DEF file without any exports, should only be used when
-   * targeting Windows.
-   *
-   * @return The artifact of an empty DEF file.
-   */
-  private static Artifact createEmptyDefFileAction(RuleContext ruleContext) {
-    Artifact trivialDefFile =
-        ruleContext.getBinArtifact(
-            ruleContext.getLabel().getName()
-                + ".gen.empty"
-                + Iterables.getOnlyElement(CppFileTypes.WINDOWS_DEF_FILE.getExtensions()));
-    ruleContext.registerAction(FileWriteAction.create(ruleContext, trivialDefFile, "", false));
-    return trivialDefFile;
-  }
-
-  /**
-   * Decide which DEF file should be used for the linking action.
-   *
-   * @return The artifact of the DEF file that should be used for the linking action.
-   */
-  public static Artifact getWindowsDefFileForLinking(
-      RuleContext ruleContext,
-      Artifact customDefFile,
-      Artifact generatedDefFile,
-      FeatureConfiguration featureConfiguration) {
-    // 1. If a custom DEF file is specified in win_def_file attribute, use it.
-    // 2. If a generated DEF file is available and should be used, use it.
-    // 3. Otherwise, we use an empty DEF file to ensure the import library will be generated.
-    if (customDefFile != null) {
-      return customDefFile;
-    } else if (generatedDefFile != null
-        && CppHelper.shouldUseGeneratedDefFile(ruleContext, featureConfiguration)) {
-      return generatedDefFile;
-    } else {
-      return createEmptyDefFileAction(ruleContext);
-    }
-  }
-
-  /**
    * Returns true if the build implied by the given config and toolchain uses --start-lib/--end-lib
    * ld options.
    */
@@ -986,7 +947,14 @@ public class CppHelper {
         Preconditions.checkNotNull(
             ruleContext.getConfiguration().getOptions().get(CppOptions.class));
 
-    return cppOptions.enableCcToolchainResolution;
+    if (cppOptions.enableCcToolchainResolution) {
+      return true;
+    }
+
+    // TODO(https://github.com/bazelbuild/bazel/issues/7260): Remove this and the flag.
+    PlatformConfiguration platformConfig =
+        Preconditions.checkNotNull(ruleContext.getFragment(PlatformConfiguration.class));
+    return platformConfig.isToolchainTypeEnabled(getToolchainTypeFromRuleClass(ruleContext));
   }
 
   public static ImmutableList<CcCompilationContext> getCompilationContextsFromDeps(

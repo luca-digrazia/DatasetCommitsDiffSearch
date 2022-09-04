@@ -16,8 +16,8 @@ package com.google.devtools.build.lib.rules.cpp;
 
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -27,12 +27,13 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
@@ -123,7 +124,6 @@ public final class CcLinkingHelper {
   private final ActionRegistry actionRegistry;
   private final RuleErrorConsumer ruleErrorConsumer;
   private final SymbolGenerator<?> symbolGenerator;
-  private final ImmutableMap<String, String> executionInfo;
 
   private Artifact grepIncludes;
   private boolean isStampingEnabled;
@@ -141,7 +141,6 @@ public final class CcLinkingHelper {
    * @param ccToolchain the C++ toolchain provider for the build
    * @param fdoContext the C++ FDO optimization support provider for the build
    * @param configuration the configuration that gives the directory of output artifacts
-   * @param executionInfo the execution info data associated with a rule
    */
   public CcLinkingHelper(
       RuleErrorConsumer ruleErrorConsumer,
@@ -154,8 +153,7 @@ public final class CcLinkingHelper {
       FdoContext fdoContext,
       BuildConfiguration configuration,
       CppConfiguration cppConfiguration,
-      SymbolGenerator<?> symbolGenerator,
-      ImmutableMap<String, String> executionInfo) {
+      SymbolGenerator<?> symbolGenerator) {
     this.semantics = Preconditions.checkNotNull(semantics);
     this.featureConfiguration = Preconditions.checkNotNull(featureConfiguration);
     this.ccToolchain = Preconditions.checkNotNull(ccToolchain);
@@ -167,7 +165,6 @@ public final class CcLinkingHelper {
     this.actionRegistry = actionRegistry;
     this.actionConstructionContext = actionConstructionContext;
     this.symbolGenerator = symbolGenerator;
-    this.executionInfo = executionInfo;
   }
 
   /** Sets fields that overlap for cc_library and cc_binary rules. */
@@ -361,8 +358,9 @@ public final class CcLinkingHelper {
   }
 
   public CcLinkingContext buildCcLinkingContextFromLibrariesToLink(
-      List<LibraryToLink> librariesToLink, CcCompilationContext ccCompilationContext) {
-    ImmutableList.Builder<Linkstamp> linkstampBuilder = ImmutableList.builder();
+      ImmutableCollection<LibraryToLink> libraryToLinks,
+      CcCompilationContext ccCompilationContext) {
+    NestedSetBuilder<Linkstamp> linkstampBuilder = NestedSetBuilder.stableOrder();
     for (Artifact linkstamp : linkstamps.build()) {
       linkstampBuilder.add(
           new Linkstamp(
@@ -378,11 +376,14 @@ public final class CcLinkingHelper {
           CcLinkingContext.builder()
               .addUserLinkFlags(
                   linkopts.isEmpty()
-                      ? ImmutableList.of()
-                      : ImmutableList.of(
+                      ? NestedSetBuilder.emptySet(Order.LINK_ORDER)
+                      : NestedSetBuilder.create(
+                          Order.LINK_ORDER,
                           CcLinkingContext.LinkOptions.of(linkopts, symbolGenerator)))
-              .addLibraries(librariesToLink)
-              .addNonCodeInputs(nonCodeLinkerInputs)
+              .addLibraries(
+                  NestedSetBuilder.<LibraryToLink>linkOrder().addAll(libraryToLinks).build())
+              .addNonCodeInputs(
+                  NestedSetBuilder.<Artifact>linkOrder().addAll(nonCodeLinkerInputs).build())
               .addLinkstamps(linkstampBuilder.build())
               .build();
     }
@@ -836,8 +837,7 @@ public final class CcLinkingHelper {
                 ? ccToolchain.getArFiles()
                 : ccToolchain.getLinkerFiles())
         .setLinkArtifactFactory(linkArtifactFactory)
-        .setUseTestOnlyFlags(useTestOnlyFlags)
-        .addExecutionInfo(executionInfo);
+        .setUseTestOnlyFlags(useTestOnlyFlags);
   }
 
   /**
