@@ -22,10 +22,11 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +76,7 @@ public class IndexHelper {
         return name.substring(0, name.lastIndexOf("_"));
     }
 
-    public static List<String> prependPrefixes(String prefix, List<Integer> numbers) {
+    private static List<String> prependPrefixes(String prefix, List<Integer> numbers) {
         List<String> r = Lists.newArrayList();
 
         for (int number : numbers) {

@@ -22,14 +22,15 @@ import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.ranges.MongoIndexRange;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.KeywordRange;
 import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
+import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -43,7 +44,7 @@ import java.util.Set;
 import java.util.SortedSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.when;
 
 public class IndexHelperTest {
@@ -52,6 +53,8 @@ public class IndexHelperTest {
 
     @Mock
     private IndexRangeService indexRangeService;
+    @Mock
+    private Deflector deflector;
 
     @BeforeClass
     public static void initialize() {
@@ -101,10 +104,10 @@ public class IndexHelperTest {
 
     @Test
     public void determineAffectedIndicesWithRangesIncludesDeflectorTarget() throws Exception {
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
+        final DateTime now = DateTime.now();
         final MongoIndexRange indexRange0 = MongoIndexRange.create("graylog_0", now, now.plusDays(1), now, 0);
         final MongoIndexRange indexRange1 = MongoIndexRange.create("graylog_1", now.plusDays(1), now.plusDays(2), now, 0);
-        final MongoIndexRange indexRangeLatest = MongoIndexRange.create("graylog_2", new DateTime(0L, DateTimeZone.UTC), new DateTime(0L, DateTimeZone.UTC), now, 0);
+        final MongoIndexRange indexRangeLatest = MongoIndexRange.create("graylog_2", new DateTime(0L), new DateTime(0L), now, 0);
         final SortedSet<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR)
             .add(indexRange0)
             .add(indexRange1)
@@ -113,22 +116,23 @@ public class IndexHelperTest {
 
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indices);
         when(indexRangeService.get("graylog_2")).thenReturn(indexRangeLatest);
+        when(deflector.getCurrentActualTargetIndex()).thenReturn("graylog_2");
 
         final TimeRange absoluteRange = AbsoluteRange.create(now.minusDays(1), now.plusDays(1));
         final TimeRange keywordRange = KeywordRange.create("1 day ago");
         final TimeRange relativeRange = RelativeRange.create(3600);
 
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, absoluteRange))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, deflector, absoluteRange))
             .containsExactly(indexRangeLatest, indexRange0, indexRange1);
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, keywordRange))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, deflector, keywordRange))
             .containsExactly(indexRangeLatest, indexRange0, indexRange1);
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, relativeRange))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, deflector, relativeRange))
             .containsExactly(indexRangeLatest, indexRange0, indexRange1);
     }
 
     @Test
     public void determineAffectedIndicesWithRangesDoesNotIncludesDeflectorTargetIfMissing() throws Exception {
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
+        final DateTime now = DateTime.now();
         final MongoIndexRange indexRange0 = MongoIndexRange.create("graylog_0", now, now.plusDays(1), now, 0);
         final MongoIndexRange indexRange1 = MongoIndexRange.create("graylog_1", now.plusDays(1), now.plusDays(2), now, 0);
         final SortedSet<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR)
@@ -137,25 +141,26 @@ public class IndexHelperTest {
             .build();
 
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indices);
+        when(deflector.getCurrentActualTargetIndex()).thenReturn(null);
 
         final TimeRange absoluteRange = AbsoluteRange.create(now.minusDays(1), now.plusDays(1));
         final TimeRange keywordRange = KeywordRange.create("1 day ago");
         final TimeRange relativeRange = RelativeRange.create(3600);
 
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, absoluteRange))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, deflector, absoluteRange))
             .containsExactly(indexRange0, indexRange1);
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, keywordRange))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, deflector, keywordRange))
             .containsExactly(indexRange0, indexRange1);
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, relativeRange))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, deflector, relativeRange))
             .containsExactly(indexRange0, indexRange1);
     }
 
     @Test
     public void determineAffectedIndicesIncludesDeflectorTarget() throws Exception {
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
+        final DateTime now = DateTime.now();
         final MongoIndexRange indexRange0 = MongoIndexRange.create("graylog_0", now, now.plusDays(1), now, 0);
         final MongoIndexRange indexRange1 = MongoIndexRange.create("graylog_1", now.plusDays(1), now.plusDays(2), now, 0);
-        final MongoIndexRange indexRangeLatest = MongoIndexRange.create("graylog_2", new DateTime(0L, DateTimeZone.UTC), new DateTime(0L, DateTimeZone.UTC), now, 0);
+        final MongoIndexRange indexRangeLatest = MongoIndexRange.create("graylog_2", new DateTime(0L), new DateTime(0L), now, 0);
         final SortedSet<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR)
             .add(indexRange0)
             .add(indexRange1)
@@ -164,22 +169,23 @@ public class IndexHelperTest {
 
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indices);
         when(indexRangeService.get("graylog_2")).thenReturn(indexRangeLatest);
+        when(deflector.getCurrentActualTargetIndex()).thenReturn("graylog_2");
 
         final TimeRange absoluteRange = AbsoluteRange.create(now.minusDays(1), now.plusDays(1));
         final TimeRange keywordRange = KeywordRange.create("1 day ago");
         final TimeRange relativeRange = RelativeRange.create(3600);
 
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, absoluteRange))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, deflector, absoluteRange))
             .containsExactly(indexRangeLatest.indexName(), indexRange0.indexName(), indexRange1.indexName());
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, keywordRange))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, deflector, keywordRange))
             .containsExactly(indexRangeLatest.indexName(), indexRange0.indexName(), indexRange1.indexName());
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, relativeRange))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, deflector, relativeRange))
             .containsExactly(indexRangeLatest.indexName(), indexRange0.indexName(), indexRange1.indexName());
     }
 
     @Test
     public void determineAffectedIndicesDoesNotIncludesDeflectorTargetIfMissing() throws Exception {
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
+        final DateTime now = DateTime.now();
         final MongoIndexRange indexRange0 = MongoIndexRange.create("graylog_0", now, now.plusDays(1), now, 0);
         final MongoIndexRange indexRange1 = MongoIndexRange.create("graylog_1", now.plusDays(1), now.plusDays(2), now, 0);
         final SortedSet<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR)
@@ -188,16 +194,17 @@ public class IndexHelperTest {
             .build();
 
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indices);
+        when(deflector.getCurrentActualTargetIndex()).thenReturn(null);
 
         final TimeRange absoluteRange = AbsoluteRange.create(now.minusDays(1), now.plusDays(1));
         final TimeRange keywordRange = KeywordRange.create("1 day ago");
         final TimeRange relativeRange = RelativeRange.create(3600);
 
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, absoluteRange))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, deflector, absoluteRange))
             .containsOnly(indexRange0.indexName(), indexRange1.indexName());
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, keywordRange))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, deflector, keywordRange))
             .containsOnly(indexRange0.indexName(), indexRange1.indexName());
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, relativeRange))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, deflector, relativeRange))
             .containsOnly(indexRange0.indexName(), indexRange1.indexName());
     }
 
