@@ -85,7 +85,7 @@ public final class SkylarkJavaMethodDoc extends SkylarkMethodDoc {
 
   @Override
   public String getDocumentation() {
-    return SkylarkDocUtils.substituteVariables(callable.doc());
+    return callable.doc();
   }
 
   @Override

@@ -20,9 +20,7 @@ import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
-import java.text.Collator;
 import java.util.Collection;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -42,8 +40,8 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
     this.module = Preconditions.checkNotNull(
         module, "Class has to be annotated with SkylarkModule: %s", classObject);
     this.classObject = classObject;
-    this.builtinMethodMap = new TreeMap<>(Collator.getInstance(Locale.US));
-    this.methodMap = new TreeMap<>(Collator.getInstance(Locale.US));
+    this.builtinMethodMap = new TreeMap<>();
+    this.methodMap = new TreeMap<>();
     this.javaMethods = HashMultimap.<String, SkylarkJavaMethodDoc>create();
     if (module.title().isEmpty()) {
       this.title = module.name();
