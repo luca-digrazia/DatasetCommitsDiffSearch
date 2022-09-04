@@ -30,9 +30,10 @@ public class HibernateSearchElasticsearchRuntimeConfig {
     /**
      * Additional backends
      */
-    @ConfigItem(name = "elasticsearch")
+    @ConfigItem(name = "elasticsearch.backends")
     @ConfigDocSection
-    public ElasticsearchAdditionalBackendsRuntimeConfig additionalBackends;
+    @ConfigDocMapKey("backend-name")
+    Map<String, ElasticsearchBackendRuntimeConfig> additionalBackends;
 
     /**
      * Configuration for how entities are loaded by a search query.
@@ -45,17 +46,6 @@ public class HibernateSearchElasticsearchRuntimeConfig {
      */
     @ConfigItem
     AutomaticIndexingConfig automaticIndexing;
-
-    @ConfigGroup
-    public static class ElasticsearchAdditionalBackendsRuntimeConfig {
-
-        /**
-         * Additional backends
-         */
-        @ConfigDocMapKey("backend-name")
-        public Map<String, ElasticsearchBackendRuntimeConfig> backends;
-
-    }
 
     @ConfigGroup
     public static class ElasticsearchBackendRuntimeConfig {
