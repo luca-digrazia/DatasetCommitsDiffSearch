@@ -18,12 +18,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkApiProvider;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkApiProvider;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcStarlarkApiProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcStarlarkApiProviderApi;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -38,7 +38,7 @@ public final class CcStarlarkApiProvider extends StarlarkApiProvider
 
   public static void maybeAdd(RuleContext ruleContext, RuleConfiguredTargetBuilder builder) {
     if (ruleContext.getFragment(CppConfiguration.class).enableLegacyCcProvider()) {
-      builder.addStarlarkTransitiveInfo(NAME, new CcStarlarkApiProvider());
+      builder.addSkylarkTransitiveInfo(NAME, new CcStarlarkApiProvider());
     }
   }
 
@@ -85,7 +85,7 @@ public final class CcStarlarkApiProvider extends StarlarkApiProvider
         getInfo().get(CcInfo.PROVIDER).getCcCompilationContext();
     return ccCompilationContext == null
         ? ImmutableList.<String>of()
-        : ccCompilationContext.getDefines();
+        : ccCompilationContext.getDefines().toList();
   }
 
   @Override
@@ -136,7 +136,7 @@ public final class CcStarlarkApiProvider extends StarlarkApiProvider
         getInfo().get(CcInfo.PROVIDER).getCcCompilationContext();
 
     ImmutableList.Builder<String> options = ImmutableList.builder();
-    for (String define : ccCompilationContext.getDefines()) {
+    for (String define : ccCompilationContext.getDefines().toList()) {
       options.add("-D" + define);
     }
     for (PathFragment path : ccCompilationContext.getSystemIncludeDirs()) {

@@ -19,8 +19,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.Artifact.OwnerlessArtifactWrapper;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
@@ -118,22 +118,19 @@ public class ActionExecutionValue implements SkyValue {
   }
 
   /**
-   * Retrieves a {@link FileArtifactValue} for a regular (non-middleman, non-tree) derived artifact.
-   *
-   * <p>The value for the given artifact must be present.
+   * Create {@link FileArtifactValue} for artifact that must be non-middleman non-tree derived
+   * artifact.
    */
-  FileArtifactValue getExistingFileArtifactValue(DerivedArtifact artifact) {
-    Preconditions.checkState(
-        !artifact.isMiddlemanArtifact() && !artifact.isTreeArtifact(),
-        "Cannot request %s from %s",
-        artifact,
-        this);
+  static FileArtifactValue createSimpleFileArtifactValue(
+      Artifact.DerivedArtifact artifact, ActionExecutionValue actionValue) {
+    Preconditions.checkState(!artifact.isMiddlemanArtifact(), "%s %s", artifact, actionValue);
+    Preconditions.checkState(!artifact.isTreeArtifact(), "%s %s", artifact, actionValue);
     return Preconditions.checkNotNull(
-        getArtifactValue(artifact),
-        "Missing artifact %s (generating action key %s) in %s",
+        actionValue.getArtifactValue(artifact),
+        "%s %s %s",
         artifact,
         artifact.getGeneratingActionKey(),
-        this);
+        actionValue);
   }
 
   /**
@@ -285,7 +282,7 @@ public class ActionExecutionValue implements SkyValue {
                 artifact,
                 newArtifactMap);
         transformedArtifact =
-            TreeFileArtifact.createTreeOutput(
+            ActionInputHelper.treeFileArtifact(
                 (Artifact.SpecialArtifact) newParent, artifact.getParentRelativePath());
       }
       result.put(transformedArtifact, entry.getValue());
