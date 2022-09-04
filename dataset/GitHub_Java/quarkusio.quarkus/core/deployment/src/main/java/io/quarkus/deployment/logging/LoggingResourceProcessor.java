@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 
 import org.jboss.logmanager.EmbeddedConfigurator;
 
-import io.quarkus.bootstrap.logging.InitialConfigurator;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -26,6 +25,7 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuil
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.runtime.RuntimeValue;
+import io.quarkus.runtime.logging.InitialConfigurator;
 import io.quarkus.runtime.logging.LogConfig;
 import io.quarkus.runtime.logging.LoggingSetupRecorder;
 
@@ -82,8 +82,7 @@ public final class LoggingResourceProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    LoggingSetupBuildItem setupLoggingRuntimeInit(LoggingSetupRecorder recorder, LogConfig log,
-            List<LogHandlerBuildItem> handlerBuildItems,
+    void setupLoggingRuntimeInit(LoggingSetupRecorder recorder, LogConfig log, List<LogHandlerBuildItem> handlerBuildItems,
             List<NamedLogHandlersBuildItem> namedHandlerBuildItems, List<LogConsoleFormatBuildItem> consoleFormatItems,
             Optional<ConsoleFormatterBannerBuildItem> possibleBannerBuildItem) {
         final List<RuntimeValue<Optional<Handler>>> handlers = handlerBuildItems.stream()
@@ -103,7 +102,6 @@ public final class LoggingResourceProcessor {
         recorder.initializeLogging(log, handlers, namedHandlers,
                 consoleFormatItems.stream().map(LogConsoleFormatBuildItem::getFormatterValue).collect(Collectors.toList()),
                 possibleSupplier);
-        return new LoggingSetupBuildItem();
     }
 
     @BuildStep
