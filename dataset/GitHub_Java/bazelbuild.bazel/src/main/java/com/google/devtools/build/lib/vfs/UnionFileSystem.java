@@ -14,9 +14,9 @@
 
 package com.google.devtools.build.lib.vfs;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -227,7 +227,7 @@ public class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  public void setLastModifiedTime(Path path, long newTime) throws IOException {
+  protected void setLastModifiedTime(Path path, long newTime) throws IOException {
     path = internalResolveSymlink(path);
     checkModifiable(path);
     FileSystem delegate = getDelegate(path);
@@ -409,7 +409,7 @@ public class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  public byte[] getxattr(Path path, String name) throws IOException {
+  protected byte[] getxattr(Path path, String name) throws IOException {
     path = internalResolveSymlink(path);
     FileSystem delegate = getDelegate(path);
     return delegate.getxattr(adjustPath(path, delegate), name);
@@ -431,7 +431,7 @@ public class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  public void renameTo(Path sourcePath, Path targetPath) throws IOException {
+  protected void renameTo(Path sourcePath, Path targetPath) throws IOException {
     sourcePath = internalResolveSymlink(sourcePath);
     FileSystem sourceDelegate = getDelegate(sourcePath);
     if (!sourceDelegate.supportsModifications(sourcePath)) {

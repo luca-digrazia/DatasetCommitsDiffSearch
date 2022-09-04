@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.vfs;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
-import com.google.common.base.Preconditions;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.common.hash.Hashing;
 import com.google.common.io.ByteSource;
@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.vfs.Dirent.Type;
 import com.google.devtools.build.lib.vfs.Path.PathFactory;
 import com.google.devtools.common.options.EnumConverter;
+import com.google.devtools.common.options.OptionsParsingException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -70,17 +71,23 @@ public abstract class FileSystem {
     }
   }
 
-  private final HashFunction digestFunction;
-
-  public FileSystem() {
-    this(HashFunction.MD5);
+  // This is effectively final, should be changed only in unit-tests!
+  private static HashFunction digestFunction;
+  static {
+    try {
+      digestFunction = new HashFunction.Converter().convert(
+          System.getProperty("bazel.DigestFunction", "MD5"));
+    } catch (OptionsParsingException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
-  public FileSystem(HashFunction digestFunction) {
-    this.digestFunction = Preconditions.checkNotNull(digestFunction);
+  @VisibleForTesting
+  public static void setDigestFunctionForTesting(HashFunction value) {
+    digestFunction = value;
   }
 
-  public HashFunction getDigestFunction() {
+  public static HashFunction getDigestFunction() {
     return digestFunction;
   }
 
@@ -284,10 +291,10 @@ public abstract class FileSystem {
   protected abstract long getLastModifiedTime(Path path, boolean followSymlinks) throws IOException;
 
   /**
-   * Sets the last modification time of the file denoted by {@code path}. See {@link
-   * Path#setLastModifiedTime} for specification.
+   * Sets the last modification time of the file denoted by {@code path}. See
+   * {@link Path#setLastModifiedTime} for specification.
    */
-  public abstract void setLastModifiedTime(Path path, long newTime) throws IOException;
+  protected abstract void setLastModifiedTime(Path path, long newTime) throws IOException;
 
   /**
    * Returns value of the given extended attribute name or null if attribute
@@ -304,7 +311,7 @@ public abstract class FileSystem {
    *   system does not support extended attributes at all.
    * @throws IOException if the call failed for any other reason.
    */
-  public byte[] getxattr(Path path, String name) throws IOException {
+  protected byte[] getxattr(Path path, String name) throws IOException {
     return null;
   }
 
@@ -605,11 +612,6 @@ public abstract class FileSystem {
     return readSymbolicLink(path);
   }
 
-  /** Returns true iff this path denotes an existing file of any kind. Follows symbolic links. */
-  public boolean exists(Path path) {
-    return exists(path, true);
-  }
-
   /**
    * Returns true iff {@code path} denotes an existing file of any kind. See
    * {@link Path#exists(Symlinks)} for specification.
@@ -756,10 +758,11 @@ public abstract class FileSystem {
   protected abstract OutputStream getOutputStream(Path path, boolean append) throws IOException;
 
   /**
-   * Renames the file denoted by "sourceNode" to the location "targetNode". See {@link
-   * Path#renameTo} for specification.
+   * Renames the file denoted by "sourceNode" to the location "targetNode".
+   * See {@link Path#renameTo} for specification.
    */
-  public abstract void renameTo(Path sourcePath, Path targetPath) throws IOException;
+  protected abstract void renameTo(Path sourcePath, Path targetPath) throws IOException;
+
 
   /**
    * Create a new hard link file at "linkPath" for file at "originalPath".

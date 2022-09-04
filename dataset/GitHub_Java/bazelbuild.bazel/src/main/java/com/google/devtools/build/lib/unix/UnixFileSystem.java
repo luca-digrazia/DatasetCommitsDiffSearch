@@ -14,13 +14,13 @@
 package com.google.devtools.build.lib.unix;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.unix.NativePosixFiles.Dirents;
 import com.google.devtools.build.lib.unix.NativePosixFiles.ReadTypes;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.AbstractFileSystemWithCustomStat;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -36,12 +36,7 @@ import java.util.List;
  */
 @ThreadSafe
 public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
-
   public UnixFileSystem() {
-  }
-
-  public UnixFileSystem(HashFunction hashFunction) {
-    super(hashFunction);
   }
 
   /**
@@ -349,7 +344,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public void renameTo(Path sourcePath, Path targetPath) throws IOException {
+  protected void renameTo(Path sourcePath, Path targetPath) throws IOException {
     synchronized (sourcePath) {
       NativePosixFiles.rename(sourcePath.toString(), targetPath.toString());
     }
@@ -379,7 +374,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public void setLastModifiedTime(Path path, long newTime) throws IOException {
+  protected void setLastModifiedTime(Path path, long newTime) throws IOException {
     synchronized (path) {
       if (newTime == -1L) { // "now"
         NativePosixFiles.utime(path.toString(), true, 0);
@@ -392,7 +387,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public byte[] getxattr(Path path, String name) throws IOException {
+  protected byte[] getxattr(Path path, String name) throws IOException {
     String pathName = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {

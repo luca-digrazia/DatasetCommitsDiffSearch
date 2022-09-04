@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs.inmemoryfs;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileAccessException;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -70,18 +70,7 @@ public class InMemoryFileSystem extends FileSystem {
    * paths are considered to be within scope).
    */
   public InMemoryFileSystem(Clock clock) {
-    this(clock, (PathFragment) null);
-  }
-
-  /**
-   * Creates a new InMemoryFileSystem with scope checking disabled (all paths are considered to be
-   * within scope).
-   */
-  public InMemoryFileSystem(Clock clock, HashFunction hashFunction) {
-    super(hashFunction);
-    this.clock = clock;
-    this.rootInode = newRootInode(clock);
-    this.scopeRoot = null;
+    this(clock, null);
   }
 
   /**
@@ -91,14 +80,9 @@ public class InMemoryFileSystem extends FileSystem {
   public InMemoryFileSystem(Clock clock, PathFragment scopeRoot) {
     this.scopeRoot = scopeRoot;
     this.clock = clock;
-    this.rootInode = newRootInode(clock);
-  }
-
-  private static InMemoryDirectoryInfo newRootInode(Clock clock) {
-    InMemoryDirectoryInfo rootInode = new InMemoryDirectoryInfo(clock);
+    this.rootInode = new InMemoryDirectoryInfo(clock);
     rootInode.addChild(".", rootInode);
     rootInode.addChild("..", rootInode);
-    return rootInode;
   }
 
   /**
@@ -702,7 +686,7 @@ public class InMemoryFileSystem extends FileSystem {
   }
 
   @Override
-  public void setLastModifiedTime(Path path, long newTime) throws IOException {
+  protected void setLastModifiedTime(Path path, long newTime) throws IOException {
     synchronized (this) {
       InMemoryContentInfo status = scopeLimitedStat(path, true);
       status.setLastModifiedTime(newTime == -1L ? clock.currentTimeMillis() : newTime);
@@ -751,7 +735,7 @@ public class InMemoryFileSystem extends FileSystem {
   }
 
   @Override
-  public void renameTo(Path sourcePath, Path targetPath)
+  protected void renameTo(Path sourcePath, Path targetPath)
       throws IOException {
     if (sourcePath.equals(getRootDirectory())) {
       throw Error.EACCES.exception(sourcePath);

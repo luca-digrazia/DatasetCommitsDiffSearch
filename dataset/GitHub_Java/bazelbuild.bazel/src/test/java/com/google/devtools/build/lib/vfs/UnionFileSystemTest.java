@@ -278,7 +278,7 @@ public class UnionFileSystemTest extends SymlinkAwareFileSystemTest {
     }
 
     @Override
-    public byte[] getxattr(Path path, String name) {
+    protected byte[] getxattr(Path path, String name) {
       assertThat(path.getFileSystem()).isSameAs(this);
       return (name.equals(XATTR_KEY)) ? XATTR_VAL.getBytes(UTF_8) : null;
     }
