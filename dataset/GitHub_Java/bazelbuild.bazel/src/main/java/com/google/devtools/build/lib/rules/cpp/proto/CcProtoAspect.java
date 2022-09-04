@@ -329,8 +329,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
                   toolchain,
                   toolchain.getFdoContext(),
                   TargetUtils.getExecutionInfo(
-                      ruleContext.getRule(), ruleContext.isAllowTagsPropagation()),
-                  /* shouldProcessHeaders= */ true)
+                      ruleContext.getRule(), ruleContext.isAllowTagsPropagation()))
               .addCcCompilationContexts(CppHelper.getCompilationContextsFromDeps(deps))
               .addCcCompilationContexts(
                   ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)))
