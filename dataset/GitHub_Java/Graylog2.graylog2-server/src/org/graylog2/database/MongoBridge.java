@@ -41,6 +41,10 @@ public class MongoBridge {
     // TODO: make configurable
     public static final int STANDARD_PORT = 27017;
 
+    public void dropCollection(String collectionName) throws Exception {
+        MongoConnection.getInstance().getDatabase().getCollection(collectionName).drop();
+    }
+
     public DBCollection getMessagesColl() {
         DBCollection coll = null;
 

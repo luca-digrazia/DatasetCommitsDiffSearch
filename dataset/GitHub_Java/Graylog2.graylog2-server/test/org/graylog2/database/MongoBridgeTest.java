@@ -16,7 +16,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import org.productivity.java.syslog4j.server.impl.event.SyslogServerEvent;
+import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 
 /**
  *
@@ -50,11 +50,6 @@ public class MongoBridgeTest {
             Integer.valueOf(27017),
             "false"
         );
-
-        // TODO: Truncate messages collection.
-        DB db = MongoConnection.getInstance().getDatabase();
-        DBCollection coll = db.getCollection("messages");
-        coll.drop();
     }
 
     @After
@@ -62,13 +57,30 @@ public class MongoBridgeTest {
     }
 
     /**
+     * Test of dropCollection method, of class MongoBridge.
+     */
+    @Test
+    public void testDropCollection() throws Exception {
+        System.out.println("dropCollection");
+        String collectionName = "";
+        MongoBridge instance = new MongoBridge();
+        instance.dropCollection(collectionName);
+        // TODO review the generated test code and remove the default call to fail.
+        fail("The test case is a prototype.");
+    }
+
+    /**
      * Test of getMessagesColl method, of class MongoBridge.
      */
     @Test
     public void testGetMessagesColl() {
+        System.out.println("getMessagesColl");
         MongoBridge instance = new MongoBridge();
-        DBCollection coll = instance.getMessagesColl();
-        assertTrue(coll.getName().equals("messages"));
+        DBCollection expResult = null;
+        DBCollection result = instance.getMessagesColl();
+        assertEquals(expResult, result);
+        // TODO review the generated test code and remove the default call to fail.
+        fail("The test case is a prototype.");
     }
 
     /**
@@ -76,28 +88,12 @@ public class MongoBridgeTest {
      */
     @Test
     public void testInsert() throws Exception {
-        // Build an event.
-        byte[] msg = "mama".getBytes();
-        SyslogServerEvent event = new SyslogServerEvent(msg, msg.length, null);
-        event.setMessage("testmessage");
-        event.setHost("testhost");
-        event.setFacility(4);
-        event.setLevel(5);
-
-        // Insert the event.
+        System.out.println("insert");
+        SyslogServerEventIF event = null;
         MongoBridge instance = new MongoBridge();
         instance.insert(event);
-
-        // Fetch the event and compare.
-        DBCollection coll = instance.getMessagesColl();
-        long count = coll.getCount();
-        assertTrue(count == 1);
-
-        DBObject res = coll.findOne();
-        assertEquals(res.get("message"), "testmessage");
-        assertEquals(res.get("host"), "testhost");
-        assertEquals(res.get("facility"), 4);
-        assertEquals(res.get("level"), 5);
+        // TODO review the generated test code and remove the default call to fail.
+        fail("The test case is a prototype.");
     }
 
     /**
@@ -105,32 +101,12 @@ public class MongoBridgeTest {
      */
     @Test
     public void testInsertGelfMessage() throws Exception {
-        GELFMessage message = new GELFMessage();
-        message.shortMessage = "gelftest";
-        message.fullMessage = "full gelftest\nstuff";
-        message.level = 1;
-        message.type = 8;
-        message.host = "junit-test";
-        message.file = "junit-testfile";
-        message.line = 9001;
-
-        // Insert the message.
+        System.out.println("insertGelfMessage");
+        GELFMessage message = null;
         MongoBridge instance = new MongoBridge();
         instance.insertGelfMessage(message);
-
-        // Fetch the event and compare
-        DBCollection coll = instance.getMessagesColl();
-        long count = coll.getCount();
-        assertTrue(count == 1);
-
-        DBObject res = coll.findOne();
-        assertEquals(res.get("message"), "gelftest");
-        assertEquals(res.get("full_message"), "full gelftest\nstuff");
-        assertEquals(res.get("level"), 1);
-        assertEquals(res.get("type"), 8);
-        assertEquals(res.get("host"), "junit-test");
-        assertEquals(res.get("file"), "junit-testfile");
-        assertEquals(res.get("line"), 9001);
+        // TODO review the generated test code and remove the default call to fail.
+        fail("The test case is a prototype.");
     }
 
     /**
