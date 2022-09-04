@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
@@ -47,9 +46,6 @@ public class PrinterTest {
   public void testPrinter() throws Exception {
     // Note that prettyPrintValue and printValue only differ on behaviour of
     // labels and strings at toplevel.
-    assertThat(Printer.str(createObjWithStr())).isEqualTo("<str marker>");
-    assertThat(Printer.repr(createObjWithStr())).isEqualTo("<repr marker>");
-
     assertThat(Printer.str("foo\nbar")).isEqualTo("foo\nbar");
     assertThat(Printer.repr("foo\nbar")).isEqualTo("\"foo\\nbar\"");
     assertThat(Printer.str("'")).isEqualTo("'");
@@ -138,24 +134,6 @@ public class PrinterTest {
         "%.s");
   }
 
-  private SkylarkPrinter makeSimplifiedFormatPrinter() {
-    return new Printer.BasePrinter(new StringBuilder(), /*simplifiedFormatStrings=*/ true);
-  }
-
-  @Test
-  public void testSimplifiedDisallowsPlaceholdersBesidesPercentS() {
-    assertThat(makeSimplifiedFormatPrinter().format("Allowed: %%").toString())
-        .isEqualTo("Allowed: %");
-    assertThat(makeSimplifiedFormatPrinter().format("Allowed: %s", "abc").toString())
-        .isEqualTo("Allowed: abc");
-    assertThrows(
-        IllegalFormatException.class,
-        () -> makeSimplifiedFormatPrinter().format("Disallowed: %r", "abc"));
-    assertThrows(
-        IllegalFormatException.class,
-        () -> makeSimplifiedFormatPrinter().format("Disallowed: %d", 5));
-  }
-
   @Test
   public void testListLimitStringLength() throws Exception {
     int lengthDivisibleByTwo = Printer.SUGGESTED_CRITICAL_LIST_ELEMENTS_STRING_LENGTH;
@@ -241,6 +219,14 @@ public class PrinterTest {
     assertThat(Printer.str(list)).isEqualTo(String.format("[%s]", Joiner.on(", ").join(list)));
   }
 
+  @Test
+  public void testLegacyPrinter() throws Exception {
+    assertThat(new Printer.LegacyPrinter().str(createObjWithStr()).toString())
+        .isEqualTo("<str legacy marker>");
+    assertThat(new Printer.LegacyPrinter().repr(createObjWithStr()).toString())
+        .isEqualTo("<repr legacy marker>");
+  }
+
   private String printListWithLimit(List<?> list) {
     return printList(list, Printer.SUGGESTED_CRITICAL_LIST_ELEMENTS_COUNT,
         Printer.SUGGESTED_CRITICAL_LIST_ELEMENTS_STRING_LENGTH);
@@ -259,8 +245,18 @@ public class PrinterTest {
       }
 
       @Override
+      public void reprLegacy(SkylarkPrinter printer) {
+        printer.append("<repr legacy marker>");
+      }
+
+      @Override
       public void str(SkylarkPrinter printer) {
         printer.append("<str marker>");
+      }
+
+      @Override
+      public void strLegacy(SkylarkPrinter printer) {
+        printer.append("<str legacy marker>");
       }
     };
   }

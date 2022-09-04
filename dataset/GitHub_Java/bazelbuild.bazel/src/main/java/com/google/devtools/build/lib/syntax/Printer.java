@@ -16,19 +16,18 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrintable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Formattable;
 import java.util.Formatter;
-import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Map;
 import java.util.MissingFormatWidthException;
-import java.util.UnknownFormatConversionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
@@ -70,16 +69,38 @@ public class Printer {
     return getPrinter(new StringBuilder());
   }
 
+  /**
+   * Creates an instance of BasePrinter with a given buffer.
+   *
+   * @param env {@link Environment}
+   * @param buffer an {@link Appendable}
+   * @return new BasePrinter
+   */
+  static BasePrinter getPrinter(Environment env, Appendable buffer) {
+    if (env.getSemantics().incompatibleDescriptiveStringRepresentations) {
+      return new BasePrinter(buffer);
+    } else {
+      return new LegacyPrinter(buffer);
+    }
+  }
+
+  /**
+   * Creates an instance of BasePrinter with an empty buffer.
+   *
+   * @param env {@link Environment}
+   * @return new BasePrinter
+   */
+  static BasePrinter getPrinter(Environment env) {
+    if (env.getSemantics().incompatibleDescriptiveStringRepresentations) {
+      return new BasePrinter();
+    } else {
+      return new LegacyPrinter();
+    }
+  }
+
   private Printer() {}
 
   // These static methods proxy to the similar methods of BasePrinter
-
-  /**
-   * Format an object with Skylark's {@code debugPrint}.
-   */
-  public static String debugPrint(Object x) {
-    return getPrinter().debugPrint(x).toString();
-  }
 
   /**
    * Format an object with Skylark's {@code str}.
@@ -273,55 +294,22 @@ public class Printer {
     protected final Appendable buffer;
 
     /**
-     * If true, the only percent sequences allowed in format strings are %s substitutions and %%
-     * escapes.
-     */
-    protected final boolean simplifiedFormatStrings;
-
-    /**
-     * Creates a printer.
+     * Creates a printer instance.
      *
-     * @param buffer the {@link Appendable} that will be written to
-     * @param simplifiedFormatStrings if true, format strings will allow only %s and %%
-     */
-    protected BasePrinter(Appendable buffer, boolean simplifiedFormatStrings) {
-      this.buffer = buffer;
-      this.simplifiedFormatStrings = simplifiedFormatStrings;
-    }
-
-    /**
-     * Creates a printer that writes to the given buffer and that does not use simplified format
-     * strings.
+     * @param buffer the {@link Appendable} to which to print the representation
      */
     protected BasePrinter(Appendable buffer) {
-      this(buffer, /*simplifiedFormatStrings=*/ false);
+      this.buffer = buffer;
     }
 
-    /**
-     * Creates a printer that uses a fresh buffer and that does not use simplified format strings.
-     */
+    /** Creates a printer instance with a new StringBuilder. */
     protected BasePrinter() {
-      this(new StringBuilder());
+      this.buffer = new StringBuilder();
     }
 
     @Override
     public String toString() {
       return buffer.toString();
-    }
-
-    /**
-     * Print an informal debug-only representation of object x.
-     *
-     * @param o the object
-     * @return the buffer, in fluent style
-     */
-    public BasePrinter debugPrint(Object o) {
-      if (o instanceof SkylarkValue) {
-        ((SkylarkValue) o).debugPrint(this);
-        return this;
-      }
-
-      return this.str(o);
     }
 
     /**
@@ -357,8 +345,8 @@ public class Printer {
         // values such as Locations or ASTs.
         this.append("null");
 
-      } else if (o instanceof SkylarkPrintable) {
-        ((SkylarkPrintable) o).repr(this);
+      } else if (o instanceof SkylarkValue) {
+        ((SkylarkValue) o).repr(this);
 
       } else if (o instanceof String) {
         writeString((String) o);
@@ -385,6 +373,13 @@ public class Printer {
         this.repr(entry.getKey());
         this.append(": ");
         this.repr(entry.getValue());
+
+      } else if (o instanceof PathFragment) {
+        this.append(((PathFragment) o).getPathString());
+
+      } else if (o instanceof Path) {
+        append(o.toString());
+
       } else if (o instanceof Class<?>) {
         this.append(EvalUtils.getDataTypeNameFromClass((Class<?>) o));
 
@@ -510,25 +505,12 @@ public class Printer {
     }
 
     /**
-     * Perform Python-style string formatting, similar to the {@code pattern % tuple} syntax.
+     * Perform Python-style string formatting, as per pattern % tuple Limitations: only %d %s %r %%
+     * are supported.
      *
-     * <p>The only supported placeholder patterns are
-     * <ul>
-     *   <li>{@code %s} (convert as if by {@code str()})
-     *   <li>{@code %r} (convert as if by {@code repr()})
-     *   <li>{@code %d} (convert an integer to its decimal representation)
-     * </ul>
-     * To encode a literal percent character, escape it as {@code %%}. It is an error to have a
-     * non-escaped {@code %} at the end of the string or followed by any character not listed above.
-     *
-     * <p>If this printer has {@code simplifiedFormatStrings} set, only {@code %s} and {@code %%}
-     * are permitted.
-     *
-     * @param pattern a format string that may contain placeholders
-     * @param arguments an array containing arguments to substitute into the placeholders in order
-     * @return the formatted string
-     * @throws IllegalFormatException if {@code pattern} is not a valid format string, or if
-     *     {@code arguments} mismatches the number or type of placeholders in {@code pattern}
+     * @param pattern a format string.
+     * @param arguments an array containing positional arguments.
+     * @return the formatted string.
      */
     @Override
     public BasePrinter format(String pattern, Object... arguments) {
@@ -536,9 +518,12 @@ public class Printer {
     }
 
     /**
-     * Perform Python-style string formatting, similar to the {@code pattern % tuple} syntax.
+     * Perform Python-style string formatting, as per pattern % tuple Limitations: only %d %s %r %%
+     * are supported.
      *
-     * <p>Same as {@link #format(String, Object...)}, but with a list instead of variadic args.
+     * @param pattern a format string.
+     * @param arguments a tuple containing positional arguments.
+     * @return the formatted string.
      */
     @Override
     public BasePrinter formatWithList(String pattern, List<?> arguments) {
@@ -573,11 +558,6 @@ public class Printer {
           case 'd':
           case 'r':
           case 's':
-            if (simplifiedFormatStrings && (directive != 's')) {
-              throw new UnknownFormatConversionException(
-                  "cannot use %" + directive + " substitution placeholder when "
-                      + "simplifiedFormatStrings is set");
-            }
             if (a >= argLength) {
               throw new MissingFormatWidthException(
                   "not enough arguments for format pattern "
@@ -632,6 +612,37 @@ public class Printer {
 
     BasePrinter append(CharSequence sequence, int start, int end) {
       return this.append(sequence.subSequence(start, end));
+    }
+  }
+
+  /** A version of BasePrinter that renders object in old style for compatibility reasons. */
+  static final class LegacyPrinter extends BasePrinter {
+    protected LegacyPrinter() {
+      super();
+    }
+
+    protected LegacyPrinter(Appendable buffer) {
+      super(buffer);
+    }
+
+    @Override
+    public LegacyPrinter repr(Object o) {
+      if (o instanceof SkylarkValue) {
+        ((SkylarkValue) o).reprLegacy(this);
+      } else {
+        super.repr(o);
+      }
+      return this;
+    }
+
+    @Override
+    public LegacyPrinter str(Object o) {
+      if (o instanceof SkylarkValue) {
+        ((SkylarkValue) o).strLegacy(this);
+      } else {
+        super.str(o);
+      }
+      return this;
     }
   }
 
