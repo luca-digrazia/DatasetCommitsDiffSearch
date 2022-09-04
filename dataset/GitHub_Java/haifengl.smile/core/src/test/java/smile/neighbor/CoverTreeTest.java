@@ -1,19 +1,18 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.neighbor;
 
@@ -27,13 +26,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import smile.data.IndexNoun;
-import smile.data.SwissRoll;
-import smile.data.USPS;
-import smile.math.distance.EditDistance;
 import smile.math.distance.EuclideanDistance;
-import smile.math.matrix.Matrix;
-
 import static org.junit.Assert.*;
 
 /**
@@ -42,8 +35,20 @@ import static org.junit.Assert.*;
  */
 @SuppressWarnings("rawtypes")
 public class CoverTreeTest {
+    double[][] data = null;
+    CoverTree<double[]> coverTree = null;
+    LinearSearch<double[]> naive = null;
 
     public CoverTreeTest() {
+        data = new double[1000][];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = new double[10];
+            for (int j = 0; j < data[i].length; j++)
+                data[i][j] = Math.random();
+        }
+
+        coverTree = new CoverTree<>(data, new EuclideanDistance());
+        naive = new LinearSearch<>(data, new EuclideanDistance());
     }
 
 
@@ -63,14 +68,13 @@ public class CoverTreeTest {
     public void tearDown() {
     }
 
+
+    /**
+     * Test of nearest method, of class CoverTree.
+     */
     @Test
     public void testNearest() {
         System.out.println("nearest");
-
-        double[][] data = Matrix.randn(1000, 10).toArray();
-        CoverTree<double[]> coverTree = new CoverTree<>(data, new EuclideanDistance());
-        LinearSearch<double[]> naive = new LinearSearch<>(data, new EuclideanDistance());
-
         for (int i = 0; i < data.length; i++) {
             Neighbor n1 = coverTree.nearest(data[i]);
             Neighbor n2 = naive.nearest(data[i]);
@@ -80,14 +84,12 @@ public class CoverTreeTest {
         }
     }
 
+    /**
+     * Test of knn method, of class CoverTree.
+     */
     @Test
     public void testKnn() {
         System.out.println("knn");
-
-        double[][] data = Matrix.randn(1000, 10).toArray();
-        CoverTree<double[]> coverTree = new CoverTree<>(data, new EuclideanDistance());
-        LinearSearch<double[]> naive = new LinearSearch<>(data, new EuclideanDistance());
-
         for (int i = 0; i < data.length; i++) {
             Neighbor[] n1 = coverTree.knn(data[i], 10);
             Neighbor[] n2 = naive.knn(data[i], 10);
@@ -101,17 +103,14 @@ public class CoverTreeTest {
     }
 
     /**
-     * Test of knn method when the data has only one elements
+     * Test of knn method, of class CoverTree. The data has only one elements
      */
     @Test
     public void testKnn1() {
         System.out.println("knn1");
-
-        double[][] data = Matrix.randn(2, 10).toArray();
         double[][] data1 = {data[0]};
         EuclideanDistance d = new EuclideanDistance();
-        CoverTree<double[]> coverTree = new CoverTree<>(data1, d);
-
+        coverTree = new CoverTree<>(data1, d);
         Neighbor[] n1 = coverTree.knn(data[1], 1);
         assertEquals(1, n1.length);
         assertEquals(0, n1[0].index);
@@ -119,14 +118,12 @@ public class CoverTreeTest {
         assertEquals(d.d(data[0], data[1]), n1[0].distance, 1E-7);
     }
 
+    /**
+     * Test of range method, of class CoverTree.
+     */
     @Test
     public void testRange() {
         System.out.println("range");
-
-        double[][] data = Matrix.randn(1000, 10).toArray();
-        CoverTree<double[]> coverTree = new CoverTree<>(data, new EuclideanDistance());
-        LinearSearch<double[]> naive = new LinearSearch<>(data, new EuclideanDistance());
-
         List<Neighbor<double[], double[]>> n1 = new ArrayList<>();
         List<Neighbor<double[], double[]>> n2 = new ArrayList<>();
         for (int i = 0; i < data.length; i++) {
@@ -143,96 +140,5 @@ public class CoverTreeTest {
             n1.clear();
             n2.clear();
         }
-    }
-
-    @Test(expected = Test.None.class)
-    public void testSwissRoll() {
-        System.out.println("----- Swiss Roll -----");
-
-        double[][] x = new double[10000][];
-        double[][] testx = new double[1000][];
-        System.arraycopy(SwissRoll.data, 0, x, 0, x.length);
-        System.arraycopy(SwissRoll.data, x.length, testx, 0, testx.length);
-
-        long start = System.currentTimeMillis();
-        CoverTree<double[]> coverTree = new CoverTree<>(x, new EuclideanDistance());
-        double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Building cover tree: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        for (int i = 0; i < testx.length; i++) {
-            coverTree.nearest(testx[i]);
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("NN: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        for (int i = 0; i < testx.length; i++) {
-            coverTree.knn(testx[i], 10);
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("10-NN: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        List<Neighbor<double[], double[]>> n = new ArrayList<>();
-        for (int i = 0; i < testx.length; i++) {
-            coverTree.range(testx[i], 8.0, n);
-            n.clear();
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Range: %.2fs%n", time);
-    }
-
-    @Test(expected = Test.None.class)
-    public void testUSPS() {
-        System.out.println("----- USPS -----");
-
-        double[][] x = USPS.x;
-        double[][] testx = USPS.testx;
-
-        long start = System.currentTimeMillis();
-        CoverTree<double[]> coverTree = new CoverTree<>(x, new EuclideanDistance());
-        double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Building cover tree: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        for (int i = 0; i < testx.length; i++) {
-            coverTree.nearest(testx[i]);
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("NN: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        for (int i = 0; i < testx.length; i++) {
-            coverTree.knn(testx[i], 10);
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("10-NN: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        List<Neighbor<double[], double[]>> n = new ArrayList<>();
-        for (int i = 0; i < testx.length; i++) {
-            coverTree.range(testx[i], 8.0, n);
-            n.clear();
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Range: %.2fs%n", time);
-    }
-
-    @Test
-    public void testStrings() {
-        System.out.println("----- Strings -----");
-
-        String[] words = IndexNoun.words;
-        CoverTree<String> cover = new CoverTree<>(words, new EditDistance(50, true));
-
-        long start = System.currentTimeMillis();
-        List<Neighbor<String, String>> neighbors = new ArrayList<>();
-        for (int i = 1000; i < 1100; i++) {
-            cover.range(words[i], 1, neighbors);
-            neighbors.clear();
-        }
-        double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("String search: %.2fs%n", time);
     }
 }

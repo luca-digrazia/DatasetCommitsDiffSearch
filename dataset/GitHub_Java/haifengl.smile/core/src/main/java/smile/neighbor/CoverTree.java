@@ -21,7 +21,6 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import smile.math.Math;
 import smile.math.distance.Metric;
 import smile.sort.DoubleHeapSelect;
@@ -245,7 +244,7 @@ public class CoverTree<E> implements NearestNeighborSearch<E, E>, KNNSearch<E, E
     /**
      * Set if exclude query object self from the neighborhood.
      */
-    public CoverTree<E> setIdenticalExcluded(boolean excluded) {
+    public CoverTree setIdenticalExcluded(boolean excluded) {
         identicalExcluded = excluded;
         return this;
     }
