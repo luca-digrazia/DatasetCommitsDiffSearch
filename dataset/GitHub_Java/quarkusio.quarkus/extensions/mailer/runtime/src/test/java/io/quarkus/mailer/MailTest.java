@@ -4,14 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 
 import java.io.File;
-import java.util.*;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
-import org.eclipse.microprofile.reactive.streams.operators.ReactiveStreams;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import io.vertx.axle.core.Vertx;
+import io.smallrye.mutiny.Multi;
 
 class MailTest {
 
@@ -20,17 +21,6 @@ class MailTest {
     private static final String DESCRIPTION = "my lorem ipsum";
     private static final String TO_ADDRESS = "quarkus@quarkus.io";
     private static final String TEXT_PLAIN = "text/plain";
-    private static Vertx vertx;
-
-    @BeforeAll
-    static void init() {
-        vertx = Vertx.vertx();
-    }
-
-    @AfterAll
-    static void closing() {
-        vertx.close().toCompletableFuture().join();
-    }
 
     @Test
     void testSimpleTextEmail() {
@@ -101,7 +91,7 @@ class MailTest {
         assertThat(mail1.getAttachments().get(0).getFile()).isFile();
         assertThat(mail1.getAttachments().get(0).getDisposition()).isEqualTo(Attachment.DISPOSITION_ATTACHMENT);
 
-        Mail mail2 = new Mail().addAttachment("some-name-2", BEGINNING.getBytes(), TEXT_PLAIN);
+        Mail mail2 = new Mail().addAttachment("some-name-2", BEGINNING.getBytes(StandardCharsets.UTF_8), TEXT_PLAIN);
         assertThat(mail2.getAttachments()).hasSize(1);
         assertThat(mail2.getAttachments().get(0).getName()).isEqualTo("some-name-2");
         assertThat(mail2.getAttachments().get(0).getContentType()).isEqualTo(TEXT_PLAIN);
@@ -109,7 +99,7 @@ class MailTest {
         assertThat(mail2.getAttachments().get(0).getDisposition()).isEqualTo(Attachment.DISPOSITION_ATTACHMENT);
 
         Mail mail3 = new Mail().addAttachment("some-name-3",
-                ReactiveStreams.of(0, 1, 2).map(Integer::byteValue).buildRs(), TEXT_PLAIN);
+                Multi.createFrom().items(0, 1, 2).map(Integer::byteValue), TEXT_PLAIN);
         assertThat(mail3.getAttachments()).hasSize(1);
         assertThat(mail3.getAttachments().get(0).getName()).isEqualTo("some-name-3");
         assertThat(mail3.getAttachments().get(0).getContentType()).isEqualTo(TEXT_PLAIN);
@@ -117,7 +107,7 @@ class MailTest {
         assertThat(mail3.getAttachments().get(0).getDisposition()).isEqualTo(Attachment.DISPOSITION_ATTACHMENT);
 
         Mail mail4 = new Mail().addAttachment("some-name-4",
-                ReactiveStreams.of(0, 1, 2).map(Integer::byteValue).buildRs(), TEXT_PLAIN,
+                Multi.createFrom().items(0, 1, 2).map(Integer::byteValue), TEXT_PLAIN,
                 DESCRIPTION, Attachment.DISPOSITION_ATTACHMENT);
         assertThat(mail4.getAttachments()).hasSize(1);
         assertThat(mail4.getAttachments().get(0).getName()).isEqualTo("some-name-4");
@@ -126,7 +116,7 @@ class MailTest {
         assertThat(mail4.getAttachments().get(0).getDescription()).isEqualTo(DESCRIPTION);
         assertThat(mail4.getAttachments().get(0).getDisposition()).isEqualTo(Attachment.DISPOSITION_ATTACHMENT);
 
-        Mail mail5 = new Mail().addAttachment("some-name-5", BEGINNING.getBytes(), TEXT_PLAIN,
+        Mail mail5 = new Mail().addAttachment("some-name-5", BEGINNING.getBytes(StandardCharsets.UTF_8), TEXT_PLAIN,
                 DESCRIPTION, Attachment.DISPOSITION_ATTACHMENT);
         assertThat(mail5.getAttachments()).hasSize(1);
         assertThat(mail5.getAttachments().get(0).getName()).isEqualTo("some-name-5");
@@ -146,7 +136,7 @@ class MailTest {
         assertThat(mail1.getAttachments().get(0).getDisposition()).isEqualTo(Attachment.DISPOSITION_INLINE);
         assertThat(mail1.getAttachments().get(0).getContentId()).isEqualTo("<cid-1>");
 
-        Mail mail2 = new Mail().addInlineAttachment("name-2", BEGINNING.getBytes(), TEXT_PLAIN, "cid-2");
+        Mail mail2 = new Mail().addInlineAttachment("name-2", BEGINNING.getBytes(StandardCharsets.UTF_8), TEXT_PLAIN, "cid-2");
         assertThat(mail2.getAttachments()).hasSize(1);
         assertThat(mail2.getAttachments().get(0).getName()).isEqualTo("name-2");
         assertThat(mail2.getAttachments().get(0).getContentType()).isEqualTo(TEXT_PLAIN);
@@ -154,7 +144,7 @@ class MailTest {
         assertThat(mail2.getAttachments().get(0).getContentId()).isEqualTo("<cid-2>");
 
         Mail mail3 = new Mail().addInlineAttachment("name-3",
-                ReactiveStreams.of(0, 1, 2).map(Integer::byteValue).buildRs(), TEXT_PLAIN, "cid-3");
+                Multi.createFrom().items(0, 1, 2).map(Integer::byteValue), TEXT_PLAIN, "cid-3");
         assertThat(mail3.getAttachments()).hasSize(1);
         assertThat(mail3.getAttachments().get(0).getName()).isEqualTo("name-3");
         assertThat(mail3.getAttachments().get(0).getContentType()).isEqualTo(TEXT_PLAIN);
@@ -179,6 +169,34 @@ class MailTest {
 
         mail.setHeaders(null);
         assertThat(mail.getHeaders()).isEmpty();
+    }
+
+    @Test
+    void testMultipleReplyTo() {
+        Mail mail = new Mail().addTo(TO_ADDRESS).setSubject("test").setText(BEGINNING)
+                .setFrom("from@quarkus.io")
+                .setReplyTo("reply-to@quarkus.io", "another@quarkus.io")
+                .setBounceAddress("bounce@quarkus.io");
+        assertThat(mail.getTo()).containsExactly(TO_ADDRESS);
+        assertThat(mail.getSubject()).isEqualTo("test");
+        assertThat(mail.getText()).isEqualTo(BEGINNING);
+        assertThat(mail.getHtml()).isNull();
+        assertThat(mail.getFrom()).isEqualTo("from@quarkus.io");
+        assertThat(mail.getReplyTo()).isEqualTo("reply-to@quarkus.io,another@quarkus.io");
+        assertThat(mail.getBounceAddress()).isEqualTo("bounce@quarkus.io");
+
+        mail = new Mail().addTo(TO_ADDRESS).setSubject("test").setText(BEGINNING)
+                .setFrom("from@quarkus.io")
+                .addReplyTo("another@quarkus.io")
+                .addReplyTo("reply-to@quarkus.io")
+                .setBounceAddress("bounce@quarkus.io");
+        assertThat(mail.getTo()).containsExactly(TO_ADDRESS);
+        assertThat(mail.getSubject()).isEqualTo("test");
+        assertThat(mail.getText()).isEqualTo(BEGINNING);
+        assertThat(mail.getHtml()).isNull();
+        assertThat(mail.getFrom()).isEqualTo("from@quarkus.io");
+        assertThat(mail.getReplyTo()).isEqualTo("another@quarkus.io,reply-to@quarkus.io");
+        assertThat(mail.getBounceAddress()).isEqualTo("bounce@quarkus.io");
     }
 
 }

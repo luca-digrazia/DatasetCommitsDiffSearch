@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -52,12 +53,21 @@ public class MutinyMailerImpl implements ReactiveMailer {
         }
 
         List<Uni<Void>> unis = stream(mails)
-                .map(mail -> toMailMessage(mail)
-                        .onItem().produceUni(mailMessage -> send(mail, mailMessage)))
+                .map(new Function<Mail, Uni<Void>>() {
+                    @Override
+                    public Uni<Void> apply(Mail mail) {
+                        return MutinyMailerImpl.this.toMailMessage(mail)
+                                .chain(new Function<MailMessage, Uni<? extends Void>>() {
+                                    @Override
+                                    public Uni<? extends Void> apply(MailMessage mailMessage) {
+                                        return send(mail, mailMessage);
+                                    }
+                                });
+                    }
+                })
                 .collect(Collectors.toList());
 
-        return Uni.combine().all().unis(unis).combinedWith(results -> null);
-
+        return Uni.combine().all().unis(unis).discardItems();
     }
 
     private Uni<Void> send(Mail mail, MailMessage message) {
@@ -95,6 +105,7 @@ public class MutinyMailerImpl implements ReactiveMailer {
         message.setHtml(mail.getHtml());
         message.setHeaders(toMultimap(mail.getHeaders()));
         if (mail.getReplyTo() != null) {
+            // getReplyTo produces the comma-separated list.
             message.addHeader("Reply-To", mail.getReplyTo());
         }
 
@@ -131,7 +142,7 @@ public class MutinyMailerImpl implements ReactiveMailer {
     }
 
     private Uni<MailAttachment> toMailAttachment(Attachment attachment) {
-        MailAttachment attach = new MailAttachment();
+        MailAttachment attach = MailAttachment.create();
         attach.setName(attachment.getName());
         attach.setContentId(attachment.getContentId());
         attach.setDescription(attachment.getDescription());
@@ -146,7 +157,7 @@ public class MutinyMailerImpl implements ReactiveMailer {
         }
 
         return getAttachmentStream(vertx, attachment)
-                .onItem().apply(attach::setData);
+                .onItem().transform(attach::setData);
     }
 
     public static Uni<Buffer> getAttachmentStream(Vertx vertx, Attachment attachment) {
@@ -156,12 +167,12 @@ public class MutinyMailerImpl implements ReactiveMailer {
             return open
                     .flatMap(af -> af.toMulti()
                             .map(io.vertx.mutiny.core.buffer.Buffer::getDelegate)
-                            .on().termination((r, f) -> af.close())
-                            .collectItems().in(Buffer::buffer, Buffer::appendBuffer));
+                            .onTermination().call((r, f) -> af.close())
+                            .collect().in(Buffer::buffer, Buffer::appendBuffer));
         } else if (attachment.getData() != null) {
             Publisher<Byte> data = attachment.getData();
             return Multi.createFrom().publisher(data)
-                    .collectItems().in(Buffer::buffer, Buffer::appendByte);
+                    .collect().in(Buffer::buffer, Buffer::appendByte);
         } else {
             return Uni.createFrom().failure(new IllegalArgumentException("Attachment has no data"));
         }
