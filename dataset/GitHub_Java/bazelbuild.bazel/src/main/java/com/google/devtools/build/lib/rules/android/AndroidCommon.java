@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathTyp
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
@@ -184,8 +183,8 @@ public class AndroidCommon {
 
     if (JavaCommon.isNeverLink(ruleContext)) {
       builder.addAll(runtimeJars);
-      for (JavaCompilationArgsProvider provider :
-          JavaInfo.getProvidersFromListOfTargets(JavaCompilationArgsProvider.class, deps)) {
+      for (JavaCompilationArgsProvider provider : AnalysisUtils.getProviders(
+          deps, JavaCompilationArgsProvider.class)) {
         builder.addTransitive(provider.getRecursiveJavaCompilationArgs().getRuntimeJars());
       }
     }
@@ -401,11 +400,6 @@ public class AndroidCommon {
             && ruleContext.getFragment(AndroidConfiguration.class).getExportsManifestDefault();
     return attributeValue == TriState.YES
         || (attributeValue == TriState.AUTO && exportsManifestDefault);
-  }
-
-  /** Returns the artifact for the debug key for signing the APK. */
-  static Artifact getApkDebugSigningKey(RuleContext ruleContext) {
-    return ruleContext.getHostPrerequisiteArtifact("debug_key");
   }
 
   private void compileResources(
@@ -793,17 +787,13 @@ public class AndroidCommon {
     javaCommon.addGenJarsProvider(builder, genClassJar, genSourceJar);
 
     DataBinding.maybeAddProvider(builder, ruleContext);
-    JavaInfo javaInfo = JavaInfo.Builder.create()
-        .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
-        .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
-        .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-        .build();
 
     return builder
         .setFilesToBuild(filesToBuild)
         .addSkylarkTransitiveInfo(
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
-        .addNativeDeclaredProvider(javaInfo)
+        .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
+        .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
         .addProvider(
             JavaRuntimeJarProvider.class,
             new JavaRuntimeJarProvider(javaCommon.getJavaCompilationArtifacts().getRuntimeJars()))
@@ -823,6 +813,7 @@ public class AndroidCommon {
                 zipAlignedApk,
                 apksUnderTest,
                 nativeLibs))
+        .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .addSkylarkTransitiveInfo(AndroidSkylarkApiProvider.NAME, new AndroidSkylarkApiProvider())
         .addOutputGroup(
             OutputGroupProvider.HIDDEN_TOP_LEVEL, collectHiddenTopLevelArtifacts(ruleContext))
