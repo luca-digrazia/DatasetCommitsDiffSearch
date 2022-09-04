@@ -18,12 +18,14 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
-/** Utility methods for use by Java-related parts of the build system. */
+/**
+ * Utility methods for use by Java-related parts of the build system.
+ */
 public final class JavaUtil {
 
   private JavaUtil() {}
 
-  // ---------- Java related methods
+  //---------- Java related methods
 
   /*
    * TODO(bazel-team): (2009)
@@ -58,10 +60,6 @@ public final class JavaUtil {
     return FileSystemUtils.removeExtension(path.getBaseName());
   }
 
-  /** Java source roots, used to relativize resource paths and infer main_class values. */
-  public static final ImmutableSet<String> KNOWN_SOURCE_ROOTS =
-      ImmutableSet.of("java", "javatests", "src", "testsrc");
-
   /**
    * Finds the index of the segment in a Java path fragment that precedes the source root. Starts
    * from the first "java" or "javatests" or "src" or "testsrc" segment. If the found item was
@@ -78,7 +76,7 @@ public final class JavaUtil {
     if (path.isAbsolute()) {
       throw new IllegalArgumentException("path must not be absolute: '" + path + "'");
     }
-    int rootIndex = path.getFirstSegment(KNOWN_SOURCE_ROOTS);
+    int rootIndex = path.getFirstSegment(ImmutableSet.of("java", "javatests", "src", "testsrc"));
     if (rootIndex < 0) {
       return rootIndex;
     }
@@ -115,7 +113,9 @@ public final class JavaUtil {
     return rootIndex;
   }
 
-  /** Given the PathFragment of a Java source file, returns the Java package to which it belongs. */
+  /**
+   * Given the PathFragment of a Java source file, returns the Java package to which it belongs.
+   */
   public static String getJavaPackageName(PathFragment path) {
     int index = javaSegmentIndex(path) + 1;
     path = path.subFragment(index, path.segmentCount() - 1);
@@ -123,14 +123,16 @@ public final class JavaUtil {
   }
 
   /**
-   * Given the PathFragment of a file without extension, returns the Java fully qualified class name
-   * based on the Java root relative path of the specified path or 'null' if no java root can be
-   * determined.
+   * Given the PathFragment of a file without extension, returns the
+   * Java fully qualified class name based on the Java root relative path of the
+   * specified path or 'null' if no java root can be determined.
+   * <p>
+   * For example, "java/foo/bar/wiz" and "javatests/foo/bar/wiz" both
+   * result in "foo.bar.wiz".
    *
-   * <p>For example, "java/foo/bar/wiz" and "javatests/foo/bar/wiz" both result in "foo.bar.wiz".
-   *
-   * <p>TODO(bazel-team): (2011) We need to have a more robust way to determine the Java root of a
-   * relative path rather than simply trying to find the "java" or "javatests" or "src" directory.
+   * TODO(bazel-team): (2011) We need to have a more robust way to determine the Java root
+   * of a relative path rather than simply trying to find the "java" or "javatests"
+   * or "src" directory.
    */
   public static String getJavaFullClassname(PathFragment path) {
     PathFragment javaPath = getJavaPath(path);
@@ -144,11 +146,13 @@ public final class JavaUtil {
    * Given the PathFragment of a Java source file, returns the Java root relative path or 'null' if
    * no java root can be determined.
    *
-   * <p>For example, "{workspace}/java/foo/bar/wiz" and "{workspace}/javatests/foo/bar/wiz" both
-   * result in "foo/bar/wiz".
+   * <p>
+   * For example, "{workspace}/java/foo/bar/wiz" and "{workspace}/javatests/foo/bar/wiz"
+   * both result in "foo/bar/wiz".
    *
-   * <p>TODO(bazel-team): (2011) We need to have a more robust way to determine the Java root of a
-   * relative path rather than simply trying to find the "java" or "javatests" directory.
+   * TODO(bazel-team): (2011) We need to have a more robust way to determine the Java root
+   * of a relative path rather than simply trying to find the "java" or
+   * "javatests" directory.
    */
   public static PathFragment getJavaPath(PathFragment path) {
     int index = javaSegmentIndex(path);
@@ -159,15 +163,18 @@ public final class JavaUtil {
   }
 
   /**
-   * Given the PathFragment of a Java source file, returns the Java root of the specified path or
-   * 'null' if no java root can be determined.
+   * Given the PathFragment of a Java source file, returns the
+   * Java root of the specified path or 'null' if no java root can be
+   * determined.
+   * <p>
+   * Example 1: "{workspace}/java/foo/bar/wiz" and "{workspace}/javatests/foo/bar/wiz"
+   * result in "{workspace}/java" and "{workspace}/javatests" Example 2:
+   * "java/foo/bar/wiz" and "javatests/foo/bar/wiz" result in "java" and
+   * "javatests"
    *
-   * <p>Example 1: "{workspace}/java/foo/bar/wiz" and "{workspace}/javatests/foo/bar/wiz" result in
-   * "{workspace}/java" and "{workspace}/javatests" Example 2: "java/foo/bar/wiz" and
-   * "javatests/foo/bar/wiz" result in "java" and "javatests"
-   *
-   * <p>TODO(bazel-team): (2011) We need to have a more robust way to determine the Java root of a
-   * relative path rather than simply trying to find the "java" or "javatests" directory.
+   * TODO(bazel-team): (2011) We need to have a more robust way to determine the Java root
+   * of a relative path rather than simply trying to find the "java" or
+   * "javatests" directory.
    */
   public static PathFragment getJavaRoot(PathFragment path) {
     int index = javaSegmentIndex(path);
@@ -176,4 +183,5 @@ public final class JavaUtil {
     }
     return null;
   }
+
 }
