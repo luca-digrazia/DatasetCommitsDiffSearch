@@ -12,6 +12,7 @@ import io.dropwizard.jersey.guava.OptionalMessageBodyWriter;
 import io.dropwizard.jersey.guava.OptionalParamFeature;
 import io.dropwizard.jersey.params.NonEmptyStringParamFeature;
 import io.dropwizard.jersey.sessions.SessionFactoryProvider;
+import io.dropwizard.jersey.validation.HibernateValidationFeature;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.server.model.Resource;
@@ -20,6 +21,7 @@ import org.glassfish.jersey.server.monitoring.ApplicationEvent;
 import org.glassfish.jersey.server.monitoring.ApplicationEventListener;
 import org.glassfish.jersey.server.monitoring.RequestEvent;
 import org.glassfish.jersey.server.monitoring.RequestEventListener;
+import org.glassfish.jersey.server.validation.ValidationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +66,8 @@ public class DropwizardResourceConfig extends ResourceConfig {
         register(OptionalParamFeature.class);
         register(NonEmptyStringParamFeature.class);
         register(new SessionFactoryProvider.Binder());
+        register(HibernateValidationFeature.class);
+        register(ValidationFeature.class);
     }
 
     public static DropwizardResourceConfig forTesting(MetricRegistry metricRegistry) {
