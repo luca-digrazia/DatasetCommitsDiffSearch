@@ -14,15 +14,19 @@ import io.vertx.ext.mail.StartTLSOptions;
 public class MailConfigRecorder {
 
     private static volatile MailClient client;
+    private static volatile MailConfig config;
 
     public RuntimeValue<MailClient> configureTheClient(RuntimeValue<Vertx> vertx, BeanContainer container,
-            MailConfig config, ShutdownContext shutdown) {
+            MailConfig config, LaunchMode launchMode, ShutdownContext shutdown) {
 
         initialize(vertx.getValue(), config);
+
         MailClientProducer producer = container.instance(MailClientProducer.class);
         producer.initialize(client);
 
-        shutdown.addShutdownTask(this::close);
+        if (!launchMode.isDevOrTest()) {
+            shutdown.addShutdownTask(this::close);
+        }
         return new RuntimeValue<>(client);
     }
 
@@ -38,6 +42,13 @@ public class MailConfigRecorder {
     }
 
     void initialize(Vertx vertx, MailConfig config) {
+        if (client != null && config.equals(MailConfigRecorder.config)) {
+            // Already configured
+            return;
+        }
+
+        this.close();
+        MailConfigRecorder.config = config;
         io.vertx.ext.mail.MailConfig cfg = toVertxMailConfig(config);
         client = MailClient.createNonShared(vertx, cfg);
     }
