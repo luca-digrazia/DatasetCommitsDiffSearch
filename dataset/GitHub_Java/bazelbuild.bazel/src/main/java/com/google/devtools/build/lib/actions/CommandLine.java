@@ -19,15 +19,23 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.collect.CollectionUtils;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Fingerprint;
 
 /** A representation of a list of arguments. */
+@AutoCodec(strategy = Strategy.POLYMORPHIC)
 public abstract class CommandLine {
+  public static final ObjectCodec<CommandLine> CODEC = new CommandLine_AutoCodec();
+
   @AutoCodec
   @VisibleForSerialization
   static class EmptyCommandLine extends CommandLine {
+    public static final ObjectCodec<EmptyCommandLine> CODEC =
+        new CommandLine_EmptyCommandLine_AutoCodec();
+
     @Override
     public Iterable<String> arguments() throws CommandLineExpansionException {
       return ImmutableList.of();
@@ -62,6 +70,9 @@ public abstract class CommandLine {
   @AutoCodec
   @VisibleForSerialization
   static class SimpleCommandLine extends CommandLine {
+    public static final ObjectCodec<SimpleCommandLine> CODEC =
+        new CommandLine_SimpleCommandLine_AutoCodec();
+
     private Iterable<String> args;
 
     SimpleCommandLine(Iterable<String> args) {
@@ -83,6 +94,9 @@ public abstract class CommandLine {
   @AutoCodec
   @VisibleForSerialization
   static class PrefixedCommandLine extends CommandLine {
+    public static final ObjectCodec<PrefixedCommandLine> CODEC =
+        new CommandLine_PrefixedCommandLine_AutoCodec();
+
     private ImmutableList<String> executableArgs;
     private CommandLine commandLine;
 
@@ -119,6 +133,9 @@ public abstract class CommandLine {
   @AutoCodec
   @VisibleForSerialization
   static class SuffixedCommandLine extends CommandLine {
+    public static final ObjectCodec<SuffixedCommandLine> CODEC =
+        new CommandLine_SuffixedCommandLine_AutoCodec();
+
     private ImmutableList<String> executableArgs;
     private CommandLine commandLine;
 
