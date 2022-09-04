@@ -10,7 +10,6 @@ import java.util.Set;
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.spi.CreationalContext;
-import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.enterprise.inject.spi.Bean;
 import javax.enterprise.inject.spi.BeanManager;
@@ -51,8 +50,11 @@ public class InfinispanClientProducer {
 
     private volatile Properties properties;
     private volatile RemoteCacheManager cacheManager;
-    @Inject
-    private Instance<InfinispanClientRuntimeConfig> infinispanClientRuntimeConfig;
+    private volatile InfinispanClientRuntimeConfig infinispanClientRuntimeConfig;
+
+    public void setRuntimeConfig(InfinispanClientRuntimeConfig infinispanClientConfigRuntime) {
+        this.infinispanClientRuntimeConfig = infinispanClientConfigRuntime;
+    }
 
     private void initialize() {
         log.debug("Initializing CacheManager");
@@ -161,31 +163,33 @@ public class InfinispanClientProducer {
             }
             builder.marshaller((Marshaller) marshallerInstance);
         }
-        InfinispanClientRuntimeConfig infinispanClientRuntimeConfig = this.infinispanClientRuntimeConfig.get();
 
-        infinispanClientRuntimeConfig.serverList
-                .ifPresent(v -> properties.put(ConfigurationProperties.SERVER_LIST, v));
+        if (infinispanClientRuntimeConfig != null) {
 
-        infinispanClientRuntimeConfig.clientIntelligence
-                .ifPresent(v -> properties.put(ConfigurationProperties.CLIENT_INTELLIGENCE, v));
+            infinispanClientRuntimeConfig.serverList
+                    .ifPresent(v -> properties.put(ConfigurationProperties.SERVER_LIST, v));
 
-        infinispanClientRuntimeConfig.useAuth
-                .ifPresent(v -> properties.put(ConfigurationProperties.USE_AUTH, v));
-        infinispanClientRuntimeConfig.authUsername
-                .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_USERNAME, v));
-        infinispanClientRuntimeConfig.authPassword
-                .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_PASSWORD, v));
-        infinispanClientRuntimeConfig.authRealm
-                .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_REALM, v));
-        infinispanClientRuntimeConfig.authServerName
-                .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_SERVER_NAME, v));
-        infinispanClientRuntimeConfig.authClientSubject
-                .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_CLIENT_SUBJECT, v));
-        infinispanClientRuntimeConfig.authCallbackHandler
-                .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_CALLBACK_HANDLER, v));
+            infinispanClientRuntimeConfig.clientIntelligence
+                    .ifPresent(v -> properties.put(ConfigurationProperties.CLIENT_INTELLIGENCE, v));
 
-        infinispanClientRuntimeConfig.saslMechanism
-                .ifPresent(v -> properties.put(ConfigurationProperties.SASL_MECHANISM, v));
+            infinispanClientRuntimeConfig.useAuth
+                    .ifPresent(v -> properties.put(ConfigurationProperties.USE_AUTH, v));
+            infinispanClientRuntimeConfig.authUsername
+                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_USERNAME, v));
+            infinispanClientRuntimeConfig.authPassword
+                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_PASSWORD, v));
+            infinispanClientRuntimeConfig.authRealm
+                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_REALM, v));
+            infinispanClientRuntimeConfig.authServerName
+                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_SERVER_NAME, v));
+            infinispanClientRuntimeConfig.authClientSubject
+                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_CLIENT_SUBJECT, v));
+            infinispanClientRuntimeConfig.authCallbackHandler
+                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_CALLBACK_HANDLER, v));
+
+            infinispanClientRuntimeConfig.saslMechanism
+                    .ifPresent(v -> properties.put(ConfigurationProperties.SASL_MECHANISM, v));
+        }
 
         builder.withProperties(properties);
 
