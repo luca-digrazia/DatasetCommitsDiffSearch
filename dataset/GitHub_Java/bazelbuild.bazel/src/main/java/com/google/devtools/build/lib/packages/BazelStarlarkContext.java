@@ -132,7 +132,8 @@ public final class BazelStarlarkContext implements RuleDefinitionContext, Label.
    */
   public void checkLoadingOrWorkspacePhase(String function) throws EvalException {
     if (phase == Phase.ANALYSIS) {
-      throw new EvalException("'" + function + "' cannot be called during the analysis phase");
+      throw new EvalException(
+          null, "'" + function + "' cannot be called during the analysis phase");
     }
   }
 
@@ -143,7 +144,8 @@ public final class BazelStarlarkContext implements RuleDefinitionContext, Label.
    */
   public void checkLoadingPhase(String function) throws EvalException {
     if (phase != Phase.LOADING) {
-      throw new EvalException("'" + function + "' can only be called during the loading phase");
+      throw new EvalException(
+          null, "'" + function + "' can only be called during the loading phase");
     }
   }
 
@@ -154,7 +156,8 @@ public final class BazelStarlarkContext implements RuleDefinitionContext, Label.
    */
   public void checkWorkspacePhase(String function) throws EvalException {
     if (phase != Phase.WORKSPACE) {
-      throw new EvalException("'" + function + "' can only be called during workspace loading");
+      throw new EvalException(
+          null, "'" + function + "' can only be called during workspace loading");
     }
   }
 }
