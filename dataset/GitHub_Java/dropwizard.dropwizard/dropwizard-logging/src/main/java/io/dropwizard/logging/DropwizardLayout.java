@@ -10,7 +10,7 @@ import java.util.TimeZone;
  * <ul>
  *     <li>Disables pattern headers.</li>
  *     <li>Prefixes logged exceptions with {@code !}.</li>
- *     <li>Sets the pattern to the given timezone.</li>
+ *     <li>Sets the pattern to the given timezine.</li>
  * </ul>
  */
 public class DropwizardLayout extends PatternLayout {
