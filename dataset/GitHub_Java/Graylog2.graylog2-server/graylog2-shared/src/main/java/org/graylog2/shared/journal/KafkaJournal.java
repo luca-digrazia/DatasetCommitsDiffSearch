@@ -68,16 +68,14 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     private final KafkaScheduler kafkaScheduler;
 
     @Inject
-    public KafkaJournal(@Named("journalDirectory") String journalDirName,
-                        @Named("scheduler") ScheduledExecutorService scheduler,
-                        @Named("journalSegmentSize") int segmentSize) {
+    public KafkaJournal(@Named("journalDirectory") String journalDirName, @Named("scheduler") ScheduledExecutorService scheduler) {
         this.scheduler = scheduler;
 
         // TODO all of these configuration values need tweaking
         // these are the default values as per kafka 0.8.1.1
         final LogConfig defaultConfig =
                 new LogConfig(
-                        segmentSize,
+                        1024 * 1024,
                         Long.MAX_VALUE,
                         Long.MAX_VALUE,
                         Long.MAX_VALUE,
@@ -184,15 +182,15 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
             payloadSize[0] += messageBytes.length;
             messages.add(new Message(messageBytes, idBytes));
 
-            if (log.isTraceEnabled()) {
-                log.trace("Message {} contains bytes {}", bytesToHex(idBytes), bytesToHex(messageBytes));
+            if (log.isInfoEnabled()) {
+                log.info("Message {} contains bytes {}", bytesToHex(idBytes), bytesToHex(messageBytes));
             }
         }
 
         final ByteBufferMessageSet messageSet = new ByteBufferMessageSet(JavaConversions.asScalaBuffer(messages));
 
         final Log.LogAppendInfo appendInfo = kafkaLog.append(messageSet, true);
-        log.debug("Wrote {} messages to journal: {} bytes, log position {} to {}",
+        log.info("Wrote {} messages to journal: {} bytes, log position {} to {}",
                  entries.size(), payloadSize[0], appendInfo.firstOffset(), appendInfo.lastOffset());
         return appendInfo.lastOffset();
     }
@@ -210,45 +208,26 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     }
 
     @Override
-    public List<JournalReadEntry> read(long requestedMaximumCount) {
-        // Always read at least one!
-        final long maximumCount = Math.max(1, requestedMaximumCount);
-        final long maxOffset = nextReadOffset + maximumCount;
-        final List<JournalReadEntry> messages = Lists.newArrayListWithCapacity((int) (maximumCount));
+    public List<JournalReadEntry> read() { // TODO this currently only reads 0 or 1 messages, use some decent limit instead
+        final long maxOffset = nextReadOffset + 1;
+        final List<JournalReadEntry> messages = Lists.newArrayListWithCapacity((int) (maxOffset - nextReadOffset));
         try {
-            log.debug("Requesting to read a maximum of {} messages (or 100kb) from the journal, offset interval [{}, {})",
-                      maximumCount, nextReadOffset, maxOffset);
-            final MessageSet messageSet = kafkaLog.read(nextReadOffset, 100 * 1024, Option.<Object>apply(maxOffset));
+            final MessageSet messageSet = kafkaLog.read(nextReadOffset, 10 * 1024, Option.<Object>apply(maxOffset));
 
             final Iterator<MessageAndOffset> iterator = messageSet.iterator();
-            long firstOffset = Long.MIN_VALUE;
-            long lastOffset = Long.MIN_VALUE;
-            long totalBytes = 0;
             while (iterator.hasNext()) {
                 final MessageAndOffset messageAndOffset = iterator.next();
-
-                if (firstOffset == Long.MIN_VALUE) firstOffset = messageAndOffset.offset();
-                // always remember the last seen offset for debug purposes below
-                lastOffset = messageAndOffset.offset();
 
                 final byte[] payloadBytes = Utils.readBytes(messageAndOffset.message().payload());
                 if (log.isTraceEnabled()) {
                     final byte[] keyBytes = Utils.readBytes(messageAndOffset.message().key());
                     log.trace("Read message {} contains {}", bytesToHex(keyBytes), bytesToHex(payloadBytes));
                 }
-                totalBytes += payloadBytes.length;
                 messages.add(new JournalReadEntry(payloadBytes, messageAndOffset.offset()));
                 nextReadOffset = messageAndOffset.nextOffset();
             }
-            if (messages.isEmpty()) {
-                log.debug("No messages available to read for offset interval [{}, {}).",  nextReadOffset, maxOffset);
-            } else {
-                log.debug("Read {} messages, total payload size {}, from journal, offset interval [{}, {}]",
-                          messages.size(), totalBytes, firstOffset, lastOffset);
-            }
 
         } catch (OffsetOutOfRangeException e) {
-            // TODO how do we recover from this? the exception doesn't contain the next valid offset :(
             log.warn("Offset out of range, no messages available starting at offset {}", nextReadOffset);
         }
         return messages;
