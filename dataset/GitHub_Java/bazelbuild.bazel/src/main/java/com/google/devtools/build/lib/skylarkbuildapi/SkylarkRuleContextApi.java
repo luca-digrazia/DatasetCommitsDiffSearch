@@ -26,9 +26,9 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.NoneType;
-import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -250,7 +250,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
               + "(if no Target is provided) or the sources of Target should be instrumented "
               + "based on the --instrumentation_filter and "
               + "--instrument_test_targets config settings. "
-              + "This differs from <code>coverage_enabled</code> in the "
+              + "This differs from <code>coverage_enabled</code> in the"
               + "<a href=\"configuration.html\">configuration</a>, which notes whether coverage "
               + "data collection is enabled for the entire run, but not whether a specific "
               + "target should be instrumented.",
@@ -344,7 +344,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             type = String.class,
             doc = "The string to split."),
       })
-  public Sequence<String> tokenize(String optionString) throws EvalException;
+  public SkylarkList<String> tokenize(String optionString) throws EvalException;
 
   @SkylarkCallable(
       name = "expand",
@@ -365,7 +365,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             name = "files",
             positional = true,
             named = false,
-            type = Sequence.class,
+            type = SkylarkList.class,
             doc = "The list of files."),
         @Param(
             name = "label_resolver",
@@ -376,7 +376,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       })
   public String expand(
       @Nullable String expression,
-      Sequence<?> artifacts, // <FileT>
+      SkylarkList<?> artifacts, // <FileT>
       Label labelResolver)
       throws EvalException;
 
@@ -464,10 +464,10 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             name = "allowed_placeholders",
             positional = true,
             named = false,
-            type = Sequence.class,
+            type = SkylarkList.class,
             doc = "The allowed placeholders."),
       })
-  public boolean checkPlaceholders(String template, Sequence<?> allowedPlaceholders) // <String>
+  public boolean checkPlaceholders(String template, SkylarkList<?> allowedPlaceholders) // <String>
       throws EvalException;
 
   @SkylarkCallable(
@@ -554,7 +554,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       parameters = {
         @Param(
             name = "outputs",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = FileApi.class,
             named = true,
             positional = false,
@@ -562,7 +562,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
         @Param(
             name = "inputs",
             allowedTypes = {
-              @ParamType(type = Sequence.class),
+              @ParamType(type = SkylarkList.class),
               @ParamType(type = SkylarkNestedSet.class),
             },
             generic1 = FileApi.class,
@@ -586,7 +586,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
         @Param(
             name = "tools",
             allowedTypes = {
-              @ParamType(type = Sequence.class),
+              @ParamType(type = SkylarkList.class),
               @ParamType(type = SkylarkNestedSet.class),
             },
             generic1 = FileApi.class,
@@ -599,7 +599,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
         @Param(
             name = "arguments",
             allowedTypes = {
-              @ParamType(type = Sequence.class),
+              @ParamType(type = SkylarkList.class),
             },
             defaultValue = "[]",
             named = true,
@@ -620,7 +620,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             type = Object.class,
             allowedTypes = {
               @ParamType(type = String.class),
-              @ParamType(type = Sequence.class, generic1 = String.class),
+              @ParamType(type = SkylarkList.class, generic1 = String.class),
               @ParamType(type = NoneType.class),
             },
             noneable = true,
@@ -672,7 +672,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             // experimental,
             // so folks shouldn't be too attached, but consider renaming to be more accurate/opaque.
             name = "input_manifests",
-            type = Sequence.class,
+            type = SkylarkList.class,
             noneable = true,
             defaultValue = "None",
             named = true,
@@ -685,7 +685,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       useLocation = true,
       useStarlarkThread = true)
   public NoneType action(
-      Sequence<?> outputs,
+      SkylarkList<?> outputs,
       Object inputs,
       Object executableUnchecked,
       Object toolsUnchecked,
@@ -723,7 +723,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
         @Param(name = "input", type = String.class, doc = "String to be expanded."),
         @Param(
             name = "targets",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = TransitiveInfoCollectionApi.class,
             defaultValue = "[]",
             named = true,
@@ -733,7 +733,8 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       useLocation = true,
       useStarlarkThread = true)
   public String expandLocation(
-      String input, Sequence<?> targets, Location loc, StarlarkThread thread) throws EvalException;
+      String input, SkylarkList<?> targets, Location loc, StarlarkThread thread)
+      throws EvalException;
 
   @SkylarkCallable(
       name = "file_action",
@@ -778,7 +779,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
         @Param(
             name = "inputs",
             allowedTypes = {
-              @ParamType(type = Sequence.class),
+              @ParamType(type = SkylarkList.class),
               @ParamType(type = SkylarkNestedSet.class),
             },
             generic1 = FileApi.class,
@@ -844,7 +845,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       parameters = {
         @Param(
             name = "files",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = FileApi.class,
             named = true,
             defaultValue = "[]",
@@ -898,7 +899,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       },
       useLocation = true)
   public RunfilesApi runfiles(
-      Sequence<?> files,
+      SkylarkList<?> files,
       Object transitiveFiles,
       Boolean collectData,
       Boolean collectDefault,
@@ -954,7 +955,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
         @Param(
             name = "tools",
             defaultValue = "[]",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = TransitiveInfoCollectionApi.class,
             named = true,
             positional = false,
@@ -986,7 +987,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       Object attributeUnchecked,
       Boolean expandLocations,
       Object makeVariablesUnchecked,
-      Sequence<?> tools,
+      SkylarkList<?> tools,
       SkylarkDict<?, ?> labelDictUnchecked,
       SkylarkDict<?, ?> executionRequirementsUnchecked,
       Location loc,
@@ -1006,7 +1007,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
         @Param(
             name = "tools",
             defaultValue = "[]",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = TransitiveInfoCollectionApi.class,
             named = true,
             positional = false,
@@ -1014,5 +1015,5 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       },
       useLocation = false,
       useStarlarkThread = false)
-  public Tuple<Object> resolveTools(Sequence<?> tools) throws EvalException;
+  public Tuple<Object> resolveTools(SkylarkList<?> tools) throws EvalException;
 }

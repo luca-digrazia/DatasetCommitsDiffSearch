@@ -14,12 +14,12 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi;
 
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /** An interface for a set of runfiles. */
 @SkylarkModule(
@@ -33,25 +33,27 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 public interface RunfilesApi extends SkylarkValue {
 
   @SkylarkCallable(
-      name = "files",
-      doc = "Returns the set of runfiles as files.",
-      structField = true)
-  public SkylarkNestedSet /*<? extends FileApi>*/ getArtifactsForStarlark();
+    name = "files",
+    doc = "Returns the set of runfiles as files.",
+    structField = true
+  )
+  public NestedSet<? extends FileApi> getArtifacts();
 
   @SkylarkCallable(name = "symlinks", doc = "Returns the set of symlinks.", structField = true)
-  public SkylarkNestedSet /*<? extends SymlinkEntryApi>*/ getSymlinksForStarlark();
+  public NestedSet<? extends SymlinkEntryApi> getSymlinks();
 
   @SkylarkCallable(
       name = "root_symlinks",
       doc = "Returns the set of root symlinks.",
       structField = true)
-  public SkylarkNestedSet /*<? extends SymlinkEntryApi>*/ getRootSymlinksForStarlark();
+  public NestedSet<? extends SymlinkEntryApi> getRootSymlinks();
 
   @SkylarkCallable(
-      name = "empty_filenames",
-      doc = "Returns names of empty files to create.",
-      structField = true)
-  public SkylarkNestedSet /*<String>*/ getEmptyFilenamesForStarlark();
+    name = "empty_filenames",
+    doc = "Returns names of empty files to create.",
+    structField = true
+  )
+  public NestedSet<String> getEmptyFilenames();
 
   @SkylarkCallable(
     name = "merge",
