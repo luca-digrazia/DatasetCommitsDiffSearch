@@ -27,7 +27,6 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.apache.shiro.crypto.hash.SimpleHash;
 import org.bson.types.ObjectId;
 import org.graylog2.database.ValidationException;
-import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.users.requests.CreateRequest;
 import org.graylog2.rest.resources.users.requests.PermissionEditRequest;
@@ -51,19 +50,13 @@ import java.util.Map;
 @Path("/users")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
-@Api(value = "Users", description = "User accounts")
 public class UsersResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestResource.class);
 
     @GET
     @Path("{username}")
-    @ApiOperation(value = "Get user details", notes = "The user's permissions are only included if a user asks for his " +
-            "own account or for users with the necessary permissions to edit permissions.")
-    @ApiResponses({
-            @ApiResponse(code = 404, message = "The user could not be found.")
-    })
-    public Response get(@ApiParam(title = "username", description = "The username to return information for.", required = true) @PathParam("username") String username) {
+    public Response get(@PathParam("username") String username) {
         final User user = User.load(username, core);
 
         if (user == null) {
@@ -78,7 +71,6 @@ public class UsersResource extends RestResource {
 
     @GET
     @RequiresPermissions(RestPermissions.USERS_LIST)
-    @ApiOperation(value = "List all users", notes = "The permissions assigned to the users are always included.")
     public Response listUsers() {
         final List<User> users = User.loadAll(core);
         final List<Map<String, Object>> resultUsers = Lists.newArrayList();
@@ -92,11 +84,7 @@ public class UsersResource extends RestResource {
 
     @POST
     @RequiresPermissions(RestPermissions.USERS_CREATE)
-    @ApiOperation("Create a new user account.")
-    @ApiResponses({
-            @ApiResponse(code = 400, message = "Missing or invalid user details.")
-    })
-    public Response create(@ApiParam(title = "JSON body", required = true) String body) {
+    public Response create(String body) {
         if (body == null || body.isEmpty()) {
             LOG.error("Missing parameters. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -132,12 +120,7 @@ public class UsersResource extends RestResource {
     @PUT
     @Path("{username}")
     @RequiresPermissions(RestPermissions.USERS_EDIT)
-    @ApiOperation("Modify user details.")
-    @ApiResponses({
-            @ApiResponse(code = 400, message = "Attempted to modify a read only user account (e.g. built-in or LDAP users)."),
-            @ApiResponse(code = 400, message = "Missing or invalid user details.")
-    })
-    public Response changeUser(@ApiParam(title = "username", description = "The name of the user to modify.", required = true) @PathParam("username") String username, String body) {
+    public Response changeUser(@PathParam("username") String username, String body) {
         if (body == null || body.isEmpty()) {
             throw new BadRequestException("Missing request body.");
         }
@@ -172,9 +155,7 @@ public class UsersResource extends RestResource {
     @DELETE
     @Path("{username}")
     @RequiresPermissions(RestPermissions.USERS_EDIT)
-    @ApiOperation("Removes a user account.")
-    @ApiResponses({@ApiResponse(code = 400, message = "When attempting to remove a read only user (e.g. built-in or LDAP user).")})
-    public Response deleteUser(@ApiParam(title = "username", description = "The name of the user to delete.", required = true) @PathParam("username") String username) {
+    public Response deleteUser(@PathParam("username") String username) {
         final User user = User.load(username, core);
         if (user.isReadOnly()) {
             throw new BadRequestException("Cannot delete readonly user " + username);
@@ -187,13 +168,7 @@ public class UsersResource extends RestResource {
     @PUT
     @Path("{username}/permissions")
     @RequiresPermissions(RestPermissions.USERPERMISSIONS_EDIT)
-    @ApiOperation("Update a user's permission set.")
-    @ApiResponses({
-            @ApiResponse(code = 400, message = "Missing or invalid permission data.")
-    })
-    public Response editPermissions(
-            @ApiParam(title = "username", description = "The name of the user to modify.", required = true) @PathParam("username") String username,
-            @ApiParam(title = "JSON body", description = "The list of permissions to assign to the user.", required = true) String body) {
+    public Response editPermissions(@PathParam("username") String username, String body) {
         PermissionEditRequest permissionRequest;
         try {
             permissionRequest = objectMapper.readValue(body, PermissionEditRequest.class);
@@ -215,11 +190,7 @@ public class UsersResource extends RestResource {
     @DELETE
     @Path("{username}/permissions")
     @RequiresPermissions(RestPermissions.USERPERMISSIONS_EDIT)
-    @ApiOperation("Revoke all permissions for a user without deleting the account.")
-    @ApiResponses({
-            @ApiResponse(code = 500, message = "When saving the user failed.")
-    })
-    public Response deletePermissions(@ApiParam(title = "username", description = "The name of the user to modify.", required = true) @PathParam("username") String username) {
+    public Response deletePermissions(@PathParam("username") String username) {
         final User user = User.load(username, core);
         user.setPermissions(Lists.<String>newArrayList());
         try {
