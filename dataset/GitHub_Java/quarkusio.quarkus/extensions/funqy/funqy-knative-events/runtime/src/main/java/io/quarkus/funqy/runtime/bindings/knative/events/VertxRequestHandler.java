@@ -29,7 +29,6 @@ import io.quarkus.funqy.runtime.FunctionInvoker;
 import io.quarkus.funqy.runtime.FunctionRecorder;
 import io.quarkus.funqy.runtime.FunqyServerResponse;
 import io.quarkus.funqy.runtime.RequestContextImpl;
-import io.quarkus.funqy.runtime.query.QueryReader;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
@@ -52,17 +51,14 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
     protected final Executor executor;
     protected final FunctionInvoker defaultInvoker;
     protected final Map<String, FunctionInvoker> typeTriggers;
-    protected final String rootPath;
 
     public VertxRequestHandler(Vertx vertx,
-            String rootPath,
             BeanContainer beanContainer,
             ObjectMapper mapper,
             FunqyKnativeEventsConfig config,
             FunctionInvoker defaultInvoker,
             Map<String, FunctionInvoker> typeTriggers,
             Executor executor) {
-        this.rootPath = rootPath;
         this.defaultInvoker = defaultInvoker;
         this.vertx = vertx;
         this.beanContainer = beanContainer;
@@ -72,6 +68,23 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
         Instance<CurrentIdentityAssociation> association = CDI.current().select(CurrentIdentityAssociation.class);
         this.association = association.isResolvable() ? association.get() : null;
         this.currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
+    }
+
+    private boolean checkHttpMethod(RoutingContext routingContext, FunctionInvoker invoker) {
+        if (invoker.hasInput()) {
+            if (routingContext.request().method() != HttpMethod.POST) {
+                routingContext.fail(405);
+                log.error("Must be POST for: " + invoker.getName());
+                return false;
+            }
+        }
+        if (routingContext.request().method() != HttpMethod.POST && routingContext.request().method() != HttpMethod.GET) {
+            routingContext.fail(405);
+            log.error("Must be POST or GET for: " + invoker.getName());
+            return false;
+
+        }
+        return true;
     }
 
     @Override
@@ -97,30 +110,21 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
         }
     }
 
-    private static final ResponseProcessing NOOP = () -> {
-    };
-
     private void regularFunqyHttp(RoutingContext routingContext) {
-        String path = routingContext.request().path();
-        if (path == null) {
-            routingContext.fail(404);
-            return;
-        }
-        // expects rootPath to end with '/'
-        if (!path.startsWith(rootPath)) {
-            routingContext.fail(404);
-            return;
-        }
-
-        path = path.substring(rootPath.length());
-
-        final FunctionInvoker invoker;
-        if (!path.isEmpty()) {
+        FunctionInvoker invoker = defaultInvoker;
+        if (invoker == null) {
+            String path = routingContext.request().path();
+            if (path.startsWith("/"))
+                path = path.substring(1);
             invoker = FunctionRecorder.registry.matchInvoker(path);
-        } else {
-            invoker = defaultInvoker;
+            if (invoker == null) {
+                routingContext.fail(404);
+                log.error("Could not vanilla http request to function: " + path);
+                return;
+            }
         }
-        processHttpRequest(null, routingContext, NOOP, invoker);
+        processHttpRequest(null, routingContext, () -> {
+        }, invoker);
     }
 
     private void binaryContentMode(RoutingContext routingContext) {
@@ -154,82 +158,57 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
 
     private void processHttpRequest(CloudEvent event, RoutingContext routingContext, ResponseProcessing handler,
             FunctionInvoker invoker) {
-        if (routingContext.request().method() == HttpMethod.GET) {
-            Object input = null;
-            if (invoker.hasInput()) {
-                QueryReader reader = (QueryReader) invoker.getBindingContext().get(QueryReader.class.getName());
-                try {
-                    input = reader.readValue(routingContext.request().params().iterator());
-                } catch (Exception e) {
-                    log.error("Failed to unmarshal input", e);
-                    routingContext.fail(400);
-                    return;
-                }
-            }
-            try {
-                execute(event, routingContext, handler, invoker, input);
-            } catch (Throwable t) {
-                log.error(t);
-                routingContext.fail(500, t);
-            }
-        } else if (routingContext.request().method() == HttpMethod.POST) {
-            routingContext.request().bodyHandler(buff -> {
-                try {
-                    Object input = null;
-                    if (buff.length() > 0) {
-                        ByteBufInputStream in = new ByteBufInputStream(buff.getByteBuf());
-                        ObjectReader reader = (ObjectReader) invoker.getBindingContext().get(ObjectReader.class.getName());
-                        try {
-                            input = reader.readValue((InputStream) in);
-                        } catch (JsonProcessingException e) {
-                            log.error("Failed to unmarshal input", e);
-                            routingContext.fail(400);
-                            return;
-                        }
-                    }
-                    execute(event, routingContext, handler, invoker, input);
-                } catch (Throwable t) {
-                    log.error(t);
-                    routingContext.fail(500, t);
-                }
-            });
-        } else {
-            routingContext.fail(405);
-            log.error("Must be POST or GET for: " + invoker.getName());
+        if (!checkHttpMethod(routingContext, invoker)) {
+            return;
         }
-
-    }
-
-    private void execute(CloudEvent event, RoutingContext routingContext, ResponseProcessing handler, FunctionInvoker invoker,
-            Object finalInput) {
-        executor.execute(() -> {
+        routingContext.request().bodyHandler(buff -> {
             try {
-                final HttpServerResponse httpResponse = routingContext.response();
-                FunqyServerResponse response = dispatch(event, routingContext, invoker, finalInput);
+                Object input = null;
+                if (buff.length() > 0) {
+                    ByteBufInputStream in = new ByteBufInputStream(buff.getByteBuf());
+                    ObjectReader reader = (ObjectReader) invoker.getBindingContext().get(ObjectReader.class.getName());
+                    try {
+                        input = reader.readValue((InputStream) in);
+                    } catch (JsonProcessingException e) {
+                        log.error("Failed to unmarshal input", e);
+                        routingContext.fail(400);
+                        return;
+                    }
+                }
+                Object finalInput = input;
+                executor.execute(() -> {
+                    try {
+                        final HttpServerResponse httpResponse = routingContext.response();
+                        FunqyServerResponse response = dispatch(event, routingContext, invoker, finalInput);
 
-                response.getOutput().emitOn(executor).subscribe().with(
-                        obj -> {
-                            if (invoker.hasOutput()) {
-                                try {
-                                    httpResponse.setStatusCode(200);
-                                    handler.handle();
-                                    ObjectWriter writer = (ObjectWriter) invoker.getBindingContext()
-                                            .get(ObjectWriter.class.getName());
-                                    httpResponse.putHeader("Content-Type", "application/json");
-                                    httpResponse.end(writer.writeValueAsString(obj));
-                                } catch (JsonProcessingException jpe) {
-                                    log.error("Failed to unmarshal input", jpe);
-                                    routingContext.fail(400);
-                                } catch (Throwable e) {
-                                    routingContext.fail(e);
-                                }
-                            } else {
-                                httpResponse.setStatusCode(204);
-                                httpResponse.end();
-                            }
-                        },
-                        t -> routingContext.fail(t));
+                        response.getOutput().emitOn(executor).subscribe().with(
+                                obj -> {
+                                    if (invoker.hasOutput()) {
+                                        try {
+                                            httpResponse.setStatusCode(200);
+                                            handler.handle();
+                                            ObjectWriter writer = (ObjectWriter) invoker.getBindingContext()
+                                                    .get(ObjectWriter.class.getName());
+                                            httpResponse.putHeader("Content-Type", "application/json");
+                                            httpResponse.end(writer.writeValueAsString(obj));
+                                        } catch (JsonProcessingException jpe) {
+                                            log.error("Failed to unmarshal input", jpe);
+                                            routingContext.fail(400);
+                                        } catch (Throwable e) {
+                                            routingContext.fail(e);
+                                        }
+                                    } else {
+                                        httpResponse.setStatusCode(204);
+                                        httpResponse.end();
+                                    }
+                                },
+                                t -> routingContext.fail(t));
 
+                    } catch (Throwable t) {
+                        log.error(t);
+                        routingContext.fail(500, t);
+                    }
+                });
             } catch (Throwable t) {
                 log.error(t);
                 routingContext.fail(500, t);
