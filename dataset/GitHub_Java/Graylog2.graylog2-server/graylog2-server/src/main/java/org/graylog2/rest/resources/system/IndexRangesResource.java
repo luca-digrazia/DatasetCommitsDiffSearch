@@ -25,7 +25,6 @@ import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.ranges.CreateNewSingleIndexRangeJob;
@@ -140,7 +139,6 @@ public class IndexRangesResource extends RestResource {
             @ApiResponse(code = 202, message = "Rebuild/sync systemjob triggered.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(action = "recalculated", object = "all index ranges")
     public Response rebuild() {
         final SystemJob rebuildJob = rebuildIndexRangesJobFactory.create(this.deflector);
         try {
@@ -165,7 +163,6 @@ public class IndexRangesResource extends RestResource {
             @ApiResponse(code = 202, message = "Rebuild/sync system job triggered.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(action = "recalculated", object = "index range")
     public Response rebuildIndex(
             @ApiParam(name = "index", value = "The name of the Graylog-managed Elasticsearch index", required = true)
             @PathParam("index") @NotEmpty String index) {
