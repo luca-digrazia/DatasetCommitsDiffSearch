@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.bazel.rules.ninja.lexer;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSortedSet;
-import com.google.devtools.build.lib.bazel.rules.ninja.file.FileFragment;
+import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteBufferFragment;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Predicate;
 
@@ -46,14 +46,9 @@ import java.util.function.Predicate;
 public class NinjaLexerStep {
   private static final ImmutableSortedSet<Byte> IDENTIFIER_SYMBOLS =
       createByteSet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-");
-  private static final byte[] TEXT_STOPPERS = createByteArray("\n\r \t$:\u0000");
+  private static final ImmutableSortedSet<Byte> TEXT_STOPPERS = createByteSet("\n\r \t$:\u0000");
   // We allow # symbol in the path, so the comment on the line with path can only start with space.
-  private static final byte[] PATH_STOPPERS = createByteArray("\n\r \t$:|\u0000");
-
-  private static byte[] createByteArray(String variants) {
-    byte[] bytes = variants.getBytes(StandardCharsets.ISO_8859_1);
-    return bytes;
-  }
+  private static final ImmutableSortedSet<Byte> PATH_STOPPERS = createByteSet("\n\r \t$:|\u0000");
 
   private static ImmutableSortedSet<Byte> createByteSet(String variants) {
     ImmutableSortedSet.Builder<Byte> builder = ImmutableSortedSet.naturalOrder();
@@ -64,7 +59,7 @@ public class NinjaLexerStep {
     return builder.build();
   }
 
-  private final FileFragment fragment;
+  private final ByteBufferFragment fragment;
   private final int position;
 
   private boolean seenZero;
@@ -74,7 +69,7 @@ public class NinjaLexerStep {
   /**
    * @param position start of the step inside a fragment; must point to a symbol inside fragment.
    */
-  public NinjaLexerStep(FileFragment fragment, int position) {
+  public NinjaLexerStep(ByteBufferFragment fragment, int position) {
     Preconditions.checkState(position < fragment.length());
     this.fragment = fragment;
     this.position = position;
@@ -101,7 +96,7 @@ public class NinjaLexerStep {
     return !seenZero && error == null && end < fragment.length();
   }
 
-  public FileFragment getFragment() {
+  public ByteBufferFragment getFragment() {
     return fragment;
   }
 
@@ -247,57 +242,11 @@ public class NinjaLexerStep {
   }
 
   public void readText() {
-    int i = position;
-    for (; i < fragment.length(); i++) {
-      byte b = fragment.byteAt(i);
-      if (0 == b) {
-        seenZero = true;
-        end = i;
-        return;
-      }
-      if (isTextStopper(b)) {
-        break;
-      }
-    }
-    end = i;
+    end = eatSequence(position, TEXT_STOPPERS::contains);
   }
 
   public void readPath() {
-    int i = position;
-    for (; i < fragment.length(); i++) {
-      byte b = fragment.byteAt(i);
-      if (0 == b) {
-        seenZero = true;
-        end = i;
-        return;
-      }
-      if (isPathStopper(b)) {
-        break;
-      }
-    }
-    end = i;
-  }
-
-  // Optimized, since this is run for each byte in the ninja file. (This has better performance
-  // than lookup in a java Set, since TEXT_STOPPERS is small.
-  private static boolean isTextStopper(byte b) {
-    for (int i = 0; i < TEXT_STOPPERS.length; i++) {
-      if (b == TEXT_STOPPERS[i]) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Optimized, since this is run for each byte in the ninja file. (This has better performance
-  // than lookup in a java Set, since PATH_STOPPERS is small.
-  private static boolean isPathStopper(byte b) {
-    for (int i = 0; i < PATH_STOPPERS.length; i++) {
-      if (b == PATH_STOPPERS[i]) {
-        return true;
-      }
-    }
-    return false;
+    end = eatSequence(position, PATH_STOPPERS::contains);
   }
 
   private int readIdentifier(int startFrom, boolean withDot) {
