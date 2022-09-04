@@ -76,21 +76,18 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private final Multimap<String, String> extraFlags;
   private final EventHandler reporter;
   private final SpawnRunner fallbackRunner;
-  private final boolean sandboxUsesExpandedTreeArtifactsInRunfiles;
 
   public WorkerSpawnRunner(
       Path execRoot,
       WorkerPool workers,
       Multimap<String, String> extraFlags,
       EventHandler reporter,
-      SpawnRunner fallbackRunner,
-      boolean sandboxUsesExpandedTreeArtifactsInRunfiles) {
+      SpawnRunner fallbackRunner) {
     this.execRoot = execRoot;
     this.workers = Preconditions.checkNotNull(workers);
     this.extraFlags = extraFlags;
     this.reporter = reporter;
     this.fallbackRunner = fallbackRunner;
-    this.sandboxUsesExpandedTreeArtifactsInRunfiles = sandboxUsesExpandedTreeArtifactsInRunfiles;
   }
 
   @Override
@@ -134,14 +131,11 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
     SortedMap<PathFragment, HashCode> workerFiles =
         WorkerFilesHash.getWorkerFilesWithHashes(
-            spawn, context.getArtifactExpander(), context.getPathResolver(),
-            context.getMetadataProvider());
+            spawn, context.getArtifactExpander(), context.getMetadataProvider());
 
     HashCode workerFilesCombinedHash = WorkerFilesHash.getCombinedHash(workerFiles);
 
-    Map<PathFragment, Path> inputFiles =
-        SandboxHelpers.processInputFiles(
-            spawn, context, execRoot, sandboxUsesExpandedTreeArtifactsInRunfiles);
+    Map<PathFragment, Path> inputFiles = SandboxHelpers.processInputFiles(spawn, context, execRoot);
     Set<PathFragment> outputFiles = SandboxHelpers.getOutputFiles(spawn);
 
     WorkerKey key =
@@ -238,9 +232,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
    * files. The @ itself can be escaped with @@. This deliberately does not expand --flagfile= style
    * arguments, because we want to get rid of the expansion entirely at some point in time.
    *
-   * Also check that the argument is not an external repository label, because they start with `@`
-   * and are not flagfile locations.
-   *
    * @param execRoot the current execroot of the build (relative paths will be assumed to be
    *     relative to this directory).
    * @param arg the argument to expand.
@@ -249,7 +240,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
    */
   static void expandArgument(Path execRoot, String arg, WorkRequest.Builder requestBuilder)
       throws IOException {
-    if (arg.startsWith("@") && !arg.startsWith("@@") && !isExternalRepositoryLabel(arg)) {
+    if (arg.startsWith("@") && !arg.startsWith("@@")) {
       for (String line :
           Files.readAllLines(
               Paths.get(execRoot.getRelative(arg.substring(1)).getPathString()), UTF_8)) {
@@ -258,10 +249,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
     } else {
       requestBuilder.addArguments(arg);
     }
-  }
-
-  private static boolean isExternalRepositoryLabel(String arg) {
-    return arg.matches("^@.*//.*");
   }
 
   private WorkResponse execInWorker(
