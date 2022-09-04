@@ -26,15 +26,12 @@ package org.graylog2;
 
 import org.graylog2.plugin.Tools;
 import com.google.common.collect.Lists;
-import org.joda.time.DateTime;
-import org.joda.time.format.ISODateTimeFormat;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.Calendar;
-import java.util.HashMap;
 import java.util.List;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
@@ -195,37 +192,5 @@ public class ToolsTest {
         assertEquals("tat", Tools.safeSubstring("justatest", 3, 6));
         assertEquals("just", Tools.safeSubstring("justatest", 0, 4));
         assertEquals("atest", Tools.safeSubstring("justatest", 4, 9));
-    }
-
-    @Test
-    public void testGetInt() throws Exception {
-        assertEquals(null, Tools.getInt(null));
-
-        assertEquals((Integer) 0, Tools.getInt(0));
-        assertEquals((Integer) 1, Tools.getInt(1));
-        assertEquals((Integer) 9001, Tools.getInt(9001));
-
-        assertEquals((Integer) 1253453, Tools.getInt((long) 1253453));
-        assertEquals(null, Tools.getInt((double) 5));
-        assertEquals(null, Tools.getInt(18.2));
-
-        assertEquals((Integer) 88, Tools.getInt("88"));
-        assertEquals(null, Tools.getInt("lol NOT A NUMBER"));
-
-        assertEquals(null, Tools.getInt(new HashMap<String, String>()));
-    }
-
-    @Test
-    public void testTimeFormatterWithOptionalMilliseconds() {
-        /*
-         * We can actually consider this working if it does not throw parser exceptions.
-         * Check the toString() representation to make sure though. (using startsWith()
-         * to avoid problems on test systems in other time zones, that are not CEST and do
-         * not end with a +02:00 or shit.)
-         */
-        assert(DateTime.parse("2013-09-15 02-21-02", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.000+"));
-        assert(DateTime.parse("2013-09-15 02-21-02.123", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.123+"));
-        assert(DateTime.parse("2013-09-15 02-21-02.12", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.120+"));
-        assert(DateTime.parse("2013-09-15 02-21-02.1", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.100+"));
     }
 }
