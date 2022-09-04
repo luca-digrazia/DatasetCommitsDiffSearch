@@ -35,91 +35,62 @@ import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
-/** An instance (in the Skylark sense, not Java) of a {@link Provider}. */
+/** Represents information provided by a {@link Provider}. */
 @SkylarkModule(
   name = "struct",
   category = SkylarkModuleCategory.BUILTIN,
   doc =
-      "A generic object with fields. See the global <a href=\"globals.html#struct\"><code>struct"
-          + "</code></a> function for more details."
-          + "<p>Structs fields cannot be reassigned once the struct is created. Two structs are "
-          + "equal if they have the same fields and if corresponding field values are equal."
+      "A special language element to support structs (i.e. simple value objects). "
+          + "See the global <a href=\"globals.html#struct\">struct</a> function "
+          + "for more details."
 )
 public abstract class Info implements ClassObject, SkylarkValue, Serializable {
-
-  /** The {@link Provider} that describes the type of this instance. */
   private final Provider provider;
-
-  /**
-   * The Skylark location where this provider instance was created.
-   *
-   * <p>Built-in provider instances may use {@link Location#BUILTIN}.
-   */
   private final Location creationLoc;
+  private final String errorMessage;
 
-  /**
-   * Formattable string with one {@code '%s'} placeholder for the missing field name.
-   */
-  private final String errorMessageFormatForUnknownField;
-
-  /**
-   * Creates an empty struct with a given location.
-   *
-   * <p>If {@code location} is null, it defaults to {@link Location#BUILTIN}.
-   */
-  public Info(Provider provider, @Nullable Location location) {
+  /** Creates an empty struct with a given location. */
+  public Info(Provider provider, Location location) {
     this.provider = provider;
-    this.creationLoc = location == null ? Location.BUILTIN : location;
-    this.errorMessageFormatForUnknownField = provider.getErrorMessageFormatForInstances();
+    this.creationLoc = location;
+    this.errorMessage = provider.getErrorMessageFormatForInstances();
   }
 
-  /** Creates a built-in struct (i.e. without a Skylark creation location). */
+  /** Creates a built-in struct (i.e. without creation loc). */
   public Info(Provider provider) {
     this.provider = provider;
-    this.creationLoc = Location.BUILTIN;
-    this.errorMessageFormatForUnknownField = provider.getErrorMessageFormatForInstances();
+    this.creationLoc = null;
+    this.errorMessage = provider.getErrorMessageFormatForInstances();
   }
 
   /**
-   * Creates a built-in struct (i.e. without creation location) that uses a specific error message
-   * for missing fields.
+   * Creates a built-in struct (i.e. without creation loc).
    *
-   * <p>Only used in {@link
-   * com.google.devtools.build.lib.packages.NativeProvider.StructConstructor#create(Map, String)}.
-   * If you need to override an error message, the preferred way is to create a new {@link
-   * NativeProvider} subclass.
+   * <p>Allows to supply a specific error message. Only used in
+   * {@link com.google.devtools.build.lib.packages.NativeProvider.StructConstructor#create(Map,
+   * String)} If you need to override an error message, preferred way is to create a specific {@link
+   * NativeProvider}.
    */
-  Info(Provider provider, String errorMessageFormatForUnknownField) {
+  Info(Provider provider, String errorMessage) {
     this.provider = provider;
-    this.creationLoc = Location.BUILTIN;
-    this.errorMessageFormatForUnknownField =
-        Preconditions.checkNotNull(errorMessageFormatForUnknownField);
+    this.creationLoc = null;
+    this.errorMessage = Preconditions.checkNotNull(errorMessage);
   }
 
-  /**
-   * Preprocesses a map of field values to convert the field names and field values to
-   * Skylark-acceptable names and types.
-   */
+  // Ensure that values are all acceptable to Skylark before to stuff them in a ClassObject
   protected static ImmutableMap<String, Object> copyValues(Map<String, Object> values) {
     ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
     for (Map.Entry<String, Object> e : values.entrySet()) {
       builder.put(
-          Attribute.getSkylarkName(e.getKey()),
-          SkylarkType.convertToSkylark(e.getValue(), /*env=*/ null));
+          Attribute.getSkylarkName(e.getKey()), SkylarkType.convertToSkylark(e.getValue(), null));
     }
     return builder.build();
   }
 
-  /**
-   * Returns whether the given field name exists.
-   *
-   * <p>The "key" nomenclature is historic and for consistency with {@link ClassObject}.
-   */
-  // TODO(bazel-team): Rename to hasField(), and likewise in ClassObject.
   public abstract boolean hasKey(String name);
 
   /** Returns a value and try to cast it into specified type */
-  public <T> T getValue(String key, Class<T> type) throws EvalException {
+  public <TYPE> TYPE getValue(String key, Class<TYPE> type) throws EvalException {
     Object obj = getValue(key);
     if (obj == null) {
       return null;
@@ -128,17 +99,17 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
     return type.cast(obj);
   }
 
-  /**
-   * Returns the Skylark location where this provider instance was created.
-   *
-   * <p>Builtin provider instances may return {@link Location#BUILTIN}.
-   */
   public Location getCreationLoc() {
-    return creationLoc;
+    return Preconditions.checkNotNull(creationLoc, "This struct was not created in a Skylark code");
   }
 
   public Provider getProvider() {
     return provider;
+  }
+
+  @Nullable
+  public Location getCreationLocOrNull() {
+    return creationLoc;
   }
 
   /**
@@ -161,12 +132,11 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
   @Override
   public abstract Object getValue(String name);
 
-  // TODO(bazel-team): Rename to getErrorMessageForUnknownField.
   @Override
   public String errorMessage(String name) {
     String suffix =
         "Available attributes: " + Joiner.on(", ").join(Ordering.natural().sortedCopy(getKeys()));
-    return String.format(errorMessageFormatForUnknownField, name) + "\n" + suffix;
+    return String.format(errorMessage, name) + "\n" + suffix;
   }
 
   @Override
