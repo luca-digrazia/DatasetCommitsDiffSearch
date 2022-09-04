@@ -1,9 +1,7 @@
 package org.jboss.shamrock.jaeger.runtime;
 
 import java.math.BigDecimal;
-import java.net.InetSocketAddress;
 import java.net.URI;
-import java.time.Duration;
 import java.util.Optional;
 
 import org.jboss.shamrock.runtime.annotations.ConfigItem;
@@ -45,7 +43,7 @@ public class JaegerConfig {
      * The hostname and port for communicating with agent via UDP
      */
     @ConfigItem
-    public Optional<InetSocketAddress> agentHostPort;
+    public Optional<String> agentHostPort;
 
     /**
      * Whether the reporter should also log the spans
@@ -60,10 +58,10 @@ public class JaegerConfig {
     public Optional<Integer> reporterMaxQueueSize;
 
     /**
-     * The reporter's flush interval
+     * The reporter's flush interval (ms)
      */
     @ConfigItem
-    public Optional<Duration> reporterFlushInterval;
+    public Optional<Integer> reporterFlushInterval;
 
     /**
      * The sampler type (const, probabilistic, ratelimiting or remote)
@@ -81,7 +79,7 @@ public class JaegerConfig {
      * The host name and port when using the remote controlled sampler
      */
     @ConfigItem
-    public Optional<InetSocketAddress> samplerManagerHostPort;
+    public Optional<String> samplerManagerHostPort;
 
     /**
      * The service name
