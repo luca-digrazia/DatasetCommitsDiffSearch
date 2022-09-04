@@ -633,6 +633,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
   @Test
   public void testJavaCommonCompileWithOnlyOneSourceJarWithIncompatibleFlag() throws Exception {
     writeBuildFileForJavaToolchain();
+    setSkylarkSemanticsOptions("--incompatible_generate_javacommon_source_jar=true");
     scratch.file(
         "java/test/BUILD",
         "load(':custom_rule.bzl', 'java_custom_library')",
@@ -685,6 +686,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
   @Test
   public void testJavaCommonCompileCustomSourceJar() throws Exception {
     writeBuildFileForJavaToolchain();
+    setSkylarkSemanticsOptions("--incompatible_generate_javacommon_source_jar=true");
     scratch.file(
         "java/test/BUILD",
         "load(':custom_rule.bzl', 'java_custom_library')",
