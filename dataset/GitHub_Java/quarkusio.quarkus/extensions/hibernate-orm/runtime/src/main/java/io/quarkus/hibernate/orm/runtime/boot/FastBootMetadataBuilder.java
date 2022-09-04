@@ -121,6 +121,8 @@ public class FastBootMetadataBuilder {
         // merge configuration sources and build the "standard" service registry
         final RecordableBootstrap ssrBuilder = new RecordableBootstrap(bsr);
 
+        insertStateRecorders(ssrBuilder);
+
         final MergedSettings mergedSettings = mergeSettings(persistenceUnit);
         this.buildTimeSettings = new BuildTimeSettings(mergedSettings.getConfigurationValues());
 
@@ -187,6 +189,11 @@ public class FastBootMetadataBuilder {
         for (String className : persistenceUnit.getManagedClassNames()) {
             metadataSources.addAnnotatedClassName(className);
         }
+    }
+
+    private void insertStateRecorders(StandardServiceRegistryBuilder ssrBuilder) {
+        //        ssrBuilder.addService( DialectFactory.class, new RecordingDialectFactory() );
+        //        ssrBuilder.addInitiator(  )
     }
 
     private BootstrapServiceRegistry buildBootstrapServiceRegistry(ClassLoaderService providedClassLoaderService) {

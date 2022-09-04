@@ -21,10 +21,8 @@ import org.hibernate.jpa.internal.util.PersistenceUtilHelper;
 import org.hibernate.service.internal.ProvidedService;
 import org.jboss.logging.Logger;
 
-import io.quarkus.agroal.DataSource.DataSourceLiteral;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
-import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.hibernate.orm.runtime.boot.FastBootEntityManagerFactoryBuilder;
 import io.quarkus.hibernate.orm.runtime.boot.registry.PreconfiguredServiceRegistryBuilder;
 import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrations;
@@ -37,7 +35,7 @@ import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
  * that: we need to be able to fully exclude HibernatePersistenceProvider from
  * the native image.
  */
-public final class FastBootHibernatePersistenceProvider implements PersistenceProvider {
+final class FastBootHibernatePersistenceProvider implements PersistenceProvider {
 
     private static final Logger log = Logger.getLogger(FastBootHibernatePersistenceProvider.class);
 
@@ -94,12 +92,8 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
     }
 
     @SuppressWarnings("rawtypes")
-    public EntityManagerFactoryBuilder getEntityManagerFactoryBuilder(PersistenceUnitInfo info, Map integration) {
-        return getEntityManagerFactoryBuilder(info.getPersistenceUnitName(), integration);
-    }
-
-    public EntityManagerFactoryBuilder getEntityManagerFactoryBuilder(String persistenceUnitName, Map integration) {
-        return getEntityManagerFactoryBuilderOrNull(persistenceUnitName, integration);
+    protected EntityManagerFactoryBuilder getEntityManagerFactoryBuilder(PersistenceUnitInfo info, Map integration) {
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     /**
@@ -151,10 +145,6 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
 
             RecordedState recordedState = PersistenceUnitsHolder.getRecordedState(persistenceUnitName);
 
-            if (recordedState.isReactive()) {
-                throw new IllegalStateException(
-                        "Attempting to boot a blocking Hibernate ORM instance on a reactive RecordedState");
-            }
             final PrevalidatedQuarkusMetadata metadata = recordedState.getMetadata();
             final BuildTimeSettings buildTimeSettings = recordedState.getBuildTimeSettings();
             final IntegrationSettings integrationSettings = recordedState.getIntegrationSettings();
@@ -162,7 +152,7 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
                     integrationSettings);
 
             // Inject the datasource
-            injectDataSource(persistenceUnitName, recordedState.getDataSource(), runtimeSettingsBuilder);
+            injectDataSource(persistenceUnitName, runtimeSettingsBuilder);
 
             HibernateOrmIntegrations.contributeRuntimeProperties((k, v) -> runtimeSettingsBuilder.put(k, v));
 
@@ -179,7 +169,7 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
                     persistenceUnitName,
                     standardServiceRegistry /* Mostly ignored! (yet needs to match) */,
                     runtimeSettings,
-                    validatorFactory, cdiBeanManager, recordedState.getMultiTenancyStrategy());
+                    validatorFactory, cdiBeanManager);
         }
 
         log.debug("Found no matching persistence units");
@@ -260,8 +250,7 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
         }
     }
 
-    private void injectDataSource(String persistenceUnitName, String dataSource,
-            RuntimeSettings.Builder runtimeSettingsBuilder) {
+    private void injectDataSource(String persistenceUnitName, RuntimeSettings.Builder runtimeSettingsBuilder) {
         // first convert
 
         if (runtimeSettingsBuilder.isConfigured(AvailableSettings.URL) ||
@@ -272,19 +261,13 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
             return;
         }
 
-        InstanceHandle<DataSource> dataSourceHandle;
-        if (DataSourceUtil.isDefault(dataSource)) {
-            dataSourceHandle = Arc.container().instance(DataSource.class);
-        } else {
-            dataSourceHandle = Arc.container().instance(DataSource.class, new DataSourceLiteral(dataSource));
-        }
-
+        // for now we only support one datasource but this will change
+        InstanceHandle<DataSource> dataSourceHandle = Arc.container().instance(DataSource.class);
         if (!dataSourceHandle.isAvailable()) {
-            throw new IllegalStateException(
-                    "No datasource " + dataSource + " has been defined for persistence unit " + persistenceUnitName);
+            throw new IllegalStateException("No datasource has been defined for persistence unit " + persistenceUnitName);
         }
 
-        runtimeSettingsBuilder.put(AvailableSettings.DATASOURCE, dataSourceHandle.get());
+        runtimeSettingsBuilder.put(AvailableSettings.DATASOURCE, Arc.container().instance(DataSource.class).get());
     }
 
     private final ProviderUtil providerUtil = new ProviderUtil() {

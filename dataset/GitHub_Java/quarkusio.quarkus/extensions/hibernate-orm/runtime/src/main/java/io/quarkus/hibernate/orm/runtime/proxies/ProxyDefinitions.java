@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 
 import org.hibernate.HibernateException;
 import org.hibernate.boot.Metadata;
@@ -50,17 +49,17 @@ public final class ProxyDefinitions {
         this.proxyDefinitionMap = proxyDefinitionMap;
     }
 
-    public static ProxyDefinitions createFromMetadata(Metadata storeableMetadata, PreGeneratedProxies preGeneratedProxies) {
+    public static ProxyDefinitions createFromMetadata(Metadata storeableMetadata) {
         //Check upfront for any need across all metadata: would be nice to avoid initializing the Bytecode provider.
-        LazyBytecode lazyBytecode = new LazyBytecode();
         if (needAnyProxyDefinitions(storeableMetadata)) {
             final HashMap<Class<?>, ProxyClassDetailsHolder> proxyDefinitionMap = new HashMap<>();
+            final BytecodeProviderImpl bytecodeProvider = new BytecodeProviderImpl();
             try {
+                final ByteBuddyProxyHelper byteBuddyProxyHelper = bytecodeProvider.getByteBuddyProxyHelper();
                 for (PersistentClass persistentClass : storeableMetadata.getEntityBindings()) {
                     if (needsProxyGeneration(persistentClass)) {
                         final Class mappedClass = persistentClass.getMappedClass();
-                        final Class proxyClassDefinition = generateProxyClass(persistentClass, lazyBytecode,
-                                preGeneratedProxies);
+                        final Class proxyClassDefinition = generateProxyClass(persistentClass, byteBuddyProxyHelper);
                         if (proxyClassDefinition == null) {
                             continue;
                         }
@@ -76,7 +75,7 @@ public final class ProxyDefinitions {
                     }
                 }
             } finally {
-                lazyBytecode.close();
+                bytecodeProvider.resetCaches();
             }
             return new ProxyDefinitions(proxyDefinitionMap);
         } else {
@@ -97,9 +96,7 @@ public final class ProxyDefinitions {
         return persistentClass.isLazy() && (persistentClass.getMappedClass() != null);
     }
 
-    private static Class<?> generateProxyClass(PersistentClass persistentClass,
-            Supplier<ByteBuddyProxyHelper> byteBuddyProxyHelper,
-            PreGeneratedProxies preGeneratedProxies) {
+    private static Class generateProxyClass(PersistentClass persistentClass, ByteBuddyProxyHelper byteBuddyProxyHelper) {
         final String entityName = persistentClass.getEntityName();
         final Class mappedClass = persistentClass.getMappedClass();
         if ((mappedClass.getModifiers() & ACC_FINAL) == ACC_FINAL) {
@@ -109,49 +106,8 @@ public final class ProxyDefinitions {
             return null;
         }
         final Set<Class> proxyInterfaces = ProxyFactoryHelper.extractProxyInterfaces(persistentClass, entityName);
-        PreGeneratedProxies.ProxyClassDetailsHolder preProxy = preGeneratedProxies.getProxies()
-                .get(persistentClass.getClassName());
-        Class<?> preGeneratedProxy = null;
-        boolean match = true;
-        if (preProxy != null) {
-            match = proxyInterfaces.size() == preProxy.getProxyInterfaces().size();
-            if (match) {
-                for (Class i : proxyInterfaces) {
-                    if (!preProxy.getProxyInterfaces().contains(i.getName())) {
-                        match = false;
-                        break;
-                    }
-                }
-            }
-            if (match) {
-                try {
-                    preGeneratedProxy = Class.forName(preProxy.getClassName(), false,
-                            Thread.currentThread().getContextClassLoader());
-                } catch (ClassNotFoundException e) {
-                    //should never happen
-                    throw new RuntimeException("Unable to load proxy class", e);
-                }
-            }
-        }
-
-        if (preGeneratedProxy == null) {
-            if (match) {
-                LOGGER.warnf("Unable to find a build time generated proxy for entity %s",
-                        persistentClass.getClassName());
-            } else {
-                //TODO: this should be changed to an exception after 1.4
-                //really it should be an exception now
-                LOGGER.errorf(
-                        "Unable to use a build time generated proxy for entity %s, as the build time proxy " +
-                                "interfaces %s are different to the runtime ones %s. This should not happen, please open an " +
-                                "issue at https://github.com/quarkusio/quarkus/issues",
-                        persistentClass.getClassName(), preProxy.getProxyInterfaces(), proxyInterfaces);
-            }
-            Class<?> proxyDef = byteBuddyProxyHelper.get().buildProxy(mappedClass, toArray(proxyInterfaces));
-            return proxyDef;
-        } else {
-            return preGeneratedProxy;
-        }
+        Class proxyDef = byteBuddyProxyHelper.buildProxy(mappedClass, toArray(proxyInterfaces));
+        return proxyDef;
     }
 
     private static Class[] toArray(final Set<Class> interfaces) {
@@ -181,27 +137,6 @@ public final class ProxyDefinitions {
 
         public Constructor getConstructor() {
             return constructor;
-        }
-    }
-
-    private static final class LazyBytecode implements Supplier<ByteBuddyProxyHelper> {
-
-        ByteBuddyProxyHelper helper;
-        private BytecodeProviderImpl bytecodeProvider;
-
-        @Override
-        public ByteBuddyProxyHelper get() {
-            if (helper == null) {
-                bytecodeProvider = new BytecodeProviderImpl();
-                helper = bytecodeProvider.getByteBuddyProxyHelper();
-            }
-            return helper;
-        }
-
-        void close() {
-            if (bytecodeProvider != null) {
-                bytecodeProvider.resetCaches();
-            }
         }
     }
 
