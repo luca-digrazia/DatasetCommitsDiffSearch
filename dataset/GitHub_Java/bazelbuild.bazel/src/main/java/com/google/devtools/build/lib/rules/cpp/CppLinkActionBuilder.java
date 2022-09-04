@@ -503,7 +503,7 @@ public class CppLinkActionBuilder {
    * Returns true if there are any LTO bitcode inputs to this link, either directly transitively via
    * library inputs.
    */
-  public boolean hasLtoBitcodeInputs() {
+  boolean hasLtoBitcodeInputs() {
     if (!ltoBitcodeFiles.isEmpty()) {
       return true;
     }

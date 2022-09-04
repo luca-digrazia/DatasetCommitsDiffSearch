@@ -77,6 +77,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
           ImmutableList.<Artifact>of(),
           NestedSetBuilder.<Pair<String, String>>emptySet(Order.COMPILE_ORDER),
           null,
+          null,
           ImmutableMap.<String, String>of(),
           ImmutableList.<PathFragment>of(),
           null);
@@ -106,6 +107,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   private final ImmutableList<Artifact> builtinIncludeFiles;
   private final NestedSet<Pair<String, String>> coverageEnvironment;
   @Nullable private final Artifact linkDynamicLibraryTool;
+  @Nullable private final Artifact defParser;
   private final ImmutableMap<String, String> environment;
   private final ImmutableList<PathFragment> builtInIncludeDirectories;
   @Nullable private final PathFragment sysroot;
@@ -137,6 +139,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
       ImmutableList<Artifact> builtinIncludeFiles,
       NestedSet<Pair<String, String>> coverageEnvironment,
       Artifact linkDynamicLibraryTool,
+      Artifact defParser,
       ImmutableMap<String, String> environment,
       ImmutableList<PathFragment> builtInIncludeDirectories,
       @Nullable PathFragment sysroot) {
@@ -166,6 +169,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
     this.builtinIncludeFiles = builtinIncludeFiles;
     this.coverageEnvironment = coverageEnvironment;
     this.linkDynamicLibraryTool = linkDynamicLibraryTool;
+    this.defParser = defParser;
     this.environment = environment;
     this.builtInIncludeDirectories = builtInIncludeDirectories;
     this.sysroot = sysroot;
@@ -494,6 +498,14 @@ public final class CcToolchainProvider extends ToolchainInfo {
   }
 
   /**
+   * Returns the tool which should be used to parser object files for generating DEF file on
+   * Windows. The label of this tool is //third_party/def_parser:def_parser.
+   */
+  public Artifact getDefParserTool() {
+    return defParser;
+  }
+
+  /**
    * Returns the tool that builds interface libraries from dynamic libraries.
    */
   public Artifact getInterfaceSoBuilder() {
@@ -715,7 +727,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   FlagList getFullyStaticLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
         configureLinkerOptions(
-            compilationMode, lipoMode, LinkingMode.FULLY_STATIC),
+            compilationMode, lipoMode, LinkingMode.FULLY_STATIC, toolchainInfo.getLdExecutable()),
         FlagList.convertOptionalOptions(toolchainInfo.getOptionalLinkerFlags()),
         ImmutableList.<String>of());
   }
@@ -724,7 +736,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   FlagList getMostlyStaticLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
         configureLinkerOptions(
-            compilationMode, lipoMode, LinkingMode.MOSTLY_STATIC),
+            compilationMode, lipoMode, LinkingMode.MOSTLY_STATIC, toolchainInfo.getLdExecutable()),
         FlagList.convertOptionalOptions(toolchainInfo.getOptionalLinkerFlags()),
         ImmutableList.<String>of());
   }
@@ -735,7 +747,8 @@ public final class CcToolchainProvider extends ToolchainInfo {
         configureLinkerOptions(
             compilationMode,
             lipoMode,
-            LinkingMode.MOSTLY_STATIC_LIBRARIES),
+            LinkingMode.MOSTLY_STATIC_LIBRARIES,
+            toolchainInfo.getLdExecutable()),
         FlagList.convertOptionalOptions(toolchainInfo.getOptionalLinkerFlags()),
         ImmutableList.<String>of());
   }
@@ -744,7 +757,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   FlagList getDynamicLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
         configureLinkerOptions(
-            compilationMode, lipoMode, LinkingMode.DYNAMIC),
+            compilationMode, lipoMode, LinkingMode.DYNAMIC, toolchainInfo.getLdExecutable()),
         FlagList.convertOptionalOptions(toolchainInfo.getOptionalLinkerFlags()),
         ImmutableList.<String>of());
   }
@@ -752,9 +765,10 @@ public final class CcToolchainProvider extends ToolchainInfo {
   ImmutableList<String> configureLinkerOptions(
       CompilationMode compilationMode,
       LipoMode lipoMode,
-      LinkingMode linkingMode) {
+      LinkingMode linkingMode,
+      PathFragment ldExecutable) {
     return toolchainInfo.configureLinkerOptions(
-        compilationMode, lipoMode, linkingMode);
+        compilationMode, lipoMode, linkingMode, ldExecutable);
   }
 
   /** Returns the GNU System Name */

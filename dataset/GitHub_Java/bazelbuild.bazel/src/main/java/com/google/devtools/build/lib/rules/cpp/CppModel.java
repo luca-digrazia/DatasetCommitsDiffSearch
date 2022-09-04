@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs.Builder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.StringSequenceBuilder;
@@ -787,7 +788,7 @@ public final class CppModel {
   private void createHeaderAction(
       Label sourceLabel,
       String outputName,
-      CcCompilationOutputs.Builder result,
+      Builder result,
       AnalysisEnvironment env,
       CppCompileActionBuilder builder,
       boolean generateDotd)
@@ -908,7 +909,7 @@ public final class CppModel {
   private void createClifMatchAction(
       Label sourceLabel,
       String outputName,
-      CcCompilationOutputs.Builder result,
+      Builder result,
       AnalysisEnvironment env,
       CppCompileActionBuilder builder)
       throws RuleErrorException {
@@ -1318,7 +1319,9 @@ public final class CppModel {
             .addVariablesExtensions(variablesExtensions)
             .build();
     env.registerAction(maybePicAction);
-    result.addStaticLibrary(maybePicAction.getOutputLibrary());
+    if (linkType != LinkTargetType.EXECUTABLE) {
+      result.addStaticLibrary(maybePicAction.getOutputLibrary());
+    }
 
     // Create a second static library (.pic.a). Only in case (2) do we need both PIC and non-PIC
     // static libraries. In that case, the first static library contains the non-PIC code, and this
@@ -1342,7 +1345,9 @@ public final class CppModel {
               .addVariablesExtensions(variablesExtensions)
               .build();
       env.registerAction(picAction);
-      result.addPicStaticLibrary(picAction.getOutputLibrary());
+      if (linkType != LinkTargetType.EXECUTABLE) {
+        result.addPicStaticLibrary(picAction.getOutputLibrary());
+      }
     }
 
     if (!createDynamicLibrary) {
@@ -1422,7 +1427,7 @@ public final class CppModel {
         Artifact generatedDefFile =
             CppHelper.createDefFileActions(
                 ruleContext,
-                ruleContext.getPrerequisiteArtifact("$def_parser", Mode.HOST),
+                ccToolchain.getDefParserTool(),
                 ccOutputs.getObjectFiles(false),
                 SolibSymlinkAction.getDynamicLibrarySoname(soImpl.getRootRelativePath(), true));
         dynamicLinkActionBuilder.setDefFile(generatedDefFile);
@@ -1452,6 +1457,10 @@ public final class CppModel {
 
     CppLinkAction dynamicLinkAction = dynamicLinkActionBuilder.build();
     env.registerAction(dynamicLinkAction);
+
+    if (linkType == LinkTargetType.EXECUTABLE) {
+      return result.build();
+    }
 
     LibraryToLink dynamicLibrary = dynamicLinkAction.getOutputLibrary();
     LibraryToLink interfaceLibrary = dynamicLinkAction.getInterfaceOutputLibrary();

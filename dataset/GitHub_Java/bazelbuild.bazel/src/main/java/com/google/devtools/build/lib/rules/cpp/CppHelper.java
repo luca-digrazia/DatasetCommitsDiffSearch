@@ -82,7 +82,6 @@ import javax.annotation.Nullable;
 public class CppHelper {
 
   static final PathFragment OBJS = PathFragment.create("_objs");
-  static final PathFragment PIC_OBJS = PathFragment.create("_pic_objs");
 
   private static final String GREPPED_INCLUDES_SUFFIX = ".includes";
 
@@ -551,18 +550,11 @@ public class CppHelper {
     return (CcToolchainProvider) dep.get(ToolchainInfo.PROVIDER);
   }
 
-  /** Returns the directory where object files are created. */
-  public static PathFragment getObjDirectory(Label ruleLabel, boolean usePic) {
-    if (usePic) {
-      return AnalysisUtils.getUniqueDirectory(ruleLabel, PIC_OBJS);
-    } else {
-      return AnalysisUtils.getUniqueDirectory(ruleLabel, OBJS);
-    }
-  }
-
-  /** Returns the directory where object files are created. */
+  /**
+   * Returns the directory where object files are created.
+   */
   public static PathFragment getObjDirectory(Label ruleLabel) {
-    return getObjDirectory(ruleLabel, false);
+    return AnalysisUtils.getUniqueDirectory(ruleLabel, OBJS);
   }
 
   /**
@@ -961,19 +953,15 @@ public class CppHelper {
         config.getBinDirectory(ruleContext.getRule().getRepository()));
   }
 
-  /** Returns the corresponding compiled TreeArtifact given the source TreeArtifact. */
+  /**
+   * Returns the corresponding compiled TreeArtifact given the source TreeArtifact.
+   */
   public static Artifact getCompileOutputTreeArtifact(
-      RuleContext ruleContext, Artifact sourceTreeArtifact, boolean usePic) {
-    PathFragment objectDir = getObjDirectory(ruleContext.getLabel(), usePic);
+      RuleContext ruleContext, Artifact sourceTreeArtifact) {
+    PathFragment objectDir = getObjDirectory(ruleContext.getLabel());
     PathFragment rootRelativePath = sourceTreeArtifact.getRootRelativePath();
     return ruleContext.getTreeArtifact(
         objectDir.getRelative(rootRelativePath), sourceTreeArtifact.getRoot());
-  }
-
-  /** Returns the corresponding compiled TreeArtifact given the source TreeArtifact. */
-  public static Artifact getCompileOutputTreeArtifact(
-      RuleContext ruleContext, Artifact sourceTreeArtifact) {
-    return getCompileOutputTreeArtifact(ruleContext, sourceTreeArtifact, false);
   }
 
   static String getArtifactNameForCategory(
