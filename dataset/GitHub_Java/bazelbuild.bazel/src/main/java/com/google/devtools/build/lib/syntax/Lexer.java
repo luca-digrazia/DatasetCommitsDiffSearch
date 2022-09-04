@@ -16,55 +16,26 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Stack;
 
-/** A scanner for Starlark. */
+/**
+ * A tokenizer for the BUILD language.
+ *
+ * <p>See: <a href="https://docs.python.org/2/reference/lexical_analysis.html"/>for some details.
+ *
+ * <p>
+ */
 final class Lexer {
-
-  // --- These fields are accessed directly by the parser: ---
-
-  // Mapping from file offsets to Locations.
-  final FileLocations locs;
-
-  // Information about current token. Updated by nextToken.
-  // raw and value are defined only for STRING, INT, IDENTIFIER, and COMMENT.
-  // TODO(adonovan): rename s/xyz/tokenXyz/
-  TokenKind kind;
-  int start; // start offset
-  int end; // end offset
-  String raw; // source text of token
-  Object value; // String or Integer value of token
-
-  // --- end of parser-visible fields ---
-
-  private final List<SyntaxError> errors;
-
-  // Input buffer and position
-  private final char[] buffer;
-  private int pos;
-
-  private final FileOptions options;
-
-  // The stack of enclosing indentation levels in spaces.
-  // The first (outermost) element is always zero.
-  private final Stack<Integer> indentStack = new Stack<>();
-
-  private final List<Comment> comments;
-
-  // The number of unclosed open-parens ("(", '{', '[') at the current point in
-  // the stream. Whitespace is handled differently when this is nonzero.
-  private int openParenStackDepth = 0;
-
-  // True after a NEWLINE token. In other words, we are outside an
-  // expression and we have to check the indentation.
-  private boolean checkIndentation;
-
-  // Number of saved INDENT (>0) or OUTDENT (<0) tokens detected but not yet returned.
-  private int dents;
 
   // Characters that can come immediately prior to an '=' character to generate
   // a different token
@@ -84,17 +55,74 @@ final class Lexer {
           .put('|', TokenKind.PIPE_EQUALS)
           .build();
 
-  // Constructs a lexer which tokenizes the parser input.
-  // Errors are appended to errors.
-  Lexer(ParserInput input, FileOptions options, List<SyntaxError> errors) {
-    this.locs = FileLocations.create(input.getContent(), input.getFile());
-    this.options = options;
+  // Input buffer and position
+  private final char[] buffer;
+  private int pos;
+
+  /**
+   * The part of the location information that is common to all LexerLocation
+   * instances created by this Lexer.  Factored into a separate object so that
+   * many Locations instances can share the same information as compactly as
+   * possible, without closing over a Lexer instance.
+   */
+  private static class LocationInfo {
+    final LineNumberTable lineNumberTable;
+    final PathFragment filename;
+    LocationInfo(PathFragment filename, LineNumberTable lineNumberTable) {
+      this.filename = filename;
+      this.lineNumberTable = lineNumberTable;
+    }
+  }
+
+  private final LocationInfo locationInfo;
+
+  // The stack of enclosing indentation levels; always contains '0' at the
+  // bottom.
+  private final Stack<Integer> indentStack = new Stack<>();
+
+  /**
+   * Token to return. This token is mutated in-place. Its kind is set to
+   * null to indicate the intermediate state, where the new token has not
+   * been scanned yet.
+   */
+  private final Token token;
+
+  private final List<Comment> comments;
+
+  // The number of unclosed open-parens ("(", '{', '[') at the current point in
+  // the stream. Whitespace is handled differently when this is nonzero.
+  private int openParenStackDepth = 0;
+
+  // List of errors appended to by Lexer and Parser.
+  private final List<Event> errors;
+
+  /**
+   * True after a NEWLINE token.
+   * In other words, we are outside an expression and we have to check the indentation.
+   */
+  private boolean checkIndentation;
+
+  private int dents; // number of saved INDENT (>0) or OUTDENT (<0) tokens to return
+
+  /**
+   * StringEscapeEvents contains the errors related to invalid escape sequences like "\a". This is
+   * not handled by the normal eventHandler. Instead, it is passed to the parser and then the AST.
+   * During the evaluation, we can decide to show the events based on a flag in StarlarkSemantics.
+   * This code is temporary, during the migration.
+   */
+  private final List<Event> stringEscapeEvents = new ArrayList<>();
+
+  /** Constructs a lexer which tokenizes the parser input. Errors are appended to {@code errors}. */
+  Lexer(ParserInput input, List<Event> errors) {
+    LineNumberTable lnt = LineNumberTable.create(input.getContent(), input.getPath());
     this.buffer = input.getContent();
     this.pos = 0;
     this.errors = errors;
+    this.locationInfo = new LocationInfo(input.getPath(), lnt);
     this.checkIndentation = true;
     this.comments = new ArrayList<>();
     this.dents = 0;
+    this.token = new Token(null, -1, -1);
 
     indentStack.push(0);
   }
@@ -103,47 +131,117 @@ final class Lexer {
     return comments;
   }
 
+  List<Event> getStringEscapeEvents() {
+    return stringEscapeEvents;
+  }
+
   /**
-   * Reads the next token, updating the Lexer's token fields. It is an error to call nextToken after
-   * an EOF token.
+   * Returns the filename from which the lexer's input came. Returns an empty value if the input
+   * came from a string.
    */
-  void nextToken() {
-    boolean afterNewline = kind == TokenKind.NEWLINE;
+  PathFragment getFilename() {
+    return locationInfo.filename != null ? locationInfo.filename : PathFragment.EMPTY_FRAGMENT;
+  }
+
+  /**
+   * Returns the next token, or EOF if it is the end of the file. It is an error to call nextToken()
+   * after EOF has been returned.
+   */
+  Token nextToken() {
+    boolean afterNewline = token.kind == TokenKind.NEWLINE;
+    token.kind = null;
     tokenize();
-    Preconditions.checkState(kind != null);
+    Preconditions.checkState(token.kind != null);
 
     // Like Python, always end with a NEWLINE token, even if no '\n' in input:
-    if (kind == TokenKind.EOF && !afterNewline) {
-      kind = TokenKind.NEWLINE;
+    if (token.kind == TokenKind.EOF && !afterNewline) {
+      token.kind = TokenKind.NEWLINE;
     }
+    return token;
   }
 
   private void popParen() {
     if (openParenStackDepth == 0) {
-      // TODO(adonovan): fix: the input ')' should not report an indentation error.
-      error("indentation error", pos - 1);
+      error("indentation error");
     } else {
       openParenStackDepth--;
     }
   }
 
-  private void error(String message, int pos) {
-    errors.add(new SyntaxError(locs.getLocation(pos), message));
+  private void error(String message) {
+     error(message, pos - 1, pos - 1);
   }
 
-  private void setToken(TokenKind kind, int start, int end) {
-    this.kind = kind;
-    this.start = start;
-    this.end = end;
-    this.value = null;
-    this.raw = null;
+  private void error(String message, int start, int end) {
+    errors.add(Event.error(createLocation(start, end), message));
   }
 
-  // setValue sets the value associated with a STRING, FLOAT, INT,
-  // IDENTIFIER, or COMMENT token, and records the raw text of the token.
-  private void setValue(Object value) {
-    this.value = value;
-    this.raw = bufferSlice(start, end);
+  Location createLocation(int start, int end) {
+    return new LexerLocation(locationInfo.lineNumberTable, start, end);
+  }
+
+  // Don't use an inner class as we don't want to close over the Lexer, only
+  // the LocationInfo.
+  @AutoCodec
+  @Immutable
+  static final class LexerLocation extends Location {
+    private final LineNumberTable lineNumberTable;
+
+    LexerLocation(LineNumberTable lineNumberTable, int startOffset, int endOffset) {
+      super(startOffset, endOffset);
+      this.lineNumberTable = lineNumberTable;
+    }
+
+    @Override
+    public PathFragment getPath() {
+      return lineNumberTable.getPath(getStartOffset());
+    }
+
+    @Override
+    public LineAndColumn getStartLineAndColumn() {
+      return lineNumberTable.getLineAndColumn(getStartOffset());
+    }
+
+    @Override
+    public LineAndColumn getEndLineAndColumn() {
+      // The end offset is the location *past* the actual end position --> subtract 1:
+      int endOffset = getEndOffset() - 1;
+      if (endOffset < 0) {
+        endOffset = 0;
+      }
+      return lineNumberTable.getLineAndColumn(endOffset);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(lineNumberTable, internalHashCode());
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other == null || !other.getClass().equals(getClass())) {
+        return false;
+      }
+      LexerLocation that = (LexerLocation) other;
+      return internalEquals(that) && Objects.equals(this.lineNumberTable, that.lineNumberTable);
+    }
+  }
+
+  /** invariant: symbol positions are half-open intervals. */
+  private void setToken(TokenKind kind, int left, int right) {
+    Preconditions.checkState(token.kind == null);
+    token.kind = kind;
+    token.left = left;
+    token.right = right;
+    token.value = null;
+  }
+
+  private void setToken(TokenKind kind, int left, int right, Object value) {
+    Preconditions.checkState(token.kind == null);
+    token.kind = kind;
+    token.left = left;
+    token.right = right;
+    token.value = value;
   }
 
   /**
@@ -186,7 +284,7 @@ final class Lexer {
       } else if (c == '\t') {
         indentLen++;
         pos++;
-        error("Tab characters are not allowed for indentation. Use spaces instead.", pos);
+        error("Tab characters are not allowed for indentation. Use spaces instead.");
       } else if (c == '\n') { // entirely blank line: discard
         indentLen = 0;
         pos++;
@@ -195,7 +293,7 @@ final class Lexer {
         while (pos < buffer.length && c != '\n') {
           c = buffer[pos++];
         }
-        addComment(oldPos, pos - 1);
+        makeComment(oldPos, pos - 1, bufferSlice(oldPos, pos - 1));
         indentLen = 0;
       } else { // printing character
         break;
@@ -219,7 +317,7 @@ final class Lexer {
       }
 
       if (peekedIndent < indentLen) {
-        error("indentation error", pos - 1);
+        error("indentation error");
       }
     }
   }
@@ -259,16 +357,14 @@ final class Lexer {
             literal.append(c);
             break;
           } else {
-            error("unterminated string literal at eol", literalStartPos);
-            setToken(TokenKind.STRING, literalStartPos, pos);
-            setValue(literal.toString());
+            error("unterminated string literal at eol", literalStartPos, pos);
+            setToken(TokenKind.STRING, literalStartPos, pos, literal.toString());
             return;
           }
         case '\\':
           if (pos == buffer.length) {
-            error("unterminated string literal at eof", literalStartPos);
-            setToken(TokenKind.STRING, literalStartPos, pos);
-            setValue(literal.toString());
+            error("unterminated string literal at eof", literalStartPos, pos);
+            setToken(TokenKind.STRING, literalStartPos, pos, literal.toString());
             return;
           }
           if (isRaw) {
@@ -343,7 +439,7 @@ final class Lexer {
                   }
                 }
                 if (octal > 0xff) {
-                  error("octal escape sequence out of range (maximum is \\377)", pos - 1);
+                  error("octal escape sequence out of range (maximum is \\377)");
                 }
                 literal.append((char) (octal & 0xff));
                 break;
@@ -357,18 +453,18 @@ final class Lexer {
             case 'v':
             case 'x':
               // exists in Python but not implemented in Blaze => error
-              error("invalid escape sequence: \\" + c, pos - 1);
+              error("invalid escape sequence: \\" + c, literalStartPos, pos);
               break;
             default:
               // unknown char escape => "\literal"
-              if (options.restrictStringEscapes()) {
-                error(
-                    "invalid escape sequence: \\"
-                        + c
-                        + ". You can enable unknown escape sequences by passing the flag"
-                        + " --incompatible_restrict_string_escapes=false",
-                    pos - 1);
-              }
+              stringEscapeEvents.add(
+                  Event.error(
+                      createLocation(pos - 1, pos),
+                      "invalid escape sequence: \\"
+                          + c
+                          + ". You can enable unknown escape sequences by passing the flag "
+                          + "--incompatible_restrict_string_escapes=false"));
+
               literal.append('\\');
               literal.append(c);
               break;
@@ -381,8 +477,7 @@ final class Lexer {
             literal.append(c);
           } else {
             // Matching close-delimiter, all done.
-            setToken(TokenKind.STRING, literalStartPos, pos);
-            setValue(literal.toString());
+            setToken(TokenKind.STRING, literalStartPos, pos, literal.toString());
             return;
           }
           break;
@@ -391,9 +486,8 @@ final class Lexer {
           break;
       }
     }
-    error("unterminated string literal at eof", literalStartPos);
-    setToken(TokenKind.STRING, literalStartPos, pos);
-    setValue(literal.toString());
+    error("unterminated string literal at eof", literalStartPos, pos);
+    setToken(TokenKind.STRING, literalStartPos, pos, literal.toString());
   }
 
   /**
@@ -423,9 +517,8 @@ final class Lexer {
       char c = buffer[pos++];
       switch (c) {
         case '\n':
-          error("unterminated string literal at eol", literalStartPos);
-          setToken(TokenKind.STRING, literalStartPos, pos);
-          setValue(bufferSlice(contentStartPos, pos - 1));
+          error("unterminated string literal at eol", literalStartPos, pos);
+          setToken(TokenKind.STRING, literalStartPos, pos, bufferSlice(contentStartPos, pos - 1));
           return;
         case '\\':
           if (isRaw) {
@@ -448,8 +541,8 @@ final class Lexer {
         case '"':
           if (c == quot) {
             // close-quote, all done.
-            setToken(TokenKind.STRING, literalStartPos, pos);
-            setValue(bufferSlice(contentStartPos, pos - 1));
+            setToken(
+                TokenKind.STRING, literalStartPos, pos, bufferSlice(contentStartPos, pos - 1));
             return;
           }
           break;
@@ -463,9 +556,8 @@ final class Lexer {
       pos = buffer.length;
     }
 
-    error("unterminated string literal at eof", literalStartPos);
-    setToken(TokenKind.STRING, literalStartPos, pos);
-    setValue(bufferSlice(contentStartPos, pos));
+    error("unterminated string literal at eof", literalStartPos, pos);
+    setToken(TokenKind.STRING, literalStartPos, pos, bufferSlice(contentStartPos, pos));
   }
 
   private static final Map<String, TokenKind> keywordMap = new HashMap<>();
@@ -517,16 +609,13 @@ final class Lexer {
     String id = scanIdentifier();
     TokenKind kind = keywordMap.get(id);
     if (kind == null) {
-      setToken(TokenKind.IDENTIFIER, oldPos, pos);
-      setValue(id);
+      setToken(TokenKind.IDENTIFIER, oldPos, pos, id);
     } else {
-      setToken(kind, oldPos, pos);
+      setToken(kind, oldPos, pos, null);
     }
   }
 
   private String scanIdentifier() {
-    // Keep consistent with Identifier.isValid.
-    // TODO(laurentlb): Handle Unicode letters.
     int oldPos = pos - 1;
     while (pos < buffer.length) {
       switch (buffer[pos]) {
@@ -583,6 +672,10 @@ final class Lexer {
           break loop;
       }
     }
+    // TODO(bazel-team): (2009) to do roundtripping when we evaluate the integer
+    // constants, we must save the actual text of the tokens, not just their
+    // integer value.
+
     return bufferSlice(oldPos, pos);
   }
 
@@ -607,7 +700,7 @@ final class Lexer {
     } else if (literal.startsWith("0") && literal.length() > 1) {
       radix = 8;
       substring = literal.substring(1);
-      error("invalid octal value `" + literal + "`, should be: `0o" + substring + "`", oldPos);
+      error("invalid octal value `" + literal + "`, should be: `0o" + substring + "`");
     } else {
       radix = 10;
       substring = literal;
@@ -617,11 +710,10 @@ final class Lexer {
     try {
       value = Integer.parseInt(substring, radix);
     } catch (NumberFormatException e) {
-      error("invalid base-" + radix + " integer constant: " + literal, oldPos);
+      error("invalid base-" + radix + " integer constant: " + literal);
     }
 
-    setToken(TokenKind.INT, oldPos, pos);
-    setValue(value);
+    setToken(TokenKind.INT, oldPos, pos, value);
   }
 
   /**
@@ -675,9 +767,6 @@ final class Lexer {
       return;
     }
 
-    // TODO(adonovan): cleanup: replace break after setToken with return,
-    // and eliminate null-check of this.kind.
-    kind = null;
     while (pos < buffer.length) {
       if (tokenizeTwoChars()) {
         pos += 2;
@@ -795,8 +884,7 @@ final class Lexer {
           } else if (lookaheadIs(0, '\r') && lookaheadIs(1, '\n')) {
             pos += 2; // skip the CRLF at the end of line
           } else {
-            setToken(TokenKind.ILLEGAL, pos - 1, pos);
-            setValue(Character.toString(c));
+            setToken(TokenKind.ILLEGAL, pos - 1, pos, Character.toString(c));
           }
           break;
         case '\n':
@@ -812,7 +900,7 @@ final class Lexer {
               pos++;
             }
           }
-          addComment(oldPos, pos);
+          makeComment(oldPos, pos, bufferSlice(oldPos, pos));
           break;
         case '\'':
         case '\"':
@@ -832,11 +920,11 @@ final class Lexer {
           } else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
             identifierOrKeyword();
           } else {
-            error("invalid character: '" + c + "'", pos - 1);
+            error("invalid character: '" + c + "'");
           }
           break;
       } // switch
-      if (kind != null) { // stop here if we scanned a token
+      if (token.kind != null) { // stop here if we scanned a token
         return;
       }
     } // while
@@ -860,13 +948,11 @@ final class Lexer {
    * @param end the offset immediately following the slice
    * @return the text at offset start with length end - start
    */
-  String bufferSlice(int start, int end) {
+  private String bufferSlice(int start, int end) {
     return new String(this.buffer, start, end - start);
   }
 
-  // TODO(adonovan): don't retain comments unconditionally.
-  private void addComment(int start, int end) {
-    String content = bufferSlice(start, end);
-    comments.add(new Comment(locs, start, content));
+  private void makeComment(int start, int end, String content) {
+    comments.add(Node.setLocation(createLocation(start, end), new Comment(content)));
   }
 }
