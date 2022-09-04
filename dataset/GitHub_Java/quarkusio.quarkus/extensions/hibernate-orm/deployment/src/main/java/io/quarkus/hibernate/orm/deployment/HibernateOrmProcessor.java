@@ -71,7 +71,7 @@ import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationBu
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationRuntimeConfiguredBuildItem;
 import io.quarkus.hibernate.orm.runtime.DefaultEntityManagerFactoryProducer;
 import io.quarkus.hibernate.orm.runtime.DefaultEntityManagerProducer;
-import io.quarkus.hibernate.orm.runtime.HibernateOrmRecorder;
+import io.quarkus.hibernate.orm.runtime.HibernateOrmTemplate;
 import io.quarkus.hibernate.orm.runtime.JPAConfig;
 import io.quarkus.hibernate.orm.runtime.JPAResourceReferenceProvider;
 import io.quarkus.hibernate.orm.runtime.RequestScopedEntityManagerHolder;
@@ -110,7 +110,7 @@ public final class HibernateOrmProcessor {
     @SuppressWarnings("unchecked")
     @BuildStep
     @Record(STATIC_INIT)
-    public void build(RecorderContext recorderContext, HibernateOrmRecorder recorder,
+    public void build(RecorderContext recorder, HibernateOrmTemplate template,
             List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems,
             List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             CombinedIndexBuildItem index,
@@ -156,7 +156,7 @@ public final class HibernateOrmProcessor {
             return;
         }
 
-        recorder.callHibernateFeatureInit();
+        template.callHibernateFeatureInit();
 
         // handle the implicit persistence unit
         List<ParsedPersistenceXmlDescriptor> allDescriptors = new ArrayList<>(explicitDescriptors.size() + 1);
@@ -169,12 +169,12 @@ public final class HibernateOrmProcessor {
         }
 
         for (String className : domainObjects.getEntityClassNames()) {
-            recorder.addEntity(className);
+            template.addEntity(className);
         }
-        recorder.enlistPersistenceUnit();
+        template.enlistPersistenceUnit();
 
         //set up the scanner, as this scanning has already been done we need to just tell it about the classes we
-        //have discovered. This scanner is bytecode serializable and is passed directly into the recorder
+        //have discovered. This scanner is bytecode serializable and is passed directly into the template
         QuarkusScanner scanner = new QuarkusScanner();
         Set<ClassDescriptor> classDescriptors = new HashSet<>();
         for (String i : domainObjects.getAllModelClassNames()) {
@@ -185,14 +185,14 @@ public final class HibernateOrmProcessor {
         scanner.setClassDescriptors(classDescriptors);
 
         //now we serialize the XML and class list to bytecode, to remove the need to re-parse the XML on JVM startup
-        recorderContext.registerNonDefaultConstructor(ParsedPersistenceXmlDescriptor.class.getDeclaredConstructor(URL.class),
+        recorder.registerNonDefaultConstructor(ParsedPersistenceXmlDescriptor.class.getDeclaredConstructor(URL.class),
                 (i) -> Collections.singletonList(i.getPersistenceUnitRootUrl()));
 
         // inspect service files for additional integrators
         Collection<Class<? extends Integrator>> integratorClasses = new LinkedHashSet<>();
         for (String integratorClassName : ServiceUtil.classNamesNamedIn(getClass().getClassLoader(),
                 "META-INF/services/org.hibernate.integrator.spi.Integrator")) {
-            integratorClasses.add((Class<? extends Integrator>) recorderContext.classProxy(integratorClassName));
+            integratorClasses.add((Class<? extends Integrator>) recorder.classProxy(integratorClassName));
         }
 
         // inspect service files for service contributors
@@ -200,12 +200,12 @@ public final class HibernateOrmProcessor {
         for (String serviceContributorClassName : ServiceUtil.classNamesNamedIn(getClass().getClassLoader(),
                 "META-INF/services/org.hibernate.service.spi.ServiceContributor")) {
             serviceContributorClasses
-                    .add((Class<? extends ServiceContributor>) recorderContext.classProxy(serviceContributorClassName));
+                    .add((Class<? extends ServiceContributor>) recorder.classProxy(serviceContributorClassName));
         }
 
         beanContainerListener
                 .produce(new BeanContainerListenerBuildItem(
-                        recorder.initMetadata(allDescriptors, scanner, integratorClasses, serviceContributorClasses)));
+                        template.initMetadata(allDescriptors, scanner, integratorClasses, serviceContributorClasses)));
     }
 
     @BuildStep
@@ -279,7 +279,7 @@ public final class HibernateOrmProcessor {
 
     @BuildStep
     @Record(STATIC_INIT)
-    public void build(HibernateOrmRecorder recorder,
+    public void build(HibernateOrmTemplate template,
             Capabilities capabilities, BuildProducer<BeanContainerListenerBuildItem> buildProducer,
             List<PersistenceUnitDescriptorBuildItem> descriptors,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) throws Exception {
@@ -288,18 +288,18 @@ public final class HibernateOrmProcessor {
         }
 
         buildProducer.produce(new BeanContainerListenerBuildItem(
-                recorder.initializeJpa(capabilities.isCapabilityPresent(Capabilities.TRANSACTIONS))));
+                template.initializeJpa(capabilities.isCapabilityPresent(Capabilities.TRANSACTIONS))));
         // Bootstrap all persistence units
         for (PersistenceUnitDescriptorBuildItem persistenceUnitDescriptor : descriptors) {
             buildProducer.produce(new BeanContainerListenerBuildItem(
-                    recorder.registerPersistenceUnit(persistenceUnitDescriptor.getDescriptor().getName())));
+                    template.registerPersistenceUnit(persistenceUnitDescriptor.getDescriptor().getName())));
         }
-        buildProducer.produce(new BeanContainerListenerBuildItem(recorder.initDefaultPersistenceUnit()));
+        buildProducer.produce(new BeanContainerListenerBuildItem(template.initDefaultPersistenceUnit()));
     }
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    public void startPersistenceUnits(HibernateOrmRecorder recorder, BeanContainerBuildItem beanContainer,
+    public void startPersistenceUnits(HibernateOrmTemplate template, BeanContainerBuildItem beanContainer,
             Optional<DataSourceInitializedBuildItem> dataSourceInitialized,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
             List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationsRuntimeConfigured) throws Exception {
@@ -307,7 +307,7 @@ public final class HibernateOrmProcessor {
             return;
         }
 
-        recorder.startAllPersistenceUnits(beanContainer.getValue());
+        template.startAllPersistenceUnits(beanContainer.getValue());
     }
 
     private boolean hasEntities(JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) {
