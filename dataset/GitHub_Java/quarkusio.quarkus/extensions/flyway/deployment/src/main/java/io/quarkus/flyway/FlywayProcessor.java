@@ -28,6 +28,7 @@ import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Default;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.JavaMigration;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
@@ -48,7 +49,6 @@ import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -66,6 +66,7 @@ class FlywayProcessor {
     private static final String FLYWAY_BEAN_NAME_PREFIX = "flyway_";
 
     private static final DotName JAVA_MIGRATION = DotName.createSimple(JavaMigration.class.getName());
+    private static final DotName BASE_JAVA_MIGRATION = DotName.createSimple(BaseJavaMigration.class.getName());
 
     private static final Logger LOGGER = Logger.getLogger(FlywayProcessor.class);
 
@@ -81,11 +82,6 @@ class FlywayProcessor {
         transformers
                 .produce(new BytecodeTransformerBuildItem(true, ScannerTransformer.FLYWAY_SCANNER_CLASS_NAME,
                         new ScannerTransformer()));
-    }
-
-    @BuildStep
-    IndexDependencyBuildItem indexFlyway() {
-        return new IndexDependencyBuildItem("org.flywaydb", "flyway-core");
     }
 
     @Record(STATIC_INIT)
@@ -107,6 +103,8 @@ class FlywayProcessor {
 
         Set<Class<?>> javaMigrationClasses = new HashSet<>();
         addJavaMigrations(combinedIndexBuildItem.getIndex().getAllKnownImplementors(JAVA_MIGRATION), context,
+                reflectiveClassProducer, javaMigrationClasses);
+        addJavaMigrations(combinedIndexBuildItem.getIndex().getAllKnownSubclasses(BASE_JAVA_MIGRATION), context,
                 reflectiveClassProducer, javaMigrationClasses);
         recorder.setApplicationMigrationClasses(new ArrayList<>(javaMigrationClasses));
 

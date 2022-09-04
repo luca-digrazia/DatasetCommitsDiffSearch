@@ -1,7 +1,6 @@
 package io.quarkus.flyway.runtime;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -21,12 +20,12 @@ public class FlywayRecorder {
 
     private final List<FlywayContainer> flywayContainers = new ArrayList<>(2);
 
-    public void setApplicationMigrationFiles(Collection<String> migrationFiles) {
+    public void setApplicationMigrationFiles(List<String> migrationFiles) {
         log.debugv("Setting the following application migration files: {0}", migrationFiles);
         QuarkusPathLocationScanner.setApplicationMigrationFiles(migrationFiles);
     }
 
-    public void setApplicationMigrationClasses(Collection<Class<?>> migrationClasses) {
+    public void setApplicationMigrationClasses(List<Class<?>> migrationClasses) {
         log.debugv("Setting the following application migration classes: {0}", migrationClasses);
         QuarkusPathLocationScanner.setApplicationMigrationClasses(migrationClasses);
     }
