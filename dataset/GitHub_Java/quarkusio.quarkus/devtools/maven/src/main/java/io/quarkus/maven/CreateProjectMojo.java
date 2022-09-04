@@ -51,12 +51,12 @@ import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuilder;
 import org.fusesource.jansi.Ansi;
 
+import io.quarkus.SourceType;
 import io.quarkus.cli.commands.AddExtensions;
 import io.quarkus.cli.commands.CreateProject;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.components.Prompter;
 import io.quarkus.maven.utilities.MojoUtils;
-import io.quarkus.templates.SourceType;
 
 /**
  * This goal helps in setting up Quarkus Maven project with quarkus-maven-plugin, with sensible defaults
@@ -140,18 +140,17 @@ public class CreateProjectMojo extends AbstractMojo {
 
         boolean success;
         try {
-            final SourceType sourceType = determineSourceType(extensions);
-            sanitizeOptions(sourceType);
+            sanitizeOptions();
 
             final Map<String, Object> context = new HashMap<>();
+            context.put("className", className);
             context.put("path", path);
 
             success = new CreateProject(projectRoot)
                     .groupId(projectGroupId)
                     .artifactId(projectArtifactId)
                     .version(projectVersion)
-                    .sourceType(sourceType)
-                    .className(className)
+                    .sourceType(determineSourceType(extensions))
                     .doCreateProject(context);
 
             File createdPomFile = new File(projectRoot, "pom.xml");
@@ -237,7 +236,7 @@ public class CreateProjectMojo extends AbstractMojo {
             }
 
             if (StringUtils.isBlank(projectVersion)) {
-                projectVersion = prompter.promptWithDefaultValue("Set the project version",
+                projectVersion = prompter.promptWithDefaultValue("Set the Quarkus version",
                         "1.0-SNAPSHOT");
             }
 
@@ -276,10 +275,14 @@ public class CreateProjectMojo extends AbstractMojo {
         return "true".equalsIgnoreCase(content) || "yes".equalsIgnoreCase(content) || "y".equalsIgnoreCase(content);
     }
 
-    private void sanitizeOptions(SourceType sourceType) {
+    private void sanitizeOptions() {
         // If className is null, we won't create the REST resource,
         if (className != null) {
-            className = sourceType.stripExtensionFrom(className);
+            if (className.endsWith(MojoUtils.JAVA_EXTENSION)) {
+                className = className.substring(0, className.length() - MojoUtils.JAVA_EXTENSION.length());
+            } else if (className.endsWith(MojoUtils.KOTLIN_EXTENSION)) {
+                className = className.substring(0, className.length() - MojoUtils.KOTLIN_EXTENSION.length());
+            }
 
             if (!className.contains(".")) {
                 // No package name, inject one
