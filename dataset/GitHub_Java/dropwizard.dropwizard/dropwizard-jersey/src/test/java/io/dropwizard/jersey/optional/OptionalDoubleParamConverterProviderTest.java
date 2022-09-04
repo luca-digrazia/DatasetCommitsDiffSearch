@@ -7,13 +7,13 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class OptionalDoubleParamConverterProviderTest {
     @Test
-    void verifyInvalidDefaultValueFailsFast() {
+    public void verifyInvalidDefaultValueFailsFast() {
         assertThatExceptionOfType(NumberFormatException.class)
             .isThrownBy(() -> new OptionalDoubleParamConverterProvider.OptionalDoubleParamConverter("invalid").fromString("invalid"));
     }
 
     @Test
-    void verifyInvalidValueNoDefaultReturnsNotPresent() {
+    public void verifyInvalidValueNoDefaultReturnsNotPresent() {
         assertThat(new OptionalDoubleParamConverterProvider.OptionalDoubleParamConverter().fromString("invalid")).isNotPresent();
     }
 }

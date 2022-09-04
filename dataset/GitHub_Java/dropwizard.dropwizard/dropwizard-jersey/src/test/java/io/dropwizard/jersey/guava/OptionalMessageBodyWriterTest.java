@@ -29,7 +29,7 @@ public class OptionalMessageBodyWriterTest extends AbstractJerseyTest {
     }
 
     @Test
-    void presentOptionalsReturnTheirValue() {
+    public void presentOptionalsReturnTheirValue() {
         assertThat(target("/optional-return/")
                 .queryParam("id", "woo").request()
                 .get(String.class))
@@ -37,7 +37,7 @@ public class OptionalMessageBodyWriterTest extends AbstractJerseyTest {
     }
 
     @Test
-    void absentOptionalsThrowANotFound() {
+    public void absentOptionalsThrowANotFound() {
         assertThatExceptionOfType(WebApplicationException.class)
             .isThrownBy(() -> target("/optional-return/").request().get(String.class))
             .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(404));

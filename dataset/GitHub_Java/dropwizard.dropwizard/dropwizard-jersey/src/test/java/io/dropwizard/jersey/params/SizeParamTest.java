@@ -12,14 +12,14 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 public class SizeParamTest {
 
     @Test
-    void parseSizeKilobytes() {
+    public void parseSizeKilobytes() {
         final SizeParam param = new SizeParam("10kb");
         assertThat(param.get())
             .isEqualTo(Size.kilobytes(10));
     }
 
     @Test
-    void badValueThrowsException() {
+    public void badValueThrowsException() {
         assertThatExceptionOfType(WebApplicationException.class)
             .isThrownBy(() -> new SizeParam("10 kelvins", "degrees"))
             .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(400))

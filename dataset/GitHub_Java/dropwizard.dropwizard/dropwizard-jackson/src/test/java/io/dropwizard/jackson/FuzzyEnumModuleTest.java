@@ -73,54 +73,54 @@ public class FuzzyEnumModuleTest {
     }
 
     @BeforeEach
-    void setUp() throws Exception {
+    public void setUp() throws Exception {
         mapper.registerModule(new FuzzyEnumModule());
     }
 
     @Test
-    void mapsUpperCaseEnums() throws Exception {
+    public void mapsUpperCaseEnums() throws Exception {
         assertThat(mapper.readValue("\"SECONDS\"", TimeUnit.class))
                 .isEqualTo(TimeUnit.SECONDS);
     }
 
     @Test
-    void mapsLowerCaseEnums() throws Exception {
+    public void mapsLowerCaseEnums() throws Exception {
         assertThat(mapper.readValue("\"milliseconds\"", TimeUnit.class))
                 .isEqualTo(TimeUnit.MILLISECONDS);
     }
 
     @Test
-    void mapsPaddedEnums() throws Exception {
+    public void mapsPaddedEnums() throws Exception {
         assertThat(mapper.readValue("\"   MINUTES \"", TimeUnit.class))
                 .isEqualTo(TimeUnit.MINUTES);
     }
 
     @Test
-    void mapsSpacedEnums() throws Exception {
+    public void mapsSpacedEnums() throws Exception {
         assertThat(mapper.readValue("\"   MILLI SECONDS \"", TimeUnit.class))
                 .isEqualTo(TimeUnit.MILLISECONDS);
     }
 
     @Test
-    void mapsDashedEnums() throws Exception {
+    public void mapsDashedEnums() throws Exception {
         assertThat(mapper.readValue("\"REASON-UNKNOWN\"", ClientInfoStatus.class))
                 .isEqualTo(ClientInfoStatus.REASON_UNKNOWN);
     }
 
     @Test
-    void mapsDottedEnums() throws Exception {
+    public void mapsDottedEnums() throws Exception {
         assertThat(mapper.readValue("\"REASON.UNKNOWN\"", ClientInfoStatus.class))
                 .isEqualTo(ClientInfoStatus.REASON_UNKNOWN);
     }
 
     @Test
-    void mapsWhenEnumHasCreator() throws Exception {
+    public void mapsWhenEnumHasCreator() throws Exception {
         assertThat(mapper.readValue("\"BLA\"", EnumWithCreator.class))
                 .isEqualTo(EnumWithCreator.TEST);
     }
 
     @Test
-    void failsOnIncorrectValue() {
+    public void failsOnIncorrectValue() {
         assertThatExceptionOfType(JsonMappingException.class)
             .isThrownBy(() -> mapper.readValue("\"wrong\"", TimeUnit.class))
             .satisfies(e -> assertThat(e.getOriginalMessage())
@@ -129,40 +129,40 @@ public class FuzzyEnumModuleTest {
     }
 
     @Test
-    void mapsToLowerCaseEnums() throws Exception {
+    public void mapsToLowerCaseEnums() throws Exception {
         assertThat(mapper.readValue("\"lower_case_enum\"", EnumWithLowercase.class))
                 .isEqualTo(EnumWithLowercase.lower_case_enum);
     }
 
     @Test
-    void mapsMixedCaseEnums() throws Exception {
+    public void mapsMixedCaseEnums() throws Exception {
         assertThat(mapper.readValue("\"mixedCaseEnum\"", EnumWithLowercase.class))
                 .isEqualTo(EnumWithLowercase.mixedCaseEnum);
     }
 
     @Test
-    void readsEnumsUsingToString() throws Exception {
+    public void readsEnumsUsingToString() throws Exception {
         final ObjectMapper toStringEnumsMapper = mapper.copy()
                 .configure(DeserializationFeature.READ_ENUMS_USING_TO_STRING, true);
         assertThat(toStringEnumsMapper.readValue("\"Pound sterling\"", CurrencyCode.class)).isEqualTo(CurrencyCode.GBP);
     }
 
     @Test
-    void readsUnknownEnumValuesAsNull() throws Exception {
+    public void readsUnknownEnumValuesAsNull() throws Exception {
         final ObjectMapper toStringEnumsMapper = mapper.copy()
             .configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL, true);
         assertThat(toStringEnumsMapper.readValue("\"Pound sterling\"", CurrencyCode.class)).isNull();
     }
 
     @Test
-    void readsUnknownEnumValuesUsingDefaultValue() throws Exception {
+    public void readsUnknownEnumValuesUsingDefaultValue() throws Exception {
         final ObjectMapper toStringEnumsMapper = mapper.copy()
             .configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE, true);
         assertThat(toStringEnumsMapper.readValue("\"Pound sterling\"", EnumWithPropertyAnno.class)).isEqualTo(EnumWithPropertyAnno.DEFAULT);
     }
 
     @Test
-    void readsEnumsUsingToStringWithDeserializationFeatureOff() throws Exception {
+    public void readsEnumsUsingToStringWithDeserializationFeatureOff() throws Exception {
         assertThat(mapper.readValue("\"Pound sterling\"", CurrencyCode.class)).isEqualTo(CurrencyCode.GBP);
         assertThat(mapper.readValue("\"a_u_d\"", CurrencyCode.class)).isEqualTo(CurrencyCode.AUD);
         assertThat(mapper.readValue("\"c-a-d\"", CurrencyCode.class)).isEqualTo(CurrencyCode.CAD);
@@ -170,7 +170,7 @@ public class FuzzyEnumModuleTest {
     }
 
     @Test
-    void testEnumWithJsonPropertyRename() throws Exception {
+    public void testEnumWithJsonPropertyRename() throws Exception {
         final String json = mapper.writeValueAsString(new EnumWithPropertyAnno[] {
             EnumWithPropertyAnno.B, EnumWithPropertyAnno.A, EnumWithPropertyAnno.FORGOT_PASSWORD
         });

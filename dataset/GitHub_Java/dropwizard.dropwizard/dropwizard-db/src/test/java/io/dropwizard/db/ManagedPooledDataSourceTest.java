@@ -14,7 +14,7 @@ public class ManagedPooledDataSourceTest {
     private final ManagedPooledDataSource dataSource = new ManagedPooledDataSource(config, metricRegistry);
 
     @Test
-    void hasNoParentLogger() {
+    public void hasNoParentLogger() {
         assertThatExceptionOfType(SQLFeatureNotSupportedException.class)
             .isThrownBy(dataSource::getParentLogger);
     }

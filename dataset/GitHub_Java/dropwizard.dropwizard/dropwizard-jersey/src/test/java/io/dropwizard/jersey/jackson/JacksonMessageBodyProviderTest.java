@@ -105,54 +105,54 @@ public class JacksonMessageBodyProviderTest {
             new JacksonMessageBodyProvider(mapper);
 
     @BeforeEach
-    void setUp() throws Exception {
+    public void setUp() throws Exception {
         assumeThat(Locale.getDefault().getLanguage()).isEqualTo("en");
     }
 
     @Test
-    void readsDeserializableTypes() {
+    public void readsDeserializableTypes() {
         assertThat(provider.isReadable(Example.class, null, null, null))
                 .isTrue();
     }
 
     @Test
-    void writesSerializableTypes() {
+    public void writesSerializableTypes() {
         assertThat(provider.isWriteable(Example.class, null, null, null))
                 .isTrue();
     }
 
     @Test
-    void doesNotWriteIgnoredTypes() {
+    public void doesNotWriteIgnoredTypes() {
         assertThat(provider.isWriteable(Ignorable.class, null, null, null))
                 .isFalse();
     }
 
     @Test
-    void writesUnIgnoredTypes() {
+    public void writesUnIgnoredTypes() {
         assertThat(provider.isWriteable(NonIgnorable.class, null, null, null))
                 .isTrue();
     }
 
     @Test
-    void doesNotReadIgnoredTypes() {
+    public void doesNotReadIgnoredTypes() {
         assertThat(provider.isReadable(Ignorable.class, null, null, null))
                 .isFalse();
     }
 
     @Test
-    void readsUnIgnoredTypes() {
+    public void readsUnIgnoredTypes() {
         assertThat(provider.isReadable(NonIgnorable.class, null, null, null))
                 .isTrue();
     }
 
     @Test
-    void isChunked() {
+    public void isChunked() {
         assertThat(provider.getSize(null, null, null, null, null))
                 .isEqualTo(-1);
     }
 
     @Test
-    void deserializesRequestEntities() throws Exception {
+    public void deserializesRequestEntities() throws Exception {
         final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1}".getBytes(StandardCharsets.UTF_8));
         final Class<?> klass = Example.class;
 
@@ -171,7 +171,7 @@ public class JacksonMessageBodyProviderTest {
     }
 
     @Test
-    void returnsPartialValidatedRequestEntities() throws Exception {
+    public void returnsPartialValidatedRequestEntities() throws Exception {
         final Validated valid = mock(Validated.class);
         doReturn(Validated.class).when(valid).annotationType();
         when(valid.value()).thenReturn(new Class<?>[]{Partial1.class, Partial2.class});
@@ -194,7 +194,7 @@ public class JacksonMessageBodyProviderTest {
     }
 
     @Test
-    void returnsPartialValidatedByGroupRequestEntities() throws Exception {
+    public void returnsPartialValidatedByGroupRequestEntities() throws Exception {
         final Validated valid = mock(Validated.class);
         doReturn(Validated.class).when(valid).annotationType();
         when(valid.value()).thenReturn(new Class<?>[]{Partial1.class});
@@ -217,7 +217,7 @@ public class JacksonMessageBodyProviderTest {
     }
 
     @Test
-    void throwsAJsonProcessingExceptionForMalformedRequestEntities() {
+    public void throwsAJsonProcessingExceptionForMalformedRequestEntities() {
         final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":-1d".getBytes(StandardCharsets.UTF_8));
         final Class<?> klass = Example.class;
 
@@ -233,7 +233,7 @@ public class JacksonMessageBodyProviderTest {
     }
 
     @Test
-    void serializesResponseEntities() throws Exception {
+    public void serializesResponseEntities() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
 
         final Example example = new Example();
@@ -252,21 +252,21 @@ public class JacksonMessageBodyProviderTest {
     }
 
     @Test
-    void returnsValidatedCollectionRequestEntities() throws Exception {
+    public void returnsValidatedCollectionRequestEntities() throws Exception {
         testValidatedCollectionType(Collection.class,
             new TypeReference<Collection<Example>>() {
             }.getType());
     }
 
     @Test
-    void returnsValidatedSetRequestEntities() throws Exception {
+    public void returnsValidatedSetRequestEntities() throws Exception {
         testValidatedCollectionType(Set.class,
             new TypeReference<Set<Example>>() {
             }.getType());
     }
 
     @Test
-    void returnsValidatedListRequestEntities() throws Exception {
+    public void returnsValidatedListRequestEntities() throws Exception {
         testValidatedCollectionType(List.class,
             new TypeReference<List<Example>>() {
             }.getType());

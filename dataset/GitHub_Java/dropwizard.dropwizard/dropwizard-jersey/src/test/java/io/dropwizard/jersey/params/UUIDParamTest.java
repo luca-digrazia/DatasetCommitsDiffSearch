@@ -20,7 +20,7 @@ public class UUIDParamTest {
     }
 
     @Test
-    void aUUIDStringReturnsAUUIDObject() {
+    public void aUUIDStringReturnsAUUIDObject() {
         final String uuidString = "067e6162-3b6f-4ae2-a171-2470b63dff00";
         final UUID uuid = UUID.fromString(uuidString);
 
@@ -28,17 +28,17 @@ public class UUIDParamTest {
     }
 
     @Test
-    void noSpaceUUID() {
+    public void noSpaceUUID() {
         UuidParamNegativeTest("067e61623b6f4ae2a1712470b63dff00");
     }
 
     @Test
-    void tooLongUUID() {
+    public void tooLongUUID() {
         UuidParamNegativeTest("067e6162-3b6f-4ae2-a171-2470b63dff000");
     }
 
     @Test
-    void aNonUUIDThrowsAnException() {
+    public void aNonUUIDThrowsAnException() {
         UuidParamNegativeTest("foo");
     }
 }

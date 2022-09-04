@@ -39,7 +39,7 @@ public class ProtectedResourceTest {
             .build();
 
     @Test
-    void testProtectedEndpoint() {
+    public void testProtectedEndpoint() {
         String secret = RULE.target("/protected").request()
                 .header(HttpHeaders.AUTHORIZATION, "Basic Z29vZC1ndXk6c2VjcmV0")
                 .get(String.class);
@@ -47,7 +47,7 @@ public class ProtectedResourceTest {
     }
 
     @Test
-    void testProtectedEndpointNoCredentials401() {
+    public void testProtectedEndpointNoCredentials401() {
         assertThatExceptionOfType(NotAuthorizedException.class)
             .isThrownBy(() -> RULE.target("/protected").request()
                 .get(String.class))
@@ -57,7 +57,7 @@ public class ProtectedResourceTest {
     }
 
     @Test
-    void testProtectedEndpointBadCredentials401() {
+    public void testProtectedEndpointBadCredentials401() {
         assertThatExceptionOfType(NotAuthorizedException.class)
             .isThrownBy(() -> RULE.target("/protected").request()
                 .header(HttpHeaders.AUTHORIZATION, "Basic c25lYWt5LWJhc3RhcmQ6YXNkZg==")
@@ -68,7 +68,7 @@ public class ProtectedResourceTest {
     }
 
     @Test
-    void testProtectedAdminEndpoint() {
+    public void testProtectedAdminEndpoint() {
         String secret = RULE.target("/protected/admin").request()
                 .header(HttpHeaders.AUTHORIZATION, "Basic Y2hpZWYtd2l6YXJkOnNlY3JldA==")
                 .get(String.class);
@@ -76,7 +76,7 @@ public class ProtectedResourceTest {
     }
 
     @Test
-    void testProtectedAdminEndpointPrincipalIsNotAuthorized403() {
+    public void testProtectedAdminEndpointPrincipalIsNotAuthorized403() {
         assertThatExceptionOfType(ForbiddenException.class)
             .isThrownBy(() -> RULE.target("/protected/admin").request()
                     .header(HttpHeaders.AUTHORIZATION, "Basic Z29vZC1ndXk6c2VjcmV0")

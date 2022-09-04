@@ -3,10 +3,14 @@ package io.dropwizard.util;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class DataSizeTest {
     @Test
@@ -218,23 +222,23 @@ class DataSizeTest {
 
     @Test
     void unableParseWrongDataSizeCount() {
-        assertThatThrownBy(() -> DataSize.parse("three bytes"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid size: three bytes");
+        assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> DataSize.parse("three bytes"))
+            .withMessage("Invalid size: three bytes");
     }
 
     @Test
     void unableParseWrongDataSizeUnit() {
-        assertThatThrownBy(() -> DataSize.parse("1EB"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid size: 1EB. Wrong size unit");
+        assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> DataSize.parse("1EB"))
+            .withMessage("Invalid size: 1EB. Wrong size unit");
     }
 
     @Test
     void unableParseWrongDataSizeFormat() {
-        assertThatThrownBy(() -> DataSize.parse("1 mega byte"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid size: 1 mega byte");
+        assertThatExceptionOfType(IllegalArgumentException.class)
+            .isThrownBy(() -> DataSize.parse("1 mega byte"))
+            .withMessage("Invalid size: 1 mega byte");
     }
 
     @Test
@@ -692,5 +696,25 @@ class DataSizeTest {
         assertThat(DataSize.fromSize(Size.megabytes(5L))).isEqualTo(DataSize.mebibytes(5L));
         assertThat(DataSize.fromSize(Size.gigabytes(5L))).isEqualTo(DataSize.gibibytes(5L));
         assertThat(DataSize.fromSize(Size.terabytes(5L))).isEqualTo(DataSize.tebibytes(5L));
+    }
+
+    @Test
+    void testSerialization() throws IOException, ClassNotFoundException {
+        final DataSize size = DataSize.kibibytes(42L);
+        final byte[] bytes;
+        try (final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+             final ObjectOutputStream objectOutputStream = new ObjectOutputStream(outputStream)) {
+            objectOutputStream.writeObject(size);
+            bytes = outputStream.toByteArray();
+        }
+
+        try (final ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes);
+             final ObjectInputStream objectInputStream = new ObjectInputStream(inputStream)) {
+            @SuppressWarnings("BanSerializableRead")
+            final Object o = objectInputStream.readObject();
+            assertThat(o)
+                    .isInstanceOf(DataSize.class)
+                    .isEqualTo(size);
+        }
     }
 }

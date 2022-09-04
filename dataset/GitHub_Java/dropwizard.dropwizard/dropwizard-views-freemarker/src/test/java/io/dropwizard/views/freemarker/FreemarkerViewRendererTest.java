@@ -92,21 +92,21 @@ public class FreemarkerViewRendererTest extends JerseyTest {
     }
 
     @Test
-    void rendersViewsWithAbsoluteTemplatePaths() {
+    public void rendersViewsWithAbsoluteTemplatePaths() {
         final String response = target("/test/absolute")
                 .request().get(String.class);
         assertThat(response).isEqualTo("Woop woop. yay\n");
     }
 
     @Test
-    void rendersViewsWithRelativeTemplatePaths() {
+    public void rendersViewsWithRelativeTemplatePaths() {
         final String response = target("/test/relative")
                 .request().get(String.class);
         assertThat(response).isEqualTo("Ok.\n");
     }
 
     @Test
-    void returnsA500ForViewsWithBadTemplatePaths() {
+    public void returnsA500ForViewsWithBadTemplatePaths() {
         assertThatExceptionOfType(WebApplicationException.class)
             .isThrownBy(() -> target("/test/bad").request().get(String.class))
             .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(500))
@@ -125,7 +125,7 @@ public class FreemarkerViewRendererTest extends JerseyTest {
     }
 
     @Test
-    void rendersViewsUsingUnsafeInputWithAutoEscapingEnabled() {
+    public void rendersViewsUsingUnsafeInputWithAutoEscapingEnabled() {
         final String unsafe = "<script>alert(\"hello\")</script>";
         final Response response = target("/test/auto-escaping")
             .request().post(Entity.form(new Form("input", unsafe)));

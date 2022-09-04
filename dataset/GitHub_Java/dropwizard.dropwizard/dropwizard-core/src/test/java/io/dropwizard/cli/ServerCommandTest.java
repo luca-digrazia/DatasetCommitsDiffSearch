@@ -45,36 +45,36 @@ public class ServerCommandTest {
     private boolean throwException = false;
 
     @BeforeEach
-    void setUp() throws Exception {
+    public void setUp() throws Exception {
         when(serverFactory.build(environment)).thenReturn(server);
         when(configuration.getServerFactory()).thenReturn(serverFactory);
     }
 
     @AfterEach
-    void tearDown() throws Exception {
+    public void tearDown() throws Exception {
         server.stop();
     }
 
     @Test
-    void hasAName() {
+    public void hasAName() {
         assertThat(command.getName())
                 .isEqualTo("server");
     }
 
     @Test
-    void hasADescription() {
+    public void hasADescription() {
         assertThat(command.getDescription())
                 .isEqualTo("Runs the Dropwizard application as an HTTP server");
     }
 
     @Test
-    void hasTheApplicationsConfigurationClass() {
+    public void hasTheApplicationsConfigurationClass() {
         assertThat(command.getConfigurationClass())
                 .isEqualTo(application.getConfigurationClass());
     }
 
     @Test
-    void buildsAndRunsAConfiguredServer() throws Exception {
+    public void buildsAndRunsAConfiguredServer() throws Exception {
         command.run(environment, namespace, configuration);
 
         assertThat(server.isStarted())
@@ -82,7 +82,7 @@ public class ServerCommandTest {
     }
 
     @Test
-    void stopsAServerIfThereIsAnErrorStartingIt() {
+    public void stopsAServerIfThereIsAnErrorStartingIt() {
         this.throwException = true;
         server.addBean(new AbstractLifeCycle() {
             @Override

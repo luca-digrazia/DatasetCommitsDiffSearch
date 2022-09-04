@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class SubstitutingSourceProviderTest {
     @Test
-    void shouldSubstituteCorrectly() throws IOException {
+    public void shouldSubstituteCorrectly() throws IOException {
         StringLookup dummyLookup = (x) -> "baz";
         DummySourceProvider dummyProvider = new DummySourceProvider();
         SubstitutingSourceProvider provider = new SubstitutingSourceProvider(dummyProvider, new StringSubstitutor(dummyLookup));
@@ -29,7 +29,7 @@ public class SubstitutingSourceProviderTest {
     }
 
     @Test
-    void shouldSubstituteOnlyExistingVariables() throws IOException {
+    public void shouldSubstituteOnlyExistingVariables() throws IOException {
         StringLookup dummyLookup = (x) -> null;
         SubstitutingSourceProvider provider = new SubstitutingSourceProvider(new DummySourceProvider(), new StringSubstitutor(dummyLookup));
 
@@ -37,7 +37,7 @@ public class SubstitutingSourceProviderTest {
     }
 
     @Test
-    void shouldSubstituteWithDefaultValue() throws IOException {
+    public void shouldSubstituteWithDefaultValue() throws IOException {
         StringLookup dummyLookup = (x) -> null;
         SubstitutingSourceProvider provider = new SubstitutingSourceProvider(new DummySourceProvider(), new StringSubstitutor(dummyLookup));
 
