@@ -459,7 +459,7 @@ public class BundleReceipe {
         final Map<String, Object> config = dashboardWidget.getConfiguration();
 
         // Replace "stream_id" in config if it's set
-        final String streamReference = (String) config.get("stream_id");
+        final String streamReference = dashboardWidget.getStream();
         if(!isNullOrEmpty(streamReference)) {
             final org.graylog2.plugin.streams.Stream stream = streamsByReferenceId.get(streamReference);
             if(null != stream) {
