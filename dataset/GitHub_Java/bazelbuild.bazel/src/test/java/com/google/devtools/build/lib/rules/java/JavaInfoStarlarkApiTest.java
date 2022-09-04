@@ -13,19 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth8.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyArtifactNames;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.StarlarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
-import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.JavaOutput;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -34,9 +36,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
 
-  private static final String HOST_JAVA_RUNTIME_LABEL =
-      TestConstants.TOOLS_REPOSITORY + "//tools/jdk:current_host_java_runtime";
-
   @Test
   public void buildHelperCreateJavaInfoWithOutputJarOnly() throws Exception {
     ruleBuilder().build();
@@ -44,9 +43,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
-        "  source_jars = ['my_skylark_rule_src.jar']",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar']",
         ")");
     assertNoEvents();
 
@@ -54,13 +53,13 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaCompilationArgsProvider.class);
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
   }
 
   @Test
@@ -72,9 +71,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
-        "  source_jars = ['my_skylark_rule_src.jar']",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar']",
         ")");
     assertNoEvents();
 
@@ -82,14 +81,14 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaCompilationArgsProvider.class);
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib-ijar.jar");
+        .containsExactly("foo/my_starlark_rule_lib-ijar.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib-ijar.jar");
+        .containsExactly("foo/my_starlark_rule_lib-ijar.jar");
   }
 
   @Test
@@ -101,9 +100,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
-        "  source_jars = ['my_skylark_rule_src.jar'],",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar'],",
         ")");
     assertNoEvents();
 
@@ -111,15 +110,16 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
 
     assertThat(prettyArtifactNames(javaRuleOutputJarsProvider.getAllSrcOutputJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar");
 
     assertThat(prettyArtifactNames(javaRuleOutputJarsProvider.getAllClassOutputJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
 
-    assertThat(javaRuleOutputJarsProvider.getOutputJars()).hasSize(1);
-    OutputJar outputJar = javaRuleOutputJarsProvider.getOutputJars().get(0);
+    assertThat(javaRuleOutputJarsProvider.getJavaOutputs()).hasSize(1);
+    JavaOutput javaOutput = javaRuleOutputJarsProvider.getJavaOutputs().get(0);
 
-    assertThat(outputJar.getIJar().prettyPrint()).isEqualTo("foo/my_skylark_rule_lib-ijar.jar");
+    assertThat(javaOutput.getCompileJar().prettyPrint())
+        .isEqualTo("foo/my_starlark_rule_lib-ijar.jar");
   }
 
   @Test
@@ -129,9 +129,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar'],",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar'],",
         "        dep = [':my_java_lib_direct']",
         ")");
     assertNoEvents();
@@ -140,13 +140,13 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaCompilationArgsProvider.class);
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_direct.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_direct.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_direct-hjar.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_direct-hjar.jar");
   }
 
   @Test
@@ -156,9 +156,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar'],",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar'],",
         "        dep_runtime = [':my_java_lib_direct']",
         ")");
     assertNoEvents();
@@ -167,13 +167,36 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaCompilationArgsProvider.class);
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_direct.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_direct.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
+  }
+
+  /** Tests that JavaInfo can be constructed with CC native libraries as dependencies. */
+  @Test
+  public void javaInfo_setNativeLibraries() throws Exception {
+    ruleBuilder().build();
+    scratch.file(
+        "foo/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "cc_library(name = 'my_cc_lib_direct', srcs = ['cc/a.cc'])",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar'],",
+        "        cc_dep = [':my_cc_lib_direct']",
+        ")");
+    assertNoEvents();
+
+    JavaInfo javaInfoProvider = fetchJavaInfo();
+
+    NestedSet<LibraryToLink> librariesForTopTarget =
+        javaInfoProvider.getTransitiveNativeLibraries();
+    assertThat(librariesForTopTarget.toList().stream().map(LibraryToLink::getLibraryIdentifier))
+        .contains("foo/libmy_cc_lib_direct");
   }
 
   @Test
@@ -184,9 +207,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar'],",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar'],",
         "        dep = [':my_java_lib_direct']",
         ")");
     assertNoEvents();
@@ -195,12 +218,12 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaCompilationArgsProvider.class);
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars())).isEmpty();
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_direct-hjar.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_direct-hjar.jar");
   }
 
   @Test
@@ -209,9 +232,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar']",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar']",
         ")");
     assertNoEvents();
 
@@ -219,10 +242,32 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar");
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar");
+  }
+
+  @Test
+  public void buildHelperPackSources_repackSingleJar() throws Exception {
+    ruleBuilder().withSourceFiles().build();
+    scratch.file(
+        "foo/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar']",
+        ")");
+    assertNoEvents();
+
+    JavaSourceJarsProvider sourceJarsProvider =
+        fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
+
+    assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
+        .containsExactly("foo/my_starlark_rule_lib-src.jar");
+
+    assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
+        .containsExactly("foo/my_starlark_rule_lib-src.jar");
   }
 
   @Test
@@ -233,8 +278,8 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
         "  sources = ['ClassA.java', 'ClassB.java', 'ClassC.java', 'ClassD.java'],",
         ")");
     assertNoEvents();
@@ -243,16 +288,16 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
 
     assertThat(prettyArtifactNames(javaRuleOutputJarsProvider.getAllSrcOutputJars()))
-        .containsExactly("foo/my_skylark_rule_lib-src.jar");
+        .containsExactly("foo/my_starlark_rule_lib-src.jar");
 
     JavaSourceJarsProvider sourceJarsProvider =
         fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("foo/my_skylark_rule_lib-src.jar");
+        .containsExactly("foo/my_starlark_rule_lib-src.jar");
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
-        .containsExactly("foo/my_skylark_rule_lib-src.jar");
+        .containsExactly("foo/my_starlark_rule_lib-src.jar");
   }
 
   @Test
@@ -263,10 +308,10 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
         "  sources = ['ClassA.java', 'ClassB.java', 'ClassC.java', 'ClassD.java'],",
-        "  source_jars = ['my_skylark_rule_src-A.jar']",
+        "  source_jars = ['my_starlark_rule_src-A.jar']",
         ")");
     assertNoEvents();
 
@@ -274,16 +319,16 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
 
     assertThat(prettyArtifactNames(javaRuleOutputJarsProvider.getAllSrcOutputJars()))
-        .containsExactly("foo/my_skylark_rule_lib-src.jar");
+        .containsExactly("foo/my_starlark_rule_lib-src.jar");
 
     JavaSourceJarsProvider sourceJarsProvider =
         fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("foo/my_skylark_rule_lib-src.jar");
+        .containsExactly("foo/my_starlark_rule_lib-src.jar");
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
-        .containsExactly("foo/my_skylark_rule_lib-src.jar");
+        .containsExactly("foo/my_starlark_rule_lib-src.jar");
   }
 
   @Test
@@ -293,9 +338,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar'],",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar'],",
         "        dep = [':my_java_lib_direct']",
         ")");
     assertNoEvents();
@@ -304,10 +349,10 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar");
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar", "foo/libmy_java_lib_direct-src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar", "foo/libmy_java_lib_direct-src.jar");
   }
 
   @Test
@@ -317,9 +362,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar'],",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar'],",
         "        dep_runtime = [':my_java_lib_direct']",
         ")");
     assertNoEvents();
@@ -328,10 +373,10 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar");
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar", "foo/libmy_java_lib_direct-src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar", "foo/libmy_java_lib_direct-src.jar");
   }
 
   @Test
@@ -344,9 +389,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "java_library(name = 'my_java_lib_direct',",
         "             srcs = ['java/A.java'],",
         "             deps = [':my_java_lib_transitive'])",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar'],",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar'],",
         "        dep = [':my_java_lib_direct']",
         ")");
     assertNoEvents();
@@ -355,11 +400,11 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar");
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
         .containsExactly(
-            "foo/my_skylark_rule_src.jar",
+            "foo/my_starlark_rule_src.jar",
             "foo/libmy_java_lib_direct-src.jar",
             "foo/libmy_java_lib_transitive-src.jar");
   }
@@ -375,9 +420,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "java_library(name = 'my_java_lib_direct',",
         "             srcs = ['java/A.java'],",
         "             deps = [':my_java_lib_transitive'])",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar'],",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar'],",
         "        dep = [':my_java_lib_direct']",
         ")");
     assertNoEvents();
@@ -386,11 +431,11 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("foo/my_skylark_rule_src.jar");
+        .containsExactly("foo/my_starlark_rule_src.jar");
 
     assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
         .containsExactly(
-            "foo/my_skylark_rule_src.jar",
+            "foo/my_starlark_rule_src.jar",
             "foo/libmy_java_lib_direct-src.jar",
             "foo/libmy_java_lib_transitive-src.jar");
   }
@@ -398,13 +443,14 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
   /** Tests that JavaExportsProvider is empty by default. */
   @Test
   public void buildHelperCreateJavaInfoExportIsEmpty() throws Exception {
+    setBuildLanguageOptions("--incompatible_enable_exports_provider");
     ruleBuilder().build();
     scratch.file(
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        source_jars = ['my_skylark_rule_src.jar']",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        source_jars = ['my_starlark_rule_src.jar']",
         ")");
     assertNoEvents();
 
@@ -416,13 +462,14 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
   /** Test exports adds dependencies to JavaCompilationArgsProvider. */
   @Test
   public void buildHelperCreateJavaInfoExportProviderExportsDepsAdded() throws Exception {
+    setBuildLanguageOptions("--incompatible_enable_exports_provider");
     ruleBuilder().build();
     scratch.file(
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "java_library(name = 'my_java_lib_exports', srcs = ['java/A.java'])",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
         "        dep_exports = [':my_java_lib_exports']",
         ")");
     assertNoEvents();
@@ -442,13 +489,13 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         javaInfo.getProvider(JavaCompilationArgsProvider.class);
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_exports-hjar.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_exports-hjar.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_exports.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_exports.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_exports.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_exports.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_exports-hjar.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_exports-hjar.jar");
   }
 
   /**
@@ -457,6 +504,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
    */
   @Test
   public void buildHelperCreateJavaInfoExportProvider() throws Exception {
+    setBuildLanguageOptions(
+        "--incompatible_enable_exports_provider",
+        "--experimental_builtins_injection_override=-java_library");
     ruleBuilder().build();
     scratch.file(
         "foo/BUILD",
@@ -467,8 +517,8 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "             deps = [':my_java_lib_b', ':my_java_lib_c'],",
         "             exports = [':my_java_lib_b']",
         "            )",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
         "        dep_exports = [':my_java_lib_a']",
         ")");
     assertNoEvents();
@@ -485,24 +535,24 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
         .containsExactly(
-            "foo/my_skylark_rule_lib.jar",
+            "foo/my_starlark_rule_lib.jar",
             "foo/libmy_java_lib_a-hjar.jar",
             "foo/libmy_java_lib_b-hjar.jar");
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
         .containsExactly(
-            "foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_a.jar", "foo/libmy_java_lib_b.jar");
+            "foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_a.jar", "foo/libmy_java_lib_b.jar");
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars()))
         .containsExactly(
-            "foo/my_skylark_rule_lib.jar",
+            "foo/my_starlark_rule_lib.jar",
             "foo/libmy_java_lib_a.jar",
             "foo/libmy_java_lib_b.jar",
             "foo/libmy_java_lib_c.jar");
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
         .containsExactly(
-            "foo/my_skylark_rule_lib.jar",
+            "foo/my_starlark_rule_lib.jar",
             "foo/libmy_java_lib_a-hjar.jar",
             "foo/libmy_java_lib_b-hjar.jar",
             "foo/libmy_java_lib_c-hjar.jar");
@@ -515,6 +565,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
    */
   @Test
   public void buildHelperCreateJavaInfoExportProvider001() throws Exception {
+    setBuildLanguageOptions(
+        "--incompatible_enable_exports_provider",
+        "--experimental_builtins_injection_override=-java_library");
     ruleBuilder().build();
     scratch.file(
         "foo/BUILD",
@@ -529,8 +582,8 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "             deps = [':my_java_lib_d'],",
         "             exports = [':my_java_lib_d']",
         "            )",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
         "        dep = [':my_java_lib_a', ':my_java_lib_c'],",
         "        dep_exports = [':my_java_lib_a']",
         ")");
@@ -548,17 +601,17 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
         .containsExactly(
-            "foo/my_skylark_rule_lib.jar",
+            "foo/my_starlark_rule_lib.jar",
             "foo/libmy_java_lib_a-hjar.jar",
             "foo/libmy_java_lib_b-hjar.jar");
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
         .containsExactly(
-            "foo/my_skylark_rule_lib.jar", "foo/libmy_java_lib_a.jar", "foo/libmy_java_lib_b.jar");
+            "foo/my_starlark_rule_lib.jar", "foo/libmy_java_lib_a.jar", "foo/libmy_java_lib_b.jar");
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars()))
         .containsExactly(
-            "foo/my_skylark_rule_lib.jar",
+            "foo/my_starlark_rule_lib.jar",
             "foo/libmy_java_lib_a.jar",
             "foo/libmy_java_lib_b.jar",
             "foo/libmy_java_lib_c.jar",
@@ -566,7 +619,7 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
 
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
         .containsExactly(
-            "foo/my_skylark_rule_lib.jar",
+            "foo/my_starlark_rule_lib.jar",
             "foo/libmy_java_lib_a-hjar.jar",
             "foo/libmy_java_lib_b-hjar.jar",
             "foo/libmy_java_lib_c-hjar.jar",
@@ -574,16 +627,8 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
   }
 
   @Test
-  public void buildHelperCreateJavaInfoPlugins() throws Exception {
+  public void buildHelperCreateJavaInfoPluginsFromExports() throws Exception {
     ruleBuilder().build();
-    scratch.file("java/test/lib.jar");
-    scratch.file(
-        "java/test/BUILD",
-        "load(':custom_rule.bzl', 'java_custom_library')",
-        "java_custom_library(",
-        "  name = 'custom',",
-        "  export = ':export',",
-        ")");
     scratch.file(
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
@@ -597,18 +642,35 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "  name = 'export',",
         "  exported_plugins = [ ':plugin'],",
         ")",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
         "        dep_exports = [':export']",
         ")");
     assertNoEvents();
 
-    assertThat(
-            fetchJavaInfo()
-                .getProvider(JavaPluginInfoProvider.class)
-                .plugins()
-                .processorClasses()
-                .toList())
+    assertThat(fetchJavaInfo().getJavaPluginInfo().plugins().processorClasses().toList())
+        .containsExactly("com.google.process.stuff");
+  }
+
+  @Test
+  public void buildHelperCreateJavaInfoWithPlugins() throws Exception {
+    ruleBuilder().build();
+    scratch.file(
+        "foo/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "java_library(name = 'plugin_dep',",
+        "    srcs = [ 'ProcessorDep.java'])",
+        "java_plugin(name = 'plugin',",
+        "    srcs = ['AnnotationProcessor.java'],",
+        "    processor_class = 'com.google.process.stuff',",
+        "    deps = [ ':plugin_dep' ])",
+        "my_rule(name = 'my_starlark_rule',",
+        "        output_jar = 'my_starlark_rule_lib.jar',",
+        "        dep_exported_plugins = [':plugin']",
+        ")");
+    assertNoEvents();
+
+    assertThat(fetchJavaInfo().getJavaPluginInfo().plugins().processorClasses().toList())
         .containsExactly("com.google.process.stuff");
   }
 
@@ -620,22 +682,22 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
-        "  source_jars = ['my_skylark_rule_src.jar']",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar']",
         ")");
     assertNoEvents();
 
     JavaCompilationArgsProvider javaCompilationArgsProvider =
         fetchJavaInfo().getProvider(JavaCompilationArgsProvider.class);
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getDirectCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib-stamped.jar");
+        .containsExactly("foo/my_starlark_rule_lib-stamped.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getRuntimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+        .containsExactly("foo/my_starlark_rule_lib.jar");
     assertThat(prettyArtifactNames(javaCompilationArgsProvider.getTransitiveCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib-stamped.jar");
+        .containsExactly("foo/my_starlark_rule_lib-stamped.jar");
   }
 
   @Test
@@ -646,9 +708,9 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         "load(':extension.bzl', 'my_rule')",
         "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
         "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
-        "  source_jars = ['my_skylark_rule_src.jar'],",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar'],",
         "  dep = [':my_java_lib_direct'],",
         "  jdeps = 'my_jdeps.pb',",
         ")");
@@ -657,19 +719,158 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
     JavaRuleOutputJarsProvider ruleOutputs =
         fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
 
+    assertThat(prettyArtifactNames(ruleOutputs.getAllClassOutputJars()))
+        .containsExactly("foo/my_starlark_rule_lib.jar");
+    assertThat(prettyArtifactNames(ruleOutputs.getAllSrcOutputJars()))
+        .containsExactly("foo/my_starlark_rule_src.jar");
     assertThat(
             prettyArtifactNames(
-                ruleOutputs.getOutputJars().stream()
-                    .map(o -> o.getClassJar())
-                    .collect(ImmutableList.toImmutableList())))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
+                ruleOutputs.getJavaOutputs().stream()
+                    .map(JavaOutput::getJdeps)
+                    .collect(toImmutableList())))
+        .containsExactly("foo/my_jdeps.pb");
+  }
+
+  @Test
+  public void buildHelperCreateJavaInfoWithGeneratedJars_javaRuleOutputJarsProvider()
+      throws Exception {
+    ruleBuilder().build();
+    scratch.file(
+        "foo/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
+        "my_rule(",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar'],",
+        "  dep = [':my_java_lib_direct'],",
+        "  generated_class_jar = 'generated_class.jar',",
+        "  generated_source_jar = 'generated_srcs.jar',",
+        ")");
+    assertNoEvents();
+
+    JavaRuleOutputJarsProvider ruleOutputs =
+        fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
+
     assertThat(
             prettyArtifactNames(
-                ruleOutputs.getOutputJars().stream()
-                    .flatMap(o -> Streams.stream(o.getSrcJars()))
-                    .collect(ImmutableList.toImmutableList())))
-        .containsExactly("foo/my_skylark_rule_src.jar");
-    assertThat(ruleOutputs.getJdeps().prettyPrint()).isEqualTo("foo/my_jdeps.pb");
+                ruleOutputs.getJavaOutputs().stream()
+                    .map(JavaOutput::getGeneratedClassJar)
+                    .collect(toImmutableList())))
+        .containsExactly("foo/generated_class.jar");
+    assertThat(
+            prettyArtifactNames(
+                ruleOutputs.getJavaOutputs().stream()
+                    .map(JavaOutput::getGeneratedSourceJar)
+                    .collect(toImmutableList())))
+        .containsExactly("foo/generated_srcs.jar");
+  }
+
+  @Test
+  public void buildHelperCreateJavaInfoWithGeneratedJars_javaGenJarsProvider() throws Exception {
+    ruleBuilder().build();
+    scratch.file(
+        "foo/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
+        "my_rule(",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar'],",
+        "  dep = [':my_java_lib_direct'],",
+        "  generated_class_jar = 'generated_class.jar',",
+        "  generated_source_jar = 'generated_srcs.jar',",
+        ")");
+    assertNoEvents();
+
+    JavaGenJarsProvider ruleOutputs = fetchJavaInfo().getProvider(JavaGenJarsProvider.class);
+
+    assertThat(ruleOutputs.getGenClassJar().prettyPrint()).isEqualTo("foo/generated_class.jar");
+    assertThat(ruleOutputs.getGenSourceJar().prettyPrint()).isEqualTo("foo/generated_srcs.jar");
+  }
+
+  @Test
+  public void buildHelperCreateJavaInfoWithCompileJdeps_javaRuleOutputJarsProvider()
+      throws Exception {
+    ruleBuilder().build();
+    scratch.file(
+        "foo/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
+        "my_rule(",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar'],",
+        "  dep = [':my_java_lib_direct'],",
+        "  compile_jdeps = 'compile.deps',",
+        ")");
+    assertNoEvents();
+
+    JavaRuleOutputJarsProvider ruleOutputs =
+        fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
+
+    assertThat(
+            prettyArtifactNames(
+                ruleOutputs.getJavaOutputs().stream()
+                    .map(JavaOutput::getCompileJdeps)
+                    .collect(toImmutableList())))
+        .containsExactly("foo/compile.deps");
+  }
+
+  @Test
+  public void buildHelperCreateJavaInfoWithNativeHeaders_javaRuleOutputJarsProvider()
+      throws Exception {
+    ruleBuilder().build();
+    scratch.file(
+        "foo/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
+        "my_rule(",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar'],",
+        "  dep = [':my_java_lib_direct'],",
+        "  native_headers_jar = 'nativeheaders.jar',",
+        ")");
+    assertNoEvents();
+
+    JavaRuleOutputJarsProvider ruleOutputs =
+        fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
+
+    assertThat(
+            prettyArtifactNames(
+                ruleOutputs.getJavaOutputs().stream()
+                    .map(JavaOutput::getNativeHeadersJar)
+                    .collect(toImmutableList())))
+        .containsExactly("foo/nativeheaders.jar");
+  }
+
+  @Test
+  public void buildHelperCreateJavaInfoWithManifestProto_javaRuleOutputJarsProvider()
+      throws Exception {
+    ruleBuilder().build();
+    scratch.file(
+        "foo/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
+        "my_rule(",
+        "  name = 'my_starlark_rule',",
+        "  output_jar = 'my_starlark_rule_lib.jar',",
+        "  source_jars = ['my_starlark_rule_src.jar'],",
+        "  dep = [':my_java_lib_direct'],",
+        "  manifest_proto = 'manifest.proto',",
+        ")");
+    assertNoEvents();
+
+    JavaRuleOutputJarsProvider ruleOutputs =
+        fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
+
+    assertThat(
+            prettyArtifactNames(
+                ruleOutputs.getJavaOutputs().stream()
+                    .map(JavaOutput::getManifestProto)
+                    .collect(toImmutableList())))
+        .containsExactly("foo/manifest.proto");
   }
 
   private RuleBuilder ruleBuilder() {
@@ -705,6 +906,16 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
     private String[] newJavaInfo() {
       assertThat(useIJar && stampJar).isFalse();
       ImmutableList.Builder<String> lines = ImmutableList.builder();
+      lines.add(
+          "result = provider()",
+          "def _impl(ctx):",
+          "  ctx.actions.write(ctx.outputs.output_jar, 'JavaInfo API Test', is_executable=False) ",
+          "  dp = [dep[java_common.provider] for dep in ctx.attr.dep]",
+          "  dp_runtime = [dep[java_common.provider] for dep in ctx.attr.dep_runtime]",
+          "  dp_exports = [dep[java_common.provider] for dep in ctx.attr.dep_exports]",
+          "  dp_exported_plugins = [dep[JavaPluginInfo] for dep in ctx.attr.dep_exported_plugins]",
+          "  dp_libs = [dep[CcInfo] for dep in ctx.attr.cc_dep]");
+
       if (useIJar) {
         lines.add(
             "  compile_jar = java_common.run_ijar(",
@@ -727,11 +938,11 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
         lines.add(
             "  source_jar = java_common.pack_sources(",
             "    ctx.actions,",
-            "    output_jar = ctx.outputs.output_jar,",
+            "    output_source_jar = ",
+            "      ctx.actions.declare_file(ctx.outputs.output_jar.basename[:-4] + '-src.jar'),",
             "    sources = ctx.files.sources,",
             "    source_jars = ctx.files.source_jars,",
             "    java_toolchain = ctx.attr._toolchain[java_common.JavaToolchainInfo],",
-            "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo],",
             ")");
       } else {
         lines.add(
@@ -749,7 +960,14 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
           "    deps = dp,",
           "    runtime_deps = dp_runtime,",
           "    exports = dp_exports,",
+          "    exported_plugins = dp_exported_plugins,",
           "    jdeps = ctx.file.jdeps,",
+          "    compile_jdeps = ctx.file.compile_jdeps,",
+          "    generated_class_jar = ctx.file.generated_class_jar,",
+          "    generated_source_jar = ctx.file.generated_source_jar,",
+          "    native_headers_jar = ctx.file.native_headers_jar,",
+          "    manifest_proto = ctx.file.manifest_proto,",
+          "    native_libraries = dp_libs,",
           "  )",
           "  return [result(property = javaInfo)]");
       return lines.build().toArray(new String[] {});
@@ -757,36 +975,31 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
 
     private void build() throws Exception {
       if (useIJar || stampJar || sourceFiles) {
-        writeBuildFileForJavaToolchain();
+        JavaToolchainTestUtil.writeBuildFileForJavaToolchain(scratch);
       }
 
       ImmutableList.Builder<String> lines = ImmutableList.builder();
-      lines.add(
-          "result = provider()",
-          "def _impl(ctx):",
-          "  ctx.actions.write(ctx.outputs.output_jar, 'JavaInfo API Test', is_executable=False) ",
-          "  dp = [dep[java_common.provider] for dep in ctx.attr.dep]",
-          "  dp_runtime = [dep[java_common.provider] for dep in ctx.attr.dep_runtime]",
-          "  dp_exports = [dep[java_common.provider] for dep in ctx.attr.dep_exports]");
       lines.add(newJavaInfo());
       lines.add(
           "my_rule = rule(",
           "  implementation = _impl,",
           "  attrs = {",
           "    'dep' : attr.label_list(),",
+          "    'cc_dep' : attr.label_list(),",
           "    'dep_runtime' : attr.label_list(),",
           "    'dep_exports' : attr.label_list(),",
+          "    'dep_exported_plugins' : attr.label_list(),",
           "    'output_jar' : attr.output(mandatory=True),",
           "    'source_jars' : attr.label_list(allow_files=['.jar']),",
           "    'sources' : attr.label_list(allow_files=['.java']),",
           "    'jdeps' : attr.label(allow_single_file=True),",
+          "    'compile_jdeps' : attr.label(allow_single_file=True),",
+          "    'generated_class_jar' : attr.label(allow_single_file=True),",
+          "    'generated_source_jar' : attr.label(allow_single_file=True),",
+          "    'native_headers_jar' : attr.label(allow_single_file=True),",
+          "    'manifest_proto' : attr.label(allow_single_file=True),",
           useIJar || stampJar || sourceFiles
               ? "    '_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),"
-              : "",
-          sourceFiles
-              ? "    '_host_javabase': attr.label(default = Label('"
-                  + HOST_JAVA_RUNTIME_LABEL
-                  + "')),"
               : "",
           "  }",
           ")");
@@ -796,14 +1009,13 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
   }
 
   private JavaInfo fetchJavaInfo() throws Exception {
-    ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
+    ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_starlark_rule");
     StructImpl info =
         (StructImpl)
             myRuleTarget.get(
                 new StarlarkProvider.Key(
                     Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
-    @SuppressWarnings("unchecked")
     JavaInfo javaInfo = (JavaInfo) info.getValue("property");
     return javaInfo;
   }
