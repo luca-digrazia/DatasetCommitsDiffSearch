@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,6 +24,7 @@ import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_R
 import static org.androidannotations.helper.CanonicalNameConstants.REST_TEMPLATE;
 import static org.androidannotations.helper.CanonicalNameConstants.STRING;
 
+import java.lang.annotation.Annotation;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
@@ -51,23 +52,23 @@ import com.sun.codemodel.JVar;
 
 public class RestProcessor implements GeneratingElementProcessor {
 
-	private final RestImplementationsHolder restImplementationsHolder;
+	private final RestImplementationsHolder restImplementationHolder;
 	private AnnotationHelper annotationHelper;
 
-	public RestProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationsHolder) {
+	public RestProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		annotationHelper = new AnnotationHelper(processingEnv);
-		this.restImplementationsHolder = restImplementationsHolder;
+		this.restImplementationHolder = restImplementationHolder;
 	}
 
 	@Override
-	public String getTarget() {
-		return Rest.class.getName();
+	public Class<? extends Annotation> getTarget() {
+		return Rest.class;
 	}
 
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
 
-		RestImplementationHolder holder = restImplementationsHolder.create(element);
+		RestImplementationHolder holder = restImplementationHolder.create(element);
 
 		TypeElement typeElement = (TypeElement) element;
 		String interfaceName = typeElement.getQualifiedName().toString();
@@ -75,7 +76,7 @@ public class RestProcessor implements GeneratingElementProcessor {
 		String implementationName = interfaceName + ModelConstants.GENERATION_SUFFIX;
 
 		holder.restImplementationClass = codeModel._class(JMod.PUBLIC, implementationName, ClassType.CLASS);
-		eBeansHolder.create(element, Rest.class, holder.restImplementationClass);
+		eBeansHolder.create(element, getTarget(), holder.restImplementationClass);
 
 		JClass interfaceClass = eBeansHolder.refClass(interfaceName);
 		holder.restImplementationClass._implements(interfaceClass);
@@ -87,15 +88,6 @@ public class RestProcessor implements GeneratingElementProcessor {
 		// RootUrl field
 		JClass stringClass = eBeansHolder.refClass(STRING);
 		holder.rootUrlField = holder.restImplementationClass.field(JMod.PRIVATE, stringClass, "rootUrl");
-
-		// available headers/cookies
-		JClass mapClass = eBeansHolder.refClass("java.util.HashMap").narrow(stringClass, stringClass);
-		holder.availableHeadersField = holder.restImplementationClass.field(JMod.PRIVATE, mapClass, "availableHeaders");
-		holder.availableCookiesField = holder.restImplementationClass.field(JMod.PRIVATE, mapClass, "availableCookies");
-
-		// any auth
-		JClass httpAuthClass = eBeansHolder.refClass("org.springframework.http.HttpAuthentication");
-		holder.authenticationField = holder.restImplementationClass.field(JMod.PRIVATE, httpAuthClass, "authentication");
 
 		{
 			// Constructor
@@ -127,9 +119,6 @@ public class RestProcessor implements GeneratingElementProcessor {
 				}
 			}
 			constructorBody.assign(holder.rootUrlField, lit(typeElement.getAnnotation(Rest.class).rootUrl()));
-
-			constructorBody.assign(holder.availableHeadersField, _new(mapClass));
-			constructorBody.assign(holder.availableCookiesField, _new(mapClass));
 		}
 
 		// Implement getRestTemplate method
@@ -180,4 +169,5 @@ public class RestProcessor implements GeneratingElementProcessor {
 		}
 
 	}
+
 }
