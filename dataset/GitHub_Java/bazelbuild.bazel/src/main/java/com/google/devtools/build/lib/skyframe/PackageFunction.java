@@ -25,7 +25,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -94,7 +93,7 @@ public class PackageFunction implements SkyFunction {
 
   private final PackageFactory packageFactory;
   private final CachingPackageLocator packageLocator;
-  private final Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache;
+  private final Cache<PackageIdentifier, BuilderAndGlobDeps> packageFunctionCache;
   private final Cache<PackageIdentifier, AstParseResult> astCache;
   private final AtomicBoolean showLoadingProgress;
   private final AtomicInteger numPackagesLoaded;
@@ -115,7 +114,7 @@ public class PackageFunction implements SkyFunction {
       PackageFactory packageFactory,
       CachingPackageLocator pkgLocator,
       AtomicBoolean showLoadingProgress,
-      Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache,
+      Cache<PackageIdentifier, BuilderAndGlobDeps> packageFunctionCache,
       Cache<PackageIdentifier, AstParseResult> astCache,
       AtomicInteger numPackagesLoaded,
       @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining,
@@ -143,7 +142,7 @@ public class PackageFunction implements SkyFunction {
       PackageFactory packageFactory,
       CachingPackageLocator pkgLocator,
       AtomicBoolean showLoadingProgress,
-      Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache,
+      Cache<PackageIdentifier, BuilderAndGlobDeps> packageFunctionCache,
       Cache<PackageIdentifier, AstParseResult> astCache,
       AtomicInteger numPackagesLoaded,
       @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining) {
@@ -207,16 +206,13 @@ public class PackageFunction implements SkyFunction {
   }
 
   /** An entry in {@link PackageFunction} internal cache. */
-  public static class LoadedPackageCacheEntry {
+  public static class BuilderAndGlobDeps {
     private final Package.Builder builder;
     private final Set<SkyKey> globDepKeys;
-    private final long loadTimeNanos;
 
-    private LoadedPackageCacheEntry(
-        Package.Builder builder, Set<SkyKey> globDepKeys, long loadTimeNanos) {
+    private BuilderAndGlobDeps(Package.Builder builder, Set<SkyKey> globDepKeys) {
       this.builder = builder;
       this.globDepKeys = globDepKeys;
-      this.loadTimeNanos = loadTimeNanos;
     }
   }
 
@@ -476,11 +472,7 @@ public class PackageFunction implements SkyFunction {
     }
 
     if (packageFactory != null) {
-      packageFactory.afterDoneLoadingPackage(
-          pkg,
-          skylarkSemantics,
-          // This is a lie.
-          /*loadTimeNanos=*/0L);
+      packageFactory.afterDoneLoadingPackage(pkg, skylarkSemantics);
     }
     return new PackageValue(pkg);
   }
@@ -584,7 +576,7 @@ public class PackageFunction implements SkyFunction {
     List<Statement> preludeStatements =
         astLookupValue.lookupSuccessful()
             ? astLookupValue.getAST().getStatements() : ImmutableList.<Statement>of();
-    LoadedPackageCacheEntry packageCacheEntry =
+    BuilderAndGlobDeps packageBuilderAndGlobDeps =
         loadPackage(
             workspaceName,
             replacementContents,
@@ -596,10 +588,10 @@ public class PackageFunction implements SkyFunction {
             preludeStatements,
             packageLookupValue.getRoot(),
             env);
-    if (packageCacheEntry == null) {
+    if (packageBuilderAndGlobDeps == null) {
       return null;
     }
-    Package.Builder pkgBuilder = packageCacheEntry.builder;
+    Package.Builder pkgBuilder = packageBuilderAndGlobDeps.builder;
     try {
       pkgBuilder.buildPartial();
     } catch (NoSuchPackageException e) {
@@ -620,7 +612,7 @@ public class PackageFunction implements SkyFunction {
           e.toNoSuchPackageException(),
           e.isTransient() ? Transience.TRANSIENT : Transience.PERSISTENT);
     }
-    Set<SkyKey> globKeys = packageCacheEntry.globDepKeys;
+    Set<SkyKey> globKeys = packageBuilderAndGlobDeps.globDepKeys;
     Map<Label, Path> subincludes = pkgBuilder.getSubincludes();
     boolean packageShouldBeConsideredInError;
     try {
@@ -650,7 +642,7 @@ public class PackageFunction implements SkyFunction {
     // We know this SkyFunction will not be called again, so we can remove the cache entry.
     packageFunctionCache.invalidate(packageId);
 
-    packageFactory.afterDoneLoadingPackage(pkg, skylarkSemantics, packageCacheEntry.loadTimeNanos);
+    packageFactory.afterDoneLoadingPackage(pkg, skylarkSemantics);
     return new PackageValue(pkg);
   }
 
@@ -1280,7 +1272,7 @@ public class PackageFunction implements SkyFunction {
    * latter indicates that we have a legitimate BUILD file and should actually read its contents.
    */
   @Nullable
-  private LoadedPackageCacheEntry loadPackage(
+  private BuilderAndGlobDeps loadPackage(
       String workspaceName,
       @Nullable String replacementContents,
       PackageIdentifier packageId,
@@ -1292,8 +1284,8 @@ public class PackageFunction implements SkyFunction {
       Root packageRoot,
       Environment env)
       throws InterruptedException, PackageFunctionException {
-    LoadedPackageCacheEntry packageCacheEntry = packageFunctionCache.getIfPresent(packageId);
-    if (packageCacheEntry == null) {
+    BuilderAndGlobDeps builderAndGlobDeps = packageFunctionCache.getIfPresent(packageId);
+    if (builderAndGlobDeps == null) {
       profiler.startTask(ProfilerTask.CREATE_PACKAGE, packageId.toString());
       if (packageProgress != null) {
         packageProgress.startReadPackage(packageId);
@@ -1361,7 +1353,6 @@ public class PackageFunction implements SkyFunction {
         astCache.invalidate(packageId);
         GlobberWithSkyframeGlobDeps globberWithSkyframeGlobDeps =
             makeGlobber(buildFilePath, packageId, packageRoot, env);
-        long startTimeNanos = BlazeClock.nanoTime();
         Package.Builder pkgBuilder = packageFactory.createPackageFromAst(
             workspaceName,
             packageId,
@@ -1372,21 +1363,18 @@ public class PackageFunction implements SkyFunction {
             defaultVisibility,
             skylarkSemantics,
             globberWithSkyframeGlobDeps);
-        long loadTimeNanos = Math.max(BlazeClock.nanoTime() - startTimeNanos, 0L);
-        packageCacheEntry = new LoadedPackageCacheEntry(
-            pkgBuilder,
-            globberWithSkyframeGlobDeps.getGlobDepsRequested(),
-            loadTimeNanos);
+        builderAndGlobDeps =
+            new BuilderAndGlobDeps(pkgBuilder, globberWithSkyframeGlobDeps.getGlobDepsRequested());
         numPackagesLoaded.incrementAndGet();
         if (packageProgress != null) {
           packageProgress.doneReadPackage(packageId);
         }
-        packageFunctionCache.put(packageId, packageCacheEntry);
+        packageFunctionCache.put(packageId, builderAndGlobDeps);
       } finally {
         profiler.completeTask(ProfilerTask.CREATE_PACKAGE);
       }
     }
-    return packageCacheEntry;
+    return builderAndGlobDeps;
   }
 
   private static class InternalInconsistentFilesystemException extends Exception {
