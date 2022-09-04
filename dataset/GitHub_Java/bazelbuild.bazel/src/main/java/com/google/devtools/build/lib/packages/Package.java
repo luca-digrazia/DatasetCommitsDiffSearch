@@ -22,6 +22,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -54,7 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
 import javax.annotation.Nullable;
 
 /**
@@ -121,7 +122,7 @@ public class Package {
    * The "Make" environment of this package, containing package-local
    * definitions of "Make" variables.
    */
-  private ImmutableMap<String, String> makeEnv;
+  private MakeEnvironment makeEnv;
 
   /** The collection of all targets defined in this package, indexed by name. */
   protected ImmutableSortedKeyMap<String, Target> targets;
@@ -167,6 +168,11 @@ public class Package {
   private boolean containsErrors;
 
   /**
+   * The set of labels subincluded by this package.
+   */
+  private Set<Label> subincludes;
+
+  /**
    * The list of transitive closure of the Skylark file dependencies.
    */
   private ImmutableList<Label> skylarkFileDependencies;
@@ -197,8 +203,8 @@ public class Package {
   private ImmutableList<Event> events;
   private ImmutableList<Postable> posts;
 
-  private ImmutableList<String> registeredExecutionPlatforms;
-  private ImmutableList<String> registeredToolchains;
+  private ImmutableList<Label> registeredExecutionPlatformLabels;
+  private ImmutableList<Label> registeredToolchainLabels;
 
   /**
    * Package initialization, part 1 of 3: instantiates a new package with the
@@ -316,7 +322,7 @@ public class Package {
           "Invalid BUILD file name for package '" + packageIdentifier + "': " + filename);
     }
 
-    this.makeEnv = ImmutableMap.copyOf(builder.makeEnv);
+    this.makeEnv = builder.makeEnv.build();
     this.targets = ImmutableSortedKeyMap.copyOf(builder.targets);
     this.defaultVisibility = builder.defaultVisibility;
     this.defaultVisibilitySet = builder.defaultVisibilitySet;
@@ -327,14 +333,23 @@ public class Package {
     }
     this.buildFile = builder.buildFile;
     this.containsErrors = builder.containsErrors;
+    this.subincludes = builder.subincludes.keySet();
     this.skylarkFileDependencies = builder.skylarkFileDependencies;
     this.defaultLicense = builder.defaultLicense;
     this.defaultDistributionSet = builder.defaultDistributionSet;
     this.features = ImmutableSortedSet.copyOf(builder.features);
     this.events = ImmutableList.copyOf(builder.events);
     this.posts = ImmutableList.copyOf(builder.posts);
-    this.registeredExecutionPlatforms = ImmutableList.copyOf(builder.registeredExecutionPlatforms);
-    this.registeredToolchains = ImmutableList.copyOf(builder.registeredToolchains);
+    this.registeredExecutionPlatformLabels =
+        ImmutableList.copyOf(builder.registeredExecutionPlatformLabels);
+    this.registeredToolchainLabels = ImmutableList.copyOf(builder.registeredToolchainLabels);
+  }
+
+  /**
+   * Returns the list of subincluded labels on which the validity of this package depends.
+   */
+  public Set<Label> getSubincludeLabels() {
+    return subincludes;
   }
 
   /**
@@ -375,10 +390,33 @@ public class Package {
   }
 
   /**
+   * Returns the "Make" value from the package's make environment whose name
+   * is "varname", or null iff the variable is not defined in the environment.
+   */
+  public String lookupMakeVariable(String varname, String platform) {
+    return makeEnv.lookup(varname, platform);
+  }
+
+  /**
+   * Returns the make environment. This should only ever be used for serialization -- how the
+   * make variables are implemented is an implementation detail.
+   */
+  MakeEnvironment getMakeEnvironment() {
+    return makeEnv;
+  }
+
+  /**
    * Returns all make variables for a given platform.
    */
-  public ImmutableMap<String, String> getMakeEnvironment() {
-    return makeEnv;
+  public ImmutableMap<String, String> getAllMakeVariables(String platform) {
+    ImmutableMap.Builder<String, String> map = ImmutableMap.builder();
+    for (String var : makeEnv.getBindings().keySet()) {
+      String value = makeEnv.lookup(var, platform);
+      if (value != null) {
+        map.put(var, value);
+      }
+    }
+    return map.build();
   }
 
   /**
@@ -498,13 +536,11 @@ public class Package {
     // stat(2) is executed.
     Path filename = getPackageDirectory().getRelative(targetName);
     String suffix;
-    if (!PathFragment.isNormalized(targetName) || "*".equals(targetName)) {
-      // Don't check for file existence if the target name is not normalized
-      // because the error message would be confusing and wrong. If the
-      // targetName is "foo/bar/.", and there is a directory "foo/bar", it
-      // doesn't mean that "//pkg:foo/bar/." is a valid label.
-      // Also don't check if the target name is a single * character since
-      // it's invalid on Windows.
+    if (!PathFragment.isNormalized(targetName)) {
+      // Don't check for file existence in this case because the error message
+      // would be confusing and wrong. If the targetName is "foo/bar/.", and
+      // there is a directory "foo/bar", it doesn't mean that "//pkg:foo/bar/."
+      // is a valid label.
       suffix = "";
     } else if (filename.isDirectory()) {
       suffix = "; however, a source directory of this name exists.  (Perhaps add "
@@ -623,12 +659,12 @@ public class Package {
     return defaultRestrictedTo;
   }
 
-  public ImmutableList<String> getRegisteredExecutionPlatforms() {
-    return registeredExecutionPlatforms;
+  public ImmutableList<Label> getRegisteredExecutionPlatformLabels() {
+    return registeredExecutionPlatformLabels;
   }
 
-  public ImmutableList<String> getRegisteredToolchains() {
-    return registeredToolchains;
+  public ImmutableList<Label> getRegisteredToolchainLabels() {
+    return registeredToolchainLabels;
   }
 
   @Override
@@ -673,6 +709,7 @@ public class Package {
     Builder b = new Builder(helper.createFreshPackage(
         Label.EXTERNAL_PACKAGE_IDENTIFIER, runfilesPrefix));
     b.setFilename(workspacePath);
+    b.setMakeEnv(new MakeEnvironment.Builder());
     return b;
   }
 
@@ -732,9 +769,7 @@ public class Package {
     private Path filename = null;
     private Label buildFileLabel = null;
     private InputFile buildFile = null;
-    // TreeMap so that the iteration order of variables is predictable. This is useful so that the
-    // serialized representation is deterministic.
-    private TreeMap<String, String> makeEnv = new TreeMap<>();
+    private MakeEnvironment.Builder makeEnv = null;
     private RuleVisibility defaultVisibility = ConstantRuleVisibility.PRIVATE;
     private boolean defaultVisibilitySet;
     private List<String> defaultCopts = null;
@@ -751,10 +786,11 @@ public class Package {
     protected Map<String, Target> targets = new HashMap<>();
     protected Map<Label, EnvironmentGroup> environmentGroups = new HashMap<>();
 
+    protected Map<Label, Path> subincludes = null;
     protected ImmutableList<Label> skylarkFileDependencies = ImmutableList.of();
 
-    protected List<String> registeredExecutionPlatforms = new ArrayList<>();
-    protected List<String> registeredToolchains = new ArrayList<>();
+    protected List<Label> registeredExecutionPlatformLabels = new ArrayList<>();
+    protected List<Label> registeredToolchainLabels = new ArrayList<>();
 
     /**
      * True iff the "package" function has already been called in this package.
@@ -832,9 +868,16 @@ public class Package {
       return events;
     }
 
-    Builder setMakeVariable(String name, String value) {
-      this.makeEnv.put(name, value);
+    /**
+     * Sets this package's Make environment.
+     */
+    Builder setMakeEnv(MakeEnvironment.Builder makeEnv) {
+      this.makeEnv = makeEnv;
       return this;
+    }
+
+    MakeEnvironment.Builder getMakeEnvironment() {
+      return makeEnv;
     }
 
     /**
@@ -1050,6 +1093,32 @@ public class Package {
           implicitOutputsFunction);
     }
 
+    /**
+     * Called by the parser when a "mocksubinclude" is encountered, to record the
+     * mappings from labels to absolute paths upon which that the validity of
+     * this package depends.
+     */
+    void addSubinclude(Label label, Path resolvedPath) {
+      if (subincludes == null) {
+        // This is a TreeMap because the order needs to be deterministic.
+        subincludes = Maps.newTreeMap();
+      }
+
+      Path oldResolvedPath = subincludes.put(label, resolvedPath);
+      if (oldResolvedPath != null && !oldResolvedPath.equals(resolvedPath)){
+        // The same label should have been resolved to the same path
+        throw new IllegalStateException("Ambiguous subinclude path");
+      }
+    }
+
+    public Set<Label> getSubincludeLabels() {
+      return subincludes == null ? Sets.<Label>newHashSet() : subincludes.keySet();
+    }
+
+    public Map<Label, Path> getSubincludes() {
+      return subincludes == null ? Maps.<Label, Path>newHashMap() : subincludes;
+    }
+
     @Nullable
     public Target getTarget(String name) {
       return targets.get(name);
@@ -1244,12 +1313,12 @@ public class Package {
       addRuleUnchecked(rule);
     }
 
-    public void addRegisteredExecutionPlatforms(List<String> platforms) {
-      this.registeredExecutionPlatforms.addAll(platforms);
+    public void addRegisteredExecutionPlatformLabels(List<Label> platforms) {
+      this.registeredExecutionPlatformLabels.addAll(platforms);
     }
 
-    void addRegisteredToolchains(List<String> toolchains) {
-      this.registeredToolchains.addAll(toolchains);
+    void addRegisteredToolchainLabels(List<Label> toolchains) {
+      this.registeredToolchainLabels.addAll(toolchains);
     }
 
     private Builder beforeBuild(boolean discoverAssumedInputFiles)
@@ -1261,6 +1330,10 @@ public class Package {
       if (ioException != null) {
         throw new NoSuchPackageException(getPackageIdentifier(), ioExceptionMessage, ioException);
       }
+      // Freeze subincludes.
+      subincludes = (subincludes == null)
+          ? Collections.<Label, Path>emptyMap()
+          : Collections.unmodifiableMap(subincludes);
 
       // We create the original BUILD InputFile when the package filename is set; however, the
       // visibility may be overridden with an exports_files directive, so we need to obtain the

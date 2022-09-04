@@ -819,7 +819,6 @@ public class PackageFunction implements SkyFunction {
   private static void handleLabelsCrossingSubpackagesAndPropagateInconsistentFilesystemExceptions(
       Root pkgRoot, PackageIdentifier pkgId, Package.Builder pkgBuilder, Environment env)
       throws InternalInconsistentFilesystemException, InterruptedException {
-    PathFragment pkgDir = pkgId.getPackageFragment();
     Set<SkyKey> containingPkgLookupKeys = Sets.newHashSet();
     Map<Target, SkyKey> targetToKey = new HashMap<>();
     for (Target target : pkgBuilder.getTargets()) {
@@ -830,10 +829,10 @@ public class PackageFunction implements SkyFunction {
                 "Null pkg for label %s as path fragment %s in pkg %s",
                 target.getLabel(), target.getLabel().getPackageFragment(), pkgId));
       }
-      if (dir.equals(pkgDir)) {
+      PackageIdentifier dirId = PackageIdentifier.create(pkgId.getRepository(), dir);
+      if (dir.equals(pkgId.getPackageFragment())) {
         continue;
       }
-      PackageIdentifier dirId = PackageIdentifier.create(pkgId.getRepository(), dir);
       SkyKey key = ContainingPackageLookupValue.key(dirId);
       targetToKey.put(target, key);
       containingPkgLookupKeys.add(key);
@@ -841,10 +840,10 @@ public class PackageFunction implements SkyFunction {
     Map<Label, SkyKey> subincludeToKey = new HashMap<>();
     for (Label subincludeLabel : pkgBuilder.getSubincludeLabels()) {
       PathFragment dir = getContainingDirectory(subincludeLabel);
-      if (dir.equals(pkgDir)) {
+      PackageIdentifier dirId = PackageIdentifier.create(pkgId.getRepository(), dir);
+      if (dir.equals(pkgId.getPackageFragment())) {
         continue;
       }
-      PackageIdentifier dirId = PackageIdentifier.create(pkgId.getRepository(), dir);
       SkyKey key = ContainingPackageLookupValue.key(dirId);
       subincludeToKey.put(subincludeLabel, key);
       containingPkgLookupKeys.add(ContainingPackageLookupValue.key(dirId));
@@ -888,14 +887,7 @@ public class PackageFunction implements SkyFunction {
   private static PathFragment getContainingDirectory(Label label) {
     PathFragment pkg = label.getPackageFragment();
     String name = label.getName();
-    if (name.equals(".")) {
-      return pkg;
-    }
-    if (PathFragment.isNormalizedRelativePath(name) && !PathFragment.containsSeparator(name)) {
-      // Optimize for the common case of a label like '//pkg:target'.
-      return pkg;
-    }
-    return pkg.getRelative(name).getParentDirectory();
+    return name.equals(".") ? pkg : pkg.getRelative(name).getParentDirectory();
   }
 
   @Nullable
