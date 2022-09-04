@@ -15,7 +15,9 @@
 package com.google.devtools.build.lib.vfs.inmemoryfs;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -76,6 +78,22 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
     super(hashFunction);
     this.clock = clock;
     this.rootInode = newRootInode(clock);
+  }
+
+  /**
+   * Creates a new InMemoryFileSystem with default clock and hash function.
+   */
+  @VisibleForTesting
+  public InMemoryFileSystem() {
+    this(new JavaClock());
+  }
+
+  /**
+   * Creates a new InMemoryFileSystem.
+   */
+  @VisibleForTesting
+  public InMemoryFileSystem(Clock clock) {
+    this(clock, DigestHashFunction.getDefaultUnchecked());
   }
 
   private static InMemoryDirectoryInfo newRootInode(Clock clock) {
@@ -232,19 +250,17 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    */
   private void unlink(InMemoryDirectoryInfo dir, String child, Path errorPath)
       throws IOException {
-    if (!dir.isWritable()) {
-      throw Error.EACCES.exception(errorPath);
-    }
+    if (!dir.isWritable()) { throw Error.EACCES.exception(errorPath); }
     dir.removeChild(child);
   }
 
   /**
-   * Inserts inode 'childInode' into the existing directory 'dir' under the specified 'name'. Dual
-   * to unlink. Fails if the directory was read-only.
+   * Inserts inode 'childInode' into the existing directory 'dir' under the
+   * specified 'name'.  Dual to unlink.  Fails if the directory was read-only.
    */
   @CheckReturnValue
-  private static Error insert(
-      InMemoryDirectoryInfo dir, String child, InMemoryContentInfo childInode) {
+  private Error insert(InMemoryDirectoryInfo dir, String child,
+                       InMemoryContentInfo childInode) {
     if (!dir.isWritable()) {
       return Error.EACCES;
     }
@@ -252,9 +268,8 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
     return null;
   }
 
-  private static void insert(
-      InMemoryDirectoryInfo dir, String child, InMemoryContentInfo childInode, Path errorPath)
-      throws IOException {
+  private void insert(InMemoryDirectoryInfo dir, String child,
+      InMemoryContentInfo childInode, Path errorPath) throws IOException {
     Error error = insert(dir, child, childInode);
     if (error != null) {
       throw error.exception(errorPath);
@@ -262,10 +277,15 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   /**
-   * Given an existing directory 'dir', looks up 'name' within it and returns its inode. May fail
-   * with ENOTDIR, EACCES, ENOENT. Error messages will be reported against file 'path'.
+   * Given an existing directory 'dir', looks up 'name' within it and returns
+   * its inode. Assumes the file exists, unless 'create', in which case it will
+   * try to create it. May fail with ENOTDIR, EACCES, ENOENT. Error messages
+   * will be reported against file 'path'.
    */
-  private static InodeOrErrno directoryLookupErrno(InMemoryContentInfo dir, String name) {
+  private InodeOrErrno directoryLookupErrno(InMemoryContentInfo dir,
+                                            String name,
+                                            boolean create,
+                                            Path path) {
     if (!dir.isDirectory()) {
       return Error.ENOTDIR.asInodeOrErrno();
     }
@@ -274,24 +294,22 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
       return Error.EACCES.asInodeOrErrno();
     }
     InMemoryContentInfo child = imdi.getChild(name);
-    return child == null ? Error.ENOENT.asInodeOrErrno() : InodeOrErrno.createInode(child);
+    if (child == null) {
+      if (!create)  {
+        return Error.ENOENT.asInodeOrErrno();
+      } else {
+        child = newFile(clock, path);
+        Error error = insert(imdi, name, child);
+        if (error != null) {
+          return error.asInodeOrErrno();
+        }
+      }
+    }
+    return InodeOrErrno.createInode(child);
   }
 
   protected FileInfo newFile(Clock clock, Path path) {
     return new InMemoryFileInfo(clock);
-  }
-
-  /** How to handle {@link Error#ENOENT} during {@link #pathWalkErrno}. */
-  private enum OnEnoent {
-    /** Halt the walk with {@link Error#ENOENT}. */
-    HALT,
-    /**
-     * Create a file node if at the last segment of the walk, otherwise halt with {@link
-     * Error#ENOENT}.
-     */
-    CREATE_FILE,
-    /** Create a directory node. */
-    CREATE_DIRECTORY_AND_PARENTS
   }
 
   /**
@@ -299,11 +317,13 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    * 'path', walks the directory tree from the root, resolving all symbolic links, and returns the
    * designated inode.
    *
-   * <p>ENOENT along the walk is handled according to the given {@link OnEnoent}.
+   * <p>If 'create' is false, the inode must exist; otherwise, it will be created and added to its
+   * parent directory, which must exist.
+   *
    *
    * <p>May fail with ENOTDIR, ENOENT, EACCES, ELOOP.
    */
-  private synchronized InodeOrErrno pathWalkErrno(Path path, OnEnoent behavior) {
+  private synchronized InodeOrErrno pathWalkErrno(Path path, boolean create) {
     Stack<String> stack = new Stack<>();
     for (Path p = path; !isRootDirectory(p); p = p.getParentDirectory()) {
       String name = baseNameOrWindowsDrive(p);
@@ -318,36 +338,15 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
 
       String name = stack.pop();
 
-      InodeOrErrno childOrError = directoryLookupErrno(inode, name);
-
-      InMemoryContentInfo child;
-      if (!childOrError.hasError()) {
-        child = childOrError.inode();
-      } else if (childOrError.error() == Error.ENOENT && behavior != OnEnoent.HALT) {
-        InMemoryDirectoryInfo parent = (InMemoryDirectoryInfo) inode;
-        Error error;
-        if (behavior == OnEnoent.CREATE_DIRECTORY_AND_PARENTS) {
-          // ENOENT anywhere with Create.DIRECTORY_AND_PARENTS => create a new directory.
-          InMemoryDirectoryInfo newDir = new InMemoryDirectoryInfo(clock);
-          error = insertChildDirectory(parent, newDir, name);
-          child = newDir;
-        } else if (stack.isEmpty()) {
-          // ENOENT on last segment with Create.FILE => create a new file.
-          child = newFile(clock, path);
-          error = insert(parent, name, child);
-        } else {
-          return childOrError;
-        }
-        if (error != null) {
-          return error.asInodeOrErrno();
-        }
-      } else {
+      // ENOENT on last segment with 'create' => create a new file.
+      InodeOrErrno childOrError =
+          directoryLookupErrno(inode, name, create && stack.isEmpty(), path);
+      if (childOrError.hasError()) {
         return childOrError;
       }
 
-      if (!child.isSymbolicLink()) {
-        inode = child;
-      } else {
+      InMemoryContentInfo child = childOrError.inode();
+      if (child.isSymbolicLink()) {
         PathFragment linkTarget = ((InMemoryLinkInfo) child).getNormalizedLinkContent();
         if (linkTarget.isAbsolute()) {
           inode = rootInode;
@@ -366,6 +365,8 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
             stack.push(driveStr);
           }
         }
+      } else {
+        inode = child;
       }
     }
     return InodeOrErrno.createInode(inode);
@@ -378,7 +379,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    * <p>May fail with ENOTDIR, or any exception from pathWalk.
    */
   private InodeOrErrno getDirectoryErrno(Path path) {
-    InodeOrErrno dirInfoOrError = pathWalkErrno(path, OnEnoent.HALT);
+    InodeOrErrno dirInfoOrError = pathWalkErrno(path, false);
     if (dirInfoOrError.hasError()) {
       return dirInfoOrError;
     }
@@ -408,7 +409,8 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
     if (dirInfoOrError.hasError()) {
       return dirInfoOrError;
     }
-    return directoryLookupErrno(dirInfoOrError.inode(), baseNameOrWindowsDrive(path));
+    return directoryLookupErrno(dirInfoOrError.inode(), baseNameOrWindowsDrive(path),
+        /*create=*/ false, path);
   }
 
   /**
@@ -448,7 +450,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   @CheckReturnValue
   protected InodeOrErrno inodeStatErrno(Path path, boolean followSymlinks) {
     if (followSymlinks) {
-      return pathWalkErrno(path, OnEnoent.HALT);
+      return pathWalkErrno(path, false);
     } else {
       return isRootDirectory(path)
           ? InodeOrErrno.createInode(rootInode)
@@ -556,12 +558,10 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
       throw Error.EACCES.exception(path);
     }
 
-    Path parentDir = path.getParentDirectory();
-    String name = baseNameOrWindowsDrive(path);
-    Error error;
+    InMemoryDirectoryInfo parent;
     synchronized (this) {
-      InMemoryDirectoryInfo parent = getDirectory(parentDir);
-      InMemoryContentInfo child = parent.getChild(name);
+      parent = getDirectory(path.getParentDirectory());
+      InMemoryContentInfo child = parent.getChild(baseNameOrWindowsDrive(path));
       if (child != null) { // already exists
         if (child.isDirectory()) {
           return false;
@@ -569,28 +569,29 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
           throw Error.EEXIST.exception(path);
         }
       }
-      error = insertChildDirectory(parent, new InMemoryDirectoryInfo(clock), name);
-    }
-    if (error != null) {
-      throw error.exception(path);
-    }
-    return true;
-  }
 
-  @Nullable
-  private static Error insertChildDirectory(
-      InMemoryDirectoryInfo parent, InMemoryDirectoryInfo newDir, String name) {
-    newDir.addChild(".", newDir);
-    newDir.addChild("..", parent);
-    return insert(parent, name, newDir);
+      InMemoryDirectoryInfo newDir = new InMemoryDirectoryInfo(clock);
+      newDir.addChild(".", newDir);
+      newDir.addChild("..", parent);
+      insert(parent, baseNameOrWindowsDrive(path), newDir, path);
+
+      return true;
+    }
   }
 
   @Override
-  public void createDirectoryAndParents(Path path) throws IOException {
-    InMemoryContentInfo result =
-        pathWalkErrno(path, OnEnoent.CREATE_DIRECTORY_AND_PARENTS).valueOrThrow(path);
-    if (!result.isDirectory()) {
-      throw new IOException("Not a directory: " + path);
+  public synchronized void createDirectoryAndParents(Path path) throws IOException {
+    List<Path> subdirs = new ArrayList<>();
+    for (; !isRootDirectory(path); path = path.getParentDirectory()) {
+      if (path.isDirectory()) {
+        break;
+      } else if (path.exists()) {
+        throw new IOException("Not a directory: " + path);
+      }
+      subdirs.add(path);
+    }
+    for (Path subdir : Lists.reverse(subdirs)) {
+      subdir.createDirectory();
     }
   }
 
@@ -750,14 +751,12 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
     // resolving a path with the intent to create it: instead of failing with
     // ENOENT they have to return an open file.  This is exactly how UNIX
     // kernels do it, which is what we're trying to emulate.
-    InMemoryContentInfo child = pathWalkErrno(path, OnEnoent.CREATE_FILE).valueOrThrow(path);
+    InMemoryContentInfo child = pathWalkErrno(path, /*create=*/true).valueOrThrow(path);
     Preconditions.checkNotNull(child);
     if (child.isDirectory()) {
       throw Error.EISDIR.exception(path);
     } else { // existing or newly-created file
-      if (!child.isWritable()) {
-        throw Error.EACCES.exception(path);
-      }
+      if (!child.isWritable()) { throw Error.EACCES.exception(path); }
       return child;
     }
   }
@@ -810,6 +809,8 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
         }
         sourceInode.movedTo(targetPath);
         insert(targetParent, baseNameOrWindowsDrive(targetPath), sourceInode, targetPath);
+        return;
+
       } catch (IOException e) {
         sourceInode.movedTo(sourcePath);
         insert(
@@ -850,7 +851,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    * On Unix the root directory is "/". On Windows there isn't one, so we reach null from
    * getParentDirectory.
    */
-  private static boolean isRootDirectory(@Nullable Path path) {
+  private boolean isRootDirectory(@Nullable Path path) {
     return path == null || path.getPathString().equals("/");
   }
 
@@ -887,7 +888,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
       return error() != null;
     }
 
-    InMemoryContentInfo valueOrThrow(Path path) throws IOException {
+    public InMemoryContentInfo valueOrThrow(Path path) throws IOException {
       if (hasError()) {
         throw error().exception(path);
       }
