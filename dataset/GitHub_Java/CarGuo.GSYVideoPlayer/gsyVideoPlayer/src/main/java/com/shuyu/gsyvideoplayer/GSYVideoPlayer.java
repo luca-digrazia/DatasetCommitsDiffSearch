@@ -104,8 +104,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     protected int mSeekTimePosition; //手动改变滑动的位置
 
-    protected int mSeekEndOffset; //手动滑动的起始偏移位置
-
     protected long mSeekOnStart = -1; //从哪个开始播放
 
     protected long mPauseTime; //保存暂停时的时间
@@ -133,14 +131,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
      * 开始播放
      */
     public abstract void startPlayLogic();
-
-    /**
-     * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
-     */
-    public GSYVideoPlayer(Context context, Boolean fullFlag) {
-        super(context, fullFlag);
-        init(context);
-    }
 
     public GSYVideoPlayer(Context context) {
         super(context);
@@ -180,8 +170,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         mScreenWidth = getContext().getResources().getDisplayMetrics().widthPixels;
         mScreenHeight = getContext().getResources().getDisplayMetrics().heightPixels;
         mAudioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
-
-        mSeekEndOffset = CommonUtil.dip2px(getContext(), 50);
     }
 
     /**
@@ -556,12 +544,8 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                             if (absDeltaX > mThreshold || absDeltaY > mThreshold) {
                                 cancelProgressTimer();
                                 if (absDeltaX >= mThreshold) {
-                                    //防止全屏虚拟按键
-                                    int screenWidth = CommonUtil.getScreenWidth(getContext());
-                                    if (Math.abs(screenWidth - mDownX) > mSeekEndOffset) {
-                                        mChangePosition = true;
-                                        mDownPosition = getCurrentPositionWhenPlaying();
-                                    }
+                                    mChangePosition = true;
+                                    mDownPosition = getCurrentPositionWhenPlaying();
                                 } else {
                                     if (mFirstTouch) {
                                         mBrightness = mDownX < mScreenWidth * 0.5f;

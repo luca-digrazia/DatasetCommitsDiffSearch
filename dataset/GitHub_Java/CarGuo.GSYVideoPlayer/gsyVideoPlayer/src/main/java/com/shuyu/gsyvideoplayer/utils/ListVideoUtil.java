@@ -140,10 +140,6 @@ public class ListVideoUtil {
 
         gsyVideoPlayer.setUp(url, true, cachePath, mapHeadData, objects);
 
-        if(objects != null && objects.length > 0) {
-            gsyVideoPlayer.getTitleTextView().setText((String)objects[0]);
-        }
-
         //增加title
         gsyVideoPlayer.getTitleTextView().setVisibility(View.GONE);
 
@@ -190,7 +186,7 @@ public class ListVideoUtil {
             viewGroup.removeView(gsyVideoPlayer);
         }
         gsyVideoPlayer.setIfCurrentIsFullscreen(true);
-        gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getShrinkImageRes());
+        gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
         gsyVideoPlayer.getBackButton().setVisibility(View.VISIBLE);
         //设置旋转
         orientationUtils = new OrientationUtils((Activity) context, gsyVideoPlayer);
@@ -279,7 +275,7 @@ public class ListVideoUtil {
                 gsyVideoPlayer.setIfCurrentIsFullscreen(false);
                 fullViewContainer.setBackgroundColor(Color.TRANSPARENT);
                 listParent.addView(gsyVideoPlayer, listParams);
-                gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getEnlargeImageRes());
+                gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
                 gsyVideoPlayer.getBackButton().setVisibility(View.GONE);
                 gsyVideoPlayer.setIfCurrentIsFullscreen(false);
                 if (videoAllCallBack != null) {
