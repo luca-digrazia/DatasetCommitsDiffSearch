@@ -23,7 +23,6 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteException;
 import android.os.Build;
 
-import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.common.Util;
 import com.facebook.stetho.inspector.helper.ChromePeerManager;
 import com.facebook.stetho.inspector.helper.PeerRegistrationListener;
@@ -164,9 +163,7 @@ public class Database implements ChromeDevtoolsDomain {
           return response;
         }
       });
-    } catch (RuntimeException e) {
-      LogUtil.e(e, "Exception executing: %s", request.query);
-
+    } catch (SQLiteException e) {
       Error error = new Error();
       error.code = 0;
       error.message = e.getMessage();
