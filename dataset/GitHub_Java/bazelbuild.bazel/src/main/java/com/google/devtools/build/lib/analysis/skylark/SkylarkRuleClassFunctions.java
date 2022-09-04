@@ -86,8 +86,8 @@ import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
-import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -253,15 +253,12 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
   @Override
   public Provider provider(String doc, Object fields, Location location) throws EvalException {
     Iterable<String> fieldNames = null;
-    if (fields instanceof Sequence<?>) {
+    if (fields instanceof SkylarkList<?>) {
       @SuppressWarnings("unchecked")
-      Sequence<String> list =
-          (Sequence<String>)
+      SkylarkList<String> list = (SkylarkList<String>)
               SkylarkType.cast(
                   fields,
-                  Sequence.class,
-                  String.class,
-                  location,
+                  SkylarkList.class, String.class, location,
                   "Expected list of strings or dictionary of string -> string for 'fields'");
       fieldNames = list;
     }  else  if (fields instanceof SkylarkDict) {
@@ -283,13 +280,13 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       Object implicitOutputs,
       Boolean executable,
       Boolean outputToGenfiles,
-      Sequence<?> fragments,
-      Sequence<?> hostFragments,
+      SkylarkList<?> fragments,
+      SkylarkList<?> hostFragments,
       Boolean skylarkTestable,
-      Sequence<?> toolchains,
+      SkylarkList<?> toolchains,
       String doc,
-      Sequence<?> providesArg,
-      Sequence<?> execCompatibleWith,
+      SkylarkList<?> providesArg,
+      SkylarkList<?> execCompatibleWith,
       Object analysisTest,
       Object buildSetting,
       Object cfg,
@@ -486,13 +483,13 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
   @Override
   public SkylarkAspect aspect(
       StarlarkFunction implementation,
-      Sequence<?> attributeAspects,
+      SkylarkList<?> attributeAspects,
       Object attrs,
-      Sequence<?> requiredAspectProvidersArg,
-      Sequence<?> providesArg,
-      Sequence<?> fragments,
-      Sequence<?> hostFragments,
-      Sequence<?> toolchains,
+      SkylarkList<?> requiredAspectProvidersArg,
+      SkylarkList<?> providesArg,
+      SkylarkList<?> fragments,
+      SkylarkList<?> hostFragments,
+      SkylarkList<?> toolchains,
       String doc,
       Boolean applyToGeneratingRules,
       FuncallExpression ast, // just for getLocation(); TODO(adonovan): simplify
@@ -611,7 +608,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         RuleClassType type,
         ImmutableList<Pair<String, SkylarkAttr.Descriptor>> attributes,
         Location definitionLocation) {
-      super(FunctionSignature.KWARGS);
+      super("rule", FunctionSignature.KWARGS);
       this.builder = builder;
       this.type = type;
       this.attributes = attributes;
@@ -621,7 +618,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     /** This is for post-export reconstruction for serialization. */
     private SkylarkRuleFunction(
         RuleClass ruleClass, RuleClassType type, Location definitionLocation, Label skylarkLabel) {
-      super(FunctionSignature.KWARGS);
+      super("rule", FunctionSignature.KWARGS);
       Preconditions.checkNotNull(
           ruleClass,
           "RuleClass must be non-null as this SkylarkRuleFunction should have been exported.");
@@ -632,11 +629,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       this.type = type;
       this.definitionLocation = definitionLocation;
       this.skylarkLabel = skylarkLabel;
-    }
-
-    @Override
-    public String getName() {
-      return "rule";
     }
 
     @Override

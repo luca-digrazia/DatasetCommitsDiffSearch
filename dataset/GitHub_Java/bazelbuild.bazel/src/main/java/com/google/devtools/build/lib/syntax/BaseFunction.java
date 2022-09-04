@@ -53,6 +53,14 @@ public abstract class BaseFunction implements StarlarkCallable {
   // TODO(adonovan): Turn fields into abstract methods. Make processArguments a static function
   // with multiple parameters, instead of a "mix-in" that accesses instance fields.
 
+  /**
+   * The name of the function.
+   *
+   * <p>For safe extensibility, this class only retrieves name via the accessor {@link #getName}.
+   * This field must be null iff {@link #getName} is overridden.
+   */
+  @Nullable private final String name;
+
   private final FunctionSignature signature;
 
   /**
@@ -62,6 +70,17 @@ public abstract class BaseFunction implements StarlarkCallable {
   // TODO(adonovan): investigate why null elements are permitted. I would expect one non-null
   // element per optional parameter, without exception.
   @Nullable private final List<Object> defaultValues;
+
+  /**
+   * Returns the name of this function.
+   *
+   * <p>A subclass must override this function if a null name is given to this class's constructor.
+   */
+  @Override
+  public String getName() {
+    Preconditions.checkNotNull(name);
+    return name;
+  }
 
   /** Returns the signature of this function. */
   public FunctionSignature getSignature() {
@@ -77,8 +96,14 @@ public abstract class BaseFunction implements StarlarkCallable {
     return defaultValues;
   }
 
-  /** Constructs a BaseFunction with a given signature and default values. */
-  protected BaseFunction(FunctionSignature signature, @Nullable List<Object> defaultValues) {
+  /**
+   * Constructs a BaseFunction with a given name and signature.
+   *
+   * @param signature the signature with default values and types
+   */
+  protected BaseFunction(
+      @Nullable String name, FunctionSignature signature, @Nullable List<Object> defaultValues) {
+    this.name = name;
     this.signature = Preconditions.checkNotNull(signature);
     this.defaultValues = defaultValues;
     if (defaultValues != null) {
@@ -86,9 +111,14 @@ public abstract class BaseFunction implements StarlarkCallable {
     }
   }
 
-  /** Constructs a BaseFunction with a given signature without default values. */
-  protected BaseFunction(FunctionSignature signature) {
-    this(signature, /*defaultValues=*/ null);
+  /**
+   * Constructs a BaseFunction with a given name and signature without default values or types.
+   *
+   * @param name the function name; null iff this is a subclass overriding {@link #getName}
+   * @param signature the function signature
+   */
+  protected BaseFunction(@Nullable String name, FunctionSignature signature) {
+    this(name, signature, /*defaultValues=*/ null);
   }
 
   /**
@@ -175,7 +205,8 @@ public abstract class BaseFunction implements StarlarkCallable {
       }
       // If there's a kwarg, it's empty.
       if (hasKwargs) {
-        arguments[kwargIndex] = Dict.of(thread.mutability());
+        // TODO(bazel-team): create a fresh mutable dict, like Python does
+        arguments[kwargIndex] = SkylarkDict.of(thread);
       }
     } else if (hasKwargs && numNamedParams == 0) {
       // Easy case (2b): there are no named parameters, but there is a **kwargs.
@@ -184,10 +215,10 @@ public abstract class BaseFunction implements StarlarkCallable {
       // Also note that no named parameters means no mandatory parameters that weren't passed,
       // and no missing optional parameters for which to use a default. Thus, no loops.
       // NB: not 2a means kwarg isn't null
-      arguments[kwargIndex] = Dict.copyOf(thread.mutability(), kwargs);
+      arguments[kwargIndex] = SkylarkDict.copyOf(thread, kwargs);
     } else {
       // Hard general case (2c): some keyword arguments may correspond to named parameters
-      Dict<String, Object> kwArg = hasKwargs ? Dict.of(thread.mutability()) : Dict.empty();
+      SkylarkDict<String, Object> kwArg = hasKwargs ? SkylarkDict.of(thread) : SkylarkDict.empty();
 
       // For nicer stabler error messages, start by checking against
       // an argument being provided both as positional argument and as keyword argument.
@@ -226,7 +257,8 @@ public abstract class BaseFunction implements StarlarkCallable {
         }
       }
       if (hasKwargs) {
-        arguments[kwargIndex] = Dict.copyOf(thread.mutability(), kwArg);
+        // TODO(bazel-team): create a fresh mutable dict, like Python does
+        arguments[kwargIndex] = SkylarkDict.copyOf(thread, kwArg);
       }
 
       // Check that all mandatory parameters were filled in general case 2c.

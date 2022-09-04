@@ -20,6 +20,8 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.syntax.StarlarkThread.LexicalFrame;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -32,7 +34,12 @@ import javax.annotation.Nullable;
  * this class do not need to be serializable because they should effectively be treated as
  * constants.
  */
-public abstract class BuiltinFunction extends BaseFunction {
+public class BuiltinFunction extends BaseFunction {
+
+  // Builtins cannot create or modify variable bindings. So it's sufficient to use a shared
+  // instance.
+  private static final LexicalFrame SHARED_LEXICAL_FRAME_FOR_BUILTIN_FUNCTION_CALLS =
+      LexicalFrame.create(Mutability.IMMUTABLE);
 
   // The underlying invoke() method.
   @Nullable private Method invokeMethod;
@@ -45,9 +52,9 @@ public abstract class BuiltinFunction extends BaseFunction {
   // The returnType of the method.
   private Class<?> returnType;
 
-  /** Creates a BuiltinFunction with the given signature. */
-  protected BuiltinFunction(FunctionSignature signature) {
-    super(signature);
+  /** Creates a BuiltinFunction with the given name and signature. */
+  protected BuiltinFunction(String name, FunctionSignature signature) {
+    super(name, signature);
     initialize();
   }
 
@@ -83,9 +90,10 @@ public abstract class BuiltinFunction extends BaseFunction {
     }
 
     // Last but not least, actually make an inner call to the function with the resolved arguments.
-    thread.push(this, ast.getLocation(), ast);
     try (SilentCloseable c =
         Profiler.instance().profile(ProfilerTask.STARLARK_BUILTIN_FN, getName())) {
+      thread.enterScope(
+          this, SHARED_LEXICAL_FRAME_FOR_BUILTIN_FUNCTION_CALLS, ast, thread.getGlobals());
       return invokeMethod.invoke(this, args);
     } catch (InvocationTargetException x) {
       Throwable e = x.getCause();
@@ -121,7 +129,7 @@ public abstract class BuiltinFunction extends BaseFunction {
     } catch (IllegalAccessException e) {
       throw badCallException(loc, e, args);
     } finally {
-      thread.pop();
+      thread.exitScope();
     }
   }
 
@@ -221,7 +229,7 @@ public abstract class BuiltinFunction extends BaseFunction {
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("<built-in function " + getName() + ">");
   }
 }

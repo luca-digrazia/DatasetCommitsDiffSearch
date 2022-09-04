@@ -17,9 +17,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.Pair;
@@ -38,16 +36,14 @@ import javax.annotation.Nullable;
  *       new NativeProvider("link_params") { };
  * </pre>
  *
- * To allow construction from Skylark and custom construction logic, override the {@link #call}
- * method.
+ * To allow construction from Skylark and custom construction logic, override {@link
+ * ProviderFromFunction#createInstanceFromSkylark(Object[], StarlarkThread, Location)}.
  *
  * @deprecated use {@link BuiltinProvider} instead.
  */
 @Immutable
 @Deprecated
-public abstract class NativeProvider<V extends InfoInterface> extends BaseFunction
-    implements Provider {
-  private final String name;
+public abstract class NativeProvider<V extends InfoInterface> extends ProviderFromFunction {
   private final NativeKey key;
   private final String errorMessageFormatForUnknownField;
 
@@ -70,16 +66,11 @@ public abstract class NativeProvider<V extends InfoInterface> extends BaseFuncti
   }
 
   protected NativeProvider(Class<V> valueClass, String name) {
-    super(FunctionSignature.KWARGS, /*defaultValues=*/ null);
-    this.name = name;
+    super(name, FunctionSignature.KWARGS);
     this.key = new NativeKey(name, getClass());
     this.valueClass = valueClass;
     this.errorMessageFormatForUnknownField =
         String.format("'%s' object has no attribute '%%s'", name);
-  }
-
-  public final SkylarkProviderIdentifier id() {
-    return SkylarkProviderIdentifier.forKey(getKey());
   }
 
   /**
@@ -106,12 +97,7 @@ public abstract class NativeProvider<V extends InfoInterface> extends BaseFuncti
 
   @Override
   public String getPrintableName() {
-    return name; // for provider-related errors
-  }
-
-  @Override
-  public String getName() {
-    return name; // for stack traces
+    return getName();
   }
 
   @Override
@@ -134,19 +120,9 @@ public abstract class NativeProvider<V extends InfoInterface> extends BaseFuncti
     return key;
   }
 
-  /**
-   * Override this method to provide logic that is used to instantiate a declared provider from
-   * Skylark.
-   *
-   * <p>This is a method that is called when a constructor {@code c} is invoked as<br>
-   * {@code c(arg1 = val1, arg2 = val2, ...)}.
-   *
-   * @param args an array of argument values sorted as per the signature ({@see BaseFunction#call})
-   */
   @Override
-  protected Object call(Object[] args, @Nullable FuncallExpression ast, StarlarkThread thread)
-      throws EvalException, InterruptedException {
-    Location loc = ast != null ? ast.getLocation() : Location.BUILTIN;
+  protected InfoInterface createInstanceFromSkylark(
+      Object[] args, StarlarkThread thread, Location loc) throws EvalException {
     throw new EvalException(
         loc, String.format("'%s' cannot be constructed from Starlark", getPrintableName()));
   }

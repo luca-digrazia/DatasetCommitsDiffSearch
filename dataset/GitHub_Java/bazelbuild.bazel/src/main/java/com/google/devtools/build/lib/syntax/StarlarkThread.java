@@ -384,7 +384,7 @@ public final class StarlarkThread implements Freezable {
       return obj1.equals(obj2)
           || (obj1 instanceof SkylarkValue
               && obj2 instanceof SkylarkValue
-              && Starlark.repr(obj1).equals(Starlark.repr(obj2)));
+              && Printer.repr(obj1).equals(Printer.repr(obj2)));
     }
 
     /**
@@ -423,17 +423,19 @@ public final class StarlarkThread implements Freezable {
         if (value.equals(otherValue)) {
           continue;
         }
-        if (value instanceof Depset) {
-          if (otherValue instanceof Depset
-              && ((Depset) value).toCollection().equals(((Depset) otherValue).toCollection())) {
+        if (value instanceof SkylarkNestedSet) {
+          if (otherValue instanceof SkylarkNestedSet
+              && ((SkylarkNestedSet) value)
+                  .toCollection()
+                  .equals(((SkylarkNestedSet) otherValue).toCollection())) {
             continue;
           }
-        } else if (value instanceof Dict) {
-          if (otherValue instanceof Dict) {
+        } else if (value instanceof SkylarkDict) {
+          if (otherValue instanceof SkylarkDict) {
             @SuppressWarnings("unchecked")
-            Dict<Object, Object> thisDict = (Dict<Object, Object>) value;
+            SkylarkDict<Object, Object> thisDict = (SkylarkDict<Object, Object>) value;
             @SuppressWarnings("unchecked")
-            Dict<Object, Object> otherDict = (Dict<Object, Object>) otherValue;
+            SkylarkDict<Object, Object> otherDict = (SkylarkDict<Object, Object>) otherValue;
             if (thisDict.size() == otherDict.size()
                 && thisDict.keySet().equals(otherDict.keySet())) {
               boolean foundProblem = false;
@@ -456,10 +458,10 @@ public final class StarlarkThread implements Freezable {
             String.format(
                 "%s: this one has %s (class %s, %s), but given one has %s (class %s, %s)",
                 name,
-                Starlark.repr(value),
+                Printer.repr(value),
                 value.getClass().getName(),
                 value,
-                Starlark.repr(otherValue),
+                Printer.repr(otherValue),
                 otherValue.getClass().getName(),
                 otherValue));
       }
@@ -795,7 +797,7 @@ public final class StarlarkThread implements Freezable {
       // imported from a parent StarlarkThread by updating the current StarlarkThread, which will
       // not trigger a MutabilityException.
       throw new AssertionError(
-          Starlark.format("Can't update %s to %r in frozen environment", varname, value), e);
+          Printer.format("Can't update %s to %r in frozen environment", varname, value), e);
     }
     return this;
   }
