@@ -71,71 +71,13 @@ class DefaultUniAsserter implements UniAsserter {
         return this;
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private <T> Uni<T> uniFromSupplier(Supplier<Uni<T>> uni) {
+    private <T> Uni<Object> uniFromSupplier(Supplier<Uni<T>> uni) {
         return execution.onItem()
-                .transformToUni((Function) new Function<Object, Uni<T>>() {
+                .transformToUni(new Function<Object, Uni<?>>() {
                     @Override
-                    public Uni<T> apply(Object o) {
+                    public Uni<?> apply(Object o) {
                         return uni.get();
                     }
                 });
-    }
-
-    @Override
-    public <T> UniAsserter assertNotEquals(Supplier<Uni<T>> uni, T t) {
-        execution = uniFromSupplier(uni)
-                .onItem()
-                .invoke(new Consumer<Object>() {
-                    @Override
-                    public void accept(Object o) {
-                        Assertions.assertNotEquals(t, o);
-                    }
-                });
-        return this;
-    }
-
-    @Override
-    public <T> UniAsserter assertNotSame(Supplier<Uni<T>> uni, T t) {
-        execution = uniFromSupplier(uni)
-                .onItem()
-                .invoke(new Consumer<Object>() {
-                    @Override
-                    public void accept(Object o) {
-                        Assertions.assertNotSame(t, o);
-                    }
-                });
-        return this;
-    }
-
-    @Override
-    public <T> UniAsserter assertNotNull(Supplier<Uni<T>> uni) {
-        execution = uniFromSupplier(uni).onItem().invoke(Assertions::assertNotNull);
-        return this;
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T> UniAsserter surroundWith(Function<Uni<T>, Uni<T>> uni) {
-        execution = uni.apply((Uni<T>) execution);
-        return this;
-    }
-
-    @Override
-    public UniAsserter assertFalse(Supplier<Uni<Boolean>> uni) {
-        execution = uniFromSupplier(uni).onItem().invoke(Assertions::assertFalse);
-        return this;
-    }
-
-    @Override
-    public UniAsserter assertTrue(Supplier<Uni<Boolean>> uni) {
-        execution = uniFromSupplier(uni).onItem().invoke(Assertions::assertTrue);
-        return this;
-    }
-
-    @Override
-    public UniAsserter fail() {
-        execution = execution.onItem().invoke(v -> Assertions.fail());
-        return this;
     }
 }
