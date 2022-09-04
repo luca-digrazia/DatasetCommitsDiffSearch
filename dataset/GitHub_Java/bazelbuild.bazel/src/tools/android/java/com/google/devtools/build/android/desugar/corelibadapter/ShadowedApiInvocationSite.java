@@ -171,11 +171,7 @@ public final class ShadowedApiInvocationSite extends ClassVisitor {
       bridgeMethodNode.visitEnd();
 
       MethodVisitor bridgeMethodVisitor =
-          verbatimMethod.toBuilder()
-              .setMemberAccess(verbatimMethod.memberAccess() | Opcodes.ACC_SYNTHETIC)
-              .build()
-              .acceptTypeMapper(IMMUTABLE_LABEL_ATTACHER)
-              .accept(cv);
+          verbatimMethod.acceptTypeMapper(IMMUTABLE_LABEL_ATTACHER).accept(cv);
 
       MethodRemapper methodRemapper =
           new MethodRemapper(
