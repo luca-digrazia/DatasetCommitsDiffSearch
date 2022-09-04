@@ -29,8 +29,6 @@ import com.google.devtools.build.lib.actions.CommandLineItem;
 import com.google.devtools.build.lib.actions.CommandLineItem.CapturingMapFn;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
-import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.actions.ResourceSetOrBuilder;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -189,15 +187,6 @@ public class ProtoCompileActionBuilder {
     }
   }
 
-  /** Builds a ResourceSet based on the number of inputs. */
-  public static class ProtoCompileResourceSetBuilder implements ResourceSetOrBuilder {
-    @Override
-    public ResourceSet buildResourceSet(NestedSet<Artifact> inputs) {
-      return ResourceSet.createWithRamCpu(
-          /* memoryMb= */ 25 + 0.15 * inputs.memoizedFlattenAndGetSize(), /* cpuUsage= */ 1);
-    }
-  }
-
   @Nullable
   public SpawnAction maybeBuild() {
     if (isEmpty(outputs)) {
@@ -235,7 +224,7 @@ public class ProtoCompileActionBuilder {
 
     result
         .addOutputs(outputs)
-        .setResources(new ProtoCompileResourceSetBuilder())
+        .setResources(AbstractAction.DEFAULT_RESOURCE_SET)
         .useDefaultShellEnvironment()
         .setExecutable(protoCompiler)
         .addCommandLine(
@@ -319,9 +308,7 @@ public class ProtoCompileActionBuilder {
         ImmutableList.copyOf(ruleContext.getPrerequisites("deps", ProtoInfo.PROVIDER));
     NestedSet<Artifact> dependenciesDescriptorSets =
         ProtoCommon.computeDependenciesDescriptorSets(protoDeps);
-
-    ProtoToolchainInfo protoToolchain = ProtoToolchainInfo.fromRuleContext(ruleContext);
-    if (protoToolchain == null || protoInfo.getDirectProtoSources().isEmpty()) {
+    if (protoInfo.getDirectProtoSources().isEmpty()) {
       ruleContext.registerAction(
           FileWriteAction.createEmptyWithInputs(
               ruleContext.getActionOwner(), dependenciesDescriptorSets, output));
@@ -331,7 +318,6 @@ public class ProtoCompileActionBuilder {
     SpawnAction.Builder actions =
         createActions(
             ruleContext,
-            protoToolchain,
             ImmutableList.of(
                 createDescriptorSetToolchain(
                     ruleContext.getFragment(ProtoConfiguration.class), output.getExecPathString())),
@@ -410,14 +396,9 @@ public class ProtoCompileActionBuilder {
       String flavorName,
       Exports useExports,
       Services allowServices) {
-    ProtoToolchainInfo protoToolchain = ProtoToolchainInfo.fromRuleContext(ruleContext);
-    if (protoToolchain == null) {
-      return;
-    }
     SpawnAction.Builder actions =
         createActions(
             ruleContext,
-            protoToolchain,
             toolchainInvocations,
             protoInfo,
             ruleLabel,
@@ -433,7 +414,6 @@ public class ProtoCompileActionBuilder {
   @Nullable
   private static SpawnAction.Builder createActions(
       RuleContext ruleContext,
-      ProtoToolchainInfo protoToolchain,
       List<ToolchainInvocation> toolchainInvocations,
       ProtoInfo protoInfo,
       Label ruleLabel,
@@ -441,6 +421,7 @@ public class ProtoCompileActionBuilder {
       String flavorName,
       Exports useExports,
       Services allowServices) {
+
     if (isEmpty(outputs)) {
       return null;
     }
@@ -455,13 +436,18 @@ public class ProtoCompileActionBuilder {
       }
     }
 
+    FilesToRunProvider compilerTarget = ruleContext.getExecutablePrerequisite(":proto_compiler");
+    if (compilerTarget == null) {
+      return null;
+    }
+
     boolean siblingRepositoryLayout = ruleContext.getConfiguration().isSiblingRepositoryLayout();
 
     result
         .addOutputs(outputs)
         .setResources(AbstractAction.DEFAULT_RESOURCE_SET)
         .useDefaultShellEnvironment()
-        .setExecutable(protoToolchain.getCompiler())
+        .setExecutable(compilerTarget)
         .addCommandLine(
             createCommandLineFromToolchains(
                 toolchainInvocations,
@@ -471,7 +457,7 @@ public class ProtoCompileActionBuilder {
                 areDepsStrict(ruleContext) ? Deps.STRICT : Deps.NON_STRICT,
                 arePublicImportsStrict(ruleContext) ? useExports : Exports.DO_NOT_USE,
                 allowServices,
-                protoToolchain.getCompilerOptions(),
+                ruleContext.getFragment(ProtoConfiguration.class).protocOpts(),
                 siblingRepositoryLayout),
             ParamFileInfo.builder(ParameterFileType.UNQUOTED).build())
         .setProgressMessage("Generating %s proto_library %s", flavorName, ruleContext.getLabel())

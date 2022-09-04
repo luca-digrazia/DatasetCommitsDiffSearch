@@ -24,16 +24,14 @@ import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import java.util.List;
 
-/**
- * Used by java_proto_library to support Google-specific features.
- */
+/** Used by java_proto_library to support Google-specific features. */
 public interface RpcSupport {
   List<ProtoCompileActionBuilder.ToolchainInvocation> getToolchainInvocation(
       RuleContext ruleContext, Artifact sourceJar);
 
   boolean allowServices(RuleContext ruleContext);
 
-  NestedSet<Artifact> getBlacklist(RuleContext ruleContext);
+  NestedSet<Artifact> getForbiddenProtos(RuleContext ruleContext);
 
   ImmutableList<TransitiveInfoCollection> getRuntimes(RuleContext ruleContext);
 
