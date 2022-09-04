@@ -19,7 +19,6 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteBufferFragment;
 import com.google.devtools.build.lib.bazel.rules.ninja.lexer.NinjaLexer;
-import com.google.devtools.build.lib.bazel.rules.ninja.lexer.NinjaLexer.TextKind;
 import com.google.devtools.build.lib.bazel.rules.ninja.lexer.NinjaToken;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -68,17 +67,13 @@ public class NinjaLexerTest {
   }
 
   @Test
-  public void testTabsAreAllowed() {
+  public void testDisallowedSymbols() {
     String text = "abc\n\tcde";
     NinjaLexer lexer = createLexer(text);
     assertTokenBytes(lexer, NinjaToken.IDENTIFIER, "abc");
     assertTokenBytes(lexer, NinjaToken.NEWLINE, null);
-    assertTokenBytes(lexer, NinjaToken.INDENT, null);
-    assertTokenBytes(lexer, NinjaToken.IDENTIFIER, "cde");
-  }
+    assertError(lexer, "Tabs are not allowed, use spaces.", "\t");
 
-  @Test
-  public void testDisallowedSymbols() {
     assertError(createLexer("^"), "Symbol is not allowed in the identifier.", "^");
   }
 
@@ -149,7 +144,7 @@ public class NinjaLexerTest {
     assertTokenBytes(lexer, NinjaToken.IDENTIFIER, "my.var");
     assertTokenBytes(lexer, NinjaToken.EQUALS, null);
 
-    lexer.setExpectedTextKind(TextKind.TEXT);
+    lexer.expectTextUntilEol();
     assertTokenBytes(lexer, NinjaToken.TEXT, "Any");
     assertTokenBytes(lexer, NinjaToken.TEXT, "text");
     assertTokenBytes(lexer, NinjaToken.TEXT, "^&%=@&!*");

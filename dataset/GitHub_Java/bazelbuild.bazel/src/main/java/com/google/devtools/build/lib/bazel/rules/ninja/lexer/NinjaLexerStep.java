@@ -47,7 +47,6 @@ public class NinjaLexerStep {
   private static final ImmutableSortedSet<Byte> IDENTIFIER_SYMBOLS =
       createByteSet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-");
   private static final ImmutableSortedSet<Byte> TEXT_STOPPERS = createByteSet("\n\r \t#$:\u0000");
-  private static final ImmutableSortedSet<Byte> PATH_STOPPERS = createByteSet("\n\r \t#$:|\u0000");
 
   private static ImmutableSortedSet<Byte> createByteSet(String variants) {
     ImmutableSortedSet.Builder<Byte> builder = ImmutableSortedSet.naturalOrder();
@@ -141,7 +140,7 @@ public class NinjaLexerStep {
   }
 
   public void skipSpaces() {
-    end = eatSequence(position, aByte -> ' ' != aByte && '\t' != aByte);
+    end = eatSequence(position, aByte -> ' ' != aByte);
   }
 
   public void skipComment() {
@@ -237,10 +236,6 @@ public class NinjaLexerStep {
 
   public void readText() {
     end = eatSequence(position, TEXT_STOPPERS::contains);
-  }
-
-  public void readPath() {
-    end = eatSequence(position, PATH_STOPPERS::contains);
   }
 
   private int readIdentifier(int startFrom, boolean withDot) {

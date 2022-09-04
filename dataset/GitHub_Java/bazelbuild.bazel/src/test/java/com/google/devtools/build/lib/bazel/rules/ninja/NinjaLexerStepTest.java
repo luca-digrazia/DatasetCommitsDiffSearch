@@ -130,18 +130,12 @@ public class NinjaLexerStepTest {
     doTest("abc_d-18", NinjaLexerStep::tryReadIdentifier);
     doTest("abc_d-18.ccc", NinjaLexerStep::tryReadIdentifier);
     doTest("abc_d-18.ccc=", NinjaLexerStep::tryReadIdentifier, "abc_d-18.ccc", true);
-    // Have a longer text to demonstrate the error output.
     doTestError(
-        "^abc Bazel only rebuilds what is necessary. "
-            + "With advanced local and distributed caching, optimized dependency analysis "
-            + "and parallel execution, you get fast and incremental builds.",
+        "^abc",
         NinjaLexerStep::tryReadIdentifier,
         "^",
         true,
-        "Symbol '^' is not allowed in the identifier, the text fragment with the symbol:\n"
-            + "^abc Bazel only rebuilds what is necessary. With advanced local and distributed"
-            + " caching, optimized dependency analysis and parallel execution,"
-            + " you get fast and incremental builds.\n");
+        "Symbol is not allowed in the identifier.");
   }
 
   @Test
