@@ -74,13 +74,14 @@ public class DropwizardTestSupport<C extends Configuration> {
     public void after() {
         try {
             stopIfRequired();
-        } finally {
+        }
+        finally {
             resetConfigOverrides();
         }
     }
 
     private void stopIfRequired() {
-        if (jettyServer != null) {
+        if( jettyServer != null) {
             for (ServiceListener<C> listener : listeners) {
                 try {
                     listener.onStop(this);
