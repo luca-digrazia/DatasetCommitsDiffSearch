@@ -21,7 +21,7 @@ import java.util.Arrays;
 import smile.math.Math;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.EVD;
+import smile.math.matrix.EigenValueDecomposition;
 import smile.projection.Projection;
 
 /**
@@ -50,12 +50,7 @@ import smile.projection.Projection;
  * the number of samples. In this case, the covariance estimates do not have
  * full rank, and so cannot be inverted. This is known as small sample size
  * problem.
- *
- * <h2>References</h2>
- * <ol>
- * <li> Robust and Accurate Cancer Classification with Gene Expression Profiling http://alumni.cs.ucr.edu/~hli/paper/hli05tumor.pdf.</li>
- * </ol>
- *
+ * 
  * @see LDA
  * @see smile.projection.PCA
  * 
@@ -277,8 +272,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
             }
         }
 
-        T.setSymmetric(true);
-        EVD eigen = T.eigen();
+        EigenValueDecomposition eigen = new EigenValueDecomposition(T, true);
         
         tol = tol * tol;
         double[] s = eigen.getEigenValues();
@@ -300,8 +294,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
         }
 
         B = U.abmm(UB);
-        B.setSymmetric(true);
-        eigen = B.eigen();
+        eigen = new EigenValueDecomposition(B, true);
 
         U = eigen.getEigenVectors();
         scaling = Matrix.zeros(p, L);

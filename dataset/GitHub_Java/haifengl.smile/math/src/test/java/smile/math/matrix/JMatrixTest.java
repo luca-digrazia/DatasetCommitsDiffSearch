@@ -20,7 +20,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.math.MathEx;
+import smile.math.Math;
 
 import static org.junit.Assert.*;
 
@@ -144,34 +144,6 @@ public class JMatrixTest {
     }
 
     /**
-     * Test of axpy method, of class ColumnMajorMatrix.
-     */
-    @Test
-    public void testAxpy() {
-        System.out.println("axpy");
-        double[] d = new double[matrix.nrows()];
-        for (int i = 0; i < d.length; i++) d[i] = 1.0;
-        matrix.axpy(b, d);
-        assertEquals(1.65, d[0], 1E-10);
-        assertEquals(1.60, d[1], 1E-10);
-        assertEquals(1.55, d[2], 1E-10);
-    }
-
-    /**
-     * Test of axpy method, of class ColumnMajorMatrix.
-     */
-    @Test
-    public void testAxpy2() {
-        System.out.println("axpy b = 2");
-        double[] d = new double[matrix.nrows()];
-        for (int i = 0; i < d.length; i++) d[i] = 1.0;
-        matrix.axpy(b, d, 2.0);
-        assertEquals(2.65, d[0], 1E-10);
-        assertEquals(2.60, d[1], 1E-10);
-        assertEquals(2.55, d[2], 1E-10);
-    }
-
-    /**
      * Test of atx method, of class ColumnMajorMatrix.
      */
     @Test
@@ -182,34 +154,6 @@ public class JMatrixTest {
         assertEquals(0.65, d[0], 1E-10);
         assertEquals(0.60, d[1], 1E-10);
         assertEquals(0.55, d[2], 1E-10);
-    }
-
-    /**
-     * Test of atxpy method, of class JMatrix.
-     */
-    @Test
-    public void testAtxpy() {
-        System.out.println("atxpy");
-        double[] d = new double[matrix.nrows()];
-        for (int i = 0; i < d.length; i++) d[i] = 1.0;
-        matrix.atxpy(b, d);
-        assertEquals(1.65, d[0], 1E-10);
-        assertEquals(1.60, d[1], 1E-10);
-        assertEquals(1.55, d[2], 1E-10);
-    }
-
-    /**
-     * Test of atxpy method, of class JMatrix.
-     */
-    @Test
-    public void testAtxpy2() {
-        System.out.println("atxpy b = 2");
-        double[] d = new double[matrix.nrows()];
-        for (int i = 0; i < d.length; i++) d[i] = 1.0;
-        matrix.atxpy(b, d, 2.0);
-        assertEquals(2.65, d[0], 1E-10);
-        assertEquals(2.60, d[1], 1E-10);
-        assertEquals(2.55, d[2], 1E-10);
     }
 
     /**
@@ -252,7 +196,7 @@ public class JMatrixTest {
         JMatrix a = new JMatrix(A);
         JMatrix b = new JMatrix(B);
         JMatrix c = a.add(b);
-        assertTrue(MathEx.equals(C, c.toArray(), 1E-7));
+        assertTrue(Math.equals(C, c.array(), 1E-7));
     }
 
     /**
@@ -279,7 +223,7 @@ public class JMatrixTest {
         JMatrix a = new JMatrix(A);
         JMatrix b = new JMatrix(B);
         JMatrix c = a.sub(b);
-        assertTrue(MathEx.equals(C, c.toArray(), 1E-7));
+        assertTrue(Math.equals(C, c.array(), 1E-7));
     }
 
     /**
@@ -316,11 +260,8 @@ public class JMatrixTest {
 
         JMatrix a = new JMatrix(A);
         JMatrix b = new JMatrix(B);
-        double[][] F = b.abmm(a).transpose().toArray();
-
-        assertTrue(MathEx.equals(a.abmm(b).toArray(), C, 1E-7));
-        assertTrue(MathEx.equals(a.abtmm(b).toArray(), D, 1E-7));
-        assertTrue(MathEx.equals(a.atbmm(b).toArray(), E, 1E-7));
-        assertTrue(MathEx.equals(a.atbtmm(b).toArray(), F, 1E-7));
+        assertTrue(Math.equals(a.abmm(b).array(), C, 1E-7));
+        assertTrue(Math.equals(a.abtmm(b).array(), D, 1E-7));
+        assertTrue(Math.equals(a.atbmm(b).array(), E, 1E-7));
     }
 }

@@ -28,7 +28,7 @@ import smile.plot.Palette;
 import smile.plot.PlotCanvas;
 import smile.projection.PCA;
 import smile.projection.RandomProjection;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  *
@@ -60,10 +60,10 @@ public class RandomProjectionDemo extends ProjectionDemo {
         pca.setProjection(2);
         double[][] y = pca.project(data);
 
-        PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+        PlotCanvas plot = new PlotCanvas(Math.colMin(y), Math.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (dataset[datasetIndex].responseAttribute() != null) {
+        } else if (dataset[datasetIndex].response() != null) {
             int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
@@ -78,10 +78,10 @@ public class RandomProjectionDemo extends ProjectionDemo {
         pca.setProjection(3);
         y = pca.project(data);
 
-        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+        plot = new PlotCanvas(Math.colMin(y), Math.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (dataset[datasetIndex].responseAttribute() != null) {
+        } else if (dataset[datasetIndex].response() != null) {
             int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
@@ -104,10 +104,10 @@ public class RandomProjectionDemo extends ProjectionDemo {
         }
 
         y = rp.project(data);
-        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+        plot = new PlotCanvas(Math.colMin(y), Math.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (dataset[datasetIndex].responseAttribute() != null) {
+        } else if (dataset[datasetIndex].response() != null) {
             int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
@@ -130,10 +130,10 @@ public class RandomProjectionDemo extends ProjectionDemo {
         }
 
         y = rp.project(data);
-        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+        plot = new PlotCanvas(Math.colMin(y), Math.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (dataset[datasetIndex].responseAttribute() != null) {
+        } else if (dataset[datasetIndex].response() != null) {
             int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
