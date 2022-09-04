@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.worker;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -23,7 +21,6 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.RunfilesTreeUpdater;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
@@ -155,16 +152,14 @@ public class WorkerModule extends BlazeModule {
   @Override
   public void registerSpawnStrategies(
       SpawnStrategyRegistry.Builder registryBuilder, CommandEnvironment env) {
-    checkNotNull(workerPool);
+    Preconditions.checkNotNull(workerPool);
     SandboxOptions sandboxOptions = env.getOptions().getOptions(SandboxOptions.class);
-    options = env.getOptions().getOptions(WorkerOptions.class);
     LocalEnvProvider localEnvProvider = LocalEnvProvider.forCurrentOs(env.getClientEnv());
     WorkerSpawnRunner spawnRunner =
         new WorkerSpawnRunner(
             new SandboxHelpers(sandboxOptions.delayVirtualInputMaterialization),
             env.getExecRoot(),
             workerPool,
-            options.workerMultiplex,
             env.getReporter(),
             createFallbackRunner(env, localEnvProvider),
             localEnvProvider,
@@ -173,11 +168,8 @@ public class WorkerModule extends BlazeModule {
             // TODO(buchgr): Replace singleton by a command-scoped RunfilesTreeUpdater
             RunfilesTreeUpdater.INSTANCE,
             env.getOptions().getOptions(WorkerOptions.class));
-    ExecutionOptions executionOptions =
-        checkNotNull(env.getOptions().getOptions(ExecutionOptions.class));
     registryBuilder.registerStrategy(
-        new WorkerSpawnStrategy(env.getExecRoot(), spawnRunner, executionOptions.verboseFailures),
-        "worker");
+        new WorkerSpawnStrategy(env.getExecRoot(), spawnRunner), "worker");
   }
 
   private static SpawnRunner createFallbackRunner(
@@ -236,6 +228,5 @@ public class WorkerModule extends BlazeModule {
     if (this.workerFactory != null) {
       this.workerFactory.setReporter(null);
     }
-    WorkerMultiplexerManager.afterCommandCleanup();
   }
 }

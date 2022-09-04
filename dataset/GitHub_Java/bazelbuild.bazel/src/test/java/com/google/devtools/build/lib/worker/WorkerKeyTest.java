@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.actions.ExecutionRequirements.WorkerProtocolFormat;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -32,7 +31,7 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link WorkerKey}. */
 @RunWith(JUnit4.class)
 public class WorkerKeyTest {
-  final FileSystem fs = new InMemoryFileSystem(DigestHashFunction.SHA256);
+  final FileSystem fs = new InMemoryFileSystem();
 
   Path workerBaseDir = fs.getPath("/outputbase/bazel-workers");
   WorkerKey workerKey =
@@ -54,39 +53,7 @@ public class WorkerKeyTest {
     assertThat(WorkerKey.makeWorkerTypeName(false)).isEqualTo("worker");
     assertThat(WorkerKey.makeWorkerTypeName(true)).isEqualTo("multiplex-worker");
     // Hash code contains args, env, execRoot, proxied, and mnemonic.
-    assertThat(workerKey.hashCode()).isEqualTo(1605714200);
+    assertThat(workerKey.hashCode()).isEqualTo(1434805936);
     assertThat(workerKey.getProtocolFormat()).isEqualTo(WorkerProtocolFormat.PROTO);
-  }
-
-  @Test
-  public void testWorkerKeyEquality() {
-    WorkerKey workerKeyWithSameFields =
-        new WorkerKey(
-            workerKey.getArgs(),
-            workerKey.getEnv(),
-            workerKey.getExecRoot(),
-            workerKey.getMnemonic(),
-            workerKey.getWorkerFilesCombinedHash(),
-            workerKey.getWorkerFilesWithHashes(),
-            workerKey.mustBeSandboxed(),
-            workerKey.getProxied(),
-            workerKey.getProtocolFormat());
-    assertThat(workerKey).isEqualTo(workerKeyWithSameFields);
-  }
-
-  @Test
-  public void testWorkerKeyInequality_protocol() {
-    WorkerKey workerKeyWithDifferentProtocol =
-        new WorkerKey(
-            workerKey.getArgs(),
-            workerKey.getEnv(),
-            workerKey.getExecRoot(),
-            workerKey.getMnemonic(),
-            workerKey.getWorkerFilesCombinedHash(),
-            workerKey.getWorkerFilesWithHashes(),
-            workerKey.mustBeSandboxed(),
-            workerKey.getProxied(),
-            WorkerProtocolFormat.JSON);
-    assertThat(workerKey).isNotEqualTo(workerKeyWithDifferentProtocol);
   }
 }
