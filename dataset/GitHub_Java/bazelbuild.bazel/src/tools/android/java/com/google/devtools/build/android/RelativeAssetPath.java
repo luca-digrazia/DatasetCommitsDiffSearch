@@ -16,7 +16,6 @@ package com.google.devtools.build.android;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.android.proto.SerializeFormat;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.FileSystem;
@@ -26,16 +25,14 @@ import java.util.Objects;
 /**
  * Represents a DataKey for assets.
  *
- * Assets are added to a single directory inside an apk by aapt. Therefore, to determine overwritten
- * and conflicting assets we take the relative from the asset directory and turn it into a DataKey.
- * This serves as the unique identifier for each apk stored asset.
+ * <p>Assets are added to a single directory inside an apk by aapt. Therefore, to determine
+ * overwritten and conflicting assets we take the relative from the asset directory and turn it into
+ * a DataKey. This serves as the unique identifier for each apk stored asset.
  *
- * Note: Assets have no qualifiers or packages.
+ * <p>Note: Assets have no qualifiers or packages.
  */
-public class RelativeAssetPath implements DataKey, Comparable<RelativeAssetPath> {
-  /**
-   * A Factory that creates RelativeAssetsPath objects whose paths are relative to a given path.
-   */
+public class RelativeAssetPath implements DataKey {
+  /** A Factory that creates RelativeAssetsPath objects whose paths are relative to a given path. */
   public static class Factory {
     private final Path assetRoot;
 
@@ -43,9 +40,7 @@ public class RelativeAssetPath implements DataKey, Comparable<RelativeAssetPath>
       this.assetRoot = assetRoot;
     }
 
-    /**
-     * Creates a new factory with the asset directory that contains assets.
-     */
+    /** Creates a new factory with the asset directory that contains assets. */
     public static Factory of(Path assetRoot) {
       return new Factory(Preconditions.checkNotNull(assetRoot));
     }
@@ -59,9 +54,7 @@ public class RelativeAssetPath implements DataKey, Comparable<RelativeAssetPath>
     }
   }
 
-  /**
-   * Reconstitutes the relative asset path from a protocol buffer and {@link FileSystem}.
-   */
+  /** Reconstitutes the relative asset path from a protocol buffer and {@link FileSystem}. */
   static RelativeAssetPath fromProto(SerializeFormat.DataKey serialized, FileSystem fileSystem) {
     return of(fileSystem.getPath(serialized.getKeyValue()));
   }
@@ -81,7 +74,7 @@ public class RelativeAssetPath implements DataKey, Comparable<RelativeAssetPath>
     if (this == other) {
       return true;
     }
-    if (other == null || getClass() != other.getClass()) {
+    if (!(other instanceof RelativeAssetPath)) {
       return false;
     }
     RelativeAssetPath that = (RelativeAssetPath) other;
@@ -103,8 +96,22 @@ public class RelativeAssetPath implements DataKey, Comparable<RelativeAssetPath>
   }
 
   @Override
-  public int compareTo(RelativeAssetPath relativeAssetPath) {
-    return this.relativeAssetPath.compareTo(relativeAssetPath.relativeAssetPath);
+  public int compareTo(DataKey otherKey) {
+    if (!(otherKey instanceof RelativeAssetPath)) {
+      return getKeyType().compareTo(otherKey.getKeyType());
+    }
+    RelativeAssetPath otherAssetPath = (RelativeAssetPath) otherKey;
+    return this.relativeAssetPath.compareTo(otherAssetPath.relativeAssetPath);
+  }
+
+  @Override
+  public KeyType getKeyType() {
+    return KeyType.ASSET_PATH;
+  }
+
+  @Override
+  public boolean shouldDetectConflicts() {
+    return true;
   }
 
   @Override
@@ -114,5 +121,10 @@ public class RelativeAssetPath implements DataKey, Comparable<RelativeAssetPath>
         .setValueSize(valueSize)
         .build()
         .writeDelimitedTo(output);
+  }
+
+  @Override
+  public String toPrettyString() {
+    return "asset:" + relativeAssetPath;
   }
 }
