@@ -110,12 +110,19 @@ public final class EvalUtils {
         }
       };
 
-  /** Throws EvalException if x is not hashable. */
-  static void checkHashable(Object x) throws EvalException {
-    if (!isHashable(x)) {
-      throw new EvalException(
-          null, Printer.format("unhashable type: '%s'", EvalUtils.getDataTypeName(x)));
+  /**
+   * Checks that an Object is a valid key for a Skylark dict.
+   *
+   * @param o an Object to validate
+   * @throws EvalException if o is not a valid key
+   */
+  static void checkValidDictKey(Object o) throws EvalException {
+    // TODO(bazel-team): check that all recursive elements are both Immutable AND Comparable.
+    if (isHashable(o)) {
+      return;
     }
+    // Same error message as Python (that makes it a TypeError).
+    throw new EvalException(null, Printer.format("unhashable type: '%r'", o.getClass()));
   }
 
   /**
@@ -470,7 +477,7 @@ public final class EvalUtils {
         b.put(key, value);
       }
     }
-    return Dict.copyOf(thread.mutability(), b.build());
+    return Dict.copyOf(thread, b.build());
   }
 
   /**
