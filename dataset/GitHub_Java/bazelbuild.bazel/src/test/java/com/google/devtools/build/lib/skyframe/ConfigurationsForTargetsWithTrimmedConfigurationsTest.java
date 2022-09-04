@@ -191,14 +191,11 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
 
     @Override
     public BuildOptions patch(BuildOptions options) {
-      if (!options.contains(TestConfiguration.TestOptions.class)) {
-        return options;
-      }
-
       BuildOptions result = options.clone();
       TestConfiguration.TestOptions testOpts = result.get(TestConfiguration.TestOptions.class);
-      testOpts.testArguments =
+      ImmutableList<String> testArgs =
           new ImmutableList.Builder<String>().addAll(testOpts.testArguments).add(argument).build();
+      testOpts.testArguments = testArgs;
       return result;
     }
   }

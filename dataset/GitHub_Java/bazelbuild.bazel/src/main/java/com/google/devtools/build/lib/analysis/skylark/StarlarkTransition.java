@@ -17,7 +17,6 @@ import static com.google.devtools.build.lib.analysis.skylark.FunctionTransitionU
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
@@ -29,18 +28,16 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.PackageValue;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /** A marker class for configuration transitions that are defined in Starlark. */
@@ -137,30 +134,25 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
    * {@code COMMAND_LINE_OPTION_PREFIX}) already have their output values checked in {@link
    * FunctionTransitionUtil#applyTransition}.
    *
-   * <p>Remove build settings in {@code toOptions} that have been set to their default value. This
-   * is how we ensure that an unset build setting and a set-to-default build settings represent the
-   * same configuration.
-   *
    * @param root transition that was applied. Likely a {@link ComposingTransition} so we decompose
    *     and post-process all StarlarkTransitions out of whatever transition is passed here.
    * @param buildSettingPackages SkyKeys/Values of packages that contain all Starlark-defined build
    *     settings that were set by {@code root}
    * @param toOptions result of applying {@code root}
    * @param eventHandler eventHandler on which to replay events
-   * @return validated toOptions with default values filtered out
    * @throws TransitionException if an error occurred during Starlark transition application.
    */
   // TODO(juliexxia): the current implementation masks certain bad transitions and only checks the
   // final result. I.e. if a transition that writes a non int --//int-build-setting is composed
   // with another transition that writes --//int-build-setting (without reading it first), then
   // the bad output of transition 1 is masked.
-  public static List<BuildOptions> validate(
+  public static void validate(
       ConfigurationTransition root,
       Map<SkyKey, SkyValue> buildSettingPackages,
       List<BuildOptions> toOptions)
       throws TransitionException {
     // collect settings changed during this transition and their types
-    Map<Label, Rule> changedSettingToRule = Maps.newHashMap();
+    Map<Label, Type<?>> changedSettingToType = Maps.newHashMap();
     root.visit(
         (StarlarkTransitionVisitor)
             transition -> {
@@ -169,37 +161,28 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
               for (Label setting : changedSettings) {
                 Target buildSettingTarget =
                     getAndCheckBuildSettingTarget(buildSettingPackages, setting);
-                changedSettingToRule.put(setting, buildSettingTarget.getAssociatedRule());
+                changedSettingToType.put(
+                    setting,
+                    buildSettingTarget
+                        .getAssociatedRule()
+                        .getRuleClassObject()
+                        .getBuildSetting()
+                        .getType());
               }
             });
 
-    // verify changed settings were changed to something reasonable for their type and filter out
-    // default values.
-    Set<BuildOptions> cleanedOptionList = new LinkedHashSet<>(toOptions.size());
+    // verify changed settings were changed to something reasonable for their type
     for (BuildOptions options : toOptions) {
-      BuildOptions.Builder cleanedOptions = options.toBuilder();
-      boolean cleaned = false;
-      for (Map.Entry<Label, Rule> changedSettingWithRule : changedSettingToRule.entrySet()) {
-        Label setting = changedSettingWithRule.getKey();
-        Rule rule = changedSettingWithRule.getValue();
+      for (Map.Entry<Label, Type<?>> changedSettingWithType : changedSettingToType.entrySet()) {
+        Label setting = changedSettingWithType.getKey();
         Object newValue = options.getStarlarkOptions().get(setting);
-        Object convertedValue;
         try {
-          convertedValue =
-              rule.getRuleClassObject().getBuildSetting().getType().convert(newValue, setting);
+          changedSettingWithType.getValue().convert(newValue, setting);
         } catch (ConversionException e) {
           throw new TransitionException(e);
         }
-        if (convertedValue.equals(
-            rule.getAttributeContainer().getAttr(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME))) {
-          cleanedOptions.removeStarlarkOption(setting);
-          cleaned = true;
-        }
       }
-      // Keep the same instance if we didn't do anything to maintain reference equality later on.
-      cleanedOptionList.add(cleaned ? cleanedOptions.build() : options);
     }
-    return ImmutableList.copyOf(cleanedOptionList);
   }
 
   /**
