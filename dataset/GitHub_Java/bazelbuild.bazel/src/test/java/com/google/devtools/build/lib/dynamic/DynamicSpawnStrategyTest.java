@@ -159,7 +159,7 @@ public class DynamicSpawnStrategyTest {
     }
 
     @Override
-    public ImmutableList<SpawnResult> exec(
+    public List<SpawnResult> exec(
         Spawn spawn,
         ActionExecutionContext actionExecutionContext,
         @Nullable StopConcurrentSpawns stopConcurrentSpawns)
@@ -194,8 +194,7 @@ public class DynamicSpawnStrategyTest {
     }
 
     @Override
-    public ImmutableList<SpawnResult> exec(
-        Spawn spawn, ActionExecutionContext actionExecutionContext) {
+    public List<SpawnResult> exec(Spawn spawn, ActionExecutionContext actionExecutionContext) {
       throw new IllegalStateException("Not expected to be called");
     }
 
