@@ -137,7 +137,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
         CompilationAttributes.Builder.fromRuleContext(ruleContext).build(),
         /*useDeps=*/ true,
         outputGroupCollector,
-        null,
         /*isTestRule=*/ false,
         /*usePch=*/ true);
   }
@@ -150,7 +149,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
    * @param intermediateArtifacts IntermediateArtifacts for deriving artifact paths
    * @param compilationAttributes attributes of the calling target
    * @param useDeps true if deps should be used
-   * @param toolchain if not null overrides the default toolchain from the ruleContext.
    * @param usePch true if pch should be used
    */
   public CrosstoolCompilationSupport(
@@ -160,7 +158,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       CompilationAttributes compilationAttributes,
       boolean useDeps,
       Map<String, NestedSet<Artifact>> outputGroupCollector,
-      CcToolchainProvider toolchain,
       boolean isTestRule,
       boolean usePch) {
     super(
@@ -170,7 +167,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
         compilationAttributes,
         useDeps,
         outputGroupCollector,
-        toolchain,
         isTestRule,
         usePch);
   }
@@ -198,7 +194,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
 
       // TODO(b/30783125): Signal the need for this action in the CROSSTOOL.
       registerObjFilelistAction(getObjFiles(compilationArtifacts, intermediateArtifacts), objList);
-
+  
       extension.addVariableCategory(VariableCategory.ARCHIVE_VARIABLES);
 
       helper =
@@ -208,8 +204,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
                   extension.build(),
                   extraCompileArgs,
                   ccToolchain,
-                  fdoSupport,
-                  priorityHeaders)
+                  fdoSupport)
               .setLinkType(LinkTargetType.OBJC_ARCHIVE)
               .addLinkActionInput(objList);
     } else {
@@ -220,8 +215,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
               extension.build(),
               extraCompileArgs,
               ccToolchain,
-              fdoSupport,
-              priorityHeaders);
+              fdoSupport);
     }
 
     Info info = helper.build();
@@ -411,8 +405,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       VariablesExtension extension,
       ExtraCompileArgs extraCompileArgs,
       CcToolchainProvider ccToolchain,
-      FdoSupportProvider fdoSupport,
-      Iterable<PathFragment> priorityHeaders) {
+      FdoSupportProvider fdoSupport) {
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
     Collection<Artifact> arcSources = ImmutableSortedSet.copyOf(compilationArtifacts.getSrcs());
     Collection<Artifact> nonArcSources =
@@ -431,8 +424,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             createIncludeProcessing(privateHdrs, objcProvider, pchHdr),
             ruleContext.getFragment(ObjcConfiguration.class),
             isHeaderThinningEnabled(),
-            intermediateArtifacts,
-            buildConfiguration);
+            intermediateArtifacts);
     CcLibraryHelper result =
         new CcLibraryHelper(
                 ruleContext,
@@ -463,7 +455,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
                             .getCoptsForCompilationMode())
                     .addAll(extraCompileArgs)
                     .build())
-            .addIncludeDirs(priorityHeaders)
             .addIncludeDirs(objcProvider.get(INCLUDE))
             .addSystemIncludeDirs(objcProvider.get(INCLUDE_SYSTEM))
             .setCppModuleMap(intermediateArtifacts.moduleMap())
