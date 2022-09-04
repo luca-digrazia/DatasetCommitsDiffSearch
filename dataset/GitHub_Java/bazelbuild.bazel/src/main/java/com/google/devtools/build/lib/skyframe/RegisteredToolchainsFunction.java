@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.platform.DeclaredToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
@@ -56,26 +55,25 @@ public class RegisteredToolchainsFunction implements SkyFunction {
     }
     BuildConfiguration configuration = buildConfigurationValue.getConfiguration();
 
-    ImmutableList.Builder<String> targetPatternBuilder = new ImmutableList.Builder<>();
+    ImmutableList.Builder<String> targetPatterns = new ImmutableList.Builder<>();
 
     // Get the toolchains from the configuration.
     PlatformConfiguration platformConfiguration =
         configuration.getFragment(PlatformConfiguration.class);
-    targetPatternBuilder.addAll(platformConfiguration.getExtraToolchains());
+    targetPatterns.addAll(platformConfiguration.getExtraToolchains());
 
     // Get the registered toolchains from the WORKSPACE.
-    targetPatternBuilder.addAll(getWorkspaceToolchains(env));
+    targetPatterns.addAll(getWorkspaceToolchains(env));
     if (env.valuesMissing()) {
       return null;
     }
-    ImmutableList<String> targetPatterns = targetPatternBuilder.build();
 
     // Expand target patterns.
     ImmutableList<Label> toolchainLabels;
     try {
       toolchainLabels =
           TargetPatternUtil.expandTargetPatterns(
-              env, targetPatterns, FilteringPolicies.ruleType("toolchain", true));
+              env, targetPatterns.build(), FilteringPolicies.ruleType("toolchain", true));
       if (env.valuesMissing()) {
         return null;
       }
@@ -86,7 +84,7 @@ public class RegisteredToolchainsFunction implements SkyFunction {
 
     // Load the configured target for each, and get the declared toolchain providers.
     ImmutableList<DeclaredToolchainInfo> registeredToolchains =
-        configureRegisteredToolchains(env, configuration, targetPatterns, toolchainLabels);
+        configureRegisteredToolchains(env, configuration, toolchainLabels);
     if (env.valuesMissing()) {
       return null;
     }
@@ -112,7 +110,7 @@ public class RegisteredToolchainsFunction implements SkyFunction {
   @VisibleForTesting
   public static List<String> getRegisteredToolchains(Environment env) throws InterruptedException {
     PackageValue externalPackageValue =
-        (PackageValue) env.getValue(PackageValue.key(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER));
+        (PackageValue) env.getValue(PackageValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER));
     if (externalPackageValue == null) {
       return null;
     }
@@ -122,10 +120,7 @@ public class RegisteredToolchainsFunction implements SkyFunction {
   }
 
   private ImmutableList<DeclaredToolchainInfo> configureRegisteredToolchains(
-      Environment env,
-      BuildConfiguration configuration,
-      ImmutableList<String> targetPatterns,
-      List<Label> labels)
+      Environment env, BuildConfiguration configuration, List<Label> labels)
       throws InterruptedException, RegisteredToolchainsFunctionException {
     ImmutableList<SkyKey> keys =
         labels
@@ -151,20 +146,13 @@ public class RegisteredToolchainsFunction implements SkyFunction {
         DeclaredToolchainInfo toolchainInfo = target.getProvider(DeclaredToolchainInfo.class);
 
         if (toolchainInfo == null) {
-          if (TargetPatternUtil.isTargetExplicit(targetPatterns, toolchainLabel)) {
-            // Only report an error if the label was explicitly requested.
-            throw new RegisteredToolchainsFunctionException(
-                new InvalidToolchainLabelException(toolchainLabel), Transience.PERSISTENT);
-          }
-          continue;
+          throw new RegisteredToolchainsFunctionException(
+              new InvalidToolchainLabelException(toolchainLabel), Transience.PERSISTENT);
         }
         toolchains.add(toolchainInfo);
       } catch (ConfiguredValueCreationException e) {
-        if (TargetPatternUtil.isTargetExplicit(targetPatterns, toolchainLabel)) {
-          // Only report an error if the label was explicitly requested.
-          throw new RegisteredToolchainsFunctionException(
-              new InvalidToolchainLabelException(toolchainLabel, e), Transience.PERSISTENT);
-        }
+        throw new RegisteredToolchainsFunctionException(
+            new InvalidToolchainLabelException(toolchainLabel, e), Transience.PERSISTENT);
       }
     }
 
