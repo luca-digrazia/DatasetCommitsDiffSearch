@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.AppleDebugOutputsInfo.OutputType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.rules.objc.MultiArchBinarySupport.DependencySpecificConfiguration;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -143,9 +142,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
             "non_propagated_deps", Mode.SPLIT, ObjcProvider.SKYLARK_CONSTRUCTOR);
     ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap =
         ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
-    ImmutableListMultimap<BuildConfiguration, ConfiguredTargetAndTarget>
-        configToCTATDepsCollectionMap =
-            ruleContext.getPrerequisiteCofiguredTargetAndTargetsByConfiguration("deps", Mode.SPLIT);
 
     ImmutableMap<BuildConfiguration, CcToolchainProvider> childConfigurations =
         MultiArchBinarySupport.getChildConfigurationsAndToolchains(ruleContext);
@@ -158,7 +154,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         multiArchBinarySupport.getDependencySpecificConfigurations(
             childConfigurations,
             configToDepsCollectionMap,
-            configToCTATDepsCollectionMap,
             configurationToNonPropagatedObjcMap,
             getDylibProviderTargets(ruleContext));
 
