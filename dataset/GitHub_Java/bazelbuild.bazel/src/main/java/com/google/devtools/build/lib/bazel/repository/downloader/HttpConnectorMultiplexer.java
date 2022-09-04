@@ -21,7 +21,6 @@ import com.google.common.base.Optional;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.bazel.repository.downloader.RetryingInputStream.Reconnector;
 import com.google.devtools.build.lib.clock.Clock;
@@ -32,7 +31,6 @@ import com.google.devtools.build.lib.util.Sleeper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
-import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -44,6 +42,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -62,7 +62,7 @@ import javax.annotation.concurrent.GuardedBy;
 @ThreadSafe
 final class HttpConnectorMultiplexer {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(HttpConnectorMultiplexer.class.getName());
 
   private static final int MAX_THREADS_PER_CONNECT = 2;
   private static final long FAILOVER_DELAY_MS = 2000;
@@ -270,15 +270,6 @@ final class HttpConnectorMultiplexer {
         HttpStream result;
         try {
           result = establishConnection(work.url, work.checksum, work.authHeaders);
-        } catch (SocketTimeoutException e) {
-          // SocketTimeoutException derives from InterruptedIOException, but its occurrence
-          // is truly exceptional, so we handle it separately here. Failing to do so hides
-          // our exception from the user s/t they only see an inscrutable "thread
-          // interrupted" message instead.
-          synchronized (context) {
-            context.errors.add(e);
-            continue;
-          }
         } catch (InterruptedIOException e) {
           // The parent thread got its result from another thread and killed this one.
           synchronized (context) {
@@ -306,7 +297,7 @@ final class HttpConnectorMultiplexer {
           try {
             result.close();
           } catch (IOException | RuntimeException e) {
-            logger.atWarning().withCause(e).log("close() failed in loser zombie thread");
+            logger.log(Level.WARNING, "close() failed in loser zombie thread", e);
           }
         }
       }
