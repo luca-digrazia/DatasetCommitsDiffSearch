@@ -614,7 +614,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
     @Option(
       name = "experimental_android_generate_robolectric_r_class",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
@@ -634,7 +634,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
     @Option(
         name = "experimental_use_manifest_from_resource_apk",
-        defaultValue = "true",
+        defaultValue = "false",
         documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
         effectTags = {OptionEffectTag.UNKNOWN},
         help = "Android library rule will use the AppManifest from the resource APK"
