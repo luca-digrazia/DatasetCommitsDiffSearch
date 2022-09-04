@@ -161,28 +161,6 @@ public class ArcConfig {
     @ConfigItem(defaultValue = "true")
     public boolean detectUnusedFalsePositives;
 
-    /**
-     * If set to true then the container attempts to detect usage of <i>wrong</i> annotations.
-     * <p>
-     * A <i>wrong</i> annotation may lead to unexpected behavior in a Quarkus application. A typical example is
-     * {@code @javax.ejb.Singleton} which is often confused with {@code @javax.inject.Singleton}. As a result a component
-     * annotated with {@code @javax.ejb.Singleton} can be completely ignored.
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean detectWrongAnnotations;
-
-    /**
-     * Dev mode configuration.
-     */
-    @ConfigItem
-    public ArcDevModeConfig devMode;
-
-    /**
-     * Test mode configuration.
-     */
-    @ConfigItem
-    public ArcTestConfig test;
-
     public final boolean isRemoveUnusedBeansFieldValid() {
         return ALLOWED_REMOVE_UNUSED_BEANS_VALUES.contains(removeUnusedBeans.toLowerCase());
     }
