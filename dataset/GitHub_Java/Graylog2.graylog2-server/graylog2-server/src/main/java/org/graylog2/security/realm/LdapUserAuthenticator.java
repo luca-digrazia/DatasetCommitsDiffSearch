@@ -93,7 +93,6 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
             final LdapEntry userEntry = ldapConnector.search(connection,
                                                              ldapSettings.getSearchBase(),
                                                              ldapSettings.getSearchPattern(),
-                                                             ldapSettings.getDisplayNameAttribute(),
                                                              principal,
                                                              ldapSettings.isActiveDirectory(),
                                                              ldapSettings.getGroupSearchBase(),

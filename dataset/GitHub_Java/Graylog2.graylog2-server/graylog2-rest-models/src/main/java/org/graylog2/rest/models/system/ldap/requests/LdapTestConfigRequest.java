@@ -67,6 +67,18 @@ public abstract class LdapTestConfigRequest {
     @JsonProperty
     public abstract boolean testConnectOnly();
 
+    @JsonProperty
+    @Nullable
+    public abstract String groupSearchBase();
+
+    @JsonProperty
+    @Nullable
+    public abstract String groupIdAttribute();
+
+    @JsonProperty
+    @Nullable
+    public abstract String groupSearchPattern();
+
     @JsonCreator
     public static LdapTestConfigRequest create(@JsonProperty("system_username") @Nullable String systemUsername,
                                                @JsonProperty("system_password") @Nullable String systemPassword,
@@ -78,7 +90,23 @@ public abstract class LdapTestConfigRequest {
                                                @JsonProperty("search_pattern") @Nullable String searchPattern,
                                                @JsonProperty("principal") @Nullable String principal,
                                                @JsonProperty("password") @Nullable String password,
-                                               @JsonProperty("test_connect_only") boolean testConnectOnly) {
-        return new AutoValue_LdapTestConfigRequest(systemUsername, systemPassword, ldapUri, useStartTls, trustAllCertificates, activeDirectory, searchBase, searchPattern, principal, password, testConnectOnly);
+                                               @JsonProperty("test_connect_only") boolean testConnectOnly,
+                                               @JsonProperty("group_search_base") @Nullable String groupSearchBase,
+                                               @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute,
+                                               @JsonProperty("group_search_pattern") @Nullable String groupSearchPattern) {
+        return new AutoValue_LdapTestConfigRequest(systemUsername,
+                                                   systemPassword,
+                                                   ldapUri,
+                                                   useStartTls,
+                                                   trustAllCertificates,
+                                                   activeDirectory,
+                                                   searchBase,
+                                                   searchPattern,
+                                                   principal,
+                                                   password,
+                                                   testConnectOnly,
+                                                   groupSearchBase,
+                                                   groupIdAttribute,
+                                                   groupSearchPattern);
     }
 }

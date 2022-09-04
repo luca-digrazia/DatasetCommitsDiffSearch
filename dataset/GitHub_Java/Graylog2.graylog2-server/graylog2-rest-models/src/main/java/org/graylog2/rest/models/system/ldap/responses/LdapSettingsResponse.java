@@ -21,7 +21,10 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 
+import javax.annotation.Nullable;
 import java.net.URI;
+import java.util.Map;
+import java.util.Set;
 
 @JsonAutoDetect
 @AutoValue
@@ -59,6 +62,26 @@ public abstract class LdapSettingsResponse {
     @JsonProperty
     public abstract String defaultGroup();
 
+    @JsonProperty
+    @Nullable
+    public abstract Map<String, String> groupMapping();
+
+    @JsonProperty
+    @Nullable
+    public abstract String groupSearchBase();
+
+    @JsonProperty
+    @Nullable
+    public abstract String groupIdAttribute();
+
+    @JsonProperty
+    @Nullable
+    public abstract Set<String> additionalDefaultGroups();
+
+    @JsonProperty
+    @Nullable
+    public abstract String groupSearchPattern();
+
 
     @JsonCreator
     public static LdapSettingsResponse create(@JsonProperty("enabled") boolean enabled,
@@ -71,7 +94,27 @@ public abstract class LdapSettingsResponse {
                                               @JsonProperty("search_base") String searchBase,
                                               @JsonProperty("search_pattern") String searchPattern,
                                               @JsonProperty("display_name_attributes") String displayNameAttribute,
-                                              @JsonProperty("default_group") String defaultGroup) {
-        return new AutoValue_LdapSettingsResponse(enabled, systemUsername, systemPassword, ldapUri, useStartTls, trustAllCertificates, activeDirectory, searchBase, searchPattern, displayNameAttribute, defaultGroup);
+                                              @JsonProperty("default_group") String defaultGroup,
+                                              @JsonProperty("group_mapping") @Nullable Map<String, String> groupMapping,
+                                              @JsonProperty("group_search_base") @Nullable String groupSearchBase,
+                                              @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute,
+                                              @JsonProperty("additional_default_groups") @Nullable Set<String> additionalDefaultGroups,
+                                              @JsonProperty("group_search_pattern") @Nullable String groupSearchPattern) {
+        return new AutoValue_LdapSettingsResponse(enabled,
+                                                  systemUsername,
+                                                  systemPassword,
+                                                  ldapUri,
+                                                  useStartTls,
+                                                  trustAllCertificates,
+                                                  activeDirectory,
+                                                  searchBase,
+                                                  searchPattern,
+                                                  displayNameAttribute,
+                                                  defaultGroup,
+                                                  groupMapping,
+                                                  groupSearchBase,
+                                                  groupIdAttribute,
+                                                  additionalDefaultGroups,
+                                                  groupSearchPattern);
     }
 }

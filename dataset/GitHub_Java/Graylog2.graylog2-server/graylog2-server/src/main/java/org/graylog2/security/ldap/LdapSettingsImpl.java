@@ -17,7 +17,6 @@
 package org.graylog2.security.ldap;
 
 import com.google.common.base.Function;
-import com.google.common.base.Strings;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -105,7 +104,8 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     @Override
     public String getSystemUserName() {
-        return Strings.nullToEmpty((String) fields.get(SYSTEM_USERNAME));
+        final Object o = fields.get(SYSTEM_USERNAME);
+        return o != null ? o.toString() : "";
     }
 
     @Override
@@ -151,7 +151,8 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     @Override
     public String getSystemPasswordSalt() {
-        return Strings.nullToEmpty((String) fields.get(SYSTEM_PASSWORD_SALT));
+        Object o = fields.get(SYSTEM_PASSWORD_SALT);
+        return (o!= null) ? o.toString() : "";
     }
 
     @Override
@@ -172,7 +173,8 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     @Override
     public String getSearchBase() {
-        return Strings.nullToEmpty((String) fields.get(SEARCH_BASE));
+        final Object o = fields.get(SEARCH_BASE);
+        return o != null ? o.toString() : "";
     }
 
     @Override
@@ -182,7 +184,8 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     @Override
     public String getSearchPattern() {
-        return Strings.nullToEmpty((String) fields.get(SEARCH_PATTERN));
+        final Object o = fields.get(SEARCH_PATTERN);
+        return o != null ? o.toString() : "";
     }
 
     @Override
@@ -192,7 +195,8 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     @Override
     public String getDisplayNameAttribute() {
-        return Strings.nullToEmpty((String) fields.get(DISPLAY_NAME_ATTRIBUTE));
+        final Object o = fields.get(DISPLAY_NAME_ATTRIBUTE);
+        return o != null ? o.toString() : "";
     }
 
     @Override
@@ -328,7 +332,8 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     @Override
     public String getGroupSearchBase() {
-        return Strings.nullToEmpty((String) fields.get(GROUP_SEARCH_BASE));
+        final Object o = fields.get(GROUP_SEARCH_BASE);
+        return o != null ? o.toString() : "";
     }
 
     @Override
@@ -338,7 +343,8 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     @Override
     public String getGroupIdAttribute() {
-        return Strings.nullToEmpty((String) fields.get(GROUP_ID_ATTRIBUTE));
+        final Object o = fields.get(GROUP_ID_ATTRIBUTE);
+        return o != null ? o.toString() : "";
     }
 
     @Override
@@ -348,7 +354,8 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     @Override
     public String getGroupSearchPattern() {
-        return Strings.nullToEmpty((String) fields.get(GROUP_SEARCH_PATTERN));
+        final Object o = fields.get(GROUP_SEARCH_PATTERN);
+        return o != null ? o.toString() : "";
     }
 
     @Override
