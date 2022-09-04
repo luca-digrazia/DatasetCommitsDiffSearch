@@ -458,7 +458,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         .that(getGeneratingLabelForArtifact(linkedLib))
         .isEqualTo(target.getLabel());
     assertThat(artifactsToStrings(actionsTestUtil().artifactClosureOf(linkedLib)))
-        .containsAtLeastElementsIn(ImmutableSet.copyOf(Arrays.asList(srcNames)));
+        .containsAllIn(ImmutableSet.copyOf(Arrays.asList(srcNames)));
   }
 
   @Test
@@ -1289,7 +1289,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     assertThat(resourceContentsPaths(dir, directResources)).containsExactlyElementsIn(resources);
 
     // Validate that the input to resource processing contains all values.
-    assertThat(resourceInputPaths(dir, directResources)).containsAtLeastElementsIn(resources);
+    assertThat(resourceInputPaths(dir, directResources)).containsAllIn(resources);
 
     // Validate that the filters are correctly passed to the resource processing action
     // This includes trimming whitespace and ignoring empty filters.
@@ -1637,8 +1637,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         .containsExactlyElementsIn(expectedResources);
 
     // Validate that the input to resource processing contains only the filtered values.
-    assertThat(resourceInputPaths(dir, directResources))
-        .containsAtLeastElementsIn(expectedResources);
+    assertThat(resourceInputPaths(dir, directResources)).containsAllIn(expectedResources);
     assertThat(resourceInputPaths(dir, directResources)).containsNoneIn(unexpectedResources);
 
     // Only transitive resources need to be ignored when filtered,, and there aren't any here.

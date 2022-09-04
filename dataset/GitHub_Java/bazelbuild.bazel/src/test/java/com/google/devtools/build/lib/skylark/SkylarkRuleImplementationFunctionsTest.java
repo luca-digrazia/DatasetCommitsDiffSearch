@@ -923,7 +923,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     Object result =
         evalRuleContextCode(
             ruleContext,
-            "ftb = depset(ruleContext.files.srcs)",
+            "ftb = depset() + ruleContext.files.srcs",
             "ruleContext.runfiles(transitive_files = ftb)");
     assertThat(ImmutableList.of("a.txt", "b.img"))
         .isEqualTo(ActionsTestUtil.baseArtifactNames(getRunfileArtifacts(result)));
@@ -996,7 +996,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   @Test
   public void testNsetContainsList() throws Exception {
     checkErrorContains(
-        "depsets cannot contain items of type 'list'", "depset([[ruleContext.files.srcs]])");
+        "depsets cannot contain items of type 'list'", "depset() + [ruleContext.files.srcs]");
   }
 
   @Test
@@ -2022,9 +2022,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "silly_rule(name = 'silly')");
     thrown.handleAssertionErrors(); // Compatibility with JUnit 4.11
     thrown.expect(AssertionError.class);
-    thrown.expectMessage(
-        "expected value of type 'function' for parameter 'implementation', "
-            + "for call to function rule");
+    thrown.expectMessage("<rule context for //test:silly> is not of type string or int or bool");
     getConfiguredTarget("//test:silly");
   }
 

@@ -28,16 +28,13 @@ import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skydoc.SkydocMain.StarlarkEvaluationException;
-import com.google.devtools.build.skydoc.rendering.DocstringParseException;
-import com.google.devtools.build.skydoc.rendering.FunctionUtil;
-import com.google.devtools.build.skydoc.rendering.ProtoRenderer;
-import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.AttributeType;
-import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.ModuleInfo;
-import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.ProviderInfo;
-import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.RuleInfo;
-import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.UserDefinedFunctionInfo;
+import com.google.devtools.build.skydoc.rendering.AttributeInfo;
+import com.google.devtools.build.skydoc.rendering.RuleInfo;
+import com.google.devtools.build.skydoc.rendering.UserDefinedFunctionInfo;
+import com.google.devtools.build.skydoc.rendering.UserDefinedFunctionInfo.DocstringParseException;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import org.junit.Before;
 import org.junit.Test;
@@ -128,29 +125,26 @@ public final class SkydocTest extends SkylarkTestCase {
     Map<String, RuleInfo> ruleInfos = ruleInfoMap.build();
     assertThat(ruleInfos).hasSize(1);
 
-    RuleInfo ruleInfo = Iterables.getOnlyElement(ruleInfos.values());
-    assertThat(ruleInfo.getRuleName()).isEqualTo("my_rule");
-    assertThat(ruleInfo.getDocString()).isEqualTo("This is my rule. It does stuff.");
-    assertThat(getAttrNames(ruleInfo)).containsExactly("name", "a", "b", "c", "d").inOrder();
-    assertThat(getAttrTypes(ruleInfo))
-        .containsExactly(
-            AttributeType.NAME,
-            AttributeType.LABEL,
-            AttributeType.STRING_DICT,
-            AttributeType.OUTPUT,
-            AttributeType.BOOLEAN)
-        .inOrder();
+    Entry<String, RuleInfo> ruleInfo = Iterables.getOnlyElement(ruleInfos.entrySet());
+    assertThat(ruleInfo.getKey()).isEqualTo("my_rule");
+    assertThat(ruleInfo.getValue().getDocString()).isEqualTo("This is my rule. It does stuff.");
+    assertThat(getAttrNames(ruleInfo.getValue())).containsExactly(
+        "name", "a", "b", "c", "d").inOrder();
+    assertThat(getAttrTypes(ruleInfo.getValue())).containsExactly(
+        AttributeInfo.Type.NAME,
+        AttributeInfo.Type.LABEL,
+        AttributeInfo.Type.STRING_DICT,
+        AttributeInfo.Type.OUTPUT,
+        AttributeInfo.Type.BOOLEAN).inOrder();
   }
 
   private static Iterable<String> getAttrNames(RuleInfo ruleInfo) {
-    return ruleInfo.getAttributeList().stream()
-        .map(attr -> attr.getName())
+    return ruleInfo.getAttributes().stream().map(attr -> attr.getName())
         .collect(Collectors.toList());
   }
 
-  private static Iterable<AttributeType> getAttrTypes(RuleInfo ruleInfo) {
-    return ruleInfo.getAttributeList().stream()
-        .map(attr -> attr.getType())
+  private static Iterable<AttributeInfo.Type> getAttrTypes(RuleInfo ruleInfo) {
+    return ruleInfo.getAttributes().stream().map(attr -> attr.getType())
         .collect(Collectors.toList());
   }
 
@@ -381,7 +375,7 @@ public final class SkydocTest extends SkylarkTestCase {
     DocstringParseException expected =
         assertThrows(
             DocstringParseException.class,
-            () -> FunctionUtil.fromNameAndFunction("check_sources", checkSourcesFn));
+            () -> UserDefinedFunctionInfo.fromNameAndFunction("check_sources", checkSourcesFn));
     assertThat(expected)
         .hasMessageThat()
         .contains(
@@ -392,94 +386,5 @@ public final class SkydocTest extends SkylarkTestCase {
         .contains(
             "/test/main.bzl:1:5 line 8: invalid parameter documentation "
                 + "(expected format: \"parameter_name: documentation\").");
-  }
-
-  @Test
-  public void testFuncInfoParams() throws Exception {
-    scratch.file(
-        "/test/test.bzl",
-        "def check_function(foo, bar, baz):",
-        "\"\"\"Runs some checks on the given function parameter.",
-        " ",
-        "This rule runs checks on a given function parameter.",
-        " ",
-        "Args:",
-        "foo: A unique parameter for this rule.",
-        "bar: A unique parameter for this rule.",
-        "baz: A unique parameter for this rule.",
-        "\"\"\"",
-        "pass");
-
-    ImmutableMap.Builder<String, UserDefinedFunction> funcInfoMap = ImmutableMap.builder();
-
-    skydocMain.eval(
-        StarlarkSemantics.DEFAULT_SEMANTICS,
-        Label.parseAbsoluteUnchecked("//test:test.bzl"),
-        ImmutableMap.builder(),
-        ImmutableMap.builder(),
-        funcInfoMap);
-
-    Map<String, UserDefinedFunction> functions = funcInfoMap.build();
-    assertThat(functions).hasSize(1);
-
-    ModuleInfo moduleInfo =
-        new ProtoRenderer().appendUserDefinedFunctionInfos(functions).getModuleInfo().build();
-    UserDefinedFunctionInfo funcInfo = moduleInfo.getFuncInfo(0);
-    assertThat(funcInfo.getFunctionName()).isEqualTo("check_function");
-    assertThat(getParamNames(funcInfo)).containsExactly("foo", "bar", "baz").inOrder();
-  }
-
-  private static Iterable<String> getParamNames(UserDefinedFunctionInfo funcInfo) {
-    return funcInfo.getParameterList().stream()
-        .map(param -> param.getName())
-        .collect(Collectors.toList());
-  }
-
-  @Test
-  public void testProviderInfo() throws Exception {
-    scratch.file(
-        "/test/test.bzl",
-        "MyExampleInfo = provider(",
-        "  doc = 'Stores information about example.',",
-        "  fields = {",
-        "    'name' : 'A string representing a random name.',",
-        "    'city' : 'A string representing a city.',",
-        "  },",
-        ")",
-        "pass");
-
-    ImmutableMap.Builder<String, ProviderInfo> providerInfoMap = ImmutableMap.builder();
-
-    skydocMain.eval(
-        StarlarkSemantics.DEFAULT_SEMANTICS,
-        Label.parseAbsoluteUnchecked("//test:test.bzl"),
-        ImmutableMap.builder(),
-        providerInfoMap,
-        ImmutableMap.builder());
-
-    Map<String, ProviderInfo> providers = providerInfoMap.build();
-    assertThat(providers).hasSize(1);
-
-    ModuleInfo moduleInfo =
-        new ProtoRenderer().appendProviderInfos(providers.values()).getModuleInfo().build();
-    ProviderInfo providerInfo = moduleInfo.getProviderInfo(0);
-    assertThat(providerInfo.getProviderName()).isEqualTo("MyExampleInfo");
-    assertThat(providerInfo.getDocString()).isEqualTo("Stores information about example.");
-    assertThat(getFieldNames(providerInfo)).containsExactly("name", "city").inOrder();
-    assertThat(getFieldDocString(providerInfo))
-        .containsExactly("A string representing a random name.", "A string representing a city.")
-        .inOrder();
-  }
-
-  private static Iterable<String> getFieldNames(ProviderInfo providerInfo) {
-    return providerInfo.getFieldInfoList().stream()
-        .map(field -> field.getName())
-        .collect(Collectors.toList());
-  }
-
-  private static Iterable<String> getFieldDocString(ProviderInfo providerInfo) {
-    return providerInfo.getFieldInfoList().stream()
-        .map(field -> field.getDocString())
-        .collect(Collectors.toList());
   }
 }
