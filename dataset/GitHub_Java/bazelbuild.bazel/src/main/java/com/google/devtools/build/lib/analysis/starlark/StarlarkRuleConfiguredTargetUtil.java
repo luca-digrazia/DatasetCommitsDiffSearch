@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.analysis.starlark;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -42,6 +43,7 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.NativeProvider.WithLegacyStarlarkName;
 import com.google.devtools.build.lib.packages.Provider;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.StarlarkInfo;
@@ -52,6 +54,7 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalExceptionWithStackTrace;
 import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -86,7 +89,7 @@ public final class StarlarkRuleConfiguredTargetUtil {
   public static ConfiguredTarget buildRule(
       RuleContext ruleContext,
       AdvertisedProviderSet advertisedProviders,
-      StarlarkCallable ruleImplementation, // TODO(adonovan): unused; delete
+      StarlarkCallable ruleImplementation,
       Location location,
       StarlarkSemantics starlarkSemantics,
       String toolsRepository)
@@ -125,13 +128,12 @@ public final class StarlarkRuleConfiguredTargetUtil {
         }
       }
 
-      // call rule.implementation(ctx)
       Object target =
-          Starlark.fastcall(
+          Starlark.call(
               thread,
-              ruleClass.getConfiguredTargetFunction(),
-              /*positional=*/ new Object[] {starlarkRuleContext},
-              /*named=*/ new Object[0]);
+              ruleImplementation,
+              /*args=*/ ImmutableList.of(starlarkRuleContext),
+              /*kwargs=*/ ImmutableMap.of());
 
       if (ruleContext.hasErrors()) {
         return null;
@@ -161,14 +163,15 @@ public final class StarlarkRuleConfiguredTargetUtil {
           ? (CachingAnalysisEnvironment.MissingDepException) ex.getCause()
           : ex;
 
-    } catch (EvalException ex) {
+    } catch (EvalException e) {
+      addRuleToStackTrace(e, ruleContext.getRule(), ruleImplementation);
       // If the error was expected, return an empty target.
-      if (!expectFailure.isEmpty() && ex.getMessage().matches(expectFailure)) {
+      if (!expectFailure.isEmpty() && getMessageWithoutStackTrace(e).matches(expectFailure)) {
         return new RuleConfiguredTargetBuilder(ruleContext)
             .add(RunfilesProvider.class, RunfilesProvider.EMPTY)
             .build();
       }
-      ruleContext.ruleError("\n" + ex.getMessageWithStack());
+      ruleContext.ruleError("\n" + e.print());
       return null;
     } finally {
       if (starlarkRuleContext != null) {
@@ -189,6 +192,27 @@ public final class StarlarkRuleConfiguredTargetUtil {
                 providerId.toString()));
       }
     }
+  }
+
+  /** Adds the given rule to the stack trace of the exception (if there is one). */
+  private static void addRuleToStackTrace(EvalException ex, Rule rule, StarlarkCallable ruleImpl) {
+    if (ex instanceof EvalExceptionWithStackTrace) {
+      ((EvalExceptionWithStackTrace) ex)
+          .registerPhantomCall(
+              String.format("%s(name = '%s')", rule.getRuleClass(), rule.getName()),
+              rule.getLocation(),
+              ruleImpl);
+    }
+  }
+
+  /**
+   * Returns the message of the given exception after removing the stack trace, if present.
+   */
+  private static String getMessageWithoutStackTrace(EvalException ex) {
+    if (ex instanceof EvalExceptionWithStackTrace) {
+      return ((EvalExceptionWithStackTrace) ex).getOriginalMessage();
+    }
+    return ex.getMessage();
   }
 
   @Nullable
@@ -216,10 +240,7 @@ public final class StarlarkRuleConfiguredTargetUtil {
     try {
       addProviders(context, builder, target, loc);
     } catch (EvalException ex) {
-      // TODO(adonovan): this is the only use of the getDeprecatedLocation feature.
-      // Eliminate it, and ensure that the error message strings contain any
-      // relevant non-stack locations.
-      if (ex.getDeprecatedLocation() == null) {
+      if (ex.getLocation() == null) {
         // Prefer target struct's creation location in error messages.
         if (target instanceof Info) {
           loc = ((Info) target).getCreationLoc();

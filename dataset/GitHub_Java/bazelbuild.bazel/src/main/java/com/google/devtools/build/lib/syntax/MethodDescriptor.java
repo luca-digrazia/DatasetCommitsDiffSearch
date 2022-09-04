@@ -161,7 +161,7 @@ final class MethodDescriptor {
         throw (InterruptedException) e;
       } else {
         // All other checked exceptions (e.g. LabelSyntaxException) are reported to Starlark.
-        throw new EvalException(e);
+        throw new EvalException(null, null, e);
       }
     }
     if (method.getReturnType().equals(Void.TYPE)) {

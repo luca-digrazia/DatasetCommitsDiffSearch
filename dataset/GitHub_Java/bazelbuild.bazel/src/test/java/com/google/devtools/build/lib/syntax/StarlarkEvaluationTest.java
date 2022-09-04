@@ -443,7 +443,7 @@ public final class StarlarkEvaluationTest {
   }
 
   private static String debugPrintArgs(Iterable<?> args) {
-    Printer p = new Printer();
+    Printer p = Printer.getPrinter();
     p.append("args(");
     String sep = "";
     for (Object arg : args) {
