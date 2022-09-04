@@ -25,7 +25,7 @@ package smile.math;
 public interface DifferentiableMultivariateFunction extends MultivariateFunction {
 
     /**
-     * Computes the value and gradient at x.
+     * Compute the value and gradient of the function at x.
      */
-    double g(double[] x, double[] gradient);
+    double applyWithGradient(double[] x, double[] gradient);
 }

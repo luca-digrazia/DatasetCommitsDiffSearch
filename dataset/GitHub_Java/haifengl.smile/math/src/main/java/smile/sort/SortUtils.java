@@ -17,12 +17,17 @@
 package smile.sort;
 
 /**
- * Some useful functions such as swap and swif-down used in many sorting
+ * Some useful functions such as swap and swift-down used in many sorting
  * algorithms.
  * 
  * @author Haifeng Li
  */
 public class SortUtils {
+    /** Utility classes should not have public constructors. */
+    private SortUtils() {
+
+    }
+
     /**
      * Swap two positions.
      */

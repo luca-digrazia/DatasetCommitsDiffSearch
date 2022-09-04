@@ -51,7 +51,7 @@ public class InverseMultiquadricRadialBasis implements RadialBasisFunction {
     }
 
     @Override
-    public double f(double r) {
+    public double apply(double r) {
         return 1 / Math.sqrt(r*r + r02);
     }
 

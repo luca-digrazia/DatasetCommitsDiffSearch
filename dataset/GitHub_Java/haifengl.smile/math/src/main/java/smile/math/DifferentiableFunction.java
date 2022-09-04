@@ -24,7 +24,7 @@ package smile.math;
  */
 public interface DifferentiableFunction extends Function {
     /**
-     * Computes the gradient/derivative at x.
+     * Compute the value of the derivative function at x.
      */
-    double g(double x);
+    double df(double x);
 }

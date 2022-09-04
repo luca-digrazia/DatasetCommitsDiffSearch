@@ -147,6 +147,11 @@ public class JMatrix implements DenseMatrix {
     }
 
     @Override
+    public int ld() {
+        return nrows;
+    }
+
+    @Override
     public double get(int i, int j) {
         return A[j*nrows + i];
     }
@@ -813,25 +818,6 @@ public class JMatrix implements DenseMatrix {
                 double v = 0.0;
                 for (int k = 0; k < nrows; k++) {
                     v += get(k, i) * B.get(k, j);
-                }
-                C.set(i, j, v);
-            }
-        }
-        return C;
-    }
-
-    @Override
-    public JMatrix atbtmm(DenseMatrix B) {
-        if (nrows() != B.ncols()) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A' * B': %d x %d vs %d x %d", nrows(), ncols(), B.nrows(), B.ncols()));
-        }
-
-        JMatrix C = new JMatrix(ncols, B.nrows());
-        for (int i = 0; i < ncols; i++) {
-            for (int j = 0; j < B.nrows(); j++) {
-                double v = 0.0;
-                for (int k = 0; k < nrows; k++) {
-                    v += get(k, i) * B.get(j, k);
                 }
                 C.set(i, j, v);
             }

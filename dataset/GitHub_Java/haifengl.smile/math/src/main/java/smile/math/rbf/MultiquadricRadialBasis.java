@@ -50,7 +50,7 @@ public class MultiquadricRadialBasis implements RadialBasisFunction {
     }
 
     @Override
-    public double f(double r) {
+    public double apply(double r) {
         return Math.sqrt(r * r + r02);
     }
 

@@ -65,7 +65,7 @@ public class GaussianRadialBasis implements RadialBasisFunction {
     }
 
     @Override
-    public double f(double r) {
+    public double apply(double r) {
         r /= r0;
         return Math.exp(-0.5 * r * r);
     }
