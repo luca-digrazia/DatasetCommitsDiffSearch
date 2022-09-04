@@ -43,7 +43,6 @@ import javax.tools.Diagnostic;
  *
  * <ul>
  *   <li>The method must be public.
- *   <li>The method must be non-static.
  *   <li>If structField=true, there must be zero user-supplied parameters.
  *   <li>Method parameters must be supplied in the following order:
  *       <pre>method([positionals]*[other user-args](Location)(FuncallExpression)(Environment))
@@ -110,9 +109,6 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
 
       if (!methodElement.getModifiers().contains(Modifier.PUBLIC)) {
         error(methodElement, "@SkylarkCallable annotated methods must be public.");
-      }
-      if (methodElement.getModifiers().contains(Modifier.STATIC)) {
-        error(methodElement, "@SkylarkCallable annotated methods cannot be static.");
       }
 
       try {

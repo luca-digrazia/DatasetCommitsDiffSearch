@@ -2209,7 +2209,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "  return [MyInfo(strict_java_deps = ctx.fragments.java.strict_java_deps)]",
         "",
         "def transition_func(settings):",
-        "  return { '//command_line_option:strict_java_deps' : 'WARN' }",
+        "  return { 'strict_java_deps' : 'WARN' }",
         "my_transition = transition(",
         "    implementation = transition_func,",
         "    for_analysis_testing=True,",
@@ -2321,7 +2321,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
       } catch (BuildFileContainsErrorsException e) {
         // The reason that this is an exception and not reported to the event handler is that the
         // error is reported by the parent sky function, which we don't have here.
-        assertThat(e).hasMessageThat().contains("Starlark import cycle");
+        assertThat(e).hasMessageThat().contains("Skylark import cycle");
         assertThat(e).hasMessageThat().contains("test/skylark:ext1.bzl");
         assertThat(e).hasMessageThat().contains("test/skylark:ext2.bzl");
       }
@@ -2347,7 +2347,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
       } catch (BuildFileContainsErrorsException e) {
         // The reason that this is an exception and not reported to the event handler is that the
         // error is reported by the parent sky function, which we don't have here.
-        assertThat(e).hasMessageThat().contains("Starlark import cycle");
+        assertThat(e).hasMessageThat().contains("Skylark import cycle");
         assertThat(e).hasMessageThat().contains("//test/skylark:ext2.bzl");
         assertThat(e).hasMessageThat().contains("//test/skylark:ext3.bzl");
         assertThat(e).hasMessageThat().contains("//test/skylark:ext4.bzl");

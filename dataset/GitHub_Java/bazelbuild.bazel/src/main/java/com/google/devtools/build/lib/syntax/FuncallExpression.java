@@ -608,7 +608,8 @@ public final class FuncallExpression extends Expression {
         if (!type.contains(value)) {
           return ArgumentListConversionResult.fromError(
               String.format(
-                  "expected value of type '%s' for parameter '%s'", type, param.getName()));
+                  "expected value of type '%s' for parameter '%s'",
+                  type.toString(), param.getName()));
         }
         if (param.isNamed() && keys.contains(param.getName())) {
           return ArgumentListConversionResult.fromError(
@@ -622,7 +623,8 @@ public final class FuncallExpression extends Expression {
           if (!type.contains(value)) {
             return ArgumentListConversionResult.fromError(
                 String.format(
-                    "expected value of type '%s' for parameter '%s'", type, param.getName()));
+                    "expected value of type '%s' for parameter '%s'",
+                    type.toString(), param.getName()));
           }
         } else { // Param not specified by user. Use default value.
           if (param.getDefaultValue().isEmpty()) {
