@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.config.transitions;
 
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory.TransitionFactoryData;
-
 /**
  * Factory interface for transitions that are created dynamically, instead of being created as
  * singletons.
@@ -31,10 +29,10 @@ import com.google.devtools.build.lib.analysis.config.transitions.TransitionFacto
  * @param <T> the type of data object passed to the {@link #create} method, used to create the
  *     actual {@link ConfigurationTransition} instance
  */
-public interface TransitionFactory<T extends TransitionFactoryData> {
+public interface TransitionFactory<T extends TransitionFactory.Data> {
 
-  /** Interface for types of data that a {@link TransitionFactory} can use. */
-  interface TransitionFactoryData {}
+  /** A marker interface for classes that provide data to TransitionFactory instances. */
+  interface Data {}
 
   /** Returns a new {@link ConfigurationTransition}, based on the given data. */
   ConfigurationTransition create(T data);
@@ -43,6 +41,19 @@ public interface TransitionFactory<T extends TransitionFactoryData> {
   // remove these methods.
   /** Returns {@code true} if the result of this {@link TransitionFactory} is a host transition. */
   default boolean isHost() {
+    return false;
+  }
+
+  /**
+   * Returns {@code true} if the result of this {@link TransitionFactory} should be considered as
+   * part of the tooling rather than a dependency of the original target.
+   */
+  default boolean isTool() {
+    if (isHost()) {
+      // Every host dependency is also a tool dependency.
+      return true;
+    }
+
     return false;
   }
 

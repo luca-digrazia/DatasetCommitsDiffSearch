@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.analysis.config.transitions;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory.TransitionFactoryData;
 
 /**
  * A transition factory that composes two other transition factories in an ordered sequence.
@@ -30,7 +29,7 @@ import com.google.devtools.build.lib.analysis.config.transitions.TransitionFacto
  * </pre>
  */
 @AutoValue
-public abstract class ComposingTransitionFactory<T extends TransitionFactoryData>
+public abstract class ComposingTransitionFactory<T extends TransitionFactory.Data>
     implements TransitionFactory<T> {
 
   /**
@@ -41,11 +40,14 @@ public abstract class ComposingTransitionFactory<T extends TransitionFactoryData
    * one of the transitions is {@link NoTransition} or the host transition, and returns an
    * efficiently composed transition.
    */
-  public static <T extends TransitionFactoryData> TransitionFactory<T> of(
+  public static <T extends TransitionFactory.Data> TransitionFactory<T> of(
       TransitionFactory<T> transitionFactory1, TransitionFactory<T> transitionFactory2) {
 
     Preconditions.checkNotNull(transitionFactory1);
     Preconditions.checkNotNull(transitionFactory2);
+    Preconditions.checkArgument(
+        !transitionFactory1.isSplit() || !transitionFactory2.isSplit(),
+        "can't compose two split transition factories");
 
     if (isFinal(transitionFactory1)) {
       // Since no other transition can be composed with transitionFactory1, use it directly.
@@ -70,14 +72,14 @@ public abstract class ComposingTransitionFactory<T extends TransitionFactoryData
     return create(transitionFactory1, transitionFactory2);
   }
 
-  private static <T extends TransitionFactoryData> boolean isFinal(
+  private static <T extends TransitionFactory.Data> boolean isFinal(
       TransitionFactory<T> transitionFactory) {
     return NullTransition.isInstance(transitionFactory) || transitionFactory.isHost();
   }
 
-  private static <T extends TransitionFactoryData> TransitionFactory<T> create(
+  private static <T extends TransitionFactory.Data> TransitionFactory<T> create(
       TransitionFactory<T> transitionFactory1, TransitionFactory<T> transitionFactory2) {
-    return new AutoValue_ComposingTransitionFactory(transitionFactory1, transitionFactory2);
+    return new AutoValue_ComposingTransitionFactory<T>(transitionFactory1, transitionFactory2);
   }
 
   abstract TransitionFactory<T> transitionFactory1();
@@ -97,10 +99,12 @@ public abstract class ComposingTransitionFactory<T extends TransitionFactoryData
   }
 
   @Override
+  public boolean isTool() {
+    return transitionFactory1().isTool() || transitionFactory2().isTool();
+  }
+
+  @Override
   public boolean isSplit() {
     return transitionFactory1().isSplit() || transitionFactory2().isSplit();
   }
-
-  // TODO(https://github.com/bazelbuild/bazel/issues/7814): Move ComposingTransition here and make
-  // it private.
 }

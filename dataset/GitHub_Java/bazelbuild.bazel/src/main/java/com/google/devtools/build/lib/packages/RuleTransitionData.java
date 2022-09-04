@@ -1,4 +1,4 @@
-// Copyright 2019 The Bazel Authors. All rights reserved.
+// Copyright 2021 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,20 +18,14 @@ import com.google.devtools.build.lib.analysis.config.transitions.TransitionFacto
 
 /**
  * Helper class which contains data used by a {@link TransitionFactory} to create a transition for
- * rules and attributes.
+ * rules.
  */
-// This class is in lib.packages in order to access AttributeMap, which is not available to
-// the lib.analysis.config.transitions package.
 @AutoValue
-public abstract class RuleTransitionData implements TransitionFactory.TransitionFactoryData {
-  /** Returns the {@link AttributeMap} which can be used to create a transition. */
-  public abstract AttributeMap attributes();
+public abstract class RuleTransitionData implements TransitionFactory.Data {
 
-  // TODO(https://github.com/bazelbuild/bazel/issues/7814): Add further data fields as needed by
-  // transition factory instances.
-
-  /** Returns a new {@link RuleTransitionData} instance. */
-  public static RuleTransitionData create(AttributeMap attributes) {
-    return new AutoValue_RuleTransitionData(attributes);
+  public static RuleTransitionData create(Rule rule) {
+    return new AutoValue_RuleTransitionData(rule);
   }
+
+  public abstract Rule rule();
 }
