@@ -42,15 +42,14 @@ public class CollectPackagesUnderDirectoryFunction implements SkyFunction {
 
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
-    return new MyTraversalFunction(directories)
-        .visitDirectory((RecursivePkgKey) skyKey.argument(), env);
+    return new MyTraversalFunction().visitDirectory((RecursivePkgKey) skyKey.argument(), env);
   }
 
-  /** The {@link RecursiveDirectoryTraversalFunction} used by our traversal. */
-  public static class MyTraversalFunction
+  private class MyTraversalFunction
       extends RecursiveDirectoryTraversalFunction<
           MyPackageDirectoryConsumer, CollectPackagesUnderDirectoryValue> {
-    protected MyTraversalFunction(BlazeDirectories directories) {
+
+    private MyTraversalFunction() {
       super(directories);
     }
 

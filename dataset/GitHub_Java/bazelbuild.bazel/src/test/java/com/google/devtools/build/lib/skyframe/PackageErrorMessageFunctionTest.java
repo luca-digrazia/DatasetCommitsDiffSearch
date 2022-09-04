@@ -65,8 +65,8 @@ public class PackageErrorMessageFunctionTest extends BuildViewTestCase {
     assertThat(packageErrorMessageValue.getResult()).isEqualTo(Result.NO_SUCH_PACKAGE_EXCEPTION);
     assertThat(packageErrorMessageValue.getNoSuchPackageExceptionMessage())
         .isEqualTo(
-            "error loading package 'a': Unable to load file "
-                + "'//a:does_not_exist.bzl': file doesn't exist");
+            "error loading package 'a': Extension file not found. Unable to load file "
+                + "'//a:does_not_exist.bzl': file doesn't exist or isn't a file");
   }
 
   private PackageErrorMessageValue getPackageErrorMessageValue(boolean keepGoing)

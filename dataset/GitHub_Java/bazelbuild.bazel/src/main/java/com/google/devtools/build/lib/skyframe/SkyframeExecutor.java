@@ -371,7 +371,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     ConfiguredRuleClassProvider ruleClassProvider =
         (ConfiguredRuleClassProvider) pkgFactory.getRuleClassProvider();
     SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining =
-        getSkylarkImportLookupFunctionForInlining();
+        getSkylarkImportLookupFunctionForInlining(ruleClassProvider, pkgFactory);
     // TODO(janakr): use this semaphore to bound memory usage for SkyFunctions besides
     // ConfiguredTargetFunction that may have a large temporary memory blow-up.
     Semaphore cpuBoundSemaphore = new Semaphore(ResourceUsage.getAvailableProcessors());
@@ -512,7 +512,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   @Nullable
-  protected SkylarkImportLookupFunction getSkylarkImportLookupFunctionForInlining() {
+  protected SkylarkImportLookupFunction getSkylarkImportLookupFunctionForInlining(
+      RuleClassProvider ruleClassProvider, PackageFactory packageFactory) {
     return null;
   }
 
