@@ -1,76 +1,65 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.dashboards.widgets;
 
-import com.codahale.metrics.MetricRegistry;
-import org.graylog2.indexer.IndexHelper;
-import org.graylog2.indexer.Indexer;
-import org.graylog2.indexer.results.CountResult;
-import org.graylog2.indexer.searches.timeranges.TimeRange;
+import com.google.common.collect.ImmutableMap;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.indexer.searches.Searches;
+import org.graylog2.plugin.dashboards.widgets.ComputationResult;
+import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 
-import java.util.HashMap;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class StreamSearchResultCountWidget extends DashboardWidget {
+import static com.google.common.base.Strings.isNullOrEmpty;
 
-    private final Indexer indexer;
-    private final String query;
-    private final TimeRange timeRange;
+public class StreamSearchResultCountWidget extends SearchResultCountWidget {
+    public interface Factory extends WidgetStrategy.Factory<StreamSearchResultCountWidget> {
+        @Override
+        StreamSearchResultCountWidget create(Map<String, Object> config, TimeRange timeRange, String widgetId);
+    }
+
     private final String streamId;
 
-    public StreamSearchResultCountWidget(MetricRegistry metricRegistry, Indexer indexer, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
-        super(metricRegistry, DashboardWidget.Type.STREAM_SEARCH_RESULT_COUNT, id, description, cacheTime, config, creatorUserId);
-        this.indexer = indexer;
-
-        this.query = query;
-        this.timeRange = timeRange;
+    @AssistedInject
+    public StreamSearchResultCountWidget(Searches searches, @Assisted Map<String, Object> config, @Assisted TimeRange timeRange, @Assisted String widgetId) {
+        super(searches, config, timeRange, widgetId);
         this.streamId = (String) config.get("stream_id");
-    }
-
-    public String getQuery() {
-        return query;
-    }
-
-    public TimeRange getTimeRange() {
-        return timeRange;
     }
 
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("query", query);
-            put("timerange", timeRange.getPersistedConfig());
-            put("stream_id", streamId);
-        }};
+        final Map<String, Object> inheritedConfig = super.getPersistedConfig();
+        final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.builder();
+        persistedConfig.putAll(inheritedConfig);
+        if (!isNullOrEmpty(streamId)) {
+            persistedConfig.put("stream_id", streamId);
+        }
+
+        return persistedConfig.build();
     }
 
     @Override
-    protected ComputationResult compute() {
-        try {
-            CountResult cr = indexer.searches().count(query, timeRange, "streams:" + streamId);
-            return new ComputationResult(cr.getCount(), cr.getTookMs());
-        } catch (IndexHelper.InvalidRangeFormatException e) {
-            throw new RuntimeException("Invalid timerange format.", e);
+    public ComputationResult compute() {
+        String filter = null;
+        if (!isNullOrEmpty(streamId)) {
+            filter = "streams:" + streamId;
         }
+        return computeInternal(filter);
     }
-
 }

@@ -1,78 +1,114 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.dashboards.widgets;
 
-import org.graylog2.Core;
-import org.graylog2.indexer.searches.timeranges.TimeRange;
+import com.google.common.collect.ImmutableMap;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.indexer.results.HistogramResult;
+import org.graylog2.indexer.searches.Searches;
+import org.graylog2.plugin.dashboards.widgets.ComputationResult;
+import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class FieldChartWidget extends DashboardWidget {
+import static com.google.common.base.Strings.isNullOrEmpty;
 
-    private final Core core;
+public class FieldChartWidget extends ChartWidget {
+    public interface Factory extends WidgetStrategy.Factory<FieldChartWidget> {
+        @Override
+        FieldChartWidget create(Map<String, Object> config, TimeRange timeRange, String widgetId);
+    }
+
+    private static final Logger LOG = LoggerFactory.getLogger(FieldChartWidget.class);
+
     private final String query;
+    private final String field;
+    private final String statisticalFunction;
+    private final String renderer;
+    private final String interpolation;
+    private final Searches searches;
     private final TimeRange timeRange;
-    private final String streamId;
-    private final Map<String, Object> config;
+    private final String widgetId;
 
-    public FieldChartWidget(Core core, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) throws InvalidWidgetConfigurationException {
-        super(core, Type.FIELD_CHART, id, description, cacheTime, config, creatorUserId);
+    @AssistedInject
+    public FieldChartWidget(Searches searches, @Assisted Map<String, Object> config, @Assisted TimeRange timeRange, @Assisted String widgetId) throws InvalidWidgetConfigurationException {
+        super(config);
+        this.searches = searches;
+        this.timeRange = timeRange;
+        this.widgetId = widgetId;
 
         if (!checkConfig(config)) {
             throw new InvalidWidgetConfigurationException("Missing or invalid widget configuration. Provided config was: " + config.toString());
         }
 
-        this.query = query;
-        this.timeRange = timeRange;
-        this.core = core;
-        this.config = config;
+        final String query = (String)config.get("query");
 
-        if (config.containsKey("stream_id")) {
-            this.streamId = (String) config.get("stream_id");
+        if (query == null || query.trim().isEmpty()) {
+            this.query = "*";
         } else {
-            this.streamId = null;
+            this.query = query;
         }
+
+        this.field = (String) config.get("field");
+        this.statisticalFunction = (String) config.get("valuetype");
+        this.renderer = (String) config.get("renderer");
+        this.interpolation = (String) config.get("interpolation");
     }
 
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("query", query);
-            put("timerange", timeRange.getPersistedConfig());
-            put("stream_id", streamId);
+        final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.<String, Object>builder()
+                .putAll(super.getPersistedConfig())
+                .put("query", query)
+                .put("field", field)
+                .put("valuetype", statisticalFunction)
+                .put("renderer", renderer)
+                .put("interpolation", interpolation);
 
-            put("field", config.get("field"));
-            put("valuetype", config.get("valuetype"));
-            put("renderer", config.get("renderer"));
-            put("interpolation", config.get("interpolation"));
-            put("interval", config.get("interval"));
-        }};
+        return persistedConfig.build();
     }
 
     @Override
-    protected ComputationResult compute() {
-        return new ComputationResult(0, 9001);
+    public ComputationResult compute() {
+        String filter = null;
+        if (!isNullOrEmpty(streamId)) {
+            filter = "streams:" + streamId;
+        }
+
+        try {
+            final HistogramResult histogramResult = searches.fieldHistogram(
+                    query,
+                    field,
+                    Searches.DateHistogramInterval.valueOf(interval.toString().toUpperCase(Locale.ENGLISH)),
+                    filter,
+                    this.timeRange,
+                    "cardinality".equalsIgnoreCase(statisticalFunction));
+
+            return new ComputationResult(histogramResult.getResults(), histogramResult.took().millis(), histogramResult.getHistogramBoundaries());
+        } catch (Searches.FieldTypeException e) {
+            String msg = "Could not calculate [" + this.getClass().getCanonicalName() + "] widget <" + this.widgetId + ">. Not a numeric field? The field was [" + field + "]";
+            LOG.error(msg, e);
+            throw new RuntimeException(msg, e);
+        }
     }
 
     private boolean checkConfig(Map<String, Object> config) {
@@ -82,5 +118,4 @@ public class FieldChartWidget extends DashboardWidget {
                 && config.containsKey("interval");
 
     }
-
 }

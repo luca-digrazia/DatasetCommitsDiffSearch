@@ -1,94 +1,81 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.dashboards.widgets;
 
-import com.codahale.metrics.MetricRegistry;
-import org.graylog2.indexer.IndexHelper;
-import org.graylog2.indexer.Indexer;
+import com.google.common.collect.ImmutableMap;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.indexer.results.HistogramResult;
-import org.graylog2.indexer.searches.timeranges.TimeRange;
+import org.graylog2.indexer.searches.Searches;
+import org.graylog2.plugin.dashboards.widgets.ComputationResult;
+import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 
-import java.util.HashMap;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class SearchResultChartWidget extends DashboardWidget {
+import static com.google.common.base.Strings.isNullOrEmpty;
 
-    private final Indexer indexer;
+public class SearchResultChartWidget extends ChartWidget {
+    public interface Factory extends WidgetStrategy.Factory<SearchResultChartWidget> {
+        @Override
+        SearchResultChartWidget create(Map<String, Object> config, TimeRange timeRange, String widgetId);
+    }
+
     private final String query;
+    private final Searches searches;
     private final TimeRange timeRange;
-    private final Indexer.DateHistogramInterval interval;
-    private final String streamId;
 
-    public SearchResultChartWidget(MetricRegistry metricRegistry, Indexer indexer, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
-        super(metricRegistry, Type.SEARCH_RESULT_CHART, id, description, cacheTime, config, creatorUserId);
-        this.indexer = indexer;
-
-        this.query = query;
+    @AssistedInject
+    public SearchResultChartWidget(Searches searches, @Assisted Map<String, Object> config, @Assisted TimeRange timeRange, @Assisted String widgetId) {
+        super(config);
+        this.searches = searches;
         this.timeRange = timeRange;
+        this.query = getNonEmptyQuery((String)config.get("query"));
+    }
 
-        if (config.containsKey("stream_id")) {
-            this.streamId = (String) config.get("stream_id");
-        } else {
-            this.streamId = null;
+    // We need to ensure query is not empty, or the histogram calculation will fail
+    private String getNonEmptyQuery(String query) {
+        if (isNullOrEmpty(query)) {
+            return "*";
         }
-
-        if (config.containsKey("interval")) {
-            this.interval = Indexer.DateHistogramInterval.valueOf(((String) config.get("interval")).toUpperCase());
-        } else {
-            this.interval = Indexer.DateHistogramInterval.MINUTE;
-        }
+        return query;
     }
 
     public String getQuery() {
         return query;
     }
 
-    public TimeRange getTimeRange() {
-        return timeRange;
-    }
-
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("query", query);
-            put("stream_id", streamId);
-            put("interval", interval.toString().toLowerCase());
-            put("timerange", timeRange.getPersistedConfig());
-        }};
+        final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.<String, Object>builder()
+                .putAll(super.getPersistedConfig())
+                .put("query", query);
+
+        return persistedConfig.build();
     }
 
     @Override
-    protected ComputationResult compute() {
+    public ComputationResult compute() {
         String filter = null;
-        if (streamId != null && !streamId.isEmpty()) {
+        if (!isNullOrEmpty(streamId)) {
             filter = "streams:" + streamId;
         }
 
-        try {
-            HistogramResult histogram = indexer.searches().histogram(query, interval, filter, timeRange);
-            return new ComputationResult(histogram.getResults(), histogram.took().millis());
-        } catch (IndexHelper.InvalidRangeFormatException e) {
-            throw new RuntimeException("Invalid timerange format.", e);
-        }
+        HistogramResult histogram = searches.histogram(query, interval, filter, this.timeRange);
+        return new ComputationResult(histogram.getResults(), histogram.took().millis(), histogram.getHistogramBoundaries());
     }
-
 }

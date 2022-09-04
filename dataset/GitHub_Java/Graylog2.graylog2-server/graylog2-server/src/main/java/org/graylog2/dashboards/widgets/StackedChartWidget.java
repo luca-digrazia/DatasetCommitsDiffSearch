@@ -17,50 +17,61 @@
 
 package org.graylog2.dashboards.widgets;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.indexer.results.HistogramResult;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
-import org.graylog2.indexer.searches.timeranges.TimeRange;
+import org.graylog2.plugin.dashboards.widgets.ComputationResult;
+import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
+import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class StackedChartWidget extends ChartWidget {
+    public interface Factory extends WidgetStrategy.Factory<StackedChartWidget> {
+        @Override
+        StackedChartWidget create(Map<String, Object> config, TimeRange timeRange, String widgetId);
+    }
 
     private static final Logger LOG = LoggerFactory.getLogger(StackedChartWidget.class);
 
     private final String renderer;
     private final String interpolation;
     private final List<Series> chartSeries;
-    private final TimeRange timeRange;
     private final Searches searches;
+    private final TimeRange timeRange;
+    private final String widgetId;
 
-    public StackedChartWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, WidgetCacheTime cacheTime, Map<String, Object> config, TimeRange timeRange, String creatorUserId) throws InvalidWidgetConfigurationException {
-        super(metricRegistry, Type.STACKED_CHART, id, description, cacheTime, config, creatorUserId);
+    @AssistedInject
+    public StackedChartWidget(Searches searches, @Assisted Map<String, Object> config, @Assisted TimeRange timeRange, @Assisted String widgetId) throws InvalidWidgetConfigurationException {
+        super(config);
         this.searches = searches;
+        this.timeRange = timeRange;
+        this.widgetId = widgetId;
 
         if (!checkConfig(config)) {
             throw new InvalidWidgetConfigurationException("Missing or invalid widget configuration. Provided config was: " + config.toString());
         }
 
-        this.timeRange = timeRange;
         this.renderer = (String) config.get("renderer");
         this.interpolation = (String) config.get("interpolation");
 
-        this.chartSeries = Lists.newArrayList();
         final Object persistedSeries = config.get("series");
 
         if (persistedSeries instanceof List) {
             final List chartSeries = (List) persistedSeries;
+            this.chartSeries = new ArrayList<>(chartSeries.size());
 
             for (final Object series : chartSeries) {
                 this.chartSeries.add(Series.fromMap((Map<String, Object>) series));
@@ -78,23 +89,23 @@ public class StackedChartWidget extends ChartWidget {
         }
 
         final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.<String, Object>builder()
+                .putAll(super.getPersistedConfig())
                 .put("renderer", renderer)
                 .put("interpolation", interpolation)
-                .put("series", seriesBuilder.build())
-                .put("timerange", timeRange.getPersistedConfig())
-                .putAll(super.getPersistedConfig());
+                .put("series", seriesBuilder.build());
+
 
         return persistedConfig.build();
     }
 
     @Override
-    protected ComputationResult compute() {
+    public ComputationResult compute() {
         String filter = null;
         if (!isNullOrEmpty(streamId)) {
             filter = "streams:" + streamId;
         }
 
-        final List<Map> results = Lists.newArrayList();
+        final List<Map> results = new ArrayList<>(chartSeries.size());
         DateTime from = null;
         DateTime to = null;
         long tookMs = 0;
@@ -104,10 +115,10 @@ public class StackedChartWidget extends ChartWidget {
                 final HistogramResult histogramResult = searches.fieldHistogram(
                         series.query,
                         series.field,
-                        Searches.DateHistogramInterval.valueOf(interval.toString().toUpperCase()),
+                        Searches.DateHistogramInterval.valueOf(interval.toString().toUpperCase(Locale.ENGLISH)),
                         filter,
-                        timeRange
-                );
+                        this.timeRange,
+                        "cardinality".equalsIgnoreCase(series.statisticalFunction));
 
                 if (from == null) {
                     from = histogramResult.getHistogramBoundaries().getFrom();
@@ -118,13 +129,13 @@ public class StackedChartWidget extends ChartWidget {
                 results.add(histogramResult.getResults());
                 tookMs += histogramResult.took().millis();
             } catch (Searches.FieldTypeException e) {
-                String msg = "Could not calculate [" + this.getClass().getCanonicalName() + "] widget <" + getId() + ">. Not a numeric field? The field was [" + series.field + "]";
+                String msg = "Could not calculate [" + this.getClass().getCanonicalName() + "] widget <" + widgetId + ">. Not a numeric field? The field was [" + series.field + "]";
                 LOG.error(msg, e);
-                throw new RuntimeException(msg);
+                throw new RuntimeException(msg, e);
             }
         }
 
-        final AbsoluteRange computationTimeRange = new AbsoluteRange(from, to);
+        final AbsoluteRange computationTimeRange = AbsoluteRange.create(from, to);
 
         return new ComputationResult(results, tookMs, computationTimeRange);
     }

@@ -1,43 +1,100 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.dashboards.widgets;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import org.graylog2.indexer.IndexHelper;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
-import org.graylog2.indexer.searches.timeranges.RelativeRange;
-import org.graylog2.indexer.searches.timeranges.TimeRange;
+import org.graylog2.plugin.dashboards.widgets.ComputationResult;
+import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
+import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
+import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.joda.time.DateTime;
 import org.joda.time.Seconds;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class StatisticalCountWidget extends SearchResultCountWidget {
-    private final String statsFunction;
-    private final String field;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
-    public StatisticalCountWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
-        super(metricRegistry, Type.STATS_COUNT, searches, id, description, cacheTime, config, query, timeRange, creatorUserId);
+public class StatisticalCountWidget extends SearchResultCountWidget {
+    public interface Factory extends WidgetStrategy.Factory<StatisticalCountWidget> {
+        @Override
+        StatisticalCountWidget create(Map<String, Object> config, TimeRange timeRange, String widgetId);
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(StatisticalCountWidget.class);
+
+    public enum StatisticalFunction {
+        COUNT("count"),
+        MEAN("mean"),
+        STANDARD_DEVIATION("std_deviation"),
+        MIN("min"),
+        MAX("max"),
+        SUM("sum"),
+        VARIANCE("variance"),
+        SUM_OF_SQUARES("squares"),
+        CARDINALITY("cardinality");
+
+        private final String function;
+
+        StatisticalFunction(String function) {
+            this.function = function;
+        }
+
+        @Override
+        public String toString() {
+            return this.function;
+        }
+
+        public static StatisticalFunction fromString(String function) {
+            for (StatisticalFunction statisticalFunction : StatisticalFunction.values()) {
+                if (statisticalFunction.toString().equals(function)) {
+                    return statisticalFunction;
+                }
+            }
+
+            throw new IllegalArgumentException("Statistic function " + function + " is not supported");
+        }
+    }
+
+    private final StatisticalFunction statsFunction;
+    private final String field;
+    private final String streamId;
+
+    @AssistedInject
+    public StatisticalCountWidget(Searches searches,
+                                  @Assisted Map<String, Object> config,
+                                  @Assisted TimeRange timeRange,
+                                  @Assisted String widgetId) {
+        super(searches,
+                config,
+                timeRange,
+                widgetId);
         this.field = (String) config.get("field");
-        this.statsFunction = (String) config.get("stats_function");
+        String statsFunction = (String) config.get("stats_function");
+        // We accidentally modified the standard deviation function name, we need this to make old widgets work again
+        this.statsFunction = (statsFunction.equals("stddev")) ? StatisticalFunction.STANDARD_DEVIATION : StatisticalFunction.fromString(statsFunction);
+        this.streamId = (String) config.get("stream_id");
     }
 
     @Override
@@ -46,57 +103,74 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
         final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.builder();
         persistedConfig.putAll(inheritedConfig);
         persistedConfig.put("field", field);
-        persistedConfig.put("stats_function", statsFunction);
+        persistedConfig.put("stats_function", statsFunction.toString());
+        if (!isNullOrEmpty(streamId)) {
+            persistedConfig.put("stream_id", streamId);
+        }
 
         return persistedConfig.build();
     }
 
     private Number getStatisticalValue(FieldStatsResult fieldStatsResult) {
-        final Number statisticalValue;
-
         switch (statsFunction) {
-            case "count":
-                statisticalValue = fieldStatsResult.getCount();
-                break;
-            case "mean":
-                statisticalValue = fieldStatsResult.getMean();
-                break;
-            case "stddev":
-                statisticalValue = fieldStatsResult.getStdDeviation();
-                break;
-            case "min":
-                statisticalValue = fieldStatsResult.getMin();
-                break;
-            case "max":
-                statisticalValue = fieldStatsResult.getMax();
-                break;
-            case "sum":
-                statisticalValue = fieldStatsResult.getSum();
-                break;
-            case "variance":
-                statisticalValue = fieldStatsResult.getVariance();
-                break;
-            case "squares":
-                statisticalValue = fieldStatsResult.getSumOfSquares();
-                break;
+            case COUNT:
+                return fieldStatsResult.getCount();
+            case MEAN:
+                return fieldStatsResult.getMean();
+            case STANDARD_DEVIATION:
+                return fieldStatsResult.getStdDeviation();
+            case MIN:
+                return fieldStatsResult.getMin();
+            case MAX:
+                return fieldStatsResult.getMax();
+            case SUM:
+                return fieldStatsResult.getSum();
+            case VARIANCE:
+                return fieldStatsResult.getVariance();
+            case SUM_OF_SQUARES:
+                return fieldStatsResult.getSumOfSquares();
+            case CARDINALITY:
+                return fieldStatsResult.getCardinality();
             default:
-                // TODO: Do something sensible here
-                statisticalValue = 0;
+                throw new IllegalArgumentException("Statistic function " + statsFunction + " is not supported");
         }
-
-        return statisticalValue;
     }
 
     @Override
-    protected ComputationResult compute() {
+    public ComputationResult compute() {
         try {
-            FieldStatsResult fieldStatsResult = getSearches().fieldStats(field, query, timeRange);
+            final String filter;
+            if (!isNullOrEmpty(streamId)) {
+                filter = "streams:" + streamId;
+            } else {
+                filter = null;
+            }
+
+            final TimeRange timeRange = this.timeRange;
+
+            boolean needsCardinality = statsFunction.equals(StatisticalFunction.CARDINALITY);
+            boolean needsCount = statsFunction.equals(StatisticalFunction.COUNT);
+            final FieldStatsResult fieldStatsResult =
+                    getSearches().fieldStats(field,
+                                             query,
+                                             filter,
+                                             timeRange,
+                                             needsCardinality,
+                                             !(needsCount || needsCardinality),
+                                             needsCount);
             if (trend && timeRange instanceof RelativeRange) {
                 DateTime toPrevious = timeRange.getFrom();
                 DateTime fromPrevious = toPrevious.minus(Seconds.seconds(((RelativeRange) timeRange).getRange()));
-                TimeRange previousTimeRange = new AbsoluteRange(fromPrevious, toPrevious);
-                FieldStatsResult previousFieldStatsResult = getSearches().fieldStats(field, query, previousTimeRange);
+                TimeRange previousTimeRange = AbsoluteRange.create(fromPrevious, toPrevious);
 
+                final FieldStatsResult previousFieldStatsResult =
+                        getSearches().fieldStats(field,
+                                                 query,
+                                                 filter,
+                                                 previousTimeRange,
+                                                 needsCardinality,
+                                                 !(needsCount || needsCardinality),
+                                                 needsCount);
                 Map<String, Object> results = Maps.newHashMap();
                 results.put("now", getStatisticalValue(fieldStatsResult));
                 results.put("previous", getStatisticalValue(previousFieldStatsResult));
@@ -106,10 +180,9 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
             } else {
                 return new ComputationResult(getStatisticalValue(fieldStatsResult), fieldStatsResult.took().millis());
             }
-        } catch (IndexHelper.InvalidRangeFormatException e) {
-            throw new RuntimeException("Invalid timerange format.", e);
         } catch (Searches.FieldTypeException e) {
-            throw new RuntimeException("Invalid field provided.", e);
+            log.warn("Invalid field provided, returning 'NaN'", e);
+            return new ComputationResult(Double.NaN, 0);
         }
     }
 }
