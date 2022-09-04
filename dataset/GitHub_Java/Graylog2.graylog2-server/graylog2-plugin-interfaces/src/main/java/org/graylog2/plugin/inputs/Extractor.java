@@ -25,8 +25,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.database.EmbeddedPersistable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -36,8 +34,6 @@ import java.util.Map;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public abstract class Extractor implements EmbeddedPersistable {
-
-    private static final Logger LOG = LoggerFactory.getLogger(Extractor.class);
 
     public enum Type {
         SUBSTRING,
@@ -63,7 +59,7 @@ public abstract class Extractor implements EmbeddedPersistable {
     public abstract void run(Message msg);
 
     public Extractor(String id, String title, Type type, CursorStrategy cursorStrategy, String sourceField, String targetField, Map<String, Object> extractorConfig, String creatorUserId, List<Converter> converters) throws ReservedFieldException {
-        if (Message.RESERVED_FIELDS.contains(targetField) && !Message.RESERVED_SETTABLE_FIELDS.contains(targetField)) {
+        if (Message.RESERVED_FIELDS.contains(targetField)) {
             throw new ReservedFieldException("You cannot apply an extractor on reserved field [" + targetField + "].");
         }
 
@@ -80,19 +76,14 @@ public abstract class Extractor implements EmbeddedPersistable {
 
     public void runConverters(Message msg) {
         for (Converter converter : converters) {
-            try {
-                if (!(msg.getFields().get(targetField) instanceof String)) {
-                    continue;
-                }
-
-                String value = (String) msg.getFields().get(targetField);
-
-                msg.removeField(targetField);
-                msg.addField(targetField, converter.convert(value));
-            } catch (Exception e) {
-                LOG.error("Could not apply converter [{}].", converter.getType(), e);
+            if (!(msg.getFields().get(targetField) instanceof String)) {
                 continue;
             }
+
+            String value = (String) msg.getFields().get(targetField);
+
+            msg.removeField(targetField);
+            msg.addField(targetField, converter.convert(value));
         }
     }
 
