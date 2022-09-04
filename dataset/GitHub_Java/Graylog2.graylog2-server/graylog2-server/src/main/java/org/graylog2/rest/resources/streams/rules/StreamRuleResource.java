@@ -17,13 +17,12 @@
 package org.graylog2.rest.resources.streams.rules;
 
 import com.codahale.metrics.annotation.Timed;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
@@ -76,7 +75,6 @@ public class StreamRuleResource extends RestResource {
     @ApiOperation(value = "Create a stream rule")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(object = "stream rule", captureRequestEntity = true, captureResponseEntity = true)
     public Response create(@ApiParam(name = "streamid", value = "The stream id this new rule belongs to.", required = true)
                            @PathParam("streamid") String streamId,
                            @ApiParam(name = "JSON body", required = true)
@@ -106,7 +104,6 @@ public class StreamRuleResource extends RestResource {
     })
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(object = "stream rule", captureRequestEntity = true, captureResponseEntity = true)
     public SingleStreamRuleSummaryResponse update(@ApiParam(name = "streamid", value = "The stream id this rule belongs to.", required = true)
                                                   @PathParam("streamid") String streamid,
                                                   @ApiParam(name = "streamRuleId", value = "The stream rule id we are updating", required = true)
@@ -131,7 +128,6 @@ public class StreamRuleResource extends RestResource {
         streamRule.setType(streamRuleType);
         streamRule.setInverted(cr.inverted());
         streamRule.setValue(cr.value());
-        streamRule.setDescription(cr.description());
 
         streamRuleService.save(streamRule);
 
@@ -144,7 +140,6 @@ public class StreamRuleResource extends RestResource {
     @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(object = "stream rule", captureRequestEntity = true, captureResponseEntity = true)
     @Deprecated
     public SingleStreamRuleSummaryResponse updateDeprecated(@PathParam("streamid") String streamid,
                                                             @PathParam("streamRuleId") String streamRuleId,
@@ -186,7 +181,6 @@ public class StreamRuleResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream rule not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    @AuditLog(object = "stream rule")
     public void delete(@ApiParam(name = "streamid", value = "The stream id this new rule belongs to.", required = true)
                        @PathParam("streamid") String streamid,
                        @ApiParam(name = "streamRuleId", required = true)
