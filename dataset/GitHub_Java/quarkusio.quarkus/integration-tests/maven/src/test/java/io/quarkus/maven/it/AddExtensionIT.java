@@ -10,11 +10,9 @@ import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 
 import org.apache.maven.model.Dependency;
-import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
 import org.apache.maven.shared.invoker.DefaultInvocationRequest;
 import org.apache.maven.shared.invoker.InvocationRequest;
@@ -22,6 +20,7 @@ import org.apache.maven.shared.invoker.Invoker;
 import org.apache.maven.shared.invoker.InvokerLogger;
 import org.apache.maven.shared.invoker.MavenInvocationException;
 import org.apache.maven.shared.invoker.PrintStreamLogger;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 @DisableForNative
@@ -49,6 +48,7 @@ class AddExtensionIT extends QuarkusPlatformAwareMojoTestBase {
     }
 
     @Test
+    @Disabled("TODO: https://github.com/quarkusio/quarkus/issues/14164")
     void testAddExtensionWithASingleExtensionToSubmodule() throws MavenInvocationException, IOException {
         testDir = initProject("projects/multimodule", "projects/testAddExtensionWithASingleExtensionToSubmodule");
         testDir = new File(testDir, "runner");
@@ -61,8 +61,7 @@ class AddExtensionIT extends QuarkusPlatformAwareMojoTestBase {
         expected.setArtifactId(VERTX_ARTIFACT_ID);
         assertThat(contains(model.getDependencies(), expected)).isTrue();
 
-        assertThat(Optional.ofNullable(model.getDependencyManagement())
-                .map(DependencyManagement::getDependencies).orElse(Collections.emptyList())).isEmpty();
+        assertThat(model.getDependencyManagement().getDependencies()).isEmpty();
     }
 
     @Test
@@ -141,7 +140,7 @@ class AddExtensionIT extends QuarkusPlatformAwareMojoTestBase {
             properties.setProperty("extension", ext);
         }
         request.setProperties(properties);
-
+        getEnv().forEach(request::addShellEnvironment);
         File log = new File(testDir, "build-add-extension-" + testDir.getName() + ".log");
         PrintStreamLogger logger = new PrintStreamLogger(new PrintStream(new FileOutputStream(log), false, "UTF-8"),
                 InvokerLogger.DEBUG);
