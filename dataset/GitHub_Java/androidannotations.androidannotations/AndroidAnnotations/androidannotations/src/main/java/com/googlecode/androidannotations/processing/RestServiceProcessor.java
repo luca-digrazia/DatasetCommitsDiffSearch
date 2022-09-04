@@ -36,7 +36,7 @@ public class RestServiceProcessor implements ElementProcessor {
 
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
-		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
+		EBeanHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
 
 		String fieldName = element.getSimpleName().toString();
 
@@ -45,7 +45,7 @@ public class RestServiceProcessor implements ElementProcessor {
 
 		String generatedClassName = interfaceName + ModelConstants.GENERATION_SUFFIX;
 
-		JBlock methodBody = holder.init.body();
+		JBlock methodBody = holder.beforeCreate.body();
 
 		JFieldRef field = JExpr.ref(fieldName);
 

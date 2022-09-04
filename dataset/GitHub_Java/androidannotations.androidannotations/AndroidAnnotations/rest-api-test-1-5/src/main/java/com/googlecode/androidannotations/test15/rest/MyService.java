@@ -82,5 +82,4 @@ public interface MyService {
 	// if you need to add some configuration to the Spring RestTemplate.
 	RestTemplate getRestTemplate();
 	
-	void setRestTemplate(RestTemplate restTemplate);
 }

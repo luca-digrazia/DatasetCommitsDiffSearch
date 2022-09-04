@@ -45,7 +45,7 @@ public class RestServiceValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
+		validatorHelper.enclosingElementHasEActivity(element, validatedElements, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
 
