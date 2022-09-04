@@ -50,13 +50,14 @@ public class WebJarUtil {
     }
 
     public static Path copyResourcesForDevOrTest(CurateOutcomeBuildItem curateOutcomeBuildItem, LaunchModeBuildItem launchMode,
-            AppArtifact resourcesArtifact, String rootFolderInJar)
+            AppArtifact artifact, String rootFolderInJar)
             throws IOException {
 
         rootFolderInJar = normalizeRootFolderInJar(rootFolderInJar);
         AppArtifact userApplication = curateOutcomeBuildItem.getEffectiveModel().getAppArtifact();
 
-        Path path = createResourcesDirectory(userApplication, resourcesArtifact);
+        Path path = createDir(userApplication.getArtifactId(), artifact.getGroupId(), artifact.getArtifactId(),
+                artifact.getVersion());
 
         // Clean on non dev mode
         if (!launchMode.getLaunchMode().equals(LaunchMode.DEVELOPMENT)) {
@@ -65,7 +66,7 @@ public class WebJarUtil {
 
         if (isEmpty(path)) {
             ClassLoader classLoader = WebJarUtil.class.getClassLoader();
-            for (Path p : resourcesArtifact.getPaths()) {
+            for (Path p : artifact.getPaths()) {
                 File artifactFile = p.toFile();
                 try (JarFile jarFile = JarFiles.create(artifactFile)) {
                     Enumeration<JarEntry> entries = jarFile.entries();
@@ -78,7 +79,7 @@ public class WebJarUtil {
                                 Files.createDirectories(filePath);
                             } else {
                                 try (InputStream inputStream = jarFile.getInputStream(entry)) {
-                                    String modulename = getModuleOverrideName(resourcesArtifact, fileName);
+                                    String modulename = getModuleOverrideName(artifact, fileName);
                                     if (IGNORE_LIST.contains(fileName)
                                             && isOverride(userApplication.getPaths(), classLoader, fileName, modulename)) {
                                         try (InputStream override = getOverride(userApplication.getPaths(), classLoader,
@@ -292,10 +293,9 @@ public class WebJarUtil {
         }
     }
 
-    private static Path createResourcesDirectory(AppArtifact userApplication, AppArtifact resourcesArtifact) {
+    private static Path createDir(String appName, String libgroupId, String libartifactId, String libversion) {
         try {
-            Path path = Paths.get(TMP_DIR, "quarkus", userApplication.getGroupId(), userApplication.getArtifactId(),
-                    resourcesArtifact.getGroupId(), resourcesArtifact.getArtifactId(), resourcesArtifact.getVersion());
+            Path path = Paths.get(TMP_DIR, "quarkus", appName, libgroupId, libartifactId, libversion);
 
             if (!Files.exists(path)) {
                 Files.createDirectories(path);
