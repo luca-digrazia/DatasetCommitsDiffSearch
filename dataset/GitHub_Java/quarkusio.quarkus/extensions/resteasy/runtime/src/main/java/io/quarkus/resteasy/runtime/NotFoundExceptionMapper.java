@@ -10,8 +10,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import javax.annotation.Priority;
 import javax.ws.rs.NotFoundException;
@@ -42,8 +42,7 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
     private final static Variant HTML_VARIANT = new Variant(MediaType.TEXT_HTML_TYPE, (String) null, null);
     private final static List<Variant> VARIANTS = Arrays.asList(JSON_VARIANT, HTML_VARIANT);
 
-    private static List<String> servletMappings;
-    private static List<String> staticResources;
+    private static Map<String, List<String>> servletToMapping;
 
     @Context
     private Registry registry = null;
@@ -64,11 +63,12 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
             this.produces = produces;
             this.consumes = consumes;
         }
+
     }
 
     public static final class ResourceDescription {
-        public final String basePath;
-        public final List<MethodDescription> calls;
+        public String basePath;
+        public List<MethodDescription> calls;
 
         public ResourceDescription(String basePath) {
             this.basePath = basePath;
@@ -156,7 +156,6 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
         List<ResourceDescription> descriptions = ResourceDescription
                 .fromBoundResourceInvokers(bounded
                         .entrySet());
-
         return respond(descriptions);
     }
 
@@ -204,18 +203,14 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
             }
             sb.resourcesEnd();
 
-            if (!servletMappings.isEmpty()) {
+            if (!servletToMapping.isEmpty()) {
                 sb.resourcesStart("Servlet mappings");
-                for (String servletMapping : servletMappings) {
-                    sb.servletMapping(servletMapping);
-                }
-                sb.resourcesEnd();
-            }
-
-            if (!staticResources.isEmpty()) {
-                sb.resourcesStart("Static resources");
-                for (String staticResource : staticResources) {
-                    sb.staticResourcePath(staticResource);
+                for (Entry<String, List<String>> servletMappings : servletToMapping.entrySet()) {
+                    sb.resourcePath(servletMappings.getKey());
+                    for (String mapping : servletMappings.getValue()) {
+                        sb.servletMapping(mapping);
+                    }
+                    sb.resourceEnd();
                 }
                 sb.resourcesEnd();
             }
@@ -232,13 +227,6 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
     }
 
     public static void servlets(Map<String, List<String>> servletToMapping) {
-        NotFoundExceptionMapper.servletMappings = servletToMapping.values().stream()
-                .flatMap(List::stream)
-                .sorted()
-                .collect(Collectors.toList());
-    }
-
-    public static void staticResources(Set<String> knownFiles) {
-        NotFoundExceptionMapper.staticResources = knownFiles.stream().sorted().collect(Collectors.toList());
+        NotFoundExceptionMapper.servletToMapping = servletToMapping;
     }
 }
