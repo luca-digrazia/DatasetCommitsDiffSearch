@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ToolchainException;
 import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext;
@@ -62,9 +63,14 @@ public abstract class ResolvedToolchainContext implements ToolchainContextApi, T
     ImmutableList.Builder<TemplateVariableInfo> templateVariableProviders =
         new ImmutableList.Builder<>();
     for (ConfiguredTargetAndData target : toolchainTargets) {
+      Label discoveredLabel;
       // Aliases are in toolchainTypeToResolved by the original alias label, not via the final
       // target's label.
-      Label discoveredLabel = target.getConfiguredTarget().getOriginalLabel();
+      if (target.getConfiguredTarget() instanceof AliasConfiguredTarget) {
+        discoveredLabel = ((AliasConfiguredTarget) target.getConfiguredTarget()).getOriginalLabel();
+      } else {
+        discoveredLabel = target.getConfiguredTarget().getLabel();
+      }
       ToolchainTypeInfo toolchainType =
           unloadedToolchainContext.toolchainTypeToResolved().inverse().get(discoveredLabel);
       ToolchainInfo toolchainInfo = PlatformProviderUtils.toolchain(target.getConfiguredTarget());
