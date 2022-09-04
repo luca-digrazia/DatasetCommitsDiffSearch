@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkbuildapi.FragmentCollectionApi;
-import com.google.devtools.build.lib.syntax.EvalException;
 import javax.annotation.Nullable;
 
 /** Represents a collection of configuration fragments in Skylark. */
@@ -36,7 +35,7 @@ public class FragmentCollection implements FragmentCollectionApi {
 
   @Override
   @Nullable
-  public Object getValue(String name) throws EvalException {
+  public Object getValue(String name) {
     return ruleContext.getSkylarkFragment(name, transition);
   }
 
