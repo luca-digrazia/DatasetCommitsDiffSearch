@@ -20,9 +20,10 @@
 package org.graylog2.inputs.raw.tcp;
 
 import org.graylog2.Core;
-import org.graylog2.inputs.util.ConnectionCounter;
-import org.graylog2.inputs.util.ThroughputCounter;
+import org.graylog2.inputs.ThroughputCounter;
 import org.graylog2.inputs.raw.RawDispatcher;
+import org.graylog2.inputs.syslog.SyslogDispatcher;
+import org.graylog2.inputs.syslog.tcp.SyslogTCPInput;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.jboss.netty.buffer.ChannelBuffer;
@@ -31,6 +32,7 @@ import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
 import org.jboss.netty.handler.codec.frame.DelimiterBasedFrameDecoder;
 import org.jboss.netty.handler.codec.frame.Delimiters;
+import org.jboss.netty.handler.traffic.GlobalTrafficShapingHandler;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -41,14 +43,12 @@ public class RawTCPPipelineFactory implements ChannelPipelineFactory {
     private final Configuration config;
     private final MessageInput sourceInput;
     private final ThroughputCounter throughputCounter;
-    private final ConnectionCounter connectionCounter;
 
-    public RawTCPPipelineFactory(Core server, Configuration config, MessageInput sourceInput, ThroughputCounter throughputCounter, ConnectionCounter connectionCounter) {
+    public RawTCPPipelineFactory(Core server, Configuration config, MessageInput sourceInput, ThroughputCounter throughputCounter) {
         this.server = server;
         this.config = config;
         this.sourceInput = sourceInput;
         this.throughputCounter = throughputCounter;
-        this.connectionCounter = connectionCounter;
     }
 
     @Override
@@ -62,9 +62,8 @@ public class RawTCPPipelineFactory implements ChannelPipelineFactory {
         }
 
         ChannelPipeline p = Channels.pipeline();
-        p.addLast("connection-counter", connectionCounter);
-        p.addLast("traffic-counter", throughputCounter);
         p.addLast("framer", new DelimiterBasedFrameDecoder(2 * 1024 * 1024, delimiter));
+        p.addLast("traffic-counter", throughputCounter);
         p.addLast("handler", new RawDispatcher(server, config, sourceInput));
 
         return p;
