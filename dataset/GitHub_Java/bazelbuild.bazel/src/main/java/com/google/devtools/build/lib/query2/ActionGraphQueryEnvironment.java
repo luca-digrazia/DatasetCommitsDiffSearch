@@ -25,11 +25,11 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.query2.ActionGraphProtoOutputFormatterCallback.OutputType;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.KeyExtractor;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -63,12 +63,13 @@ public class ActionGraphQueryEnvironment
   AqueryOptions aqueryOptions;
   private final KeyExtractor<ConfiguredTargetValue, ConfiguredTargetKey>
       configuredTargetKeyExtractor;
+  private final ConfiguredTargetValueAccessor accessor;
 
   public ActionGraphQueryEnvironment(
       boolean keepGoing,
       ExtendedEventHandler eventHandler,
       Iterable<QueryFunction> extraFunctions,
-      BuildConfiguration defaultTargetConfiguration,
+      TopLevelConfigurations topLevelConfigurations,
       BuildConfiguration hostConfiguration,
       String parserPrefix,
       PathPackageLocator pkgPath,
@@ -78,13 +79,12 @@ public class ActionGraphQueryEnvironment
         keepGoing,
         eventHandler,
         extraFunctions,
-        defaultTargetConfiguration,
+        topLevelConfigurations,
         hostConfiguration,
         parserPrefix,
         pkgPath,
         walkableGraphSupplier,
-        settings,
-        new ConfiguredTargetValueAccessor(walkableGraphSupplier.get()));
+        settings);
     this.configuredTargetKeyExtractor =
         configuredTargetValue -> {
           try {
@@ -96,16 +96,19 @@ public class ActionGraphQueryEnvironment
                     : ((BuildConfigurationValue) graph.getValue(element.getConfigurationKey()))
                         .getConfiguration());
           } catch (InterruptedException e) {
-            throw new IllegalStateException("Interruption unexpected in configured query");
+            throw new IllegalStateException("Interruption unexpected in configured query", e);
           }
         };
+    this.accessor =
+        new ConfiguredTargetValueAccessor(
+            walkableGraphSupplier.get(), this.configuredTargetKeyExtractor);
   }
 
   public ActionGraphQueryEnvironment(
       boolean keepGoing,
       ExtendedEventHandler eventHandler,
       Iterable<QueryFunction> extraFunctions,
-      BuildConfiguration defaultTargetConfiguration,
+      TopLevelConfigurations topLevelConfigurations,
       BuildConfiguration hostConfiguration,
       String parserPrefix,
       PathPackageLocator pkgPath,
@@ -115,7 +118,7 @@ public class ActionGraphQueryEnvironment
         keepGoing,
         eventHandler,
         extraFunctions,
-        defaultTargetConfiguration,
+        topLevelConfigurations,
         hostConfiguration,
         parserPrefix,
         pkgPath,
@@ -129,20 +132,27 @@ public class ActionGraphQueryEnvironment
   }
 
   @Override
+  public ConfiguredTargetValueAccessor getAccessor() {
+    return accessor;
+  }
+
+  @Override
   public ImmutableList<NamedThreadSafeOutputFormatterCallback<ConfiguredTargetValue>>
       getDefaultOutputFormatters(
           TargetAccessor<ConfiguredTargetValue> accessor,
-          Reporter reporter,
+          ExtendedEventHandler eventHandler,
+          OutputStream out,
           SkyframeExecutor skyframeExecutor,
           BuildConfiguration hostConfiguration,
           @Nullable RuleTransitionFactory trimmingTransitionFactory,
           PackageManager packageManager) {
-    OutputStream out = reporter.getOutErr().getOutputStream();
     return ImmutableList.of(
         new ActionGraphProtoOutputFormatterCallback(
-            reporter, aqueryOptions, out, skyframeExecutor, accessor),
+            eventHandler, aqueryOptions, out, skyframeExecutor, accessor, OutputType.BINARY),
+        new ActionGraphProtoOutputFormatterCallback(
+            eventHandler, aqueryOptions, out, skyframeExecutor, accessor, OutputType.TEXT),
         new ActionGraphTextOutputFormatterCallback(
-            reporter, aqueryOptions, out, skyframeExecutor, accessor));
+            eventHandler, aqueryOptions, out, skyframeExecutor, accessor));
   }
 
   @Override
@@ -175,8 +185,20 @@ public class ActionGraphQueryEnvironment
   @Override
   protected ConfiguredTargetValue getTargetConfiguredTarget(Label label)
       throws InterruptedException {
-    return this.getConfiguredTargetValue(
-        ConfiguredTargetValue.key(label, defaultTargetConfiguration));
+    if (topLevelConfigurations.isTopLevelTarget(label)) {
+      return this.getConfiguredTargetValue(
+          ConfiguredTargetValue.key(
+              label, topLevelConfigurations.getConfigurationForTopLevelTarget(label)));
+    } else {
+      ConfiguredTargetValue toReturn;
+      for (BuildConfiguration configuration : topLevelConfigurations.getConfigurations()) {
+        toReturn = this.getConfiguredTargetValue(ConfiguredTargetValue.key(label, configuration));
+        if (toReturn != null) {
+          return toReturn;
+        }
+      }
+      return null;
+    }
   }
 
   @Nullable
@@ -213,7 +235,7 @@ public class ActionGraphQueryEnvironment
           : ((BuildConfigurationValue) graph.getValue(target.getConfigurationKey()))
               .getConfiguration();
     } catch (InterruptedException e) {
-      throw new IllegalStateException("Unexpected interruption during aquery");
+      throw new IllegalStateException("Unexpected interruption during aquery", e);
     }
   }
 

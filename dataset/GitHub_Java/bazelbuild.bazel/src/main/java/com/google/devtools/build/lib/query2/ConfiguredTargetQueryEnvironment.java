@@ -20,13 +20,12 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -160,39 +159,42 @@ public class ConfiguredTargetQueryEnvironment
           OutputStream out,
           SkyframeExecutor skyframeExecutor,
           BuildConfiguration hostConfiguration,
-          @Nullable TransitionFactory<Rule> trimmingTransitionFactory,
+          @Nullable RuleTransitionFactory trimmingTransitionFactory,
           PackageManager packageManager) {
     AspectResolver aspectResolver =
         cqueryOptions.aspectDeps.createResolver(packageManager, eventHandler);
-    return ImmutableList.of(
-        new LabelAndConfigurationOutputFormatterCallback(
-            eventHandler, cqueryOptions, out, skyframeExecutor, accessor),
-        new TransitionsOutputFormatterCallback(
-            eventHandler,
-            cqueryOptions,
-            out,
-            skyframeExecutor,
-            accessor,
-            hostConfiguration,
-            trimmingTransitionFactory),
-        new ProtoOutputFormatterCallback(
-            eventHandler,
-            cqueryOptions,
-            out,
-            skyframeExecutor,
-            accessor,
-            aspectResolver,
-            OutputType.BINARY),
-        new ProtoOutputFormatterCallback(
-            eventHandler,
-            cqueryOptions,
-            out,
-            skyframeExecutor,
-            accessor,
-            aspectResolver,
-            OutputType.TEXT),
-        new CqueryBuildOutputFormatterCallback(
-            eventHandler, cqueryOptions, out, skyframeExecutor, accessor));
+    return new ImmutableList.Builder<NamedThreadSafeOutputFormatterCallback<ConfiguredTarget>>()
+        .add(
+            new LabelAndConfigurationOutputFormatterCallback(
+                eventHandler, cqueryOptions, out, skyframeExecutor, accessor))
+        .add(
+            new TransitionsOutputFormatterCallback(
+                eventHandler,
+                cqueryOptions,
+                out,
+                skyframeExecutor,
+                accessor,
+                hostConfiguration,
+                trimmingTransitionFactory))
+        .add(
+            new ProtoOutputFormatterCallback(
+                eventHandler,
+                cqueryOptions,
+                out,
+                skyframeExecutor,
+                accessor,
+                aspectResolver,
+                OutputType.BINARY))
+        .add(
+            new ProtoOutputFormatterCallback(
+                eventHandler,
+                cqueryOptions,
+                out,
+                skyframeExecutor,
+                accessor,
+                aspectResolver,
+                OutputType.TEXT))
+        .build();
   }
 
   public String getOutputFormat() {
@@ -223,33 +225,27 @@ public class ConfiguredTargetQueryEnvironment
           reportBuildFileError(owner, exn.getMessage());
           return Futures.immediateFuture(null);
         };
-
-    try {
-      return QueryTaskFutureImpl.ofDelegate(
-          Futures.catchingAsync(
-              patternToEval.evalAdaptedForAsync(
-                  resolver,
-                  getBlacklistedPackagePrefixesPathFragments(),
-                  /* excludedSubdirectories= */ ImmutableSet.of(),
-                  (Callback<Target>)
-                      partialResult -> {
-                        List<ConfiguredTarget> transformedResult = new ArrayList<>();
-                        for (Target target : partialResult) {
-                          ConfiguredTarget configuredTarget =
-                              getConfiguredTarget(target.getLabel());
-                          if (configuredTarget != null) {
-                            transformedResult.add(configuredTarget);
-                          }
+    return QueryTaskFutureImpl.ofDelegate(
+        Futures.catchingAsync(
+            patternToEval.evalAdaptedForAsync(
+                resolver,
+                ImmutableSet.of(),
+                ImmutableSet.of(),
+                (Callback<Target>)
+                    partialResult -> {
+                      List<ConfiguredTarget> transformedResult = new ArrayList<>();
+                      for (Target target : partialResult) {
+                        ConfiguredTarget configuredTarget = getConfiguredTarget(target.getLabel());
+                        if (configuredTarget != null) {
+                          transformedResult.add(configuredTarget);
                         }
-                        callback.process(transformedResult);
-                      },
-                  QueryException.class),
-              TargetParsingException.class,
-              reportBuildFileErrorAsyncFunction,
-              MoreExecutors.directExecutor()));
-    } catch (InterruptedException e) {
-      return immediateCancelledFuture();
-    }
+                      }
+                      callback.process(transformedResult);
+                    },
+                QueryException.class),
+            TargetParsingException.class,
+            reportBuildFileErrorAsyncFunction,
+            MoreExecutors.directExecutor()));
   }
 
   private ConfiguredTarget getConfiguredTarget(Label label) throws InterruptedException {
