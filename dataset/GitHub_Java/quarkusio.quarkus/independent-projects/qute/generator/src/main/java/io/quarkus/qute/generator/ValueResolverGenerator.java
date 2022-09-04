@@ -888,7 +888,7 @@ public class ValueResolverGenerator {
         }
     }
 
-    public static boolean hasCompletionStageInTypeClosure(ClassInfo classInfo,
+    static boolean hasCompletionStageInTypeClosure(ClassInfo classInfo,
             IndexView index) {
 
         if (classInfo == null) {
