@@ -18,7 +18,6 @@ import org.quartz.core.QuartzSchedulerThread;
 import org.quartz.core.SchedulerSignalerImpl;
 import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.impl.jdbcjobstore.AttributeRestoringConnectionInvocationHandler;
-import org.quartz.impl.jdbcjobstore.DB2v8Delegate;
 import org.quartz.impl.jdbcjobstore.HSQLDBDelegate;
 import org.quartz.impl.jdbcjobstore.JobStoreSupport;
 import org.quartz.impl.jdbcjobstore.MSSQLDelegate;
@@ -58,7 +57,7 @@ import io.quarkus.quartz.runtime.QuartzScheduler;
 import io.quarkus.quartz.runtime.QuartzSupport;
 
 /**
- *
+ * 
  */
 public class QuartzProcessor {
 
@@ -136,9 +135,6 @@ public class QuartzProcessor {
         if (DatabaseKind.isMsSQL(dataSourceKind)) {
             return MSSQLDelegate.class.getName();
         }
-        if (DatabaseKind.isDB2(dataSourceKind)) {
-            return DB2v8Delegate.class.getName();
-        }
 
         return StdJDBCDelegate.class.getName();
 
@@ -180,8 +176,7 @@ public class QuartzProcessor {
         List<ReflectiveClassBuildItem> reflectiveClasses = new ArrayList<>();
         for (QuartzAdditionalPropsConfig props : config.values()) {
             try {
-                if (!clazz
-                        .isAssignableFrom(Class.forName(props.clazz, false, Thread.currentThread().getContextClassLoader()))) {
+                if (!clazz.isAssignableFrom(Class.forName(props.clazz))) {
                     throw new IllegalArgumentException(String.format("%s does not implements %s", props.clazz, clazz));
                 }
             } catch (ClassNotFoundException e) {
