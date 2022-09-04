@@ -16,12 +16,14 @@
  */
 package org.graylog.security.idp;
 
-import java.util.Optional;
+import javax.inject.Qualifier;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-public interface IdentityProvider {
-    Optional<String> authenticate(IDPAuthCredentials authCredentials);
-
-    String providerId();
-
-    String providerTitle();
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.PARAMETER)
+@Qualifier
+public @interface InternalIdentityProvider {
 }
