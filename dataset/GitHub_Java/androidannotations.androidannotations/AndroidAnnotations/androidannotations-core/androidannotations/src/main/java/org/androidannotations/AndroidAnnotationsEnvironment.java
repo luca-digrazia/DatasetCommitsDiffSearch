@@ -138,6 +138,10 @@ public class AndroidAnnotationsEnvironment {
 		return validatedElements;
 	}
 
+	public ProcessHolder getProcessHolder() {
+		return processHolder;
+	}
+
 	public JCodeModel getCodeModel() {
 		return processHolder.codeModel();
 	}

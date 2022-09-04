@@ -15,32 +15,17 @@
  */
 package org.androidannotations.holder;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.process.ProcessHolder;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 
 public interface GeneratedClassHolder {
+
 	JDefinedClass getGeneratedClass();
 
 	TypeElement getAnnotatedElement();
 
-	ProcessingEnvironment processingEnvironment();
-
-	ProcessHolder.Classes classes();
-
-	JCodeModel codeModel();
-
-	JClass refClass(String fullyQualifiedClassName);
-
-	JClass refClass(Class<?> clazz);
-
-	JDefinedClass definedClass(String fullyQualifiedClassName);
-
-	AndroidAnnotationsEnvironment environment();
+	AndroidAnnotationsEnvironment getEnvironment();
 }

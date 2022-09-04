@@ -25,14 +25,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.internal.process.ProcessHolder;
+import org.androidannotations.process.ProcessHolder;
 
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JClass;
@@ -100,10 +99,6 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 	@Override
 	public AndroidAnnotationsEnvironment getEnvironment() {
 		return environment;
-	}
-
-	protected ProcessingEnvironment getProcessingEnvironment() {
-		return environment.getProcessingEnvironment();
 	}
 
 	protected ProcessHolder.Classes getClasses() {
