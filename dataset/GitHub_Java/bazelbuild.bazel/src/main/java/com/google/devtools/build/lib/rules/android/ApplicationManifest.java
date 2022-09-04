@@ -318,14 +318,13 @@ public final class ApplicationManifest {
     return new ApplicationManifest(ruleContext, outputManifest, targetAaptVersion);
   }
 
-  public ResourceApk packTestWithDataAndResources(
-      RuleContext ruleContext,
+  /** Packages up the manifest with assets from the rule and dependent resources. */
+  public ResourceApk packWithAssets(
       Artifact resourceApk,
+      RuleContext ruleContext,
       ResourceDependencies resourceDeps,
       boolean incremental,
-      Artifact proguardCfg,
-      @Nullable String packageUnderTest)
-      throws InterruptedException, RuleErrorException {
+      Artifact proguardCfg) throws InterruptedException, RuleErrorException {
     LocalResourceContainer data = new LocalResourceContainer.Builder(ruleContext)
         .withAssets(
             AndroidCommon.getAssetDir(ruleContext),
@@ -333,21 +332,7 @@ public final class ApplicationManifest {
                 // TODO(bazel-team): Remove the ResourceType construct.
                 ResourceType.ASSETS.getAttribute(),
                 Mode.TARGET,
-                FileProvider.class))
-        .withResources(
-            ruleContext.getPrerequisites(
-                "local_resource_files",
-                Mode.TARGET,
                 FileProvider.class)).build();
-    ResourceContainer.Builder builder =
-        ResourceContainer.builderFromRule(ruleContext)
-            .setAssetsAndResourcesFrom(data)
-            .setManifest(getManifest())
-            .setApk(resourceApk);
-
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
 
     return createApk(
         ruleContext,
@@ -356,16 +341,15 @@ public final class ApplicationManifest {
         ImmutableList.of(), /* uncompressedExtensions */
         true, /* crunchPng */
         incremental,
-        builder,
+        ResourceContainer.builderFromRule(ruleContext).setApk(resourceApk),
         data,
         proguardCfg,
         null, /* Artifact mainDexProguardCfg */
-        null /* Artifact manifestOut */,
+        null, /* Artifact manifestOut */
         null, /* Artifact mergedResources */
         null, /* Artifact dataBindingInfoZip */
         null, /* featureOf */
-        null /* featureAfter */,
-        packageUnderTest);
+        null /* featureAfter */);
   }
 
   /** Packages up the manifest with resource and assets from the LocalResourceContainer. */
@@ -376,7 +360,8 @@ public final class ApplicationManifest {
       Artifact rTxt,
       Artifact symbols,
       Artifact manifestOut,
-      Artifact mergedResources) throws InterruptedException, RuleErrorException {
+      Artifact mergedResources,
+      boolean alwaysExportManifest) throws InterruptedException, RuleErrorException {
     if (ruleContext.hasErrors()) {
       return null;
     }
@@ -384,14 +369,16 @@ public final class ApplicationManifest {
         ResourceContainer.builderFromRule(ruleContext)
             .setRTxt(rTxt)
             .setSymbols(symbols)
-            .setJavaPackageFrom(JavaPackageSource.MANIFEST)
-            .setManifestExported(true);
+            .setJavaPackageFrom(JavaPackageSource.MANIFEST);
+    if (alwaysExportManifest) {
+      builder.setManifestExported(true);
+    }
 
     return createApk(
         ruleContext,
         true, /* isLibrary */
         resourceDeps,
-        ImmutableList.of(), /* List<String> uncompressedExtensions */
+        ImmutableList.<String>of(), /* List<String> uncompressedExtensions */
         false, /* crunchPng */
         false, /* incremental */
         builder,
@@ -402,8 +389,7 @@ public final class ApplicationManifest {
         mergedResources,
         null, /* Artifact dataBindingInfoZip */
         null, /* Artifact featureOf */
-        null /* Artifact featureAfter */,
-        null /* packageUnderTest */);
+        null /* Artifact featureAfter */);
   }
 
   /* Creates an incremental apk from assets and data. */
@@ -444,8 +430,7 @@ public final class ApplicationManifest {
         null, /* mergedResources */
         null, /* dataBindingInfoZip */
         null, /* featureOf */
-        null /* featureAfter */,
-        null /* packageUnderTest */);
+        null /* featureAfter */);
   }
 
   /** Packages up the manifest with resource and assets from the rule and dependent resources. */
@@ -504,8 +489,7 @@ public final class ApplicationManifest {
         mergedResources,
         dataBindingInfoZip,
         featureOf,
-        featureAfter,
-        null /* packageUnderTest */);
+        featureAfter);
   }
 
   public ResourceApk packLibraryWithDataAndResources(
@@ -571,8 +555,7 @@ public final class ApplicationManifest {
         mergedResources,
         dataBindingInfoZip,
         null /* featureOf */,
-        null /* featureAfter */,
-        null /* packageUnderTest */);
+        null /* featureAfter */);
   }
 
   private ResourceApk createApk(
@@ -590,8 +573,7 @@ public final class ApplicationManifest {
       Artifact mergedResources,
       Artifact dataBindingInfoZip,
       @Nullable Artifact featureOf,
-      @Nullable Artifact featureAfter,
-      @Nullable String packageUnderTest)
+      @Nullable Artifact featureAfter)
       throws InterruptedException, RuleErrorException {
     // Filter the resources during analysis to prevent processing of and dependencies on unwanted
     // resources during execution.
@@ -699,8 +681,7 @@ public final class ApplicationManifest {
               .setFeatureAfter(featureAfter)
               .setThrowOnResourceConflict(
                 ruleContext.getConfiguration()
-                    .getFragment(AndroidConfiguration.class).throwOnResourceConflict())
-              .setPackageUnderTest(packageUnderTest);
+                    .getFragment(AndroidConfiguration.class).throwOnResourceConflict());
       if (!incremental) {
         builder
             .targetAaptVersion(targetAaptVersion)
@@ -807,7 +788,7 @@ public final class ApplicationManifest {
     List<String> uncompressedExtensions =
         ruleContext.getTokenizedStringListAttr("nocompress_extensions");
 
-    ImmutableList.Builder<String> additionalAaptOpts = ImmutableList.builder();
+    ImmutableList.Builder<String> additionalAaptOpts = ImmutableList.<String>builder();
 
     for (String extension : uncompressedExtensions) {
       additionalAaptOpts.add("-0").add(extension);
