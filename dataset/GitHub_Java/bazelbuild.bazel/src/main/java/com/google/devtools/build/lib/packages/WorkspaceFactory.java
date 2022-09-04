@@ -21,7 +21,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
-import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -50,13 +49,11 @@ import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
@@ -68,8 +65,6 @@ import javax.annotation.Nullable;
  * Parser for WORKSPACE files.  Fills in an ExternalPackage.Builder
  */
 public class WorkspaceFactory {
-
-  // Must start with a letter and can contain letters, numbers, and underscores
   private static final Pattern LEGAL_WORKSPACE_NAME = Pattern.compile("^\\p{Alpha}\\w*$");
 
   // List of static function added by #addWorkspaceFunctions. Used to trim them out from the
@@ -138,12 +133,25 @@ public class WorkspaceFactory {
         allowOverride, ruleFactory);
   }
 
+  /**
+   * Parses the given WORKSPACE file without resolving Skylark imports, using the default Skylark
+   * semantics.
+   */
+  public void parse(ParserInputSource source)
+      throws BuildFileContainsErrorsException, InterruptedException {
+    parse(source, SkylarkSemantics.DEFAULT_SEMANTICS, null);
+  }
+
   @VisibleForTesting
-  void parseForTesting(
+  public void parse(
       ParserInputSource source,
-      StarlarkSemantics starlarkSemantics,
+      SkylarkSemantics skylarkSemantics,
       @Nullable StoredEventHandler localReporter)
       throws BuildFileContainsErrorsException, InterruptedException {
+    // This method is split in 2 so WorkspaceFileFunction can call the two parts separately and
+    // do the Skylark load imports in between. We can't load skylark imports from
+    // generate_workspace at the moment because it doesn't have access to skyframe, but that's okay
+    // because most people are just using it to resolve Maven dependencies.
     if (localReporter == null) {
       localReporter = new StoredEventHandler();
     }
@@ -152,36 +160,30 @@ public class WorkspaceFactory {
       throw new BuildFileContainsErrorsException(
           LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, "Failed to parse " + source.getPath());
     }
-    execute(
-        buildFileAST,
-        null,
-        starlarkSemantics,
-        localReporter,
-        WorkspaceFileValue.key(
-            RootedPath.toRootedPath(Root.fromPath(workspaceDir), source.getPath())));
+    execute(buildFileAST, null, skylarkSemantics, localReporter);
   }
 
+
   /**
-   * Actually runs through the AST, calling the functions in the WORKSPACE file and adding rules to
-   * the //external package.
+   * Actually runs through the AST, calling the functions in the WORKSPACE file and adding rules
+   * to the //external package.
    */
   public void execute(
       BuildFileAST ast,
       Map<String, Extension> importedExtensions,
-      StarlarkSemantics starlarkSemantics,
-      WorkspaceFileValue.WorkspaceFileKey workspaceFileKey)
+      SkylarkSemantics skylarkSemantics)
       throws InterruptedException {
     Preconditions.checkNotNull(ast);
     Preconditions.checkNotNull(importedExtensions);
-    execute(ast, importedExtensions, starlarkSemantics, new StoredEventHandler(), workspaceFileKey);
+    execute(ast, importedExtensions, skylarkSemantics, new StoredEventHandler());
   }
+
 
   private void execute(
       BuildFileAST ast,
       @Nullable Map<String, Extension> importedExtensions,
-      StarlarkSemantics starlarkSemantics,
-      StoredEventHandler localReporter,
-      WorkspaceFileValue.WorkspaceFileKey workspaceFileKey)
+      SkylarkSemantics skylarkSemantics,
+      StoredEventHandler localReporter)
       throws InterruptedException {
     if (importedExtensions != null) {
       importMap = ImmutableMap.copyOf(importedExtensions);
@@ -190,7 +192,7 @@ public class WorkspaceFactory {
     }
     Environment workspaceEnv =
         Environment.builder(mutability)
-            .setSemantics(starlarkSemantics)
+            .setSemantics(skylarkSemantics)
             .setGlobals(BazelLibrary.GLOBALS)
             .setEventHandler(localReporter)
             .setImportedExtensions(importMap)
@@ -202,8 +204,7 @@ public class WorkspaceFactory {
                 new BazelStarlarkContext(
                     /* toolsRepository= */ null,
                     /* fragmentNameToClass= */ null,
-                    ImmutableMap.of(),
-                    new SymbolGenerator<>(workspaceFileKey)))
+                    ImmutableMap.of()))
             .build();
     SkylarkUtils.setPhase(workspaceEnv, Phase.WORKSPACE);
     addWorkspaceFunctions(workspaceEnv, localReporter);
@@ -341,7 +342,7 @@ public class WorkspaceFactory {
                 }
                 // Add entry in repository map from "@name" --> "@" to avoid issue where bazel
                 // treats references to @name as a separate external repo
-                if (env.getSemantics().incompatibleRemapMainRepo()) {
+                if (env.getSemantics().experimentalRemapMainRepo()) {
                   builder.addRepositoryMappingEntry(
                       RepositoryName.MAIN,
                       RepositoryName.createFromValidStrippedName(name),
@@ -497,7 +498,7 @@ public class WorkspaceFactory {
           // repository has a repo_mapping entry from <mainRepoName> to something.
           WorkspaceFactoryHelper.addMainRepoEntry(builder, externalRepoName, env.getSemantics());
           WorkspaceFactoryHelper.addRepoMappings(
-              builder, kwargs, externalRepoName, ast.getLocation());
+              builder, kwargs, externalRepoName, ast.getLocation(), env.getSemantics());
           RuleClass ruleClass = ruleFactory.getRuleClass(ruleClassName);
           RuleClass bindRuleClass = ruleFactory.getRuleClass("bind");
           Rule rule =
@@ -505,7 +506,7 @@ public class WorkspaceFactory {
                   builder,
                   ruleClass,
                   bindRuleClass,
-                  WorkspaceFactoryHelper.getFinalKwargs(kwargs),
+                  WorkspaceFactoryHelper.getFinalKwargs(kwargs, env.getSemantics()),
                   ast);
           if (!isLegalWorkspaceName(rule.getName())) {
             throw new EvalException(
