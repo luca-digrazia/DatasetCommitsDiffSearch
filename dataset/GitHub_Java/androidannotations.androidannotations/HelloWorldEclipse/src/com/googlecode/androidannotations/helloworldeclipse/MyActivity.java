@@ -29,7 +29,7 @@ public class MyActivity extends Activity {
 	}
 
 	@Click(R.id.myButton)
-	public void myButtonWasClicked() {
+	public void myButtonWasClicked(View myButton) {
 		content.setText("Clicked at " + new Date());
 	}
 
