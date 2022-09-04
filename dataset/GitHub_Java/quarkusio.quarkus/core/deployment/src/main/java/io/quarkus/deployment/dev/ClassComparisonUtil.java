@@ -52,14 +52,9 @@ public class ClassComparisonUtil {
                 return false;
             }
         }
-        List<MethodInfo> methods = clazz.methods();
-        List<MethodInfo> oldMethods = old.methods();
-        if (methods.size() != oldMethods.size()) {
-            return false;
-        }
-        for (MethodInfo method : methods) {
+        for (MethodInfo method : clazz.methods()) {
             MethodInfo om = null;
-            for (MethodInfo i : oldMethods) {
+            for (MethodInfo i : old.methods()) {
                 if (!i.name().equals(method.name())) {
                     continue;
                 }
