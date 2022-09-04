@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.List;
 
 import android.content.Context;
-import com.facebook.stetho.common.ProcessUtil;
 import com.facebook.stetho.inspector.console.CLog;
 import com.facebook.stetho.inspector.helper.ChromePeerManager;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
@@ -19,8 +18,10 @@ import com.facebook.stetho.json.annotation.JsonValue;
 import org.json.JSONObject;
 
 public class Page implements ChromeDevtoolsDomain {
-  @SuppressWarnings("unused")
+  private final Context mContext;
+
   public Page(Context context) {
+    mContext = context.getApplicationContext();
   }
 
   @ChromeDevtoolsMethod
@@ -58,7 +59,7 @@ public class Page implements ChromeDevtoolsDomain {
 "       _\\///\\\\\\\\\\\\\\\\\\\\\\/______\\//\\\\\\\\\\____\\//\\\\\\\\\\\\\\\\\\\\____\\//\\\\\\\\\\___\\/\\\\\\___\\/\\\\\\__\\///\\\\\\\\\\/___\n" +
 "        ___\\///////////_________\\/////______\\//////////______\\/////____\\///____\\///_____\\/////_____\n" +
 "         Welcome to Stetho\n" +
-"          Attached to " + ProcessUtil.getProcessName() + "\n";
+"          Attached to " + mContext.getPackageName() + "\n";
     Console.MessageAddedRequest messageAddedRequest = new Console.MessageAddedRequest();
     messageAddedRequest.message = message;
     peer.invokeMethod("Console.messageAdded", messageAddedRequest, null /* callback */);
