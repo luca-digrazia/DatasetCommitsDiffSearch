@@ -75,6 +75,7 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.BatchStat;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.BuildDriver;
@@ -287,8 +288,9 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   public void sync(
       ExtendedEventHandler eventHandler,
       PackageCacheOptions packageCacheOptions,
-      PathPackageLocator packageLocator,
       SkylarkSemanticsOptions skylarkSemanticsOptions,
+      Path outputBase,
+      Path workingDirectory,
       String defaultsPackageContents,
       UUID commandId,
       Map<String, String> clientEnv,
@@ -301,16 +303,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       resetEvaluator();
       evaluatorNeedsReset = false;
     }
-    super.sync(
-        eventHandler,
-        packageCacheOptions,
-        packageLocator,
-        skylarkSemanticsOptions,
-        defaultsPackageContents,
-        commandId,
-        clientEnv,
-        tsgm,
-        options);
+    super.sync(eventHandler, packageCacheOptions, skylarkSemanticsOptions, outputBase,
+        workingDirectory, defaultsPackageContents, commandId, clientEnv, tsgm, options);
     try (SilentCloseable c = Profiler.instance().profile("handleDiffs")) {
       handleDiffs(eventHandler, packageCacheOptions.checkOutputFiles, options);
     }

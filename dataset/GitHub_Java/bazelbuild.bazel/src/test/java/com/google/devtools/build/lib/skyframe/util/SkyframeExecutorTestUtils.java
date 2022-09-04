@@ -75,7 +75,9 @@ public class SkyframeExecutorTestUtils {
             .setNumThreads(SkyframeExecutor.DEFAULT_THREAD_COUNT)
             .setEventHander(errorEventListener)
             .build();
-    return skyframeExecutor.getDriver().evaluate(ImmutableList.of(key), evaluationContext);
+    return skyframeExecutor
+        .getDriverForTesting()
+        .evaluate(ImmutableList.of(key), evaluationContext);
   }
 
   /**

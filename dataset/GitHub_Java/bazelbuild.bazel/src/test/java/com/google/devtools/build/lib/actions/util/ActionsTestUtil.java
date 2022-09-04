@@ -144,7 +144,6 @@ public final class ActionsTestUtil {
         actionKeyContext,
         metadataHandler,
         fileOutErr,
-        executor != null ? executor.getEventHandler() : null,
         ImmutableMap.copyOf(clientEnv),
         ImmutableMap.of(),
         actionGraph == null
@@ -161,7 +160,6 @@ public final class ActionsTestUtil {
       Path execRoot,
       MetadataHandler metadataHandler,
       BuildDriver buildDriver) {
-    ExtendedEventHandler eventHandler = executor != null ? executor.getEventHandler() : null;
     return ActionExecutionContext.forInputDiscovery(
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
@@ -169,9 +167,9 @@ public final class ActionsTestUtil {
         actionKeyContext,
         metadataHandler,
         fileOutErr,
-        eventHandler,
         ImmutableMap.of(),
-        new BlockingSkyFunctionEnvironment(buildDriver, eventHandler),
+        new BlockingSkyFunctionEnvironment(
+            buildDriver, executor == null ? null : executor.getEventHandler()),
         /*actionFileSystem=*/ null);
   }
 
@@ -184,7 +182,6 @@ public final class ActionsTestUtil {
         new ActionKeyContext(),
         null,
         null,
-        eventHandler,
         ImmutableMap.of(),
         ImmutableMap.of(),
         createDummyArtifactExpander(),

@@ -110,7 +110,7 @@ public class ParallelEvaluatorTest {
         keepGoing,
         revalidationReceiver,
         GraphInconsistencyReceiver.THROWING,
-        () -> AbstractQueueVisitor.createExecutorService(200, "test-pool"),
+        () -> AbstractQueueVisitor.createExecutorService(200),
         new SimpleCycleDetector(),
         EvaluationVersionBehavior.MAX_CHILD_VERSIONS);
   }

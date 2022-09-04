@@ -144,7 +144,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     options.parse();
     inMemoryCache = new InMemoryActionCache();
     tsgm = new TimestampGranularityMonitor(clock);
-    ResourceManager.instance().setAvailableResources(ResourceSet.createWithRamCpu(100, 1));
+    ResourceManager.instance().setAvailableResources(ResourceSet.createWithRamCpuIo(100, 1, 1));
     actions = new HashSet<>();
     actionTemplateExpansionFunction = new ActionTemplateExpansionFunction(actionKeyContext);
   }
@@ -420,7 +420,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   protected void buildArtifacts(Builder builder, Artifact... artifacts)
       throws BuildFailedException, AbruptExitException, InterruptedException, TestExecException,
           OptionsParsingException {
-    buildArtifacts(builder, new DummyExecutor(fileSystem, rootDirectory, reporter), artifacts);
+    buildArtifacts(builder, new DummyExecutor(fileSystem, rootDirectory), artifacts);
   }
 
   protected void buildArtifacts(Builder builder, Executor executor, Artifact... artifacts)

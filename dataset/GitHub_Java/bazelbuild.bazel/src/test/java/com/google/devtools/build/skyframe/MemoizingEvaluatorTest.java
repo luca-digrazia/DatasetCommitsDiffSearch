@@ -35,7 +35,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.testing.GcFinalization;
-import com.google.common.truth.IterableSubject;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.events.DelegatingEventHandler;
 import com.google.devtools.build.lib.events.Event;
@@ -79,7 +78,7 @@ import org.junit.runners.JUnit4;
 public class MemoizingEvaluatorTest {
 
   protected MemoizingEvaluatorTester tester;
-  protected EventCollector eventCollector;
+  private EventCollector eventCollector;
   private ExtendedEventHandler reporter;
   protected MemoizingEvaluator.EmittedEventState emittedEventState;
 
@@ -149,7 +148,7 @@ public class MemoizingEvaluatorTest {
     return true;
   }
 
-  protected void initializeReporter() {
+  private void initializeReporter() {
     eventCollector = new EventCollector();
     reporter = new Reporter(new EventBus(), eventCollector);
     tester.resetPlayedEvents();
@@ -1368,12 +1367,9 @@ public class MemoizingEvaluatorTest {
       assertThatErrorInfo(errorInfo).hasCycleInfoThat().hasSize(1);
     }
     // But the parent itself shouldn't have a direct dep on the special error transience node.
-    verifyParentDepsForParentOfCycleAndError(
-        assertThatEvaluationResult(evalResult).hasDirectDepsInGraphThat(top));
-  }
-
-  protected void verifyParentDepsForParentOfCycleAndError(IterableSubject parentDeps) {
-    parentDeps.doesNotContain(ErrorTransienceValue.KEY);
+    assertThatEvaluationResult(evalResult)
+        .hasDirectDepsInGraphThat(top)
+        .doesNotContain(ErrorTransienceValue.KEY);
   }
 
   @Test

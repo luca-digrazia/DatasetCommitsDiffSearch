@@ -137,7 +137,7 @@ public class ExternalPackageUtilTest extends BuildViewTestCase {
                 .setEnvironmentExtensions(
                     ImmutableList.<EnvironmentExtension>of(
                         new PackageFactory.EmptyEnvironmentExtension()))
-                .build(ruleClassProvider, fileSystem),
+                .build(ruleClassProvider),
             directories));
     skyFunctions.put(
         SkyFunctions.PACKAGE, new PackageFunction(null, null, null, null, null, null, null));

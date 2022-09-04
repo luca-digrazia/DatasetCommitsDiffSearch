@@ -226,7 +226,9 @@ public class TestTargetUtilsTest extends PackageLoadingTestCase {
             .setEventHander(reporter)
             .build();
     EvaluationResult<TestSuiteExpansionValue> result =
-        getSkyframeExecutor().getDriver().evaluate(ImmutableList.of(key), evaluationContext);
+        getSkyframeExecutor()
+            .getDriverForTesting()
+            .evaluate(ImmutableList.of(key), evaluationContext);
     ResolvedTargets<Label> actual = result.get(key).getLabels();
     assertThat(actual.hasError()).isFalse();
     assertThat(actual.getTargets()).containsExactlyElementsIn(expectedLabels);

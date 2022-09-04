@@ -84,7 +84,7 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
         SequencedSkyframeExecutor.create(
             AnalysisMock.get()
                 .getPackageFactoryBuilderForTesting(directories)
-                .build(ruleClassProvider, fileSystem),
+                .build(ruleClassProvider),
             fileSystem,
             directories,
             new ActionKeyContext(),

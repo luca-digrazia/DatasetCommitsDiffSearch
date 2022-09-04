@@ -15,9 +15,6 @@ package com.google.devtools.build.lib.bazel.commands;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.NoBuildEvent;
-import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
-import com.google.devtools.build.lib.bazel.repository.RepositoryOrderEvent;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -44,8 +41,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingResult;
-import java.util.HashSet;
-import java.util.Set;
 
 /** Syncs all repositories specifed in the workspace file */
 @Command(
@@ -70,17 +65,7 @@ public final class SyncCommand implements BlazeCommand {
 
   @Override
   public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
-    ExitCode exitCode = ExitCode.SUCCESS;
-
     try {
-      env.getReporter()
-          .post(
-              new NoBuildEvent(
-                  env.getCommandName(),
-                  env.getCommandStartTime(),
-                  true,
-                  true,
-                  env.getCommandId().toString()));
       env.setupPackageCache(options, env.getRuntime().getDefaultsPackageContent());
       SkyframeExecutor skyframeExecutor = env.getSkyframeExecutor();
       skyframeExecutor.injectExtraPrecomputedValues(
@@ -100,10 +85,6 @@ public final class SyncCommand implements BlazeCommand {
           skyframeExecutor.prepareAndGet(ImmutableSet.of(packageLookupKey), evaluationContext);
       if (packageLookupValue.hasError()) {
         reportError(env, packageLookupValue);
-        env.getReporter()
-            .post(
-                new NoBuildRequestFinishedEvent(
-                    ExitCode.ANALYSIS_FAILURE, env.getRuntime().getClock().currentTimeMillis()));
         return BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
       }
       RootedPath workspacePath =
@@ -112,31 +93,17 @@ public final class SyncCommand implements BlazeCommand {
       SkyKey workspace = WorkspaceFileValue.key(workspacePath);
 
       // read and evaluate the WORKSPACE file to its end
-      ImmutableList.Builder<String> repositoryOrder = new ImmutableList.Builder<>();
-      Set<String> namesSeen = new HashSet<>();
       WorkspaceFileValue fileValue = null;
       while (workspace != null) {
         EvaluationResult<SkyValue> value =
             skyframeExecutor.prepareAndGet(ImmutableSet.of(workspace), evaluationContext);
         if (value.hasError()) {
           reportError(env, value);
-          env.getReporter()
-              .post(
-                  new NoBuildRequestFinishedEvent(
-                      ExitCode.ANALYSIS_FAILURE, env.getRuntime().getClock().currentTimeMillis()));
           return BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
         }
         fileValue = (WorkspaceFileValue) value.get(workspace);
-        for (Rule rule : fileValue.getPackage().getTargets(Rule.class)) {
-          String name = rule.getName();
-          if (!namesSeen.contains(name)) {
-            repositoryOrder.add(name);
-            namesSeen.add(name);
-          }
-        }
         workspace = fileValue.next();
       }
-      env.getReporter().post(new RepositoryOrderEvent(repositoryOrder.build()));
 
       // take all skylark workspace rules and get their values
       ImmutableSet.Builder<SkyKey> repositoriesToFetch = new ImmutableSet.Builder<>();
@@ -147,18 +114,6 @@ public final class SyncCommand implements BlazeCommand {
             repositoriesToFetch.add(
                 RepositoryDirectoryValue.key(RepositoryName.create("@" + rule.getName())));
           } catch (LabelSyntaxException e) {
-            env.getReporter()
-                .handle(
-                    Event.error(
-                        "Internal error queuing "
-                            + rule.getName()
-                            + " to fetch: "
-                            + e.getMessage()));
-            env.getReporter()
-                .post(
-                    new NoBuildRequestFinishedEvent(
-                        ExitCode.BLAZE_INTERNAL_ERROR,
-                        env.getRuntime().getClock().currentTimeMillis()));
             return BlazeCommandResult.exitCode(ExitCode.BLAZE_INTERNAL_ERROR);
           }
         }
@@ -167,18 +122,15 @@ public final class SyncCommand implements BlazeCommand {
       fetchValue = skyframeExecutor.prepareAndGet(repositoriesToFetch.build(), evaluationContext);
       if (fetchValue.hasError()) {
         reportError(env, fetchValue);
-        exitCode = ExitCode.ANALYSIS_FAILURE;
+        return BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
       }
     } catch (InterruptedException e) {
-      exitCode = ExitCode.INTERRUPTED;
+      return BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
     } catch (AbruptExitException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
-      exitCode = ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
+      return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
     }
-    env.getReporter()
-        .post(
-            new NoBuildRequestFinishedEvent(
-                exitCode, env.getRuntime().getClock().currentTimeMillis()));
-    return BlazeCommandResult.exitCode(exitCode);
+
+    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 }

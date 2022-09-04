@@ -23,6 +23,7 @@ import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -30,6 +31,13 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link PackageErrorMessageFunction}. */
 @RunWith(JUnit4.class)
 public class PackageErrorMessageFunctionTest extends BuildViewTestCase {
+
+  private SkyframeExecutor skyframeExecutor;
+
+  @Before
+  public final void createSkyframeExecutor() {
+    skyframeExecutor = getSkyframeExecutor();
+  }
 
   @Test
   public void testNoErrorMessage() throws Exception {
@@ -72,7 +80,7 @@ public class PackageErrorMessageFunctionTest extends BuildViewTestCase {
             .setEventHander(reporter)
             .build();
     EvaluationResult<SkyValue> result =
-        skyframeExecutor.getDriver().evaluate(ImmutableList.of(key), evaluationContext);
+        skyframeExecutor.getDriverForTesting().evaluate(ImmutableList.of(key), evaluationContext);
     assertThat(result.hasError()).isFalse();
     SkyValue value = result.get(key);
     assertThat(value).isInstanceOf(PackageErrorMessageValue.class);

@@ -234,8 +234,7 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
               ALL_OWNER,
               new BasicActionLookupValue(
                   Actions.filterSharedActionsAndThrowActionConflict(
-                      actionKeyContext, ImmutableList.copyOf(actions)),
-                  /*nonceVersion=*/ null)));
+                      actionKeyContext, ImmutableList.copyOf(actions)))));
     }
   }
 

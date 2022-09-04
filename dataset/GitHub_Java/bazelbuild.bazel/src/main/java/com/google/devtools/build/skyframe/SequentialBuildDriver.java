@@ -44,7 +44,7 @@ public class SequentialBuildDriver implements BuildDriver {
                   .setExecutorServiceSupplier(
                       () ->
                           AbstractQueueVisitor.createExecutorService(
-                              evaluationContext.getNumThreads(), "skyframe-evaluator"))
+                              evaluationContext.getNumThreads()))
                   .build()
               : evaluationContext);
     } finally {
