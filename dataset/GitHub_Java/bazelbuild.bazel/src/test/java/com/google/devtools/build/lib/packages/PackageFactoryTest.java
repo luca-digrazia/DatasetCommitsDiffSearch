@@ -371,6 +371,33 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
   }
 
   @Test
+  public void testThirdPartyLicenseError() throws Exception {
+    events.setFailFast(false);
+    Path buildFile =
+        scratch.file("/third_party/foo/BUILD", "# line 1", "cc_library(name='bar')", "# line 3");
+    Package pkg =
+        packages.createPackage("third_party/foo", RootedPath.toRootedPath(root, buildFile));
+    events.assertContainsError(
+        "third-party rule '//third_party/foo:bar' lacks a license "
+            + "declaration with one of the following types: "
+            + "notice, reciprocal, permissive, restricted, unencumbered, by_exception_only");
+    assertThat(pkg.containsErrors()).isTrue();
+  }
+
+  @Test
+  public void testThirdPartyLicenseExportsFileError() throws Exception {
+    events.setFailFast(false);
+    Path buildFile = scratch.file("/third_party/foo/BUILD", "exports_files(['bar'])");
+    Package pkg =
+        packages.createPackage("third_party/foo", RootedPath.toRootedPath(root, buildFile));
+    events.assertContainsError(
+        "third-party file 'bar' lacks a license "
+            + "declaration with one of the following types: "
+            + "notice, reciprocal, permissive, restricted, unencumbered, by_exception_only");
+    assertThat(pkg.containsErrors()).isTrue();
+  }
+
+  @Test
   public void testDuplicateRuleIsNotAddedToPackage() throws Exception {
     events.setFailFast(false);
     Path path =
@@ -678,8 +705,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     assertGlobFails(
         "glob()",
         "insufficient arguments received by glob(include: sequence of strings, "
-            + "*, exclude: sequence of strings = [], exclude_directories: int = 1, "
-            + "allow_empty: bool = True) (got 0, expected at least 1)");
+            + "*, exclude: sequence of strings = [], exclude_directories: int = 1) "
+            + "(got 0, expected at least 1)");
   }
 
   @Test
@@ -688,8 +715,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     assertGlobFails(
         "glob(['a'], ['b'])",
         "too many (2) positional arguments in call to glob(include: sequence of strings, "
-            + "*, exclude: sequence of strings = [], exclude_directories: int = 1, "
-            + "allow_empty: bool = True)");
+            + "*, exclude: sequence of strings = [], exclude_directories: int = 1)");
   }
 
   @Test
@@ -698,8 +724,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     assertGlobFails(
         "glob(1,2,3,4)",
         "too many (4) positional arguments in call to glob(include: sequence of strings, "
-            + "*, exclude: sequence of strings = [], exclude_directories: int = 1, "
-            + "allow_empty: bool = True)");
+            + "*, exclude: sequence of strings = [], exclude_directories: int = 1)");
   }
 
   @Test
@@ -708,8 +733,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     assertGlobFails(
         "glob(1, exclude=2)",
         "argument 'include' has type 'int', but should be 'sequence'\n"
-            + "in call to builtin function glob(include, *, exclude, exclude_directories, "
-            + "allow_empty)");
+            + "in call to builtin function glob(include, *, exclude, exclude_directories)");
   }
 
   @Test

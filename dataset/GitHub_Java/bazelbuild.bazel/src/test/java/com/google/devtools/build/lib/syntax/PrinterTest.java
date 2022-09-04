@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
@@ -85,9 +86,12 @@ public class PrinterTest {
   }
 
   private void checkFormatPositionalFails(String errorMessage, String format, Object... arguments) {
-    IllegalFormatException e =
-        assertThrows(IllegalFormatException.class, () -> Printer.format(format, arguments));
-    assertThat(e).hasMessageThat().isEqualTo(errorMessage);
+    try {
+      Printer.format(format, arguments);
+      fail();
+    } catch (IllegalFormatException e) {
+      assertThat(e).hasMessageThat().isEqualTo(errorMessage);
+    }
   }
 
   @Test

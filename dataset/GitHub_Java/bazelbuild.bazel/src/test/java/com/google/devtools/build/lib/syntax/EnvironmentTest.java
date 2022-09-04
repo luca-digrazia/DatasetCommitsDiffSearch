@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
@@ -63,8 +64,12 @@ public class EnvironmentTest extends EvaluationTestCase {
   @Test
   public void testReference() throws Exception {
     setFailFast(false);
-    EvalException e = assertThrows(EvalException.class, () -> eval("foo"));
-    assertThat(e).hasMessageThat().isEqualTo("name 'foo' is not defined");
+    try {
+      eval("foo");
+      fail();
+    } catch (EvalException e) {
+      assertThat(e).hasMessageThat().isEqualTo("name 'foo' is not defined");
+    }
     update("foo", "bar");
     assertThat(eval("foo")).isEqualTo("bar");
   }
@@ -73,8 +78,12 @@ public class EnvironmentTest extends EvaluationTestCase {
   @Test
   public void testAssignAndReference() throws Exception {
     setFailFast(false);
-    EvalException e = assertThrows(EvalException.class, () -> eval("foo"));
-    assertThat(e).hasMessageThat().isEqualTo("name 'foo' is not defined");
+    try {
+      eval("foo");
+      fail();
+    } catch (EvalException e) {
+      assertThat(e).hasMessageThat().isEqualTo("name 'foo' is not defined");
+    }
     eval("foo = 'bar'");
     assertThat(eval("foo")).isEqualTo("bar");
   }
@@ -148,9 +157,12 @@ public class EnvironmentTest extends EvaluationTestCase {
 
   @Test
   public void testBindToNullThrowsException() throws Exception {
-    NullPointerException e =
-        assertThrows(NullPointerException.class, () -> update("some_name", null));
-    assertThat(e).hasMessageThat().isEqualTo("trying to assign null to 'some_name'");
+    try {
+      update("some_name", null);
+      fail();
+    } catch (NullPointerException e) {
+      assertThat(e).hasMessageThat().isEqualTo("trying to assign null to 'some_name'");
+    }
   }
 
   @Test

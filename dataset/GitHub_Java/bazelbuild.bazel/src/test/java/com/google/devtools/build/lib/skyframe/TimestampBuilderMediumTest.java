@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -415,10 +415,14 @@ public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
 
     // Now first cache creation attempt should cause IOException while renaming corrupted files.
     // Second attempt will initialize empty cache, causing rebuild.
-    IOException e = assertThrows(IOException.class, () -> createCache());
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo("Failed action cache referential integrity check: empty index");
+    try {
+      createCache();
+      fail("Expected IOException");
+    } catch (IOException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo("Failed action cache referential integrity check: empty index");
+    }
 
     buildArtifacts(persistentBuilder(createCache()), hello);
     assertThat(button.pressed).isTrue(); // rebuilt due to the missing filename index
@@ -476,8 +480,12 @@ public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
 
     // Now first cache creation attempt should cause IOException while renaming corrupted files.
     // Second attempt will initialize empty cache, causing rebuild.
-    IOException e = assertThrows(IOException.class, () -> createCache());
-    assertThat(e).hasMessageThat().contains("Failed action cache referential integrity check");
+    try {
+      createCache();
+      fail("Expected IOException");
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().contains("Failed action cache referential integrity check");
+    }
 
     // Validate cache with incorrect (out-of-date) filename index.
     buildArtifacts(persistentBuilder(createCache()), hello);
