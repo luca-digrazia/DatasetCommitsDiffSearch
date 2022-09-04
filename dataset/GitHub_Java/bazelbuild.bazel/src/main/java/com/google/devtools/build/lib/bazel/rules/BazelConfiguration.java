@@ -73,7 +73,7 @@ public class BazelConfiguration extends Fragment {
     public PathFragment shellExecutable;
 
     @Override
-    public Options getHost() {
+    public Options getHost(boolean fallback) {
       Options host = (Options) getDefault();
       host.useStrictActionEnv = useStrictActionEnv;
       host.shellExecutable = shellExecutable;
