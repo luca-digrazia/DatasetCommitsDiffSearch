@@ -35,13 +35,11 @@ import com.google.devtools.build.lib.analysis.MakeVariableExpander;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.LazyString;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -302,7 +300,10 @@ public class ProtoCompileActionBuilder {
       // Note: the %s in the line below is used by proto-compiler. That is, the string we create
       // here should have a literal %s in it.
       result.add(
-          createStrictProtoDepsViolationErrorMessage(ruleContext.getLabel().getCanonicalForm()));
+          "--direct_dependencies_violation_msg=%s is imported, "
+              + "but "
+              + ruleContext.getLabel().getCanonicalForm()
+              + " doesn't directly depend on a proto_library that 'srcs' it.");
     }
 
     for (Artifact src : supportData.getDirectProtoSources()) {
@@ -370,37 +371,21 @@ public class ProtoCompileActionBuilder {
   public static void writeDescriptorSet(
       RuleContext ruleContext,
       final CharSequence outReplacement,
-      Collection<Artifact> protosToCompile,
+      Iterable<Artifact> protosToCompile,
       NestedSet<Artifact> transitiveSources,
       NestedSet<Artifact> protosInDirectDeps,
-      Artifact output,
-      boolean allowServices,
-      NestedSet<Artifact> transitiveDescriptorSets) {
-    if (protosToCompile.isEmpty()) {
-      ruleContext.registerAction(
-          FileWriteAction.createEmptyWithInputs(
-              ruleContext.getActionOwner(), transitiveDescriptorSets, output));
-      return;
-    }
-
-    SpawnAction.Builder actions =
-        createActions(
-            ruleContext,
-            ImmutableList.of(createDescriptorSetToolchain(outReplacement)),
-            protosToCompile,
-            transitiveSources,
-            protosInDirectDeps,
-            ruleContext.getLabel().getCanonicalForm(),
-            ImmutableList.of(output),
-            "Descriptor Set",
-            allowServices);
-    if (actions == null) {
-      return;
-    }
-
-    actions.setMnemonic("GenProtoDescriptorSet");
-    actions.addTransitiveInputs(transitiveDescriptorSets);
-    ruleContext.registerAction(actions.build(ruleContext));
+      Iterable<Artifact> outputs,
+      boolean allowServices) {
+    registerActions(
+        ruleContext,
+        ImmutableList.of(createDescriptorSetToolchain(outReplacement)),
+        protosToCompile,
+        transitiveSources,
+        protosInDirectDeps,
+        ruleContext.getLabel().getCanonicalForm(),
+        outputs,
+        "Descriptor Set",
+        allowServices);
   }
 
   private static ToolchainInvocation createDescriptorSetToolchain(CharSequence outReplacement) {
@@ -436,36 +421,8 @@ public class ProtoCompileActionBuilder {
       Iterable<Artifact> outputs,
       String flavorName,
       boolean allowServices) {
-    SpawnAction.Builder actions =
-        createActions(
-            ruleContext,
-            toolchainInvocations,
-            protosToCompile,
-            transitiveSources,
-            protosInDirectDeps,
-            ruleLabel,
-            outputs,
-            flavorName,
-            allowServices);
-    if (actions != null) {
-      ruleContext.registerAction(actions.build(ruleContext));
-    }
-  }
-
-  @Nullable
-  private static SpawnAction.Builder createActions(
-      RuleContext ruleContext,
-      List<ToolchainInvocation> toolchainInvocations,
-      Iterable<Artifact> protosToCompile,
-      NestedSet<Artifact> transitiveSources,
-      @Nullable NestedSet<Artifact> protosInDirectDeps,
-      String ruleLabel,
-      Iterable<Artifact> outputs,
-      String flavorName,
-      boolean allowServices) {
-
     if (isEmpty(outputs)) {
-      return null;
+      return;
     }
 
     SpawnAction.Builder result = new SpawnAction.Builder().addTransitiveInputs(transitiveSources);
@@ -480,7 +437,7 @@ public class ProtoCompileActionBuilder {
     FilesToRunProvider compilerTarget =
         ruleContext.getExecutablePrerequisite(":proto_compiler", RuleConfiguredTarget.Mode.HOST);
     if (compilerTarget == null) {
-      return null;
+      return;
     }
 
     result
@@ -501,7 +458,7 @@ public class ProtoCompileActionBuilder {
         .setProgressMessage("Generating " + flavorName + " proto_library " + ruleContext.getLabel())
         .setMnemonic(MNEMONIC);
 
-    return result;
+    ruleContext.registerAction(result.build(ruleContext));
   }
 
   /**
@@ -573,7 +530,13 @@ public class ProtoCompileActionBuilder {
     cmdLine.add(new ProtoCommandLineArgv(protosInDirectDeps, transitiveSources));
 
     if (protosInDirectDeps != null) {
-      cmdLine.add(createStrictProtoDepsViolationErrorMessage(ruleLabel));
+      // Note: the %s in the line below is used by proto-compiler. That is, the string we create
+      // here should have a literal %s in it.
+      cmdLine.add(
+          "--direct_dependencies_violation_msg=%s is imported, "
+              + "but "
+              + ruleLabel
+              + " doesn't directly depend on a proto_library that 'srcs' it.");
     }
 
     for (Artifact src : protosToCompile) {
@@ -585,14 +548,6 @@ public class ProtoCompileActionBuilder {
     }
 
     return cmdLine.build();
-  }
-
-  @SuppressWarnings("FormatString") // Errorprone complains that there's no '%s' in the format
-  // string, but it's actually in MESSAGE.
-  @VisibleForTesting
-  public static String createStrictProtoDepsViolationErrorMessage(String ruleLabel) {
-    return "--direct_dependencies_violation_msg="
-        + String.format(StrictProtoDepsViolationMessage.MESSAGE, ruleLabel);
   }
 
   /**

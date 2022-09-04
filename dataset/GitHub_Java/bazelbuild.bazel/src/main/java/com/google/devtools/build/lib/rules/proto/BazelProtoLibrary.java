@@ -61,7 +61,7 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
     RuleConfiguredTargetBuilder result = new RuleConfiguredTargetBuilder(ruleContext);
 
     Artifact descriptorSetOutput = null;
-    if (checkDepsProtoSources.isEmpty()) {
+    if (checkDepsProtoSources.isEmpty() || !outputDescriptorSetFlagEnabled(ruleContext)) {
       result.setFilesToBuild(NestedSetBuilder.<Artifact>create(STABLE_ORDER));
     } else {
       descriptorSetOutput =
@@ -96,5 +96,12 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
         .addProvider(ProtoSupportDataProvider.class, new ProtoSupportDataProvider(supportData))
         .addSkylarkTransitiveInfo(ProtoSourcesProvider.SKYLARK_NAME, sourcesProvider)
         .build();
+  }
+
+  private boolean outputDescriptorSetFlagEnabled(RuleContext ruleContext) {
+    return ruleContext
+        .getConfiguration()
+        .getFragment(ProtoConfiguration.class)
+        .outputDescriptorSet();
   }
 }
