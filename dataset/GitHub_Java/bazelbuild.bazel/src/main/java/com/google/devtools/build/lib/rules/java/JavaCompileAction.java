@@ -457,7 +457,6 @@ public final class JavaCompileAction extends SpawnAction {
     private PathFragment tempDirectory;
     private PathFragment classDirectory;
     private JavaPluginInfo plugins = JavaPluginInfo.empty();
-    private NestedSet<Artifact> extraData = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
     private Label targetLabel;
     @Nullable private String injectingRuleKind;
 
@@ -573,8 +572,6 @@ public final class JavaCompileAction extends SpawnAction {
               .addTransitive(classpathEntries)
               .addTransitive(compileTimeDependencyArtifacts)
               .addTransitive(plugins.processorClasspath())
-              .addTransitive(plugins.data())
-              .addTransitive(extraData)
               .addAll(sourceJars)
               .addAll(sourceFiles)
               .addAll(javabaseInputs)
@@ -956,12 +953,6 @@ public final class JavaCompileAction extends SpawnAction {
       checkState(this.plugins.isEmpty());
       this.plugins = plugins;
       return this;
-    }
-
-    public void setExtraData(NestedSet<Artifact> extraData) {
-      checkNotNull(extraData, "extraData must not be null");
-      checkState(this.extraData.isEmpty());
-      this.extraData = extraData;
     }
 
     public Builder setLangtoolsJar(Artifact langtoolsJar) {

@@ -23,7 +23,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
-import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
@@ -428,29 +427,11 @@ public class JavaCommon {
   /** Returns the per-package configured javacopts. */
   public static ImmutableList<String> computePerPackageJavacOpts(
       RuleContext ruleContext, JavaToolchainProvider toolchain) {
-    return computePerPackageConfiguration(ruleContext, toolchain)
-        .stream()
-        .flatMap(p -> p.javacopts().stream())
-        .collect(toImmutableList());
-  }
-
-  /** Returns the per-package configured runfiles. */
-  public static NestedSet<Artifact> computePerPackageData(
-      RuleContext ruleContext, JavaToolchainProvider toolchain) {
-    NestedSetBuilder<Artifact> data = NestedSetBuilder.naiveLinkOrder();
-    computePerPackageConfiguration(ruleContext, toolchain)
-        .stream()
-        .map(p -> p.data())
-        .forEach(data::addTransitive);
-    return data.build();
-  }
-
-  private static ImmutableList<JavaPackageConfigurationProvider> computePerPackageConfiguration(
-      RuleContext ruleContext, JavaToolchainProvider toolchain) {
     return toolchain
         .packageConfiguration()
         .stream()
         .filter(p -> p.matches(ruleContext.getLabel()))
+        .flatMap(p -> p.javacopts().stream())
         .collect(toImmutableList());
   }
 
@@ -792,13 +773,8 @@ public class JavaCommon {
     NestedSet<String> processorClasses =
         NestedSetBuilder.wrap(Order.NAIVE_LINK_ORDER, getProcessorClasses(ruleContext));
     NestedSet<Artifact> processorClasspath = getRuntimeClasspath();
-    FileProvider dataProvider = ruleContext.getPrerequisite("data", Mode.HOST, FileProvider.class);
-    NestedSet<Artifact> data =
-        dataProvider != null
-            ? dataProvider.getFilesToBuild()
-            : NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
     return JavaPluginInfoProvider.create(
-        JavaPluginInfo.create(processorClasses, processorClasspath, data),
+        JavaPluginInfo.create(processorClasses, processorClasspath),
         ruleContext.attributes().get("generates_api", Type.BOOLEAN));
   }
 

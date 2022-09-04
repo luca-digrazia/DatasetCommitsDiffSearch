@@ -196,7 +196,7 @@ final class JavaInfoBuildHelper {
 
     JavaRuleOutputJarsProvider javaRuleOutputJarsProvider =
         JavaRuleOutputJarsProvider.builder()
-            .addOutputJar(outputJar, compileJar, null /* manifestProto */, sourceJars)
+            .addOutputJar(outputJar, compileJar, sourceJars)
             .setJdeps(jdeps)
             .build();
     javaInfoBuilder.addProvider(JavaRuleOutputJarsProvider.class, javaRuleOutputJarsProvider);
@@ -528,13 +528,10 @@ final class JavaInfoBuildHelper {
 
     NestedSetBuilder<Artifact> transitiveSourceJars =
         NestedSetBuilder.<Artifact>stableOrder().addAll(outputSourceJars);
-    deps.stream()
-        .filter(javaInfo -> !javaInfo.isNeverlink())
-        .filter(javaInfo -> javaInfo.getProvider(JavaSourceJarsProvider.class) != null)
-        .map(javaInfo -> javaInfo.getProvider(JavaSourceJarsProvider.class))
-        .forEach(
-            sourceJarsP ->
-                transitiveSourceJars.addTransitive(sourceJarsP.getTransitiveSourceJars()));
+    for (JavaSourceJarsProvider sourceJarsProvider :
+        JavaInfo.getProvidersFromListOfJavaProviders(JavaSourceJarsProvider.class, deps)) {
+      transitiveSourceJars.addTransitive(sourceJarsProvider.getTransitiveSourceJars());
+    }
 
     return javaInfoBuilder
         .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)

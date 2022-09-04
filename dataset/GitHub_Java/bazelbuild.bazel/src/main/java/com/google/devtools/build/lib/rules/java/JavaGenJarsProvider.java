@@ -31,8 +31,10 @@ public final class JavaGenJarsProvider
     implements TransitiveInfoProvider, JavaAnnotationProcessingApi<Artifact> {
 
   private final boolean usesAnnotationProcessing;
-  @Nullable private final Artifact genClassJar;
-  @Nullable private final Artifact genSourceJar;
+  @Nullable
+  private final Artifact genClassJar;
+  @Nullable
+  private final Artifact genSourceJar;
 
   private final NestedSet<Artifact> processorClasspath;
   private final ImmutableList<String> processorClassNames;
@@ -64,7 +66,7 @@ public final class JavaGenJarsProvider
         genClassJar,
         genSourceJar,
         plugins.plugins().processorClasspath(),
-        plugins.plugins().processorClasses().toList(),
+        ImmutableList.copyOf(plugins.plugins().processorClasses().toList()),
         classJarsBuilder.build(),
         sourceJarsBuilder.build());
   }

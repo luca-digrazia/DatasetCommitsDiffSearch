@@ -267,11 +267,8 @@ public final class JavaLibraryHelper {
         /* instrumentationMetadataJar= */ null,
         nativeHeaderOutput);
 
-    Artifact iJar = null;
-    if (!sourceJars.isEmpty() || !sourceFiles.isEmpty()) {
-      artifactsBuilder.addRuntimeJar(output);
-      iJar = helper.createCompileTimeJarAction(output, artifactsBuilder);
-    }
+    artifactsBuilder.addRuntimeJar(output);
+    Artifact iJar = helper.createCompileTimeJarAction(output, artifactsBuilder);
 
     if (createOutputSourceJar) {
       helper.createSourceJarAction(
@@ -280,7 +277,7 @@ public final class JavaLibraryHelper {
     ImmutableList<Artifact> outputSourceJars =
         outputSourceJar == null ? ImmutableList.of() : ImmutableList.of(outputSourceJar);
     outputJarsBuilder
-        .addOutputJar(new OutputJar(output, iJar, manifestProtoOutput, outputSourceJars))
+        .addOutputJar(new OutputJar(output, iJar, outputSourceJars))
         .setJdeps(outputDepsProto)
         .setNativeHeaders(nativeHeaderOutput);
 
