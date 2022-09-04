@@ -15,8 +15,8 @@ package com.google.devtools.build.lib.query2;
 
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.TargetAccessor;
+import com.google.devtools.build.lib.events.NullEventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.query2.output.CqueryOptions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import java.io.OutputStream;
@@ -25,12 +25,11 @@ import java.io.OutputStream;
 public class LabelAndConfigurationOutputFormatterCallback extends CqueryThreadsafeCallback {
 
   LabelAndConfigurationOutputFormatterCallback(
-      ExtendedEventHandler eventHandler,
+      Reporter reporter,
       CqueryOptions options,
       OutputStream out,
-      SkyframeExecutor skyframeExecutor,
-      TargetAccessor<ConfiguredTarget> accessor) {
-    super(eventHandler, options, out, skyframeExecutor, accessor);
+      SkyframeExecutor skyframeExecutor) {
+    super(reporter, options, out, skyframeExecutor);
   }
 
   @Override
@@ -42,7 +41,8 @@ public class LabelAndConfigurationOutputFormatterCallback extends CqueryThreadsa
   public void processOutput(Iterable<ConfiguredTarget> partialResult) {
     for (ConfiguredTarget configuredTarget : partialResult) {
       BuildConfiguration config =
-          skyframeExecutor.getConfiguration(eventHandler, configuredTarget.getConfigurationKey());
+          skyframeExecutor.getConfiguration(
+              NullEventHandler.INSTANCE, configuredTarget.getConfigurationKey());
       StringBuilder output =
           new StringBuilder()
               .append(configuredTarget.getLabel())
