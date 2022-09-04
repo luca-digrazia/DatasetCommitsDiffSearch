@@ -1,6 +1,8 @@
 package io.quarkus.runtime.configuration;
 
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.logging.Logger;
@@ -14,28 +16,28 @@ public final class ConfigDiagnostic {
     private static final Logger log = Logger.getLogger("io.quarkus.config");
 
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)
-    private static volatile boolean error = false;
+    private static final List<String> errorsMessages = new CopyOnWriteArrayList<>();
 
     private ConfigDiagnostic() {
     }
 
     public static void invalidValue(String name, IllegalArgumentException ex) {
         final String message = ex.getMessage();
-        log.errorf("An invalid value was given for configuration key \"%s\": %s", name,
-                message == null ? ex.toString() : message);
-        error = true;
+        final String loggedMessage = message != null ? message
+                : String.format("An invalid value was given for configuration key \"%s\"", name);
+        errorsMessages.add(loggedMessage);
     }
 
     public static void missingValue(String name, NoSuchElementException ex) {
         final String message = ex.getMessage();
-        log.errorf("Configuration key \"%s\" is required, but its value is empty/missing: %s", name,
-                message == null ? ex.toString() : message);
-        error = true;
+        final String loggedMessage = message != null ? message
+                : String.format("Configuration key \"%s\" is required, but its value is empty/missing", name);
+        errorsMessages.add(loggedMessage);
     }
 
     public static void duplicate(String name) {
-        log.errorf("Configuration key \"%s\" was specified more than once", name);
-        error = true;
+        final String loggedMessage = String.format("Configuration key \"%s\" was specified more than once", name);
+        errorsMessages.add(loggedMessage);
     }
 
     public static void deprecated(String name) {
@@ -43,7 +45,9 @@ public final class ConfigDiagnostic {
     }
 
     public static void unknown(String name) {
-        log.warnf("Unrecognized configuration key \"%s\" was provided; it will be ignored", name);
+        log.warnf(
+                "Unrecognized configuration key \"%s\" was provided; it will be ignored; verify that the dependency extension for this configuration is set or you did not make a typo",
+                name);
     }
 
     public static void unknown(NameIterator name) {
@@ -53,7 +57,9 @@ public final class ConfigDiagnostic {
     public static void unknownRunTime(String name) {
         if (ImageInfo.inImageRuntimeCode()) {
             // only warn at run time for native images, otherwise the user will get warned twice for every property
-            log.warnf("Unrecognized configuration key \"%s\" was provided; it will be ignored", name);
+            log.warnf(
+                    "Unrecognized configuration key \"%s\" was provided; it will be ignored; verify that the dependency extension for this configuration is set or that you did not make a typo",
+                    name);
         }
     }
 
@@ -67,13 +73,23 @@ public final class ConfigDiagnostic {
      * @return {@code true} if a fatal configuration error has occurred
      */
     public static boolean isError() {
-        return error;
+        return !errorsMessages.isEmpty();
     }
 
     /**
      * Reset the config error status (for e.g. testing).
      */
     public static void resetError() {
-        error = false;
+        errorsMessages.clear();
+    }
+
+    public static String getNiceErrorMessage() {
+        StringBuilder b = new StringBuilder();
+        for (String errorsMessage : errorsMessages) {
+            b.append("  - ");
+            b.append(errorsMessage);
+            b.append(System.lineSeparator());
+        }
+        return b.toString();
     }
 }
