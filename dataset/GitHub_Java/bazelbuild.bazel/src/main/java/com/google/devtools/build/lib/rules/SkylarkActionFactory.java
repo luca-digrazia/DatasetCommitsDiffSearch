@@ -598,7 +598,7 @@ public class SkylarkActionFactory implements SkylarkValue {
                   envUnchecked, String.class, String.class, "env")));
     }
     if (progressMessage != Runtime.NONE) {
-      builder.setProgressMessageNonLazy((String) progressMessage);
+      builder.setProgressMessage((String) progressMessage);
     }
     if (EvalUtils.toBoolean(useDefaultShellEnv)) {
       builder.useDefaultShellEnvironment();
