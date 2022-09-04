@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.rules;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.RuleClass.Builder.STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
+import static com.google.devtools.build.lib.packages.RuleClass.Builder.SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProviderImpl;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
@@ -48,8 +49,9 @@ public final class LateBoundAlias implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws ActionConflictException, InterruptedException {
-    ConfiguredTarget actual = (ConfiguredTarget) ruleContext.getPrerequisite(ATTRIBUTE_NAME);
+      throws ActionConflictException {
+    ConfiguredTarget actual =
+        (ConfiguredTarget) ruleContext.getPrerequisite(ATTRIBUTE_NAME, Mode.TARGET);
     if (actual == null) {
       return createEmptyConfiguredTarget(ruleContext);
     }
@@ -66,17 +68,16 @@ public final class LateBoundAlias implements RuleConfiguredTargetFactory {
       Object defaultValue =
           ruleContext
               .attributes()
-              .get(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, buildSetting.getType());
+              .get(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, buildSetting.getType());
       providers.put(
-          BuildSettingProvider.class,
-          new BuildSettingProvider(buildSetting, defaultValue, ruleContext.getLabel()));
+          BuildSettingProvider.class, new BuildSettingProvider(buildSetting, defaultValue));
     }
 
     return new AliasConfiguredTarget(ruleContext, actual, providers.build());
   }
 
   private ConfiguredTarget createEmptyConfiguredTarget(RuleContext ruleContext)
-      throws ActionConflictException, InterruptedException {
+      throws ActionConflictException {
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY))
         .build();
