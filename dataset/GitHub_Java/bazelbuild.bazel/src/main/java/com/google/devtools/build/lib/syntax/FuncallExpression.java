@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -36,6 +37,7 @@ import com.google.devtools.build.lib.util.Pair;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -392,7 +394,60 @@ public final class FuncallExpression extends Expression {
             || !methodDescriptor.isUseSkylarkSemantics()
             || !methodDescriptor.isUseLocation(),
         "Cannot be invoked on structField callables with extra interpreter params");
-    return methodDescriptor.call(obj, new Object[0], Location.BUILTIN, null);
+    return callMethod(methodDescriptor, fieldName, obj, new Object[0], Location.BUILTIN, null);
+  }
+
+  static Object callMethod(MethodDescriptor methodDescriptor, String methodName, Object obj,
+      Object[] args, Location loc, Environment env) throws EvalException, InterruptedException {
+    try {
+      Method method = methodDescriptor.getMethod();
+      if (obj == null && !Modifier.isStatic(method.getModifiers())) {
+        throw new EvalException(loc, "method '" + methodName + "' is not static");
+      }
+      // This happens when the interface is public but the implementation classes
+      // have reduced visibility.
+      method.setAccessible(true);
+      Object result = method.invoke(obj, args);
+      if (method.getReturnType().equals(Void.TYPE)) {
+        return Runtime.NONE;
+      }
+      if (result == null) {
+        if (methodDescriptor.isAllowReturnNones()) {
+          return Runtime.NONE;
+        } else {
+          throw new EvalException(
+              loc,
+              "method invocation returned None, please file a bug report: "
+                  + methodName
+                  + Printer.printAbbreviatedList(
+                  ImmutableList.copyOf(args), "(", ", ", ")", null));
+        }
+      }
+      // TODO(bazel-team): get rid of this, by having everyone use the Skylark data structures
+      result = SkylarkType.convertToSkylark(result, method, env);
+      if (result != null && !EvalUtils.isSkylarkAcceptable(result.getClass())) {
+        throw new EvalException(
+            loc,
+            Printer.format(
+                "method '%s' returns an object of invalid type %r", methodName, result.getClass()));
+      }
+      return result;
+    } catch (IllegalAccessException e) {
+      // TODO(bazel-team): Print a nice error message. Maybe the method exists
+      // and an argument is missing or has the wrong type.
+      throw new EvalException(loc, "Method invocation failed: " + e);
+    } catch (InvocationTargetException e) {
+      if (e.getCause() instanceof FuncallException) {
+        throw new EvalException(loc, e.getCause().getMessage());
+      } else if (e.getCause() != null) {
+        Throwables.throwIfInstanceOf(e.getCause(), InterruptedException.class);
+
+        throw new EvalExceptionWithJavaCause(loc, e.getCause());
+      } else {
+        // This is unlikely to happen
+        throw new EvalException(loc, "method invocation failed: " + e);
+      }
+    }
   }
 
   // TODO(bazel-team): If there's exactly one usable method, this works. If there are multiple
@@ -468,24 +523,9 @@ public final class FuncallExpression extends Expression {
    */
   public static List<Object> extraInterpreterArgs(
       MethodDescriptor method, @Nullable FuncallExpression ast, Location loc, Environment env) {
-    ImmutableList.Builder<Object> builder = ImmutableList.builder();
-    appendExtraInterpreterArgs(builder, method, ast, loc, env);
-    return builder.build();
-  }
 
-  /**
-   * Same as {@link #extraInterpreterArgs(MethodDescriptor, FuncallExpression, Location,
-   * Environment)} but appends args to a passed {@code builder} to avoid unnecessary allocations of
-   * intermediate instances.
-   *
-   * @see #extraInterpreterArgs(MethodDescriptor, FuncallExpression, Location, Environment)
-   */
-  private static void appendExtraInterpreterArgs(
-      ImmutableList.Builder<Object> builder,
-      MethodDescriptor method,
-      @Nullable FuncallExpression ast,
-      Location loc,
-      Environment env) {
+    ImmutableList.Builder<Object> builder = ImmutableList.builder();
+
     if (method.isUseLocation()) {
       builder.add(loc);
     }
@@ -501,6 +541,7 @@ public final class FuncallExpression extends Expression {
     if (method.isUseSkylarkSemantics()) {
       builder.add(env.getSemantics());
     }
+    return builder.build();
   }
 
   /**
@@ -609,7 +650,7 @@ public final class FuncallExpression extends Expression {
     if (acceptsExtraKwargs) {
       builder.add(SkylarkDict.copyOf(environment, extraKwargs));
     }
-    appendExtraInterpreterArgs(builder, method, this, getLocation(), environment);
+    builder.addAll(extraInterpreterArgs(method, this, getLocation(), environment));
 
     return ArgumentListConversionResult.fromArgumentList(builder.build());
   }
@@ -779,7 +820,7 @@ public final class FuncallExpression extends Expression {
       if (javaMethod.first.isStructField()) {
         // Not a method but a callable attribute
         try {
-          return callFunction(javaMethod.first.invoke(obj), env);
+          return callFunction(javaMethod.first.getMethod().invoke(obj), env);
         } catch (IllegalAccessException e) {
           throw new EvalException(getLocation(), "method invocation failed: " + e);
         } catch (InvocationTargetException e) {
@@ -793,7 +834,7 @@ public final class FuncallExpression extends Expression {
           }
         }
       }
-      return javaMethod.first.call(obj, javaMethod.second.toArray(), location, env);
+      return callMethod(javaMethod.first, method, obj, javaMethod.second.toArray(), location, env);
     }
   }
 
