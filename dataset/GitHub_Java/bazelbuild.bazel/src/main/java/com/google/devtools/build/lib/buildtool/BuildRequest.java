@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
@@ -118,9 +119,8 @@ public class BuildRequest implements OptionsProvider {
   /**
    * Since the OptionsProvider interface is used by many teams, this method is String-keyed even
    * though it should always contain labels for our purposes. Consumers of this method should
-   * probably use the {@link
-   * com.google.devtools.build.lib.analysis.config.BuildOptions#labelizeStarlarkOptions} method
-   * before doing meaningful work with the results.
+   * probably use the {@link BuildOptions#labelizeStarlarkOptions} method before doing meaningful
+   * work with the results.
    */
   @Override
   public Map<String, Object> getStarlarkOptions() {
@@ -292,12 +292,10 @@ public class BuildRequest implements OptionsProvider {
 
   /** Creates a new TopLevelArtifactContext from this build request. */
   public TopLevelArtifactContext getTopLevelArtifactContext() {
-    BuildRequestOptions buildOptions = getBuildOptions();
     return new TopLevelArtifactContext(
         getOptions(ExecutionOptions.class).testStrategy.equals("exclusive"),
         getOptions(BuildEventProtocolOptions.class).expandFilesets,
-        OutputGroupInfo.determineOutputGroups(
-            buildOptions.outputGroups, buildOptions.runValidationActions));
+        OutputGroupInfo.determineOutputGroups(getBuildOptions().outputGroups));
   }
 
   public ImmutableSortedSet<String> getMultiCpus() {
