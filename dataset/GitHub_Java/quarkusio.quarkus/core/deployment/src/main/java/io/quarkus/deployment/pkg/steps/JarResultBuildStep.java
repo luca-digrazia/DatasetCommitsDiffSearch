@@ -414,7 +414,8 @@ public class JarResultBuildStep {
                 .resolve(outputTargetBuildItem.getBaseName() + packageConfig.runnerSuffix + ".jar");
         Path libDir = outputTargetBuildItem.getOutputDirectory().resolve("lib");
         Files.deleteIfExists(runnerJar);
-        IoUtils.recursiveDeleteAndThenCreate(libDir);
+        IoUtils.recursiveDelete(libDir);
+        Files.createDirectories(libDir);
 
         try (FileSystem runnerZipFs = ZipUtils.newZip(runnerJar)) {
 
@@ -463,7 +464,8 @@ public class JarResultBuildStep {
             userProviders = buildDir.resolve(packageConfig.userProvidersDirectory.get());
         }
         if (!rebuild) {
-            IoUtils.recursiveDeleteAndThenCreate(buildDir);
+            IoUtils.recursiveDelete(buildDir);
+            Files.createDirectories(buildDir);
             Files.createDirectories(mainLib);
             Files.createDirectories(baseLib);
             Files.createDirectories(appDir);
@@ -475,7 +477,8 @@ public class JarResultBuildStep {
                 Files.createFile(userProviders.resolve(".keep"));
             }
         } else {
-            IoUtils.recursiveDeleteAndThenCreate(quarkus);
+            IoUtils.recursiveDelete(quarkus);
+            Files.createDirectories(quarkus);
         }
         Map<AppArtifactKey, List<Path>> copiedArtifacts = new HashMap<>();
 
@@ -709,7 +712,8 @@ public class JarResultBuildStep {
             List<UberJarRequiredBuildItem> uberJarRequired) throws Exception {
         Path targetDirectory = outputTargetBuildItem.getOutputDirectory()
                 .resolve(outputTargetBuildItem.getBaseName() + "-native-image-source-jar");
-        IoUtils.recursiveDeleteAndThenCreate(targetDirectory);
+        IoUtils.recursiveDelete(targetDirectory);
+        Files.createDirectories(targetDirectory);
 
         List<GeneratedClassBuildItem> allClasses = new ArrayList<>(generatedClasses);
         allClasses.addAll(nativeImageResources.stream()
@@ -722,14 +726,9 @@ public class JarResultBuildStep {
                     "maximum command length (see https://github.com/oracle/graal/issues/2387).");
             // Native image source jar generation with the uber jar strategy is provided as a workaround for Windows and
             // will be removed once https://github.com/oracle/graal/issues/2387 is fixed.
-            final NativeImageSourceJarBuildItem nativeImageSourceJarBuildItem = buildNativeImageUberJar(curateOutcomeBuildItem,
-                    outputTargetBuildItem, transformedClasses,
+            return buildNativeImageUberJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses,
                     applicationArchivesBuildItem,
                     packageConfig, applicationInfo, allClasses, generatedResources, mainClassBuildItem, targetDirectory);
-            // additionally copy any json config files to a location accessible by native-image tool during
-            // native-image generation
-            copyJsonConfigFiles(applicationArchivesBuildItem, targetDirectory);
-            return nativeImageSourceJarBuildItem;
         } else {
             return buildNativeImageThinJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses,
                     applicationArchivesBuildItem,
