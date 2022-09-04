@@ -100,12 +100,7 @@ abstract class DataHandler extends LitePalBase {
 							Class<?> cursorClass = cursor.getClass();
 							Method method = cursorClass.getMethod(getMethodName, int.class);
 							Object value = method.invoke(cursor, columnIndex);
-							if (isIdColumn(field.getName())) {
-								DynamicExecutor.setField(modelInstance, field.getName(), value,
-										modelInstance.getClass());
-							} else {
-								setValueToModel(modelInstance, field, value);
-							}
+							setValueToModel(modelInstance, field, value);
 						}
 					}
 					dataList.add(modelInstance);
