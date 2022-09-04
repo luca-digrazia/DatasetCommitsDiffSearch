@@ -189,7 +189,7 @@ public class Deflector {
         return prefix + "_" + number;
     }
     
-    public static int extractIndexNumber(String indexName) throws NumberFormatException {
+    public int extractIndexNumber(String indexName) throws NumberFormatException {
         String[] parts = indexName.split("_");
         
         try {
