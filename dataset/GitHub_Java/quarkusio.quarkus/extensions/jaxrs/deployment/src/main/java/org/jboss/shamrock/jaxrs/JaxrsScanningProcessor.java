@@ -15,44 +15,43 @@
  */
 package org.jboss.shamrock.jaxrs;
 
-import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
+import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.reflect.Modifier;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import javax.inject.Singleton;
+import javax.servlet.DispatcherType;
+import javax.ws.rs.ApplicationPath;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.container.DynamicFeature;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.ext.ContextResolver;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
+import javax.ws.rs.ext.Provider;
 import javax.ws.rs.ext.Providers;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.MethodParameterInfo;
 import org.jboss.jandex.Type;
+import org.jboss.logging.Logger;
 import org.jboss.resteasy.api.validation.ResteasyConstraintViolation;
 import org.jboss.resteasy.api.validation.ViolationReport;
 import org.jboss.resteasy.core.MediaTypeMap;
@@ -61,10 +60,11 @@ import org.jboss.resteasy.plugins.interceptors.GZIPDecodingInterceptor;
 import org.jboss.resteasy.plugins.interceptors.GZIPEncodingInterceptor;
 import org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
-import org.jboss.shamrock.annotations.BuildProducer;
-import org.jboss.shamrock.annotations.BuildStep;
-import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
+import org.jboss.shamrock.arc.deployment.BeanContainerBuildItem;
+import org.jboss.shamrock.arc.deployment.BeanDefiningAnnotationBuildItem;
+import org.jboss.shamrock.deployment.annotations.BuildProducer;
+import org.jboss.shamrock.deployment.annotations.BuildStep;
+import org.jboss.shamrock.deployment.annotations.Record;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.ProxyUnwrapperBuildItem;
@@ -74,9 +74,14 @@ import org.jboss.shamrock.deployment.builditem.substrate.RuntimeInitializedClass
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
-import org.jboss.shamrock.deployment.cdi.BeanDefiningAnnotationBuildItem;
-import org.jboss.shamrock.jaxrs.runtime.graal.JaxrsTemplate;
-import org.jboss.shamrock.jaxrs.runtime.graal.ShamrockInjectorFactory;
+import org.jboss.shamrock.deployment.util.ServiceUtil;
+import org.jboss.shamrock.jaxrs.runtime.JaxrsTemplate;
+import org.jboss.shamrock.jaxrs.runtime.ResteasyFilter;
+import org.jboss.shamrock.jaxrs.runtime.RolesFilterRegistrar;
+import org.jboss.shamrock.jaxrs.runtime.ShamrockInjectorFactory;
+import org.jboss.shamrock.runtime.annotations.ConfigItem;
+import org.jboss.shamrock.runtime.annotations.ConfigRoot;
+import org.jboss.shamrock.undertow.FilterBuildItem;
 import org.jboss.shamrock.undertow.ServletBuildItem;
 import org.jboss.shamrock.undertow.ServletInitParamBuildItem;
 
@@ -87,29 +92,43 @@ import org.jboss.shamrock.undertow.ServletInitParamBuildItem;
  */
 public class JaxrsScanningProcessor {
 
-    private static final String JAX_RS_SERVLET_NAME = "javax.ws.rs.Application";
-    // They happen to share the same value, but I'm not sure they mean the same thing
-    private static final String JAX_RS_APPLICATION_PARAMETER_NAME = JAX_RS_SERVLET_NAME;
+    private static final String JAVAX_WS_RS_APPLICATION = "javax.ws.rs.Application";
+    private static final String JAX_RS_FILTER_NAME = JAVAX_WS_RS_APPLICATION;
+    private static final String JAX_RS_SERVLET_NAME = JAVAX_WS_RS_APPLICATION;
+    private static final String JAX_RS_APPLICATION_PARAMETER_NAME = JAVAX_WS_RS_APPLICATION;
 
-    private static final DotName APPLICATION_PATH = DotName.createSimple("javax.ws.rs.ApplicationPath");
+    private static final DotName APPLICATION_PATH = DotName.createSimple(ApplicationPath.class.getName());
 
-    private static final DotName PATH = DotName.createSimple("javax.ws.rs.Path");
+    private static final DotName PATH = DotName.createSimple(Path.class.getName());
+    private static final DotName PROVIDER = DotName.createSimple(Provider.class.getName());
     private static final DotName DYNAMIC_FEATURE = DotName.createSimple(DynamicFeature.class.getName());
+    private static final DotName CONTEXT = DotName.createSimple(Context.class.getName());
+
+    private static final DotName GET = DotName.createSimple(javax.ws.rs.GET.class.getName());
+    private static final DotName HEAD = DotName.createSimple(javax.ws.rs.HEAD.class.getName());
+    private static final DotName DELETE = DotName.createSimple(javax.ws.rs.DELETE.class.getName());
+    private static final DotName OPTIONS = DotName.createSimple(javax.ws.rs.OPTIONS.class.getName());
+    private static final DotName PATCH = DotName.createSimple(javax.ws.rs.PATCH.class.getName());
+    private static final DotName POST = DotName.createSimple(javax.ws.rs.POST.class.getName());
+    private static final DotName PUT = DotName.createSimple(javax.ws.rs.PUT.class.getName());
+
+    private static final DotName CONSUMES = DotName.createSimple(Consumes.class.getName());
+    private static final DotName PRODUCES = DotName.createSimple(Produces.class.getName());
+
+    private static final DotName RESTEASY_QUERY_PARAM = DotName.createSimple(org.jboss.resteasy.annotations.jaxrs.QueryParam.class.getName());
+    private static final DotName RESTEASY_FORM_PARAM = DotName.createSimple(org.jboss.resteasy.annotations.jaxrs.FormParam.class.getName());
+    private static final DotName RESTEASY_COOKIE_PARAM = DotName.createSimple(org.jboss.resteasy.annotations.jaxrs.CookieParam.class.getName());
+    private static final DotName RESTEASY_PATH_PARAM = DotName.createSimple(org.jboss.resteasy.annotations.jaxrs.PathParam.class.getName());
+    private static final DotName RESTEASY_HEADER_PARAM = DotName.createSimple(org.jboss.resteasy.annotations.jaxrs.HeaderParam.class.getName());
+    private static final DotName RESTEASY_MATRIX_PARAM = DotName.createSimple(org.jboss.resteasy.annotations.jaxrs.MatrixParam.class.getName());
 
     private static final DotName XML_ROOT = DotName.createSimple("javax.xml.bind.annotation.XmlRootElement");
     private static final DotName JSONB_ANNOTATION = DotName.createSimple("javax.json.bind.annotation.JsonbAnnotation");
-    private static final DotName CONTEXT = DotName.createSimple("javax.ws.rs.core.Context");
 
-    private static final DotName GET = DotName.createSimple("javax.ws.rs.GET");
-    private static final DotName HEAD = DotName.createSimple("javax.ws.rs.HEAD");
-    private static final DotName DELETE = DotName.createSimple("javax.ws.rs.DELETE");
-    private static final DotName OPTIONS = DotName.createSimple("javax.ws.rs.OPTIONS");
-    private static final DotName PATCH = DotName.createSimple("javax.ws.rs.PATCH");
-    private static final DotName POST = DotName.createSimple("javax.ws.rs.POST");
-    private static final DotName PUT = DotName.createSimple("javax.ws.rs.PUT");
-
-    private static final DotName CONSUMES = DotName.createSimple("javax.ws.rs.Consumes");
-    private static final DotName PRODUCES = DotName.createSimple("javax.ws.rs.Produces");
+    private static final Set<DotName> TYPES_IGNORED_FOR_REFLECTION = new HashSet<>(Arrays.asList(
+            DotName.createSimple("javax.json.JsonObject"),
+            DotName.createSimple("javax.json.JsonArray")
+    ));
 
     private static final DotName[] METHOD_ANNOTATIONS = {
             GET,
@@ -119,6 +138,15 @@ public class JaxrsScanningProcessor {
             PATCH,
             POST,
             PUT,
+    };
+
+    private static final DotName[] RESTEASY_PARAM_ANNOTATIONS = {
+            RESTEASY_QUERY_PARAM,
+            RESTEASY_FORM_PARAM,
+            RESTEASY_COOKIE_PARAM,
+            RESTEASY_PATH_PARAM,
+            RESTEASY_HEADER_PARAM,
+            RESTEASY_MATRIX_PARAM,
     };
 
     private static final ProviderDiscoverer[] PROVIDER_DISCOVERERS = {
@@ -133,40 +161,50 @@ public class JaxrsScanningProcessor {
     private static final DotName SINGLETON_SCOPE = DotName.createSimple(Singleton.class.getName());
 
     /**
-	 * If this is true then JAX-RS will use only a single instance of a resource
-	 * class to service all requests.
-	 *
-	 * If this is false then it will create a new instance of the resource per
-	 * request.
-	 *
-	 * If the resource class has an explicit CDI scope annotation then the value of
-	 * this annotation will always be used to control the lifecycle of the resource
-	 * class.
-	 *
-	 * IMPLEMENTATION NOTE: {@code javax.ws.rs.Path} turns into a CDI stereotype
-	 * with singleton scope. As a result, if a user annotates a JAX-RS resource with
-	 * a stereotype which has a different default scope the deployment fails with
-	 * IllegalStateException.
-	 */
-    @ConfigProperty(name = "shamrock.jaxrs.singleton-resources", defaultValue = "true")
-    boolean singletonResources;
-
-    /**
-     * Enable gzip support for JAX-RS services.
+     * JAX-RS configuration.
      */
-    @ConfigProperty(name = "shamrock.jaxrs.enable-gzip")
-    Optional<Boolean> isGzipSupportEnabled;
+    JaxrsConfig jaxrs;
+
+    @ConfigRoot
+    static final class JaxrsConfig {
+        /**
+         * If this is true then JAX-RS will use only a single instance of a resource
+         * class to service all requests.
+         * <p>
+         * If this is false then it will create a new instance of the resource per
+         * request.
+         * <p>
+         * If the resource class has an explicit CDI scope annotation then the value of
+         * this annotation will always be used to control the lifecycle of the resource
+         * class.
+         * <p>
+         * IMPLEMENTATION NOTE: {@code javax.ws.rs.Path} turns into a CDI stereotype
+         * with singleton scope. As a result, if a user annotates a JAX-RS resource with
+         * a stereotype which has a different default scope the deployment fails with
+         * IllegalStateException.
+         */
+        @ConfigItem(defaultValue = "true")
+        boolean singletonResources;
+
+        /**
+         * Enable gzip support for JAX-RS services.
+         */
+        @ConfigItem
+        boolean enableGzip;
+
+        /**
+         * Set this to override the default path for JAX-RS resources if there are no
+         * annotated application classes.
+         */
+        @ConfigItem(defaultValue = "/")
+        String path;
+    }
+
+    private static final Logger log = Logger.getLogger("org.jboss.shamrock.jaxrs");
 
     @BuildStep
-    ServletInitParamBuildItem registerProviders(List<JaxrsProviderBuildItem> providers) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < providers.size(); ++i) {
-            if (i != 0) {
-                sb.append(",");
-            }
-            sb.append(providers.get(i).getName());
-        }
-        return new ServletInitParamBuildItem("resteasy.providers", sb.toString());
+    org.jboss.shamrock.jaxrs.JaxrsConfig exportConfig() {
+        return new org.jboss.shamrock.jaxrs.JaxrsConfig(jaxrs.path);
     }
 
     @BuildStep
@@ -178,43 +216,40 @@ public class JaxrsScanningProcessor {
     }
 
     @BuildStep
-    public void build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-                      BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition,
+    void scanForProviders(BuildProducer<JaxrsProviderBuildItem> providers, CombinedIndexBuildItem indexBuildItem) {
+        for(AnnotationInstance i : indexBuildItem.getIndex().getAnnotations(PROVIDER)) {
+            if(i.target().kind() == AnnotationTarget.Kind.CLASS) {
+                providers.produce(new JaxrsProviderBuildItem(i.target().asClass().name().toString()));
+            }
+        }
+    }
+
+    @BuildStep
+    public void build(
+                      BuildProducer<FeatureBuildItem> feature,
+                      BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
                       BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
+                      BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition,
                       BuildProducer<SubstrateResourceBuildItem> resource,
                       BuildProducer<RuntimeInitializedClassBuildItem> runtimeClasses,
+                      BuildProducer<FilterBuildItem> filterProducer,
                       BuildProducer<ServletBuildItem> servletProducer,
                       BuildProducer<ServletInitParamBuildItem> servletContextParams,
                       CombinedIndexBuildItem combinedIndexBuildItem
     ) throws Exception {
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.JAXRS));
 
-
-        //this is pretty yuck, and does not really belong here, but it is needed to get the json-p
-        //provider to work
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "org.glassfish.json.JsonProviderImpl",
-                "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector",
-                "com.fasterxml.jackson.databind.ser.std.SqlDateSerializer"));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ArrayList.class.getName()));
-        resource.produce(new SubstrateResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
         IndexView index = combinedIndexBuildItem.getIndex();
 
+        resource.produce(new SubstrateResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
+
         Collection<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
-        if (app.isEmpty()) {
-            return;
-        }
         Collection<AnnotationInstance> xmlRoot = index.getAnnotations(XML_ROOT);
         if (!xmlRoot.isEmpty()) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "com.sun.xml.bind.v2.ContextFactory",
                     "com.sun.xml.internal.bind.v2.ContextFactory"));
         }
         runtimeClasses.produce(new RuntimeInitializedClassBuildItem("com.sun.xml.internal.bind.v2.runtime.reflect.opt.Injector"));
-        for (DotName i : Arrays.asList(XML_ROOT, JSONB_ANNOTATION)) {
-            for (AnnotationInstance anno : index.getAnnotations(i)) {
-                if (anno.target().kind() == AnnotationTarget.Kind.CLASS) {
-                    reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, anno.target().asClass().name().toString()));
-                }
-            }
-        }
 
         //@Context uses proxies for interface injection
         for (AnnotationInstance annotation : index.getAnnotations(CONTEXT)) {
@@ -254,19 +289,50 @@ public class JaxrsScanningProcessor {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, implementation.name().toString()));
         }
 
-        AnnotationInstance appPath = app.iterator().next();
-        String path = appPath.value().asString();
-        String appClass = appPath.target().asClass().name().toString();
+        //currently we only examine the first class that is annotated with @ApplicationPath so best
+        //fail if there the user code has multiple such annotations instead of surprising the user
+        //at runtime
+        if (app.size() > 1) {
+            StringBuilder sb = new StringBuilder();
+            boolean first = true;
+            for (AnnotationInstance annotationInstance : app) {
+                if (first) {
+                    first = false;
+                } else {
+                    sb.append(",");
+                }
+                sb.append(annotationInstance.target().asClass().name().toString());
+            }
+            throw new RuntimeException("Multiple classes ( "+ sb.toString() + ") have been annotated with @ApplicationPath which is currently not supported");
+        }
         String mappingPath;
+        String path = null;
+        String appClass = null;
+        if(!app.isEmpty()) {
+            AnnotationInstance appPath = app.iterator().next();
+            path = appPath.value().asString();
+            appClass = appPath.target().asClass().name().toString();
+        } else {
+            path = jaxrs.path;
+        }
         if (path.endsWith("/")) {
             mappingPath = path + "*";
         } else {
             mappingPath = path + "/*";
         }
-        servletProducer.produce(new ServletBuildItem(JAX_RS_SERVLET_NAME, HttpServlet30Dispatcher.class.getName()).setLoadOnStartup(1).addMapping(mappingPath).setAsyncSupported(true));
+
         Collection<AnnotationInstance> paths = index.getAnnotations(PATH);
-        if (paths != null) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, HttpServlet30Dispatcher.class.getName()));
+        if (paths != null && !paths.isEmpty()) {
+
+            //if JAX-RS is installed at the root location we use a filter, otherwise we use a Servlet and take over the whole mapped path
+            if (path.equals("/")) {
+                filterProducer.produce(new FilterBuildItem(JAX_RS_FILTER_NAME, ResteasyFilter.class.getName()).setLoadOnStartup(1).addFilterServletNameMapping("default", DispatcherType.REQUEST).setAsyncSupported(true));
+                reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ResteasyFilter.class.getName()));
+            } else {
+                servletProducer.produce(new ServletBuildItem(JAX_RS_SERVLET_NAME, HttpServlet30Dispatcher.class.getName()).setLoadOnStartup(1).addMapping(mappingPath).setAsyncSupported(true));
+                reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, HttpServlet30Dispatcher.class.getName()));
+            }
+
             StringBuilder sb = new StringBuilder();
             boolean first = true;
             for (AnnotationInstance annotation : paths) {
@@ -289,28 +355,33 @@ public class JaxrsScanningProcessor {
                 servletContextParams.produce(new ServletInitParamBuildItem(ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString()));
             }
             servletContextParams.produce(new ServletInitParamBuildItem("resteasy.servlet.mapping.prefix", path));
-            servletContextParams.produce(new ServletInitParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
-            servletContextParams.produce(new ServletInitParamBuildItem(JAX_RS_APPLICATION_PARAMETER_NAME, appClass));
-
+            if (appClass != null) {
+                servletContextParams.produce(new ServletInitParamBuildItem(JAX_RS_APPLICATION_PARAMETER_NAME, appClass));
+            }
+        } else {
+            // no @Application class and no detected @Path resources, bail out
+            return;
         }
-        for (DotName annotationType : METHOD_ANNOTATIONS) {
+
+        OUTER:
+        for (DotName annotationType : RESTEASY_PARAM_ANNOTATIONS) {
             Collection<AnnotationInstance> instances = index.getAnnotations(annotationType);
             for (AnnotationInstance instance : instances) {
-                MethodInfo method = instance.target().asMethod();
-                reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType()));
-                for (Type param : method.parameters()) {
-                    if (param.kind() != Type.Kind.PRIMITIVE) {
-                        reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(param));
-                    }
+                MethodParameterInfo param = instance.target().asMethodParameter();
+                if(param.name() == null) {
+                    log.warnv("Detected RESTEasy annotation {0} on method parameter {1}.{2} with no name. Either specify its name,"
+                             +" or tell your compiler to enable debug info (-g) or parameter names (-parameters). This message is only"
+                            +" logged for the first such parameter.", instance.name(),
+                             param.method().declaringClass(), param.method().name());
+                    break OUTER;
                 }
             }
         }
 
-        // In the case of a constraint violation, these elements might be returned as entities and will be serialized
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ViolationReport.class.getName()));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ResteasyConstraintViolation.class.getName()));
+        registerReflectionForSerialization(reflectiveClass, reflectiveHierarchy, combinedIndexBuildItem);
     }
 
+    @Record(STATIC_INIT)
     @BuildStep
     void registerProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
                            BuildProducer<ServletInitParamBuildItem> servletContextParams,
@@ -323,7 +394,7 @@ public class JaxrsScanningProcessor {
             contributedProviders.add(contributedProviderBuildItem.getName());
         }
 
-        Set<String> availableProviders = getAvailableProviders();
+        Set<String> availableProviders = ServiceUtil.classNamesNamedIn(getClass().getClassLoader(), "META-INF/services/" + Providers.class.getName());
 
         MediaTypeMap<String> categorizedReaders = new MediaTypeMap<>();
         MediaTypeMap<String> categorizedWriters = new MediaTypeMap<>();
@@ -341,7 +412,7 @@ public class JaxrsScanningProcessor {
         boolean useBuiltinProviders = collectDeclaredProviders(providersToRegister, categorizedReaders, categorizedWriters, categorizedContextResolvers, index);
 
         // If GZIP support is enabled, enable it
-        if (Boolean.TRUE.equals(isGzipSupportEnabled.orElse(Boolean.FALSE))) {
+        if (jaxrs.enableGzip) {
             providersToRegister.add(AcceptEncodingGZIPFilter.class.getName());
             providersToRegister.add(GZIPDecodingInterceptor.class.getName());
             providersToRegister.add(GZIPEncodingInterceptor.class.getName());
@@ -370,43 +441,77 @@ public class JaxrsScanningProcessor {
 
     @Record(STATIC_INIT)
     @BuildStep
-    void integrate(JaxrsTemplate template, BeanContainerBuildItem beanContainerBuildItem, List<ProxyUnwrapperBuildItem> proxyUnwrappers, BuildProducer<FeatureBuildItem> feature) {
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.JAX_RS));
-    	List<Function<Object, Object>> unwrappers = new ArrayList<>();
+    void setupInjection(JaxrsTemplate template,
+            BuildProducer<ServletInitParamBuildItem> servletContextParams,
+            BeanContainerBuildItem beanContainerBuildItem,
+            List<ProxyUnwrapperBuildItem> proxyUnwrappers) {
+
+        List<Function<Object, Object>> unwrappers = new ArrayList<>();
         for (ProxyUnwrapperBuildItem i : proxyUnwrappers) {
             unwrappers.add(i.getUnwrapper());
         }
         template.setupIntegration(beanContainerBuildItem.getValue(), unwrappers);
+
+        servletContextParams.produce(new ServletInitParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
     }
+
 
     @BuildStep
     List<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations() {
-        return Collections.singletonList(new BeanDefiningAnnotationBuildItem(PATH, singletonResources ? SINGLETON_SCOPE : null));
+        return Collections.singletonList(new BeanDefiningAnnotationBuildItem(PATH, jaxrs.singletonResources ? SINGLETON_SCOPE : null));
     }
 
-    private Set<String> getAvailableProviders() throws Exception {
-        Set<String> availableProviders = new HashSet<>();
-        Enumeration<URL> resources = getClass().getClassLoader()
-                .getResources("META-INF/services/" + Providers.class.getName());
-        while (resources.hasMoreElements()) {
-            URL url = resources.nextElement();
-            try (InputStream in = url.openStream()) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.contains("#")) {
-                        line = line.substring(line.indexOf("#"));
-                    }
-                    line = line.trim();
-                    if (line.equals("")) {
-                        continue;
-                    }
+    /**
+     * Install the JAXRS security provider
+     * @param providers - the JaxrsProviderBuildItem providers producer to use
+     */
+    @BuildStep
+    void setupFilter(BuildProducer<JaxrsProviderBuildItem> providers) {
+        providers.produce(new JaxrsProviderBuildItem(RolesFilterRegistrar.class.getName()));
+    }
 
-                    availableProviders.add(line);
+    private void registerReflectionForSerialization(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
+            CombinedIndexBuildItem combinedIndexBuildItem) {
+        IndexView index = combinedIndexBuildItem.getIndex();
+
+        // required by JSON-P support
+        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "org.glassfish.json.JsonProviderImpl"));
+
+        // required by Jackson
+        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false,
+                "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector",
+                "com.fasterxml.jackson.databind.ser.std.SqlDateSerializer"));
+
+        // This is probably redundant with the automatic resolution we do just below but better be safe
+        for (DotName i : Arrays.asList(XML_ROOT, JSONB_ANNOTATION)) {
+            for (AnnotationInstance annotation : index.getAnnotations(i)) {
+                if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
+                    reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, annotation.target().asClass().name().toString()));
                 }
             }
         }
-        return availableProviders;
+
+        // Declare reflection for all the types implicated in the Rest end points (return types and parameters).
+        // It might be needed for serialization.
+        for (DotName annotationType : METHOD_ANNOTATIONS) {
+            Collection<AnnotationInstance> instances = index.getAnnotations(annotationType);
+            for (AnnotationInstance instance : instances) {
+                MethodInfo method = instance.target().asMethod();
+                if (isReflectionDeclarationRequiredFor(method.returnType())) {
+                    reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType()));
+                }
+                for (Type param : method.parameters()) {
+                    if (isReflectionDeclarationRequiredFor(param)) {
+                        reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(param));
+                    }
+                }
+            }
+        }
+
+        // In the case of a constraint violation, these elements might be returned as entities and will be serialized
+        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ViolationReport.class.getName()));
+        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ResteasyConstraintViolation.class.getName()));
     }
 
     private static void categorizeProviders(Set<String> availableProviders, MediaTypeMap<String> categorizedReaders,
@@ -518,6 +623,24 @@ public class JaxrsScanningProcessor {
             providersToRegister.addAll(categorizedProviders.getPossible(mediaType));
         }
         return false;
+    }
+
+    private static boolean isReflectionDeclarationRequiredFor(Type type) {
+        DotName className = getClassName(type);
+
+        return className != null && !TYPES_IGNORED_FOR_REFLECTION.contains(className);
+    }
+
+    private static DotName getClassName(Type type) {
+        switch (type.kind()) {
+        case CLASS:
+        case PARAMETERIZED_TYPE:
+            return type.name();
+        case ARRAY:
+            return getClassName(type.asArrayType().component());
+        default:
+            return null;
+        }
     }
 
     private static class ProviderDiscoverer {
