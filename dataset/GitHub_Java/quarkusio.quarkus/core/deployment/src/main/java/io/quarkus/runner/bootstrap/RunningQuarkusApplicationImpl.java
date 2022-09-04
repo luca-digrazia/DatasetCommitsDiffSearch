@@ -8,16 +8,15 @@ import java.util.Optional;
 import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.quarkus.bootstrap.app.RunningQuarkusApplication;
-import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 
 public class RunningQuarkusApplicationImpl implements RunningQuarkusApplication {
 
     private final Closeable closeTask;
-    private final QuarkusClassLoader classLoader;
+    private final ClassLoader classLoader;
 
     private boolean closing;
 
-    public RunningQuarkusApplicationImpl(Closeable closeTask, QuarkusClassLoader classLoader) {
+    public RunningQuarkusApplicationImpl(Closeable closeTask, ClassLoader classLoader) {
         this.closeTask = closeTask;
         this.classLoader = classLoader;
     }
@@ -31,11 +30,7 @@ public class RunningQuarkusApplicationImpl implements RunningQuarkusApplication 
     public void close() throws Exception {
         if (!closing) {
             closing = true;
-            try {
-                closeTask.close();
-            } finally {
-                classLoader.close();
-            }
+            closeTask.close();
         }
     }
 

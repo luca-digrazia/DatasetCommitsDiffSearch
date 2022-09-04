@@ -1,5 +1,6 @@
 package io.quarkus.launcher;
 
+import java.io.Closeable;
 import java.net.JarURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -7,7 +8,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Consumer;
 
 import io.quarkus.bootstrap.BootstrapConstants;
 
@@ -23,7 +23,8 @@ import io.quarkus.bootstrap.BootstrapConstants;
  */
 public class QuarkusLauncher {
 
-    public static void launch(String callingClass, String quarkusApplication, Consumer<Integer> exitHandler, String... args) {
+    public static Closeable launch(String callingClass, String quarkusApplication, String... args) {
+        final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
         try {
             String classResource = callingClass.replace(".", "/") + ".class";
             URL resource = Thread.currentThread().getContextClassLoader().getResource(classResource);
@@ -52,13 +53,12 @@ public class QuarkusLauncher {
             Thread.currentThread().setContextClassLoader(loader);
 
             Class<?> launcher = loader.loadClass("io.quarkus.bootstrap.IDELauncherImpl");
-            launcher.getDeclaredMethod("launch", Path.class, Map.class).invoke(null, appClasses, context);
-
+            return (Closeable) launcher.getDeclaredMethod("launch", Path.class, Map.class).invoke(null, appClasses, context);
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
             System.clearProperty(BootstrapConstants.SERIALIZED_APP_MODEL);
+            Thread.currentThread().setContextClassLoader(originalCl);
         }
     }
-
 }
