@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -542,7 +543,7 @@ public abstract class ImplicitOutputsFunction {
     for (String placeholder : parsedTemplate.attributeNames()) {
       if (rule.isConfigurable(placeholder)) {
         throw new EvalException(
-            /*location=*/ null,
+            rule.getAttributeLocation(placeholder),
             String.format(
                 "Attribute %s is configurable and cannot be used in outputs", placeholder));
       }

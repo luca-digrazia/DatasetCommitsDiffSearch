@@ -26,6 +26,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -72,6 +73,7 @@ public final class OptionsParser {
   private String sourceGenDir;
   private String generatedSourcesOutputJar;
   private String manifestProtoPath;
+  private final Set<String> sourceRoots = new HashSet<>();
 
   private final List<String> sourceFiles = new ArrayList<>();
   private final List<String> sourceJars = new ArrayList<>();
@@ -158,6 +160,9 @@ public final class OptionsParser {
           break;
         case "--output_manifest_proto":
           manifestProtoPath = getArgument(argQueue, arg);
+          break;
+        case "--source_roots":
+          collectFlagArguments(sourceRoots, argQueue, "-");
           break;
         case "--sources":
           collectFlagArguments(sourceFiles, argQueue, "-");
@@ -398,6 +403,10 @@ public final class OptionsParser {
 
   public String getManifestProtoPath() {
     return manifestProtoPath;
+  }
+
+  public Set<String> getSourceRoots() {
+    return sourceRoots;
   }
 
   public List<String> getSourceFiles() {
