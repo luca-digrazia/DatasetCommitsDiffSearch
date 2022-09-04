@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
@@ -449,12 +448,11 @@ public class AndroidCommon {
       } else {
         Artifact outputDepsProto =
             javacHelper.createOutputDepsProtoArtifact(resourceClassJar, javaArtifactsBuilder);
-        javacHelper.createCompileActionWithInstrumentation(
+        javacHelper.createCompileAction(
             resourceClassJar,
             null /* manifestProtoOutput */,
             null /* genSourceJar */,
-            outputDepsProto,
-            javaArtifactsBuilder);
+            outputDepsProto);
       }
     } else {
       // Otherwise, it should have been the AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR.
@@ -557,16 +555,14 @@ public class AndroidCommon {
       bootclasspath =
           ImmutableList.of(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar());
     }
-    Iterable<String> javacopts = androidSemantics.getJavacArguments(ruleContext);
-    if (DataBinding.isEnabled(ruleContext)) {
-      javacopts = Iterables.concat(javacopts, DataBinding.getJavacopts(ruleContext, isBinary));
-    }
     JavaTargetAttributes.Builder attributes =
         javaCommon
-            .initCommon(idlHelper.getIdlGeneratedJavaSources(), javacopts)
+            .initCommon(
+                idlHelper.getIdlGeneratedJavaSources(),
+                androidSemantics.getJavacArguments(ruleContext))
             .setBootClassPath(bootclasspath);
     if (DataBinding.isEnabled(ruleContext)) {
-      DataBinding.addAnnotationProcessor(ruleContext, attributes);
+      DataBinding.addAnnotationProcessor(ruleContext, attributes, isBinary);
     }
 
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
@@ -702,8 +698,7 @@ public class AndroidCommon {
     helper.createSourceJarAction(srcJar, genSourceJar);
 
     outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
-    helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, genSourceJar,
-        outputDepsProto, javaArtifactsBuilder);
+    helper.createCompileAction(classJar, manifestProtoOutput, genSourceJar, outputDepsProto);
 
     if (isBinary) {
       generatedExtensionRegistryProvider =
@@ -884,6 +879,10 @@ public class AndroidCommon {
     return javaCommon.getJavacOpts();
   }
 
+  public Artifact getClassJar() {
+    return classJar;
+  }
+
   public Artifact getGenClassJar() {
     return genClassJar;
   }
@@ -907,10 +906,6 @@ public class AndroidCommon {
    */
   public NestedSet<Artifact> getJarsProducedForRuntime() {
     return jarsProducedForRuntime;
-  }
-
-  public Artifact getInstrumentedJar() {
-    return javaCommon.getJavaCompilationArtifacts().getInstrumentedJar();
   }
 
   public NestedSet<Artifact> getTransitiveNeverLinkLibraries() {
