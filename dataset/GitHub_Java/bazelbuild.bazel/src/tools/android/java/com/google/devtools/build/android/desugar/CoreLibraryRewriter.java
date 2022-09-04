@@ -38,10 +38,10 @@ class CoreLibraryRewriter {
    * with a ClassRemapper that prefixes class names of core library classes if prefix is not empty.
    */
   public ClassReader reader(InputStream content) throws IOException {
-    if (prefix.isEmpty()) {
-      return new ClassReader(content);
+    if (prefix.length() != 0) {
+      return new PrefixingClassReader(content);
     } else {
-      return new PrefixingClassReader(content, prefix);
+      return new ClassReader(content);
     }
   }
 
@@ -53,7 +53,7 @@ class CoreLibraryRewriter {
     return new UnprefixingClassWriter(flags);
   }
 
-  static boolean shouldPrefix(String typeName) {
+  private static boolean shouldPrefix(String typeName) {
     return (typeName.startsWith("java/") || typeName.startsWith("sun/")) && !except(typeName);
   }
 
@@ -87,21 +87,26 @@ class CoreLibraryRewriter {
     return false;
   }
 
+  /** Prefixes core library class names with prefix */
+  public String prefix(String typeName) {
+    if (prefix.length() > 0 && shouldPrefix(typeName)) {
+      return prefix + typeName;
+    }
+    return typeName;
+  }
+
   /** Removes prefix from class names */
   public String unprefix(String typeName) {
-    if (prefix.isEmpty() || !typeName.startsWith(prefix)) {
+    if (prefix.length() == 0 || !typeName.startsWith(prefix)) {
       return typeName;
     }
     return typeName.substring(prefix.length());
   }
 
   /** ClassReader that prefixes core library class names as they are read */
-  private static class PrefixingClassReader extends ClassReader {
-    private final String prefix;
-
-    PrefixingClassReader(InputStream content, String prefix) throws IOException {
+  private class PrefixingClassReader extends ClassReader {
+    PrefixingClassReader(InputStream content) throws IOException {
       super(content);
-      this.prefix = prefix;
     }
 
     @Override
@@ -117,14 +122,6 @@ class CoreLibraryRewriter {
               });
       super.accept(cv, attrs, flags);
     }
-
-    /** Prefixes core library class names with prefix. */
-    private String prefix(String typeName) {
-      if (shouldPrefix(typeName)) {
-        return prefix + typeName;
-      }
-      return typeName;
-    }
   }
 
   /**
@@ -138,7 +135,7 @@ class CoreLibraryRewriter {
       super(Opcodes.ASM5);
       this.writer = new ClassWriter(flags);
       this.cv = this.writer;
-      if (!prefix.isEmpty()) {
+      if (prefix.length() != 0) {
         this.cv =
             new ClassRemapperWithBugFix(
                 this.cv,
