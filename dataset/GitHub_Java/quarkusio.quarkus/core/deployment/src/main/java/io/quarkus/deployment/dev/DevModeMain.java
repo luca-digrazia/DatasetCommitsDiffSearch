@@ -1,17 +1,14 @@
 
 package io.quarkus.deployment.dev;
 
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
-import java.io.PrintStream;
 import java.net.URI;
 import java.net.URL;
-import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -19,15 +16,11 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
-import org.apache.commons.lang3.SystemUtils;
 import org.jboss.logging.Logger;
 
 import io.quarkus.bootstrap.app.AdditionalDependency;
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
-import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.bootstrap.model.PathsCollection;
-import io.quarkus.deployment.util.ProcessUtil;
 import io.quarkus.dev.appstate.ApplicationStateNotification;
 
 /**
@@ -86,35 +79,16 @@ public class DevModeMain implements Closeable {
                     }
                 }
             }
-            final PathsCollection.Builder appRoots = PathsCollection.builder();
-            Path p = Paths.get(context.getApplicationRoot().getClassesPath());
-            if (Files.exists(p)) {
-                appRoots.add(p);
-            }
-            if (context.getApplicationRoot().getResourcesOutputPath() != null
-                    && !context.getApplicationRoot().getResourcesOutputPath()
-                            .equals(context.getApplicationRoot().getClassesPath())) {
-                p = Paths.get(context.getApplicationRoot().getResourcesOutputPath());
-                if (Files.exists(p)) {
-                    appRoots.add(p);
-                }
-            }
-
             QuarkusBootstrap.Builder bootstrapBuilder = QuarkusBootstrap.builder()
-                    .setApplicationRoot(appRoots.build())
-                    .setTargetDirectory(context.getDevModeRunnerJarFile().getParentFile().toPath())
+                    .setApplicationRoot(Paths.get(context.getApplicationRoot().getClassesPath()))
                     .setIsolateDeployment(true)
                     .setLocalProjectDiscovery(context.isLocalProjectDiscovery())
                     .addAdditionalDeploymentArchive(path)
-                    .setBaseName(context.getBaseName())
-                    .setMode(context.getMode());
+                    .setMode(QuarkusBootstrap.Mode.DEV);
             if (context.getProjectDir() != null) {
                 bootstrapBuilder.setProjectRoot(context.getProjectDir().toPath());
             } else {
                 bootstrapBuilder.setProjectRoot(new File(".").toPath());
-            }
-            for (AppArtifactKey i : context.getLocalArtifacts()) {
-                bootstrapBuilder.addLocalArtifact(i);
             }
 
             for (DevModeContext.ModuleInfo i : context.getAllModules()) {
@@ -128,27 +102,25 @@ public class DevModeMain implements Closeable {
                 }
             }
 
-            linkDotEnvFile();
+            copyDotEnvFile();
 
             Properties buildSystemProperties = new Properties();
             buildSystemProperties.putAll(context.getBuildSystemProperties());
             bootstrapBuilder.setBuildSystemProperties(buildSystemProperties);
             curatedApplication = bootstrapBuilder.setTest(context.isTest()).build().bootstrap();
-            realCloseable = (Closeable) curatedApplication.runInAugmentClassLoader(
-                    context.getAlternateEntryPoint() == null ? IsolatedDevModeMain.class.getName()
-                            : context.getAlternateEntryPoint(),
+            realCloseable = (Closeable) curatedApplication.runInAugmentClassLoader(IsolatedDevModeMain.class.getName(),
                     Collections.singletonMap(DevModeContext.class.getName(), context));
         } catch (Throwable t) {
-            log.error("Quarkus dev mode failed to start", t);
+            log.error("Quarkus dev mode failed to start in curation phase", t);
             throw new RuntimeException(t);
             //System.exit(1);
         }
     }
 
-    // links the .env file to the directory where the process is running
+    // copies the .env file to the directory where the process is running
     // this is done because for the .env file to take effect, it needs to be
     // in the same directory as the running process
-    private void linkDotEnvFile() {
+    private void copyDotEnvFile() {
         File projectDir = context.getProjectDir();
         if (projectDir == null) { // this is the case for QuarkusDevModeTest
             return;
@@ -162,24 +134,13 @@ public class DevModeMain implements Closeable {
 
         Path dotEnvPath = projectDir.toPath().resolve(".env");
         if (Files.exists(dotEnvPath)) {
-            Path link = currentDir.resolve(".env");
-            silentDeleteFile(link);
             try {
+                Path link = currentDir.resolve(".env");
+                silentDeleteFile(link);
                 // create a symlink to ensure that user updates to the file have the expected effect in dev-mode
-                try {
-                    Files.createSymbolicLink(link, dotEnvPath);
-                } catch (FileSystemException e) {
-                    // on Windows fall back to mklink if symlink cannot be created via Files API (due to insufficient permissions)
-                    // see https://github.com/quarkusio/quarkus/issues/8297
-                    if (SystemUtils.IS_OS_WINDOWS) {
-                        log.debug("Falling back to mklink on Windows after FileSystemException", e);
-                        makeHardLinkWindowsFallback(link, dotEnvPath);
-                    } else {
-                        throw e;
-                    }
-                }
-            } catch (IOException | InterruptedException e) {
-                log.warn("Unable to link .env file", e);
+                Files.createSymbolicLink(link, dotEnvPath);
+            } catch (IOException e) {
+                log.warn("Unable to copy .env file", e);
             }
         }
     }
@@ -189,24 +150,6 @@ public class DevModeMain implements Closeable {
             Files.delete(path);
         } catch (IOException ignored) {
 
-        }
-    }
-
-    private void makeHardLinkWindowsFallback(Path link, Path dotEnvPath) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder("cmd.exe", "/C", "mklink", "/H", link.toString(), dotEnvPath.toString())
-                .redirectOutput(new File("NUL"))
-                .redirectError(ProcessBuilder.Redirect.PIPE)
-                .start();
-        try {
-            ByteArrayOutputStream errStream = new ByteArrayOutputStream();
-            ProcessUtil.streamErrorTo(new PrintStream(errStream), process);
-            int exitValue = process.waitFor();
-            if (exitValue > 0) {
-                throw new IOException(
-                        "mklink /H execution failed with exit code " + exitValue + ": " + new String(errStream.toByteArray()));
-            }
-        } finally {
-            process.destroy();
         }
     }
 
