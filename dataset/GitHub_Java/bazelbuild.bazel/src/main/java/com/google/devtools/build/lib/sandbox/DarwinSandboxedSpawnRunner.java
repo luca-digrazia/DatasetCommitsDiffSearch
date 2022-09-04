@@ -39,12 +39,12 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /** Spawn runner that uses Darwin (macOS) sandboxing to execute a process. */
 @ExecutionStrategy(
@@ -188,9 +188,9 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
 
     final Path sandboxConfigPath = sandboxPath.getRelative("sandbox.sb");
-    Duration timeout = policy.getTimeout();
+    int timeoutSeconds = (int) TimeUnit.MILLISECONDS.toSeconds(policy.getTimeoutMillis());
     List<String> arguments =
-        computeCommandLine(spawn, timeout, sandboxConfigPath, timeoutGraceSeconds);
+        computeCommandLine(spawn, timeoutSeconds, sandboxConfigPath, timeoutGraceSeconds);
     Map<String, String> environment =
         localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, productName);
 
@@ -210,18 +210,18 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
             sandboxConfigPath, writableDirs, getInaccessiblePaths(), allowNetworkForThisSpawn);
       }
     };
-    return runSpawn(spawn, sandbox, policy, execRoot, timeout);
+    return runSpawn(spawn, sandbox, policy, execRoot, timeoutSeconds);
   }
 
   private List<String> computeCommandLine(
-      Spawn spawn, Duration timeout, Path sandboxConfigPath, int timeoutGraceSeconds) {
+      Spawn spawn, int timeoutSeconds, Path sandboxConfigPath, int timeoutGraceSeconds) {
     List<String> commandLineArgs = new ArrayList<>();
     commandLineArgs.add(SANDBOX_EXEC);
     commandLineArgs.add("-f");
     commandLineArgs.add(sandboxConfigPath.getPathString());
     commandLineArgs.addAll(
         ProcessWrapperRunner.getCommandLine(
-            processWrapper, spawn.getArguments(), timeout, timeoutGraceSeconds));
+            processWrapper, spawn.getArguments(), timeoutSeconds, timeoutGraceSeconds));
     return commandLineArgs;
   }
 
