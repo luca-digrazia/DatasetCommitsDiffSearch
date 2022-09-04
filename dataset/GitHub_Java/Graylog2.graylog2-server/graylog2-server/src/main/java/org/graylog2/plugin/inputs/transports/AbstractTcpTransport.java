@@ -42,7 +42,6 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.pkcs.PKCSException;
-import org.graylog2.configuration.TLSProtocolsConfiguration;
 import org.graylog2.inputs.transports.NettyTransportConfiguration;
 import org.graylog2.inputs.transports.netty.ByteBufMessageAggregationHandler;
 import org.graylog2.inputs.transports.netty.ChannelRegistrationHandler;
@@ -121,7 +120,7 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     protected final Configuration configuration;
     protected final EventLoopGroup parentEventLoopGroup;
     private final NettyTransportConfiguration nettyTransportConfiguration;
-    private final Set<String> enabledTLSProtocols;
+    private final org.graylog2.Configuration graylogConfiguration;
     private final AtomicReference<Channel> channelReference;
 
     private final boolean tlsEnable;
@@ -136,7 +135,6 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     protected EventLoopGroup childEventLoopGroup;
     private ServerBootstrap bootstrap;
 
-    @Deprecated
     public AbstractTcpTransport(
             Configuration configuration,
             ThroughputCounter throughputCounter,
@@ -145,23 +143,11 @@ public abstract class AbstractTcpTransport extends NettyTransport {
             EventLoopGroupFactory eventLoopGroupFactory,
             NettyTransportConfiguration nettyTransportConfiguration,
             org.graylog2.Configuration graylogConfiguration) {
-            this(configuration, throughputCounter, localRegistry, parentEventLoopGroup, eventLoopGroupFactory,
-                    nettyTransportConfiguration, new TLSProtocolsConfiguration(graylogConfiguration.getEnabledTlsProtocols()));
-    }
-
-    public AbstractTcpTransport(
-            Configuration configuration,
-            ThroughputCounter throughputCounter,
-            LocalMetricRegistry localRegistry,
-            EventLoopGroup parentEventLoopGroup,
-            EventLoopGroupFactory eventLoopGroupFactory,
-            NettyTransportConfiguration nettyTransportConfiguration,
-            TLSProtocolsConfiguration tlsConfiguration) {
         super(configuration, eventLoopGroupFactory, throughputCounter, localRegistry);
         this.configuration = configuration;
         this.parentEventLoopGroup = parentEventLoopGroup;
         this.nettyTransportConfiguration = nettyTransportConfiguration;
-        this.enabledTLSProtocols = tlsConfiguration.getEnabledTlsProtocols();
+        this.graylogConfiguration = graylogConfiguration;
         this.channelReference = new AtomicReference<>();
         this.childChannels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
@@ -363,13 +349,13 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                         .sslProvider(tlsProvider)
                         .clientAuth(clientAuth)
                         .trustManager(clientAuthCerts);
-                sslContext.protocols(enabledTLSProtocols);
+                if (!graylogConfiguration.getEnabledTlsProtocols().isEmpty()) {
+                    sslContext.protocols(graylogConfiguration.getEnabledTlsProtocols());
+                }
                 if (tlsProvider.equals(SslProvider.OPENSSL)) {
-                    if (!enabledTLSProtocols.contains("TLSv1") && !enabledTLSProtocols.contains("TLSv1.1")) {
-                        // Netty tcnative does not adhere jdk.tls.disabledAlgorithms: https://github.com/netty/netty-tcnative/issues/530
-                        // We need to build our own cipher list
-                        sslContext.ciphers(secureDefaultCiphers.get());
-                    }
+                    // Netty tcnative does not adhere jdk.tls.disabledAlgorithms: https://github.com/netty/netty-tcnative/issues/530
+                    // We need to build our own cipher list
+                    sslContext.ciphers(secureDefaultCiphers.get());
                 }
 
                 // TODO: Use byte buffer allocator of channel
