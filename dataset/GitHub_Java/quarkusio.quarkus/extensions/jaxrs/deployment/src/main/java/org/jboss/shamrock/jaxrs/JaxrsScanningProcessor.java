@@ -67,8 +67,7 @@ import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.arc.deployment.BeanContainerBuildItem;
-import org.jboss.shamrock.arc.deployment.BeanDefiningAnnotationBuildItem;
+import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.ProxyUnwrapperBuildItem;
@@ -78,6 +77,7 @@ import org.jboss.shamrock.deployment.builditem.substrate.RuntimeInitializedClass
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import org.jboss.shamrock.deployment.cdi.BeanDefiningAnnotationBuildItem;
 import org.jboss.shamrock.jaxrs.runtime.ResteasyFilter;
 import org.jboss.shamrock.jaxrs.runtime.graal.JaxrsTemplate;
 import org.jboss.shamrock.jaxrs.runtime.graal.ShamrockInjectorFactory;
@@ -124,11 +124,6 @@ public class JaxrsScanningProcessor {
 
     private static final DotName CONSUMES = DotName.createSimple("javax.ws.rs.Consumes");
     private static final DotName PRODUCES = DotName.createSimple("javax.ws.rs.Produces");
-
-    private static final Set<DotName> TYPES_IGNORED_FOR_REFLECTION = new HashSet<>(Arrays.asList(
-            DotName.createSimple("javax.json.JsonObject"),
-            DotName.createSimple("javax.json.JsonArray")
-    ));
 
     private static final DotName[] METHOD_ANNOTATIONS = {
             GET,
@@ -187,7 +182,7 @@ public class JaxrsScanningProcessor {
 
     /**
      * Set this to override the default path for JAX-RS resources if there are no
-     * annotated application classes. The default value is `/`.
+     * annotated application classes. The default value is `/`. 
      */
     @ConfigProperty(name = "shamrock.jaxrs.path", defaultValue = "/")
     String defaultPath;
@@ -358,23 +353,21 @@ public class JaxrsScanningProcessor {
             }
             servletContextParams.produce(new ServletInitParamBuildItem("resteasy.servlet.mapping.prefix", path));
             servletContextParams.produce(new ServletInitParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
-            if (appClass != null) {
+            if(appClass != null) {
                 servletContextParams.produce(new ServletInitParamBuildItem(JAX_RS_APPLICATION_PARAMETER_NAME, appClass));
             }
         } else {
             // no @Application class and no detected @Path resources, bail out
             return;
         }
-
+        
         for (DotName annotationType : METHOD_ANNOTATIONS) {
             Collection<AnnotationInstance> instances = index.getAnnotations(annotationType);
             for (AnnotationInstance instance : instances) {
                 MethodInfo method = instance.target().asMethod();
-                if (isReflectionDeclarationRequiredFor(method.returnType())) {
-                    reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType()));
-                }
+                reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType()));
                 for (Type param : method.parameters()) {
-                    if (isReflectionDeclarationRequiredFor(param)) {
+                    if (param.kind() != Type.Kind.PRIMITIVE) {
                         reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(param));
                     }
                 }
@@ -389,13 +382,13 @@ public class JaxrsScanningProcessor {
                 if(param.name() == null) {
                     log.warnv("Detected RESTEasy annotation {0} on method parameter {1}.{2} with no name. Either specify its name,"
                              +" or tell your compiler to enable debug info (-g) or parameter names (-parameters). This message is only"
-                            +" logged for the first such parameter.", instance.name(),
+                            +" logged for the first such parameter.", instance.name(), 
                              param.method().declaringClass(), param.method().name());
                     break OUTER;
                 }
             }
         }
-
+        
         // In the case of a constraint violation, these elements might be returned as entities and will be serialized
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ViolationReport.class.getName()));
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ResteasyConstraintViolation.class.getName()));
@@ -608,24 +601,6 @@ public class JaxrsScanningProcessor {
             providersToRegister.addAll(categorizedProviders.getPossible(mediaType));
         }
         return false;
-    }
-
-    private static boolean isReflectionDeclarationRequiredFor(Type type) {
-        DotName className = getClassName(type);
-
-        return className != null && !TYPES_IGNORED_FOR_REFLECTION.contains(className);
-    }
-
-    private static DotName getClassName(Type type) {
-        switch (type.kind()) {
-        case CLASS:
-        case PARAMETERIZED_TYPE:
-            return type.name();
-        case ARRAY:
-            return getClassName(type.asArrayType().component());
-        default:
-            return null;
-        }
     }
 
     private static class ProviderDiscoverer {
