@@ -346,25 +346,11 @@ public class ProcessedAndroidData {
     // we need to build containers for both here.
     MergedAndroidResources merged =
         MergedAndroidResources.of(
-            resources,
-            mergedResources,
-            rClassJar,
-            /*aapt2RTxt=*/ null,
-            dataBindingInfoZip,
-            resourceDeps,
-            manifest);
+            resources, mergedResources, rClassJar, dataBindingInfoZip, resourceDeps, manifest);
 
     // Combined resource processing does not produce aapt2 artifacts; they're nulled out
     ValidatedAndroidResources validated =
-        ValidatedAndroidResources.of(
-            merged,
-            rTxt,
-            sourceJar,
-            apk,
-            /*aapt2ValidationArtifact=*/ (Artifact) null,
-            /*aapt2SourceJar*/ (Artifact) null,
-            /*staticLibrary*/ (Artifact) null,
-            /*useRTxtFromMergedResources=*/ true);
+        ValidatedAndroidResources.of(merged, rTxt, sourceJar, apk, null, null, null, null);
     return ResourceApk.of(validated, assets, resourceProguardConfig, mainDexProguardConfig);
   }
 

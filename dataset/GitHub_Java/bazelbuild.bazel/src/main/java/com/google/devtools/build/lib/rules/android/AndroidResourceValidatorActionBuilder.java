@@ -40,6 +40,7 @@ public class AndroidResourceValidatorActionBuilder {
   private Artifact staticLibraryOut;
   private ResourceDependencies resourceDeps;
   private Artifact aapt2SourceJarOut;
+  private Artifact aapt2RTxtOut;
   private Artifact aapt2ValidationArtifactOut;
   private Artifact compiledSymbols;
   private Artifact apkOut;
@@ -86,6 +87,11 @@ public class AndroidResourceValidatorActionBuilder {
     return this;
   }
 
+  public AndroidResourceValidatorActionBuilder setAapt2RTxtOut(Artifact aapt2RTxtOut) {
+    this.aapt2RTxtOut = aapt2RTxtOut;
+    return this;
+  }
+
   public AndroidResourceValidatorActionBuilder setAapt2ValidationArtifactOut(
       Artifact aapt2ValidationArtifactOut) {
     this.aapt2ValidationArtifactOut = aapt2ValidationArtifactOut;
@@ -116,10 +122,10 @@ public class AndroidResourceValidatorActionBuilder {
         rTxtOut,
         sourceJarOut,
         apkOut,
+        aapt2RTxtOut,
         aapt2ValidationArtifactOut,
         aapt2SourceJarOut,
-        staticLibraryOut,
-        dataContext.getAndroidConfig().useRTxtFromMergedResources());
+        staticLibraryOut);
   }
 
   public AndroidResourceValidatorActionBuilder setCompiledSymbols(Artifact compiledSymbols) {

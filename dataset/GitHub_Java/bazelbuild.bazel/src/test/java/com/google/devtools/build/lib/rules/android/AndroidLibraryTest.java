@@ -2249,14 +2249,12 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     Iterable<String> c1Jars =
         ActionsTestUtil.baseArtifactNames(
             JavaInfo.getProvider(JavaCompilationInfoProvider.class, c1Target)
-                .getCompilationClasspath()
-                .getSet(Artifact.class));
+                .getCompilationClasspath());
 
     Iterable<String> c2Jars =
         ActionsTestUtil.baseArtifactNames(
             JavaInfo.getProvider(JavaCompilationInfoProvider.class, c2Target)
-                .getCompilationClasspath()
-                .getSet(Artifact.class));
+                .getCompilationClasspath());
 
     assertThat(c1Jars).containsExactly("liba-hjar.jar");
     assertThat(c2Jars).containsExactly("liba-hjar.jar");
@@ -2289,13 +2287,11 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     ImmutableList<Artifact> bClasspath =
         ImmutableList.copyOf(
             JavaInfo.getProvider(JavaCompilationInfoProvider.class, bTarget)
-                .getCompilationClasspath()
-                .getSet(Artifact.class));
+                .getCompilationClasspath());
     ImmutableList<Artifact> cClasspath =
         ImmutableList.copyOf(
             JavaInfo.getProvider(JavaCompilationInfoProvider.class, cTarget)
-                .getCompilationClasspath()
-                .getSet(Artifact.class));
+                .getCompilationClasspath());
 
     assertThat(bClasspath).isEmpty();
     assertThat(cClasspath)

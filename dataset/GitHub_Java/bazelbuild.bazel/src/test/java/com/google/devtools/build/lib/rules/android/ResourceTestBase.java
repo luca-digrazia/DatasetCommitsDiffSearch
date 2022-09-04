@@ -263,17 +263,16 @@ public abstract class ResourceTestBase extends AndroidBuildViewTestCase {
                 DataBinding.DISABLED_V1_CONTEXT),
             getOutput("merged/resources.zip"),
             getOutput("class.jar"),
-            includeAapt2Outs ? getOutput("aapt2-r.txt") : null,
             /* dataBindingInfoZip = */ null,
             resourceDependencies,
             manifest),
         getOutput("r.txt"),
         getOutput("source.jar"),
         getOutput("resources.apk"),
+        includeAapt2Outs ? getOutput("aapt2-r.txt") : null,
         includeAapt2Outs ? getOutput("aapt2-validation.txt") : null,
         includeAapt2Outs ? getOutput("aapt2-source.jar") : null,
-        includeAapt2Outs ? getOutput("aapt2-static-lib") : null,
-        /*useRTxtFromMergedResources=*/ true);
+        includeAapt2Outs ? getOutput("aapt2-static-lib") : null);
   }
 
   /**
