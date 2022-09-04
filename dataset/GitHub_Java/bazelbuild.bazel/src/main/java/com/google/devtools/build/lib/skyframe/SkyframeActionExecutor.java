@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.ActionCacheChecker.Token;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent;
-import com.google.devtools.build.lib.actions.ActionExecutedEvent.ErrorTiming;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContextFactory;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
@@ -67,6 +66,7 @@ import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrappe
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.util.Pair;
@@ -582,8 +582,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     try {
       return action.discoverInputs(actionExecutionContext);
     } catch (ActionExecutionException e) {
-      throw processAndThrow(
-          e, action, actionExecutionContext.getFileOutErr(), ErrorTiming.BEFORE_EXECUTION);
+      throw processAndThrow(e, action, actionExecutionContext.getFileOutErr());
     }
   }
 
@@ -798,10 +797,10 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
   }
 
-  private ActionExecutionException processAndThrow(
-      ActionExecutionException e, Action action, FileOutErr outErrBuffer, ErrorTiming errorTiming)
+  ActionExecutionException processAndThrow(
+      ActionExecutionException e, Action action, FileOutErr outErrBuffer)
       throws ActionExecutionException {
-    reportActionExecution(action, e, outErrBuffer, errorTiming);
+    reportActionExecution(action, e, outErrBuffer);
     boolean reported = reportErrorIfNotAbortingMode(e, outErrBuffer);
 
     ActionExecutionException toThrow = e;
@@ -860,7 +859,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       }
       // Defer reporting action success until outputs are checked
     } catch (ActionExecutionException e) {
-      throw processAndThrow(e, action, outErrBuffer, ErrorTiming.AFTER_EXECUTION);
+      processAndThrow(e, action, outErrBuffer);
     } finally {
       profiler.completeTask(ProfilerTask.ACTION_EXECUTE);
     }
@@ -891,18 +890,15 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
         }
       }
 
-      reportActionExecution(action, null, fileOutErr, ErrorTiming.NO_ERROR);
+      reportActionExecution(action, null, fileOutErr);
     } catch (ActionExecutionException actionException) {
       // Success in execution but failure in completion.
-      reportActionExecution(action, actionException, fileOutErr, ErrorTiming.AFTER_EXECUTION);
+      reportActionExecution(action, actionException, fileOutErr);
       throw actionException;
     } catch (IllegalStateException exception) {
       // More serious internal error, but failure still reported.
-      reportActionExecution(
-          action,
-          new ActionExecutionException(exception, action, true),
-          fileOutErr,
-          ErrorTiming.AFTER_EXECUTION);
+      reportActionExecution(action,
+          new ActionExecutionException(exception, action, true), fileOutErr);
       throw exception;
     }
   }
@@ -1079,11 +1075,8 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
   }
 
-  private void reportActionExecution(
-      Action action,
-      ActionExecutionException exception,
-      FileOutErr outErr,
-      ErrorTiming errorTiming) {
+  private void reportActionExecution(Action action,
+      ActionExecutionException exception, FileOutErr outErr) {
     Path stdout = null;
     Path stderr = null;
 
@@ -1093,7 +1086,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     if (outErr.hasRecordedStderr()) {
       stderr = outErr.getErrorPath();
     }
-    postEvent(new ActionExecutedEvent(action, exception, stdout, stderr, errorTiming));
+    postEvent(new ActionExecutedEvent(action, exception, stdout, stderr));
   }
 
   /**
