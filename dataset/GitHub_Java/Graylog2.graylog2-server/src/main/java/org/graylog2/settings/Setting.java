@@ -20,9 +20,8 @@
 
 package org.graylog2.settings;
 
-import org.graylog2.GraylogServer;
-
 import com.mongodb.DBObject;
+import org.graylog2.database.MongoBridge;
 
 /**
  * Setting.java: Nov 22, 2011 7:08:46 PM
@@ -38,13 +37,8 @@ public class Setting {
     public final static int TYPE_RETENTION_TIME_DAYS_STANDARD = 60;
     public final static int TYPE_RETENTION_FREQUENCY_MINUTES = 6;
     public final static int TYPE_RETENTION_FREQUENCY_MINUTES_STANDARD = 30;
-    private final GraylogServer graylogServer;
 
-    public Setting(GraylogServer server) {
-        this.graylogServer = server;
-    }
-
-    public int getRetentionTimeInDays() {
+    public static int getRetentionTimeInDays() {
         Object dbVal = get(TYPE_RETENTION_TIME_DAYS);
         if (dbVal == null) {
             return TYPE_RETENTION_TIME_DAYS_STANDARD;
@@ -53,7 +47,7 @@ public class Setting {
         }
     }
 
-    public int getRetentionFrequencyInMinutes() {
+    public static int getRetentionFrequencyInMinutes() {
         Object dbVal = get(TYPE_RETENTION_FREQUENCY_MINUTES);
         if (dbVal == null) {
             return TYPE_RETENTION_FREQUENCY_MINUTES_STANDARD;
@@ -62,8 +56,9 @@ public class Setting {
         }
     }
 
-    private Object get(int type) {
-        DBObject setting = graylogServer.getMongoBridge().getSetting(type);
+    private static Object get(int type) {
+        MongoBridge m = new MongoBridge();
+        DBObject setting = m.getSetting(type);
         if (setting == null) {
             return null;
         }

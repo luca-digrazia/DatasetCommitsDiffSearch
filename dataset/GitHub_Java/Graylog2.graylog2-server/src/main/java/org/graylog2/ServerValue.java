@@ -20,6 +20,7 @@
 
 package org.graylog2;
 
+import org.graylog2.database.MongoBridge;
 import org.graylog2.messagequeue.MessageQueue;
 
 /**
@@ -31,45 +32,40 @@ import org.graylog2.messagequeue.MessageQueue;
  */
 public class ServerValue {
 
-    private final GraylogServer graylogServer;
-
-    public ServerValue(GraylogServer graylogServer) {
-        this.graylogServer = graylogServer;
-    }
-
-    public void setStartupTime(int timestamp) {
+    public static void setStartupTime(int timestamp) {
         set("startup_time", timestamp);
     }
 
-    public void setPID(int pid) {
+    public static void setPID(int pid) {
         set("pid", pid);
     }
 
-    public void setJREInfo(String info) {
+    public static void setJREInfo(String info) {
         set("jre", info);
     }
 
-    public void setAvailableProcessors(int processors) {
+    public static void setAvailableProcessors(int processors) {
         set("available_processors", processors);
     }
 
-    public void setGraylog2Version(String version) {
+    public static void setGraylog2Version(String version) {
         set("graylog2_version", version);
     }
 
-    public void setLocalHostname(String hostname) {
+    public static void setLocalHostname(String hostname) {
         set("local_hostname", hostname);
     }
 
-    public void writeThroughput(int current, int highest) {
-        graylogServer.getMongoBridge().writeThroughput(current, highest);
+    public static void writeThroughput(int current, int highest) {
+        MongoBridge m = new MongoBridge();
+        m.writeThroughput(current, highest);
     }
 
-    public void writeMessageQueueCurrentSize(int size) {
+    public static void writeMessageQueueCurrentSize(int size) {
         set("message_queue_current_size", size);
     }
 
-    public void writeMessageQueueMaximumSize(int size) {
+    public static void writeMessageQueueMaximumSize(int size) {
         if (size == MessageQueue.SIZE_LIMIT_UNLIMITED) {
             // Abstraction for unlimited size limit to allow change in server without change in web interface.
             size = -1;
@@ -77,24 +73,25 @@ public class ServerValue {
         set("message_queue_maximum_size", size);
     }
 
-    public void writeMessageQueueBatchSize(int size) {
+    public static void writeMessageQueueBatchSize(int size) {
         set("message_queue_batch_size", size);
     }
 
-    public void writeMessageQueuePollFrequency(int freq) {
+    public static void writeMessageQueuePollFrequency(int freq) {
         set("message_queue_poll_freq", freq);
     }
 
-    public void writeMessageRetentionLastPerformed(int when) {
+    public static void writeMessageRetentionLastPerformed(int when) {
         set("message_retention_last_performed", when);
     }
 
-    public void ping() {
+    public static void ping() {
         set("ping", Tools.getUTCTimestamp());
     }
 
-    private void set(String key, Object value) {
-        graylogServer.getMongoBridge().setSimpleServerValue(key, value);
+    private static void set(String key, Object value) {
+        MongoBridge m = new MongoBridge();
+        m.setSimpleServerValue(key, value);
     }
 
 }

@@ -51,14 +51,13 @@ public class MessageRetentionThread implements Runnable {
 
             LOG.info("Initialized message retention thread - cleaning all messages older than <" + this.retentionTimeDays + " days>.");
 
-            if (MessageRetention.performCleanup(this.retentionTimeDays)) {
-                MessageRetention.updateLastPerformedTime();
-            }
+            MessageRetention.performCleanup(this.retentionTimeDays);
+            MessageRetention.updateLastPerformedTime();
         } catch (Exception e) {
             LOG.fatal("Error in MessageRetentionThread: " + e.getMessage(), e);
-        } finally {
-            scheduleNextRun();
         }
+
+        scheduleNextRun();
     }
 
     private void scheduleNextRun() {

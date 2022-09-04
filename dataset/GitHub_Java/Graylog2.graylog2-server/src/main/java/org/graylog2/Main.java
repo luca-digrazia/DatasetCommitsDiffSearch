@@ -53,6 +53,7 @@ import org.graylog2.messagequeue.MessageQueueFlusher;
 import org.graylog2.periodical.BulkIndexerThread;
 import org.graylog2.periodical.MessageRetentionThread;
 import org.graylog2.periodical.ServerValueWriterThread;
+import org.graylog2.settings.Setting;
 
 /**
  * Main class of Graylog2.
@@ -179,11 +180,7 @@ public final class Main {
         initializeServerValueWriter(scheduler);
 
         // Start thread that automatically removes messages older than retention time.
-        if (commandLineArguments.performRetention()) {
-            initializeMessageRetentionThread(scheduler);
-        } else {
-            LOG.info("Not initializing retention time cleanup thread because --no-retention was passed.");
-        }
+        initializeMessageRetentionThread(scheduler);
 
         // Add a shutdown hook that tries to flush the message queue.
 	Runtime.getRuntime().addShutdownHook(new MessageQueueFlusher());
@@ -225,7 +222,11 @@ public final class Main {
 
     private static void initializeMessageRetentionThread(ScheduledExecutorService scheduler) {
         // Schedule first run. This is NOT at fixed rate. Thread will itself schedule next run with current frequency setting from database.
-        scheduler.schedule(new MessageRetentionThread(),0,TimeUnit.SECONDS);
+        scheduler.schedule(
+                new MessageRetentionThread(),
+                Setting.getRetentionFrequencyInMinutes(),
+                TimeUnit.MINUTES
+        );
 
         LOG.info("Retention time management active.");
     }
