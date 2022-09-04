@@ -16,18 +16,16 @@
  */
 package org.graylog2;
 
-import com.github.joschi.jadconfig.Parameter;
-import com.github.joschi.jadconfig.ValidationException;
-import com.github.joschi.jadconfig.ValidatorMethod;
+import com.github.joschi.jadconfig.*;
 import com.github.joschi.jadconfig.converters.StringListConverter;
-import com.github.joschi.jadconfig.util.Size;
 import com.github.joschi.jadconfig.validators.FileReadableValidator;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
-import com.github.joschi.jadconfig.validators.PositiveLongValidator;
-import com.google.common.net.HostAndPort;
+import com.google.common.collect.Lists;
 import com.mongodb.ServerAddress;
 import org.graylog2.plugin.BaseConfiguration;
+import org.graylog2.plugin.Tools;
+import org.graylog2.shared.JadPeriodConverter;
 import org.joda.time.Period;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,9 +33,7 @@ import org.slf4j.LoggerFactory;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.graylog2.plugin.Tools.getUriWithPort;
@@ -60,7 +56,7 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
     private int udpRecvBufferSizes = 1048576;
-
+    
     @Parameter(value = "mongodb_useauth", required = true)
     private boolean mongoUseAuth = false;
 
@@ -84,10 +80,10 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "outputbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessors = 3;
-
+    
     @Parameter(value = "outputbuffer_processor_threads_max_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessorThreadsMaxPoolSize = 30;
-
+    
     @Parameter(value = "outputbuffer_processor_threads_core_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessorThreadsCorePoolSize = 3;
 
@@ -105,25 +101,25 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "elasticsearch_index_prefix", required = true)
     private String elasticsearchIndexPrefix = "graylog2";
-
+    
     @Parameter(value = "elasticsearch_max_docs_per_index", validator = PositiveIntegerValidator.class, required = true)
     private int elasticsearchMaxDocsPerIndex = 80000000;
 
     @Parameter(value = "elasticsearch_max_size_per_index", validator = PositiveIntegerValidator.class, required = true)
     private long elasticSearchMaxSizePerIndex = 1L * 1024 * 1024 * 1024; // 1GB
 
-    @Parameter(value = "elasticsearch_max_time_per_index", required = true)
-    private Period elasticSearchMaxTimePerIndex = Period.days(1);
+    @Parameter(value = "elasticsearch_max_time_per_index", converter = JadPeriodConverter.class, required = true)
+    private Period elasticSearchMaxTimePerIndex= Period.days(1);
 
     @Parameter(value = "elasticsearch_shards", validator = PositiveIntegerValidator.class, required = true)
     private int elasticsearchShards = 4;
-
+    
     @Parameter(value = "elasticsearch_replicas", validator = PositiveIntegerValidator.class, required = true)
     private int elasticsearchReplicas = 0;
-
+    
     @Parameter(value = "elasticsearch_analyzer", required = true)
     private String elasticsearchAnalyzer = "standard";
-
+    
     @Parameter(value = "mongodb_user")
     private String mongoUser;
 
@@ -288,26 +284,17 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "stream_processing_max_faults", validator = PositiveIntegerValidator.class)
     private int streamProcessingMaxFaults = 3;
 
-    @Parameter(value = "output_module_timeout", validator = PositiveLongValidator.class)
+    @Parameter(value = "output_module_timeout", validator = PositiveIntegerValidator.class)
     private long outputModuleTimeout = 10000;
 
     @Parameter(value = "message_cache_spool_dir")
     private String messageCacheSpoolDir = "spool";
 
-    @Parameter(value = "message_cache_commit_interval", validator = PositiveLongValidator.class)
-    private long messageCacheCommitInterval = TimeUnit.SECONDS.toMillis(1l);
-
-    @Parameter(value = "message_cache_compaction_interval")
-    private Long messageCacheCompactionInterval = null;
+    @Parameter(value = "message_cache_commit_interval", validator = PositiveIntegerValidator.class)
+    private long messageCacheCommitInterval = 1000;
 
     @Parameter(value = "message_cache_off_heap")
     private boolean messageCacheOffHeap = true;
-
-    @Parameter(value = "message_cache_enable_compression")
-    private boolean messageCacheEnableCompression = false;
-
-    @Parameter(value = "message_cache_max_size")
-    private Size messageCacheMaxSize = null;
 
     @Parameter(value = "stale_master_timeout", validator = PositiveIntegerValidator.class)
     private int staleMasterTimeout = 2000;
@@ -318,13 +305,10 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "ldap_connection_timeout", validator = PositiveIntegerValidator.class)
     private int ldapConnectionTimeout = 2000;
 
-    @Parameter(value = "alert_check_interval", validator = PositiveIntegerValidator.class)
-    private int alertCheckInterval = 60;
-
     public boolean isMaster() {
         return isMaster;
     }
-
+    
     public void setIsMaster(boolean is) {
         isMaster = is;
     }
@@ -340,7 +324,7 @@ public class Configuration extends BaseConfiguration {
     public void setPerformRetention(boolean retention) {
         noRetention = !retention;
     }
-
+    
     public int getMaxNumberOfIndices() {
         return maxNumberOfIndices;
     }
@@ -356,11 +340,11 @@ public class Configuration extends BaseConfiguration {
     public int getOutputBufferProcessors() {
         return outputBufferProcessors;
     }
-
+    
     public int getOutputBufferProcessorThreadsCorePoolSize() {
         return outputBufferProcessorThreadsCorePoolSize;
     }
-
+    
     public int getOutputBufferProcessorThreadsMaxPoolSize() {
         return outputBufferProcessorThreadsMaxPoolSize;
     }
@@ -372,7 +356,7 @@ public class Configuration extends BaseConfiguration {
     public int getRingSize() {
         return ringSize;
     }
-
+    
     public String getElasticSearchConfigFile() {
         return elasticSearchConfigFile;
     }
@@ -380,7 +364,7 @@ public class Configuration extends BaseConfiguration {
     public String getElasticSearchIndexPrefix() {
         return this.elasticsearchIndexPrefix;
     }
-
+    
     public int getElasticSearchMaxDocsPerIndex() {
         return this.elasticsearchMaxDocsPerIndex;
     }
@@ -388,15 +372,15 @@ public class Configuration extends BaseConfiguration {
     public int getElasticSearchShards() {
         return this.elasticsearchShards;
     }
-
+    
     public int getElasticSearchReplicas() {
         return this.elasticsearchReplicas;
     }
-
+    
     public String getElasticSearchAnalyzer() {
         return elasticsearchAnalyzer;
     }
-
+   
     public boolean isMongoUseAuth() {
         return mongoUseAuth;
     }
@@ -434,22 +418,33 @@ public class Configuration extends BaseConfiguration {
     }
 
     public List<ServerAddress> getMongoReplicaSet() {
-        if (mongoReplicaSet == null || mongoReplicaSet.isEmpty()) {
+        final List<ServerAddress> replicaServers = Lists.newArrayList();
+        final List<String> rawSet = mongoReplicaSet;
+
+        if (rawSet == null || rawSet.isEmpty()) {
             return null;
         }
 
-        final List<ServerAddress> replicaServers = new ArrayList<>(mongoReplicaSet.size());
-        for (String host : mongoReplicaSet) {
-            try {
-                final HostAndPort hostAndPort = HostAndPort.fromString(host)
-                        .withDefaultPort(27017);
-                replicaServers.add(new ServerAddress(
-                        InetAddress.getByName(hostAndPort.getHostText()), hostAndPort.getPort()));
-            } catch (IllegalArgumentException e) {
-                LOG.error("Malformed mongodb_replica_set configuration.", e);
+        for (String host : rawSet) {
+            // Split host:port.
+            final String[] replicaTarget = host.split(":");
+
+            // Check if valid.
+            if (replicaTarget.length != 2) {
+                LOG.error("Malformed mongodb_replica_set configuration.");
                 return null;
+            }
+
+            // Get host and port.
+            try {
+                replicaServers.add(new ServerAddress(
+                        InetAddress.getByName(replicaTarget[0]),
+                        Integer.parseInt(replicaTarget[1])));
             } catch (UnknownHostException e) {
-                LOG.error("Unknown host in mongodb_replica_set", e);
+                LOG.error("Unknown host in mongodb_replica_set: " + e.getMessage(), e);
+                return null;
+            } catch (NumberFormatException e) {
+                LOG.error("Invalid port in mongodb_replica_set: " + e.getMessage(), e);
                 return null;
             }
         }
@@ -533,7 +528,6 @@ public class Configuration extends BaseConfiguration {
     public boolean isAllowLeadingWildcardSearches() {
         return allowLeadingWildcardSearches;
     }
-
     public boolean isAllowHighlighting() {
         return allowHighlighting;
     }
@@ -666,20 +660,8 @@ public class Configuration extends BaseConfiguration {
         return messageCacheCommitInterval;
     }
 
-    public Long getMessageCacheCompactionInterval() {
-        return messageCacheCompactionInterval;
-    }
-
     public boolean isMessageCacheOffHeap() {
         return messageCacheOffHeap;
-    }
-
-    public boolean isMessageCacheEnableCompression() {
-        return messageCacheEnableCompression;
-    }
-
-    public Size getMessageCacheMaxSize() {
-        return messageCacheMaxSize;
     }
 
     public int getStaleMasterTimeout() {
@@ -702,13 +684,7 @@ public class Configuration extends BaseConfiguration {
         return elasticSearchMaxSizePerIndex;
     }
 
-    public Period getElasticSearchMaxTimePerIndex() {
-        return elasticSearchMaxTimePerIndex;
-    }
-
-    public int getAlertCheckInterval() {
-        return alertCheckInterval;
-    }
+    public Period getElasticSearchMaxTimePerIndex() { return elasticSearchMaxTimePerIndex; }
 
     @ValidatorMethod
     public void validate() throws ValidationException {
