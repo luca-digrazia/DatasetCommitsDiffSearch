@@ -24,14 +24,18 @@ import org.graylog2.indexer.IndexSetValidator;
 import org.graylog2.indexer.indexset.DefaultIndexSetConfig;
 import org.graylog2.indexer.indexset.IndexSetConfig;
 import org.graylog2.indexer.indexset.IndexSetService;
+import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.jobs.IndexSetCleanupJob;
+import org.graylog2.indexer.indices.stats.IndexStatistics;
 import org.graylog2.indexer.retention.strategies.NoopRetentionStrategy;
 import org.graylog2.indexer.retention.strategies.NoopRetentionStrategyConfig;
 import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategy;
 import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategyConfig;
 import org.graylog2.plugin.cluster.ClusterConfigService;
+import org.graylog2.rest.models.system.indexer.responses.IndexStats;
 import org.graylog2.rest.resources.system.indexer.requests.IndexSetUpdateRequest;
 import org.graylog2.rest.resources.system.indexer.responses.IndexSetResponse;
+import org.graylog2.rest.resources.system.indexer.responses.IndexSetStats;
 import org.graylog2.rest.resources.system.indexer.responses.IndexSetSummary;
 import org.graylog2.shared.bindings.GuiceInjectorHolder;
 import org.graylog2.system.jobs.SystemJobManager;
@@ -57,6 +61,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -72,6 +77,8 @@ public class IndexSetsResourceTest {
     @Rule
     public final ExpectedException expectedException = ExpectedException.none();
 
+    @Mock
+    private Indices indices;
     @Mock
     private IndexSetService indexSetService;
     @Mock
@@ -98,7 +105,7 @@ public class IndexSetsResourceTest {
     @Before
     public void setUp() throws Exception {
         this.permitted = true;
-        this.indexSetsResource = new TestResource(indexSetService, indexSetRegistry, indexSetValidator, indexSetCleanupJobFactory, indexSetStatsCreator, clusterConfigService, systemJobManager, () -> permitted);
+        this.indexSetsResource = new TestResource(indices, indexSetService, indexSetRegistry, indexSetValidator, indexSetCleanupJobFactory, indexSetStatsCreator, clusterConfigService, systemJobManager, () -> permitted);
     }
 
     private void notPermitted() {
@@ -242,6 +249,46 @@ public class IndexSetsResourceTest {
             indexSetsResource.get("id");
         } finally {
             verifyZeroInteractions(indexSetService);
+        }
+    }
+
+    @Test
+    public void indexSetStatistics() {
+        final IndexSet indexSet = mock(IndexSet.class);
+        final IndexSetStats indexSetStats = IndexSetStats.create(5L, 23L, 42L);
+
+        when(indexSetRegistry.get("id")).thenReturn(Optional.of(indexSet));
+        when(indexSetStatsCreator.getForIndexSet(indexSet)).thenReturn(indexSetStats);
+
+        assertThat(indexSetsResource.indexSetStatistics("id")).isEqualTo(indexSetStats);
+    }
+
+    @Test
+    public void indexSetStatistics0() {
+        when(indexSetRegistry.get("id")).thenReturn(Optional.empty());
+
+        expectedException.expect(NotFoundException.class);
+        expectedException.expectMessage("Couldn't load index set with ID <id>");
+
+        try {
+            indexSetsResource.indexSetStatistics("id");
+        } finally {
+            verify(indexSetRegistry, times(1)).get("id");
+            verifyNoMoreInteractions(indexSetRegistry);
+        }
+    }
+
+    @Test
+    public void indexSetStatisticsDenied() {
+        notPermitted();
+
+        expectedException.expect(ForbiddenException.class);
+        expectedException.expectMessage("Not authorized to access resource id <id>");
+
+        try {
+            indexSetsResource.indexSetStatistics("id");
+        } finally {
+            verifyZeroInteractions(indexSetRegistry);
         }
     }
 
@@ -499,6 +546,76 @@ public class IndexSetsResourceTest {
     }
 
     @Test
+    public void globalStats() throws Exception {
+        final IndexStatistics indexStatistics = IndexStatistics.create(
+                "prefix_0",
+                IndexStats.create(
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        0L,
+                        23L,
+                        2L,
+                        IndexStats.DocsStats.create(42L, 0L)
+                ),
+                IndexStats.create(
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        IndexStats.TimeAndTotalStats.create(0L, 0L),
+                        0L,
+                        23L,
+                        2L,
+                        IndexStats.DocsStats.create(42L, 0L)
+                ),
+                Collections.emptyList()
+        );
+        when(indices.getClosedIndices(anyCollection())).thenReturn(Collections.singleton("closed_index_0"));
+        when(indices.getIndicesStats(anyCollection())).thenReturn(Collections.singleton(indexStatistics));
+
+        final IndexSetStats indexSetStats = indexSetsResource.globalStats();
+
+        assertThat(indexSetStats).isNotNull();
+        assertThat(indexSetStats.indices()).isEqualTo(2L);
+        assertThat(indexSetStats.documents()).isEqualTo(42L);
+        assertThat(indexSetStats.size()).isEqualTo(23L);
+    }
+
+    @Test
+    public void globalStats0() throws Exception {
+        when(indexSetRegistry.getAll()).thenReturn(Collections.emptySet());
+        when(indices.getIndicesStats(anyCollection())).thenReturn(Collections.emptySet());
+
+        final IndexSetStats indexSetStats = indexSetsResource.globalStats();
+
+        assertThat(indexSetStats).isNotNull();
+        assertThat(indexSetStats.indices()).isEqualTo(0L);
+        assertThat(indexSetStats.documents()).isEqualTo(0L);
+        assertThat(indexSetStats.size()).isEqualTo(0L);
+    }
+
+    @Test
+    public void globalStatsDenied() {
+        notPermitted();
+
+        expectedException.expect(ForbiddenException.class);
+        expectedException.expectMessage("Not authorized");
+
+        try {
+            indexSetsResource.globalStats();
+        } finally {
+            verifyZeroInteractions(indexSetService);
+        }
+    }
+
+    @Test
     public void setDefaultMakesIndexDefaultIfWritable() throws Exception {
         final String indexSetId = "newDefaultIndexSetId";
         final IndexSet indexSet = mock(IndexSet.class);
@@ -604,8 +721,8 @@ public class IndexSetsResourceTest {
     private static class TestResource extends IndexSetsResource {
         private final Provider<Boolean> permitted;
 
-        TestResource(IndexSetService indexSetService, IndexSetRegistry indexSetRegistry, IndexSetValidator indexSetValidator, IndexSetCleanupJob.Factory indexSetCleanupJobFactory, IndexSetStatsCreator indexSetStatsCreator, ClusterConfigService clusterConfigService, SystemJobManager systemJobManager, Provider<Boolean> permitted) {
-            super(indexSetService, indexSetRegistry, indexSetValidator, indexSetCleanupJobFactory, indexSetStatsCreator, clusterConfigService, systemJobManager);
+        TestResource(Indices indices, IndexSetService indexSetService, IndexSetRegistry indexSetRegistry, IndexSetValidator indexSetValidator, IndexSetCleanupJob.Factory indexSetCleanupJobFactory, IndexSetStatsCreator indexSetStatsCreator, ClusterConfigService clusterConfigService, SystemJobManager systemJobManager, Provider<Boolean> permitted) {
+            super(indices, indexSetService, indexSetRegistry, indexSetValidator, indexSetCleanupJobFactory, indexSetStatsCreator, clusterConfigService, systemJobManager);
             this.permitted = permitted;
         }
 
@@ -613,6 +730,7 @@ public class IndexSetsResourceTest {
         protected Subject getSubject() {
             final Subject mockSubject = mock(Subject.class);
             when(mockSubject.isPermitted(anyString())).thenReturn(permitted.get());
+            when(mockSubject.getPrincipal()).thenReturn("test-user");
             return mockSubject;
         }
     }

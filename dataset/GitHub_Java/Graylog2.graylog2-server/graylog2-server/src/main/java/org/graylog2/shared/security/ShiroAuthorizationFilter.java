@@ -45,15 +45,15 @@ public class ShiroAuthorizationFilter implements ContainerRequestFilter {
         final SecurityContext securityContext = requestContext.getSecurityContext();
         if (securityContext instanceof ShiroSecurityContext) {
             final ShiroSecurityContext context = (ShiroSecurityContext) securityContext;
-            final String userId = RestTools.getUserIdFromRequest(requestContext);
+            final String userName = RestTools.getUserNameFromRequest(requestContext);
             final ContextAwarePermissionAnnotationHandler annotationHandler = new ContextAwarePermissionAnnotationHandler(context);
             final String[] requiredPermissions = annotation.value();
             try {
-                LOG.debug("Checking authorization for user [{}], needs permissions: {}", userId, requiredPermissions);
+                LOG.debug("Checking authorization for user [{}], needs permissions: {}", userName, requiredPermissions);
                 annotationHandler.assertAuthorized(annotation);
             } catch (AuthorizationException e) {
                 LOG.info("Not authorized. User <{}> is missing permissions {} to perform <{} {}>",
-                        userId, Arrays.toString(requiredPermissions), requestContext.getMethod(), requestContext.getUriInfo().getPath());
+                        userName, Arrays.toString(requiredPermissions), requestContext.getMethod(), requestContext.getUriInfo().getPath());
                 throw new ForbiddenException("Not authorized");
             }
         } else {
