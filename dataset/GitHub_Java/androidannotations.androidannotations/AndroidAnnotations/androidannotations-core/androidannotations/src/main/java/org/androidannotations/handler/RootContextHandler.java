@@ -62,12 +62,12 @@ public class RootContextHandler extends BaseAnnotationHandler<EBeanHolder> {
 		if (CanonicalNameConstants.CONTEXT.equals(typeQualifiedName)) {
 			body.assign(ref(fieldName), contextRef);
 		} else {
-			JClass extendingContextClass = holder.refClass(typeQualifiedName);
+			JClass extendingContextClass = getEnvironment().getJClass(typeQualifiedName);
 			JConditional cond = body._if(holder.getContextRef()._instanceof(extendingContextClass));
 			cond._then() //
 					.assign(ref(fieldName), cast(extendingContextClass, holder.getContextRef()));
 
-			JInvocation warningInvoke = holder.classes().LOG.staticInvoke("w");
+			JInvocation warningInvoke = getClasses().LOG.staticInvoke("w");
 			warningInvoke.arg(holder.getGeneratedClass().name());
 			JExpression expr = lit("Due to Context class ").plus(holder.getContextRef().invoke("getClass").invoke("getSimpleName")).plus(
 					lit(", the @RootContext " + extendingContextClass.name() + " won't be populated"));

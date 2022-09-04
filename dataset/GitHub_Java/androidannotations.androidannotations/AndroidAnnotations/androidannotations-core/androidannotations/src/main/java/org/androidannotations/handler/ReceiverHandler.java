@@ -101,8 +101,8 @@ public class ReceiverHandler extends BaseAnnotationHandler<HasReceiverRegistrati
 	}
 
 	private JFieldVar createReceiverField(HasReceiverRegistration holder, String receiverName, String methodName, ExecutableElement executableElement) {
-		JDefinedClass anonymousReceiverClass = getCodeModel().anonymousClass(getClasses().BROADCAST_RECEIVER);
-		JMethod onReceiveMethod = anonymousReceiverClass.method(PUBLIC, getCodeModel().VOID, "onReceive");
+		JDefinedClass anonymousReceiverClass = codeModel().anonymousClass(getClasses().BROADCAST_RECEIVER);
+		JMethod onReceiveMethod = anonymousReceiverClass.method(PUBLIC, codeModel().VOID, "onReceive");
 		JVar contextVar = onReceiveMethod.param(getClasses().CONTEXT, "context");
 		JVar intentVar = onReceiveMethod.param(getClasses().INTENT, "intent");
 

@@ -63,7 +63,7 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	@Override
 	protected void setExtends() {
 		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
-		JClass annotatedComponent = codeModel().directClass(annotatedComponentQualifiedName);
+		JClass annotatedComponent = getCodeModel().directClass(annotatedComponentQualifiedName);
 		generatedClass._implements(narrow(annotatedComponent));
 	}
 
@@ -129,7 +129,7 @@ public class RestHolder extends BaseGeneratedClassHolder {
 		JMethod setAuthMethod = codeModelHelper.implementMethod(this, methods, "setHttpBasicAuth", TypeKind.VOID.toString(), STRING, STRING);
 
 		if (setAuthMethod != null) {
-			JClass basicAuthClass = refClass(HTTP_BASIC_AUTHENTICATION);
+			JClass basicAuthClass = getJClass(HTTP_BASIC_AUTHENTICATION);
 			JInvocation basicAuthentication = JExpr._new(basicAuthClass).arg(setAuthMethod.params().get(0)).arg(setAuthMethod.params().get(1));
 			setAuthMethod.body().assign(_this().ref(getAuthenticationField()), basicAuthentication);
 		}
@@ -142,8 +142,8 @@ public class RestHolder extends BaseGeneratedClassHolder {
 			JVar tokenParamVar = setBearerMethod.params().get(0);
 			JExpression tokenExpr = lit("Bearer ").plus(tokenParamVar);
 
-			JClass authClass = refClass(HTTP_AUTHENTICATION);
-			JDefinedClass anonymousHttpAuthClass = codeModel().anonymousClass(authClass);
+			JClass authClass = getJClass(HTTP_AUTHENTICATION);
+			JDefinedClass anonymousHttpAuthClass = getCodeModel().anonymousClass(authClass);
 
 			JMethod getHeaderValueMethod = anonymousHttpAuthClass.method(JMod.PUBLIC, String.class, "getHeaderValue");
 			getHeaderValueMethod.annotate(Override.class);
@@ -222,7 +222,7 @@ public class RestHolder extends BaseGeneratedClassHolder {
 
 	private void setInit() {
 		init = getGeneratedClass().constructor(JMod.PUBLIC);
-		initContextParam = init.param(classes().CONTEXT, "context");
+		initContextParam = init.param(getClasses().CONTEXT, "context");
 	}
 
 	public JFieldVar getRootUrlField() {
@@ -233,7 +233,7 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	}
 
 	private void setRootUrlField() {
-		rootUrlField = getGeneratedClass().field(JMod.PRIVATE, classes().STRING, "rootUrl");
+		rootUrlField = getGeneratedClass().field(JMod.PRIVATE, getClasses().STRING, "rootUrl");
 	}
 
 	public JFieldVar getRestTemplateField() {
@@ -244,8 +244,8 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	}
 
 	private void setRestTemplateField() {
-		restTemplateField = getGeneratedClass().field(JMod.PRIVATE, refClass(REST_TEMPLATE), "restTemplate");
-		getInit().body().assign(restTemplateField, _new(refClass(REST_TEMPLATE)));
+		restTemplateField = getGeneratedClass().field(JMod.PRIVATE, getJClass(REST_TEMPLATE), "restTemplate");
+		getInit().body().assign(restTemplateField, _new(getJClass(REST_TEMPLATE)));
 	}
 
 	public JFieldVar getAvailableHeadersField() {
@@ -256,8 +256,8 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	}
 
 	private void setAvailableHeadersField() {
-		JClass stringClass = classes().STRING;
-		JClass mapClass = classes().HASH_MAP.narrow(stringClass, stringClass);
+		JClass stringClass = getClasses().STRING;
+		JClass mapClass = getClasses().HASH_MAP.narrow(stringClass, stringClass);
 		availableHeadersField = getGeneratedClass().field(JMod.PRIVATE, mapClass, "availableHeaders");
 		getInit().body().assign(availableHeadersField, _new(mapClass));
 	}
@@ -270,8 +270,8 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	}
 
 	private void setAvailableCookiesField() {
-		JClass stringClass = classes().STRING;
-		JClass mapClass = classes().HASH_MAP.narrow(stringClass, stringClass);
+		JClass stringClass = getClasses().STRING;
+		JClass mapClass = getClasses().HASH_MAP.narrow(stringClass, stringClass);
 		availableCookiesField = getGeneratedClass().field(JMod.PRIVATE, mapClass, "availableCookies");
 		getInit().body().assign(availableCookiesField, _new(mapClass));
 	}
@@ -284,7 +284,7 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	}
 
 	private void setAuthenticationField() {
-		authenticationField = getGeneratedClass().field(JMod.PRIVATE, refClass(HTTP_AUTHENTICATION), "authentication");
+		authenticationField = getGeneratedClass().field(JMod.PRIVATE, getJClass(HTTP_AUTHENTICATION), "authentication");
 	}
 
 	public JFieldVar getRestErrorHandlerField() {
@@ -294,7 +294,7 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	}
 
 	private void setRestErrorHandlerField() {
-		JClass restErrorHandlerClass = refClass(RestErrorHandler.class.getName());
+		JClass restErrorHandlerClass = getJClass(RestErrorHandler.class.getName());
 		restErrorHandlerField = getGeneratedClass().field(JMod.PRIVATE, restErrorHandlerClass, "restErrorHandler");
 	}
 

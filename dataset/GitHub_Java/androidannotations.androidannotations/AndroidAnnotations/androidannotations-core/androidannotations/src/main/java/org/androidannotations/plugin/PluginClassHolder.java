@@ -48,6 +48,10 @@ public class PluginClassHolder<H extends GeneratedClassHolder> {
 		return holder().environment();
 	}
 
+	public JDefinedClass definedClass(String fullyQualifiedClassName) {
+		return holder.definedClass(fullyQualifiedClassName);
+	}
+
 	protected JClass getJClass(String fullyQualifiedClassName) {
 		return environment().getJClass(fullyQualifiedClassName);
 	}

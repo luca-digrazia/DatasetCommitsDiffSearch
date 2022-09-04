@@ -15,14 +15,10 @@
  */
 package org.androidannotations.ormlite.holder;
 
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.lang.model.type.TypeMirror;
-
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
 import org.androidannotations.helper.CaseHelper;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.holder.EComponentHolder;
@@ -30,10 +26,12 @@ import org.androidannotations.holder.HasLifecycleMethods;
 import org.androidannotations.ormlite.helper.OrmLiteClasses;
 import org.androidannotations.plugin.PluginClassHolder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JFieldVar;
+import javax.lang.model.type.TypeMirror;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JMod.PRIVATE;
 
 public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 
@@ -53,13 +51,13 @@ public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 	}
 
 	private JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
-		AbstractJClass databaseHelperClass = getJClass(databaseHelperTypeMirror.toString());
+		JClass databaseHelperClass = getJClass(databaseHelperTypeMirror.toString());
 		String fieldName = CaseHelper.lowerCaseFirst(databaseHelperClass.name()) + ModelConstants.generationSuffix();
 		JFieldVar databaseHelperRef = getGeneratedClass().field(PRIVATE, databaseHelperClass, fieldName);
 		databaseHelperRefs.put(databaseHelperTypeMirror, databaseHelperRef);
 
-		IJExpression dbHelperClass = databaseHelperClass.dotclass();
-		holder().getInitBodyInjectionBlock().assign(databaseHelperRef, //
+		JExpression dbHelperClass = databaseHelperClass.dotclass();
+		holder().getInitBody().assign(databaseHelperRef, //
 				getJClass(OrmLiteClasses.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(holder().getContextRef()).arg(dbHelperClass));
 
 		return databaseHelperRef;

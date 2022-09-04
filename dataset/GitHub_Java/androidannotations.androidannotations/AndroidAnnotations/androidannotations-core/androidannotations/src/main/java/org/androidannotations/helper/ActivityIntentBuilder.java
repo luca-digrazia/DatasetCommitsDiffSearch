@@ -74,29 +74,29 @@ public class ActivityIntentBuilder extends IntentBuilder {
 		if (hasFragmentInClasspath()) {
 			// intent() with android.app.Fragment param
 			JMethod method = holder.getGeneratedClass().method(STATIC | PUBLIC, holder.getIntentBuilderClass(), "intent");
-			JVar fragmentParam = method.param(holder.classes().FRAGMENT, "fragment");
+			JVar fragmentParam = method.param(getClasses().FRAGMENT, "fragment");
 			method.body()._return(_new(holder.getIntentBuilderClass()).arg(fragmentParam));
 		}
 		if (hasFragmentSupportInClasspath()) {
 			// intent() with android.support.v4.app.Fragment param
 			JMethod method = holder.getGeneratedClass().method(STATIC | PUBLIC, holder.getIntentBuilderClass(), "intent");
-			JVar fragmentParam = method.param(holder.classes().SUPPORT_V4_FRAGMENT, "supportFragment");
+			JVar fragmentParam = method.param(getClasses().SUPPORT_V4_FRAGMENT, "supportFragment");
 			method.body()._return(_new(holder.getIntentBuilderClass()).arg(fragmentParam));
 		}
 	}
 
 	@Override
 	protected JClass getSuperClass() {
-		JClass superClass = holder.refClass(org.androidannotations.api.builder.ActivityIntentBuilder.class);
+		JClass superClass = environment.getJClass(org.androidannotations.api.builder.ActivityIntentBuilder.class);
 		return superClass.narrow(builderClass);
 	}
 
 	private void createAdditionalConstructor() {
 		if (hasFragmentInClasspath()) {
-			fragmentField = addFragmentConstructor(holder.classes().FRAGMENT, "fragment" + generationSuffix());
+			fragmentField = addFragmentConstructor(getClasses().FRAGMENT, "fragment" + generationSuffix());
 		}
 		if (hasFragmentSupportInClasspath()) {
-			fragmentSupportField = addFragmentConstructor(holder.classes().SUPPORT_V4_FRAGMENT, "fragmentSupport" + generationSuffix());
+			fragmentSupportField = addFragmentConstructor(getClasses().SUPPORT_V4_FRAGMENT, "fragmentSupport" + generationSuffix());
 		}
 	}
 
@@ -114,9 +114,9 @@ public class ActivityIntentBuilder extends IntentBuilder {
 	}
 
 	private void overrideStartForResultMethod() {
-		JMethod method = holder.getIntentBuilderClass().method(PUBLIC, holder.codeModel().VOID, "startForResult");
+		JMethod method = holder.getIntentBuilderClass().method(PUBLIC, environment.getCodeModel().VOID, "startForResult");
 		method.annotate(Override.class);
-		JVar requestCode = method.param(holder.codeModel().INT, "requestCode");
+		JVar requestCode = method.param(environment.getCodeModel().INT, "requestCode");
 		JBlock body = method.body();
 
 		JConditional condition = null;
@@ -154,12 +154,12 @@ public class ActivityIntentBuilder extends IntentBuilder {
 			activityStartInvocationBlock = method.body();
 		}
 
-		JConditional activityCondition = activityStartInvocationBlock._if(contextField._instanceof(holder.classes().ACTIVITY));
+		JConditional activityCondition = activityStartInvocationBlock._if(contextField._instanceof(getClasses().ACTIVITY));
 		JBlock thenBlock = activityCondition._then();
-		JVar activityVar = thenBlock.decl(holder.classes().ACTIVITY, "activity", JExpr.cast(holder.classes().ACTIVITY, contextField));
+		JVar activityVar = thenBlock.decl(getClasses().ACTIVITY, "activity", JExpr.cast(getClasses().ACTIVITY, contextField));
 
 		if (hasActivityCompatInClasspath() && hasActivityOptionsInActivityCompat()) {
-			thenBlock.staticInvoke(holder.classes().ACTIVITY_COMPAT, "startActivityForResult") //
+			thenBlock.staticInvoke(getClasses().ACTIVITY_COMPAT, "startActivityForResult") //
 					.arg(activityVar).arg(intentField).arg(requestCode).arg(optionsField);
 		} else if (hasActivityOptionsInFragment()) {
 			JBlock startForResultInvocationBlock;
@@ -189,7 +189,7 @@ public class ActivityIntentBuilder extends IntentBuilder {
 	}
 
 	private JBlock createCallWithIfGuard(JVar requestCode, JBlock thenBlock, JExpression invocationTarget) {
-		JConditional guardIf = thenBlock._if(holder.classes().BUILD_VERSION.staticRef("SDK_INT").gte(holder.classes().BUILD_VERSION_CODES.staticRef("JELLY_BEAN")));
+		JConditional guardIf = thenBlock._if(getClasses().BUILD_VERSION.staticRef("SDK_INT").gte(getClasses().BUILD_VERSION_CODES.staticRef("JELLY_BEAN")));
 		JBlock startInvocationBlock = guardIf._then();
 		String methodName = requestCode != null ? "startActivityForResult" : "startActivity";
 
