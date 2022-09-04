@@ -6,7 +6,9 @@ import io.dropwizard.Configuration;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.server.SimpleServerFactory;
 import io.dropwizard.setup.Environment;
-import org.junit.rules.ExternalResource;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
 
 import java.net.URI;
 import java.net.URL;
@@ -50,7 +52,7 @@ import java.net.URL;
  * </ul>
  * </p>
  */
-public class DropwizardClientRule extends ExternalResource {
+public class DropwizardClientRule implements TestRule {
     private final Object[] resources;
     private final DropwizardAppRule<Configuration> appRule;
 
@@ -69,13 +71,8 @@ public class DropwizardClientRule extends ExternalResource {
     }
 
     @Override
-    protected void before() throws Throwable {
-        appRule.before();
-    }
-
-    @Override
-    protected void after() {
-        appRule.after();
+    public Statement apply(Statement base, Description description) {
+        return appRule.apply(base, description);
     }
 
     private static class DummyHealthCheck extends HealthCheck {
