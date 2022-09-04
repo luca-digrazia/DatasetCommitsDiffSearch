@@ -11,6 +11,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -26,14 +27,21 @@ import sun.misc.Unsafe;
  *
  * This is only for development mode, it must not be used for production applications.
  *
- * TODO: should this just provide a facacde that simply starts a new thread pool instead?
+ * TODO: should this just provide a facade that simply starts a new thread pool instead?
  */
 public final class CleanableExecutor implements ExecutorService {
+
+    static {
+        try {
+            Class.forName("org.jboss.threads.EnhancedQueueExecutor$1", false, CleanableExecutor.class.getClassLoader());
+        } catch (ClassNotFoundException ignored) {
+        }
+    }
 
     private final EnhancedQueueExecutor executor;
 
     private static final AtomicInteger generation = new AtomicInteger(1);
-    private final ThreadLocal<Integer> lastGeneration = new ThreadLocal<Integer>() {
+    private static final ThreadLocal<Integer> lastGeneration = new ThreadLocal<Integer>() {
         @Override
         protected Integer initialValue() {
             return -1;
@@ -63,8 +71,14 @@ public final class CleanableExecutor implements ExecutorService {
         //threadlocal state. It does not really matter if this does not work, however if these threads are holding
         //state that is stopping things being GC'ed it can help with memory usage
         try {
-            for (int i = 0; i < executor.getMaximumPoolSize(); ++i) {
-                submit(empty);
+            if (!executor.isShutdown()) {
+                for (int i = 0; i < executor.getMaximumPoolSize(); ++i) {
+                    try {
+                        submit(empty);
+                    } catch (RejectedExecutionException e) {
+                        //ignore
+                    }
+                }
             }
         } finally {
             latch.countDown();
@@ -72,7 +86,7 @@ public final class CleanableExecutor implements ExecutorService {
 
     }
 
-    private void handleClean(int taskGen) {
+    private static void handleClean(int taskGen) {
         int val = lastGeneration.get();
         if (val == -1) {
             lastGeneration.set(taskGen);
@@ -169,20 +183,19 @@ public final class CleanableExecutor implements ExecutorService {
         private static final long inheritableThreadLocalMapOffs;
 
         static {
-            final Field threadLocals = AccessController.doPrivileged(new DeclaredFieldAction(Thread.class, "threadLocals"));
-            threadLocalMapOffs = threadLocals == null ? 0 : unsafe.objectFieldOffset(threadLocals);
-            final Field inheritableThreadLocals = AccessController
-                    .doPrivileged(new DeclaredFieldAction(Thread.class, "inheritableThreadLocals"));
-            inheritableThreadLocalMapOffs = inheritableThreadLocals == null ? 0
-                    : unsafe.objectFieldOffset(inheritableThreadLocals);
+            try {
+                threadLocalMapOffs = unsafe.objectFieldOffset(Thread.class.getDeclaredField("threadLocals"));
+                inheritableThreadLocalMapOffs = unsafe
+                        .objectFieldOffset(Thread.class.getDeclaredField("inheritableThreadLocals"));
+            } catch (NoSuchFieldException e) {
+                throw new NoSuchFieldError(e.getMessage());
+            }
         }
 
         static void run() {
             final Thread thread = Thread.currentThread();
-            if (threadLocalMapOffs != 0)
-                unsafe.putObject(thread, threadLocalMapOffs, null);
-            if (inheritableThreadLocalMapOffs != 0)
-                unsafe.putObject(thread, inheritableThreadLocalMapOffs, null);
+            unsafe.putObject(thread, threadLocalMapOffs, null);
+            unsafe.putObject(thread, inheritableThreadLocalMapOffs, null);
         }
     }
 
@@ -204,25 +217,7 @@ public final class CleanableExecutor implements ExecutorService {
         });
     }
 
-    static final class DeclaredFieldAction implements PrivilegedAction<Field> {
-        private final Class<?> clazz;
-        private final String fieldName;
-
-        DeclaredFieldAction(final Class<?> clazz, final String fieldName) {
-            this.clazz = clazz;
-            this.fieldName = fieldName;
-        }
-
-        public Field run() {
-            try {
-                return clazz.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException e) {
-                return null;
-            }
-        }
-    }
-
-    private class CleaningRunnable implements Runnable {
+    private static class CleaningRunnable implements Runnable {
         private final Runnable command;
         final int gen = generation.get();
 
@@ -237,7 +232,7 @@ public final class CleanableExecutor implements ExecutorService {
         }
     }
 
-    private class CleaningCallable<T> implements Callable<T> {
+    private static class CleaningCallable<T> implements Callable<T> {
         private final Callable<T> i;
         final int gen = generation.get();
 
