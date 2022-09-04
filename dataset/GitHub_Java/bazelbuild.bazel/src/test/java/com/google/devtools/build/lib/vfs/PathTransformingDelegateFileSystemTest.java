@@ -33,8 +33,6 @@ import com.google.testing.junit.testparameterinjector.TestParameters.TestParamet
 import com.google.testing.junit.testparameterinjector.TestParameters.TestParametersValuesProvider;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
-import java.util.stream.Collectors;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -180,16 +178,10 @@ public class PathTransformingDelegateFileSystemTest {
           .map(
               m ->
                   TestParametersValues.builder()
-                      .name(m.getName() + parameterString(m.getParameterTypes()))
+                      .name(m.getName())
                       .addParameter("method", m)
                       .build())
           .collect(toImmutableList());
-    }
-
-    private static String parameterString(Class<?>[] types) {
-      return Arrays.stream(types)
-          .map(Class::getSimpleName)
-          .collect(Collectors.joining(", ", "(", ")"));
     }
   }
 }
