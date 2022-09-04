@@ -9,17 +9,17 @@ import com.fasterxml.jackson.databind.introspect.AnnotatedParameter;
 /**
  * A {@link PropertyNamingStrategy} implementation which, if the declaring class of a property is
  * annotated with {@link JsonSnakeCase}, uses a
- * {@link com.fasterxml.jackson.databind.PropertyNamingStrategy.SnakeCaseStrategy}, and uses
+ * {@link com.fasterxml.jackson.databind.PropertyNamingStrategy.LowerCaseWithUnderscoresStrategy}, and uses
  * the default {@link PropertyNamingStrategy} otherwise.
  */
 public class AnnotationSensitivePropertyNamingStrategy extends PropertyNamingStrategy {
     private static final long serialVersionUID = -1372862028366311230L;
 
-    private final SnakeCaseStrategy snakeCase;
+    private final LowerCaseWithUnderscoresStrategy snakeCase;
 
     public AnnotationSensitivePropertyNamingStrategy() {
         super();
-        this.snakeCase = new SnakeCaseStrategy();
+        this.snakeCase = new LowerCaseWithUnderscoresStrategy();
     }
 
     @Override
