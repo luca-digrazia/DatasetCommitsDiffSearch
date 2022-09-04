@@ -1,8 +1,10 @@
 package com.example.gsyvideoplayer;
 
+import android.content.res.Configuration;
 import android.graphics.Point;
 import android.os.Bundle;
 import android.support.v4.widget.NestedScrollView;
+import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.webkit.WebSettings;
 import android.widget.ImageView;
@@ -10,13 +12,17 @@ import android.widget.RelativeLayout;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
+import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.video.PreViewGSYVideoPlayer;
 import com.example.gsyvideoplayer.view.ScrollWebView;
 import com.shuyu.gsyvideoplayer.GSYBaseActivityDetail;
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
+import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
+import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
+import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -108,7 +114,7 @@ public class WebDetailActivity extends GSYBaseActivityDetail {
 
     @Override
     public GSYVideoOptionBuilder getGSYVideoOptionBuilder() {
-        String url = "https://res.exexm.com/cw_145225549855002";
+        String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
         //String url = "https://d131x7vzzf85jg.cloudfront.net/upload/documents/paper/b2/61/00/00/20160420_115018_b544.mp4";
         //增加封面。内置封面可参考SampleCoverVideo
         ImageView imageView = new ImageView(this);
