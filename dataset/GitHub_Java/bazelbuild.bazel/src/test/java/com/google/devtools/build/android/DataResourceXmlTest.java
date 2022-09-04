@@ -16,7 +16,6 @@ package com.google.devtools.build.android;
 import static com.google.common.truth.Truth.assertAbout;
 import static com.google.common.truth.Truth.assertThat;
 
-import com.android.ide.common.res2.MergingException;
 import com.android.resources.ResourceType;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -24,11 +23,9 @@ import com.google.common.base.Optional;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.io.MoreFiles;
-import com.google.common.io.RecursiveDeleteOption;
 import com.google.common.jimfs.Jimfs;
-import com.google.common.truth.FailureStrategy;
-import com.google.common.truth.SubjectFactory;
+import com.google.common.truth.Subject;
+import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.xml.ArrayXmlResourceValue;
 import com.google.devtools.build.android.xml.ArrayXmlResourceValue.ArrayType;
 import com.google.devtools.build.android.xml.AttrXmlResourceValue;
@@ -43,19 +40,23 @@ import com.google.devtools.build.android.xml.AttrXmlResourceValue.IntegerResourc
 import com.google.devtools.build.android.xml.AttrXmlResourceValue.ReferenceResourceXmlAttrValue;
 import com.google.devtools.build.android.xml.AttrXmlResourceValue.StringResourceXmlAttrValue;
 import com.google.devtools.build.android.xml.IdXmlResourceValue;
+import com.google.devtools.build.android.xml.Namespaces;
 import com.google.devtools.build.android.xml.PluralXmlResourceValue;
 import com.google.devtools.build.android.xml.PublicXmlResourceValue;
+import com.google.devtools.build.android.xml.ResourcesAttribute;
 import com.google.devtools.build.android.xml.SimpleXmlResourceValue;
 import com.google.devtools.build.android.xml.StyleXmlResourceValue;
 import com.google.devtools.build.android.xml.StyleableXmlResourceValue;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import javax.xml.stream.XMLStreamException;
 import org.junit.Before;
 import org.junit.Test;
@@ -89,7 +90,7 @@ public class DataResourceXmlTest {
     Files.createDirectories(values.getParent());
     StringBuilder builder = new StringBuilder();
     builder.append(AndroidDataWriter.PRELUDE).append("<resources");
-    for (Entry<String, String> entry : namespaces.entrySet()) {
+    for (Map.Entry<String, String> entry : namespaces.entrySet()) {
       builder
           .append(" xmlns:")
           .append(entry.getKey())
@@ -97,7 +98,7 @@ public class DataResourceXmlTest {
           .append(entry.getValue())
           .append("\"");
     }
-    for (Entry<String, String> entry : attributes.entrySet()) {
+    for (Map.Entry<String, String> entry : attributes.entrySet()) {
       builder
           .append(" ")
           .append(entry.getKey())
@@ -652,6 +653,41 @@ public class DataResourceXmlTest {
   }
 
   @Test
+  public void resourcesAttribute() throws Exception {
+    Namespaces namespaces = Namespaces.from(
+        ImmutableMap.of("tools", "http://schemas.android.com/tools"));
+
+    Path path = writeResourceXml(
+        namespaces.asMap(),
+        ImmutableMap.of("tools:foo", "fooVal", "tools:ignore", "ignoreVal"));
+
+    final Map<DataKey, DataResource> toOverwrite = new HashMap<>();
+    final Map<DataKey, DataResource> toCombine = new HashMap<>();
+    parseResourcesFrom(path, toOverwrite, toCombine);
+
+    FullyQualifiedName fooFqn = fqn("<resources>/{http://schemas.android.com/tools}foo");
+    assertThat(toOverwrite)
+        .containsExactly(
+            fooFqn,
+            DataResourceXml.createWithNamespaces(
+                path,
+                ResourcesAttribute.of(fooFqn, "tools:foo", "fooVal"),
+                namespaces)
+            );
+
+    FullyQualifiedName ignoreFqn = fqn("<resources>/{http://schemas.android.com/tools}ignore");
+    assertThat(toCombine)
+        .containsExactly(
+            ignoreFqn,
+            DataResourceXml.createWithNamespaces(
+                path,
+                ResourcesAttribute.of(ignoreFqn, "tools:ignore", "ignoreVal"),
+                namespaces)
+            );
+
+  }
+
+  @Test
   public void writeSimpleXmlResources() throws Exception {
     Path source =
         writeResourceXml(
@@ -986,8 +1022,9 @@ public class DataResourceXmlTest {
     Path source = writeResourceXml(
         ImmutableMap.of("tools", "http://schemas.android.com/tools"),
         ImmutableMap.of("tools:foo", "fooVal"));
+
     assertAbout(resourcePaths)
-        .that(parsedAndWritten(source, fqn("<resources>/tools:foo")))
+        .that(parsedAndWritten(source, fqn("<resources>/{http://schemas.android.com/tools}foo")))
         .xmlContentsIsEqualTo(
             resourcesXmlFrom(
                 ImmutableMap.of("tools", "http://schemas.android.com/tools"),
@@ -1033,10 +1070,11 @@ public class DataResourceXmlTest {
     serializer.queueForSerialization(dimenKey, dimenValue);
     serializer.flushTo(serialized);
 
-    AndroidDataDeserializer deserializer = AndroidDataDeserializer.create();
+    AndroidDataDeserializer deserializer = AndroidParsedDataDeserializer.create();
     final Map<DataKey, DataResource> toOverwrite = new HashMap<>();
     final Map<DataKey, DataResource> toCombine = new HashMap<>();
     deserializer.read(
+        DependencyInfo.UNKNOWN,
         serialized,
         KeyValueConsumers.of(new FakeConsumer(toOverwrite), new FakeConsumer(toCombine), null));
     assertThat(toOverwrite)
@@ -1094,10 +1132,11 @@ public class DataResourceXmlTest {
     serializer.queueForSerialization(themeKey, themeValue);
     serializer.flushTo(serialized);
 
-    AndroidDataDeserializer deserializer = AndroidDataDeserializer.create();
+    AndroidDataDeserializer deserializer = AndroidParsedDataDeserializer.create();
     final Map<DataKey, DataResource> toOverwrite = new HashMap<>();
     final Map<DataKey, DataResource> toCombine = new HashMap<>();
     deserializer.read(
+        DependencyInfo.UNKNOWN,
         serialized,
         KeyValueConsumers.of(new FakeConsumer(toOverwrite), new FakeConsumer(toCombine), null));
     assertThat(toOverwrite).containsEntry(attrKey, attrValue);
@@ -1220,10 +1259,11 @@ public class DataResourceXmlTest {
     serializer.queueForSerialization(key, value);
     serializer.flushTo(serialized);
 
-    AndroidDataDeserializer deserializer = AndroidDataDeserializer.create();
+    AndroidDataDeserializer deserializer = AndroidParsedDataDeserializer.create();
     final Map<DataKey, DataResource> toOverwrite = new HashMap<>();
     final Map<DataKey, DataResource> toCombine = new HashMap<>();
     deserializer.read(
+        DependencyInfo.UNKNOWN,
         serialized,
         KeyValueConsumers.of(new FakeConsumer(toOverwrite), new FakeConsumer(toCombine), null));
     if (key.isOverwritable()) {
@@ -1242,28 +1282,30 @@ public class DataResourceXmlTest {
 
   private String[] resourcesXmlFrom(Map<String, String> namespaces, Map<String, String> attributes,
       Path source, String... lines) {
-    FluentIterable<String> xml = FluentIterable.of(new String(AndroidDataWriter.PRELUDE))
-        .append("<resources")
-        .append(
-            FluentIterable.from(namespaces.entrySet())
-                .transform(
-                    new Function<Entry<String, String>, String>() {
-                      @Override
-                      public String apply(Entry<String, String> input) {
-                        return String.format(" xmlns:%s=\"%s\"", input.getKey(), input.getValue());
-                      }
-                    })
-                .join(Joiner.on("")))
-        .append(
-            FluentIterable.from(attributes.entrySet())
-                .transform(
-                    new Function<Entry<String, String>, String>() {
-                      @Override
-                      public String apply(Entry<String, String> input) {
-                        return String.format(" %s=\"%s\"", input.getKey(), input.getValue());
-                      }
-                    })
-                .join(Joiner.on("")));
+    FluentIterable<String> xml =
+        FluentIterable.of(new String(AndroidDataWriter.PRELUDE))
+            .append("<resources")
+            .append(
+                FluentIterable.from(namespaces.entrySet())
+                    .transform(
+                        new Function<Map.Entry<String, String>, String>() {
+                          @Override
+                          public String apply(Map.Entry<String, String> input) {
+                            return String.format(
+                                " xmlns:%s=\"%s\"", input.getKey(), input.getValue());
+                          }
+                        })
+                    .join(Joiner.on("")))
+            .append(
+                FluentIterable.from(attributes.entrySet())
+                    .transform(
+                        new Function<Map.Entry<String, String>, String>() {
+                          @Override
+                          public String apply(Map.Entry<String, String> input) {
+                            return String.format(" %s=\"%s\"", input.getKey(), input.getValue());
+                          }
+                        })
+                    .join(Joiner.on("")));
     if (source == null && (lines == null || lines.length == 0)) {
       xml = xml.append("/>");
     } else {
@@ -1286,7 +1328,26 @@ public class DataResourceXmlTest {
     parseResourcesFrom(path, toOverwrite, toCombine);
     Path out = fs.getPath("out");
     if (Files.exists(out)) {
-      MoreFiles.deleteRecursively(out, RecursiveDeleteOption.ALLOW_INSECURE);
+      Files.walkFileTree(
+          out,
+          new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                throws IOException {
+              Files.delete(file);
+              return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path directory, IOException e)
+                throws IOException {
+              if (e != null) {
+                throw e;
+              }
+              Files.delete(directory);
+              return FileVisitResult.CONTINUE;
+            }
+          });
     }
     // find and write the resource -- the categorization is tested during parsing.
     AndroidDataWriter mergedDataWriter = AndroidDataWriter.createWithDefaults(out);
@@ -1301,13 +1362,7 @@ public class DataResourceXmlTest {
     return mergedDataWriter.resourceDirectory().resolve("values/values.xml");
   }
 
-  private static final SubjectFactory<PathsSubject, Path> resourcePaths =
-      new SubjectFactory<PathsSubject, Path>() {
-        @Override
-        public PathsSubject getSubject(FailureStrategy failureStrategy, Path path) {
-          return new PathsSubject(failureStrategy, path);
-        }
-      };
+  private static final Subject.Factory<PathsSubject, Path> resourcePaths = PathsSubject::new;
 
   private static class FakeConsumer
       implements ParsedAndroidData.KeyValueConsumer<DataKey, DataResource> {
@@ -1318,7 +1373,7 @@ public class DataResourceXmlTest {
     }
 
     @Override
-    public void consume(DataKey key, DataResource value) {
+    public void accept(DataKey key, DataResource value) {
       target.put(key, value);
     }
   }

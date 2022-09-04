@@ -184,8 +184,7 @@ public class GenerateRobolectricResourceSymbolsAction {
                 });
 
         final RClassGenerator generator =
-            RClassGenerator.with(
-                options.targetLabel, generatedSources, robolectricIds.build(), false, false);
+            RClassGenerator.with(generatedSources, robolectricIds.build(), false);
 
         List<SymbolFileProvider> libraries = new ArrayList<>();
         for (DependencyAndroidData dataDep : options.data) {

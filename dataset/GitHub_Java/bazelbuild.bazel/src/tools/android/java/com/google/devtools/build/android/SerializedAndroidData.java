@@ -15,6 +15,7 @@ package com.google.devtools.build.android;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.android.aapt2.CompiledResources;
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -82,6 +83,10 @@ public class SerializedAndroidData {
     this.symbols = symbols;
   }
 
+  public static SerializedAndroidData from(CompiledResources primary) {
+    return new SerializedAndroidData(ImmutableList.of(), ImmutableList.of(), "", primary.getZip());
+  }
+
   public void walk(final AndroidDataPathWalker pathWalker) throws IOException {
     for (Path path : resourceDirs) {
       pathWalker.walkResources(path);
@@ -91,13 +96,16 @@ public class SerializedAndroidData {
     }
   }
 
-  public void deserialize(AndroidDataDeserializer deserializer, KeyValueConsumers consumers)
+  public void deserialize(
+      DependencyInfo.DependencyType dependencyType,
+      AndroidDataDeserializer deserializer,
+      KeyValueConsumers consumers)
       throws DeserializationException {
     // Missing symbols means the resources where provided via android_resources rules.
     if (symbols == null) {
       throw new DeserializationException(true);
     }
-    deserializer.read(symbols, consumers);
+    deserializer.read(DependencyInfo.create(label, dependencyType), symbols, consumers);
   }
 
   public String getLabel() {
