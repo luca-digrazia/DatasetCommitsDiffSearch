@@ -265,7 +265,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         CppFileTypes.SHARED_LIBRARY));
     CppLinkAction action = (CppLinkAction) getGeneratingAction(sharedObject);
 
-    ExtraActionInfo.Builder builder = action.getExtraActionInfo(actionKeyContext);
+    ExtraActionInfo.Builder builder = action.getExtraActionInfo();
     ExtraActionInfo info = builder.build();
     assertThat(info.getMnemonic()).isEqualTo("CppLink");
 
@@ -282,7 +282,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         .isEqualTo(action.getLinkCommandLine().getLinkTargetType().name());
     assertThat(cppLinkInfo.getLinkStaticness())
         .isEqualTo(action.getLinkCommandLine().getLinkStaticness().name());
-    Iterable<String> linkstamps = Artifact.asExecPaths(action.getLinkstampObjects());
+    Iterable<String> linkstamps = Artifact.asExecPaths(action.getLinkstamps().values());
     assertThat(cppLinkInfo.getLinkStampList()).containsExactlyElementsIn(linkstamps);
     Iterable<String> buildInfoHeaderArtifacts =
         Artifact.asExecPaths(action.getBuildInfoHeaderArtifacts());
@@ -299,7 +299,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         FileType.filter(getFilesToBuild(hello), CppFileTypes.SHARED_LIBRARY).iterator().next();
     CppLinkAction action = (CppLinkAction) getGeneratingAction(sharedObject);
 
-    ExtraActionInfo.Builder builder = action.getExtraActionInfo(actionKeyContext);
+    ExtraActionInfo.Builder builder = action.getExtraActionInfo();
     ExtraActionInfo info = builder.build();
     assertThat(info.getMnemonic()).isEqualTo("CppLink");
 
@@ -315,7 +315,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         .isEqualTo(action.getLinkCommandLine().getLinkTargetType().name());
     assertThat(cppLinkInfo.getLinkStaticness())
         .isEqualTo(action.getLinkCommandLine().getLinkStaticness().name());
-    Iterable<String> linkstamps = Artifact.asExecPaths(action.getLinkstampObjects());
+    Iterable<String> linkstamps = Artifact.asExecPaths(action.getLinkstamps().values());
     assertThat(cppLinkInfo.getLinkStampList()).containsExactlyElementsIn(linkstamps);
     Iterable<String> buildInfoHeaderArtifacts =
         Artifact.asExecPaths(action.getBuildInfoHeaderArtifacts());
