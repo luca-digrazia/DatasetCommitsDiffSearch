@@ -1,7 +1,6 @@
 package io.quarkus.gradle.tasks;
 
 import java.io.File;
-import java.util.Collections;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.Input;
@@ -40,7 +39,6 @@ public class QuarkusGenerateConfig extends QuarkusTask {
         getLogger().lifecycle("generating example config");
 
         final AppArtifact appArtifact = extension().getAppArtifact();
-        appArtifact.setPath(extension().appJarOrClasses());
         final AppModelResolver modelResolver = extension().getAppModelResolver();
         if (extension().resourcesDir().isEmpty()) {
             throw new GradleException("No resources directory, cannot create application.properties");
@@ -51,19 +49,14 @@ public class QuarkusGenerateConfig extends QuarkusTask {
         if (name == null || name.isEmpty()) {
             name = "application.properties.example";
         }
-        try (CuratedApplication bootstrap = QuarkusBootstrap.builder(appArtifact.getPath())
-                .setBaseClassLoader(getClass().getClassLoader())
+        try (CuratedApplication bootstrap = QuarkusBootstrap.builder(getProject().getBuildDir().toPath())
+                .setMode(QuarkusBootstrap.Mode.PROD)
                 .setAppModelResolver(modelResolver)
-                .setTargetDirectory(getProject().getBuildDir().toPath())
-                .setBaseName(extension().finalName())
-                .setAppArtifact(appArtifact)
-                .setLocalProjectDiscovery(false)
-                .setIsolateDeployment(true)
-                //.setConfigDir(extension().outputConfigDirectory().toPath())
-                //.setTargetDirectory(extension().outputDirectory().toPath())
-                .build().bootstrap()) {
-            bootstrap.runInAugmentClassLoader(GenerateConfigTask.class.getName(),
-                    Collections.singletonMap(GenerateConfigTask.CONFIG_FILE, new File(target, name).toPath()));
+                .setBuildSystemProperties(getBuildSystemProperties(appArtifact))
+                .build()
+                .bootstrap()) {
+            GenerateConfigTask ct = new GenerateConfigTask(new File(target, name).toPath());
+            ct.run(bootstrap);
             getLogger().lifecycle("Generated config file " + name);
         } catch (BootstrapException e) {
             throw new RuntimeException(e);

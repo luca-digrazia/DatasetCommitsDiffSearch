@@ -253,6 +253,11 @@ public class QuarkusDev extends QuarkusTask {
             wiringClassesDirectory.mkdirs();
             addToClassPaths(classPathManifest, context, wiringClassesDirectory);
 
+            //now we need to build a temporary jar to actually run
+            File tempFile = new File(getBuildDir(), extension.finalName() + "-dev.jar");
+            tempFile.delete();
+            tempFile.deleteOnExit();
+
             StringBuilder resources = new StringBuilder();
             String res = null;
             for (File file : extension.resourcesDir()) {
@@ -372,10 +377,6 @@ public class QuarkusDev extends QuarkusTask {
             context.setCacheDir(new File(getBuildDir(), "transformer-cache").getAbsoluteFile());
 
             // this is the jar file we will use to launch the dev mode main class
-            final File tempFile = new File(getBuildDir(), extension.finalName() + "-dev.jar");
-            tempFile.delete();
-            tempFile.deleteOnExit();
-
             context.setDevModeRunnerJarFile(tempFile);
             try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(tempFile))) {
                 out.putNextEntry(new ZipEntry("META-INF/"));
@@ -388,22 +389,18 @@ public class QuarkusDev extends QuarkusTask {
 
                 out.putNextEntry(new ZipEntry(DevModeMain.DEV_MODE_CONTEXT));
                 ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-                try (ObjectOutputStream obj = new ObjectOutputStream(new DataOutputStream(bytes))) {
-                    obj.writeObject(context);
-                }
+                ObjectOutputStream obj = new ObjectOutputStream(new DataOutputStream(bytes));
+                obj.writeObject(context);
+                obj.close();
                 out.write(bytes.toByteArray());
 
                 out.putNextEntry(new ZipEntry(BootstrapConstants.SERIALIZED_APP_MODEL));
                 bytes = new ByteArrayOutputStream();
-                try (ObjectOutputStream obj = new ObjectOutputStream(new DataOutputStream(bytes))) {
-                    obj.writeObject(appModel);
-                }
+                obj = new ObjectOutputStream(new DataOutputStream(bytes));
+                obj.writeObject(appModel);
+                obj.close();
                 out.write(bytes.toByteArray());
             }
-
-            final Path serializedModel = QuarkusGradleUtils.serializeAppModel(appModel);
-            serializedModel.toFile().deleteOnExit();
-            args.add("-D" + BootstrapConstants.SERIALIZED_APP_MODEL + "=" + serializedModel.toAbsolutePath());
 
             extension.outputDirectory().mkdirs();
 

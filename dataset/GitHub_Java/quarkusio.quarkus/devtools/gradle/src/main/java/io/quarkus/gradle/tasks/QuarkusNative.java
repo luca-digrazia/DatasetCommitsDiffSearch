@@ -62,8 +62,6 @@ public class QuarkusNative extends QuarkusTask {
 
     private String dockerBuild;
 
-    private String nativeBuilderImage;
-
     private boolean enableVMInspection = false;
 
     private boolean enableFallbackImages = false;
@@ -284,17 +282,6 @@ public class QuarkusNative extends QuarkusTask {
         this.dockerBuild = dockerBuild;
     }
 
-    @Option(description = "Docker image", option = "native-builder-image")
-    public void setNativeBuilderImage(String nativeBuilderImage) {
-        this.nativeBuilderImage = nativeBuilderImage;
-    }
-
-    @Optional
-    @Input
-    public String getNativeBuilderImage() {
-        return nativeBuilderImage;
-    }
-
     @Input
     public boolean isEnableVMInspection() {
         return enableVMInspection;
@@ -357,7 +344,7 @@ public class QuarkusNative extends QuarkusTask {
         getLogger().lifecycle("building native image");
 
         final AppArtifact appArtifact = extension().getAppArtifact();
-        final AppModelResolver modelResolver = extension().resolveAppModel();
+        final AppModelResolver modelResolver = extension().getAppModelResolver();
         try {
             modelResolver.resolveModel(appArtifact);
         } catch (AppModelResolverException e) {
@@ -430,9 +417,6 @@ public class QuarkusNative extends QuarkusTask {
         }
         if (containerRuntimeOptions != null && !containerRuntimeOptions.trim().isEmpty()) {
             configs.put("quarkus.native.container-runtime-options", containerRuntimeOptions);
-        }
-        if (nativeBuilderImage != null && !nativeBuilderImage.trim().isEmpty()) {
-            configs.put("quarkus.native.builder-image", nativeBuilderImage);
         }
         configs.put("quarkus.native.dump-proxies", Boolean.toString(dumpProxies));
         configs.put("quarkus.native.enable-all-security-services", Boolean.toString(enableAllSecurityServices));
