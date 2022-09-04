@@ -248,6 +248,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         .addProvider(pluginInfoProvider)
         .addProvider(new ProguardSpecProvider(proguardSpecs))
         .addProvider(sourceJarsProvider)
+        .addProvider(javaProvider)
         .addNativeDeclaredProvider(javaProvider)
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
         .addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, proguardSpecs);
