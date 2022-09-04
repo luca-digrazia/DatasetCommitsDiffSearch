@@ -93,11 +93,6 @@ class SingleplexWorker extends Worker {
   }
 
   @Override
-  public boolean isSandboxed() {
-    return false;
-  }
-
-  @Override
   public void prepareExecution(
       SandboxInputs inputFiles, SandboxOutputs outputs, Set<PathFragment> workerFiles)
       throws IOException {

@@ -77,6 +77,8 @@ final class WorkerSpawnRunner implements SpawnRunner {
   public static final String REASON_NO_FLAGFILE =
       "because the command-line arguments do not contain at least one @flagfile or --flagfile=";
   public static final String REASON_NO_TOOLS = "because the action has no tools";
+  public static final String REASON_NO_EXECUTION_INFO =
+      "because the action's execution info does not contain 'supports-workers=1'";
 
   /** Pattern for @flagfile.txt and --flagfile=flagfile.txt */
   private static final Pattern FLAG_FILE_PATTERN = Pattern.compile("(?:@|--?flagfile=)(.+)");
@@ -203,7 +205,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
             workerFiles,
             context.speculating(),
             multiplex && Spawns.supportsMultiplexWorkers(spawn),
-            Spawns.supportsWorkerCancellation(spawn),
             protocolFormat);
 
     SpawnMetrics.Builder spawnMetrics =
@@ -457,11 +458,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
         try {
           response = worker.getResponse(request.getRequestId());
         } catch (InterruptedException e) {
-          finishWorkAsync(
-              key,
-              worker,
-              request,
-              workerOptions.workerCancellation && Spawns.supportsWorkerCancellation(spawn));
+          finishWorkAsync(key, worker, request);
           worker = null;
           throw e;
         } catch (IOException e) {
@@ -481,12 +478,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
       if (response == null) {
         throw createEmptyResponseException(worker.getLogFile());
-      }
-
-      if (response.getWasCancelled()) {
-        throw createUserExecException(
-            "Received cancel response for " + response.getRequestId() + " without having cancelled",
-            Code.FINISH_FAILURE);
       }
 
       try {
@@ -534,21 +525,12 @@ final class WorkerSpawnRunner implements SpawnRunner {
    * interrupted. This takes ownership of the worker for purposes of returning it to the worker
    * pool.
    */
-  private void finishWorkAsync(
-      WorkerKey key, Worker worker, WorkRequest request, boolean canCancel) {
+  private void finishWorkAsync(WorkerKey key, Worker worker, WorkRequest request) {
     Thread reaper =
         new Thread(
             () -> {
               Worker w = worker;
               try {
-                if (canCancel) {
-                  WorkRequest cancelRequest =
-                      WorkRequest.newBuilder()
-                          .setRequestId(request.getRequestId())
-                          .setCancel(true)
-                          .build();
-                  w.putRequest(cancelRequest);
-                }
                 w.getResponse(request.getRequestId());
               } catch (IOException | InterruptedException e1) {
                 // If this happens, we either can't trust the output of the worker, or we got
@@ -567,8 +549,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
                   workers.returnObject(key, w);
                 }
               }
-            },
-            "AsyncFinish-Worker-" + worker.workerId);
+            });
     reaper.start();
   }
 
