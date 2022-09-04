@@ -17,16 +17,13 @@
 package org.graylog2.streams;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.mongodb.BasicDBObject;
-import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
-import com.mongodb.QueryBuilder;
 import org.bson.types.ObjectId;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfiguration;
-import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationImpl;
+import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationAVImpl;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
 import org.graylog2.alarmcallbacks.EmailAlarmCallback;
 import org.graylog2.alerts.Alert;
@@ -34,7 +31,6 @@ import org.graylog2.alerts.AlertService;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
-import org.graylog2.events.ClusterEventBus;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.MongoIndexSet;
 import org.graylog2.indexer.indexset.IndexSetConfig;
@@ -49,7 +45,6 @@ import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.rest.resources.streams.requests.CreateStreamRequest;
-import org.graylog2.streams.events.StreamsChangedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,12 +56,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
@@ -78,7 +71,6 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
     private final IndexSetService indexSetService;
     private final MongoIndexSet.Factory indexSetFactory;
     private final NotificationService notificationService;
-    private final ClusterEventBus clusterEventBus;
     private final AlarmCallbackConfigurationService alarmCallbackConfigurationService;
 
     @Inject
@@ -89,7 +81,6 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
                              IndexSetService indexSetService,
                              MongoIndexSet.Factory indexSetFactory,
                              NotificationService notificationService,
-                             ClusterEventBus clusterEventBus,
                              AlarmCallbackConfigurationService alarmCallbackConfigurationService) {
         super(mongoConnection);
         this.streamRuleService = streamRuleService;
@@ -98,7 +89,6 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         this.indexSetService = indexSetService;
         this.indexSetFactory = indexSetFactory;
         this.notificationService = notificationService;
-        this.clusterEventBus = clusterEventBus;
         this.alarmCallbackConfigurationService = alarmCallbackConfigurationService;
     }
 
@@ -179,10 +169,6 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
 
     public List<Stream> loadAll(Map<String, Object> additionalQueryOpts) {
         final DBObject query = new BasicDBObject(additionalQueryOpts);
-        return loadAll(query);
-    }
-
-    private List<Stream> loadAll(DBObject query) {
         final List<DBObject> results = query(StreamImpl.class, query);
         final List<String> streamIds = results.stream()
                 .map(o -> o.get("_id").toString())
@@ -209,12 +195,11 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
 
     @Override
     public List<Stream> loadAllWithConfiguredAlertConditions() {
-        final DBObject query = QueryBuilder.start().and(
-            QueryBuilder.start(StreamImpl.EMBEDDED_ALERT_CONDITIONS).exists(true).get(),
-            QueryBuilder.start(StreamImpl.EMBEDDED_ALERT_CONDITIONS).not().size(0).get()
-        ).get();
+        // Explanation: alert_conditions.1 is the first Array element.
+        Map<String, Object> queryOpts = Collections.singletonMap(
+                StreamImpl.EMBEDDED_ALERT_CONDITIONS, new BasicDBObject("$ne", Collections.emptyList()));
 
-        return loadAll(query);
+        return loadAll(queryOpts);
     }
 
     protected Set<Output> loadOutputsForRawStream(DBObject stream) {
@@ -317,7 +302,7 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
             }
         }
 
-        throw new NotFoundException("Alert condition <" + conditionId + "> for stream <" + stream.getId() + "> not found");
+        throw new org.graylog2.database.NotFoundException();
     }
 
     @Override
@@ -365,15 +350,14 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
                     final Map<String, Object> configuration = callback.getConfiguration();
                     String key;
 
-                    if ("users".equals(type)) {
+                    if (type.equals("users")) {
                         key = EmailAlarmCallback.CK_USER_RECEIVERS;
                     } else {
                         key = EmailAlarmCallback.CK_EMAIL_RECEIVERS;
                     }
 
-                    @SuppressWarnings("unchecked")
                     final List<String> recipients = (List<String>) configuration.get(key);
-                    if ("add".equals(action)) {
+                    if (action.equals("add")) {
                         if (!recipients.contains(entity)) {
                             recipients.add(entity);
                         }
@@ -384,7 +368,7 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
                     }
                     configuration.put(key, recipients);
 
-                    final AlarmCallbackConfiguration updatedConfig = ((AlarmCallbackConfigurationImpl) callback).toBuilder()
+                    final AlarmCallbackConfiguration updatedConfig = ((AlarmCallbackConfigurationAVImpl) callback).toBuilder()
                             .setConfiguration(configuration)
                             .build();
                     try {
@@ -422,22 +406,9 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         DBObject match = new BasicDBObject(StreamImpl.FIELD_OUTPUTS, outputId);
         DBObject modify = new BasicDBObject("$pull", new BasicDBObject(StreamImpl.FIELD_OUTPUTS, outputId));
 
-        // Collect streams that will change before updating them because we don't get the list of changed streams
-        // from the upsert call.
-        final ImmutableSet<String> updatedStreams;
-        try (final DBCursor cursor = collection(StreamImpl.class).find(match)) {
-            updatedStreams = StreamSupport.stream(cursor.spliterator(), false)
-                    .map(stream -> stream.get("_id"))
-                    .filter(Objects::nonNull)
-                    .map(id -> ((ObjectId) id).toHexString())
-                    .collect(ImmutableSet.toImmutableSet());
-        }
-
         collection(StreamImpl.class).update(
                 match, modify, false, true
         );
-
-        clusterEventBus.post(StreamsChangedEvent.create(updatedStreams));
     }
 
     @Override
