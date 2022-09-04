@@ -30,7 +30,6 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
@@ -379,10 +378,6 @@ public final class RuleContext extends TargetContext
 
   private List<? extends TransitiveInfoCollection> getDeps(String key) {
     return Lists.transform(targetMap.get(key), ConfiguredTargetAndTarget::getConfiguredTarget);
-  }
-
-  private List<ConfiguredTargetAndTarget> getConfiguredTargetAndTargetDeps(String key) {
-    return targetMap.get(key);
   }
 
   /**
@@ -758,29 +753,6 @@ public final class RuleContext extends TargetContext
    */
   public List<? extends TransitiveInfoCollection> getPrerequisites(String attributeName,
       Mode mode) {
-    return Lists.transform(
-        getPrerequisiteConfiguredTargetAndTargets(attributeName, mode),
-        ConfiguredTargetAndTarget::getConfiguredTarget);
-  }
-
-  /**
-   * Returns the a prerequisites keyed by the CPU of their configurations. If the split transition
-   * is not active (e.g. split() returned an empty list), the key is an empty Optional.
-   */
-  public Map<Optional<String>, ? extends List<? extends TransitiveInfoCollection>>
-      getSplitPrerequisites(String attributeName) {
-    return Maps.transformValues(
-        getSplitPrerequisiteConfiguredTargetAndTargets(attributeName),
-        (ctatList) -> Lists.transform(ctatList, ConfiguredTargetAndTarget::getConfiguredTarget));
-  }
-
-  /**
-   * Returns the list of ConfiguredTargetsAndTargets that feed into the target through the specified
-   * attribute. Note that you need to specify the correct mode for the attribute otherwise an
-   * exception will be raised.
-   */
-  public List<ConfiguredTargetAndTarget> getPrerequisiteConfiguredTargetAndTargets(
-      String attributeName, Mode mode) {
     Attribute attributeDefinition = attributes().getAttributeDefinition(attributeName);
     if ((mode == Mode.TARGET) && (attributeDefinition.hasSplitConfigurationTransition())) {
       // TODO(bazel-team): If you request a split-configured attribute in the target configuration,
@@ -789,25 +761,30 @@ public final class RuleContext extends TargetContext
       // deeply nested and we can't easily inject the behavior we want. However, we should fix all
       // such call sites.
       checkAttribute(attributeName, Mode.SPLIT);
-      Map<Optional<String>, List<ConfiguredTargetAndTarget>> map =
-          getSplitPrerequisiteConfiguredTargetAndTargets(attributeName);
+      Map<Optional<String>, ? extends List<? extends TransitiveInfoCollection>> map =
+          getSplitPrerequisites(attributeName);
       return map.isEmpty() ? ImmutableList.of() : map.entrySet().iterator().next().getValue();
     }
 
     checkAttribute(attributeName, mode);
-    return getConfiguredTargetAndTargetDeps(attributeName);
+    return getDeps(attributeName);
   }
 
-  private Map<Optional<String>, List<ConfiguredTargetAndTarget>>
-      getSplitPrerequisiteConfiguredTargetAndTargets(String attributeName) {
+  /**
+   * Returns the a prerequisites keyed by the CPU of their configurations.
+   * If the split transition is not active (e.g. split() returned an empty
+   * list), the key is an empty Optional.
+   */
+  public Map<Optional<String>, ? extends List<? extends TransitiveInfoCollection>>
+      getSplitPrerequisites(String attributeName) {
     checkAttribute(attributeName, Mode.SPLIT);
-    Attribute attributeDefinition = attributes().getAttributeDefinition(attributeName);
-    SplitTransition transition =
-        attributeDefinition.getSplitTransition(
-            ConfiguredAttributeMapper.of(rule, configConditions));
-    List<BuildOptions> splitOptions = transition.split(getConfiguration().getOptions());
-    List<ConfiguredTargetAndTarget> deps = getConfiguredTargetAndTargetDeps(attributeName);
 
+    Attribute attributeDefinition = attributes().getAttributeDefinition(attributeName);
+    SplitTransition transition = attributeDefinition.getSplitTransition(
+        ConfiguredAttributeMapper.of(rule, configConditions));
+    List<? extends TransitiveInfoCollection> deps = getDeps(attributeName);
+
+    List<BuildOptions> splitOptions = transition.split(getConfiguration().getOptions());
     if (splitOptions.isEmpty()) {
       // The split transition is not active. Defer the decision on which CPU to use.
       return ImmutableMap.of(Optional.<String>absent(), deps);
@@ -821,11 +798,11 @@ public final class RuleContext extends TargetContext
     }
 
     // Use an ImmutableListMultimap.Builder here to preserve ordering.
-    ImmutableListMultimap.Builder<Optional<String>, ConfiguredTargetAndTarget> result =
+    ImmutableListMultimap.Builder<Optional<String>, TransitiveInfoCollection> result =
         ImmutableListMultimap.builder();
-    for (ConfiguredTargetAndTarget t : deps) {
-      if (t.getConfiguredTarget().getConfiguration() != null) {
-        result.put(Optional.of(t.getConfiguredTarget().getConfiguration().getCpu()), t);
+    for (TransitiveInfoCollection t : deps) {
+      if (t.getConfiguration() != null) {
+        result.put(Optional.of(t.getConfiguration().getCpu()), t);
       } else {
         // Source files don't have a configuration, so we add them to all architecture entries.
         for (String cpu : cpus) {
@@ -864,17 +841,23 @@ public final class RuleContext extends TargetContext
   }
 
   /**
-   * For a given attribute, returns all the ConfiguredTargetAndTargets of that attribute. Each
-   * ConfiguredTargetAndTarget is keyed by the {@link BuildConfiguration} that created it.
+   * For a given attribute, returns all {@link TransitiveInfoProvider}s provided by targets
+   * of that attribute. Each {@link TransitiveInfoProvider} is keyed by the
+   * {@link BuildConfiguration} under which the provider was created.
    */
-  public ImmutableListMultimap<BuildConfiguration, ConfiguredTargetAndTarget>
-      getPrerequisiteCofiguredTargetAndTargetsByConfiguration(String attributeName, Mode mode) {
-    List<ConfiguredTargetAndTarget> ctatCollection =
-        getPrerequisiteConfiguredTargetAndTargets(attributeName, mode);
-    ImmutableListMultimap.Builder<BuildConfiguration, ConfiguredTargetAndTarget> result =
+  public <C extends TransitiveInfoProvider> ImmutableListMultimap<BuildConfiguration, C>
+      getPrerequisitesByConfiguration(String attributeName, Mode mode, final Class<C> classType) {
+    AnalysisUtils.checkProvider(classType);
+    List<? extends TransitiveInfoCollection> transitiveInfoCollections =
+        getPrerequisites(attributeName, mode);
+
+    ImmutableListMultimap.Builder<BuildConfiguration, C> result =
         ImmutableListMultimap.builder();
-    for (ConfiguredTargetAndTarget ctat : ctatCollection) {
-      result.put(ctat.getConfiguredTarget().getConfiguration(), ctat);
+    for (TransitiveInfoCollection prerequisite : transitiveInfoCollections) {
+      C prerequisiteProvider = prerequisite.getProvider(classType);
+      if (prerequisiteProvider != null) {
+        result.put(prerequisite.getConfiguration(), prerequisiteProvider);
+      }
     }
     return result.build();
   }
@@ -968,6 +951,7 @@ public final class RuleContext extends TargetContext
       String attributeName, Mode mode, final NativeProvider<C> classType) {
     return AnalysisUtils.filterByProvider(getPrerequisites(attributeName, mode), classType);
   }
+
 
   /**
    * Returns the prerequisite referred to by the specified attribute. Also checks whether

@@ -111,9 +111,6 @@ public class CppLinkActionBuilder {
    */
   public static final String LINKER_PARAM_FILE_VARIABLE = "linker_param_file";
 
-  /** A build variable for linker flags read from a file provided by the user. */
-  public static final String LINK_OPTS_FILE_VARIABLE = "linkopts_file";
-
   /** A build variable for the execpath of the output of the linker. */
   public static final String OUTPUT_EXECPATH_VARIABLE = "output_execpath";
 
@@ -198,7 +195,6 @@ public class CppLinkActionBuilder {
   private final ImmutableSet.Builder<Linkstamp> linkstampsBuilder = ImmutableSet.builder();
   private ImmutableList<String> additionalLinkstampDefines = ImmutableList.of();
   private final List<String> linkopts = new ArrayList<>();
-  private Artifact linkoptsFile;
   private LinkTargetType linkType = LinkTargetType.STATIC_LIBRARY;
   private LinkStaticness linkStaticness = LinkStaticness.FULLY_STATIC;
   private String libraryIdentifier = null;
@@ -209,7 +205,6 @@ public class CppLinkActionBuilder {
   private boolean isNativeDeps;
   private boolean useTestOnlyFlags;
   private boolean wholeArchive;
-  private boolean mustKeepDebug = false;
   private LinkArtifactFactory linkArtifactFactory = CppLinkAction.DEFAULT_ARTIFACT_FACTORY;
 
   private boolean isLtoIndexing = false;
@@ -923,15 +918,13 @@ public class CppLinkActionBuilder {
                 runtimeLinkerInputs,
                 /* output= */ null,
                 paramFile,
-                linkoptsFile,
                 thinltoParamFile,
                 thinltoMergedObjectFile,
                 ltoOutputRootPrefix,
                 // If we reached here, then allowLtoIndexing must be true (checked above).
                 /* allowLtoIndexing= */ true,
                 /* interfaceLibraryBuilder= */ null,
-                /* interfaceLibraryOutput= */ null,
-                mustKeepDebug)
+                /* interfaceLibraryOutput= */ null)
             : new CppLinkVariablesExtension(
                 configuration,
                 needWholeArchive,
@@ -939,14 +932,12 @@ public class CppLinkActionBuilder {
                 runtimeLinkerInputs,
                 output,
                 paramFile,
-                linkoptsFile,
                 thinltoParamFile,
                 thinltoMergedObjectFile,
                 /* ltoOutputRootPrefix= */ PathFragment.EMPTY_FRAGMENT,
                 allowLtoIndexing,
                 toolchain.getInterfaceSoBuilder(),
-                interfaceOutput,
-                mustKeepDebug);
+                interfaceOutput);
     variablesExtension.addVariables(buildVariablesBuilder);
     for (VariablesExtension extraVariablesExtension : variablesExtensions) {
       extraVariablesExtension.addVariables(buildVariablesBuilder);
@@ -1282,7 +1273,7 @@ public class CppLinkActionBuilder {
     for (VariablesExtension variablesExtension : variablesExtensions) {
       addVariablesExtension(variablesExtension);
     }
-    return this;
+     return this;
    }
   
   /**
@@ -1317,9 +1308,6 @@ public class CppLinkActionBuilder {
     Preconditions.checkArgument(
         input.getArtifact().isTreeArtifact() || Link.OBJECT_FILETYPES.matches(name), name);
     this.objectFiles.add(input);
-    if (input.isMustKeepDebug()) {
-      this.mustKeepDebug = true;
-    }
   }
 
   /**
@@ -1389,9 +1377,6 @@ public class CppLinkActionBuilder {
   public CppLinkActionBuilder addLibrary(LibraryToLink input) {
     checkLibrary(input);
     libraries.add(input);
-    if (input.isMustKeepDebug()) {
-      mustKeepDebug = true;
-    }
     return this;
   }
 
@@ -1402,9 +1387,6 @@ public class CppLinkActionBuilder {
   public CppLinkActionBuilder addLibraries(NestedSet<LibraryToLink> inputs) {
     for (LibraryToLink input : inputs) {
       checkLibrary(input);
-      if (input.isMustKeepDebug()) {
-        mustKeepDebug = true;
-      }
     }
     this.libraries.addTransitive(inputs);
     return this;
@@ -1489,15 +1471,6 @@ public class CppLinkActionBuilder {
     }
     CppHelper.checkLinkstampsUnique(errorListener, linkParams);
     addLinkstamps(linkParams.getLinkstamps());
-    return this;
-  }
-
-  /** Will pass a file with additional options to the linker. */
-  public CppLinkActionBuilder setLinkoptsParamFile(Artifact linkoptsFile) {
-    Preconditions.checkState(this.linkoptsFile == null);
-    Preconditions.checkNotNull(linkoptsFile);
-    this.linkoptsFile = linkoptsFile;
-    addActionInput(linkoptsFile);
     return this;
   }
 
@@ -1620,12 +1593,10 @@ public class CppLinkActionBuilder {
     private final Artifact interfaceLibraryBuilder;
     private final Artifact interfaceLibraryOutput;
     private final Artifact paramFile;
-    private final Artifact linkoptsFile;
     private final Artifact thinltoParamFile;
     private final Artifact thinltoMergedObjectFile;
     private final PathFragment ltoOutputRootPrefix;
     private final boolean allowLtoIndexing;
-    private final boolean mustKeepDebug;
 
     private final LinkArgCollector linkArgCollector = new LinkArgCollector();
 
@@ -1636,14 +1607,12 @@ public class CppLinkActionBuilder {
         ImmutableList<LinkerInput> runtimeLinkerInputs,
         Artifact output,
         Artifact paramFile,
-        Artifact linkoptsFile,
         Artifact thinltoParamFile,
         Artifact thinltoMergedObjectFile,
         PathFragment ltoOutputRootPrefix,
         boolean allowLtoIndexing,
         Artifact interfaceLibraryBuilder,
-        Artifact interfaceLibraryOutput,
-        boolean mustKeepDebug) {
+        Artifact interfaceLibraryOutput) {
       this.configuration = configuration;
       this.needWholeArchive = needWholeArchive;
       this.linkerInputs = linkerInputs;
@@ -1652,12 +1621,10 @@ public class CppLinkActionBuilder {
       this.interfaceLibraryBuilder = interfaceLibraryBuilder;
       this.interfaceLibraryOutput = interfaceLibraryOutput;
       this.paramFile = paramFile;
-      this.linkoptsFile = linkoptsFile;
       this.thinltoParamFile = thinltoParamFile;
       this.thinltoMergedObjectFile = thinltoMergedObjectFile;
       this.ltoOutputRootPrefix = ltoOutputRootPrefix;
       this.allowLtoIndexing = allowLtoIndexing;
-      this.mustKeepDebug = mustKeepDebug;
 
       addInputFileLinkOptions(linkArgCollector);
     }
@@ -1676,7 +1643,7 @@ public class CppLinkActionBuilder {
         buildVariables.addStringVariable(FORCE_PIC_VARIABLE, "");
       }
 
-      if (!mustKeepDebug && cppConfiguration.shouldStripBinaries()) {
+      if (cppConfiguration.shouldStripBinaries()) {
         buildVariables.addStringVariable(STRIP_DEBUG_SYMBOLS_VARIABLE, "");
       }
 
@@ -1710,10 +1677,6 @@ public class CppLinkActionBuilder {
 
       if (paramFile != null) {
         buildVariables.addStringVariable(LINKER_PARAM_FILE_VARIABLE, paramFile.getExecPathString());
-      }
-
-      if (linkoptsFile != null) {
-        buildVariables.addStringVariable(LINK_OPTS_FILE_VARIABLE, linkoptsFile.getExecPathString());
       }
 
       // output exec path
