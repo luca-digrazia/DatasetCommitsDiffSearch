@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.exec.apple.XcodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
@@ -223,13 +222,13 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     sandboxExecRoot.createDirectory();
 
     Map<String, String> environment =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), binTools, "/tmp");
+        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, "/tmp");
 
     final HashSet<Path> writableDirs = new HashSet<>(alwaysWritableDirs);
     ImmutableSet<Path> extraWritableDirs = getWritableDirs(sandboxExecRoot, environment);
     writableDirs.addAll(extraWritableDirs);
 
-    SandboxOutputs outputs = SandboxHelpers.getOutputs(spawn);
+    ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
 
     final Path sandboxConfigPath = sandboxPath.getRelative("sandbox.sb");
     Duration timeout = context.getTimeout();
@@ -256,16 +255,9 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
             .addAll(processWrapperCommandLineBuilder.build())
             .build();
 
-    boolean allowNetworkForThisSpawn =
-        allowNetwork
-            || Spawns.requiresNetwork(spawn, getSandboxOptions().defaultSandboxAllowNetwork);
+    boolean allowNetworkForThisSpawn = allowNetwork || Spawns.requiresNetwork(spawn);
 
-    Map<PathFragment, Path> inputs =
-        SandboxHelpers.processInputFiles(
-            spawn,
-            context,
-            execRoot,
-            getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree);
+    Map<PathFragment, Path> inputs = SandboxHelpers.processInputFiles(spawn, context, execRoot);
 
     SandboxedSpawn sandbox;
     if (sandboxfsProcess != null) {

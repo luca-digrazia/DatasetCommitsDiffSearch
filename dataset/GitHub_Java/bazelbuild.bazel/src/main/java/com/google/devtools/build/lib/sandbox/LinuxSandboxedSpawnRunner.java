@@ -31,12 +31,12 @@ import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import java.io.File;
 import java.io.IOException;
@@ -147,10 +147,10 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     sandboxExecRoot.createDirectory();
 
     Map<String, String> environment =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), binTools, "/tmp");
+        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, "/tmp");
 
     ImmutableSet<Path> writableDirs = getWritableDirs(sandboxExecRoot, environment);
-    SandboxOutputs outputs = SandboxHelpers.getOutputs(spawn);
+    ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
     Duration timeout = context.getTimeout();
 
     LinuxSandboxUtil.CommandLineBuilder commandLineBuilder =
@@ -159,10 +159,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
             .setTmpfsDirectories(getTmpfsPaths())
             .setBindMounts(getReadOnlyBindMounts(blazeDirs, sandboxExecRoot))
             .setUseFakeHostname(getSandboxOptions().sandboxFakeHostname)
-            .setCreateNetworkNamespace(
-                !(allowNetwork
-                    || Spawns.requiresNetwork(
-                        spawn, getSandboxOptions().defaultSandboxAllowNetwork)))
+            .setCreateNetworkNamespace(!(allowNetwork || Spawns.requiresNetwork(spawn)))
             .setUseDebugMode(getSandboxOptions().sandboxDebug)
             .setKillDelay(timeoutKillDelay);
 
@@ -190,11 +187,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
               sandboxPath,
               commandLineBuilder.build(),
               environment,
-              SandboxHelpers.processInputFiles(
-                  spawn,
-                  context,
-                  execRoot,
-                  getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
+              SandboxHelpers.processInputFiles(spawn, context, execRoot),
               outputs,
               ImmutableSet.of());
     } else {
@@ -204,11 +197,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
               sandboxExecRoot,
               commandLineBuilder.build(),
               environment,
-              SandboxHelpers.processInputFiles(
-                  spawn,
-                  context,
-                  execRoot,
-                  getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
+              SandboxHelpers.processInputFiles(spawn, context, execRoot),
               outputs,
               writableDirs);
     }
