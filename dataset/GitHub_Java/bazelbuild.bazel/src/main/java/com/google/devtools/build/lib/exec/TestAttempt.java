@@ -144,16 +144,6 @@ public class TestAttempt implements BuildEventWithOrderConstraint {
     return files;
   }
 
-  @VisibleForTesting
-  public BuildEventStreamProtos.TestResult.ExecutionInfo getExecutionInfo() {
-    return executionInfo;
-  }
-
-  @VisibleForTesting
-  public BlazeTestStatus getStatus() {
-    return status;
-  }
-
   @Override
   public BuildEventId getEventId() {
     return BuildEventId.testResult(
