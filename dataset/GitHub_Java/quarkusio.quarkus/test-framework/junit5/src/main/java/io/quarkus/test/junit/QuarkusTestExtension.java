@@ -267,14 +267,6 @@ public class QuarkusTestExtension
         if (failedBoot) {
             return result;
         }
-
-        // We do this here as well, because when @TestInstance(Lifecycle.PER_CLASS) is used on a class,
-        // interceptTestClassConstructor is called before beforeAll, meaning that the TCCL will not be set correctly
-        // (for any test other than the first) unless this is done
-        if (runningQuarkusApplication != null) {
-            setCCL(runningQuarkusApplication.getClassLoader());
-        }
-
         initTestState(extensionContext, state);
         return result;
     }
@@ -329,17 +321,6 @@ public class QuarkusTestExtension
     }
 
     @Override
-    public <T> T interceptTestFactoryMethod(Invocation<T> invocation,
-            ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext) throws Throwable {
-        if (isNativeTest(extensionContext)) {
-            return invocation.proceed();
-        }
-        T result = (T) runExtensionMethod(invocationContext, extensionContext);
-        invocation.skip();
-        return result;
-    }
-
-    @Override
     public void interceptAfterEachMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
             ExtensionContext extensionContext) throws Throwable {
         if (isNativeTest(extensionContext)) {
@@ -361,7 +342,7 @@ public class QuarkusTestExtension
         invocation.skip();
     }
 
-    private Object runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext)
+    private void runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext)
             throws Throwable {
         Method newMethod = null;
 
@@ -412,7 +393,7 @@ public class QuarkusTestExtension
                 }
             }
 
-            return newMethod.invoke(actualTestInstance, argumentsFromTccl.toArray(new Object[0]));
+            newMethod.invoke(actualTestInstance, argumentsFromTccl.toArray(new Object[0]));
         } catch (InvocationTargetException e) {
             throw e.getCause();
         } catch (IllegalAccessException | ClassNotFoundException e) {
