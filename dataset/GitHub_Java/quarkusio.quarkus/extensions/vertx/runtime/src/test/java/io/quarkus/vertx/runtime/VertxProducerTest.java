@@ -1,11 +1,13 @@
 package io.quarkus.vertx.runtime;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.hamcrest.core.Is.is;
+import static org.hamcrest.core.IsNull.notNullValue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
 
@@ -14,37 +16,33 @@ public class VertxProducerTest {
     private VertxRecorder recorder;
     private VertxProducer producer;
 
-    @BeforeEach
-    public void setUp() {
+    @Before
+    public void setUp() throws Exception {
         producer = new VertxProducer();
         recorder = new VertxRecorder();
     }
 
-    @AfterEach
-    public void tearDown() {
+    @After
+    public void tearDown() throws Exception {
         recorder.destroy();
     }
 
     @Test
     public void shouldNotFailWithoutConfig() {
-        producer.vertx = VertxCoreRecorder.initialize(null, null);
+        producer.vertx = VertxCoreRecorder.initialize(null);
+        producer.initialize();
         verifyProducer();
     }
 
     private void verifyProducer() {
-        assertThat(producer.eventbus()).isNotNull();
+        assertThat(producer.eventbus(), is(notNullValue()));
 
-        assertThat(producer.axle()).isNotNull();
+        assertThat(producer.axle(), is(notNullValue()));
         assertFalse(producer.axle().isClustered());
-        assertThat(producer.axleEventBus()).isNotNull();
+        assertThat(producer.axleEventbus(), is(notNullValue()));
 
-        assertThat(producer.rx()).isNotNull();
+        assertThat(producer.rx(), is(notNullValue()));
         assertFalse(producer.rx().isClustered());
-        assertThat(producer.rxEventBus()).isNotNull();
-
-        assertThat(producer.mutiny()).isNotNull();
-        assertFalse(producer.mutiny().isClustered());
-        assertThat(producer.mutinyEventBus()).isNotNull();
-
+        assertThat(producer.rxRventbus(), is(notNullValue()));
     }
 }

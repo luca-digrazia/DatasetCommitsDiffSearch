@@ -1,18 +1,17 @@
 package io.quarkus.vertx.core.runtime;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.hamcrest.core.Is.is;
+import static org.hamcrest.core.IsNull.notNullValue;
+import static org.junit.Assert.*;
 
 import java.time.Duration;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Supplier;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import io.vertx.core.Vertx;
 
@@ -21,13 +20,13 @@ public class VertxCoreProducerTest {
     private VertxCoreRecorder recorder;
     private VertxCoreProducer producer;
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         producer = new VertxCoreProducer();
         recorder = new VertxCoreRecorder();
     }
 
-    @AfterEach
+    @After
     public void tearDown() throws Exception {
         recorder.destroy();
     }
@@ -44,7 +43,7 @@ public class VertxCoreProducerTest {
     }
 
     private void verifyProducer() {
-        assertThat(producer.vertx()).isNotNull();
+        assertThat(producer.vertx(), is(notNullValue()));
         assertFalse(producer.vertx().isClustered());
     }
 
@@ -54,7 +53,12 @@ public class VertxCoreProducerTest {
         configuration.workerPoolSize = 10;
         configuration.warningExceptionTime = Duration.ofSeconds(1);
         configuration.internalBlockingPoolSize = 5;
-        VertxCoreRecorder.vertx = new VertxCoreRecorder.VertxSupplier(configuration);
+        VertxCoreRecorder.vertx = new Supplier<Vertx>() {
+            @Override
+            public Vertx get() {
+                return VertxCoreRecorder.initialize(configuration);
+            }
+        };
         producer.initialize(VertxCoreRecorder.vertx);
         verifyProducer();
     }
