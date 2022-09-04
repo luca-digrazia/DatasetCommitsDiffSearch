@@ -216,9 +216,4 @@ public abstract class DelegatingNodeEntry implements NodeEntry {
   public void addTemporaryDirectDepsGroupToDirtyEntry(List<SkyKey> group) {
     getDelegate().addTemporaryDirectDepsGroupToDirtyEntry(group);
   }
-
-  @Override
-  public void addExternalDep() {
-    getDelegate().addExternalDep();
-  }
 }

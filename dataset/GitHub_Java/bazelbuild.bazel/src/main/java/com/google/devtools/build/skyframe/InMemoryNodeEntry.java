@@ -751,11 +751,7 @@ public class InMemoryNodeEntry implements NodeEntry {
         .add("value", value)
         .add("lastChangedVersion", lastChangedVersion)
         .add("lastEvaluatedVersion", lastEvaluatedVersion)
-        .add(
-            "directDeps",
-            isDone() && keepEdges() != KeepEdgesPolicy.NONE
-                ? GroupedList.create(directDeps)
-                : directDeps)
+        .add("directDeps", isDone() ? GroupedList.create(directDeps) : directDeps)
         .add("signaledDeps", signaledDeps)
         .add("reverseDeps", ReverseDepsUtility.toString(this))
         .add("dirtyBuildingState", dirtyBuildingState);
