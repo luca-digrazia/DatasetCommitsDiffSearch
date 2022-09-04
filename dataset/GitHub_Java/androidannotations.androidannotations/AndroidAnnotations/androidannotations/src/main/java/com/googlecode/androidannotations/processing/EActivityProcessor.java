@@ -1,13 +1,13 @@
-/*
- * Copyright 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
- * 
+/**
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
+ *
+ * Unless required by applicable law or agreed To in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations under
@@ -15,7 +15,14 @@
  */
 package com.googlecode.androidannotations.processing;
 
+import static com.googlecode.androidannotations.helper.GreenDroidConstants.GREENDROID_ACTIVITIES_LIST_CLASS;
+import static com.sun.codemodel.JExpr._super;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+
 import java.lang.annotation.Annotation;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
@@ -27,29 +34,49 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
 
 import com.googlecode.androidannotations.annotations.EActivity;
-import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.api.SdkVersionHelper;
+import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.AnnotationHelper;
+import com.googlecode.androidannotations.helper.CanonicalNameConstants;
+import com.googlecode.androidannotations.helper.ModelConstants;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
+import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
+import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
-public class EActivityProcessor extends AnnotationHelper implements ElementProcessor {
+public class EActivityProcessor implements GeneratingElementProcessor {
 
 	private final IRClass rClass;
+	private List<TypeElement> greendroidActivityElements;
+
+	private final AnnotationHelper annotationHelper;
+
+	private final ProcessingEnvironment processingEnv;
+	private final APTCodeModelHelper aptCodeModelHelper;
 
 	public EActivityProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
-		super(processingEnv);
+		this.processingEnv = processingEnv;
+		annotationHelper = new AnnotationHelper(processingEnv);
+		aptCodeModelHelper = new APTCodeModelHelper();
 		this.rClass = rClass;
+
+		greendroidActivityElements = new ArrayList<TypeElement>();
+		for (String greendroidActivityName : GREENDROID_ACTIVITIES_LIST_CLASS) {
+			TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(greendroidActivityName);
+			if (typeElement != null) {
+				greendroidActivityElements.add(typeElement);
+			}
+		}
 	}
 
 	@Override
@@ -57,72 +84,97 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 		return EActivity.class;
 	}
 
-	public static final String NEW_CLASS_SUFFIX = "_";
-
 	@Override
-	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) throws Exception {
-
-		ActivityHolder holder = activitiesHolder.create(element);
+	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
 
 		TypeElement typeElement = (TypeElement) element;
 
 		// Activity
 		String annotatedActivityQualifiedName = typeElement.getQualifiedName().toString();
 
-		String subActivityQualifiedName = annotatedActivityQualifiedName + NEW_CLASS_SUFFIX;
-		holder.activity = codeModel._class(subActivityQualifiedName);
+		String subActivityQualifiedName = annotatedActivityQualifiedName + ModelConstants.GENERATION_SUFFIX;
+
+		boolean usesGreenDroid = usesGreenDroid(typeElement);
+
+		int modifiers = JMod.PUBLIC | JMod.FINAL;
+
+		JDefinedClass generatedClass = codeModel._class(modifiers, subActivityQualifiedName, ClassType.CLASS);
+
+		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
 
 		JClass annotatedActivity = codeModel.directClass(annotatedActivityQualifiedName);
 
-		holder.activity._extends(annotatedActivity);
+		holder.generatedClass._extends(annotatedActivity);
 
-		holder.bundleClass = holder.refClass("android.os.Bundle");
-
-		// beforeSetContentView
-		holder.beforeSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "beforeSetContentView_");
-		holder.beforeSetContentViewSavedInstanceStateParam = holder.beforeSetContentView.param(holder.bundleClass, "savedInstanceState");
-
-		// afterSetContentView
-		holder.afterSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "afterSetContentView_");
-		holder.afterSetContentView.param(holder.bundleClass, "savedInstanceState");
+		holder.contextRef = _this();
 
 		// onCreate
-		JMethod onCreate = holder.activity.method(JMod.PUBLIC, codeModel.VOID, "onCreate");
+		JMethod onCreate = holder.generatedClass.method(PUBLIC, codeModel.VOID, "onCreate");
 		onCreate.annotate(Override.class);
 
-		JVar onCreateSavedInstanceState = onCreate.param(holder.bundleClass, "savedInstanceState");
+		JClass bundleClass = holder.classes().BUNDLE;
+
+		// beforeSetContentView
+		holder.init = holder.generatedClass.method(PRIVATE, codeModel.VOID, "init_");
+		holder.beforeCreateSavedInstanceStateParam = holder.init.param(bundleClass, "savedInstanceState");
+
+		{
+			// init if activity
+			holder.initIfActivityBody = holder.init.body();
+			holder.initActivityRef = _this();
+		}
+
+		// afterSetContentView
+		holder.afterSetContentView = holder.generatedClass.method(PRIVATE, codeModel.VOID, "afterSetContentView_");
+
+		JVar onCreateSavedInstanceState = onCreate.param(bundleClass, "savedInstanceState");
 		JBlock onCreateBody = onCreate.body();
 
-		onCreateBody.invoke(holder.beforeSetContentView).arg(onCreateSavedInstanceState);
+		onCreateBody.invoke(holder.init).arg(onCreateSavedInstanceState);
 
-		EActivity layoutAnnotation = element.getAnnotation(EActivity.class);
-		int layoutIdValue = layoutAnnotation.value();
+		onCreateBody.invoke(_super(), onCreate).arg(onCreateSavedInstanceState);
+
+		List<JFieldRef> fieldRefs = annotationHelper.extractAnnotationFieldRefs(holder, element, EActivity.class, rClass.get(Res.LAYOUT), false);
 
 		JFieldRef contentViewId;
-		if (layoutIdValue != Id.DEFAULT_VALUE) {
-			IRInnerClass rInnerClass = rClass.get(Res.LAYOUT);
-			contentViewId = rInnerClass.getIdStaticRef(layoutIdValue, holder);
+		if (fieldRefs.size() == 1) {
+			contentViewId = fieldRefs.get(0);
 		} else {
 			contentViewId = null;
 		}
 
 		if (contentViewId != null) {
-			onCreateBody.invoke("setContentView").arg(contentViewId);
+			// GreenDroid support
+			if (usesGreenDroid) {
+				onCreateBody.invoke("setActionBarContentView").arg(contentViewId);
+			} else {
+				onCreateBody.invoke("setContentView").arg(contentViewId);
+			}
 		}
 
-		onCreateBody.invoke(holder.afterSetContentView).arg(onCreateSavedInstanceState);
+		// Overriding setContentView (with layout id param)
+		JClass layoutParamsClass = holder.classes().VIEW_GROUP_LAYOUT_PARAMS;
 
-		onCreateBody.invoke(JExpr._super(), onCreate).arg(onCreateSavedInstanceState);
+		String setContentViewMethodName;
+		if (usesGreenDroid) {
+			setContentViewMethodName = "setActionBarContentView";
+		} else {
+			setContentViewMethodName = "setContentView";
+		}
 
-		// onBackPressed
+		setContentViewMethod(setContentViewMethodName, codeModel, holder, new JType[] { codeModel.INT }, new String[] { "layoutResID" });
+		setContentViewMethod(setContentViewMethodName, codeModel, holder, new JType[] { holder.classes().VIEW, layoutParamsClass }, new String[] { "view", "params" });
+		setContentViewMethod(setContentViewMethodName, codeModel, holder, new JType[] { holder.classes().VIEW }, new String[] { "view" });
+
+		// Handling onBackPressed
 		if (hasOnBackPressedMethod(typeElement)) {
-			JMethod onKeyDownMethod = holder.activity.method(JMod.PUBLIC, codeModel.BOOLEAN, "onKeyDown");
+			JMethod onKeyDownMethod = holder.generatedClass.method(PUBLIC, codeModel.BOOLEAN, "onKeyDown");
 			onKeyDownMethod.annotate(Override.class);
 			JVar keyCodeParam = onKeyDownMethod.param(codeModel.INT, "keyCode");
-			JClass keyEventClass = holder.refClass("android.view.KeyEvent");
+			JClass keyEventClass = holder.classes().KEY_EVENT;
 			JVar eventParam = onKeyDownMethod.param(keyEventClass, "event");
 
-			JClass versionHelperClass = codeModel.ref(SdkVersionHelper.class);
+			JClass versionHelperClass = holder.refClass(SdkVersionHelper.class);
 
 			JInvocation sdkInt = versionHelperClass.staticInvoke("getSdkInt");
 
@@ -141,24 +193,47 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 							.arg(eventParam));
 
 		}
+
+		aptCodeModelHelper.addActivityIntentBuilder(codeModel, holder);
+
+	}
+
+	private void setContentViewMethod(String setContentViewMethodName, JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {
+		JMethod method = holder.generatedClass.method(JMod.PUBLIC, codeModel.VOID, setContentViewMethodName);
+		method.annotate(Override.class);
+
+		ArrayList<JVar> params = new ArrayList<JVar>();
+		for (int i = 0; i < paramTypes.length; i++) {
+			JVar param = method.param(paramTypes[i], paramNames[i]);
+			params.add(param);
+		}
+		JBlock body = method.body();
+		JInvocation superCall = body.invoke(JExpr._super(), method);
+		for (JVar arg : params) {
+			superCall.arg(arg);
+		}
+		body.invoke(holder.afterSetContentView);
 	}
 
 	private boolean hasOnBackPressedMethod(TypeElement activityElement) {
 
-		List<? extends Element> allMembers = getElementUtils().getAllMembers(activityElement);
+		List<? extends Element> allMembers = annotationHelper.getElementUtils().getAllMembers(activityElement);
 
 		List<ExecutableElement> activityInheritedMethods = ElementFilter.methodsIn(allMembers);
 
 		for (ExecutableElement activityInheritedMethod : activityInheritedMethods) {
-			if (isOnBackPressedMethod(activityInheritedMethod)) {
+			if (isCustomOnBackPressedMethod(activityInheritedMethod)) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	private boolean isOnBackPressedMethod(ExecutableElement method) {
-		return method.getSimpleName().toString().equals("onBackPressed") //
+	private boolean isCustomOnBackPressedMethod(ExecutableElement method) {
+		TypeElement methodClass = (TypeElement) method.getEnclosingElement();
+		boolean methodBelongsToActivityClass = methodClass.getQualifiedName().toString().equals(CanonicalNameConstants.ACTIVITY);
+		return !methodBelongsToActivityClass //
+				&& method.getSimpleName().toString().equals("onBackPressed") //
 				&& method.getThrownTypes().size() == 0 //
 				&& method.getModifiers().contains(Modifier.PUBLIC) //
 				&& method.getReturnType().getKind().equals(TypeKind.VOID) //
@@ -166,4 +241,12 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 		;
 	}
 
+	private boolean usesGreenDroid(TypeElement typeElement) {
+		for (TypeElement greendroidActivityElement : greendroidActivityElements) {
+			if (processingEnv.getTypeUtils().isSubtype(typeElement.asType(), greendroidActivityElement.asType())) {
+				return true;
+			}
+		}
+		return false;
+	}
 }

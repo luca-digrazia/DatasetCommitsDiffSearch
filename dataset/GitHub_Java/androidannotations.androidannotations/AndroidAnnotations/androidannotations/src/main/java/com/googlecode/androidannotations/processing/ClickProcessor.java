@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,35 +15,45 @@
  */
 package com.googlecode.androidannotations.processing;
 
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr.invoke;
+
 import java.lang.annotation.Annotation;
 import java.util.List;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 
 import com.googlecode.androidannotations.annotations.Click;
-import com.googlecode.androidannotations.annotations.Id;
+import com.googlecode.androidannotations.helper.AnnotationHelper;
+import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
 import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
-public class ClickProcessor implements ElementProcessor {
+/**
+ * @author Mathieu Boniface
+ * @author Pierre-Yves
+ */
+public class ClickProcessor implements DecoratingElementProcessor {
 
+	private final AnnotationHelper helper;
 	private final IRClass rClass;
 
-	public ClickProcessor(IRClass rClass) {
+	public ClickProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
 		this.rClass = rClass;
+		helper = new AnnotationHelper(processingEnv);
 	}
 
 	@Override
@@ -52,9 +62,8 @@ public class ClickProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) {
-
-		ActivityHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+		Classes classes = holder.classes();
 
 		String methodName = element.getSimpleName().toString();
 
@@ -63,41 +72,28 @@ public class ClickProcessor implements ElementProcessor {
 
 		boolean hasViewParameter = parameters.size() == 1;
 
-		JFieldRef idRef = extractClickQualifiedId(element, holder);
+		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, getTarget(), rClass.get(Res.ID), true);
 
-		JDefinedClass onClickListenerClass = codeModel.anonymousClass(holder.refClass("android.view.View.OnClickListener"));
+		JDefinedClass onClickListenerClass = codeModel.anonymousClass(classes.VIEW_ON_CLICK_LISTENER);
 		JMethod onClickMethod = onClickListenerClass.method(JMod.PUBLIC, codeModel.VOID, "onClick");
-		JClass viewClass = holder.refClass("android.view.View");
-		JVar onClickViewParam = onClickMethod.param(viewClass, "view");
+		onClickMethod.annotate(Override.class);
+		JVar onClickViewParam = onClickMethod.param(classes.VIEW, "view");
 
-		JInvocation clickCall = onClickMethod.body().invoke(methodName);
+		JExpression activityRef = holder.generatedClass.staticRef("this");
+		JInvocation clickCall = onClickMethod.body().invoke(activityRef, methodName);
 
 		if (hasViewParameter) {
 			clickCall.arg(onClickViewParam);
 		}
 
-		JBlock body = holder.afterSetContentView.body();
+		for (JFieldRef idRef : idsRefs) {
+			JBlock block = holder.afterSetContentView.body().block();
 
-		body.add(JExpr.invoke(JExpr.invoke("findViewById").arg(idRef),"setOnClickListener").arg(JExpr._new(onClickListenerClass)));
-
-
-	}
-
-	private JFieldRef extractClickQualifiedId(Element element, ActivityHolder holder) {
-		Click annotation = element.getAnnotation(Click.class);
-		int idValue = annotation.value();
-		IRInnerClass rInnerClass = rClass.get(Res.ID);
-		if (idValue == Id.DEFAULT_VALUE) {
-			String fieldName = element.getSimpleName().toString();
-			int lastIndex = fieldName.lastIndexOf("Clicked");
-			if (lastIndex != -1) {
-				fieldName = fieldName.substring(0, lastIndex);
-			}
-			return rInnerClass.getIdStaticRef(fieldName, holder);
-
-		} else {
-			return rInnerClass.getIdStaticRef(idValue, holder);
+			JInvocation findViewById = invoke("findViewById");
+			JVar view = block.decl(classes.VIEW, "view", findViewById.arg(idRef));
+			block._if(view.ne(_null()))._then().invoke(view, "setOnClickListener").arg(_new(onClickListenerClass));
 		}
+
 	}
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,33 +15,36 @@
  */
 package com.googlecode.androidannotations.helper;
 
-import java.util.Arrays;
-import java.util.List;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.NoType;
+import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.processing.EBeanHolder;
-import com.sun.codemodel.JClass;
 
+/**
+ * @author Eric Kok
+ */
 public class SherlockHelper {
 
-	public static final List<String> SHERLOCK_ACTIVITIES_LIST_CLASS = Arrays.asList(new String[] {
-			"com.actionbarsherlock.app.SherlockActivity",
-			"com.actionbarsherlock.app.SherlockFragmentActivity",
-			"com.actionbarsherlock.app.SherlockListActivity",
-			"com.actionbarsherlock.app.SherlockPreferenceActivity"
-			});
-	
-	public SherlockHelper() {
+	private final AnnotationHelper annotationHelper;
+
+	public SherlockHelper(AnnotationHelper annotationHelper) {
+		this.annotationHelper = annotationHelper;
 	}
 
+	/**
+	 * Checks whether the Activity extends one of the ActionBarSherlock Activity
+	 * types
+	 */
 	public boolean usesSherlock(EBeanHolder holder) {
-		// Check whether the Activity extends one of the ActionBarSherlock Activity types
-		for (String sherlockClass : SHERLOCK_ACTIVITIES_LIST_CLASS) {
-			JClass activityClass = holder.eBean;
-			while (activityClass != null) {
-				if (activityClass.fullName().equals(sherlockClass)) {
-					return true;
-				}
-				activityClass = activityClass._extends();
+		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(holder.generatedClass._extends().fullName());
+
+		TypeMirror superType;
+		while (!((superType = typeElement.getSuperclass()) instanceof NoType)) {
+			typeElement = (TypeElement) ((DeclaredType) superType).asElement();
+			if (typeElement.getQualifiedName().toString().startsWith("com.actionbarsherlock.app")) {
+				return true;
 			}
 		}
 		return false;

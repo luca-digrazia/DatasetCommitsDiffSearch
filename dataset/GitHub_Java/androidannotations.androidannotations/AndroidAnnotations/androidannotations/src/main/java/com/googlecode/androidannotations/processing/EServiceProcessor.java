@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,24 +22,26 @@ import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.lang.annotation.Annotation;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.EService;
-import com.googlecode.androidannotations.helper.AnnotationHelper;
+import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.ModelConstants;
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JMethod;
 
-public class EServiceProcessor extends AnnotationHelper implements ElementProcessor {
+public class EServiceProcessor implements GeneratingElementProcessor {
 
-	public EServiceProcessor(ProcessingEnvironment processingEnv) {
-		super(processingEnv);
+	private final APTCodeModelHelper aptCodeModelHelper;
+
+	public EServiceProcessor() {
+		aptCodeModelHelper = new APTCodeModelHelper();
 	}
 
 	@Override
@@ -48,9 +50,7 @@ public class EServiceProcessor extends AnnotationHelper implements ElementProces
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
-
-		EBeanHolder holder = activitiesHolder.create(element);
+	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -58,18 +58,20 @@ public class EServiceProcessor extends AnnotationHelper implements ElementProces
 
 		String generatedComponentQualifiedName = annotatedComponentQualifiedName + ModelConstants.GENERATION_SUFFIX;
 
-		holder.eBean = codeModel._class(PUBLIC | FINAL, generatedComponentQualifiedName, ClassType.CLASS);
+		JDefinedClass generatedClass = codeModel._class(PUBLIC | FINAL, generatedComponentQualifiedName, ClassType.CLASS);
+
+		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
 
 		JClass annotatedComponent = codeModel.directClass(annotatedComponentQualifiedName);
 
-		holder.eBean._extends(annotatedComponent);
+		holder.generatedClass._extends(annotatedComponent);
 
 		holder.contextRef = _this();
 
-		holder.init = holder.eBean.method(PRIVATE, codeModel.VOID, "init_");
+		holder.init = holder.generatedClass.method(PRIVATE, codeModel.VOID, "init_");
 		{
 			// onCreate
-			JMethod onCreate = holder.eBean.method(PUBLIC, codeModel.VOID, "onCreate");
+			JMethod onCreate = holder.generatedClass.method(PUBLIC, codeModel.VOID, "onCreate");
 			onCreate.annotate(Override.class);
 			JBlock onCreateBody = onCreate.body();
 			onCreateBody.invoke(holder.init);
@@ -79,13 +81,15 @@ public class EServiceProcessor extends AnnotationHelper implements ElementProces
 		{
 			/*
 			 * Setting to null shouldn't be a problem as long as we don't allow
+			 * 
 			 * @App and @Extra on this component
 			 */
 			holder.initIfActivityBody = null;
 			holder.initActivityRef = null;
 		}
 
-	}
+		aptCodeModelHelper.addServiceIntentBuilder(codeModel, holder);
 
+	}
 
 }

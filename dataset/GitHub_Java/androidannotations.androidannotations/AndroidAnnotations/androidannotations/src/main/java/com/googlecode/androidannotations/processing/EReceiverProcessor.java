@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,27 +21,23 @@ import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.lang.annotation.Annotation;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.EReceiver;
-import com.googlecode.androidannotations.helper.AnnotationHelper;
 import com.googlecode.androidannotations.helper.ModelConstants;
+import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
-public class EReceiverProcessor extends AnnotationHelper implements ElementProcessor {
-
-	public EReceiverProcessor(ProcessingEnvironment processingEnv) {
-		super(processingEnv);
-	}
+public class EReceiverProcessor implements GeneratingElementProcessor {
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
@@ -49,9 +45,7 @@ public class EReceiverProcessor extends AnnotationHelper implements ElementProce
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
-
-		EBeanHolder holder = activitiesHolder.create(element);
+	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -59,24 +53,25 @@ public class EReceiverProcessor extends AnnotationHelper implements ElementProce
 
 		String generatedComponentQualifiedName = annotatedComponentQualifiedName + ModelConstants.GENERATION_SUFFIX;
 
-		holder.eBean = codeModel._class(PUBLIC | FINAL, generatedComponentQualifiedName, ClassType.CLASS);
+		JDefinedClass generatedClass = codeModel._class(PUBLIC | FINAL, generatedComponentQualifiedName, ClassType.CLASS);
+
+		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
 
 		JClass annotatedComponent = codeModel.directClass(annotatedComponentQualifiedName);
 
-		holder.eBean._extends(annotatedComponent);
-		
-		JClass contextClass = holder.refClass("android.content.Context");
-		
-		JFieldVar contextField = holder.eBean.field(PRIVATE, contextClass, "context_");
+		holder.generatedClass._extends(annotatedComponent);
+
+		Classes classes = holder.classes();
+
+		JFieldVar contextField = holder.generatedClass.field(PRIVATE, classes.CONTEXT, "context_");
 		holder.contextRef = contextField;
 
-		holder.init = holder.eBean.method(PRIVATE, codeModel.VOID, "init_");
+		holder.init = holder.generatedClass.method(PRIVATE, codeModel.VOID, "init_");
 		{
 			// onReceive
-			JClass intentClass = holder.refClass("android.content.Intent");
-			JMethod onReceive = holder.eBean.method(PUBLIC, codeModel.VOID, "onReceive");
-			JVar contextParam = onReceive.param(contextClass, "context");
-			JVar intentParam = onReceive.param(intentClass, "intent");
+			JMethod onReceive = holder.generatedClass.method(PUBLIC, codeModel.VOID, "onReceive");
+			JVar contextParam = onReceive.param(classes.CONTEXT, "context");
+			JVar intentParam = onReceive.param(classes.INTENT, "intent");
 			onReceive.annotate(Override.class);
 			JBlock onReceiveBody = onReceive.body();
 			onReceiveBody.assign(contextField, contextParam);
@@ -87,6 +82,7 @@ public class EReceiverProcessor extends AnnotationHelper implements ElementProce
 		{
 			/*
 			 * Setting to null shouldn't be a problem as long as we don't allow
+			 * 
 			 * @App and @Extra on this component
 			 */
 			holder.initIfActivityBody = null;
@@ -94,6 +90,5 @@ public class EReceiverProcessor extends AnnotationHelper implements ElementProce
 		}
 
 	}
-
 
 }

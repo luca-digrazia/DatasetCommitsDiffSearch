@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,6 +15,12 @@
  */
 package com.googlecode.androidannotations.processing;
 
+import static com.googlecode.androidannotations.helper.CanonicalNameConstants.BUNDLE;
+import static com.googlecode.androidannotations.helper.CanonicalNameConstants.CHAR_SEQUENCE;
+import static com.googlecode.androidannotations.helper.CanonicalNameConstants.STRING;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr.ref;
+import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.lang.annotation.Annotation;
@@ -24,20 +30,25 @@ import java.util.Map;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.ArrayType;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
-
-import android.os.Bundle;
+import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.InstanceState;
+import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.AnnotationHelper;
 import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
-public class InstanceStateProcessor extends AnnotationHelper implements ElementProcessor {
+public class InstanceStateProcessor implements DecoratingElementProcessor {
 
 	private static final String BUNDLE_PARAM_NAME = "bundle";
 
@@ -45,7 +56,7 @@ public class InstanceStateProcessor extends AnnotationHelper implements ElementP
 
 	static {
 
-		methodSuffixNameByTypeName.put("android.os.Bundle", "Bundle");
+		methodSuffixNameByTypeName.put(BUNDLE, "Bundle");
 
 		methodSuffixNameByTypeName.put("boolean", "Boolean");
 		methodSuffixNameByTypeName.put("boolean[]", "BooleanArray");
@@ -56,7 +67,7 @@ public class InstanceStateProcessor extends AnnotationHelper implements ElementP
 		methodSuffixNameByTypeName.put("char", "Char");
 		methodSuffixNameByTypeName.put("char[]", "CharArray");
 
-		methodSuffixNameByTypeName.put("java.lang.CharSequence", "CharSequence");
+		methodSuffixNameByTypeName.put(CHAR_SEQUENCE, "CharSequence");
 
 		methodSuffixNameByTypeName.put("double", "Double");
 		methodSuffixNameByTypeName.put("double[]", "DoubleArray");
@@ -74,13 +85,17 @@ public class InstanceStateProcessor extends AnnotationHelper implements ElementP
 		methodSuffixNameByTypeName.put("short", "Short");
 		methodSuffixNameByTypeName.put("short[]", "ShortArray");
 
-		methodSuffixNameByTypeName.put("java.lang.String", "String");
+		methodSuffixNameByTypeName.put(STRING, "String");
 		methodSuffixNameByTypeName.put("java.lang.String[]", "StringArray");
 		methodSuffixNameByTypeName.put("java.util.ArrayList<java.lang.String>", "StringArrayList");
 	}
 
+	private final APTCodeModelHelper helper = new APTCodeModelHelper();
+
+	private AnnotationHelper annotationHelper;
+
 	public InstanceStateProcessor(ProcessingEnvironment processingEnv) {
-		super(processingEnv);
+		annotationHelper = new AnnotationHelper(processingEnv);
 	}
 
 	@Override
@@ -89,19 +104,20 @@ public class InstanceStateProcessor extends AnnotationHelper implements ElementP
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
-		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
 		String fieldName = element.getSimpleName().toString();
 
 		JBlock saveStateBody = getSaveStateMethodBody(codeModel, holder);
-		JBlock restoreStateBody = getRestoreStateBody(holder);
+		JBlock restoreStateBody = getRestoreStateBody(codeModel, holder);
 
 		String typeString = element.asType().toString();
-		TypeElement elementType = typeElementFromQualifiedName(typeString);
+		TypeElement elementType = annotationHelper.typeElementFromQualifiedName(typeString);
 
 		String methodNameToSave;
 		String methodNameToRestore;
 		boolean restoreCallNeedCastStatement = false;
+
+		boolean restoreCallNeedsSuppressWarning = false;
 
 		if (methodSuffixNameByTypeName.containsKey(typeString)) {
 
@@ -110,63 +126,103 @@ public class InstanceStateProcessor extends AnnotationHelper implements ElementP
 
 		} else if (element.asType().getKind() == TypeKind.ARRAY) {
 
-			typeString = typeString.replace("[]", "");
-			elementType = typeElementFromQualifiedName(typeString);
+			ArrayType arrayType = (ArrayType) element.asType();
+
+			boolean hasTypeArguments = false;
+			if (arrayType.getComponentType() instanceof DeclaredType) {
+				DeclaredType declaredType = (DeclaredType) arrayType.getComponentType();
+				typeString = declaredType.asElement().toString();
+				hasTypeArguments = declaredType.getTypeArguments().size() > 0;
+			} else {
+				typeString = arrayType.getComponentType().toString();
+			}
+
+			elementType = annotationHelper.typeElementFromQualifiedName(typeString);
 
 			if (isTypeParcelable(elementType)) {
-
 				methodNameToSave = "put" + "ParcelableArray";
 				methodNameToRestore = "get" + "ParcelableArray";
 				restoreCallNeedCastStatement = true;
 
+				if (hasTypeArguments) {
+					restoreCallNeedsSuppressWarning = true;
+				}
 			} else {
 				methodNameToSave = "put" + "Serializable";
 				methodNameToRestore = "get" + "Serializable";
 				restoreCallNeedCastStatement = true;
 			}
 		} else {
-			if (isTypeParcelable(elementType)) {
 
+			TypeMirror elementAsType = element.asType();
+			boolean hasTypeArguments = false;
+			if (elementAsType instanceof DeclaredType) {
+				DeclaredType declaredType = (DeclaredType) elementAsType;
+				typeString = declaredType.asElement().toString();
+				elementType = annotationHelper.typeElementFromQualifiedName(typeString);
+				hasTypeArguments = declaredType.getTypeArguments().size() > 0;
+			}
+
+			if (isTypeParcelable(elementType)) {
 				methodNameToSave = "put" + "Parcelable";
 				methodNameToRestore = "get" + "Parcelable";
 			} else {
 				methodNameToSave = "put" + "Serializable";
 				methodNameToRestore = "get" + "Serializable";
 				restoreCallNeedCastStatement = true;
+
+				if (hasTypeArguments) {
+					restoreCallNeedsSuppressWarning = true;
+				}
 			}
 		}
 
-		saveStateBody.invoke(JExpr.ref(BUNDLE_PARAM_NAME), methodNameToSave).arg(fieldName).arg(JExpr.ref(fieldName));
+		JFieldRef ref = JExpr.ref(fieldName);
+		saveStateBody.invoke(JExpr.ref(BUNDLE_PARAM_NAME), methodNameToSave).arg(fieldName).arg(ref);
 
-		JInvocation restoreMethodCall = JExpr.invoke(JExpr.ref("savedInstanceState"), methodNameToRestore).arg(fieldName);
+		JInvocation restoreMethodCall = JExpr.invoke(ref("savedInstanceState"), methodNameToRestore).arg(fieldName);
 		if (restoreCallNeedCastStatement) {
 
-			JExpression castStatement = JExpr.cast(holder.refClass(element.asType().toString()), restoreMethodCall);
-			restoreStateBody.assign(JExpr.ref(fieldName), castStatement);
+			JClass jclass = helper.typeMirrorToJClass(element.asType(), holder);
+			JExpression castStatement = JExpr.cast(jclass, restoreMethodCall);
+			restoreStateBody.assign(ref, castStatement);
+
+			if (restoreCallNeedsSuppressWarning) {
+				if (holder.restoreSavedInstanceStateMethod.annotations().size() == 0) {
+					holder.restoreSavedInstanceStateMethod.annotate(SuppressWarnings.class).param("value", "unchecked");
+				}
+			}
 
 		} else {
-
-			restoreStateBody.assign(JExpr.ref(fieldName), restoreMethodCall);
-
+			restoreStateBody.assign(ref, restoreMethodCall);
 		}
 	}
 
-	private JBlock getRestoreStateBody(EBeanHolder holder) {
+	private JBlock getRestoreStateBody(JCodeModel codeModel, EBeanHolder holder) {
 
-		if (holder.restoreInstanceStateBlock == null) {
-			JExpression bundleNullTest = JExpr.ref("savedInstanceState").ne(JExpr._null());
-			holder.restoreInstanceStateBlock = holder.initIfActivityBody.block()._if(bundleNullTest)._then();
+		if (holder.restoreSavedInstanceStateMethod == null) {
+
+			holder.restoreSavedInstanceStateMethod = holder.generatedClass.method(PRIVATE, codeModel.VOID, "restoreSavedInstanceState_");
+
+			JVar savedInstanceState = holder.restoreSavedInstanceStateMethod.param(holder.classes().BUNDLE, "savedInstanceState");
+
+			holder.initIfActivityBody.invoke(holder.restoreSavedInstanceStateMethod).arg(savedInstanceState);
+
+			holder.restoreSavedInstanceStateMethod.body() //
+					._if(ref("savedInstanceState").eq(_null())) //
+					._then()._return();
+
 		}
 
-		return holder.restoreInstanceStateBlock;
+		return holder.restoreSavedInstanceStateMethod.body();
 	}
 
 	private JBlock getSaveStateMethodBody(JCodeModel codeModel, EBeanHolder holder) {
 
 		if (holder.saveInstanceStateBlock == null) {
-			JMethod method = holder.eBean.method(PUBLIC, codeModel.VOID, "onSaveInstanceState");
+			JMethod method = holder.generatedClass.method(PUBLIC, codeModel.VOID, "onSaveInstanceState");
 			method.annotate(Override.class);
-			method.param(Bundle.class, BUNDLE_PARAM_NAME);
+			method.param(holder.classes().BUNDLE, BUNDLE_PARAM_NAME);
 
 			holder.saveInstanceStateBlock = method.body();
 
@@ -178,9 +234,9 @@ public class InstanceStateProcessor extends AnnotationHelper implements ElementP
 
 	private boolean isTypeParcelable(TypeElement elementType) {
 
-		TypeElement parcelableType = typeElementFromQualifiedName("android.os.Parcelable");
+		TypeElement parcelableType = annotationHelper.typeElementFromQualifiedName("android.os.Parcelable");
 
-		return elementType != null && isSubtype(elementType, parcelableType);
+		return elementType != null && annotationHelper.isSubtype(elementType, parcelableType);
 	}
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,6 +23,7 @@ import static com.sun.codemodel.JExpr.invoke;
 import java.lang.annotation.Annotation;
 import java.util.List;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
@@ -30,11 +31,15 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.OptionsItem;
+import com.googlecode.androidannotations.helper.IdAnnotationHelper;
+import com.googlecode.androidannotations.helper.SherlockHelper;
+import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.googlecode.androidannotations.rclass.IRClass;
+import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCase;
+import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
@@ -44,10 +49,15 @@ import com.sun.codemodel.JVar;
 /**
  * @author Pierre-Yves Ricau
  */
-public class OptionsItemProcessor extends MultipleResIdsBasedProcessor implements ElementProcessor {
+public class OptionsItemProcessor implements DecoratingElementProcessor {
 
-	public OptionsItemProcessor(IRClass rClass) {
-		super(rClass);
+	private final IdAnnotationHelper helper;
+
+	private final SherlockHelper sherlockHelper;
+
+	public OptionsItemProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
+		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
+		sherlockHelper = new SherlockHelper(helper);
 	}
 
 	@Override
@@ -56,10 +66,17 @@ public class OptionsItemProcessor extends MultipleResIdsBasedProcessor implement
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
-		EBeanHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+		Classes classes = holder.classes();
 
 		String methodName = element.getSimpleName().toString();
+
+		JClass menuItemClass;
+		if (sherlockHelper.usesSherlock(holder)) {
+			menuItemClass = classes.SHERLOCK_MENU_ITEM;
+		} else {
+			menuItemClass = classes.MENU_ITEM;
+		}
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 		List<? extends VariableElement> parameters = executableElement.getParameters();
@@ -68,44 +85,43 @@ public class OptionsItemProcessor extends MultipleResIdsBasedProcessor implement
 
 		boolean hasItemParameter = parameters.size() == 1;
 
-		OptionsItem annotation = element.getAnnotation(OptionsItem.class);
-		List<JFieldRef> idsRefs = extractQualifiedIds(element, annotation.value(), "Selected", holder);
+		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, Res.ID, true);
 
-		if (holder.onOptionsItemSelectedSwitch == null) {
-			JMethod method = holder.eBean.method(JMod.PUBLIC, codeModel.BOOLEAN, "onOptionsItemSelected");
+		if (holder.onOptionsItemSelectedIfElseBlock == null) {
+			JMethod method = holder.generatedClass.method(JMod.PUBLIC, codeModel.BOOLEAN, "onOptionsItemSelected");
 			method.annotate(Override.class);
-			holder.onOptionsItemSelectedItem = method.param(holder.refClass("android.view.MenuItem"), "item");
+			holder.onOptionsItemSelectedItem = method.param(menuItemClass, "item");
 
 			JBlock body = method.body();
 			JVar handled = body.decl(codeModel.BOOLEAN, "handled", invoke(_super(), method).arg(holder.onOptionsItemSelectedItem));
 
 			body._if(handled)._then()._return(TRUE);
 
-			holder.onOptionsItemSelectedSwitch = body._switch(holder.onOptionsItemSelectedItem.invoke("getItemId"));
+			holder.onOptionsItemSelectedItemId = body.decl(codeModel.INT, "itemId_", holder.onOptionsItemSelectedItem.invoke("getItemId"));
+			holder.onOptionsItemSelectedIfElseBlock = body.block();
 
-			JBlock defaultBody = holder.onOptionsItemSelectedSwitch._default().body();
-			defaultBody._return(FALSE);
+			body._return(FALSE);
 		}
 
-		JCase itemCase = null;
-		for (JFieldRef idRef : idsRefs) {
-			itemCase = holder.onOptionsItemSelectedSwitch._case(idRef);
+		JExpression ifExpr = holder.onOptionsItemSelectedItemId.eq(idsRefs.get(0));
+
+		for (int i = 1; i < idsRefs.size(); i++) {
+			ifExpr = ifExpr.cor(holder.onOptionsItemSelectedItemId.eq(idsRefs.get(i)));
 		}
 
-		JBlock itemCaseBody = itemCase.body();
+		JBlock itemIfBody = holder.onOptionsItemSelectedIfElseBlock._if(ifExpr)._then();
 		JInvocation methodCall = invoke(methodName);
 
 		if (returnMethodResult) {
-			itemCaseBody._return(methodCall);
+			itemIfBody._return(methodCall);
 		} else {
-			itemCaseBody.add(methodCall);
-			itemCaseBody._return(TRUE);
+			itemIfBody.add(methodCall);
+			itemIfBody._return(TRUE);
 		}
-		
+
 		if (hasItemParameter) {
 			methodCall.arg(holder.onOptionsItemSelectedItem);
 		}
-
 
 	}
 

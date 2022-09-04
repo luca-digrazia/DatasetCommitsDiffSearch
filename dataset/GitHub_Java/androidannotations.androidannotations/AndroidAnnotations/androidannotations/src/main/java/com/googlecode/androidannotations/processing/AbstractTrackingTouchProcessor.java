@@ -19,6 +19,8 @@ import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.VariableElement;
 
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.OnSeekBarChangeListenerHelper;
@@ -66,11 +68,16 @@ public abstract class AbstractTrackingTouchProcessor implements DecoratingElemen
 			JBlock methodBody = methodToCall.body();
 
 			methodBody.add(previousBody);
-			JExpression activityRef = holder.eBean.staticRef("this");
+			JExpression activityRef = holder.generatedClass.staticRef("this");
 			textChangeCall = methodBody.invoke(activityRef, methodName);
 
-			JVar progressParameter = codeModelHelper.findParameterByName(methodToCall, "seekBar");
-			textChangeCall.arg(progressParameter);
+			ExecutableElement executableElement = (ExecutableElement) element;
+			List<? extends VariableElement> parameters = executableElement.getParameters();
+
+			if (parameters.size() == 1) {
+				JVar progressParameter = codeModelHelper.findParameterByName(methodToCall, "seekBar");
+				textChangeCall.arg(progressParameter);
+			}
 		}
 
 	}

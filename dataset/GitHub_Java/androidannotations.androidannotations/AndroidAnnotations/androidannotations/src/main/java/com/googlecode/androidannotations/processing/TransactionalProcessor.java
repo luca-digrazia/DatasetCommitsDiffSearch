@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -27,12 +27,13 @@ import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JVar;
 
-public class TransactionalProcessor implements ElementProcessor {
+public class TransactionalProcessor implements DecoratingElementProcessor {
 
 	private final APTCodeModelHelper helper = new APTCodeModelHelper();
 
@@ -42,8 +43,7 @@ public class TransactionalProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
-		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
@@ -61,7 +61,9 @@ public class TransactionalProcessor implements ElementProcessor {
 
 		JTryBlock tryBlock = body._try();
 
-		JInvocation superCall = JExpr.invoke(JExpr._super(), method);
+		JExpression activitySuper = holder.generatedClass.staticRef("super");
+		JInvocation superCall = JExpr.invoke(activitySuper, method);
+
 		for (JVar param : method.params()) {
 			superCall.arg(param);
 		}
@@ -76,16 +78,15 @@ public class TransactionalProcessor implements ElementProcessor {
 			tryBody._return(result);
 		}
 
-		JCatchBlock catchBlock = tryBlock._catch(codeModel.ref(RuntimeException.class));
+		JCatchBlock catchBlock = tryBlock._catch(holder.refClass(RuntimeException.class));
 
 		JVar exceptionParam = catchBlock.param("e");
 
 		JBlock catchBody = catchBlock.body();
 
-		JClass logClass = holder.refClass("android.util.Log");
-		JInvocation errorInvoke = catchBody.staticInvoke(logClass, "e");
+		JInvocation errorInvoke = catchBody.staticInvoke(holder.classes().LOG, "e");
 
-		errorInvoke.arg(holder.eBean.name());
+		errorInvoke.arg(holder.generatedClass.name());
 		errorInvoke.arg("Error in transaction");
 		errorInvoke.arg(exceptionParam);
 

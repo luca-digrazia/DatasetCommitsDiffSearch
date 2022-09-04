@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -28,8 +28,10 @@ import com.googlecode.androidannotations.annotations.AfterTextChange;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.TextWatcherHelper;
 import com.googlecode.androidannotations.rclass.IRClass;
+import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
@@ -38,10 +40,10 @@ import com.sun.codemodel.JVar;
 /**
  * @author Mathieu Boniface
  */
-public class AfterTextChangeProcessor implements ElementProcessor {
+public class AfterTextChangeProcessor implements DecoratingElementProcessor {
 
 	private final TextWatcherHelper helper;
-	
+
 	private final APTCodeModelHelper codeModelHelper;
 
 	public AfterTextChangeProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
@@ -55,9 +57,7 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
-
-		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
 
 		String methodName = element.getSimpleName().toString();
 
@@ -67,11 +67,11 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 		int editableParameterPosition = -1;
 		int viewParameterPosition = -1;
 		TypeMirror viewParameterType = null;
-		
-		for (int i = 0 ; i < parameters.size() ; i++) {
+
+		for (int i = 0; i < parameters.size(); i++) {
 			VariableElement parameter = parameters.get(i);
 			TypeMirror parameterType = parameter.asType();
-			
+
 			if ("android.text.Editable".equals(parameterType.toString())) {
 				editableParameterPosition = i;
 			} else {
@@ -84,9 +84,7 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 
 		}
 
-		AfterTextChange annotation = element.getAnnotation(AfterTextChange.class);
-		
-		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "TextChanged", holder);
+		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, Res.ID, true);
 
 		for (JFieldRef idRef : idsRefs) {
 			TextWatcherHolder textWatcherHolder = helper.getOrCreateListener(codeModel, holder, idRef, viewParameterType);
@@ -96,12 +94,13 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 
 			JBlock previousBody = codeModelHelper.removeBody(methodToCall);
 			JBlock methodBody = methodToCall.body();
-			
-			methodBody.add(previousBody);
-			textChangeCall = methodBody.invoke(methodName);
 
-			for (int i = 0 ; i < parameters.size() ; i++) {
-				if (i == editableParameterPosition) {				
+			methodBody.add(previousBody);
+			JExpression activityRef = holder.generatedClass.staticRef("this");
+			textChangeCall = methodBody.invoke(activityRef, methodName);
+
+			for (int i = 0; i < parameters.size(); i++) {
+				if (i == editableParameterPosition) {
 					JVar afterTextChangeEditableParam = codeModelHelper.findParameterByName(methodToCall, "s");
 					textChangeCall.arg(afterTextChangeEditableParam);
 				} else if (i == viewParameterPosition) {
@@ -113,5 +112,5 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 		}
 
 	}
-	
+
 }
