@@ -214,7 +214,7 @@ public class APTCodeModelHelper {
 		}
 	}
 
-	public void addAnnotation(JAnnotatable annotatable, AnnotationMirror annotationMirror, GeneratedClassHolder holder) {
+	private void addAnnotation(JAnnotatable annotatable, AnnotationMirror annotationMirror, GeneratedClassHolder holder) {
 		Map<? extends ExecutableElement, ? extends AnnotationValue> parameters = annotationMirror.getElementValues();
 
 		JAnnotationUse annotate = annotatable.annotate(typeMirrorToJClass(annotationMirror.getAnnotationType(), holder));
