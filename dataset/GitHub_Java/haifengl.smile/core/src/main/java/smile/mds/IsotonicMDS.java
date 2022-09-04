@@ -15,7 +15,9 @@
  *******************************************************************************/
 package smile.mds;
 
-import smile.math.MathEx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import smile.math.Math;
 import smile.math.DifferentiableMultivariateFunction;
 import smile.sort.QuickSort;
 
@@ -31,7 +33,7 @@ import smile.sort.QuickSort;
  * @author Haifeng Li
  */
 public class IsotonicMDS {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(IsotonicMDS.class);
+    private static final Logger logger = LoggerFactory.getLogger(IsotonicMDS.class);
 
     /**
      * The final stress achieved.
@@ -119,7 +121,7 @@ public class IsotonicMDS {
             throw new IllegalArgumentException("The proximity matrix and the initial coordinates are of different size.");
         }
 
-        coordinates = MathEx.clone(init);
+        coordinates = Math.clone(init);
         int nr = proximity.length;
         int nc = coordinates[0].length;
 
@@ -145,10 +147,10 @@ public class IsotonicMDS {
 
         stress = 0.0;
         try {
-            stress = MathEx.min(func, 5, x, tol, maxIter);
+            stress = Math.min(func, 5, x, tol, maxIter);
         } catch (Exception ex) {
             // If L-BFGS doesn't work, let's try BFGS.
-            stress = MathEx.min(func, x, tol, maxIter);
+            stress = Math.min(func, x, tol, maxIter);
         }
 
         if (stress == 0.0) {
@@ -175,26 +177,27 @@ public class IsotonicMDS {
      * Isotonic regression.
      */
     static class ObjectiveFunction implements DifferentiableMultivariateFunction {
-        /** ranks of dissimilarities */
-        int[] ord;
-        /** inverse ordering (which one is rank i?) */
-        int[] ord2;
-        /** number of dissimilarities */
-        int n;
-        /** number of data points */
-        int nr;
-        /** # cols of fitted configuration */
-        int nc;
-        /** Size of configuration array */
-        int dimx;
-        /** dissimilarities */
-        double[] d;
-        /** fitted distances (in rank of d order) */
-        double[] y;
-        /** cumulative fitted distances (in rank of d order) */
-        double[] yc;
-        /** isotonic regression fitted values (ditto) */
-        double[] yf;
+
+        int[] ord;		/* ranks of dissimilarities */
+
+        int[] ord2;		/* inverse ordering (which one is rank i?) */
+
+        int n;			/* number of  dissimilarities */
+
+        int nr;			/* number of data points */
+
+        int nc;			/* # cols of  fitted configuration */
+
+        int dimx;		/* Size of configuration array */
+
+        double[] d;		/* dissimilarities */
+
+        double[] y;		/* fitted distances (in rank of d order) */
+
+        double[] yc;		/* cumulative fitted distances (in rank of d order) */
+
+        double[] yf;		/* isotonic regression fitted values (ditto) */
+
 
         ObjectiveFunction(int nr, int nc, double[] d, int[] ord, int[] ord2) {
             this.d = d;
@@ -214,9 +217,9 @@ public class IsotonicMDS {
                 for (int j = i + 1; j < nr; j++) {
                     double tmp = 0.0;
                     for (int c = 0; c < nc; c++) {
-                        tmp += MathEx.sqr(x[i * nc + c] - x[j * nc + c]);
+                        tmp += Math.sqr(x[i * nc + c] - x[j * nc + c]);
                     }
-                    d[index++] = MathEx.sqrt(tmp);
+                    d[index++] = Math.sqrt(tmp);
                 }
             }
 
@@ -259,7 +262,7 @@ public class IsotonicMDS {
                 sstar += tmp * tmp;
                 tstar += y[i] * y[i];
             }
-            double ssq = MathEx.sqrt(sstar / tstar);
+            double ssq = Math.sqrt(sstar / tstar);
             return ssq;
         }
 
@@ -297,7 +300,7 @@ public class IsotonicMDS {
                 sstar += tmp * tmp;
                 tstar += y[i] * y[i];
             }
-            double ssq = MathEx.sqrt(sstar / tstar);
+            double ssq = Math.sqrt(sstar / tstar);
 
             int k = 0;
             for (int u = 0; u < nr; u++) {
@@ -318,7 +321,7 @@ public class IsotonicMDS {
                         }
                         double tmp1 = (x[u * nc + i] - x[s * nc + i]);
                         double sgn = (tmp1 >= 0) ? 1 : -1;
-                        tmp1 = MathEx.abs(tmp1) / y[k];
+                        tmp1 = Math.abs(tmp1) / y[k];
                         tmp += ((y[k] - yf[k]) / sstar - y[k] / tstar) * sgn * tmp1;
                     }
                     g[u * nc + i] = tmp * ssq;
