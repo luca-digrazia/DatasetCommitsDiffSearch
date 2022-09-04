@@ -16,12 +16,9 @@
  */
 package org.graylog.plugins.views.search.elasticsearch.searchtypes;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.inject.name.Named;
 import io.searchbox.core.SearchResult;
 import io.searchbox.core.search.aggregation.MetricAggregation;
 import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.index.query.QueryStringQueryBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.sort.SortOrder;
@@ -33,18 +30,12 @@ import org.graylog.plugins.views.search.elasticsearch.ESQueryDecorators;
 import org.graylog.plugins.views.search.elasticsearch.ElasticsearchQueryString;
 import org.graylog.plugins.views.search.searchtypes.MessageList;
 import org.graylog.plugins.views.search.searchtypes.Sort;
-import org.graylog2.decorators.Decorator;
-import org.graylog2.decorators.DecoratorProcessor;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.decorators.SearchResponseDecorator;
 import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
-import org.graylog2.rest.resources.search.responses.SearchResponse;
-import org.joda.time.DateTime;
 
 import javax.inject.Inject;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -53,58 +44,26 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 
 public class ESMessageList implements ESSearchTypeHandler<MessageList> {
     private final ESQueryDecorators esQueryDecorators;
-    private final DecoratorProcessor decoratorProcessor;
-    private final Map<String, SearchResponseDecorator.Factory> searchResponseDecorators;
-    private final boolean allowHighlighting;
 
     @Inject
-    public ESMessageList(ESQueryDecorators esQueryDecorators,
-                         DecoratorProcessor decoratorProcessor,
-                         Map<String, SearchResponseDecorator.Factory> searchResponseDecorators,
-                         @Named("allow_highlighting") boolean allowHighlighting) {
-        this.esQueryDecorators = esQueryDecorators;
-        this.decoratorProcessor = decoratorProcessor;
-        this.searchResponseDecorators = searchResponseDecorators;
-        this.allowHighlighting = allowHighlighting;
-    }
-
-    @VisibleForTesting
     public ESMessageList(ESQueryDecorators esQueryDecorators) {
-        this(esQueryDecorators, new DecoratorProcessor.Fake(), Collections.emptyMap(), false);
+        this.esQueryDecorators = esQueryDecorators;
     }
 
     @Override
     public void doGenerateQueryPart(SearchJob job, Query query, MessageList messageList, ESGeneratedQueryContext queryContext) {
+        final String queryString = this.esQueryDecorators.decorate(((ElasticsearchQueryString)query.query()).queryString(), job, query, Collections.emptySet());
 
         final SearchSourceBuilder searchSourceBuilder = queryContext.searchSourceBuilder(messageList)
                 .size(messageList.limit())
-                .from(messageList.offset());
-
-        applyHighlightingIfActivated(searchSourceBuilder, job, query);
-
+                .from(messageList.offset())
+                .highlighter(new HighlightBuilder().requireFieldMatch(false)
+                        .highlightQuery(QueryBuilders.queryStringQuery(queryString))
+                        .field("*")
+                        .fragmentSize(0)
+                        .numOfFragments(0));
         final List<Sort> sorts = firstNonNull(messageList.sort(), Collections.singletonList(Sort.create(Message.FIELD_TIMESTAMP, SortOrder.DESC)));
         sorts.forEach(sort -> searchSourceBuilder.sort(sort.field(), sort.order()));
-    }
-
-    private void applyHighlightingIfActivated(SearchSourceBuilder searchSourceBuilder, SearchJob job, Query query) {
-        if (!allowHighlighting)
-            return;
-
-        final QueryStringQueryBuilder highlightQuery = decoratedHighlightQuery(job, query);
-
-        searchSourceBuilder.highlighter(new HighlightBuilder().requireFieldMatch(false)
-                .highlightQuery(highlightQuery)
-                .field("*")
-                .fragmentSize(0)
-                .numOfFragments(0));
-    }
-
-    private QueryStringQueryBuilder decoratedHighlightQuery(SearchJob job, Query query) {
-        final String raw = ((ElasticsearchQueryString) query.query()).queryString();
-
-        final String decorated = this.esQueryDecorators.decorate(raw, job, query, Collections.emptySet());
-
-        return QueryBuilders.queryStringQuery(decorated);
     }
 
     @Override
@@ -115,41 +74,9 @@ public class ESMessageList implements ESSearchTypeHandler<MessageList> {
                 .map((resultMessage) -> ResultMessageSummary.create(resultMessage.highlightRanges, resultMessage.getMessage().getFields(), resultMessage.getIndex()))
                 .collect(Collectors.toList());
 
-        final String undecoratedQueryString = ((ElasticsearchQueryString)query.query()).queryString();
-        final String queryString = this.esQueryDecorators.decorate(undecoratedQueryString, job, query, Collections.emptySet());
-
-        final DateTime from = query.effectiveTimeRange(searchType).getFrom();
-        final DateTime to = query.effectiveTimeRange(searchType).getTo();
-
-        final SearchResponse searchResponse = SearchResponse.create(
-                undecoratedQueryString,
-                queryString,
-                Collections.emptySet(),
-                messages,
-                Collections.emptySet(),
-                0,
-                result.getTotal(),
-                from,
-                to
-        );
-
-        final SearchResponse decoratedSearchResponse = decorateSearchResponse(searchResponse, searchType.decorators());
-
         final MessageList.Result.Builder resultBuilder = MessageList.Result.result(searchType.id())
-                .messages(decoratedSearchResponse.messages())
-                .totalResults(decoratedSearchResponse.totalResults());
+                .messages(messages)
+                .totalResults(result.getTotal());
         return searchType.name().map(resultBuilder::name).orElse(resultBuilder).build();
-    }
-
-    private SearchResponse decorateSearchResponse(SearchResponse searchResponse, List<Decorator> decorators) {
-        if (decorators.isEmpty()) {
-            return searchResponse;
-        }
-        final List<SearchResponseDecorator> searchResponseDecorators = decorators
-                .stream()
-                .sorted(Comparator.comparing(Decorator::order))
-                .map(decorator -> this.searchResponseDecorators.get(decorator.type()).create(decorator))
-                .collect(Collectors.toList());
-        return decoratorProcessor.decorate(searchResponse, searchResponseDecorators);
     }
 }
