@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
@@ -97,9 +96,6 @@ public class AppleCrosstoolTransition implements PatchTransition {
 
     // OSX toolchains do not support fission.
     to.get(CppOptions.class).fissionModes = ImmutableList.of();
-
-    // Ensure platforms aren't set so that platform mapping can take place.
-    to.get(PlatformOptions.class).platforms = ImmutableList.of();
   }
 
   /**
@@ -119,19 +115,10 @@ public class AppleCrosstoolTransition implements PatchTransition {
           return AppleConfiguration.iosCpuFromCpu(configOptions.cpu);
         }
       case WATCHOS:
-        if (appleOptions.watchosCpus.isEmpty()) {
-          return AppleCommandLineOptions.DEFAULT_WATCHOS_CPU;
-        }
         return appleOptions.watchosCpus.get(0);
       case TVOS:
-        if (appleOptions.tvosCpus.isEmpty()) {
-          return AppleCommandLineOptions.DEFAULT_TVOS_CPU;
-        }
         return appleOptions.tvosCpus.get(0);
       case MACOS:
-        if (appleOptions.macosCpus.isEmpty()) {
-          return AppleCommandLineOptions.DEFAULT_MACOS_CPU;
-        }
         return appleOptions.macosCpus.get(0);
       default:
         throw new IllegalArgumentException(

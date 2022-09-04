@@ -82,7 +82,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
     help = "Specifies the version of the iOS SDK to use to build iOS applications."
   )
-  public DottedVersion.Option iosSdkVersion;
+  public DottedVersion iosSdkVersion;
 
   @Option(
     name = "watchos_sdk_version",
@@ -92,7 +92,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
     help = "Specifies the version of the watchOS SDK to use to build watchOS applications."
   )
-  public DottedVersion.Option watchOsSdkVersion;
+  public DottedVersion watchOsSdkVersion;
 
   @Option(
     name = "tvos_sdk_version",
@@ -102,7 +102,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
     help = "Specifies the version of the tvOS SDK to use to build tvOS applications."
   )
-  public DottedVersion.Option tvOsSdkVersion;
+  public DottedVersion tvOsSdkVersion;
 
   @Option(
     name = "macos_sdk_version",
@@ -112,7 +112,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
     help = "Specifies the version of the macOS SDK to use to build macOS applications."
   )
-  public DottedVersion.Option macOsSdkVersion;
+  public DottedVersion macOsSdkVersion;
 
   @Option(
     name = "ios_minimum_os",
@@ -122,7 +122,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
     help = "Minimum compatible iOS version for target simulators and devices."
   )
-  public DottedVersion.Option iosMinimumOs;
+  public DottedVersion iosMinimumOs;
 
   @Option(
     name = "watchos_minimum_os",
@@ -132,7 +132,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
     help = "Minimum compatible watchOS version for target simulators and devices."
   )
-  public DottedVersion.Option watchosMinimumOs;
+  public DottedVersion watchosMinimumOs;
 
   @Option(
     name = "tvos_minimum_os",
@@ -142,7 +142,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
     help = "Minimum compatible tvOS version for target simulators and devices."
   )
-  public DottedVersion.Option tvosMinimumOs;
+  public DottedVersion tvosMinimumOs;
 
   @Option(
     name = "macos_minimum_os",
@@ -152,7 +152,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
     help = "Minimum compatible macOS version for targets."
   )
-  public DottedVersion.Option macosMinimumOs;
+  public DottedVersion macosMinimumOs;
 
   @VisibleForTesting public static final String DEFAULT_IOS_SDK_VERSION = "8.4";
   @VisibleForTesting public static final String DEFAULT_WATCHOS_SDK_VERSION = "2.0";
@@ -351,25 +351,18 @@ public class AppleCommandLineOptions extends FragmentOptions {
   
   /** Returns whether the minimum OS version is explicitly set for the current platform. */
   public DottedVersion getMinimumOsVersion() {
-    DottedVersion.Option option;
     switch (applePlatformType) {
       case IOS:
-        option = iosMinimumOs;
-        break;
+        return iosMinimumOs;
       case MACOS:
-        option = macosMinimumOs;
-        break;
+        return macosMinimumOs;
       case TVOS:
-        option = tvosMinimumOs;
-        break;
+        return tvosMinimumOs;
       case WATCHOS:
-        option = watchosMinimumOs;
-        break;
+        return watchosMinimumOs;
       default:
         throw new IllegalStateException();
     }
-
-    return DottedVersion.maybeUnwrap(option);
   }
 
   /**
