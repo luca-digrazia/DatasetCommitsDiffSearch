@@ -39,12 +39,9 @@ import org.hibernate.jpa.boot.spi.TypeContributorList;
 import org.hibernate.jpa.internal.util.LogHelper;
 import org.hibernate.jpa.internal.util.PersistenceUnitTransactionTypeHelper;
 import org.hibernate.jpa.spi.IdentifierGeneratorStrategyProvider;
-import org.hibernate.protean.recording.RecordableBootstrap;
-import org.hibernate.protean.recording.RecordedState;
 import org.hibernate.protean.recording.RecordingDialectFactory;
 import org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorBuilderImpl;
 import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoordinatorBuilderImpl;
-import org.hibernate.service.internal.AbstractServiceRegistryImpl;
 
 import static org.hibernate.cfg.AvailableSettings.DATASOURCE;
 import static org.hibernate.cfg.AvailableSettings.DRIVER;
@@ -94,7 +91,7 @@ class FastBootMetadataBuilder {
 		final BootstrapServiceRegistry bsr = buildBootstrapServiceRegistry( providedClassLoaderService);
 
 		// merge configuration sources and build the "standard" service registry
-		final RecordableBootstrap ssrBuilder = new RecordableBootstrap( bsr );
+		final StandardServiceRegistryBuilder ssrBuilder = new StandardServiceRegistryBuilder( bsr );
 
 		insertStateRecorders( ssrBuilder );
 
@@ -129,8 +126,7 @@ class FastBootMetadataBuilder {
 	}
 
 	private void insertStateRecorders(StandardServiceRegistryBuilder ssrBuilder) {
-//		ssrBuilder.addService( DialectFactory.class, new RecordingDialectFactory() );
-//		ssrBuilder.addInitiator(  )
+		ssrBuilder.addService( DialectFactory.class, new RecordingDialectFactory() );
 	}
 
 	private BootstrapServiceRegistry buildBootstrapServiceRegistry(ClassLoaderService providedClassLoaderService) {
@@ -208,24 +204,21 @@ class FastBootMetadataBuilder {
 		return mergedSettings;
 	}
 
-	public RecordedState build() {
-		MetadataImplementor fullMeta = MetadataBuildingProcess.complete(
+	public MetadataImplementor build() {
+		MetadataImplementor build = MetadataBuildingProcess.complete(
 				managedResources,
 				metamodelBuilder.getBootstrapContext(),
 				metamodelBuilder.getMetadataBuildingOptions()
-
 		);
-		Dialect dialect = extractDialect();
-		final AbstractServiceRegistryImpl serviceRegistry = (AbstractServiceRegistryImpl) metamodelBuilder.getBootstrapContext().getServiceRegistry();
-		serviceRegistry.close();
-		serviceRegistry.resetParent( null );
-		return new RecordedState( dialect, fullMeta, configurationValues );
+		extractRecordedState( managedResources );
+		return build;
 	}
 
-	private Dialect extractDialect() {
+	private void extractRecordedState(ManagedResources build) {
 		DialectFactory service = standardServiceRegistry.getService( DialectFactory.class );
 		RecordingDialectFactory casted = (RecordingDialectFactory)service;
-		return casted.getDialect();
+		Dialect dialect = casted.getDialect();
+		System.out.println( "##CLASS" + dialect.getClass() );
 	}
 
 	private static class MergedSettings {
