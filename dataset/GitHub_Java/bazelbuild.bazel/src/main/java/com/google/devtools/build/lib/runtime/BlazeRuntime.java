@@ -87,7 +87,7 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import com.google.devtools.common.options.TriState;
 import java.io.File;
 import java.io.IOException;
@@ -149,7 +149,7 @@ public final class BlazeRuntime {
   private final AtomicInteger storedExitCode = new AtomicInteger();
 
   // We pass this through here to make it available to the MasterLogWriter.
-  private final OptionsParsingResult startupOptionsProvider;
+  private final OptionsProvider startupOptionsProvider;
 
   private final ProjectFile.Provider projectFileProvider;
   @Nullable private final InvocationPolicy moduleInvocationPolicy;
@@ -174,7 +174,7 @@ public final class BlazeRuntime {
       ActionKeyContext actionKeyContext,
       Clock clock,
       Runnable abruptShutdownHandler,
-      OptionsParsingResult startupOptionsProvider,
+      OptionsProvider startupOptionsProvider,
       Iterable<BlazeModule> blazeModules,
       SubscriberExceptionHandler eventBusExceptionHandler,
       ProjectFile.Provider projectFileProvider,
@@ -559,7 +559,7 @@ public final class BlazeRuntime {
     return clock;
   }
 
-  public OptionsParsingResult getStartupOptionsProvider() {
+  public OptionsProvider getStartupOptionsProvider() {
     return startupOptionsProvider;
   }
 
@@ -989,7 +989,7 @@ public final class BlazeRuntime {
    * parser can set the source for every option correctly. If that cannot be parsed or is missing,
    * we just report an unknown source for every startup option.
    */
-  private static OptionsParsingResult parseStartupOptions(
+  private static OptionsProvider parseStartupOptions(
       Iterable<BlazeModule> modules, List<String> args) throws OptionsParsingException {
     ImmutableList<Class<? extends OptionsBase>> optionClasses =
         BlazeCommandUtils.getStartupOptions(modules);
@@ -1031,7 +1031,7 @@ public final class BlazeRuntime {
   private static BlazeRuntime newRuntime(Iterable<BlazeModule> blazeModules, List<String> args,
       Runnable abruptShutdownHandler)
       throws AbruptExitException, OptionsParsingException {
-    OptionsParsingResult options = parseStartupOptions(blazeModules, args);
+    OptionsProvider options = parseStartupOptions(blazeModules, args);
     for (BlazeModule module : blazeModules) {
       module.globalInit(options);
     }
@@ -1283,7 +1283,7 @@ public final class BlazeRuntime {
     private ServerDirectories serverDirectories;
     private Clock clock;
     private Runnable abruptShutdownHandler;
-    private OptionsParsingResult startupOptionsProvider;
+    private OptionsProvider startupOptionsProvider;
     private final List<BlazeModule> blazeModules = new ArrayList<>();
     private SubscriberExceptionHandler eventBusExceptionHandler = new RemoteExceptionHandler();
     private UUID instanceId;
@@ -1402,7 +1402,7 @@ public final class BlazeRuntime {
       return this;
     }
 
-    public Builder setStartupOptionsProvider(OptionsParsingResult startupOptionsProvider) {
+    public Builder setStartupOptionsProvider(OptionsProvider startupOptionsProvider) {
       this.startupOptionsProvider = startupOptionsProvider;
       return this;
     }

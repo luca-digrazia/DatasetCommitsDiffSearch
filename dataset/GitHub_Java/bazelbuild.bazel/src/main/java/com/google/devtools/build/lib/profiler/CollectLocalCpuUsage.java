@@ -56,7 +56,6 @@ public class CollectLocalCpuUsage extends Thread {
   public void stopCollecting() {
     Preconditions.checkArgument(!stopCpuUsage);
     stopCpuUsage = true;
-    interrupt();
   }
 
   public void logCollectedData() {
