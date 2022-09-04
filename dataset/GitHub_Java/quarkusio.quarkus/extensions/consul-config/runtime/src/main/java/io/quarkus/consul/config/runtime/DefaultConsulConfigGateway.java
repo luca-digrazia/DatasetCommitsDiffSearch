@@ -8,7 +8,6 @@ import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +23,6 @@ import org.apache.http.conn.ssl.TrustAllStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.http.util.EntityUtils;
 
@@ -42,32 +40,26 @@ class DefaultConsulConfigGateway implements ConsulConfigGateway {
 
     public DefaultConsulConfigGateway(ConsulConfig consulConfig) {
         this.consulConfig = consulConfig;
-        if (consulConfig.agent.trustStore.isPresent() || consulConfig.agent.keyStore.isPresent()
-                || consulConfig.agent.trustCerts) {
-            this.sslSocketFactory = createFactoryFromAgentConfig(consulConfig.agent);
+        if (consulConfig.agent.keyStore.isPresent()) {
+            this.sslSocketFactory = createFactoryFromKeyStore(consulConfig.agent.keyStore.get(),
+                    consulConfig.agent.keyStorePassword);
+        } else if (consulConfig.agent.trustCerts) {
+            this.sslSocketFactory = createAllTrustingFactory();
         } else {
             this.sslSocketFactory = null;
         }
 
     }
 
-    private SSLConnectionSocketFactory createFactoryFromAgentConfig(ConsulConfig.AgentConfig agentConfig) {
+    private SSLConnectionSocketFactory createFactoryFromKeyStore(Path keyStorePath, Optional<String> keyStorePassword) {
         try {
-            SSLContextBuilder sslContextBuilder = SSLContexts.custom();
-            if (agentConfig.trustStore.isPresent()) {
-                sslContextBuilder = sslContextBuilder
-                        .loadTrustMaterial(readStore(agentConfig.trustStore.get(), agentConfig.trustStorePassword), null);
-            } else if (agentConfig.trustCerts) {
-                sslContextBuilder = sslContextBuilder.loadTrustMaterial(TrustAllStrategy.INSTANCE);
-            }
-            if (agentConfig.keyStore.isPresent()) {
-                String keyPassword = agentConfig.keyPassword.orElse(agentConfig.keyStorePassword.orElse(""));
-                sslContextBuilder = sslContextBuilder.loadKeyMaterial(
-                        readStore(agentConfig.keyStore.get(), agentConfig.keyStorePassword), keyPassword.toCharArray());
-            }
-            return new SSLConnectionSocketFactory(sslContextBuilder.build(), NoopHostnameVerifier.INSTANCE);
-        } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException | IOException | CertificateException
-                | UnrecoverableKeyException e) {
+            return new SSLConnectionSocketFactory(
+                    SSLContexts.custom()
+                            // make sure we only trust the certificates in the keystore and nothing else
+                            .loadTrustMaterial(readStore(keyStorePath, keyStorePassword), null)
+                            .build(),
+                    NoopHostnameVerifier.INSTANCE);
+        } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException | IOException | CertificateException e) {
             throw new RuntimeException(e);
         }
     }
@@ -105,6 +97,16 @@ class DefaultConsulConfigGateway implements ConsulConfigGateway {
         return keyStore;
     }
 
+    private SSLConnectionSocketFactory createAllTrustingFactory() {
+        try {
+            return new SSLConnectionSocketFactory(
+                    SSLContexts.custom().loadTrustMaterial(TrustAllStrategy.INSTANCE).build(),
+                    NoopHostnameVerifier.INSTANCE);
+        } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Override
     public Optional<Response> getValue(String key) throws IOException {
         RequestConfig requestConfig = RequestConfig.custom()
@@ -123,7 +125,7 @@ class DefaultConsulConfigGateway implements ConsulConfigGateway {
             HttpGet request = new HttpGet(finalUri);
             request.addHeader("Accept", "application/json");
             if (consulConfig.agent.token.isPresent()) {
-                request.addHeader("Authorization", "Bearer " + consulConfig.agent.token.get());
+                request.addHeader("Authorization", "Bearer " + consulConfig.agent.token);
             }
 
             try (CloseableHttpResponse response = client.execute(request)) {
