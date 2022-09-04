@@ -68,7 +68,6 @@ public abstract class Extractor implements EmbeddedPersistable {
 
     protected final String id;
     protected final String title;
-    protected final int order;
     protected final Type superType;
     protected final CursorStrategy cursorStrategy;
     protected final String targetField;
@@ -88,7 +87,6 @@ public abstract class Extractor implements EmbeddedPersistable {
 
     public Extractor(String id,
                      String title,
-                     int order,
                      Type type,
                      CursorStrategy cursorStrategy,
                      String sourceField,
@@ -107,7 +105,6 @@ public abstract class Extractor implements EmbeddedPersistable {
 
         this.id = id;
         this.title = title;
-        this.order = order;
         this.superType = type;
         this.cursorStrategy = cursorStrategy;
         this.targetField = targetField;
@@ -235,10 +232,6 @@ public abstract class Extractor implements EmbeddedPersistable {
         return title;
     }
 
-    public int getOrder() {
-        return order;
-    }
-
     public Type getType() {
         return superType;
     }
@@ -347,5 +340,4 @@ public abstract class Extractor implements EmbeddedPersistable {
         }
 
     }
-
 }
