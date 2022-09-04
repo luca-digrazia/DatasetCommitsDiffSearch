@@ -61,18 +61,14 @@ public class AarImport implements RuleConfiguredTargetFactory {
   private static final String MERGED_JAR = "classes_and_libs_merged.jar";
 
   private final JavaSemantics javaSemantics;
-  private final AndroidMigrationSemantics androidMigrationSemantics;
 
-  protected AarImport(
-      JavaSemantics javaSemantics, AndroidMigrationSemantics androidMigrationSemantics) {
+  protected AarImport(JavaSemantics javaSemantics) {
     this.javaSemantics = javaSemantics;
-    this.androidMigrationSemantics = androidMigrationSemantics;
   }
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    androidMigrationSemantics.validateRuleContext(ruleContext);
     AndroidSdkProvider.verifyPresence(ruleContext);
 
     RuleConfiguredTargetBuilder ruleBuilder = new RuleConfiguredTargetBuilder(ruleContext);
