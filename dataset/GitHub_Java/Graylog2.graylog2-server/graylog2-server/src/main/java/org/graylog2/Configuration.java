@@ -212,24 +212,6 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "versionchecks_connection_request_timeout", validator = PositiveIntegerValidator.class)
     private int versionchecksConnectionRequestTimeOut = 10000;
 
-    @Parameter(value = "monitoring_service")
-    private boolean telemetryServiceEnabled = false;
-
-    @Parameter(value = "telemetry_service_token")
-    private String telemetryServiceToken = null;
-
-    @Parameter(value = "telemetry_service_uri")
-    private String telemetryServiceUri = "https://in.monitor.services.graylog2.io/check";
-
-    @Parameter(value = "telemetry_service_connect_timeout", validator = PositiveIntegerValidator.class)
-    private int telemetryServiceConnectTimeOut = 10000;
-
-    @Parameter(value = "telemetry_service_socket_timeout", validator = PositiveIntegerValidator.class)
-    private int telemetryServiceSocketTimeOut = 20000;
-
-    @Parameter(value = "telemetry_service_connection_request_timeout", validator = PositiveIntegerValidator.class)
-    private int telemetryServiceConnectionRequestTimeOut = 20000;
-
     @Parameter(value = "http_proxy_uri")
     private String httpProxyUri;
 
@@ -594,30 +576,6 @@ public class Configuration extends BaseConfiguration {
 
     public int getVersionchecksConnectionRequestTimeOut() {
         return versionchecksConnectionRequestTimeOut;
-    }
-
-    public boolean isTelemetryServiceEnabled() {
-        return telemetryServiceEnabled;
-    }
-
-    public String getTelemetryServiceToken() {
-        return telemetryServiceToken;
-    }
-
-    public String getTelemetryServiceUri() {
-        return telemetryServiceUri;
-    }
-
-    public int getTelemetryServiceConnectTimeOut() {
-        return telemetryServiceConnectTimeOut;
-    }
-
-    public int getTelemetryServiceSocketTimeOut() {
-        return telemetryServiceSocketTimeOut;
-    }
-
-    public int getTelemetryServiceConnectionRequestTimeOut() {
-        return telemetryServiceConnectionRequestTimeOut;
     }
 
     public String getHttpProxyUri() {

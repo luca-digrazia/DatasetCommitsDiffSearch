@@ -24,9 +24,6 @@ import org.graylog2.plugin.Tools;
 
 import java.net.URI;
 
-import static org.graylog2.plugin.Tools.getUriWithPort;
-import static org.graylog2.plugin.Tools.getUriWithScheme;
-
 public class Configuration extends BaseConfiguration {
     private static final int RADIO_DEFAULT_PORT = 12950;
 
@@ -94,9 +91,8 @@ public class Configuration extends BaseConfiguration {
         }
     }
 
-    @Override
     public URI getRestListenUri() {
-        return getUriWithPort(getUriWithScheme(restListenUri, getRestUriScheme()), GRAYLOG2_DEFAULT_PORT);
+        return Tools.getUriWithPort(restListenUri, RADIO_DEFAULT_PORT);
     }
 
     public URI getGraylog2ServerUri() {
