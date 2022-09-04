@@ -20,7 +20,6 @@
 
 package org.graylog2;
 
-import java.io.BufferedWriter;
 import org.graylog2.periodical.HostDistinctThread;
 import org.graylog2.periodical.SystemStatisticThread;
 import org.graylog2.periodical.SystemStatistics;
@@ -29,8 +28,6 @@ import org.graylog2.messagehandlers.gelf.GELFMainThread;
 import org.graylog2.messagehandlers.gelf.GELF;
 import org.graylog2.database.MongoConnection;
 import java.io.FileInputStream;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Properties;
 
@@ -76,9 +73,6 @@ public class Main {
         requiredConfigFields.add("mongodb_host");
         requiredConfigFields.add("mongodb_database");
         requiredConfigFields.add("mongodb_port");
-        requiredConfigFields.add("messages_collection_size");
-        requiredConfigFields.add("use_gelf");
-        requiredConfigFields.add("gelf_listen_port");
 
         // Check if all required configuration fields are set.
         for (Object requiredConfigFieldO : requiredConfigFields) {
@@ -108,22 +102,6 @@ public class Main {
             Main.debugMode = true;
         } else {
             System.out.println("[x] Not in Debug mode.");
-        }
-
-        // Write a PID file.
-        try {
-            String pid = Tools.getPID();
-            if (pid == null || pid.length() == 0) {
-                throw new Exception("Could not determine PID.");
-            }
-
-            FileWriter fstream = new FileWriter("/tmp/graylog2.pid");
-            BufferedWriter out = new BufferedWriter(fstream);
-            out.write(pid);
-            out.close();
-        } catch (Exception e) {
-            System.out.println("Could not write PID file: " + e.toString());
-            System.exit(1); // Exit with error.
         }
 
         try {
