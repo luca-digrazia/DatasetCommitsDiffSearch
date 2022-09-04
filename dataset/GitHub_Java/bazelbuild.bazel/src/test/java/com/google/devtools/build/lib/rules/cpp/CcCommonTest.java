@@ -117,7 +117,8 @@ public class CcCommonTest extends BuildViewTestCase {
     assertThat(
             emptylib
                 .get(CcLinkingInfo.PROVIDER)
-                .getDynamicModeParamsForExecutable()
+                .getCcLinkParamsStore()
+                .get(/* linkingStatically= */ false, /* linkShared= */ false)
                 .getDynamicLibrariesForRuntime()
                 .isEmpty())
         .isTrue();
@@ -230,7 +231,8 @@ public class CcCommonTest extends BuildViewTestCase {
     assertThat(
             statically
                 .get(CcLinkingInfo.PROVIDER)
-                .getDynamicModeParamsForExecutable()
+                .getCcLinkParamsStore()
+                .get(/* linkingStatically= */ false, /* linkShared= */ false)
                 .getDynamicLibrariesForRuntime()
                 .isEmpty())
         .isTrue();

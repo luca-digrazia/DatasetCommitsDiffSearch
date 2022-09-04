@@ -219,7 +219,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(
             hello
                 .get(CcLinkingInfo.PROVIDER)
-                .getDynamicModeParamsForExecutable()
+                .getCcLinkParamsStore()
+                .get(/* linkingStatically= */ false, /* linkShared= */ false)
                 .getDynamicLibrariesForRuntime())
         .containsExactly(implSharedObjectLink);
   }
@@ -284,7 +285,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(
             hello
                 .get(CcLinkingInfo.PROVIDER)
-                .getDynamicModeParamsForExecutable()
+                .getCcLinkParamsStore()
+                .get(/* linkingStatically= */ false, /* linkShared= */ false)
                 .getDynamicLibrariesForRuntime())
         .containsExactly(implSharedObjectLink);
   }
@@ -295,7 +297,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(
             hello
                 .get(CcLinkingInfo.PROVIDER)
-                .getDynamicModeParamsForExecutable()
+                .getCcLinkParamsStore()
+                .getCcLinkParams(false, false)
                 .getLinkopts()
                 .isEmpty())
         .isTrue();
@@ -1363,7 +1366,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         LinkerInputs.toNonSolibArtifacts(
             target
                 .get(CcLinkingInfo.PROVIDER)
-                .getStaticModeParamsForDynamicLibrary()
+                .getCcLinkParamsStore()
+                .getCcLinkParams(true, true)
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).contains("bin a/libfoo.a");
   }
@@ -1378,7 +1382,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         LinkerInputs.toNonSolibArtifacts(
             target
                 .get(CcLinkingInfo.PROVIDER)
-                .getStaticModeParamsForDynamicLibrary()
+                .getCcLinkParamsStore()
+                .getCcLinkParams(true, true)
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin a/libfoo.a");
     assertThat(artifactsToStrings(libraries)).contains("src a/libfoo.so");
@@ -1394,7 +1399,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         LinkerInputs.toNonSolibArtifacts(
             target
                 .get(CcLinkingInfo.PROVIDER)
-                .getStaticModeParamsForDynamicLibrary()
+                .getCcLinkParamsStore()
+                .getCcLinkParams(true, true)
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).doesNotContain("src a/libfoo.so");
     assertThat(artifactsToStrings(libraries)).contains("src a/libfoo.lo");
@@ -1412,7 +1418,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         target
             .get(CcLinkingInfo.PROVIDER)
-            .getDynamicModeParamsForDynamicLibrary()
+            .getCcLinkParamsStore()
+            .getCcLinkParams(false, true)
             .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin a/libfoo.ifso");
     assertThat(artifactsToStrings(libraries)).contains("bin a/libfoo.so");
@@ -1426,7 +1433,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         target
             .get(CcLinkingInfo.PROVIDER)
-            .getDynamicModeParamsForDynamicLibrary()
+            .getCcLinkParamsStore()
+            .getCcLinkParams(false, true)
             .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin _solib_k8/liba_Slibfoo.ifso");
     assertThat(artifactsToStrings(libraries)).contains("bin _solib_k8/liba_Slibfoo.so");
@@ -1441,7 +1449,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         target
             .get(CcLinkingInfo.PROVIDER)
-            .getDynamicModeParamsForDynamicLibrary()
+            .getCcLinkParamsStore()
+            .getCcLinkParams(false, true)
             .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).isEmpty();
   }
