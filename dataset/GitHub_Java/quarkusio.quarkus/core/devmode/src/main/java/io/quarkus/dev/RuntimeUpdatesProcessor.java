@@ -298,9 +298,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                 continue;
             }
             Path root = Paths.get(rootPath);
-            if (!Files.exists(root) || !Files.isReadable(root)) {
-                continue;
-            }
             Path classesDir = Paths.get(module.getClassesPath());
             //copy all modified non hot deployment files over
             if (doCopy) {
@@ -334,7 +331,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                         });
                     }
                     for (Path i : seen) {
-                        moduleResources.remove(i);
                         if (!Files.isDirectory(i)) {
                             Files.delete(i);
                         }
