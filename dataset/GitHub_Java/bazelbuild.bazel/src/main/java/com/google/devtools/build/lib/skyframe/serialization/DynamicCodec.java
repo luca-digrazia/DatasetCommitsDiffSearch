@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.UnsafeProvider;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
@@ -25,7 +26,6 @@ import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.TreeMap;
 import sun.reflect.ReflectionFactory;
 
 /**
@@ -37,7 +37,7 @@ public class DynamicCodec implements ObjectCodec<Object> {
 
   private final Class<?> type;
   private final Constructor<?> constructor;
-  private final TypeAndOffset[] offsets;
+  private final ImmutableSortedMap<Field, Long> offsets;
 
   public DynamicCodec(Class<?> type) throws ReflectiveOperationException {
     this.type = type;
@@ -58,8 +58,8 @@ public class DynamicCodec implements ObjectCodec<Object> {
   @Override
   public void serialize(SerializationContext context, Object obj, CodedOutputStream codedOut)
       throws SerializationException, IOException {
-    for (int i = 0; i < offsets.length; ++i) {
-      serializeField(context, codedOut, obj, offsets[i].type, offsets[i].offset);
+    for (Map.Entry<Field, Long> entry : offsets.entrySet()) {
+      serializeField(context, codedOut, obj, entry.getKey().getType(), entry.getValue());
     }
   }
 
@@ -105,15 +105,6 @@ public class DynamicCodec implements ObjectCodec<Object> {
       }
     } else if (type.isArray()) {
       Object arr = UnsafeProvider.getInstance().getObject(obj, offset);
-      if (type.getComponentType().equals(byte.class)) {
-        if (arr == null) {
-          codedOut.writeBoolNoTag(false);
-        } else {
-          codedOut.writeBoolNoTag(true);
-          codedOut.writeByteArrayNoTag((byte[]) arr);
-        }
-        return;
-      }
       if (arr == null) {
         codedOut.writeInt32NoTag(-1);
         return;
@@ -149,8 +140,8 @@ public class DynamicCodec implements ObjectCodec<Object> {
       throw new SerializationException("Could not instantiate object of type: " + type, e);
     }
     context.registerInitialValue(instance);
-    for (int i = 0; i < offsets.length; ++i) {
-      deserializeField(context, codedIn, instance, offsets[i].type, offsets[i].offset);
+    for (Map.Entry<Field, Long> entry : offsets.entrySet()) {
+      deserializeField(context, codedIn, instance, entry.getKey().getType(), entry.getValue());
     }
     return instance;
   }
@@ -194,12 +185,6 @@ public class DynamicCodec implements ObjectCodec<Object> {
         throw new UnsupportedOperationException("Unknown primitive type: " + type);
       }
     } else if (type.isArray()) {
-      if (type.getComponentType().equals(byte.class)) {
-        boolean isNonNull = codedIn.readBool();
-        UnsafeProvider.getInstance()
-            .putObject(obj, offset, isNonNull ? codedIn.readByteArray() : null);
-        return;
-      }
       int length = codedIn.readInt32();
       if (length < 0) {
         UnsafeProvider.getInstance().putObject(obj, offset, null);
@@ -221,8 +206,9 @@ public class DynamicCodec implements ObjectCodec<Object> {
     }
   }
 
-  private static <T> TypeAndOffset[] getOffsets(Class<T> type) {
-    TreeMap<Field, Long> offsets = new TreeMap<>(new FieldComparator());
+  private static <T> ImmutableSortedMap<Field, Long> getOffsets(Class<T> type) {
+    ImmutableSortedMap.Builder<Field, Long> offsets =
+        new ImmutableSortedMap.Builder<>(new FieldComparator());
     for (Class<? super T> next = type; next != null; next = next.getSuperclass()) {
       for (Field field : next.getDeclaredFields()) {
         if ((field.getModifiers() & (Modifier.STATIC | Modifier.TRANSIENT)) != 0) {
@@ -232,24 +218,7 @@ public class DynamicCodec implements ObjectCodec<Object> {
         offsets.put(field, UnsafeProvider.getInstance().objectFieldOffset(field));
       }
     }
-    // Converts to an array to make it easy to avoid the use of iterators.
-    TypeAndOffset[] offsetsArr = new TypeAndOffset[offsets.size()];
-    int i = 0;
-    for (Map.Entry<Field, Long> entry : offsets.entrySet()) {
-      offsetsArr[i] = new TypeAndOffset(entry.getKey().getType(), entry.getValue());
-      ++i;
-    }
-    return offsetsArr;
-  }
-
-  private static class TypeAndOffset {
-    public final Class<?> type;
-    public final long offset;
-
-    public TypeAndOffset(Class<?> type, long offset) {
-      this.type = type;
-      this.offset = offset;
-    }
+    return offsets.build();
   }
 
   private static Constructor<?> getConstructor(Class<?> type) throws ReflectiveOperationException {

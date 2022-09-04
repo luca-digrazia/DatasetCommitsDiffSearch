@@ -106,22 +106,10 @@ public class DeserializationContext {
    * context.
    */
   @CheckReturnValue
-  public DeserializationContext getMemoizingContext() {
+  DeserializationContext getMemoizingContext() {
     if (deserializer != null) {
       return this;
     }
-    return getNewMemoizingContext();
-  }
-
-  /**
-   * Returns a memoizing {@link DeserializationContext}, as getMemoizingContext above. Unlike
-   * getMemoizingContext, this method is not idempotent - the returned context will always be fresh.
-   */
-  public DeserializationContext getNewMemoizingContext() {
     return new DeserializationContext(this.registry, this.dependencies, new Deserializer());
-  }
-
-  public DeserializationContext getNewNonMemoizingContext() {
-    return new DeserializationContext(this.registry, this.dependencies, null);
   }
 }

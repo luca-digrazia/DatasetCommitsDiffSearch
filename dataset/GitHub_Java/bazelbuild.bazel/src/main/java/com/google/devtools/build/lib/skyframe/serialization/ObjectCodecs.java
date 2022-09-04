@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
@@ -43,41 +42,21 @@ public class ObjectCodecs {
     this(codecRegistry, ImmutableMap.of());
   }
 
-  @VisibleForTesting
-  public SerializationContext getSerializationContext() {
-    return serializationContext;
-  }
-
-  @VisibleForTesting
-  public DeserializationContext getDeserializationContext() {
-    return deserializationContext;
-  }
-
   public ByteString serialize(Object subject) throws SerializationException {
     return serializeToByteString(subject, this::serialize);
   }
 
   public void serialize(Object subject, CodedOutputStream codedOut) throws SerializationException {
-    serializeImpl(subject, codedOut, serializationContext);
+    serializeImpl(subject, codedOut, /*memoize=*/ false);
   }
 
   public ByteString serializeMemoized(Object subject) throws SerializationException {
     return serializeToByteString(subject, this::serializeMemoized);
   }
 
-  public SerializationResult<ByteString> serializeMemoizedAndBlocking(Object subject)
-      throws SerializationException {
-    SerializationContext memoizingContext =
-        serializationContext.getMemoizingAndBlockingOnWriteContext();
-    ByteString byteString =
-        serializeToByteString(
-            subject, (subj, codedOut) -> serializeImpl(subj, codedOut, memoizingContext));
-    return SerializationResult.create(byteString, memoizingContext.createFutureToBlockWritingOn());
-  }
-
   public void serializeMemoized(Object subject, CodedOutputStream codedOut)
       throws SerializationException {
-    serializeImpl(subject, codedOut, serializationContext.getMemoizingContext());
+    serializeImpl(subject, codedOut, /*memoize=*/ true);
   }
 
   public Object deserialize(ByteString data) throws SerializationException {
@@ -96,11 +75,14 @@ public class ObjectCodecs {
     return deserializeImpl(codedIn, /*memoize=*/ true);
   }
 
-  private void serializeImpl(
-      Object subject, CodedOutputStream codedOut, SerializationContext serializationContext)
+  private void serializeImpl(Object subject, CodedOutputStream codedOut, boolean memoize)
       throws SerializationException {
     try {
-      serializationContext.serialize(subject, codedOut);
+      if (memoize) {
+        serializationContext.getMemoizingContext().serialize(subject, codedOut);
+      } else {
+        serializationContext.serialize(subject, codedOut);
+      }
     } catch (IOException e) {
       throw new SerializationException("Failed to serialize " + subject, e);
     }

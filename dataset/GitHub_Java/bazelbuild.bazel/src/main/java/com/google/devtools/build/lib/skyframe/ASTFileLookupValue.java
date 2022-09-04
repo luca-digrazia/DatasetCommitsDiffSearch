@@ -101,14 +101,9 @@ public abstract class ASTFileLookupValue implements NotComparableSkyValue {
         String.format("Unable to load package for '%s': %s", fileLabel, reason));
   }
 
-  static ASTFileLookupValue forMissingFile(Label fileLabel) {
-    return new ASTLookupNoFile(
-        String.format("Unable to load file '%s': file doesn't exist", fileLabel));
-  }
-
   static ASTFileLookupValue forBadFile(Label fileLabel) {
     return new ASTLookupNoFile(
-        String.format("Unable to load file '%s': it isn't a regular file", fileLabel));
+        String.format("Unable to load file '%s': file doesn't exist or isn't a file", fileLabel));
   }
 
   public static ASTFileLookupValue withFile(BuildFileAST ast) {
