@@ -17,12 +17,15 @@
 package org.graylog2.decorators;
 
 import com.google.inject.multibindings.MapBinder;
+import com.google.inject.multibindings.Multibinder;
 import org.graylog2.plugin.decorators.SearchResponseDecorator;
 import org.graylog2.plugin.inject.Graylog2Module;
 
 public class DecoratorBindings extends Graylog2Module {
     @Override
     protected void configure() {
+        Multibinder<SearchResponseDecorator> searchResponseDecoratorMultibinder = Multibinder.newSetBinder(binder(), SearchResponseDecorator.class);
+
         final MapBinder<String, SearchResponseDecorator.Factory> searchResponseDecoratorBinder = searchResponseDecoratorBinder();
         installSearchResponseDecorator(searchResponseDecoratorBinder,
                                        SyslogSeverityMapperDecorator.class,
@@ -31,9 +34,5 @@ public class DecoratorBindings extends Graylog2Module {
         installSearchResponseDecorator(searchResponseDecoratorBinder,
                                        FormatStringDecorator.class,
                                        FormatStringDecorator.Factory.class);
-
-        installSearchResponseDecorator(searchResponseDecoratorBinder,
-                                       LookupTableDecorator.class,
-                                       LookupTableDecorator.Factory.class);
     }
 }

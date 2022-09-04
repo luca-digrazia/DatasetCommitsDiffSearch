@@ -16,7 +16,6 @@
  */
 package org.graylog2.decorators;
 
-import com.floreysoft.jmte.Engine;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
@@ -35,14 +34,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.graylog2.rest.models.messages.responses.ResultMessageSummary.create;
 
 public class FormatStringDecoratorTest {
-    private final Engine templateEngine = Engine.createDefaultEngine();
 
     @Test
     public void testFormat() {
 
         final DecoratorImpl decorator = getDecoratorConfig("${field_a}: ${field_b}", "message", true);
 
-        final FormatStringDecorator formatStringDecorator = new FormatStringDecorator(decorator, templateEngine);
+        final FormatStringDecorator formatStringDecorator = new FormatStringDecorator(decorator);
         final SearchResponse searchResponse = getSearchResponse();
 
         final SearchResponse response = formatStringDecorator.apply(searchResponse);
@@ -58,7 +56,7 @@ public class FormatStringDecoratorTest {
     public void formatAllowEmptyValues() {
         final DecoratorImpl decorator = getDecoratorConfig("${field_a}: ${field_b}", "message", false);
 
-        final FormatStringDecorator formatStringDecorator = new FormatStringDecorator(decorator, templateEngine);
+        final FormatStringDecorator formatStringDecorator = new FormatStringDecorator(decorator);
         final SearchResponse searchResponse = getSearchResponse();
 
         final SearchResponse response = formatStringDecorator.apply(searchResponse);

@@ -93,14 +93,14 @@ public class FormatStringDecorator implements SearchResponseDecorator {
     }
 
     @Inject
-    public FormatStringDecorator(@Assisted Decorator decorator, Engine templateEngine) {
+    public FormatStringDecorator(@Assisted Decorator decorator) {
         final String formatString = (String) requireNonNull(decorator.config().get(CK_FORMAT_STRING),
                                                             CK_FORMAT_STRING + " cannot be null");
         this.targetField = (String) requireNonNull(decorator.config().get(CK_TARGET_FIELD),
                                                    CK_TARGET_FIELD + " cannot be null");
         requireAllFields = (boolean) requireNonNull(decorator.config().get(CK_REQUIRE_ALL_FIELDS),
                                                     CK_REQUIRE_ALL_FIELDS + " cannot be null");
-        template = requireNonNull(templateEngine, "templateEngine").getTemplate(formatString);
+        template = Engine.createDefaultEngine().getTemplate(formatString);
         usedVariables = template.getUsedVariables();
     }
 
@@ -108,8 +108,10 @@ public class FormatStringDecorator implements SearchResponseDecorator {
     public SearchResponse apply(SearchResponse searchResponse) {
         final List<ResultMessageSummary> summaries = searchResponse.messages().stream()
                 .map(summary -> {
-                    if (requireAllFields && !usedVariables.stream().allMatch(variable -> summary.message().containsKey(variable))) {
-                        return summary;
+                    if (requireAllFields) {
+                        if (!usedVariables.stream().allMatch(variable -> summary.message().containsKey(variable))) {
+                            return summary;
+                        }
                     }
                     final String formattedString = template.transform(summary.message(), Locale.ENGLISH);
 
