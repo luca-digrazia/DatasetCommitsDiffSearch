@@ -56,13 +56,15 @@ import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionContext.Reply;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.CppHelper.PregreppedHeader;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
+import com.google.devtools.build.lib.vfs.FileSystemProvider;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -86,11 +88,9 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 
 /** Action that represents some kind of C++ compilation step. */
-@AutoCodec
 @ThreadCompatible
 public class CppCompileAction extends AbstractAction
     implements IncludeScannable, ExecutionInfoSpecifier, CommandAction {
-  public static final ObjectCodec<CppCompileAction> CODEC = new CppCompileAction_AutoCodec();
 
   private static final PathFragment BUILD_PATH_FRAGMENT = PathFragment.create("BUILD");
 
@@ -227,6 +227,8 @@ public class CppCompileAction extends AbstractAction
 
   private CcToolchainFeatures.Variables overwrittenVariables = null;
 
+  private PathFragment gccToolPath;
+
   /**
    * Creates a new action to compile C/C++ source files.
    *
@@ -261,7 +263,7 @@ public class CppCompileAction extends AbstractAction
    * @param cppSemantics C++ compilation semantics
    * @param cppProvider - CcToolchainProvider with configuration-dependent information.
    */
-  CppCompileAction(
+  protected CppCompileAction(
       ActionOwner owner,
       NestedSet<Artifact> allInputs,
       FeatureConfiguration featureConfiguration,
@@ -293,125 +295,62 @@ public class CppCompileAction extends AbstractAction
       String actionName,
       CppSemantics cppSemantics,
       CcToolchainProvider cppProvider) {
-    this(
+    super(
         owner,
         allInputs,
-        CollectionUtils.asSetWithoutNulls(
+        CollectionUtils.asListWithoutNulls(
             outputFile,
-            dotdFile == null ? null : dotdFile.artifact(),
+            (dotdFile == null ? null : dotdFile.artifact()),
             gcnoFile,
             dwoFile,
-            ltoIndexingFile),
-        localShellEnvironment,
-        Preconditions.checkNotNull(outputFile),
-        sourceFile,
-        optionalSourceFile,
-        // We do not need to include the middleman artifact since it is a generated
-        // artifact and will definitely exist prior to this action execution.
-        mandatoryInputs,
-        prunableInputs,
-        // inputsKnown begins as the logical negation of shouldScanIncludes.
-        // When scanning includes, the inputs begin as not known, and become
-        // known after inclusion scanning. When *not* scanning includes,
-        // the inputs are as declared, hence known, and remain so.
-        shouldScanIncludes,
-        shouldPruneModules,
-        usePic,
-        useHeaderModules,
-        isStrictSystemIncludes,
-        context,
-        lipoScannables,
-        builtinIncludeFiles,
-        ImmutableList.copyOf(additionalIncludeScanningRoots),
-        CompileCommandLine.builder(
-                sourceFile, coptsFilter, actionName, crosstoolTopPathFragment, dotdFile)
-            .setFeatureConfiguration(featureConfiguration)
-            .setVariables(variables)
-            .build(),
-        executionInfo,
-        environment,
-        actionName,
-        featureConfiguration,
-        actionClassId,
-        shouldScanIncludes || cppSemantics.needsDotdInputPruning(),
-        ImmutableList.copyOf(cppProvider.getBuiltInIncludeDirectories()),
-        /*additionalInputs=*/ null,
-        /*usedModules=*/ null,
-        /*topLevelModules=*/ null,
-        /*overwrittenVariables=*/ null,
-        cppSemantics.needsDotdInputPruning(),
-        cppSemantics.needsIncludeValidation(),
-        cppSemantics.getIncludeProcessing());
-    Preconditions.checkArgument(!shouldPruneModules || shouldScanIncludes);
-  }
-
-  @AutoCodec.Instantiator
-  @VisibleForSerialization
-  CppCompileAction(
-      ActionOwner owner,
-      NestedSet<Artifact> inputs,
-      ImmutableSet<Artifact> outputs,
-      ImmutableMap<String, String> localShellEnvironment,
-      Artifact outputFile,
-      Artifact sourceFile,
-      Artifact optionalSourceFile,
-      NestedSet<Artifact> mandatoryInputs,
-      NestedSet<Artifact> prunableInputs,
-      boolean shouldScanIncludes,
-      boolean shouldPruneModules,
-      boolean usePic,
-      boolean useHeaderModules,
-      boolean isStrictSystemIncludes,
-      CppCompilationContext context,
-      Iterable<IncludeScannable> lipoScannables,
-      ImmutableList<Artifact> builtinIncludeFiles,
-      ImmutableList<Artifact> additionalIncludeScanningRoots,
-      CompileCommandLine compileCommandLine,
-      ImmutableMap<String, String> executionInfo,
-      ImmutableMap<String, String> environment,
-      String actionName,
-      FeatureConfiguration featureConfiguration,
-      UUID actionClassId,
-      boolean discoversInputs,
-      ImmutableList<PathFragment> builtInIncludeDirectories,
-      Iterable<Artifact> additionalInputs,
-      Collection<Artifact> usedModules,
-      Iterable<Artifact> topLevelModules,
-      CcToolchainFeatures.Variables overwrittenVariables,
-      boolean needsDotdInputPruning,
-      boolean needsIncludeValidation,
-      IncludeProcessing includeProcessing) {
-    super(owner, inputs, outputs);
+            ltoIndexingFile));
     this.localShellEnvironment = localShellEnvironment;
-    this.outputFile = outputFile;
     this.sourceFile = sourceFile;
+    this.outputFile = Preconditions.checkNotNull(outputFile);
     this.optionalSourceFile = optionalSourceFile;
-    this.mandatoryInputs = mandatoryInputs;
-    this.prunableInputs = prunableInputs;
+    this.context = context;
+    this.featureConfiguration = featureConfiguration;
+    // inputsKnown begins as the logical negation of shouldScanIncludes.
+    // When scanning includes, the inputs begin as not known, and become
+    // known after inclusion scanning. When *not* scanning includes,
+    // the inputs are as declared, hence known, and remain so.
     this.shouldScanIncludes = shouldScanIncludes;
     this.shouldPruneModules = shouldPruneModules;
+    // We can only prune modules if include scanning is enabled.
+    Preconditions.checkArgument(!shouldPruneModules || shouldScanIncludes, this);
     this.usePic = usePic;
     this.useHeaderModules = useHeaderModules;
     this.isStrictSystemIncludes = isStrictSystemIncludes;
-    this.context = context;
+    this.discoversInputs = shouldScanIncludes || cppSemantics.needsDotdInputPruning();
+    this.compileCommandLine =
+        CompileCommandLine.builder(
+                sourceFile,
+                coptsFilter,
+                actionName,
+                crosstoolTopPathFragment,
+                dotdFile)
+            .setFeatureConfiguration(featureConfiguration)
+            .setVariables(variables)
+            .build();
     this.lipoScannables = lipoScannables;
-    this.builtinIncludeFiles = builtinIncludeFiles;
-    this.additionalIncludeScanningRoots = additionalIncludeScanningRoots;
-    this.compileCommandLine = compileCommandLine;
+    this.actionClassId = actionClassId;
     this.executionInfo = executionInfo;
     this.environment = environment;
     this.actionName = actionName;
-    this.featureConfiguration = featureConfiguration;
-    this.needsDotdInputPruning = needsDotdInputPruning;
-    this.needsIncludeValidation = needsIncludeValidation;
-    this.includeProcessing = includeProcessing;
-    this.actionClassId = actionClassId;
-    this.discoversInputs = discoversInputs;
-    this.builtInIncludeDirectories = builtInIncludeDirectories;
-    this.additionalInputs = additionalInputs;
-    this.usedModules = usedModules;
-    this.topLevelModules = topLevelModules;
-    this.overwrittenVariables = overwrittenVariables;
+
+    // We do not need to include the middleman artifact since it is a generated
+    // artifact and will definitely exist prior to this action execution.
+    this.mandatoryInputs = mandatoryInputs;
+    this.prunableInputs = prunableInputs;
+    this.builtinIncludeFiles = builtinIncludeFiles;
+    this.needsDotdInputPruning = cppSemantics.needsDotdInputPruning();
+    this.needsIncludeValidation = cppSemantics.needsIncludeValidation();
+    this.includeProcessing = cppSemantics.getIncludeProcessing();
+
+    this.additionalIncludeScanningRoots = ImmutableList.copyOf(additionalIncludeScanningRoots);
+    this.builtInIncludeDirectories =
+        ImmutableList.copyOf(cppProvider.getBuiltInIncludeDirectories());
+    this.gccToolPath = cppProvider.getToolPathFragment(Tool.GCC);
   }
 
   /**
@@ -480,13 +419,15 @@ public class CppCompileAction extends AbstractAction
     return Iterables.concat(getInputs(), prunableInputs);
   }
 
-  /**
-   * Returns the results of include scanning or, when that is null, all prunable inputs and header
-   * modules.
-   */
-  private Iterable<Artifact> findAdditionalInputs(ActionExecutionContext actionExecutionContext)
+  @Nullable
+  @Override
+  public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     Iterable<Artifact> initialResult;
+
+    actionExecutionContext
+        .getEventBus()
+        .post(ActionStatusMessage.analysisStrategy(this));
     try {
       initialResult =
           actionExecutionContext
@@ -510,21 +451,9 @@ public class CppCompileAction extends AbstractAction
         result.addTransitive(context.getTransitiveModules(usePic));
       }
       result.addTransitive(prunableInputs);
-      return result.build();
-    } else {
-      return initialResult;
+      additionalInputs = result.build();
+      return additionalInputs;
     }
-  }
-
-  @Nullable
-  @Override
-  public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException, InterruptedException {
-    actionExecutionContext
-        .getEventBus()
-        .post(ActionStatusMessage.analysisStrategy(this));
-
-    Iterable<Artifact> initialResult = findAdditionalInputs(actionExecutionContext);
 
     if (shouldPruneModules) {
       Set<Artifact> initialResultSet = Sets.newLinkedHashSet(initialResult);
@@ -777,7 +706,7 @@ public class CppCompileAction extends AbstractAction
   @Override
   public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext) {
     CppCompileInfo.Builder info = CppCompileInfo.newBuilder();
-    info.setTool(compileCommandLine.getToolPath());
+    info.setTool(gccToolPath.getPathString());
     for (String option : getCompilerOptions()) {
       info.addCompilerOption(option);
     }
@@ -1334,10 +1263,20 @@ public class CppCompileAction extends AbstractAction
   public Iterable<Artifact> getInputFilesForExtraAction(
       ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    Iterable<Artifact> discoveredInputs = findAdditionalInputs(actionExecutionContext);
+    Iterable<Artifact> scannedIncludes;
+    try {
+      scannedIncludes = actionExecutionContext.getContext(CppIncludeScanningContext.class)
+          .findAdditionalInputs(this, actionExecutionContext, includeProcessing);
+    } catch (ExecException e) {
+      throw e.toActionExecutionException(this);
+    }
+
+    if (scannedIncludes == null) {
+      return ImmutableList.of();
+    }
+
     return Sets.<Artifact>difference(
-        ImmutableSet.<Artifact>copyOf(discoveredInputs),
-        ImmutableSet.<Artifact>copyOf(getInputs()));
+        ImmutableSet.<Artifact>copyOf(scannedIncludes), ImmutableSet.<Artifact>copyOf(getInputs()));
   }
 
   @Override
@@ -1398,15 +1337,15 @@ public class CppCompileAction extends AbstractAction
 
   /**
    * A reference to a .d file. There are two modes:
-   *
    * <ol>
    *   <li>an Artifact that represents a real on-disk file
    *   <li>just an execPath that refers to a virtual .d file that is not written to disk
    * </ol>
    */
-  @AutoCodec
+  @AutoCodec(dependency = FileSystemProvider.class)
   public static class DotdFile {
-    public static final ObjectCodec<DotdFile> CODEC = new CppCompileAction_DotdFile_AutoCodec();
+    public static final InjectingObjectCodec<DotdFile, FileSystemProvider> CODEC =
+        new CppCompileAction_DotdFile_AutoCodec();
 
     private final Artifact artifact;
     private final PathFragment execPath;
