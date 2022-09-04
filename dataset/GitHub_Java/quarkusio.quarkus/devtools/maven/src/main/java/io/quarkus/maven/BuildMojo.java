@@ -19,6 +19,7 @@ import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 
 import io.quarkus.bootstrap.model.AppArtifact;
+import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
@@ -147,6 +148,7 @@ public class BuildMojo extends AbstractMojo {
         final AppArtifact appArtifact = new AppArtifact(projectArtifact.getGroupId(), projectArtifact.getArtifactId(),
                 projectArtifact.getClassifier(), projectArtifact.getArtifactHandler().getExtension(),
                 projectArtifact.getVersion());
+        final AppModel appModel;
         final BootstrapAppModelResolver modelResolver;
         try {
             modelResolver = new BootstrapAppModelResolver(
@@ -155,6 +157,7 @@ public class BuildMojo extends AbstractMojo {
                             .setRepositorySystemSession(repoSession)
                             .setRemoteRepositories(repos)
                             .build());
+            appModel = modelResolver.resolveModel(appArtifact);
         } catch (AppModelResolverException e) {
             throw new MojoExecutionException("Failed to resolve application model " + appArtifact + " dependencies", e);
         }
@@ -176,7 +179,7 @@ public class BuildMojo extends AbstractMojo {
                 .setModelResolver(modelResolver)
                 .setWorkDir(buildDir.toPath())
                 .setBaseName(finalName)
-                .setAppArtifact(appArtifact)
+                .setAppArtifact(appModel.getAppArtifact())
                 .build()) {
 
             // resolve the outcome we need here
