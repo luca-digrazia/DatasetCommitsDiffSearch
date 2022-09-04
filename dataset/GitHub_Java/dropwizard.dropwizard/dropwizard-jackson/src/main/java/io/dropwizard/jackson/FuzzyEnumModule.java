@@ -3,21 +3,15 @@ package io.dropwizard.jackson;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.Version;
-import com.fasterxml.jackson.databind.BeanDescription;
-import com.fasterxml.jackson.databind.DeserializationConfig;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.Module;
+import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.deser.Deserializers;
 import com.fasterxml.jackson.databind.deser.std.EnumDeserializer;
 import com.fasterxml.jackson.databind.deser.std.StdScalarDeserializer;
 import com.fasterxml.jackson.databind.introspect.AnnotatedMethod;
 import com.google.common.base.CharMatcher;
+import com.google.common.collect.Lists;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -42,7 +36,7 @@ public class FuzzyEnumModule extends Module {
         protected PermissiveEnumDeserializer(Class<Enum<?>> clazz) {
             super(clazz);
             this.constants = ((Class<Enum<?>>) handledType()).getEnumConstants();
-            this.acceptedValues = new ArrayList<>();
+            this.acceptedValues = Lists.newArrayList();
             for (Enum<?> constant : constants) {
                 acceptedValues.add(constant.name());
             }
