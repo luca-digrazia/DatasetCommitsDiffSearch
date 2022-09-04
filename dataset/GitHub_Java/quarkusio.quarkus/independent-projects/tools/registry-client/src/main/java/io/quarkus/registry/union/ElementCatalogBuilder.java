@@ -72,7 +72,8 @@ public class ElementCatalogBuilder<M> {
         private final Object version;
         private final ElementCatalogBuilder<T> catalogBuilder;
         private final T instance;
-        private List<Union<T>> unions = new ArrayList<>();
+        private Union<T> initialUnion;
+        private List<UnionVersion> unionVersions = new ArrayList<>();
         private final List<BuildCallback<Member<T>>> callbacks = new ArrayList<>();
         private final Map<Object, Element<T>> elements = new HashMap<>();
 
@@ -89,16 +90,13 @@ public class ElementCatalogBuilder<M> {
 
         MemberBuilder<T> addUnion(UnionBuilder<T> union) {
             callbacks.add(union);
+            unionVersions.add(union.version);
             return this;
         }
 
         @Override
         protected void created(Element<T> t) {
             elements.put(t.key(), t);
-        }
-
-        private void createdUnion(Union<T> union) {
-            unions.add(union);
         }
 
         public Member<T> build() {
@@ -112,6 +110,11 @@ public class ElementCatalogBuilder<M> {
                 @Override
                 public Object version() {
                     return version;
+                }
+
+                @Override
+                public Union<T> initialUnion() {
+                    return initialUnion;
                 }
 
                 @Override
@@ -140,8 +143,8 @@ public class ElementCatalogBuilder<M> {
                 }
 
                 @Override
-                public Collection<Union<T>> unions() {
-                    return unions;
+                public Collection<UnionVersion> unions() {
+                    return unionVersions;
                 }
 
                 @Override
@@ -214,7 +217,7 @@ public class ElementCatalogBuilder<M> {
                 }
             };
             for (MemberBuilder<T> mb : memberBuilders) {
-                mb.createdUnion(u);
+                mb.initialUnion = u;
             }
             return u;
         }
@@ -273,49 +276,43 @@ public class ElementCatalogBuilder<M> {
 
     public ElementCatalog<M> build() {
 
-        final Map<Object, Element<M>> builtElements = new HashMap<>(elements.size());
+        final Map<Object, Element<M>> map = new HashMap<>(elements.size());
         for (ElementBuilder<M> eb : elements.values()) {
             final Element<M> e = eb.build();
-            builtElements.put(e.key(), e);
+            map.put(e.key(), e);
         }
         for (MemberBuilder<M> m : members.values()) {
             m.build();
         }
-        final List<Union<M>> builtUnions = new ArrayList<>(unions.size());
         for (UnionBuilder<M> u : unions.values()) {
-            builtUnions.add(u.build());
+            u.build();
         }
 
         final ElementCatalog<M> catalog = new ElementCatalog<M>() {
 
             @Override
             public Collection<Element<M>> elements() {
-                return builtElements.values();
+                return map.values();
             }
 
             @Override
             public Collection<Object> elementKeys() {
-                return builtElements.keySet();
+                return elements.keySet();
             }
 
             @Override
             public Element<M> get(Object elementKey) {
-                return builtElements.get(elementKey);
+                return map.get(elementKey);
             }
 
             @Override
             public String toString() {
-                return builtElements.toString();
+                return elements.toString();
             }
 
             @Override
             public boolean isEmpty() {
-                return builtElements.isEmpty();
-            }
-
-            @Override
-            public Collection<Union<M>> unions() {
-                return builtUnions;
+                return map.isEmpty();
             }
         };
 
@@ -328,8 +325,8 @@ public class ElementCatalogBuilder<M> {
         final Map<UnionVersion, Map<Object, Member<T>>> unions = new TreeMap<>();
         for (Element<T> e : catalog.elements()) {
             for (Member<T> m : e.members()) {
-                for (Union<T> u : m.unions()) {
-                    unions.computeIfAbsent(u.version(), v -> new HashMap<>()).put(m.key(), m);
+                for (UnionVersion uv : m.unions()) {
+                    unions.computeIfAbsent(uv, v -> new HashMap<>()).put(m.key(), m);
                 }
             }
         }
@@ -353,8 +350,8 @@ public class ElementCatalogBuilder<M> {
                         "Element " + elementKey + " not found in the catalog " + elementCatalog.elementKeys());
             }
             for (Member<T> m : e.members()) {
-                for (Union<T> u : m.unions()) {
-                    unionVersions.computeIfAbsent(u.version(), v -> new IdentityHashMap<>()).put(m, m);
+                for (UnionVersion uv : m.unions()) {
+                    unionVersions.computeIfAbsent(uv, v -> new IdentityHashMap<>()).put(m, m);
                 }
             }
         }
@@ -392,11 +389,6 @@ public class ElementCatalogBuilder<M> {
         }
     }
 
-    public static boolean hasElementCatalog(ExtensionCatalog extCatalog) {
-        return extCatalog.getMetadata().containsKey("element-catalog");
-    }
-
-    @SuppressWarnings({ "unchecked" })
     public static <T> ElementCatalog<T> getElementCatalog(ExtensionCatalog extCatalog, Class<T> t) {
         return (ElementCatalog<T>) extCatalog.getMetadata().get("element-catalog");
     }
