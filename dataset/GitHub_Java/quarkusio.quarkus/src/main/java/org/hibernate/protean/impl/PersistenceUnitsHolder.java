@@ -75,9 +75,19 @@ final class PersistenceUnitsHolder {
 	}
 
 	private static MetadataImplementor createMetadata(PersistenceUnitDescriptor unit) {
-		FastBootMetadataBuilder fastBootMetadataBuilder = new FastBootMetadataBuilder( unit );
-		MetadataImplementor mi = fastBootMetadataBuilder.build();
-		return mi;
+		final Map nativeImageProcessingProperties = createNativeImageProcessingConfiguration();
+		EntityManagerFactoryBuilderImpl entityManagerFactoryBuilder = (EntityManagerFactoryBuilderImpl) Bootstrap.getEntityManagerFactoryBuilder(
+				unit,
+				nativeImageProcessingProperties,
+				FlatClassLoaderService.INSTANCE
+		);
+		return entityManagerFactoryBuilder.triggerMetadataBuild();
+	}
+
+	private static Map createNativeImageProcessingConfiguration() {
+		HashMap props = new HashMap();
+		props.put( "hibernate.temp.use_jdbc_metadata_defaults", "false" );
+		return props;
 	}
 
 	static List<PersistenceUnitDescriptor> getPersistenceUnitDescriptors() {
