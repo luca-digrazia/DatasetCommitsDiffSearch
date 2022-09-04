@@ -3,11 +3,9 @@ package io.quarkus.hibernate.orm.panache.runtime;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import javax.persistence.EntityManager;
-import javax.persistence.LockModeType;
 import javax.persistence.PersistenceException;
 import javax.persistence.Query;
 import javax.transaction.SystemException;
@@ -17,7 +15,6 @@ import io.quarkus.arc.Arc;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.common.Parameters;
 import io.quarkus.panache.common.Sort;
-import io.quarkus.panache.common.exception.PanacheQueryException;
 
 public class JpaOperations {
 
@@ -101,11 +98,11 @@ public class JpaOperations {
         return query;
     }
 
-    static int paramCount(Object[] params) {
+    private static int paramCount(Object[] params) {
         return params != null ? params.length : 0;
     }
 
-    static int paramCount(Map<String, Object> params) {
+    private static int paramCount(Map<String, Object> params) {
         return params != null ? params.size() : 0;
     }
 
@@ -114,7 +111,7 @@ public class JpaOperations {
         return entityClass.getName();
     }
 
-    static String createFindQuery(Class<?> entityClass, String query, int paramCount) {
+    private static String createFindQuery(Class<?> entityClass, String query, int paramCount) {
         if (query == null)
             return "FROM " + getEntityName(entityClass);
 
@@ -157,32 +154,6 @@ public class JpaOperations {
         return "SELECT COUNT(*) FROM " + getEntityName(entityClass) + " WHERE " + query;
     }
 
-    private static String createUpdateQuery(Class<?> entityClass, String query, int paramCount) {
-        if (query == null) {
-            throw new PanacheQueryException("Query string cannot be null");
-        }
-
-        String trimmed = query.trim();
-        if (trimmed.isEmpty()) {
-            throw new PanacheQueryException("Query string cannot be empty");
-        }
-
-        String trimmedLc = trimmed.toLowerCase();
-        if (trimmedLc.startsWith("update ")) {
-            return query;
-        }
-        if (trimmedLc.startsWith("from ")) {
-            return "UPDATE " + query;
-        }
-        if (trimmedLc.indexOf(' ') == -1 && trimmedLc.indexOf('=') == -1 && paramCount == 1) {
-            query += " = ?1";
-        }
-        if (trimmedLc.startsWith("set ")) {
-            return "UPDATE FROM " + getEntityName(entityClass) + " " + query;
-        }
-        return "UPDATE FROM " + getEntityName(entityClass) + " SET " + query;
-    }
-
     private static String createDeleteQuery(Class<?> entityClass, String query, int paramCount) {
         if (query == null)
             return "DELETE FROM " + getEntityName(entityClass);
@@ -205,7 +176,7 @@ public class JpaOperations {
         return "DELETE FROM " + getEntityName(entityClass) + " WHERE " + query;
     }
 
-    public static String toOrderBy(Sort sort) {
+    private static String toOrderBy(Sort sort) {
         StringBuilder sb = new StringBuilder(" ORDER BY ");
         for (int i = 0; i < sort.getColumns().size(); i++) {
             Sort.Column column = sort.getColumns().get(i);
@@ -223,18 +194,6 @@ public class JpaOperations {
 
     public static Object findById(Class<?> entityClass, Object id) {
         return getEntityManager().find(entityClass, id);
-    }
-
-    public static Object findById(Class<?> entityClass, Object id, LockModeType lockModeType) {
-        return getEntityManager().find(entityClass, id, lockModeType);
-    }
-
-    public static Optional<?> findByIdOptional(Class<?> entityClass, Object id) {
-        return Optional.ofNullable(findById(entityClass, id));
-    }
-
-    public static Optional<?> findByIdOptional(Class<?> entityClass, Object id, LockModeType lockModeType) {
-        return Optional.ofNullable(findById(entityClass, id, lockModeType));
     }
 
     public static PanacheQuery<?> find(Class<?> entityClass, String query, Object... params) {
@@ -370,22 +329,6 @@ public class JpaOperations {
         return count(entityClass, query, params.map());
     }
 
-    public static boolean exists(Class<?> entityClass) {
-        return count(entityClass) > 0;
-    }
-
-    public static boolean exists(Class<?> entityClass, String query, Object... params) {
-        return count(entityClass, query, params) > 0;
-    }
-
-    public static boolean exists(Class<?> entityClass, String query, Map<String, Object> params) {
-        return count(entityClass, query, params) > 0;
-    }
-
-    public static boolean exists(Class<?> entityClass, String query, Parameters params) {
-        return count(entityClass, query, params) > 0;
-    }
-
     public static long deleteAll(Class<?> entityClass) {
         return (long) getEntityManager().createQuery("DELETE FROM " + getEntityName(entityClass)).executeUpdate();
     }
@@ -419,28 +362,6 @@ public class JpaOperations {
         Query jpaQuery = getEntityManager().createQuery(query);
         bindParameters(jpaQuery, params);
         return jpaQuery.executeUpdate();
-    }
-
-    public static int executeUpdate(Class<?> entityClass, String query, Object... params) {
-        String updateQuery = createUpdateQuery(entityClass, query, paramCount(params));
-        return executeUpdate(updateQuery, params);
-    }
-
-    public static int executeUpdate(Class<?> entityClass, String query, Map<String, Object> params) {
-        String updateQuery = createUpdateQuery(entityClass, query, paramCount(params));
-        return executeUpdate(updateQuery, params);
-    }
-
-    public static int update(Class<?> entityClass, String query, Map<String, Object> params) {
-        return executeUpdate(entityClass, query, params);
-    }
-
-    public static int update(Class<?> entityClass, String query, Parameters params) {
-        return update(entityClass, query, params.map());
-    }
-
-    public static int update(Class<?> entityClass, String query, Object... params) {
-        return executeUpdate(entityClass, query, params);
     }
 
     public static void setRollbackOnly() {
