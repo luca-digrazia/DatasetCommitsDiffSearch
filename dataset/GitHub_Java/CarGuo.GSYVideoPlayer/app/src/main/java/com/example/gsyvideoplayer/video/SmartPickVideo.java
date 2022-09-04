@@ -2,7 +2,6 @@ package com.example.gsyvideoplayer.video;
 
 import android.content.Context;
 import android.util.AttributeSet;
-import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -15,7 +14,6 @@ import com.example.gsyvideoplayer.view.SwitchVideoTypeDialog;
 import com.shuyu.gsyvideoplayer.GSYVideoBaseManager;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.listener.GSYMediaPlayerListener;
-import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
@@ -230,9 +228,6 @@ public class SmartPickVideo extends StandardGSYVideoPlayer {
                 GSYVideoManager.changeManager(mTmpManager);
                 mTmpManager.setLastListener(manager.lastListener());
                 mTmpManager.setListener(manager.listener());
-
-                Debuger.printfError("**** showDisplay onSeekComplete ***** " + mSurface);
-                Debuger.printfError("**** showDisplay onSeekComplete isValid***** " + mSurface.isValid());
                 mTmpManager.setDisplay(mSurface);
                 changeUiToPlayingClear();
                 resolveChangedResult();
@@ -307,7 +302,7 @@ public class SmartPickVideo extends StandardGSYVideoPlayer {
                 mTmpManager = GSYVideoManager.tmpInstance(gsyMediaPlayerListener);
                 mTmpManager.initContext(getContext().getApplicationContext());
                 resolveChangeUrl(mCache, mCachePath, url);
-                mTmpManager.prepare(mUrl, mMapHeadData, mLooping, mSpeed, mCache, mCachePath, null);
+                mTmpManager.prepare(mUrl, mMapHeadData, mLooping, mSpeed, mCache, mCachePath);
                 changeUiToPlayingBufferingShow();
             }
         } else {
@@ -346,13 +341,4 @@ public class SmartPickVideo extends StandardGSYVideoPlayer {
         }
     }
 
-    @Override
-    public boolean onSurfaceDestroyed(Surface surface) {
-        //清空释放
-        setDisplay(null);
-        //同一消息队列中去release
-        //todo 需要处理为什么全屏时全屏的surface会被释放了
-        //releaseSurface(surface);
-        return true;
-    }
 }
