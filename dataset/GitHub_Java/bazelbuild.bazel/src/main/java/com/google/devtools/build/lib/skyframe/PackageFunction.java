@@ -68,7 +68,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.lib.vfs.UnixGlob;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -880,34 +879,56 @@ public class PackageFunction implements SkyFunction {
     @Override
     public Token runAsync(List<String> includes, List<String> excludes, boolean excludeDirs)
         throws BadGlobException, InterruptedException {
-      LinkedHashSet<SkyKey> globKeys = Sets.newLinkedHashSetWithExpectedSize(includes.size());
-      Map<SkyKey, String> globKeyToPatternMap = Maps.newHashMapWithExpectedSize(includes.size());
+      List<SkyKey> globKeys = new ArrayList<>(includes.size() + excludes.size());
+      LinkedHashSet<SkyKey> includesKeys = Sets.newLinkedHashSetWithExpectedSize(includes.size());
+      LinkedHashSet<SkyKey> excludesKeys = Sets.newLinkedHashSetWithExpectedSize(excludes.size());
+      Map<SkyKey, String> globKeyToIncludeStringMap =
+          Maps.newHashMapWithExpectedSize(includes.size());
+      Map<SkyKey, String> globKeyToExcludeStringMap =
+          Maps.newHashMapWithExpectedSize(excludes.size());
 
       for (String pattern : includes) {
         SkyKey globKey = getGlobKey(pattern, excludeDirs);
         globKeys.add(globKey);
-        globKeyToPatternMap.put(globKey, pattern);
+        includesKeys.add(globKey);
+        globKeyToIncludeStringMap.put(globKey, pattern);
       }
-
+      for (String pattern : excludes) {
+        SkyKey globKey = getGlobKey(pattern, excludeDirs);
+        globKeys.add(globKey);
+        excludesKeys.add(globKey);
+        globKeyToExcludeStringMap.put(globKey, pattern);
+      }
       globDepsRequested.addAll(globKeys);
 
       Map<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>> globValueMap =
           env.getValuesOrThrow(globKeys, IOException.class, BuildFileNotFoundException.class);
 
-      // For each missing glob, evaluate it asynchronously via the delegate.
+      // For each missing glob, evaluate it asychronously via the delegate.
       Collection<SkyKey> missingKeys = getMissingKeys(globKeys, globValueMap);
-      List<String> globsToDelegate = new ArrayList<>(missingKeys.size());
+      List<String> includesToDelegate = new ArrayList<>(missingKeys.size());
+      List<String> excludesToDelegate = new ArrayList<>(missingKeys.size());
       for (SkyKey missingKey : missingKeys) {
-        String missingPattern = globKeyToPatternMap.get(missingKey);
-        if (missingPattern != null) {
-          globsToDelegate.add(missingPattern);
-          globKeys.remove(missingKey);
+        String missingIncludePattern = globKeyToIncludeStringMap.get(missingKey);
+        if (missingIncludePattern != null) {
+          includesToDelegate.add(missingIncludePattern);
+          includesKeys.remove(missingKey);
+        }
+        String missingExcludePattern = globKeyToExcludeStringMap.get(missingKey);
+        if (missingExcludePattern != null) {
+          excludesToDelegate.add(missingExcludePattern);
+          excludesKeys.remove(missingKey);
         }
       }
       Token legacyIncludesToken =
-          legacyGlobber.runAsync(globsToDelegate, ImmutableList.of(), excludeDirs);
+          legacyGlobber.runAsync(includesToDelegate, ImmutableList.<String>of(), excludeDirs);
+      // See the HybridToken class-comment for why we pass excludesToDelegate as the includes
+      // parameter here.
+      Token legacyExcludesToken =
+          legacyGlobber.runAsync(excludesToDelegate, ImmutableList.<String>of(), excludeDirs);
 
-      return new HybridToken(globValueMap, globKeys, legacyIncludesToken, excludes);
+      return new HybridToken(globValueMap, includesKeys, excludesKeys,
+          legacyIncludesToken, legacyExcludesToken);
     }
 
     private Collection<SkyKey> getMissingKeys(Collection<SkyKey> globKeys,
@@ -948,9 +969,33 @@ public class PackageFunction implements SkyFunction {
 
     /**
      * A {@link Globber.Token} that encapsulates the result of a single {@link Globber#runAsync}
-     * call via the fetching of some globs from skyframe, and some other globs via a{@link
-     * PackageFactory.LegacyGlobber}. 'exclude' patterns are evaluated using {@link
-     * UnixGlob#removeExcludes} after merging legacy and skyframe glob results in {@link #resolve}.
+     * call via the fetching of some globs from skyframe, and some other globs via a
+     * {@link PackageFactory.LegacyGlobber}. We take care to properly handle 'includes' vs
+     * 'excludes'.
+     *
+     * <p>That is, we evaluate {@code glob(includes, excludes)} by partitioning {@code includes} and
+     * {@code excludes}.
+     *
+     * <pre>
+     * {@code
+     * includes = includes_sky U includes_leg
+     * excludes = excludes_sky U excludes_leg
+     * }
+     * </pre>
+     *
+     * <p>and then noting
+     *
+     * <pre>
+     * {@code
+     * glob(includes, excludes) =
+     *     (glob(includes_sky, []) U glob(includes_leg, []))
+     *   - (glob(excludes_sky, []) U glob(excludes_leg, []))
+     * }
+     * </pre>
+     *
+     * <p>Importantly, we pass excludes=[] in all cases; otherwise we'd be incorrectly not
+     * subtracting excluded glob matches from the overall list of matches. In other words, we
+     * implement the subtractive nature of excludes ourselves in {@link #resolve}.
      */
     private static class HybridToken extends Globber.Token {
       // The result of the Skyframe lookup for all the needed glob patterns.
@@ -959,20 +1004,25 @@ public class PackageFunction implements SkyFunction {
       // The skyframe keys corresponding to the 'includes' patterns fetched from Skyframe
       // (this is includes_sky above).
       private final Iterable<SkyKey> includesGlobKeys;
-      // A token for computing legacy globs.
+      // The skyframe keys corresponding to the 'excludes' patterns fetched from Skyframe
+      // (this is excludes_sky above).
+      private final Iterable<SkyKey> excludesGlobKeys;
+      // A token for computing includes_leg.
       private final Token legacyIncludesToken;
-
-      private final List<String> excludes;
+      // A token for computing excludes_leg.
+      private final Token legacyExcludesToken;
 
       private HybridToken(
           Map<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>> globValueMap,
           Iterable<SkyKey> includesGlobKeys,
+          Iterable<SkyKey> excludesGlobKeys,
           Token delegateIncludesToken,
-          List<String> excludes) {
+          Token delegateExcludesToken) {
         this.globValueMap = globValueMap;
         this.includesGlobKeys = includesGlobKeys;
+        this.excludesGlobKeys = excludesGlobKeys;
         this.legacyIncludesToken = delegateIncludesToken;
-        this.excludes = excludes;
+        this.legacyExcludesToken = delegateExcludesToken;
       }
 
       private List<String> resolve(Globber delegate) throws IOException, InterruptedException {
@@ -984,7 +1034,14 @@ public class PackageFunction implements SkyFunction {
           }
         }
         matches.addAll(delegate.fetch(legacyIncludesToken));
-        UnixGlob.removeExcludes(matches, excludes);
+        for (SkyKey excludeGlobKey : excludesGlobKeys) {
+          for (PathFragment match : getGlobMatches(excludeGlobKey, globValueMap)) {
+            matches.remove(match.getPathString());
+          }
+        }
+        for (String delegateExcludeMatch : delegate.fetch(legacyExcludesToken)) {
+          matches.remove(delegateExcludeMatch);
+        }
         List<String> result = new ArrayList<>(matches);
         // Skyframe glob results are unsorted. And we used a LegacyGlobber that doesn't sort.
         // Therefore, we want to unconditionally sort here.

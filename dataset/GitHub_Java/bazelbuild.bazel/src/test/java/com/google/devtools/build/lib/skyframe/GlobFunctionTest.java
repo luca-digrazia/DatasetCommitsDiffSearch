@@ -659,12 +659,7 @@ public abstract class GlobFunctionTest {
     RootedPath pkgRootedPath = RootedPath.toRootedPath(Root.fromPath(root), pkgPath);
     FileStateValue pkgDirFileStateValue = FileStateValue.create(pkgRootedPath, null);
     FileValue pkgDirValue =
-        FileValue.value(
-            ImmutableList.of(pkgRootedPath),
-            pkgRootedPath,
-            pkgDirFileStateValue,
-            pkgRootedPath,
-            pkgDirFileStateValue);
+        FileValue.value(pkgRootedPath, pkgDirFileStateValue, pkgRootedPath, pkgDirFileStateValue);
     differencer.inject(ImmutableMap.of(FileValue.key(pkgRootedPath), pkgDirValue));
     String expectedMessage = "/root/workspace/pkg is no longer an existing directory";
     SkyKey skyKey =

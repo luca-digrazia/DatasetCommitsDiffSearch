@@ -504,9 +504,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             skylarkImportLookupFunctionForInlining,
             packageProgress,
             actionOnIOExceptionReadingBuildFile,
-            tracksStateForIncrementality()
-                ? IncrementalityIntent.INCREMENTAL
-                : IncrementalityIntent.NON_INCREMENTAL));
+            IncrementalityIntent.INCREMENTAL));
     map.put(SkyFunctions.PACKAGE_ERROR, new PackageErrorFunction());
     map.put(SkyFunctions.PACKAGE_ERROR_MESSAGE, new PackageErrorMessageFunction());
     map.put(SkyFunctions.TARGET_MARKER, new TargetMarkerFunction());

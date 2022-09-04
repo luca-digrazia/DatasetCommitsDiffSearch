@@ -74,7 +74,6 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.UnixGlob.FilesystemCalls;
 import com.google.devtools.build.skyframe.BuildDriver;
 import com.google.devtools.build.skyframe.Differencer;
 import com.google.devtools.build.skyframe.ErrorInfo;
@@ -385,7 +384,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache =
         CacheBuilder.newBuilder().build();
     Cache<PackageIdentifier, AstParseResult> astCache = CacheBuilder.newBuilder().build();
-    AtomicReference<FilesystemCalls> syscallCacheRef =
+    AtomicReference<PerBuildSyscallCache> syscallCacheRef =
         new AtomicReference<>(
             PerBuildSyscallCache.newBuilder().setConcurrencyLevel(legacyGlobbingThreads).build());
     pkgFactory.setGlobbingThreads(legacyGlobbingThreads);
@@ -403,9 +402,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     ImmutableMap.Builder<SkyFunctionName, SkyFunction> builder = ImmutableMap.builder();
     builder
         .put(SkyFunctions.PRECOMPUTED, new PrecomputedFunction())
-        .put(
-            FileStateValue.FILE_STATE,
-            new FileStateFunction(tsgm, syscallCacheRef, externalFilesHelper))
+        .put(FileStateValue.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper))
         .put(SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, new FileSymlinkCycleUniquenessFunction())
         .put(
             SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,

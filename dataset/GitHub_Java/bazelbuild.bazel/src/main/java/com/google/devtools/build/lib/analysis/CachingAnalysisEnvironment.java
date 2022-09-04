@@ -68,7 +68,6 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
    */
   private final boolean isSystemEnv;
   private final boolean extendedSanityChecks;
-  private final boolean allowAnalysisFailures;
 
   private final ActionKeyContext actionKeyContext;
 
@@ -90,7 +89,6 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
       ArtifactOwner owner,
       boolean isSystemEnv,
       boolean extendedSanityChecks,
-      boolean allowAnalysisFailures,
       ExtendedEventHandler errorEventListener,
       SkyFunction.Environment env) {
     this.artifactFactory = artifactFactory;
@@ -98,7 +96,6 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
     this.owner = Preconditions.checkNotNull(owner);
     this.isSystemEnv = isSystemEnv;
     this.extendedSanityChecks = extendedSanityChecks;
-    this.allowAnalysisFailures = allowAnalysisFailures;
     this.errorEventListener = errorEventListener;
     this.skyframeEnv = env;
     middlemanFactory = new MiddlemanFactory(artifactFactory, this);
@@ -106,7 +103,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   public void disable(Target target) {
-    if (!hasErrors() && !allowAnalysisFailures) {
+    if (!hasErrors()) {
       verifyGeneratedArtifactHaveActions(target);
     }
     artifacts = null;

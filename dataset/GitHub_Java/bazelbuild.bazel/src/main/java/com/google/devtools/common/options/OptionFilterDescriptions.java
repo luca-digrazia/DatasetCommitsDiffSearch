@@ -35,7 +35,6 @@ public class OptionFilterDescriptions {
     OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
     OptionDocumentationCategory.LOGGING,
     OptionDocumentationCategory.GENERIC_INPUTS,
-    OptionDocumentationCategory.REMOTE,
     OptionDocumentationCategory.UNCATEGORIZED
   };
 
@@ -88,8 +87,7 @@ public class OptionFilterDescriptions {
         .put(
             OptionDocumentationCategory.GENERIC_INPUTS,
             "Options specifying or altering a generic input to a Bazel command that does not fall "
-                + "into other categories.")
-        .put(OptionDocumentationCategory.REMOTE, "Remote caching and execution options");
+                + "into other categories.");
     return optionCategoriesBuilder.build();
   }
 

@@ -38,11 +38,8 @@ import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryLoaderFunction;
-import com.google.devtools.build.lib.skyframe.ContainingPackageLookupValue.ContainingPackage;
-import com.google.devtools.build.lib.skyframe.ContainingPackageLookupValue.NoContainingPackage;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue.ErrorReason;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -121,9 +118,7 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
     skyFunctions.put(
         FileStateValue.FILE_STATE,
         new FileStateFunction(
-            new AtomicReference<TimestampGranularityMonitor>(),
-            new AtomicReference<>(UnixGlob.DEFAULT_SYSCALLS),
-            externalFilesHelper));
+            new AtomicReference<TimestampGranularityMonitor>(), externalFilesHelper));
     skyFunctions.put(FileValue.FILE, new FileFunction(pkgLocator));
     skyFunctions.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     skyFunctions.put(
@@ -188,18 +183,6 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
     return driver
         .<ContainingPackageLookupValue>evaluate(ImmutableList.of(key), evaluationContext)
         .get(key);
-  }
-
-  private PackageLookupValue lookupPackage(PackageIdentifier packageIdentifier)
-      throws InterruptedException {
-    SkyKey key = PackageLookupValue.key(packageIdentifier);
-    EvaluationContext evaluationContext =
-        EvaluationContext.newBuilder()
-            .setKeepGoing(false)
-            .setNumThreads(SkyframeExecutor.DEFAULT_THREAD_COUNT)
-            .setEventHander(NullEventHandler.INSTANCE)
-            .build();
-    return driver.<PackageLookupValue>evaluate(ImmutableList.of(key), evaluationContext).get(key);
   }
 
   @Test
@@ -281,52 +264,5 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
         .addEqualityGroup(valueC1, valueC2)
         .addEqualityGroup(valueCOther)
         .testEquals();
-  }
-
-  @Test
-  public void testNonExistentExternalRepositoryErrorReason() throws Exception {
-    PackageIdentifier identifier =
-        PackageIdentifier.create("@some_repo", PathFragment.create(":atarget"));
-    ContainingPackageLookupValue value = lookupContainingPackage(identifier);
-    assertThat(value.hasContainingPackage()).isFalse();
-    assertThat(value.getClass()).isEqualTo(NoContainingPackage.class);
-    assertThat(value.getReasonForNoContainingPackage())
-        .isEqualTo("The repository '@some_repo' could not be resolved");
-  }
-
-  @Test
-  public void testInvalidPackageLabelErrorReason() throws Exception {
-    ContainingPackageLookupValue value = lookupContainingPackage("invalidpackagename:42/BUILD");
-    assertThat(value.hasContainingPackage()).isFalse();
-    assertThat(value.getClass()).isEqualTo(NoContainingPackage.class);
-    // As for invalid package name we continue to climb up the parent packages,
-    // we will find the top-level package with the path "" - empty string.
-    assertThat(value.getReasonForNoContainingPackage()).isNull();
-  }
-
-  @Test
-  public void testDeletedPackageErrorReason() throws Exception {
-    PackageIdentifier identifier = PackageIdentifier.createInMainRepo("deletedpackage");
-    deletedPackages.set(ImmutableSet.of(identifier));
-    scratch.file("BUILD");
-
-    PackageLookupValue packageLookupValue = lookupPackage(identifier);
-    assertThat(packageLookupValue.packageExists()).isFalse();
-    assertThat(packageLookupValue.getErrorReason()).isEqualTo(ErrorReason.DELETED_PACKAGE);
-    assertThat(packageLookupValue.getErrorMsg())
-        .isEqualTo("Package is considered deleted due to --deleted_packages");
-
-    ContainingPackageLookupValue value = lookupContainingPackage(identifier);
-    assertThat(value.hasContainingPackage()).isTrue();
-    assertThat(value.getContainingPackageName().toString()).isEmpty();
-    assertThat(value.getClass()).isEqualTo(ContainingPackage.class);
-  }
-
-  @Test
-  public void testNoBuildFileErrorReason() throws Exception {
-    ContainingPackageLookupValue value = lookupContainingPackage("abc");
-    assertThat(value.hasContainingPackage()).isFalse();
-    assertThat(value.getClass()).isEqualTo(NoContainingPackage.class);
-    assertThat(value.getReasonForNoContainingPackage()).isNull();
   }
 }
