@@ -100,11 +100,6 @@ public class RBuildFilesVisitor extends ParallelQueryVisitor<SkyKey, PackageIden
     Set<PackageIdentifier> keysToUseForResult = CompactHashSet.create();
     Set<SkyKey> keysToVisitNext = CompactHashSet.create();
     for (SkyKey rdep : Iterables.concat(reverseDeps)) {
-      // This loop is cpu bound, make sure we bail if asked.
-      if (Thread.interrupted()) {
-        throw new InterruptedException();
-      }
-
       if (rdep.functionName().equals(SkyFunctions.PACKAGE)) {
         if (resultUniquifier.unique(rdep)) {
           keysToUseForResult.add((PackageIdentifier) rdep.argument());
