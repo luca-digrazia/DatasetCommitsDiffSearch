@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -128,9 +127,6 @@ public abstract class MockCcSupport {
 
   /** This feature will prevent bazel from patching the crosstool. */
   public static final String NO_LEGACY_FEATURES_FEATURE = "feature { name: 'no_legacy_features' }";
-
-  public static final String DYNAMIC_LINKING_MODE_FEATURE =
-      "feature { name: '" + CppRuleClasses.DYNAMIC_LINKING_MODE + "'}";
 
   /** Feature expected by the C++ rules when pic build is requested */
   public static final String PIC_FEATURE =
@@ -365,9 +361,6 @@ public abstract class MockCcSupport {
   public static final String THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS_CONFIGURATION =
       "" + "feature {  name: 'thin_lto_linkstatic_tests_use_shared_nonlto_backends'}";
 
-  public static final String THIN_LTO_ALL_LINKSTATIC_USE_SHARED_NONLTO_BACKENDS_CONFIGURATION =
-      "" + "feature {  name: 'thin_lto_all_linkstatic_use_shared_nonlto_backends'}";
-
   public static final String ENABLE_AFDO_THINLTO_CONFIGURATION =
       ""
           + "feature {"
@@ -404,6 +397,7 @@ public abstract class MockCcSupport {
           + "  flag_set {"
           + "    action: 'c-compile'"
           + "    action: 'c++-compile'"
+          + "    action: 'c++-link-interface-dynamic-library'"
           + "    action: 'c++-link-dynamic-library'"
           + "    action: 'c++-link-nodeps-dynamic-library'"
           + "    action: 'c++-link-executable'"
@@ -548,6 +542,38 @@ public abstract class MockCcSupport {
     }
 
     return TextFormat.printToString(crosstoolBuilder.build());
+  }
+
+  public static String addOptionalDefaultCoptsToCrosstool(String original)
+      throws TextFormat.ParseException {
+    CrosstoolConfig.CrosstoolRelease.Builder builder =
+        CrosstoolConfig.CrosstoolRelease.newBuilder();
+    TextFormat.merge(original, builder);
+    for (CrosstoolConfig.CToolchain.Builder toolchain : builder.getToolchainBuilderList()) {
+      CrosstoolConfig.CToolchain.OptionalFlag.Builder defaultTrue =
+          CrosstoolConfig.CToolchain.OptionalFlag.newBuilder();
+      defaultTrue.setDefaultSettingName("crosstool_default_true");
+      defaultTrue.addFlag("-DDEFAULT_TRUE");
+      toolchain.addOptionalCompilerFlag(defaultTrue.build());
+      CrosstoolConfig.CToolchain.OptionalFlag.Builder defaultFalse =
+          CrosstoolConfig.CToolchain.OptionalFlag.newBuilder();
+      defaultFalse.setDefaultSettingName("crosstool_default_false");
+      defaultFalse.addFlag("-DDEFAULT_FALSE");
+      toolchain.addOptionalCompilerFlag(defaultFalse.build());
+    }
+
+    CrosstoolConfig.CrosstoolRelease.DefaultSetting.Builder defaultTrue =
+        CrosstoolConfig.CrosstoolRelease.DefaultSetting.newBuilder();
+    defaultTrue.setName("crosstool_default_true");
+    defaultTrue.setDefaultValue(true);
+    builder.addDefaultSetting(defaultTrue.build());
+    CrosstoolConfig.CrosstoolRelease.DefaultSetting.Builder defaultFalse =
+        CrosstoolConfig.CrosstoolRelease.DefaultSetting.newBuilder();
+    defaultFalse.setName("crosstool_default_false");
+    defaultFalse.setDefaultValue(false);
+    builder.addDefaultSetting(defaultFalse.build());
+
+    return TextFormat.printToString(builder.build());
   }
 
   public static String addLibcLabelToCrosstool(String original, String label)
