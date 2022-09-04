@@ -27,10 +27,10 @@ public class InterceptorResolver {
             if (!interceptor.intercepts(interceptionType)) {
                 continue;
             }
-            boolean matches = true;
+            boolean matches = false;
             for (AnnotationInstance interceptorBinding : interceptor.getBindings()) {
-                if (!hasInterceptorBinding(bindings, interceptorBinding)) {
-                    matches = false;
+                if (hasInterceptorBinding(bindings, interceptorBinding)) {
+                    matches = true;
                     break;
                 }
             }
