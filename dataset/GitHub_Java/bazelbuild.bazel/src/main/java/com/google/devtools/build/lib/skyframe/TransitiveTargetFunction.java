@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
@@ -266,7 +265,7 @@ public class TransitiveTargetFunction
   @Override
   protected Collection<Label> getAspectLabels(
       Rule fromRule,
-      ImmutableList<Aspect> aspectsOfAttribute,
+      Attribute attr,
       Label toLabel,
       ValueOrException2<NoSuchPackageException, NoSuchTargetException> toVal,
       final Environment env)
@@ -285,9 +284,8 @@ public class TransitiveTargetFunction
         return ImmutableList.of();
       }
       Target dependedTarget = pkgValue.getPackage().getTarget(toLabel.getName());
-      return AspectDefinition.visitAspectsIfRequired(
-              fromRule, aspectsOfAttribute, dependedTarget, DependencyFilter.ALL_DEPS)
-          .values();
+      return AspectDefinition.visitAspectsIfRequired(fromRule, attr, dependedTarget,
+          DependencyFilter.ALL_DEPS).values();
     } catch (NoSuchThingException e) {
       // Do nothing. This error was handled when we computed the corresponding
       // TransitiveTargetValue.

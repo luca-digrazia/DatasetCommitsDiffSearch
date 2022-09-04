@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
@@ -93,27 +94,23 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
         env.getValuesOrThrow(
             Iterables.transform(labels, label -> PackageValue.key(label.getPackageIdentifier())),
             NoSuchPackageException.class);
+    if (env.valuesMissing()) {
+      return null;
+    }
     if (labels instanceof Collection) {
       labelsSizeHint = ((Collection<Label>) labels).size();
     } else if (labelsSizeHint <= 0) {
       labelsSizeHint = 2 * packages.size();
     }
-
-    // As per the comment in SkyFunctionEnvironment.getValueOrUntypedExceptions(), we are supposed
-    // to prefer reporting errors to reporting null, we first check for errors in our dependencies.
-    // This, of course, results in some wasted work in case this will need to be restarted later.
-
     // Duplicates can occur, so we can't use ImmutableMap.
     HashMap<Label, Target> result = Maps.newHashMapWithExpectedSize(labelsSizeHint);
     for (Label label : labels) {
       PackageValue packageValue;
       try {
         packageValue =
-            (PackageValue) packages.get(PackageValue.key(label.getPackageIdentifier())).get();
-        if (packageValue == null) {
-          // Dependency has not been computed yet. There will be a next iteration.
-          continue;
-        }
+            Preconditions.checkNotNull(
+                (PackageValue) packages.get(PackageValue.key(label.getPackageIdentifier())).get(),
+                label);
       } catch (NoSuchPackageException e) {
         rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
         missingEdgeHook(fromTarget, label, e);
@@ -133,7 +130,6 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
         missingEdgeHook(fromTarget, label, e);
       }
     }
-
-    return env.valuesMissing() ? null : result;
+    return result;
   }
 }

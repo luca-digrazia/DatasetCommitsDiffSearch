@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
-import java.util.Collection;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -62,6 +61,11 @@ public class DependencyResolverTest extends AnalysisTestCase {
     dependencyResolver =
         new DependencyResolver() {
           @Override
+          protected void invalidVisibilityReferenceHook(TargetAndConfiguration node, Label label) {
+            throw new IllegalStateException();
+          }
+
+          @Override
           protected void invalidPackageGroupReferenceHook(
               TargetAndConfiguration node, Label label) {
             throw new IllegalStateException();
@@ -69,7 +73,10 @@ public class DependencyResolverTest extends AnalysisTestCase {
 
           @Override
           protected Map<Label, Target> getTargets(
-              Collection<Label> labels, Target fromTarget, NestedSetBuilder<Cause> rootCauses) {
+              Iterable<Label> labels,
+              Target fromTarget,
+              NestedSetBuilder<Cause> rootCauses,
+              int labelsSizeHint) {
             return Streams.stream(labels)
                 .distinct()
                 .collect(
