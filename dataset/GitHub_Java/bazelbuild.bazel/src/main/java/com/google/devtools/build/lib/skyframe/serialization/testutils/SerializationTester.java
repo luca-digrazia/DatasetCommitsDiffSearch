@@ -21,7 +21,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.skyframe.serialization.AutoRegistry;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecRegistry;
@@ -33,6 +32,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Random;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Utility for testing serialization of given subjects.
@@ -44,7 +45,7 @@ public class SerializationTester {
   public static final int DEFAULT_JUNK_INPUTS = 20;
   public static final int JUNK_LENGTH_UPPER_BOUND = 20;
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(SerializationTester.class.getName());
 
   /** Interface for testing successful deserialization of an object. */
   @FunctionalInterface
@@ -123,33 +124,11 @@ public class SerializationTester {
     return this;
   }
 
-  private void runTests(boolean verifyStableSerialization) throws Exception {
+  public void runTests() throws Exception {
     ObjectCodecs codecs = this.objectCodecs == null ? createObjectCodecs() : this.objectCodecs;
     testSerializeDeserialize(codecs);
-    if (verifyStableSerialization) {
-      testStableSerialization(codecs);
-    }
+    testStableSerialization(codecs);
     testDeserializeJunkData(codecs);
-  }
-
-  public void runTests() throws Exception {
-    runTests(true);
-  }
-
-  /**
-   * Runs serialization tests without checking for stable serialization ({@code
-   * serialize(deserialize(serialize(x))) == serialize(x)}). Call {@link #runTests()}} instead if
-   * possible.
-   *
-   * <p>To be used only when serialization is not stable for good reasons: please understand the
-   * cause before using this. Typically unstable serialization is the result of non-determinism in
-   * your underlying objects, which can cause problems throughout Blaze by harming incrementality.
-   * Only if you are sure that the non-determinism in your objects is not detectable in its public
-   * interface or behavior (including {@code equals} if implemented) should you use this instead of
-   * {@link #runTests()}.
-   */
-  public void runTestsWithoutStableSerializationCheck() throws Exception {
-    runTests(false);
   }
 
   private ObjectCodecs createObjectCodecs() {
@@ -199,9 +178,13 @@ public class SerializationTester {
         verificationFunction.verifyDeserialized(subject, deserialized);
       }
     }
-    logger.atInfo().log(
-        "%s total serialized bytes = %d, %s",
-        subjects.get(0).getClass().getSimpleName(), totalBytes, timer);
+    logger.log(
+        Level.INFO,
+        subjects.get(0).getClass().getSimpleName()
+            + " total serialized bytes = "
+            + totalBytes
+            + ", "
+            + timer);
   }
 
   /** Runs serialized bytes stability tests. */
