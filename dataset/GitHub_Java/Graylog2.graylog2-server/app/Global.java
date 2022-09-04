@@ -24,10 +24,7 @@ import com.google.inject.Module;
 import com.google.inject.name.Names;
 import lib.ApiClient;
 import lib.ServerNodesRefreshService;
-import lib.security.PlayAuthenticationListener;
-import lib.security.RedirectAuthenticator;
-import lib.security.RethrowingFirstSuccessfulStrategy;
-import lib.security.ServerRestInterfaceRealm;
+import lib.security.*;
 import models.LocalAdminUser;
 import models.ModelFactoryModule;
 import models.Node;
@@ -36,6 +33,7 @@ import models.api.responses.NodeSummaryResponse;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationListener;
 import org.apache.shiro.authc.Authenticator;
+import org.apache.shiro.authc.credential.HashedCredentialsMatcher;
 import org.apache.shiro.authc.pam.ModularRealmAuthenticator;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.realm.Realm;
@@ -101,15 +99,14 @@ public class Global extends GlobalSettings {
         // TODO replace with custom AuthenticatedAction filter
         RedirectAuthenticator.userService = injector.getInstance(UserService.class);
 
-        // temporarily disabled for preview to prevent confusion.
-//        LocalAdminUserRealm localAdminRealm = new LocalAdminUserRealm("local-accounts");
-//        localAdminRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA2"));
-//        setupLocalUser(api, localAdminRealm, app);
+        LocalAdminUserRealm localAdminRealm = new LocalAdminUserRealm("local-accounts");
+        localAdminRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA1"));
+        setupLocalUser(api, localAdminRealm, app);
 
         Realm serverRestInterfaceRealm = injector.getInstance(ServerRestInterfaceRealm.class);
         final DefaultSecurityManager securityManager =
                 new DefaultSecurityManager(
-                        Lists.newArrayList(serverRestInterfaceRealm)
+                        Lists.newArrayList(localAdminRealm, serverRestInterfaceRealm)
                 );
         final Authenticator authenticator = securityManager.getAuthenticator();
         if (authenticator instanceof ModularRealmAuthenticator) {
@@ -131,7 +128,7 @@ public class Global extends GlobalSettings {
     private void setupLocalUser(ApiClient api, SimpleAccountRealm realm, Application app) {
 		final Configuration config = app.configuration();
         final String username = config.getString("local-user.name", "localadmin");
-        final String passwordHash = config.getString("local-user.password-sha2");
+        final String passwordHash = config.getString("local-user.password-sha1");
         if (passwordHash == null) {
 			log.warn("No password hash for local user {} set. " +
 					"If you lose connection to the graylog2-server at {}, you will be unable to log in!",
