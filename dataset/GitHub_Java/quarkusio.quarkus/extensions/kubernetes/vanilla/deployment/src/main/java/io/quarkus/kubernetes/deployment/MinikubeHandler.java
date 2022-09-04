@@ -1,5 +1,6 @@
 package io.quarkus.kubernetes.deployment;
 
+import static io.dekorate.utils.Labels.createLabels;
 import static io.quarkus.kubernetes.deployment.Constants.MINIKUBE;
 
 import java.util.Optional;
@@ -124,7 +125,7 @@ public class MinikubeHandler extends AbstractKubernetesHandler<KubernetesConfig>
             resources.decorate(group, new AddServiceResourceDecorator(config));
         }
 
-        resources.decorate(group, new AddIngressDecorator(config, Labels.createLabelsAsMap(config, "Ingress")));
+        resources.decorate(group, new AddIngressDecorator(config, Labels.createLabels(config)));
         resources.decorate(group, new ApplyLabelSelectorDecorator(createSelector(config)));
     }
 
@@ -138,7 +139,7 @@ public class MinikubeHandler extends AbstractKubernetesHandler<KubernetesConfig>
         return new DeploymentBuilder()
                 .withNewMetadata()
                 .withName(appConfig.getName())
-                .withLabels(Labels.createLabelsAsMap(appConfig, "Deployment"))
+                .withLabels(Labels.createLabels(appConfig))
                 .endMetadata()
                 .withNewSpec()
                 .withReplicas(1)
@@ -155,7 +156,7 @@ public class MinikubeHandler extends AbstractKubernetesHandler<KubernetesConfig>
      */
     public LabelSelector createSelector(KubernetesConfig config) {
         return new LabelSelectorBuilder()
-                .withMatchLabels(Labels.createLabelsAsMap(config, "Deployment"))
+                .withMatchLabels(Labels.createLabels(config))
                 .build();
     }
 
@@ -169,7 +170,7 @@ public class MinikubeHandler extends AbstractKubernetesHandler<KubernetesConfig>
         return new PodTemplateSpecBuilder()
                 .withSpec(createPodSpec(appConfig, imageConfig))
                 .withNewMetadata()
-                .withLabels(Labels.createLabelsAsMap(appConfig, "Deployment"))
+                .withLabels(createLabels(appConfig))
                 .endMetadata()
                 .build();
     }
@@ -235,5 +236,4 @@ public class MinikubeHandler extends AbstractKubernetesHandler<KubernetesConfig>
                 .withAutoPushEnabled(imageConfig.isAutoPushEnabled() ? imageConfig.isAutoPushEnabled() : false)
                 .build();
     }
-
 }
