@@ -49,7 +49,10 @@ import java.util.List;
 import java.util.Map;
 
 public abstract class MessageInput {
+    private static final Logger LOG = LoggerFactory.getLogger(MessageInput.class);
+
     public static final String CK_OVERRIDE_SOURCE = "override_source";
+
     public static final String FIELD_TYPE = "type";
     public static final String FIELD_INPUT_ID = "input_id";
     public static final String FIELD_PERSIST_ID = "persist_id";
@@ -64,7 +67,7 @@ public abstract class MessageInput {
     public static final String FIELD_ATTRIBUTES = "attributes";
     public static final String FIELD_STATIC_FIELDS = "static_fields";
     public static final String FIELD_GLOBAL = "global";
-    private static final Logger LOG = LoggerFactory.getLogger(MessageInput.class);
+
     @SuppressWarnings("StaticNonFinalField")
     private static long defaultRecvBufferSize = 1024 * 1024;
 
@@ -72,47 +75,38 @@ public abstract class MessageInput {
     private final Transport transport;
     private final MetricRegistry localRegistry;
     private final Codec codec;
-    private final Descriptor descriptor;
     private final Meter failures;
     private final Meter incompleteMessages;
     private final Meter incomingMessages;
     private final Meter processedMessages;
     private final Timer parseTime;
     private final Meter rawSize;
-    private final Map<String, String> staticFields = Maps.newConcurrentMap();
-    private final ConfigurationRequest requestedConfiguration;
 
     protected String title;
     protected String creatorUserId;
     protected String persistId;
     protected DateTime createdAt;
     protected Boolean global = false;
+
     protected Configuration configuration;
     protected Buffer processBuffer;
 
+    private final Map<String, String> staticFields = Maps.newConcurrentMap();
+
     public MessageInput(MetricRegistry metricRegistry,
                         Transport transport,
-                        MetricRegistry localRegistry, Codec codec, Config config, Descriptor descriptor) {
+                        MetricRegistry localRegistry, Codec codec) {
         this.metricRegistry = metricRegistry;
         this.transport = transport;
         this.localRegistry = localRegistry;
         this.codec = codec;
-        this.descriptor = descriptor;
-        this.requestedConfiguration = config.getRequestedConfiguration();
+
         parseTime = localRegistry.timer("parseTime");
         processedMessages = localRegistry.meter("processedMessages");
         failures = localRegistry.meter("failures");
         incompleteMessages = localRegistry.meter("incompleteMessages");
         rawSize = localRegistry.meter("rawSize");
         incomingMessages = localRegistry.meter("incomingMessages");
-    }
-
-    public static long getDefaultRecvBufferSize() {
-        return defaultRecvBufferSize;
-    }
-
-    public static void setDefaultRecvBufferSize(long size) {
-        defaultRecvBufferSize = size;
     }
 
     public void initialize() {
@@ -146,19 +140,36 @@ public abstract class MessageInput {
     }
 
     public ConfigurationRequest getRequestedConfiguration() {
-        return requestedConfiguration;
+        final ConfigurationRequest transportConfig = transport.getRequestedConfiguration();
+        final ConfigurationRequest codecConfig = codec.getRequestedConfiguration();
+        final ConfigurationRequest r = new ConfigurationRequest();
+        r.putAll(transportConfig.getFields());
+        r.putAll(codecConfig.getFields());
+
+        r.addField(new TextField(
+                CK_OVERRIDE_SOURCE,
+                "Override source",
+                null,
+                "The source is a hostname derived from the received packet by default. Set this if you want to override " +
+                        "it with a custom string.",
+                ConfigurationField.Optional.OPTIONAL
+        ));
+
+        // give the codec the opportunity to override default values for certain configuration fields,
+        // this is commonly being used to default to some well known port for protocols such as GELF or syslog
+        codec.overrideDefaultValues(r);
+
+        return r;
     }
 
-    public Descriptor getDescriptor() {
-        return descriptor;
-    };
+    public abstract boolean isExclusive();
 
-    public String getName() {
-        return descriptor.getName();
-    }
+    public abstract String getName();
 
-    public boolean isExclusive() {
-        return descriptor.isExclusive();
+    public abstract String linkToDocs();
+
+    public void setPersistId(String id) {
+        this.persistId = id;
     }
 
     public String getId() {
@@ -167,10 +178,6 @@ public abstract class MessageInput {
 
     public String getPersistId() {
         return persistId;
-    }
-
-    public void setPersistId(String id) {
-        this.persistId = id;
     }
 
     public String getTitle() {
@@ -189,12 +196,12 @@ public abstract class MessageInput {
         this.creatorUserId = creatorUserId;
     }
 
-    public DateTime getCreatedAt() {
-        return createdAt;
-    }
-
     public void setCreatedAt(DateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public DateTime getCreatedAt() {
+        return createdAt;
     }
 
     public Configuration getConfiguration() {
@@ -294,6 +301,14 @@ public abstract class MessageInput {
         }
     }
 
+    public static void setDefaultRecvBufferSize(long size) {
+        defaultRecvBufferSize = size;
+    }
+
+    public static long getDefaultRecvBufferSize() {
+        return defaultRecvBufferSize;
+    }
+
     public Codec getCodec() {
         return codec;
     }
@@ -373,74 +388,6 @@ public abstract class MessageInput {
 
     public interface Factory<M> {
         M create(Configuration configuration);
-        Config getConfig();
-        Descriptor getDescriptor();
-    }
-
-    public static class Config {
-        private final Transport.Config transportConfig;
-        private final Codec.Config codecConfig;
-
-        // required for guice, but isn't called.
-        Config() {
-            throw new IllegalStateException("This class should not be instantiated directly, this is a bug.");
-        }
-
-        protected Config(Transport.Config transportConfig, Codec.Config codecConfig) {
-            this.transportConfig = transportConfig;
-            this.codecConfig = codecConfig;
-        }
-
-        public ConfigurationRequest getRequestedConfiguration() {
-            final ConfigurationRequest transport = transportConfig.getRequestedConfiguration();
-            final ConfigurationRequest codec = codecConfig.getRequestedConfiguration();
-            final ConfigurationRequest r = new ConfigurationRequest();
-            r.putAll(transport.getFields());
-            r.putAll(codec.getFields());
-
-            r.addField(new TextField(
-                    CK_OVERRIDE_SOURCE,
-                    "Override source",
-                    null,
-                    "The source is a hostname derived from the received packet by default. Set this if you want to override " +
-                            "it with a custom string.",
-                    ConfigurationField.Optional.OPTIONAL
-            ));
-
-            // give the codec the opportunity to override default values for certain configuration fields,
-            // this is commonly being used to default to some well known port for protocols such as GELF or syslog
-            codecConfig.overrideDefaultValues(r);
-
-            return r;
-        }
-    }
-
-    public static class Descriptor {
-        private final String name;
-        private final boolean exclusive;
-        private final String linkToDocs;
-
-        // required for guice, but isn't called.
-        Descriptor() {
-            throw new IllegalStateException("This class should not be instantiated directly, this is a bug.");
-        }
-
-        protected Descriptor(String name, boolean exclusive, String linkToDocs) {
-            this.name = name;
-            this.exclusive = exclusive;
-            this.linkToDocs = linkToDocs;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public boolean isExclusive() {
-            return exclusive;
-        }
-
-        public String getLinkToDocs() {
-            return linkToDocs;
-        }
+        M create(Configuration configuration, Transport transport, Codec codec);
     }
 }
