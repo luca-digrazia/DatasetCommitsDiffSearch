@@ -124,11 +124,9 @@ public class MessagerAppender extends Appender {
 				return null;
 			}
 
-			boolean ignorePackage = false;
 			List<String> localElements = new LinkedList<>(elements);
 			Element element = processingEnv.getElementUtils().getTypeElement(localElements.remove(0));
 			while (localElements.size() > 0) {
-				int prevSize = localElements.size();
 				if (element instanceof ExecutableElement) {
 					ExecutableElement method = (ExecutableElement) element;
 					for (VariableElement param : method.getParameters()) {
@@ -140,33 +138,16 @@ public class MessagerAppender extends Appender {
 					}
 				} else {
 					for (Element elem : element.getEnclosedElements()) {
-						String elemStringValue = elem.toString();
-						String localElement = localElements.get(0);
-						if (ignorePackage) {
-							elemStringValue = removePackages(elemStringValue);
-							localElement = removePackages(localElement);
-						}
-						if (elemStringValue.equals(localElement)) {
+						if (elem.toString().equals(localElements.get(0))) {
 							localElements.remove(0);
 							element = elem;
 							break;
 						}
 					}
 				}
-				if (prevSize == localElements.size()) {
-					if (ignorePackage) {
-						// return current element in case we have not found a
-						// matching one in this round one - should not happen
-						return element;
-					}
-					ignorePackage = true;
-				}
 			}
-			return element;
-		}
 
-		private String removePackages(String elemStringValue) {
-			return elemStringValue.replaceAll("([a-zA-Z_$][a-zA-Z_$0-9]*\\.)+", "");
+			return element;
 		}
 
 		private ElementDetails getElementDetails() {
