@@ -167,9 +167,6 @@ public class Package {
    */
   private ImmutableList<Label> skylarkFileDependencies;
 
-  /** The package's default "applicable_licenses" attribute. */
-  private Set<Label> defaultApplicableLicenses = ImmutableSet.of();
-
   /**
    * The package's default "licenses" and "distribs" attributes, as specified
    * in calls to licenses() and distribs() in the BUILD file.
@@ -296,14 +293,6 @@ public class Package {
    */
   private void setDefaultDeprecation(String deprecation) {
     defaultDeprecation = deprecation;
-  }
-
-  /**
-   * Sets the default 'applicable_licenses" value for this package attribute when not explicitly
-   * specified by the rule.
-   */
-  private void setDefaultApplicableLicenses(Set<Label> licenses) {
-    defaultApplicableLicenses = licenses;
   }
 
   /**
@@ -670,11 +659,6 @@ public class Package {
     return defaultVisibilitySet;
   }
 
-  /** Gets the licenses list for the default applicable_licenses declared by this package. */
-  public Set<Label> getDefaultApplicableLicenses() {
-    return defaultApplicableLicenses;
-  }
-
   /**
    * Gets the parsed license object for the default license
    * declared by this package.
@@ -846,7 +830,6 @@ public class Package {
     @Nullable private IOException ioException = null;
     private boolean containsErrors = false;
 
-    private ImmutableList<Label> defaultApplicableLicenses = ImmutableList.of();
     private License defaultLicense = License.NO_LICENSE;
     private Set<License.DistributionType> defaultDistributionSet = License.DEFAULT_DISTRIB;
 
@@ -878,12 +861,6 @@ public class Package {
     private Map<String, OutputFile> outputFilePrefixes = new HashMap<>();
 
     private final Interner<ImmutableList<?>> listInterner = new ThreadCompatibleInterner<>();
-
-    private final Map<Location, String> generatorNameByLocation = new HashMap<>();
-
-    Map<Location, String> getGeneratorNameByLocation() {
-      return generatorNameByLocation;
-    }
 
     @ThreadCompatible
     private static class ThreadCompatibleInterner<T> implements Interner<T> {
@@ -996,7 +973,7 @@ public class Package {
       this.filename = filename;
       try {
         buildFileLabel = createLabel(filename.getRootRelativePath().getBaseName());
-        addInputFile(buildFileLabel, Location.fromFile(filename.asPath().toString()));
+        addInputFile(buildFileLabel, Location.fromPathFragment(filename.asPath().asFragment()));
       } catch (LabelSyntaxException e) {
         // This can't actually happen.
         throw new AssertionError("Package BUILD file has an illegal name: " + filename);
@@ -1163,23 +1140,6 @@ public class Package {
     Builder setSkylarkFileDependencies(ImmutableList<Label> skylarkFileDependencies) {
       this.skylarkFileDependencies = skylarkFileDependencies;
       return this;
-    }
-
-    /**
-     * Sets the default value to use for a rule's {@link RuleClass#APPLICABLE_LICENSES_ATTR}
-     * attribute when not explicitly specified by the rule. Records a package error if any labels
-     * are duplicated.
-     */
-    void setDefaultApplicableLicenses(List<Label> licenses, String attrName, Location location) {
-      if (!checkForDuplicateLabels(
-          licenses, "package " + pkg.getName(), attrName, location, builderEventHandler)) {
-        setContainsErrors();
-      }
-      pkg.setDefaultApplicableLicenses(ImmutableSet.copyOf(licenses));
-    }
-
-    ImmutableList<Label> getDefaultApplicableLicenses() {
-      return defaultApplicableLicenses;
     }
 
     /**
