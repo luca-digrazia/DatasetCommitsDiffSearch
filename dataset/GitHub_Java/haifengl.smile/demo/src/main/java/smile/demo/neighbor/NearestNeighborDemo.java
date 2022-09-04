@@ -236,7 +236,7 @@ public class NearestNeighborDemo extends JPanel implements Runnable, ActionListe
         return "Nearest Neighbor";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         NearestNeighborDemo demo = new NearestNeighborDemo();
         JFrame f = new JFrame("Nearest Neighbor");
         f.setSize(new Dimension(1000, 1000));

@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.demo.plot;
 
@@ -21,7 +21,7 @@ import java.awt.GridLayout;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import smile.plot.swing.BoxPlot;
-import smile.plot.swing.PlotCanvas;
+import smile.plot.swing.Canvas;
 
 /**
  *
@@ -43,18 +43,18 @@ public class BoxPlotDemo extends JPanel {
                 } while (r >= 1.0);
 
                 double z = Math.sqrt(-2.0 * Math.log(r) / r);
-                data[i][j] = new Double(x * z);
+                data[i][j] = x * z;
             }
         }
 
-        PlotCanvas canvas = BoxPlot.plot(data, new String[] {"Group A", "Group B", "Big Group C", "Group D", "Very Long Group E"});
+        Canvas canvas = new BoxPlot(data, new String[] {"Group A", "Group B", "Big Group C", "Group D", "Very Long Group E"}).canvas();
         canvas.setTitle("Box Plot A");
         canvas.getAxis(0).setRotation(-Math.PI / 2);
-        add(canvas);
+        add(canvas.panel());
 
-        canvas = BoxPlot.plot(data[0]);
+        canvas = BoxPlot.of(data[0]).canvas();
         canvas.setTitle("Box Plot B");
-        add(canvas);
+        add(canvas.panel());
     }
 
     @Override

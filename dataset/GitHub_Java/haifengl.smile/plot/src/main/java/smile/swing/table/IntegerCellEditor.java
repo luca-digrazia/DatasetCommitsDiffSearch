@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.swing.table;
 
@@ -39,6 +39,8 @@ import javax.swing.text.NumberFormatter;
 /**
  * Implements a cell editor that uses a formatted text field
  * to edit Integer values.
+ *
+ * @author Haifeng Li
  */
 @SuppressWarnings("serial")
 public class IntegerCellEditor extends DefaultCellEditor {
@@ -63,8 +65,8 @@ public class IntegerCellEditor extends DefaultCellEditor {
     public IntegerCellEditor(int min, int max) {
         super(new JFormattedTextField());
         textField = (JFormattedTextField) getComponent();
-        minimum = new Integer(min);
-        maximum = new Integer(max);
+        minimum = min;
+        maximum = max;
 
         // Set up the editor for the integer cells.
         integerFormat = NumberFormat.getIntegerInstance();
@@ -115,7 +117,7 @@ public class IntegerCellEditor extends DefaultCellEditor {
         if (o instanceof Integer) {
             return o;
         } else if (o instanceof Number) {
-            return new Integer(((Number) o).intValue());
+            return ((Number) o).intValue();
         } else {
             try {
                 return integerFormat.parseObject(o.toString());
