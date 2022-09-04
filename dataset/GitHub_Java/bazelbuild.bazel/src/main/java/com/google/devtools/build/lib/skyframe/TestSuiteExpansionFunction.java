@@ -21,19 +21,16 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.skyframe.TestSuiteExpansionValue.TestSuiteExpansion;
+import com.google.devtools.build.lib.skyframe.TestSuiteExpansionValue.TestSuiteExpansionKey;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
-
 import javax.annotation.Nullable;
 
 /**
@@ -41,8 +38,8 @@ import javax.annotation.Nullable;
  */
 final class TestSuiteExpansionFunction implements SkyFunction {
   @Override
-  public SkyValue compute(SkyKey key, Environment env) {
-    TestSuiteExpansion expansion = (TestSuiteExpansion) key.argument();
+  public SkyValue compute(SkyKey key, Environment env) throws InterruptedException {
+    TestSuiteExpansionKey expansion = (TestSuiteExpansionKey) key.argument();
     ResolvedTargets<Target> targets = labelsToTargets(env, expansion.getTargets(), false);
     List<SkyKey> testsInSuitesKeys = new ArrayList<>();
     for (Target target : targets.getTargets()) {
@@ -55,29 +52,32 @@ final class TestSuiteExpansionFunction implements SkyFunction {
       return null;
     }
 
-    ResolvedTargets.Builder<Target> result = ResolvedTargets.builder();
-    result.mergeError(targets.hasError());
+    Set<Label> result = new LinkedHashSet<>();
+    boolean hasError = targets.hasError();
     for (Target target : targets.getTargets()) {
       if (TargetUtils.isTestRule(target)) {
-        result.add(target);
+        result.add(target.getLabel());
       } else if (TargetUtils.isTestSuiteRule(target)) {
         TestsInSuiteValue value = (TestsInSuiteValue) testsInSuites.get(
             TestsInSuiteValue.key(target, true));
         if (value != null) {
-          result.merge(value.getTargets());
+          result.addAll(value.getLabels().getTargets());
+          hasError |= value.getLabels().hasError();
         }
       } else {
-        result.add(target);
+        result.add(target.getLabel());
       }
     }
     if (env.valuesMissing()) {
       return null;
     }
-    return new TestSuiteExpansionValue(result.build());
+    // We use ResolvedTargets in order to associate an error flag; the result should never contain
+    // any filtered targets.
+    return new TestSuiteExpansionValue(new ResolvedTargets<>(result, hasError));
   }
 
   static ResolvedTargets<Target> labelsToTargets(
-      Environment env, ImmutableSet<Label> labels, boolean hasError) {
+      Environment env, ImmutableSet<Label> labels, boolean hasError) throws InterruptedException {
     Set<PackageIdentifier> pkgIdentifiers = new LinkedHashSet<>();
     for (Label label : labels) {
       pkgIdentifiers.add(label.getPackageIdentifier());
@@ -91,7 +91,7 @@ final class TestSuiteExpansionFunction implements SkyFunction {
     ResolvedTargets.Builder<Target> builder = ResolvedTargets.builder();
     builder.mergeError(hasError);
     Map<PackageIdentifier, Package> packageMap = new HashMap<>();
-    for (Entry<SkyKey, SkyValue> entry : packages.entrySet()) {
+    for (Map.Entry<SkyKey, SkyValue> entry : packages.entrySet()) {
       packageMap.put(
           (PackageIdentifier) entry.getKey().argument(),
           ((PackageValue) entry.getValue()).getPackage());
@@ -104,6 +104,9 @@ final class TestSuiteExpansionFunction implements SkyFunction {
       }
       try {
         builder.add(pkg.getTarget(label.getName()));
+        if (pkg.containsErrors()) {
+          builder.setError();
+        }
       } catch (NoSuchTargetException e) {
         builder.setError();
       }

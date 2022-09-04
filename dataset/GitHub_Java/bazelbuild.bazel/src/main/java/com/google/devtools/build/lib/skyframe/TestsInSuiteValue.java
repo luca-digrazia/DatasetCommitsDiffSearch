@@ -13,16 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.skyframe.serialization.NotSerializableRuntimeException;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
@@ -35,24 +36,24 @@ import java.util.Objects;
 @Immutable
 @ThreadSafe
 final class TestsInSuiteValue implements SkyValue {
-  private ResolvedTargets<Target> targets;
+  private ResolvedTargets<Label> labels;
 
-  TestsInSuiteValue(ResolvedTargets<Target> targets) {
-    this.targets = Preconditions.checkNotNull(targets);
+  TestsInSuiteValue(ResolvedTargets<Label> labels) {
+    this.labels = Preconditions.checkNotNull(labels);
   }
 
-  public ResolvedTargets<Target> getTargets() {
-    return targets;
+  public ResolvedTargets<Label> getLabels() {
+    return labels;
   }
 
   @SuppressWarnings("unused")
   private void writeObject(ObjectOutputStream out) {
-    throw new UnsupportedOperationException();
+    throw new NotSerializableRuntimeException();
   }
 
   @SuppressWarnings("unused")
   private void readObject(ObjectInputStream in) {
-    throw new UnsupportedOperationException();
+    throw new NotSerializableRuntimeException();
   }
 
   @SuppressWarnings("unused")
@@ -63,30 +64,34 @@ final class TestsInSuiteValue implements SkyValue {
   /**
    * Create a target pattern value key.
    *
-   * @param testSuite the test suite target to be expanded
+   * @param testSuiteTarget the test suite target to be expanded
    */
   @ThreadSafe
-  public static SkyKey key(Target testSuite, boolean strict) {
-    Preconditions.checkState(TargetUtils.isTestSuiteRule(testSuite));
-    return new SkyKey(SkyFunctions.TESTS_IN_SUITE,
-        new TestsInSuite((Rule) testSuite, strict));
+  public static SkyKey key(Target testSuiteTarget, boolean strict) {
+    Preconditions.checkState(TargetUtils.isTestSuiteRule(testSuiteTarget));
+    return new TestsInSuiteKey(testSuiteTarget.getLabel(), strict);
   }
 
   /**
    * A list of targets of which all test suites should be expanded.
    */
   @ThreadSafe
-  static final class TestsInSuite implements Serializable {
-    private final Rule testSuite;
+  static final class TestsInSuiteKey implements SkyKey, Serializable {
+    private final Label testSuiteLabel;
     private final boolean strict;
 
-    public TestsInSuite(Rule testSuite, boolean strict) {
-      this.testSuite = testSuite;
+    public TestsInSuiteKey(Label testSuiteLabel, boolean strict) {
+      this.testSuiteLabel = testSuiteLabel;
       this.strict = strict;
     }
 
-    public Rule getTestSuite() {
-      return testSuite;
+    @Override
+    public SkyFunctionName functionName() {
+      return SkyFunctions.TESTS_IN_SUITE;
+    }
+
+    public Label getTestSuiteLabel() {
+      return testSuiteLabel;
     }
 
     public boolean isStrict() {
@@ -95,12 +100,12 @@ final class TestsInSuiteValue implements SkyValue {
 
     @Override
     public String toString() {
-      return "TestsInSuite(" + testSuite.toString() + ", strict=" + strict + ")";
+      return "TestsInSuite(" + testSuiteLabel.toString() + ", strict=" + strict + ")";
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(testSuite, strict);
+      return Objects.hash(testSuiteLabel, strict);
     }
 
     @Override
@@ -108,11 +113,11 @@ final class TestsInSuiteValue implements SkyValue {
       if (this == obj) {
         return true;
       }
-      if (!(obj instanceof TestsInSuite)) {
+      if (!(obj instanceof TestsInSuiteKey)) {
         return false;
       }
-      TestsInSuite other = (TestsInSuite) obj;
-      return other.testSuite.equals(testSuite) && other.strict == strict;
+      TestsInSuiteKey other = (TestsInSuiteKey) obj;
+      return other.testSuiteLabel.equals(testSuiteLabel) && other.strict == strict;
     }
   }
 }
