@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.packages;
 import static com.google.devtools.build.lib.packages.Attribute.ANY_RULE;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.ExecGroup.EMPTY_EXEC_GROUP;
 import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -660,7 +659,7 @@ public class RuleClass {
     private boolean isExecutableStarlark = false;
     private boolean isAnalysisTest = false;
     private boolean hasAnalysisTestTransition = false;
-    private boolean hasFunctionTransitionAllowlist = false;
+    private boolean hasFunctionTransitionWhitelist = false;
     private boolean hasStarlarkRuleTransition = false;
     private boolean ignoreLicenses = false;
     private ImplicitOutputsFunction implicitOutputsFunction = ImplicitOutputsFunction.NONE;
@@ -844,23 +843,6 @@ public class RuleClass {
         this.useToolchainTransition(false);
       }
 
-      // Any exec groups that have entirely empty toolchains and constraints inherit the rule's
-      // toolchains and constraints. Note that this isn't the same as a target's constraints which
-      // also read from attributes and configuration.
-      Map<String, ExecGroup> execGroupsWithInheritance = new HashMap<>();
-      ExecGroup inherited = null;
-      for (Map.Entry<String, ExecGroup> groupEntry : execGroups.entrySet()) {
-        ExecGroup group = groupEntry.getValue();
-        if (group.equals(EMPTY_EXEC_GROUP)) {
-          if (inherited == null) {
-            inherited = ExecGroup.create(requiredToolchains, executionPlatformConstraints);
-          }
-          execGroupsWithInheritance.put(groupEntry.getKey(), inherited);
-        } else {
-          execGroupsWithInheritance.put(groupEntry.getKey(), group);
-        }
-      }
-
       return new RuleClass(
           name,
           callstack,
@@ -875,7 +857,7 @@ public class RuleClass {
           isExecutableStarlark,
           isAnalysisTest,
           hasAnalysisTestTransition,
-          hasFunctionTransitionAllowlist,
+          hasFunctionTransitionWhitelist,
           ignoreLicenses,
           implicitOutputsFunction,
           transitionFactory,
@@ -895,7 +877,7 @@ public class RuleClass {
           useToolchainResolution,
           useToolchainTransition,
           executionPlatformConstraints,
-          execGroupsWithInheritance,
+          execGroups,
           outputFileKind,
           attributes.values(),
           buildSetting);
@@ -1329,11 +1311,11 @@ public class RuleClass {
     }
 
     /**
-     * This rule class has the _allowlist_function_transition attribute. Intended only for Starlark
+     * This rule class has the _whitelist_function_transition attribute. Intended only for Starlark
      * rules.
      */
-    public <TypeT> Builder setHasFunctionTransitionAllowlist() {
-      this.hasFunctionTransitionAllowlist = true;
+    public <TYPE> Builder setHasFunctionTransitionWhitelist() {
+      this.hasFunctionTransitionWhitelist = true;
       return this;
     }
 
@@ -1441,7 +1423,7 @@ public class RuleClass {
      * Adds execution groups to this rule class. Errors out if multiple different groups with the
      * same name are added.
      */
-    public Builder addExecGroups(Map<String, ExecGroup> execGroups) {
+    public Builder addExecGroups(Map<String, ExecGroup> execGroups) throws DuplicateExecGroupError {
       for (Map.Entry<String, ExecGroup> group : execGroups.entrySet()) {
         String name = group.getKey();
         if (this.execGroups.containsKey(name)) {
@@ -1459,20 +1441,14 @@ public class RuleClass {
       return this;
     }
 
-    /**
-     * Adds an exec group that is empty. During {@code build()} this will be replaced by an exec
-     * group that inherits its toolchains and constraints from the rule.
-     */
-    public Builder addExecGroup(String name) {
-      return addExecGroups(ImmutableMap.of(name, EMPTY_EXEC_GROUP));
-    }
-
     /** An error to help report {@link ExecGroup}s with the same name */
-    static class DuplicateExecGroupError extends RuntimeException {
+    static class DuplicateExecGroupError extends EvalException {
       private final String duplicateGroup;
 
       DuplicateExecGroupError(String duplicateGroup) {
-        super(String.format("Multiple execution groups with the same name: '%s'.", duplicateGroup));
+        super(
+            null,
+            String.format("Multiple execution groups with the same name: '%s'.", duplicateGroup));
         this.duplicateGroup = duplicateGroup;
       }
 
@@ -1550,7 +1526,7 @@ public class RuleClass {
   private final boolean isExecutableStarlark;
   private final boolean isAnalysisTest;
   private final boolean hasAnalysisTestTransition;
-  private final boolean hasFunctionTransitionAllowlist;
+  private final boolean hasFunctionTransitionWhitelist;
   private final boolean ignoreLicenses;
   private final boolean hasAspects;
 
@@ -1685,7 +1661,7 @@ public class RuleClass {
       boolean isExecutableStarlark,
       boolean isAnalysisTest,
       boolean hasAnalysisTestTransition,
-      boolean hasFunctionTransitionAllowlist,
+      boolean hasFunctionTransitionWhitelist,
       boolean ignoreLicenses,
       ImplicitOutputsFunction implicitOutputsFunction,
       TransitionFactory<Rule> transitionFactory,
@@ -1737,7 +1713,7 @@ public class RuleClass {
     this.isExecutableStarlark = isExecutableStarlark;
     this.isAnalysisTest = isAnalysisTest;
     this.hasAnalysisTestTransition = hasAnalysisTestTransition;
-    this.hasFunctionTransitionAllowlist = hasFunctionTransitionAllowlist;
+    this.hasFunctionTransitionWhitelist = hasFunctionTransitionWhitelist;
     this.ignoreLicenses = ignoreLicenses;
     this.configurationFragmentPolicy = configurationFragmentPolicy;
     this.supportsConstraintChecking = supportsConstraintChecking;
@@ -2598,19 +2574,6 @@ public class RuleClass {
    * Returns the digest for the RuleClass's rule definition environment, a hash of the .bzl file
    * defining the rule class and all the .bzl files it transitively loads. Null for native rules'
    * RuleClass objects.
-   *
-   * <p>This digest is sensitive to any changes in the declaration of the RuleClass itself,
-   * including changes in the .bzl files it transitively loads, but it is not unique: all
-   * RuleClasses defined within in the same .bzl file have the same digest.
-   *
-   * <p>To uniquely identify a rule class, we need the triple: ({@link
-   * #getRuleDefinitionEnvironmentLabel()}, {@link #getRuleDefinitionEnvironmentDigest()}, {@link
-   * #getName()}) The first two components are collectively known as the "rule definition
-   * environment". Dependency analysis may compare these triples to detect whether a change to a
-   * rule definition might have consequences for a rule instance that has not otherwise changed.
-   *
-   * <p>Note: this concept of rule definition environment is not related to the {@link
-   * com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment} interface.
    */
   @Nullable
   public byte[] getRuleDefinitionEnvironmentDigest() {
@@ -2645,9 +2608,11 @@ public class RuleClass {
     return hasAnalysisTestTransition;
   }
 
-  /** Returns true if this rule class has the _allowlist_function_transition attribute. */
-  public boolean hasFunctionTransitionAllowlist() {
-    return hasFunctionTransitionAllowlist;
+  /**
+   * Returns true if this rule class has the _whitelist_function_transition attribute.
+   */
+  public boolean hasFunctionTransitionWhitelist() {
+    return hasFunctionTransitionWhitelist;
   }
 
   /**
