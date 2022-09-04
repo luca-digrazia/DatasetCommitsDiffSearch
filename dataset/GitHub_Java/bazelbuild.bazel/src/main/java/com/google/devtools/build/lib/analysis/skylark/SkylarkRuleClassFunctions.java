@@ -385,7 +385,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     ImmutableList.Builder<Label> requiredToolchains = new ImmutableList.Builder<>();
     for (String rawLabel : rawLabels) {
       try {
-        Label toolchainLabel = Label.parseAbsolute(rawLabel, ImmutableMap.of());
+        Label toolchainLabel = Label.parseAbsolute(rawLabel);
         requiredToolchains.add(toolchainLabel);
       } catch (LabelSyntaxException e) {
         throw new EvalException(
@@ -401,7 +401,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     ImmutableList.Builder<Label> constraintLabels = new ImmutableList.Builder<>();
     for (String rawLabel : rawLabels) {
       try {
-        Label constraintLabel = Label.parseAbsolute(rawLabel, ImmutableMap.of());
+        Label constraintLabel = Label.parseAbsolute(rawLabel);
         constraintLabels.add(constraintLabel);
       } catch (LabelSyntaxException e) {
         throw new EvalException(
@@ -415,12 +415,12 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
   @Override
   public SkylarkAspect aspect(
       BaseFunction implementation,
-      SkylarkList<?> attributeAspects,
+      SkylarkList attributeAspects,
       Object attrs,
-      SkylarkList<?> requiredAspectProvidersArg,
-      SkylarkList<?> providesArg,
-      SkylarkList<?> fragments,
-      SkylarkList<?> hostFragments,
+      SkylarkList requiredAspectProvidersArg,
+      SkylarkList providesArg,
+      SkylarkList fragments,
+      SkylarkList hostFragments,
       SkylarkList<?> toolchains,
       String doc,
       FuncallExpression ast,

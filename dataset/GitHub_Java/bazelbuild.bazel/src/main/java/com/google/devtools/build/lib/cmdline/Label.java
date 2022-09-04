@@ -130,7 +130,6 @@ public final class Label
       boolean defaultToMain,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws LabelSyntaxException {
-    Preconditions.checkNotNull(repositoryMapping);
     String repo = defaultToMain ? "@" : RepositoryName.DEFAULT_REPOSITORY;
     int packageStartPos = absName.indexOf("//");
     if (packageStartPos > 0) {
@@ -159,7 +158,6 @@ public final class Label
   private static RepositoryName getGlobalRepoName(
       String repo, ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws LabelSyntaxException {
-    Preconditions.checkNotNull(repositoryMapping);
     RepositoryName repoName = RepositoryName.create(repo);
     return repositoryMapping.getOrDefault(repoName, repoName);
   }
@@ -526,7 +524,6 @@ public final class Label
   public Label getRelativeWithRemapping(
       String relName, ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws LabelSyntaxException {
-    Preconditions.checkNotNull(repositoryMapping);
     if (relName.length() == 0) {
       throw new LabelSyntaxException("empty package-relative label");
     }
