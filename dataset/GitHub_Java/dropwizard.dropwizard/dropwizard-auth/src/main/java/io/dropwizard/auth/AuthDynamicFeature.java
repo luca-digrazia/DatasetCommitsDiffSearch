@@ -3,6 +3,7 @@ package io.dropwizard.auth;
 import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
 import org.glassfish.jersey.server.model.AnnotatedMethod;
 
+import javax.annotation.Nullable;
 import javax.annotation.security.DenyAll;
 import javax.annotation.security.PermitAll;
 import javax.annotation.security.RolesAllowed;
@@ -57,14 +58,17 @@ public class AuthDynamicFeature implements DynamicFeature {
 
         // First, check for any @Auth annotations on the method.
         for (int i = 0; i < parameterAnnotations.length; i++) {
-            if (containsAuthAnnotation(parameterAnnotations[i])) {
-                // Optional auth requires that a concrete AuthFilter be provided.
-                if (parameterTypes[i].equals(Optional.class) && authFilter != null) {
-                    context.register(new WebApplicationExceptionCatchingFilter(authFilter));
-                } else {
-                    registerAuthFilter(context);
+            for (final Annotation annotation : parameterAnnotations[i]) {
+                if (annotation instanceof Auth) {
+                    // Optional auth requires that a concrete AuthFilter be provided.
+                    if (parameterTypes[i].equals(Optional.class) && authFilter != null) {
+                        context.register(new WebApplicationExceptionCatchingFilter(authFilter));
+                        return;
+                    } else {
+                        registerAuthFilter(context);
+                        return;
+                    }
                 }
-                return;
             }
         }
 
@@ -78,15 +82,6 @@ public class AuthDynamicFeature implements DynamicFeature {
         if (annotationOnClass || annotationOnMethod) {
             registerAuthFilter(context);
         }
-    }
-
-    private boolean containsAuthAnnotation(final Annotation[] annotations) {
-        for (final Annotation annotation : annotations) {
-            if (annotation instanceof Auth) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void registerAuthFilter(FeatureContext context) {
