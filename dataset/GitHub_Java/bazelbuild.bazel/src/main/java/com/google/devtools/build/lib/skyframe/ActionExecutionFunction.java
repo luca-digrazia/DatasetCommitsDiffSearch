@@ -751,7 +751,7 @@ public class ActionExecutionFunction implements SkyFunction {
             action.getOutputs(),
             tsgm.get(),
             pathResolver,
-            skyframeActionExecutor.getExecRoot().asFragment(),
+            skyframeActionExecutor.getExecRoot(),
             expandedFilesets);
 
     // We only need to check the action cache if we haven't done it on a previous run.
