@@ -1,33 +1,27 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
 import com.google.common.collect.Lists;
-import org.graylog2.restclient.lib.Tools;
 import org.apache.commons.lang3.StringEscapeUtils;
-import play.api.templates.Html;
+import org.graylog2.restclient.lib.Tools;
 
 import java.util.List;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class FieldMapper {
 
     public enum Type {
@@ -63,14 +57,14 @@ public class FieldMapper {
         return value;
     }
 
-    private static Html convertNewlinesToBr(Object fullMessage) {
+    private static String convertNewlinesToBr(Object fullMessage) {
         if (fullMessage == null) {
             return null;
         }
 
         String s = StringEscapeUtils.escapeHtml4(fullMessage.toString());
         s = s.replaceAll("\\n", "<br>");
-        return Html.apply(s);
+        return s;
     }
 
     private static String mapSyslogLevel(Object level) {
