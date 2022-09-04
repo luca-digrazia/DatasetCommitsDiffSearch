@@ -1,7 +1,22 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.processor.BuildExtension.BuildContext;
-import java.util.HashSet;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import org.jboss.jandex.AnnotationInstance;
@@ -20,10 +35,12 @@ public class InjectionPointModifier {
 
     private List<InjectionPointsTransformer> transformers;
     private BuildExtension.BuildContext buildContext;
+    private AnnotationStore annotationStore;
 
     InjectionPointModifier(List<InjectionPointsTransformer> transformers, BuildExtension.BuildContext buildContext) {
         this.buildContext = buildContext;
         this.transformers = transformers;
+        this.annotationStore = buildContext != null ? buildContext.get(BuildExtension.Key.ANNOTATION_STORE) : null;
     }
 
     public Set<AnnotationInstance> applyTransformers(Type type, AnnotationTarget target, Set<AnnotationInstance> qualifiers) {
@@ -31,7 +48,8 @@ public class InjectionPointModifier {
         if (transformers.isEmpty()) {
             return qualifiers;
         }
-        TransformationContextImpl transformationContext = new TransformationContextImpl(buildContext, target, qualifiers);
+        TransformationContextImpl transformationContext = new TransformationContextImpl(target, qualifiers,
+                annotationStore);
         for (InjectionPointsTransformer transformer : transformers) {
             if (transformer.appliesTo(type)) {
                 transformer.transform(transformationContext);
@@ -40,24 +58,55 @@ public class InjectionPointModifier {
         return transformationContext.getQualifiers();
     }
 
-    class TransformationContextImpl extends AnnotationsTransformationContext<Set<AnnotationInstance>>
-            implements InjectionPointsTransformer.TransformationContext {
+    class TransformationContextImpl implements InjectionPointsTransformer.TransformationContext {
 
-        public TransformationContextImpl(BuildContext buildContext, AnnotationTarget target,
-                Set<AnnotationInstance> annotations) {
-            super(buildContext, target, annotations);
+        private AnnotationTarget target;
+        private Set<AnnotationInstance> qualifiers;
+        private AnnotationStore annotationStore;
+
+        TransformationContextImpl(AnnotationTarget target, Set<AnnotationInstance> qualifiers,
+                AnnotationStore annotationStore) {
+            this.target = target;
+            this.qualifiers = qualifiers;
+            this.annotationStore = annotationStore;
         }
 
         @Override
-        public InjectionPointsTransformer.Transformation transform() {
-            return new InjectionPointsTransformer.Transformation(new HashSet<>(getAnnotations()), getTarget(),
-                    this::setAnnotations);
+        public AnnotationTarget getTarget() {
+            return target;
         }
 
         @Override
         public Set<AnnotationInstance> getQualifiers() {
-            return getAnnotations();
+            return qualifiers;
         }
 
+        @Override
+        public Collection<AnnotationInstance> getAllAnnotations() {
+            if (annotationStore == null) {
+                throw new IllegalStateException(
+                        "Attempted to use TransformationContext#getAllAnnotations but AnnotationStore wasn't initialized.");
+            }
+            return annotationStore.getAnnotations(getTarget());
+        }
+
+        @Override
+        public InjectionPointsTransformer.Transformation transform() {
+            return new InjectionPointsTransformer.Transformation(this);
+        }
+
+        @Override
+        public <V> V get(BuildExtension.Key<V> key) {
+            return buildContext.get(key);
+        }
+
+        @Override
+        public <V> V put(BuildExtension.Key<V> key, V value) {
+            return buildContext.put(key, value);
+        }
+
+        public void setQualifiers(Set<AnnotationInstance> qualifiers) {
+            this.qualifiers = qualifiers;
+        }
     }
 }

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import static io.quarkus.arc.processor.Basics.index;
@@ -33,7 +49,7 @@ public class BeanInfoTypesTest {
 
         Index index = index(Foo.class, Bar.class, FooQualifier.class, AbstractList.class, AbstractCollection.class,
                 Collection.class, List.class,
-                Iterable.class, Object.class, String.class);
+                Iterable.class);
 
         BeanDeployment deployment = new BeanDeployment(index, null, null);
         DotName fooName = name(Foo.class);
@@ -41,8 +57,8 @@ public class BeanInfoTypesTest {
         ClassInfo fooClass = index.getClassByName(fooName);
         BeanInfo fooBean = Beans.createClassBean(fooClass, deployment, null);
         Set<Type> types = fooBean.getTypes();
-        // Foo, AbstractList<String>, AbstractCollection<String>, List<String>, Collection<String>, Iterable<String>, Object
-        assertEquals(7, types.size());
+        // Foo, AbstractList<String>, AbstractCollection<String>, List<String>, Collection<String>, Iterable<String>
+        assertEquals(6, types.size());
         assertTrue(types.contains(Type.create(fooName, Kind.CLASS)));
         assertTrue(types.contains(ParameterizedType.create(name(AbstractList.class),
                 new Type[] { Type.create(name(String.class), Kind.CLASS) }, null)));

@@ -34,18 +34,12 @@ final class Interceptors {
      * @return a new interceptor info
      */
     static InterceptorInfo createInterceptor(ClassInfo interceptorClass, BeanDeployment beanDeployment,
-            InjectionPointModifier transformer, AnnotationStore store) {
+            InjectionPointModifier transformer) {
         Set<AnnotationInstance> bindings = new HashSet<>();
         Integer priority = 0;
-        for (AnnotationInstance annotation : store.getAnnotations(interceptorClass)) {
+        for (AnnotationInstance annotation : interceptorClass.classAnnotations()) {
             if (beanDeployment.getInterceptorBinding(annotation.name()) != null) {
                 bindings.add(annotation);
-                // can also be a transitive binding
-                Set<AnnotationInstance> transitiveInterceptorBindings = beanDeployment
-                        .getTransitiveInterceptorBindings(annotation.name());
-                if (transitiveInterceptorBindings != null) {
-                    bindings.addAll(transitiveInterceptorBindings);
-                }
             } else if (annotation.name().equals(DotNames.PRIORITY)) {
                 priority = annotation.value().asInt();
             }

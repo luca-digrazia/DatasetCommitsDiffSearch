@@ -47,7 +47,6 @@ import io.quarkus.arc.processor.BeanDefiningAnnotation;
 import io.quarkus.arc.processor.BeanDeployment;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BeanProcessor;
-import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.ReflectionRegistration;
 import io.quarkus.arc.processor.ResourceOutput;
 import io.quarkus.arc.runtime.AdditionalBean;
@@ -65,7 +64,6 @@ import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.TestClassPredicateBuildItem;
-import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveFieldBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveMethodBuildItem;
 
@@ -89,9 +87,6 @@ public class ArcAnnotationProcessor {
 
     @Inject
     BuildProducer<ReflectiveMethodBuildItem> reflectiveMethods;
-
-    @Inject
-    BuildProducer<ReflectiveClassBuildItem> reflectiveClasses;
 
     @Inject
     BuildProducer<ReflectiveFieldBuildItem> reflectiveFields;
@@ -135,23 +130,30 @@ public class ArcAnnotationProcessor {
             BuildProducer<FeatureBuildItem> feature)
             throws Exception {
 
-        if (!arc.isRemoveUnusedBeansFieldValid()) {
-            throw new IllegalArgumentException("Invalid configuration value set for 'quarkus.arc.remove-unused-beans'." +
-                    " Please use one of " + ArcConfig.ALLOWED_REMOVE_UNUSED_BEANS_VALUES);
-        }
-
         feature.produce(new FeatureBuildItem(FeatureBuildItem.CDI));
 
         List<String> additionalBeans = beanArchiveIndex.getAdditionalBeans();
         Set<DotName> generatedClassNames = beanArchiveIndex.getGeneratedClassNames();
         IndexView index = beanArchiveIndex.getIndex();
         BeanProcessor.Builder builder = BeanProcessor.builder();
-        IndexView applicationClassesIndex = applicationArchivesBuildItem.getRootArchive().getIndex();
-        builder.setApplicationClassPredicate(new AbstractCompositeApplicationClassesPredicate<DotName>(
-                applicationClassesIndex, generatedClassNames, applicationClassPredicates) {
+        builder.setApplicationClassPredicate(new Predicate<DotName>() {
             @Override
-            protected DotName getDotName(DotName dotName) {
-                return dotName;
+            public boolean test(DotName dotName) {
+                if (applicationArchivesBuildItem.getRootArchive().getIndex().getClassByName(dotName) != null) {
+                    return true;
+                }
+                if (generatedClassNames.contains(dotName)) {
+                    return true;
+                }
+                if (!applicationClassPredicates.isEmpty()) {
+                    String className = dotName.toString();
+                    for (ApplicationClassPredicateBuildItem predicate : applicationClassPredicates) {
+                        if (predicate.test(className)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
             }
         });
         builder.addAnnotationTransformer(new AnnotationsTransformer() {
@@ -166,11 +168,7 @@ public class ArcAnnotationProcessor {
                 ClassInfo beanClass = transformationContext.getTarget().asClass();
                 String beanClassName = beanClass.name().toString();
                 if (additionalBeans.contains(beanClassName)) {
-                    if (BuiltinScope.isDeclaredOn(beanClass)) {
-                        // If it declares a built-in scope no action is needed
-                        return;
-                    }
-                    // Try to determine the default scope
+                    // This is an additional bean - try to determine the default scope
                     DotName defaultScope = ArcAnnotationProcessor.this.additionalBeans.stream()
                             .filter(ab -> ab.contains(beanClassName)).findFirst().map(AdditionalBeanBuildItem::getDefaultScope)
                             .orElse(null);
@@ -243,16 +241,7 @@ public class ArcAnnotationProcessor {
         for (BeanDeploymentValidatorBuildItem item : beanDeploymentValidators) {
             builder.addBeanDeploymentValidator(item.getBeanDeploymentValidator());
         }
-        builder.setRemoveUnusedBeans(arc.shouldEnableBeanRemoval());
-        if (arc.shouldOnlyKeepAppBeans()) {
-            builder.addRemovalExclusion(new AbstractCompositeApplicationClassesPredicate<BeanInfo>(
-                    applicationClassesIndex, generatedClassNames, applicationClassPredicates) {
-                @Override
-                protected DotName getDotName(BeanInfo bean) {
-                    return bean.getBeanClass();
-                }
-            });
-        }
+        builder.setRemoveUnusedBeans(arc.removeUnusedBeans);
         builder.addRemovalExclusion(new BeanClassNameExclusion(LifecycleEventRunner.class.getName()));
         for (AdditionalBeanBuildItem additionalBean : this.additionalBeans) {
             if (!additionalBean.isRemovable()) {
@@ -281,11 +270,6 @@ public class ArcAnnotationProcessor {
         BeanProcessor beanProcessor = builder.build();
         BeanDeployment beanDeployment = beanProcessor.process();
 
-        // Register all qualifiers for reflection to support type-safe resolution at runtime in native image
-        for (ClassInfo qualifier : beanDeployment.getQualifiers()) {
-            reflectiveClasses.produce(new ReflectiveClassBuildItem(true, false, qualifier.name().toString()));
-        }
-
         ArcContainer container = arcTemplate.getContainer(shutdown);
         BeanContainer beanContainer = arcTemplate.initBeanContainer(container,
                 beanContainerListenerBuildItems.stream().map(BeanContainerListenerBuildItem::getBeanContainerListener)
@@ -294,42 +278,5 @@ public class ArcAnnotationProcessor {
                         .collect(Collectors.toSet()));
 
         return new BeanContainerBuildItem(beanContainer);
-    }
-
-    private abstract static class AbstractCompositeApplicationClassesPredicate<T> implements Predicate<T> {
-
-        private final IndexView applicationClassesIndex;
-        private final Set<DotName> generatedClassNames;
-        private final List<ApplicationClassPredicateBuildItem> applicationClassPredicateBuildItems;
-
-        protected abstract DotName getDotName(T t);
-
-        private AbstractCompositeApplicationClassesPredicate(IndexView applicationClassesIndex,
-                Set<DotName> generatedClassNames,
-                List<ApplicationClassPredicateBuildItem> applicationClassPredicateBuildItems) {
-            this.applicationClassesIndex = applicationClassesIndex;
-            this.generatedClassNames = generatedClassNames;
-            this.applicationClassPredicateBuildItems = applicationClassPredicateBuildItems;
-        }
-
-        @Override
-        public boolean test(T t) {
-            final DotName dotName = getDotName(t);
-            if (applicationClassesIndex.getClassByName(dotName) != null) {
-                return true;
-            }
-            if (generatedClassNames.contains(dotName)) {
-                return true;
-            }
-            if (!applicationClassPredicateBuildItems.isEmpty()) {
-                String className = dotName.toString();
-                for (ApplicationClassPredicateBuildItem predicate : applicationClassPredicateBuildItems) {
-                    if (predicate.test(className)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
     }
 }

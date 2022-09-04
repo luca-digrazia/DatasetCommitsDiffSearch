@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.test;
 
 import io.quarkus.arc.Arc;
@@ -10,9 +26,8 @@ import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BeanProcessor;
 import io.quarkus.arc.processor.BeanRegistrar;
 import io.quarkus.arc.processor.ContextRegistrar;
+import io.quarkus.arc.processor.DeploymentEnhancer;
 import io.quarkus.arc.processor.InjectionPointsTransformer;
-import io.quarkus.arc.processor.InterceptorBindingRegistrar;
-import io.quarkus.arc.processor.ObserverTransformer;
 import io.quarkus.arc.processor.ResourceOutput;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -33,25 +48,11 @@ import java.util.stream.Collectors;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
-import org.junit.jupiter.api.extension.AfterEachCallback;
-import org.junit.jupiter.api.extension.BeforeEachCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
 
-/**
- * Junit5 extension for Arc bootstrap/shutdown.
- * Designed to be used via {code @RegisterExtension} fields in tests.
- *
- * It bootstraps Arc before each test method and shuts down afterwards.
- * Leverages root {@code ExtensionContext.Store} to store and retrieve some variables.
- */
-public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
-
-    // our specific namespace for storing anything into ExtensionContext.Store
-    private static ExtensionContext.Namespace EXTENSION_NAMESPACE;
-
-    // Strings used as keys in ExtensionContext.Store
-    private static final String KEY_OLD_TCCL = "arcExtensionOldTccl";
-    private static final String KEY_TEST_CLASSLOADER = "arcExtensionTestClassLoader";
+public class ArcTestContainer implements TestRule {
 
     private static final String TARGET_TEST_CLASSES = "target/test-classes";
 
@@ -66,10 +67,9 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
         private final List<Class<? extends Annotation>> resourceAnnotations;
         private final List<BeanRegistrar> beanRegistrars;
         private final List<ContextRegistrar> contextRegistrars;
-        private final List<InterceptorBindingRegistrar> interceptorBindingRegistrars;
         private final List<AnnotationsTransformer> annotationsTransformers;
         private final List<InjectionPointsTransformer> injectionsPointsTransformers;
-        private final List<ObserverTransformer> observerTransformers;
+        private final List<DeploymentEnhancer> deploymentEnhancers;
         private final List<BeanDeploymentValidator> beanDeploymentValidators;
         private boolean shouldFail = false;
         private boolean removeUnusedBeans = false;
@@ -81,10 +81,9 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
             resourceAnnotations = new ArrayList<>();
             beanRegistrars = new ArrayList<>();
             contextRegistrars = new ArrayList<>();
-            interceptorBindingRegistrars = new ArrayList<>();
             annotationsTransformers = new ArrayList<>();
             injectionsPointsTransformers = new ArrayList<>();
-            observerTransformers = new ArrayList<>();
+            deploymentEnhancers = new ArrayList<>();
             beanDeploymentValidators = new ArrayList<>();
             exclusions = new ArrayList<>();
         }
@@ -125,13 +124,8 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
             return this;
         }
 
-        public Builder observerTransformers(ObserverTransformer... transformers) {
-            Collections.addAll(this.observerTransformers, transformers);
-            return this;
-        }
-
-        public Builder interceptorBindingRegistrars(InterceptorBindingRegistrar... registrars) {
-            Collections.addAll(this.interceptorBindingRegistrars, registrars);
+        public Builder deploymentEnhancers(DeploymentEnhancer... enhancers) {
+            Collections.addAll(this.deploymentEnhancers, enhancers);
             return this;
         }
 
@@ -157,9 +151,8 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
 
         public ArcTestContainer build() {
             return new ArcTestContainer(resourceReferenceProviders, beanClasses, resourceAnnotations, beanRegistrars,
-                    contextRegistrars, interceptorBindingRegistrars, annotationsTransformers, injectionsPointsTransformers,
-                    observerTransformers,
-                    beanDeploymentValidators, shouldFail, removeUnusedBeans, exclusions);
+                    contextRegistrars, annotationsTransformers, injectionsPointsTransformers,
+                    deploymentEnhancers, beanDeploymentValidators, shouldFail, removeUnusedBeans, exclusions);
         }
 
     }
@@ -174,13 +167,11 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
 
     private final List<ContextRegistrar> contextRegistrars;
 
-    List<InterceptorBindingRegistrar> bindingRegistrars;
-
     private final List<AnnotationsTransformer> annotationsTransformers;
 
     private final List<InjectionPointsTransformer> injectionPointsTransformers;
 
-    private final List<ObserverTransformer> observerTransformers;
+    private final List<DeploymentEnhancer> deploymentEnhancers;
 
     private final List<BeanDeploymentValidator> beanDeploymentValidators;
 
@@ -190,9 +181,11 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
     private final boolean removeUnusedBeans;
     private final List<Predicate<BeanInfo>> exclusions;
 
+    private URLClassLoader testClassLoader;
+
     public ArcTestContainer(Class<?>... beanClasses) {
         this(Collections.emptyList(), Arrays.asList(beanClasses), Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(),
                 Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false, false,
                 Collections.emptyList());
     }
@@ -200,9 +193,8 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
     public ArcTestContainer(List<Class<?>> resourceReferenceProviders, List<Class<?>> beanClasses,
             List<Class<? extends Annotation>> resourceAnnotations,
             List<BeanRegistrar> beanRegistrars, List<ContextRegistrar> contextRegistrars,
-            List<InterceptorBindingRegistrar> bindingRegistrars,
             List<AnnotationsTransformer> annotationsTransformers, List<InjectionPointsTransformer> ipTransformers,
-            List<ObserverTransformer> observerTransformers,
+            List<DeploymentEnhancer> deploymentEnhancers,
             List<BeanDeploymentValidator> beanDeploymentValidators, boolean shouldFail, boolean removeUnusedBeans,
             List<Predicate<BeanInfo>> exclusions) {
         this.resourceReferenceProviders = resourceReferenceProviders;
@@ -210,10 +202,9 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
         this.resourceAnnotations = resourceAnnotations;
         this.beanRegistrars = beanRegistrars;
         this.contextRegistrars = contextRegistrars;
-        this.bindingRegistrars = bindingRegistrars;
         this.annotationsTransformers = annotationsTransformers;
         this.injectionPointsTransformers = ipTransformers;
-        this.observerTransformers = observerTransformers;
+        this.deploymentEnhancers = deploymentEnhancers;
         this.beanDeploymentValidators = beanDeploymentValidators;
         this.buildFailure = new AtomicReference<Throwable>(null);
         this.shouldFail = shouldFail;
@@ -221,40 +212,29 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
         this.exclusions = exclusions;
     }
 
-    // this is where we start Arc, we operate on a per-method basis
     @Override
-    public void beforeEach(ExtensionContext extensionContext) throws Exception {
-        getRootExtensionStore(extensionContext).put(KEY_OLD_TCCL, init(extensionContext));
-    }
-
-    // this is where we shutdown Arc
-    @Override
-    public void afterEach(ExtensionContext extensionContext) throws Exception {
-        ClassLoader oldTccl = getRootExtensionStore(extensionContext).get(KEY_OLD_TCCL, ClassLoader.class);
-        Thread.currentThread().setContextClassLoader(oldTccl);
-
-        URLClassLoader testClassLoader = getRootExtensionStore(extensionContext).get(KEY_TEST_CLASSLOADER,
-                URLClassLoader.class);
-        if (testClassLoader != null) {
-            try {
-                testClassLoader.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+    public Statement apply(Statement base, Description description) {
+        return new Statement() {
+            @Override
+            public void evaluate() throws Throwable {
+                ClassLoader oldTccl = init(description.getTestClass());
+                try {
+                    base.evaluate();
+                } finally {
+                    Thread.currentThread().setContextClassLoader(oldTccl);
+                    if (testClassLoader != null) {
+                        try {
+                            testClassLoader.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    shutdown();
+                }
             }
-        }
-        shutdown();
+        };
     }
 
-    private static synchronized ExtensionContext.Store getRootExtensionStore(ExtensionContext context) {
-        if (EXTENSION_NAMESPACE == null) {
-            EXTENSION_NAMESPACE = ExtensionContext.Namespace.create(ArcTestContainer.class);
-        }
-        return context.getRoot().getStore(EXTENSION_NAMESPACE);
-    }
-
-    /**
-     * In case the test is expected to fail, this method will return a {@link Throwable} that caused it.
-     */
     public Throwable getFailure() {
         return buildFailure.get();
     }
@@ -263,9 +243,7 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
         Arc.shutdown();
     }
 
-    private ClassLoader init(ExtensionContext context) {
-        // retrieve test class from extension context
-        Class<?> testClass = context.getRequiredTestClass();
+    private ClassLoader init(Class<?> testClass) {
 
         // Make sure Arc is down
         Arc.shutdown();
@@ -320,17 +298,14 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
             for (ContextRegistrar registrar : contextRegistrars) {
                 beanProcessorBuilder.addContextRegistrar(registrar);
             }
-            for (InterceptorBindingRegistrar registrar : bindingRegistrars) {
-                beanProcessorBuilder.addInterceptorbindingRegistrar(registrar);
-            }
             for (AnnotationsTransformer annotationsTransformer : annotationsTransformers) {
                 beanProcessorBuilder.addAnnotationTransformer(annotationsTransformer);
             }
             for (InjectionPointsTransformer injectionPointsTransformer : injectionPointsTransformers) {
                 beanProcessorBuilder.addInjectionPointTransformer(injectionPointsTransformer);
             }
-            for (ObserverTransformer observerTransformer : observerTransformers) {
-                beanProcessorBuilder.addObserverTransformer(observerTransformer);
+            for (DeploymentEnhancer enhancer : deploymentEnhancers) {
+                beanProcessorBuilder.addDeploymentEnhancer(enhancer);
             }
             for (BeanDeploymentValidator validator : beanDeploymentValidators) {
                 beanProcessorBuilder.addBeanDeploymentValidator(validator);
@@ -371,7 +346,7 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
                 throw new IllegalStateException("Error generating resources", e);
             }
 
-            URLClassLoader testClassLoader = new URLClassLoader(new URL[] {}, old) {
+            testClassLoader = new URLClassLoader(new URL[] {}, old) {
                 @Override
                 public Enumeration<URL> getResources(String name) throws IOException {
                     if (("META-INF/services/" + ComponentsProvider.class.getName()).equals(name)) {
@@ -388,9 +363,6 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
             };
             Thread.currentThread()
                     .setContextClassLoader(testClassLoader);
-
-            // store the test class loader into extension store
-            getRootExtensionStore(context).put(KEY_TEST_CLASSLOADER, testClassLoader);
 
             // Now we are ready to initialize Arc
             Arc.initialize();

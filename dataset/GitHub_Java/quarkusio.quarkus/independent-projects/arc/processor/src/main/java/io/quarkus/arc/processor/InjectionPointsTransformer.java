@@ -1,10 +1,31 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
+import java.lang.annotation.Annotation;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Consumer;
+import java.util.function.Predicate;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationValue;
+import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
 
 /**
@@ -45,7 +66,7 @@ public interface InjectionPointsTransformer extends BuildExtension {
          *
          * @return the annotation instances
          */
-        Set<AnnotationInstance> getQualifiers();
+        Collection<AnnotationInstance> getQualifiers();
 
         /**
          * Retrieves all annotations attached to the {@link AnnotationTarget} that this transformer operates on
@@ -61,7 +82,8 @@ public interface InjectionPointsTransformer extends BuildExtension {
         Collection<AnnotationInstance> getAllAnnotations();
 
         /**
-         * The transformation is not applied until the {@link Transformation#done()} method is invoked.
+         * /**
+         * The transformation is not applied until {@link Transformation#done()} is invoked.
          *
          * @return a new transformation
          */
@@ -69,18 +91,96 @@ public interface InjectionPointsTransformer extends BuildExtension {
 
     }
 
-    final class Transformation extends AbstractAnnotationsTransformation<Transformation, Set<AnnotationInstance>> {
+    final class Transformation {
+        private final InjectionPointModifier.TransformationContextImpl transformationContext;
 
-        Transformation(Set<AnnotationInstance> annotations, AnnotationTarget target,
-                Consumer<Set<AnnotationInstance>> transformationConsumer) {
-            super(annotations, target, transformationConsumer);
+        private final Set<AnnotationInstance> modified;
+
+        Transformation(InjectionPointModifier.TransformationContextImpl transformationContext) {
+            this.transformationContext = transformationContext;
+            this.modified = new HashSet<>(transformationContext.getQualifiers());
         }
 
-        @Override
-        protected Transformation self() {
+        /**
+         *
+         * @param annotation
+         * @return self
+         */
+        public Transformation add(AnnotationInstance annotation) {
+            modified.add(annotation);
             return this;
         }
 
-    }
+        /**
+         *
+         * @param annotations
+         * @return self
+         */
+        public Transformation addAll(Collection<AnnotationInstance> annotations) {
+            modified.addAll(annotations);
+            return this;
+        }
 
+        /**
+         *
+         * @param annotations
+         * @return self
+         */
+        public Transformation addAll(AnnotationInstance... annotations) {
+            Collections.addAll(modified, annotations);
+            return this;
+        }
+
+        /**
+         * NOTE: The annotation target is derived from the {@link TransformationContext}.
+         *
+         * @param annotationType
+         * @param values
+         * @return self
+         */
+        public Transformation add(Class<? extends Annotation> annotationType, AnnotationValue... values) {
+            add(DotNames.create(annotationType.getName()), values);
+            return this;
+        }
+
+        /**
+         * NOTE: The annotation target is derived from the {@link TransformationContext}.
+         *
+         * @param name
+         * @param values
+         * @return self
+         */
+        public Transformation add(DotName name, AnnotationValue... values) {
+            add(AnnotationInstance.create(name, transformationContext.getTarget(), values));
+            return this;
+        }
+
+        /**
+         *
+         * @param predicate
+         * @return self
+         */
+        public Transformation remove(Predicate<AnnotationInstance> predicate) {
+            modified.removeIf(predicate);
+            return this;
+        }
+
+        /**
+         *
+         * @return self
+         */
+        public Transformation removeAll() {
+            modified.clear();
+            return this;
+        }
+
+        /**
+         * Applies the transformation.
+         *
+         * @see TransformationContext#getQualifiers()
+         */
+        public void done() {
+            transformationContext.setQualifiers(modified);
+        }
+    }
 }

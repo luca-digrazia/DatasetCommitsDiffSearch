@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import java.util.ArrayList;
@@ -31,7 +47,9 @@ public class InjectionPointInfo {
             InjectionPointModifier transformer) {
         Set<AnnotationInstance> qualifiers = new HashSet<>();
         for (AnnotationInstance annotation : beanDeployment.getAnnotations(field)) {
-            beanDeployment.extractQualifiers(annotation).forEach(qualifiers::add);
+            if (beanDeployment.getQualifier(annotation.name()) != null) {
+                qualifiers.add(annotation);
+            }
         }
         Type type = resolveType(field.type(), beanClass, field.declaringClass(), beanDeployment);
         return new InjectionPointInfo(type,
@@ -64,7 +82,9 @@ public class InjectionPointInfo {
             }
             Set<AnnotationInstance> paramQualifiers = new HashSet<>();
             for (AnnotationInstance paramAnnotation : paramAnnotations) {
-                beanDeployment.extractQualifiers(paramAnnotation).forEach(paramQualifiers::add);
+                if (beanDeployment.getQualifier(paramAnnotation.name()) != null) {
+                    paramQualifiers.add(paramAnnotation);
+                }
             }
             Type type = resolveType(paramType, beanClass, method.declaringClass(), beanDeployment);
             injectionPoints.add(new InjectionPointInfo(type,
