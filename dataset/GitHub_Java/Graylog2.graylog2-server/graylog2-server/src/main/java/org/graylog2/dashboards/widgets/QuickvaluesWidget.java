@@ -1,114 +1,114 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.dashboards.widgets;
 
-import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import org.graylog2.indexer.IndexHelper;
-import org.graylog2.indexer.Indexer;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.indexer.results.TermsResult;
-import org.graylog2.indexer.searches.timeranges.TimeRange;
+import org.graylog2.indexer.searches.Searches;
+import org.graylog2.plugin.dashboards.widgets.ComputationResult;
+import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
+import javax.annotation.Nullable;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class QuickvaluesWidget extends DashboardWidget {
+import static com.google.common.base.Strings.isNullOrEmpty;
+
+public class QuickvaluesWidget implements WidgetStrategy {
+
+    public interface Factory extends WidgetStrategy.Factory<QuickvaluesWidget> {
+        @Override
+        QuickvaluesWidget create(Map<String, Object> config, TimeRange timeRange, String widgetId);
+    }
 
     private static final Logger LOG = LoggerFactory.getLogger(QuickvaluesWidget.class);
 
     private final String query;
-    private final TimeRange timeRange;
+    @Nullable
     private final String streamId;
 
     private final String field;
-    private final Indexer indexer;
+    private final Searches searches;
+    private final TimeRange timeRange;
 
-    public QuickvaluesWidget(MetricRegistry metricRegistry, Indexer indexer, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) throws InvalidWidgetConfigurationException {
-        super(metricRegistry, Type.QUICKVALUES, id, description, cacheTime, config, creatorUserId);
-        this.indexer = indexer;
+    private final Boolean showPieChart;
+    private final Boolean showDataTable;
+
+    @AssistedInject
+    public QuickvaluesWidget(Searches searches, @Assisted Map<String, Object> config, @Assisted TimeRange timeRange, @Assisted String widgetId) throws InvalidWidgetConfigurationException {
+        this.searches = searches;
+        this.timeRange = timeRange;
 
         if (!checkConfig(config)) {
             throw new InvalidWidgetConfigurationException("Missing or invalid widget configuration. Provided config was: " + config.toString());
         }
 
-        this.query = query;
-        this.timeRange = timeRange;
+        this.query = (String)config.get("query");
 
         this.field = (String) config.get("field");
+        this.streamId = (String) config.get("stream_id");
 
-        if (config.containsKey("stream_id")) {
-            this.streamId = (String) config.get("stream_id");
-        } else {
-            this.streamId = null;
-        }
+        this.showPieChart = config.get("show_pie_chart") != null && Boolean.parseBoolean(String.valueOf(config.get("show_pie_chart")));
+        this.showDataTable = !config.containsKey("show_data_table") || Boolean.parseBoolean(String.valueOf(config.get("show_data_table")));
     }
 
     public String getQuery() {
         return query;
     }
 
-    public TimeRange getTimeRange() {
-        return timeRange;
-    }
-
-    @Override
     public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("query", query);
-            put("timerange", timeRange.getPersistedConfig());
-            put("stream_id", streamId);
+        final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.<String, Object>builder()
+                .putAll(ImmutableMap.of("timerange", this.timeRange.getPersistedConfig()))
+                .put("query", query)
+                .put("field", field)
+                .put("show_pie_chart", showPieChart)
+                .put("show_data_table", showDataTable);
 
-            put("field", field);
-        }};
+        if (!isNullOrEmpty(streamId)) {
+            persistedConfig.put("stream_id", streamId);
+        }
+
+        return persistedConfig.build();
     }
 
     @Override
-    protected ComputationResult compute() {
+    public ComputationResult compute() {
         String filter = null;
-        if (streamId != null && !streamId.isEmpty()) {
+        if (!isNullOrEmpty(streamId)) {
             filter = "streams:" + streamId;
         }
 
-        try {
-            TermsResult terms = indexer.searches().terms(field, 50, query, filter, timeRange);
+        final TermsResult terms = searches.terms(field, 50, query, filter, this.timeRange);
 
-            Map<String, Object> result = Maps.newHashMap();
-            result.put("terms", terms.getTerms());
-            result.put("total", terms.getTotal());
-            result.put("other", terms.getOther());
-            result.put("missing", terms.getMissing());
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("terms", terms.getTerms());
+        result.put("total", terms.getTotal());
+        result.put("other", terms.getOther());
+        result.put("missing", terms.getMissing());
 
-            return new ComputationResult(result, terms.took().millis());
-        } catch (IndexHelper.InvalidRangeFormatException e) {
-            String msg = "Could not calculate [" + this.getClass().getCanonicalName() + "] widget <" + getId() + ">. Invalid time range.";
-            LOG.error(msg, e);
-            throw new RuntimeException(msg);
-        }
+        return new ComputationResult(result, terms.took().millis());
     }
 
     private boolean checkConfig(Map<String, Object> config) {
         return config.containsKey("field");
     }
-
 }
