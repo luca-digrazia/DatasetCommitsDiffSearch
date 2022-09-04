@@ -3,10 +3,7 @@ package io.quarkus.swaggerui.deployment;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.builder.Version;
@@ -17,9 +14,7 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
@@ -27,7 +22,6 @@ import io.quarkus.deployment.util.WebJarUtil;
 import io.quarkus.smallrye.openapi.common.deployment.SmallRyeOpenApiConfig;
 import io.quarkus.swaggerui.runtime.SwaggerUiRecorder;
 import io.quarkus.swaggerui.runtime.SwaggerUiRuntimeConfig;
-import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
@@ -44,15 +38,6 @@ public class SwaggerUiProcessor {
     private static final String SWAGGER_UI_WEBJAR_PREFIX = "META-INF/resources/openapi-ui/";
     private static final String SWAGGER_UI_FINAL_DESTINATION = "META-INF/swagger-ui-files";
 
-    // Branding files to monitor for changes
-    private static final String BRANDING_DIR = "META-INF/branding/";
-    private static final String BRANDING_LOGO_GENERAL = BRANDING_DIR + "logo.png";
-    private static final String BRANDING_LOGO_MODULE = BRANDING_DIR + "smallrye-open-api-ui.png";
-    private static final String BRANDING_STYLE_GENERAL = BRANDING_DIR + "style.css";
-    private static final String BRANDING_STYLE_MODULE = BRANDING_DIR + "smallrye-open-api-ui.css";
-    private static final String BRANDING_FAVICON_GENERAL = BRANDING_DIR + "favicon.ico";
-    private static final String BRANDING_FAVICON_MODULE = BRANDING_DIR + "smallrye-open-api-ui.ico";
-
     @BuildStep
     void feature(BuildProducer<FeatureBuildItem> feature,
             LaunchModeBuildItem launchMode,
@@ -60,17 +45,6 @@ public class SwaggerUiProcessor {
         if (shouldInclude(launchMode, swaggerUiConfig)) {
             feature.produce(new FeatureBuildItem(Feature.SWAGGER_UI));
         }
-    }
-
-    @BuildStep
-    List<HotDeploymentWatchedFileBuildItem> brandingFiles() {
-        return Stream.of(BRANDING_LOGO_GENERAL,
-                BRANDING_STYLE_GENERAL,
-                BRANDING_FAVICON_GENERAL,
-                BRANDING_LOGO_MODULE,
-                BRANDING_STYLE_MODULE,
-                BRANDING_FAVICON_MODULE).map(HotDeploymentWatchedFileBuildItem::new)
-                .collect(Collectors.toList());
     }
 
     @BuildStep
@@ -83,9 +57,7 @@ public class SwaggerUiProcessor {
             CurateOutcomeBuildItem curateOutcomeBuildItem,
             LaunchModeBuildItem launchMode,
             SwaggerUiConfig swaggerUiConfig,
-            SmallRyeOpenApiConfig openapi,
-            HttpRootPathBuildItem httpRootPathBuildItem,
-            LiveReloadBuildItem liveReloadBuildItem) throws Exception {
+            SmallRyeOpenApiConfig openapi) throws Exception {
 
         if (shouldInclude(launchMode, swaggerUiConfig)) {
             if ("/".equals(swaggerUiConfig.path)) {
@@ -93,10 +65,7 @@ public class SwaggerUiProcessor {
                         "quarkus.swagger-ui.path was set to \"/\", this is not allowed as it blocks the application from serving anything else.");
             }
 
-            String openApiPath = httpRootPathBuildItem.adjustPath(nonApplicationRootPathBuildItem.adjustPath(openapi.path));
-            String swaggerUiPath = httpRootPathBuildItem
-                    .adjustPath(nonApplicationRootPathBuildItem.adjustPath(swaggerUiConfig.path));
-
+            String openApiPath = nonApplicationRootPathBuildItem.adjustPath(openapi.path);
             AppArtifact artifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, SWAGGER_UI_WEBJAR_GROUP_ID,
                     SWAGGER_UI_WEBJAR_ARTIFACT_ID);
 
@@ -104,19 +73,12 @@ public class SwaggerUiProcessor {
                 Path tempPath = WebJarUtil.copyResourcesForDevOrTest(curateOutcomeBuildItem, launchMode, artifact,
                         SWAGGER_UI_WEBJAR_PREFIX);
                 // Update index.html
-                WebJarUtil.updateFile(tempPath.resolve("index.html"),
-                        generateIndexHtml(openApiPath, swaggerUiPath, swaggerUiConfig));
+                WebJarUtil.updateFile(tempPath.resolve("index.html"), generateIndexHtml(openApiPath, swaggerUiConfig));
 
                 swaggerUiBuildProducer.produce(new SwaggerUiBuildItem(tempPath.toAbsolutePath().toString(),
                         nonApplicationRootPathBuildItem.adjustPath(swaggerUiConfig.path)));
                 displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem(
                         nonApplicationRootPathBuildItem.adjustPath(swaggerUiConfig.path + "/"), "Open API UI"));
-
-                // Handle live reload of branding files
-                if (liveReloadBuildItem.isLiveReload() && !liveReloadBuildItem.getChangedResources().isEmpty()) {
-                    WebJarUtil.hotReloadBrandingChanges(curateOutcomeBuildItem, launchMode, artifact,
-                            liveReloadBuildItem.getChangedResources());
-                }
             } else {
                 Map<String, byte[]> files = WebJarUtil.copyResourcesForProduction(curateOutcomeBuildItem, artifact,
                         SWAGGER_UI_WEBJAR_PREFIX);
@@ -127,7 +89,7 @@ public class SwaggerUiProcessor {
                     if (fileName.equals(theme.toString()) || !fileName.startsWith("theme-")) {
                         byte[] content;
                         if (fileName.endsWith("index.html")) {
-                            content = generateIndexHtml(openApiPath, swaggerUiPath, swaggerUiConfig);
+                            content = generateIndexHtml(openApiPath, swaggerUiConfig);
                         } else {
                             content = file.getValue();
                         }
@@ -171,12 +133,11 @@ public class SwaggerUiProcessor {
         }
     }
 
-    private byte[] generateIndexHtml(String openApiPath, String swaggerUiPath, SwaggerUiConfig swaggerUiConfig)
-            throws IOException {
+    private byte[] generateIndexHtml(String openApiPath, SwaggerUiConfig swaggerUiConfig) throws IOException {
         Map<Option, String> options = new HashMap<>();
         Map<String, String> urlsMap = null;
 
-        options.put(Option.selfHref, swaggerUiPath);
+        options.put(Option.selfHref, swaggerUiConfig.path);
 
         // Only add the url if the user did not specified urls
         if (swaggerUiConfig.urls != null && !swaggerUiConfig.urls.isEmpty()) {

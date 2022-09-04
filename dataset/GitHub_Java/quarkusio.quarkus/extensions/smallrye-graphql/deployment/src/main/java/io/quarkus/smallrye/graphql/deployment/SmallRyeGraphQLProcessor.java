@@ -43,7 +43,6 @@ import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.deployment.util.WebJarUtil;
 import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.metrics.MetricsFactory;
 import io.quarkus.smallrye.graphql.runtime.SmallRyeGraphQLRecorder;
 import io.quarkus.smallrye.graphql.runtime.SmallRyeGraphQLRuntimeConfig;
@@ -52,6 +51,7 @@ import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RequireBodyHandlerBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
+import io.quarkus.vertx.http.runtime.HandlerType;
 import io.smallrye.graphql.cdi.config.ConfigKey;
 import io.smallrye.graphql.cdi.config.GraphQLConfig;
 import io.smallrye.graphql.cdi.producer.GraphQLProducer;
@@ -145,7 +145,6 @@ public class SmallRyeGraphQLProcessor {
     void buildExecutionService(
             BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchyProducer,
-            BuildProducer<SmallRyeGraphQLInitializedBuildItem> graphQLInitializedProducer,
             SmallRyeGraphQLRecorder recorder,
             BeanContainerBuildItem beanContainer,
             CombinedIndexBuildItem combinedIndex,
@@ -155,8 +154,7 @@ public class SmallRyeGraphQLProcessor {
 
         Schema schema = SchemaBuilder.build(index, graphQLConfig.autoNameStrategy);
 
-        RuntimeValue<Boolean> initialized = recorder.createExecutionService(beanContainer.getValue(), schema);
-        graphQLInitializedProducer.produce(new SmallRyeGraphQLInitializedBuildItem(initialized));
+        recorder.createExecutionService(beanContainer.getValue(), schema);
 
         // Make sure the complex object from the application can work in native mode
         reflectiveClassProducer.produce(new ReflectiveClassBuildItem(true, true, getSchemaJavaClasses(schema)));
@@ -175,18 +173,12 @@ public class SmallRyeGraphQLProcessor {
     @BuildStep
     void buildSchemaEndpoint(
             BuildProducer<RouteBuildItem> routeProducer,
-            SmallRyeGraphQLInitializedBuildItem graphQLInitializedBuildItem,
             SmallRyeGraphQLRecorder recorder,
             SmallRyeGraphQLConfig graphQLConfig) {
 
-        Handler<RoutingContext> schemaHandler = recorder.schemaHandler(graphQLInitializedBuildItem.getInitialized());
-
-        routeProducer.produce(new RouteBuildItem.Builder()
-                .route(graphQLConfig.rootPath + SCHEMA_PATH)
-                .handler(schemaHandler)
-                .blockingRoute()
-                .build());
-
+        Handler<RoutingContext> schemaHandler = recorder.schemaHandler();
+        routeProducer.produce(
+                new RouteBuildItem(graphQLConfig.rootPath + SCHEMA_PATH, schemaHandler, HandlerType.BLOCKING));
     }
 
     @Record(ExecutionTime.STATIC_INIT)
@@ -194,7 +186,6 @@ public class SmallRyeGraphQLProcessor {
     void buildExecutionEndpoint(
             BuildProducer<RouteBuildItem> routeProducer,
             BuildProducer<NotFoundPageDisplayableEndpointBuildItem> notFoundPageDisplayableEndpointProducer,
-            SmallRyeGraphQLInitializedBuildItem graphQLInitializedBuildItem,
             SmallRyeGraphQLRecorder recorder,
             ShutdownContextBuildItem shutdownContext,
             LaunchModeBuildItem launchMode,
@@ -226,8 +217,7 @@ public class SmallRyeGraphQLProcessor {
 
         Boolean allowGet = ConfigProvider.getConfig().getOptionalValue(ConfigKey.ALLOW_GET, boolean.class).orElse(false);
 
-        Handler<RoutingContext> executionHandler = recorder.executionHandler(graphQLInitializedBuildItem.getInitialized(),
-                allowGet);
+        Handler<RoutingContext> executionHandler = recorder.executionHandler(allowGet);
         routeProducer.produce(new RouteBuildItem.Builder()
                 .route(graphQLConfig.rootPath)
                 .handler(executionHandler)
@@ -464,7 +454,7 @@ public class SmallRyeGraphQLProcessor {
 
             String graphQLPath = httpRootPath.adjustPath(graphQLConfig.rootPath);
             String graphQLUiPath = nonApplicationRootPathBuildItem
-                    .adjustPath(graphQLConfig.ui.rootPath);
+                    .adjustPath(httpRootPath.adjustPath(graphQLConfig.ui.rootPath));
 
             AppArtifact artifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, GRAPHQL_UI_WEBJAR_GROUP_ID,
                     GRAPHQL_UI_WEBJAR_ARTIFACT_ID);
@@ -472,11 +462,10 @@ public class SmallRyeGraphQLProcessor {
                 Path tempPath = WebJarUtil.copyResourcesForDevOrTest(curateOutcomeBuildItem, launchMode, artifact,
                         GRAPHQL_UI_WEBJAR_PREFIX);
                 WebJarUtil.updateUrl(tempPath.resolve(FILE_TO_UPDATE), graphQLPath, LINE_TO_UPDATE, LINE_FORMAT);
-                WebJarUtil.updateUrl(tempPath.resolve(FILE_TO_UPDATE), httpRootPath.adjustPath(graphQLUiPath),
-                        UI_LINE_TO_UPDATE, UI_LINE_FORMAT);
+                WebJarUtil.updateUrl(tempPath.resolve(FILE_TO_UPDATE), graphQLUiPath, UI_LINE_TO_UPDATE, UI_LINE_FORMAT);
 
                 smallRyeGraphQLBuildProducer.produce(new SmallRyeGraphQLBuildItem(tempPath.toAbsolutePath().toString(),
-                        httpRootPath.adjustPath(graphQLUiPath)));
+                        graphQLUiPath));
                 notFoundPageDisplayableEndpointProducer
                         .produce(new NotFoundPageDisplayableEndpointBuildItem(graphQLUiPath + "/", "MicroProfile GraphQL UI"));
 
@@ -494,8 +483,7 @@ public class SmallRyeGraphQLProcessor {
                                         LINE_FORMAT)
                                 .getBytes(StandardCharsets.UTF_8);
                         content = WebJarUtil
-                                .updateUrl(new String(content, StandardCharsets.UTF_8), httpRootPath.adjustPath(graphQLUiPath),
-                                        UI_LINE_TO_UPDATE,
+                                .updateUrl(new String(content, StandardCharsets.UTF_8), graphQLPath, UI_LINE_TO_UPDATE,
                                         UI_LINE_FORMAT)
                                 .getBytes(StandardCharsets.UTF_8);
                     }
@@ -506,7 +494,7 @@ public class SmallRyeGraphQLProcessor {
                 }
 
                 smallRyeGraphQLBuildProducer.produce(new SmallRyeGraphQLBuildItem(GRAPHQL_UI_FINAL_DESTINATION,
-                        httpRootPath.adjustPath(graphQLUiPath)));
+                        graphQLUiPath));
             }
         }
     }

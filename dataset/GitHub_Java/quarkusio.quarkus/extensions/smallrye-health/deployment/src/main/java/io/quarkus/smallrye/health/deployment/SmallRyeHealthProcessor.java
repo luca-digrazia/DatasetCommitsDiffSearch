@@ -70,7 +70,6 @@ import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
-import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
 import io.smallrye.health.SmallRyeHealthReporter;
 import io.smallrye.health.api.HealthGroup;
 import io.smallrye.health.api.HealthGroups;
@@ -262,13 +261,12 @@ class SmallRyeHealthProcessor {
     @BuildStep(onlyIf = OpenAPIIncluded.class)
     public void includeInOpenAPIEndpoint(BuildProducer<AddToOpenAPIDefinitionBuildItem> openAPIProducer,
             NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
-            HttpRootPathBuildItem httpRootPath,
             Capabilities capabilities,
             SmallRyeHealthConfig healthConfig) {
 
         // Add to OpenAPI if OpenAPI is available
         if (capabilities.isPresent(Capability.SMALLRYE_OPENAPI)) {
-            String basePath = httpRootPath.adjustPath(nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath));
+            String basePath = nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath);
             HealthOpenAPIFilter filter = new HealthOpenAPIFilter(basePath,
                     basePath + healthConfig.livenessPath,
                     basePath + healthConfig.readinessPath);
@@ -300,19 +298,17 @@ class SmallRyeHealthProcessor {
     }
 
     @BuildStep
-    public void kubernetes(HttpBuildTimeConfig httpConfig, NonApplicationRootPathBuildItem frameworkRootPath,
+    public void kubernetes(NonApplicationRootPathBuildItem frameworkRootPath,
             SmallRyeHealthConfig healthConfig,
             BuildProducer<KubernetesHealthLivenessPathBuildItem> livenessPathItemProducer,
             BuildProducer<KubernetesHealthReadinessPathBuildItem> readinessPathItemProducer) {
 
         livenessPathItemProducer.produce(
                 new KubernetesHealthLivenessPathBuildItem(
-                        httpConfig
-                                .adjustPath(frameworkRootPath.adjustPath(healthConfig.rootPath + healthConfig.livenessPath))));
+                        frameworkRootPath.adjustPath(healthConfig.rootPath + healthConfig.livenessPath)));
         readinessPathItemProducer.produce(
                 new KubernetesHealthReadinessPathBuildItem(
-                        httpConfig
-                                .adjustPath(frameworkRootPath.adjustPath(healthConfig.rootPath + healthConfig.readinessPath))));
+                        frameworkRootPath.adjustPath(healthConfig.rootPath + healthConfig.readinessPath)));
     }
 
     @BuildStep
@@ -387,7 +383,7 @@ class SmallRyeHealthProcessor {
                         "quarkus.smallrye-health.root-path-ui was set to \"/\", this is not allowed as it blocks the application from serving anything else.");
             }
 
-            String healthPath = httpRootPath.adjustPath(nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath));
+            String healthPath = nonApplicationRootPathBuildItem.adjustPath(httpRootPath.adjustPath(healthConfig.rootPath));
 
             AppArtifact artifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, HEALTH_UI_WEBJAR_GROUP_ID,
                     HEALTH_UI_WEBJAR_ARTIFACT_ID);
@@ -403,7 +399,7 @@ class SmallRyeHealthProcessor {
                 notFoundPageDisplayableEndpointProducer
                         .produce(new NotFoundPageDisplayableEndpointBuildItem(
                                 nonApplicationRootPathBuildItem
-                                        .adjustPath(healthConfig.ui.rootPath + "/")));
+                                        .adjustPath(httpRootPath.adjustPath(healthConfig.ui.rootPath + "/"))));
             } else {
                 Map<String, byte[]> files = WebJarUtil.copyResourcesForProduction(curateOutcomeBuildItem, artifact,
                         HEALTH_UI_WEBJAR_PREFIX);
