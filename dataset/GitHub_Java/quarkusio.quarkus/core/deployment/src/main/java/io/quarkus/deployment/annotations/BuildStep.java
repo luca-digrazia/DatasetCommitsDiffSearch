@@ -6,14 +6,15 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import org.jboss.builder.item.BuildItem;
-import org.jboss.builder.item.MultiBuildItem;
-import org.jboss.builder.item.SimpleBuildItem;
+import io.quarkus.builder.item.BuildItem;
+import io.quarkus.builder.item.MultiBuildItem;
+import io.quarkus.builder.item.SimpleBuildItem;
 import io.quarkus.deployment.recording.BytecodeRecorderImpl;
-import io.quarkus.runtime.annotations.Template;
+import io.quarkus.runtime.annotations.Recorder;
 
 /**
  * Indicates that a given method is a build step that is run at deployment time to
@@ -32,7 +33,8 @@ import io.quarkus.runtime.annotations.Template;
  * <li>{@link Consumer} of any concrete subclass of {@link BuildItem}</li>
  * <li>{@link Supplier} of any concrete subclass of {@link SimpleBuildItem}</li>
  * <li>{@link Optional} instances whose value type is a subclass of {@link SimpleBuildItem}</li>
- * <li>Recorder template classes, which are annotated with {@link Template} (method parameters only, if the method is annotated {@link Record})</li>
+ * <li>Recorder classes, which are annotated with {@link Recorder} (method parameters only, if the method is annotated
+ * {@link Record})</li>
  * <li>{@link BytecodeRecorderImpl} (method parameters only, if the method is annotated {@link Record})</li>
  * </ul>
  *
@@ -62,20 +64,16 @@ import io.quarkus.runtime.annotations.Template;
 public @interface BuildStep {
 
     /**
+     * Only include this build step if the given supplier class(es) return {@code true}.
      *
-     * A list of capabilities that are provided by this build step.
-     *
-     * @return The capabilities provided by this build step
+     * @return the supplier class array
      */
-    String[] providesCapabilities() default {};
+    Class<? extends BooleanSupplier>[] onlyIf() default {};
 
     /**
-     * Indicates that the provided file names should be considered to be application index markers.
+     * Only include this build step if the given supplier class(es) return {@code false}.
      *
-     * If these are present in library on the class path then the library will be indexed, and this index will be
-     * used when evaluating application components.
-     *
-     * TODO: this should be a different annotation?
+     * @return the supplier class array
      */
-    String[] applicationArchiveMarkers() default {};
+    Class<? extends BooleanSupplier>[] onlyIfNot() default {};
 }
