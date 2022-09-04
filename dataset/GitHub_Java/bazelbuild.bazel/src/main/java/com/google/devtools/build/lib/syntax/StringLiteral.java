@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,44 +13,93 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-/**
- * Syntax node for a string literal.
- */
-public final class StringLiteral extends Literal<String> {
+import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
+import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
+import com.google.protobuf.CodedInputStream;
+import com.google.protobuf.CodedOutputStream;
+import java.io.IOException;
 
-  private final char quoteChar;
+/** Syntax node for a string literal. */
+public final class StringLiteral extends Expression {
 
-  public StringLiteral(String value, char quoteChar) {
-    super(value);
-    this.quoteChar = quoteChar;
+  private final int startOffset;
+  private final String value;
+  private final int endOffset;
+
+  StringLiteral(FileLocations locs, int startOffset, String value, int endOffset) {
+    super(locs);
+    this.startOffset = startOffset;
+    this.value = value;
+    this.endOffset = endOffset;
+  }
+
+  /** Returns the value denoted by the string literal */
+  public String getValue() {
+    return value;
+  }
+
+  public Location getLocation() {
+    return locs.getLocation(startOffset);
   }
 
   @Override
-  public String toString() {
-    return new StringBuilder()
-        .append(quoteChar)
-        .append(value.replace(Character.toString(quoteChar), "\\" + quoteChar))
-        .append(quoteChar)
-        .toString();
+  public int getStartOffset() {
+    return startOffset;
   }
 
   @Override
-  public void accept(SyntaxTreeVisitor visitor) {
+  public int getEndOffset() {
+    // TODO(adonovan): when we switch to compilation,
+    // making syntax trees ephemeral, we can afford to
+    // record the raw literal. This becomes:
+    //   return startOffset + raw.length().
+    return endOffset;
+  }
+
+  @Override
+  public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
 
-  /**
-   * Gets the quote character that was used for this string.  For example, if
-   * the string was 'hello, world!', then this method returns '\''.
-   *
-   * @return the character used to quote the string.
-   */
-  public char getQuoteChar() {
-    return quoteChar;
+  @Override
+  public Kind kind() {
+    return Kind.STRING_LITERAL;
   }
 
-  @Override
-  SkylarkType validate(ValidationEnvironment env) throws EvalException {
-    return SkylarkType.STRING;
+  static final class StringLiteralCodec implements ObjectCodec<StringLiteral> {
+    @Override
+    public Class<? extends StringLiteral> getEncodedClass() {
+      return StringLiteral.class;
+    }
+
+    @Override
+    public void serialize(SerializationContext context, StringLiteral lit, CodedOutputStream out)
+        throws SerializationException, IOException {
+      // Enable de-duplication of strings during encoding.
+      // The encoder does not intern and de-duplicate Strings by default,
+      // though it does for all other objects;
+      // see skyframe.serialization.strings.StringCodec.getStrategy.
+      // If that were to change, we could delete StringLiteralCodec.
+      // (One wonders why Identifier.name strings are not similarly de-duped,
+      // as they are as numerous and more repetitive than string literals.)
+      context.serializeWithAdHocMemoizationStrategy(
+          lit.getValue(), MemoizationStrategy.MEMOIZE_AFTER, out);
+      out.writeInt32NoTag(lit.startOffset);
+      out.writeInt32NoTag(lit.endOffset);
+      context.serialize(lit.locs, out);
+    }
+
+    @Override
+    public StringLiteral deserialize(DeserializationContext context, CodedInputStream in)
+        throws SerializationException, IOException {
+      String value =
+          context.deserializeWithAdHocMemoizationStrategy(in, MemoizationStrategy.MEMOIZE_AFTER);
+      int startOffset = in.readInt32();
+      int endOffset = in.readInt32();
+      FileLocations locs = context.deserialize(in);
+      return new StringLiteral(locs, startOffset, value, endOffset);
+    }
   }
 }
