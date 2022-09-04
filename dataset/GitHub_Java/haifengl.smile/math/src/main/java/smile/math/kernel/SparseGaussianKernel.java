@@ -34,7 +34,7 @@ import smile.util.SparseArray;
  * @author Haifeng Li
  */
 public class SparseGaussianKernel implements MercerKernel<SparseArray>, IsotropicKernel {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * The width of the kernel.
