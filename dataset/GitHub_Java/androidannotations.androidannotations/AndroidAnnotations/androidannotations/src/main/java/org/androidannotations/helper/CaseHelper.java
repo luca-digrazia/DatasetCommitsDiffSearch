@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -58,16 +58,6 @@ public class CaseHelper {
 
 	public static String camelCaseToUpperSnakeCase(String camelCase) {
 		return camelCaseToSnakeCase(camelCase).toUpperCase();
-	}
-
-	public static String camelCaseToUpperSnakeCase(String prefix, String camelCase, String suffix) {
-		if (prefix != null && !camelCase.startsWith(prefix)) {
-			camelCase = prefix + "_" + camelCase;
-		}
-		if (suffix != null && !camelCase.toLowerCase().endsWith(suffix.toLowerCase())) {
-			camelCase = camelCase + "_" + suffix;
-		}
-		return camelCaseToUpperSnakeCase(camelCase);
 	}
 
 }

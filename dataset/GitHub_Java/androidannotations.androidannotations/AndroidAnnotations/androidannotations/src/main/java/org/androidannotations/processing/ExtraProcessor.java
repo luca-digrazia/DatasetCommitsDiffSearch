@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,8 +26,9 @@ import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
 import static org.androidannotations.helper.CanonicalNameConstants.PARCELABLE;
-import static org.androidannotations.helper.CanonicalNameConstants.SERIALIZABLE;
 import static org.androidannotations.helper.CanonicalNameConstants.STRING;
+
+import java.lang.annotation.Annotation;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -67,8 +68,8 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public String getTarget() {
-		return Extra.class.getName();
+	public Class<? extends Annotation> getTarget() {
+		return Extra.class;
 	}
 
 	@Override
@@ -138,7 +139,6 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 				JMethod method = holder.intentBuilderClass.method(PUBLIC, holder.intentBuilderClass, fieldName);
 
 				boolean castToSerializable = false;
-				boolean castToParcelable = false;
 				TypeMirror extraType = elementType;
 				if (extraType.getKind() == TypeKind.DECLARED) {
 					Elements elementUtils = processingEnv.getElementUtils();
@@ -149,11 +149,6 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 						if (!typeUtils.isSubtype(extraType, stringType)) {
 							castToSerializable = true;
 						}
-					} else {
-						TypeMirror serializableType = elementUtils.getTypeElement(SERIALIZABLE).asType();
-						if (typeUtils.isSubtype(extraType, serializableType)) {
-							castToParcelable = true;
-						}
 					}
 				}
 				JClass paramClass = helper.typeMirrorToJClass(extraType, holder);
@@ -162,8 +157,6 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 				JInvocation invocation = body.invoke(holder.intentField, "putExtra").arg(extraKeyField);
 				if (castToSerializable) {
 					invocation.arg(cast(classes.SERIALIZABLE, extraParam));
-				} else if (castToParcelable) {
-					invocation.arg(cast(classes.PARCELABLE, extraParam));
 				} else {
 					invocation.arg(extraParam);
 				}
@@ -222,6 +215,6 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 	}
 
 	private void injectExtrasOnInit(EBeanHolder holder, JClass intentClass, JMethod injectExtrasMethod) {
-		holder.initBody.invoke(injectExtrasMethod);
+		holder.init.body().invoke(injectExtrasMethod);
 	}
 }
