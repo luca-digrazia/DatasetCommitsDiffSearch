@@ -39,9 +39,9 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -312,9 +312,8 @@ public class SpawnIncludeScanner {
             actionExecutionContext,
             grepIncludes,
             fileType);
-    return dotIncludeStream == null
-        ? IncludeParser.processIncludes(output)
-        : IncludeParser.processIncludes(output, dotIncludeStream);
+    return IncludeParser.processIncludes(
+        output, dotIncludeStream == null ? output.getInputStream() : dotIncludeStream);
   }
 
   /**
@@ -375,11 +374,11 @@ public class SpawnIncludeScanner {
     // Don't share the originalOutErr across spawnGrep calls. Doing so would not be thread-safe.
     FileOutErr originalOutErr = actionExecutionContext.getFileOutErr();
     FileOutErr grepOutErr = originalOutErr.childOutErr();
-    SpawnStrategy strategy = actionExecutionContext.getContext(SpawnStrategy.class);
+    SpawnActionContext context = actionExecutionContext.getContext(SpawnActionContext.class);
     ActionExecutionContext spawnContext = actionExecutionContext.withFileOutErr(grepOutErr);
     List<SpawnResult> results;
     try {
-      results = strategy.exec(spawn, spawnContext);
+      results = context.exec(spawn, spawnContext);
       dump(spawnContext, actionExecutionContext);
     } catch (ExecException e) {
       dump(spawnContext, actionExecutionContext);
@@ -501,7 +500,7 @@ public class SpawnIncludeScanner {
     SpawnContinuation spawnContinuation;
     try {
       spawnContinuation =
-          grepContext.getContext(SpawnStrategy.class).beginExecution(spawn, grepContext);
+          grepContext.getContext(SpawnActionContext.class).beginExecution(spawn, grepContext);
     } catch (InterruptedException e) {
       dump(grepContext, actionExecutionContext);
       return Futures.immediateCancelledFuture();

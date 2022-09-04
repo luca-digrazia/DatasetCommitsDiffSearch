@@ -13,35 +13,29 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.actions;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyCacher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
+import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionTemplate;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
-import com.google.devtools.build.lib.actions.MiddlemanType;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.skyframe.ActionTemplateExpansionValue;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.Collection;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /** An {@link ActionTemplate} that expands into {@link SpawnAction}s at execution time. */
 public final class SpawnActionTemplate extends ActionKeyCacher
@@ -104,16 +98,15 @@ public final class SpawnActionTemplate extends ActionKeyCacher
   }
 
   @Override
-  public ImmutableList<SpawnAction> generateActionsForInputArtifacts(
-      ImmutableSet<TreeFileArtifact> inputTreeFileArtifacts, ActionLookupKey artifactOwner) {
-    ImmutableList.Builder<SpawnAction> expandedActions =
-        ImmutableList.builderWithExpectedSize(inputTreeFileArtifacts.size());
+  public Iterable<SpawnAction> generateActionForInputArtifacts(
+      Iterable<TreeFileArtifact> inputTreeFileArtifacts, ActionLookupKey artifactOwner) {
+    ImmutableList.Builder<SpawnAction> expandedActions = new ImmutableList.Builder<>();
     for (TreeFileArtifact inputTreeFileArtifact : inputTreeFileArtifacts) {
       PathFragment parentRelativeOutputPath =
           outputPathMapper.parentRelativeOutputPath(inputTreeFileArtifact);
 
       TreeFileArtifact outputTreeFileArtifact =
-          TreeFileArtifact.createTemplateExpansionOutput(
+          ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
               outputTreeArtifact, parentRelativeOutputPath, artifactOwner);
 
       expandedActions.add(createAction(inputTreeFileArtifact, outputTreeFileArtifact));
@@ -123,21 +116,17 @@ public final class SpawnActionTemplate extends ActionKeyCacher
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable ArtifactExpander artifactExpander,
-      Fingerprint fp)
-      throws CommandLineExpansionException, InterruptedException {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
+      throws CommandLineExpansionException {
     TreeFileArtifact inputTreeFileArtifact =
-        TreeFileArtifact.createTreeOutput(inputTreeArtifact, "dummy_for_key");
+        ActionInputHelper.treeFileArtifact(inputTreeArtifact, "dummy_for_key");
     TreeFileArtifact outputTreeFileArtifact =
-        TreeFileArtifact.createTemplateExpansionOutput(
+        ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
             outputTreeArtifact,
             outputPathMapper.parentRelativeOutputPath(inputTreeFileArtifact),
-            ActionTemplateExpansionValue.key(
-                outputTreeArtifact.getArtifactOwner(), /*actionIndex=*/ 0));
+            outputTreeArtifact.getArtifactOwner());
     SpawnAction dummyAction = createAction(inputTreeFileArtifact, outputTreeFileArtifact);
-    dummyAction.computeKey(actionKeyContext, artifactExpander, fp);
+    dummyAction.computeKey(actionKeyContext, fp);
   }
 
   /**
@@ -165,15 +154,16 @@ public final class SpawnActionTemplate extends ActionKeyCacher
    *
    * <p>This method is called by Skyframe to expand the input TreeArtifact into child
    * TreeFileArtifacts. Skyframe then expands this SpawnActionTemplate with the TreeFileArtifacts
-   * through {@link #generateActionsForInputArtifacts}.
+   * through {@link #generateActionForInputArtifacts}.
    */
   @Override
-  public SpecialArtifact getInputTreeArtifact() {
+  public Artifact getInputTreeArtifact() {
     return inputTreeArtifact;
   }
 
+  /** Returns the output TreeArtifact. */
   @Override
-  public SpecialArtifact getOutputTreeArtifact() {
+  public Artifact getOutputTreeArtifact() {
     return outputTreeArtifact;
   }
 
@@ -203,6 +193,11 @@ public final class SpawnActionTemplate extends ActionKeyCacher
   }
 
   @Override
+  public ImmutableSet<Artifact> getOutputs() {
+    return ImmutableSet.of(outputTreeArtifact);
+  }
+
+  @Override
   public NestedSet<Artifact> getMandatoryInputs() {
     return getInputs();
   }
@@ -219,7 +214,17 @@ public final class SpawnActionTemplate extends ActionKeyCacher
   }
 
   @Override
-  public Collection<String> getClientEnvironmentVariables() {
+  public Artifact getPrimaryInput() {
+    return inputTreeArtifact;
+  }
+
+  @Override
+  public Artifact getPrimaryOutput() {
+    return outputTreeArtifact;
+  }
+
+  @Override
+  public Iterable<String> getClientEnvironmentVariables() {
     return spawnActionBuilder.buildForActionTemplate(getOwner()).getClientEnvironmentVariables();
   }
 
@@ -235,17 +240,8 @@ public final class SpawnActionTemplate extends ActionKeyCacher
 
   @Override
   public String prettyPrint() {
-    return "SpawnActionTemplate with output TreeArtifact " + outputTreeArtifact.prettyPrint();
-  }
-
-  @Override
-  public String describe() {
-    return "Executing " + mnemonic + " action on all files in " + inputTreeArtifact.prettyPrint();
-  }
-
-  @Override
-  public String toString() {
-    return prettyPrint();
+    return String.format("action template with output TreeArtifact %s",
+        outputTreeArtifact.prettyPrint());
   }
 
   /** Builder class to construct {@link SpawnActionTemplate} instances. */
@@ -362,14 +358,10 @@ public final class SpawnActionTemplate extends ActionKeyCacher
 
     /**
      * Sets the executable path used by expanded actions. The path is interpreted relative to the
-     * execution root, unless it's a bare file name.
+     * execution root.
      *
-     * <p><b>Caution</b>: if the executable is a bare file name ("foo"), it will be interpreted
-     * relative to PATH. See https://github.com/bazelbuild/bazel/issues/13189 for details. To avoid
-     * that, use {@link #setExecutable(Artifact)} instead.
-     *
-     * <p>Calling this method overrides any previous values set via calls to {@link
-     * #setExecutable(Artifact)} and {@link #setExecutable(FilesToRunProvider)}.
+     * <p>Calling this method overrides any previous values set via calls to
+     * {@link #setExecutable(Artifact)} and {@link #setExecutable(FilesToRunProvider)}.
      */
     public Builder setExecutable(PathFragment executable) {
       spawnActionBuilder.setExecutable(executable);
@@ -414,16 +406,16 @@ public final class SpawnActionTemplate extends ActionKeyCacher
      * @param actionOwner the action owner of the SpawnActionTemplate to be built.
      */
     public SpawnActionTemplate build(ActionOwner actionOwner) {
-      checkNotNull(executable);
+      Preconditions.checkNotNull(executable);
 
       return new SpawnActionTemplate(
-          checkNotNull(actionOwner),
-          checkNotNull(inputTreeArtifact),
-          checkNotNull(outputTreeArtifact),
+          actionOwner,
+          Preconditions.checkNotNull(inputTreeArtifact),
+          Preconditions.checkNotNull(outputTreeArtifact),
           inputsBuilder.build(),
           toolsBuilder.build(),
-          checkNotNull(outputPathMapper),
-          checkNotNull(commandLineTemplate),
+          Preconditions.checkNotNull(outputPathMapper),
+          Preconditions.checkNotNull(commandLineTemplate),
           actionTemplateMnemonic,
           spawnActionBuilder);
     }
