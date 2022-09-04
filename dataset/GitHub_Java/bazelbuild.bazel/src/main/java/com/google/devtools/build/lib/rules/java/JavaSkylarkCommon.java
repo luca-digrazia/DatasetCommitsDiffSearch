@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -341,10 +343,7 @@ public class JavaSkylarkCommon {
             ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
             : hostJavabaseProvider.getMiddlemanArtifact();
     JavaToolchainProvider javaToolchainProvider =
-        javaToolchain.getProvider(JavaToolchainProvider.class);
-    if (javaToolchain == null) {
-      throw new EvalException(null, javaToolchain.getLabel() + " is not a java_toolchain rule.");
-    }
+        checkNotNull(javaToolchain.getProvider(JavaToolchainProvider.class));
     JavaCompilationArtifacts artifacts =
         helper.build(
             javaSemantics,
@@ -401,12 +400,9 @@ public class JavaSkylarkCommon {
       SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) throws EvalException {
     RuleContext ruleContext = skylarkRuleContext.getRuleContext();
     ConfiguredTarget javaToolchainConfigTarget =
-        (ConfiguredTarget) skylarkRuleContext.getAttr().getValue(javaToolchainAttr);
+        (ConfiguredTarget) checkNotNull(skylarkRuleContext.getAttr().getValue(javaToolchainAttr));
     JavaToolchainProvider toolchain =
-        javaToolchainConfigTarget.getProvider(JavaToolchainProvider.class);
-    if (toolchain == null) {
-      throw new EvalException(null, javaToolchainAttr + " is not a java_toolchain rule label");
-    }
+        checkNotNull(javaToolchainConfigTarget.getProvider(JavaToolchainProvider.class));
     return ImmutableList.copyOf(Iterables.concat(
         toolchain.getJavacOptions(), ruleContext.getTokenizedStringListAttr("javacopts")));
   }
