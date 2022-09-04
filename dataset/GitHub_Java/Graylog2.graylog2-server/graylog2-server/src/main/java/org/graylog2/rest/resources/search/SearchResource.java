@@ -111,7 +111,7 @@ public class SearchResource extends RestResource {
     }
 
     @GET @Path("/universal/relative/histogram") @Timed
-    @ApiOperation(value = "Datetime histogram of a query using a relative timerange.")
+    @ApiOperation(value = "Datetime histogram a query using a relative timerange.")
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Invalid interval provided.")
     })
@@ -198,7 +198,7 @@ public class SearchResource extends RestResource {
     }
 
     @GET @Path("/universal/absolute/histogram") @Timed
-    @ApiOperation(value = "Datetime histogram of a query using an absolute timerange.")
+    @ApiOperation(value = "Datetime histogram a query using an absolute timerange.")
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Invalid timerange parameters provided."),
             @ApiResponse(code = 400, message = "Invalid interval provided.")
