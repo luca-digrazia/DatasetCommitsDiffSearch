@@ -55,7 +55,7 @@ public class ThreadActivity extends Activity {
 	}
 
 	@Background
-	void genericBackgroundMethod(List<Map<String, List<Set<MySerializableBean[]>>>> param) {
+	void genericBackgroundMethod(List<Map<String, List<Set<Void>>>> param) {
 
 	}
 
@@ -65,14 +65,8 @@ public class ThreadActivity extends Activity {
 	}
 	
 	@UiThread
-	void uiThreadedUsingArrayParamtersMethod(MySerializableBean [] array) {}
+	void arrayParamtersMethod(MySerializableBean [] array) {
+		
+	}
 
-	@UiThread
-	void uiThreadedUsingArrayParamtersMethod(MySerializableBean [][] array) {}
-
-	@Background
-	void backgrounddUsingArrayParamtersMethod(MySerializableBean [] array) {}
-
-	@Background
-	void backgroundUsingArrayParamtersMethod(MySerializableBean [][] array) {}
 }
