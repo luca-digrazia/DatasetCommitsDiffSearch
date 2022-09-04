@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.security.authservice;
 
@@ -41,17 +41,7 @@ public abstract class UserDetails {
 
     public abstract String email();
 
-    public abstract Optional<String> firstName();
-
-    public abstract Optional<String> lastName();
-
-    /**
-     * Some authentication backends only currently support the fullName attribute (and not firstName and lastName),
-     * so it is still optionally available here. Prefer use of only firstName and lastName when available.
-     */
-    public abstract Optional<String> fullName();
-
-    public abstract boolean isExternal();
+    public abstract String fullName();
 
     public abstract Set<String> defaultRoles();
 
@@ -87,29 +77,10 @@ public abstract class UserDetails {
 
         public abstract Builder email(String email);
 
-        public abstract Builder firstName(@Nullable String firstName);
-
-        public abstract Builder lastName(@Nullable String lastName);
-
-        public abstract Builder fullName(@Nullable String fullName);
-
-        public abstract Builder isExternal(boolean isExternal);
+        public abstract Builder fullName(String fullName);
 
         public abstract Builder defaultRoles(Set<String> defaultRoles);
 
-        abstract UserDetails autoBuild();
-
-        public UserDetails build() {
-            UserDetails userDetails = autoBuild();
-
-            // Either a fullName, or a firstName/lastName are required.
-            final boolean missingFirstOrLast = !userDetails.firstName().isPresent()
-                                               || !userDetails.lastName().isPresent();
-
-            if (missingFirstOrLast && !userDetails.fullName().isPresent()) {
-                throw new IllegalArgumentException("Either a firstName/lastName or a fullName are required.");
-            }
-            return userDetails;
-        }
+        public abstract UserDetails build();
     }
 }
