@@ -315,7 +315,7 @@ public class Indexer {
             
             // Sorry if this should ever go mad. Delete the index!
             deleteIndex(indexName);
-            new IndexRangeManager(server).removeRange(indexName);
+            server.getMongoBridge().removeIndexDateRange(indexName);
         }
     }
     

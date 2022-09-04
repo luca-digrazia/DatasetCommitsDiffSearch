@@ -20,19 +20,31 @@
 
 package org.graylog2.rest.resources.messages;
 
-import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.Maps;
+import java.util.List;
+import java.util.Map;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.jersey.api.core.ResourceConfig;
 import org.elasticsearch.indices.IndexMissingException;
+import org.graylog2.Core;
 import org.graylog2.indexer.messages.DocumentNotFoundException;
 import org.graylog2.indexer.results.ResultMessage;
-import org.graylog2.rest.resources.RestResource;
+import org.graylog2.rest.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.*;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
-import java.util.List;
-import java.util.Map;
+
+
+import com.google.common.collect.Maps;
+import javax.ws.rs.core.Response;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -41,9 +53,15 @@ import java.util.Map;
 public class MessageResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(MessageResource.class);
 
-    @GET @Path("/{messageId}") @Timed
+    private final ObjectMapper objectMapper = new ObjectMapper();
+	
+    @Context ResourceConfig rc;
+
+    @GET @Path("/{messageId}")
     @Produces(MediaType.APPLICATION_JSON)
     public String search(@PathParam("index") String index, @PathParam("messageId") String messageId, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (messageId == null || messageId.isEmpty()) {
         	LOG.error("Missing parameters. Returning HTTP 400.");
         	throw new WebApplicationException(400);
@@ -63,9 +81,11 @@ public class MessageResource extends RestResource {
         return json(m, prettyPrint);
     }
     
-    @GET @Path("/analyze") @Timed
+    @GET @Path("/analyze")
     @Produces(MediaType.APPLICATION_JSON)
     public String analyze(@PathParam("index") String index, @QueryParam("string") String string, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (string == null || string.isEmpty()) {
         	LOG.error("Missing parameters. Returning HTTP 400.");
         	throw new WebApplicationException(400);

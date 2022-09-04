@@ -20,17 +20,34 @@
 
 package org.graylog2.rest.resources.search;
 
-import com.codahale.metrics.annotation.Timed;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
+import org.elasticsearch.indices.IndexMissingException;
+import org.graylog2.Core;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.DateHistogramResult;
 import org.graylog2.indexer.results.SearchResult;
-import org.graylog2.rest.resources.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+
+import org.graylog2.Core;
+import org.graylog2.indexer.Indexer;
+import org.graylog2.indexer.results.DateHistogramResult;
+import org.graylog2.indexer.results.SearchResult;
+import org.graylog2.rest.RestResource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
+import javax.ws.rs.core.Response;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,9 +57,15 @@ import java.util.Map;
 public class SearchResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(SearchResource.class);
 
-    @GET @Path("/universal") @Timed
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Context ResourceConfig rc;
+
+    @GET @Path("/universal")
     @Produces(MediaType.APPLICATION_JSON)
     public String search(@QueryParam("query") String query, @QueryParam("timerange") int timerange, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (query == null || query.isEmpty()) {
         	LOG.error("Missing parameters. Returning HTTP 400.");
         	throw new WebApplicationException(400);
@@ -60,9 +83,11 @@ public class SearchResource extends RestResource {
         return json(result, prettyPrint);
     }
     
-    @GET @Path("/universal/histogram") @Timed
+    @GET @Path("/universal/histogram")
     @Produces(MediaType.APPLICATION_JSON)
     public String histogram(@QueryParam("query") String query, @QueryParam("interval") String interval, @QueryParam("timerange") int timerange, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+        
         interval = interval.toUpperCase();
 
         if (query == null || query.isEmpty() || interval == null || interval.isEmpty()) {
