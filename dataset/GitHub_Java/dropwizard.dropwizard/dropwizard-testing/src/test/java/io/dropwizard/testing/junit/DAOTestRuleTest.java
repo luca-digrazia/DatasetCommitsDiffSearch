@@ -1,15 +1,18 @@
 package io.dropwizard.testing.junit;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
+
+import java.io.Serializable;
+
+import javax.validation.ConstraintViolationException;
+
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.junit.Rule;
 import org.junit.Test;
-
-import javax.validation.ConstraintViolationException;
-import java.io.Serializable;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 public class DAOTestRuleTest {
 
@@ -20,52 +23,53 @@ public class DAOTestRuleTest {
     public void ruleCreatedSessionFactory() {
         final SessionFactory sessionFactory = daoTestRule.getSessionFactory();
 
-        assertThat(sessionFactory).isNotNull();
+        assertThat(sessionFactory, notNullValue());
     }
 
     @Test
     public void ruleCanOpenTransaction() {
-        final Long id = daoTestRule.inTransaction(() -> persist(new TestEntity("description")).getId());
+        final Long id = daoTestRule.transaction(() -> persist(new TestEntity("description")).getId());
 
-        assertThat(id).isNotNull();
+        assertThat(id, notNullValue());
     }
 
     @Test
     public void ruleCanRoundtrip() {
-        final Long id = daoTestRule.inTransaction(() -> persist(new TestEntity("description")).getId());
+        final Long id = daoTestRule.transaction(() -> persist(new TestEntity("description")).getId());
 
         final TestEntity testEntity = get(id);
 
-        assertThat(testEntity).isNotNull();
-        assertThat(testEntity.getDescription()).isEqualTo("description");
+        assertThat(testEntity, notNullValue());
+        assertThat(testEntity.getDescription(), equalTo("description"));
     }
 
     @Test(expected = ConstraintViolationException.class)
-    public void transactionThrowsExceptionAsExpected() {
-        daoTestRule.inTransaction(() -> persist(new TestEntity(null)));
+    public void transcationThrowsExceptionAsExpected() {
+        daoTestRule.transaction(() -> persist(new TestEntity(null)));
     }
 
     @Test
     public void rollsBackTransaction() {
         // given a successfully persisted entity
         final TestEntity testEntity = new TestEntity("description");
-        daoTestRule.inTransaction(() -> persist(testEntity));
+        daoTestRule.transaction(() -> persist(testEntity));
 
         // when we prepare an update of that entity
         testEntity.setDescription("newDescription");
         try {
             // ... but cause a constraint violation during the actual update
-            daoTestRule.inTransaction(() -> {
+            daoTestRule.transaction(() -> {
                 persist(testEntity);
                 persist(new TestEntity(null));
             });
-            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+            fail("Expected a constraint violation");
         } catch (ConstraintViolationException ignoredException) {
             // keep calm and carry on
-            // ... the entity has the original value
-            final TestEntity sameTestEntity = get(testEntity.getId());
-            assertThat(sameTestEntity.getDescription()).isEqualTo("description");
         }
+
+        // ... the entity has the original value
+        final TestEntity sameTestEntity = get(testEntity.getId());
+        assertThat(sameTestEntity.getDescription(), equalTo("description"));
     }
 
 
