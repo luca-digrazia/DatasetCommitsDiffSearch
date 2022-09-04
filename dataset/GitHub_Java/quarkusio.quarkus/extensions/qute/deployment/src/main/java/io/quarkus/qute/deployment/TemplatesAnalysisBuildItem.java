@@ -36,7 +36,7 @@ public final class TemplatesAnalysisBuildItem extends SimpleBuildItem {
             this.path = path;
         }
 
-        Expression findExpression(int id) {
+        Expression findExpression(Integer id) {
             for (Expression expression : expressions) {
                 if (expression.getGeneratedId() == id) {
                     return expression;

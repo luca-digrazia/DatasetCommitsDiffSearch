@@ -2,6 +2,7 @@ package io.quarkus.qute;
 
 import static io.quarkus.qute.Parameter.EMPTY;
 
+import io.quarkus.qute.Results.Result;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -10,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -45,24 +47,21 @@ public class LoopSectionHelper implements SectionHelper {
                 results.add(nextElement(iterator.next(), idx++, iterator.hasNext(), context));
             }
             if (results.isEmpty()) {
-                return ResultNode.NOOP;
-            }
-            if (results.size() == 1) {
-                return results.get(0);
+                return CompletableFuture.completedFuture(ResultNode.NOOP);
             }
             CompletableFuture<ResultNode> result = new CompletableFuture<>();
-            CompletableFuture<ResultNode>[] allResults = new CompletableFuture[results.size()];
+            CompletableFuture<ResultNode>[] all = new CompletableFuture[results.size()];
             idx = 0;
             for (CompletionStage<ResultNode> r : results) {
-                allResults[idx++] = r.toCompletableFuture();
+                all[idx++] = r.toCompletableFuture();
             }
             CompletableFuture
-                    .allOf(allResults)
+                    .allOf(all)
                     .whenComplete((v, t) -> {
                         if (t != null) {
                             result.completeExceptionally(t);
                         } else {
-                            result.complete(new MultiResultNode(allResults));
+                            result.complete(new MultiResultNode(all));
                         }
                     });
             return result;
@@ -91,8 +90,10 @@ public class LoopSectionHelper implements SectionHelper {
     }
 
     CompletionStage<ResultNode> nextElement(Object element, int index, boolean hasNext, SectionResolutionContext context) {
+        AtomicReference<ResolutionContext> resolutionContextHolder = new AtomicReference<>();
         ResolutionContext child = context.resolutionContext().createChild(new IterationElement(alias, element, index, hasNext),
-                null);
+                null, null);
+        resolutionContextHolder.set(child);
         return context.execute(child);
     }
 
@@ -159,47 +160,43 @@ public class LoopSectionHelper implements SectionHelper {
 
     static class IterationElement implements Mapper {
 
-        static final CompletableFuture<Object> EVEN = CompletableFuture.completedFuture("even");
-        static final CompletableFuture<Object> ODD = CompletableFuture.completedFuture("odd");
-
         final String alias;
-        final CompletableFuture<Object> element;
+        final Object element;
         final int index;
         final boolean hasNext;
 
         public IterationElement(String alias, Object element, int index, boolean hasNext) {
             this.alias = alias;
-            this.element = CompletableFuture.completedFuture(element);
+            this.element = element;
             this.index = index;
             this.hasNext = hasNext;
         }
 
         @Override
-        public CompletionStage<Object> getAsync(String key) {
+        public Object get(String key) {
             if (alias.equals(key)) {
                 return element;
             }
             // Iteration metadata
             switch (key) {
                 case "count":
-                    return CompletableFuture.completedFuture(index + 1);
+                    return index + 1;
                 case "index":
-                    return CompletableFuture.completedFuture(index);
+                    return index;
                 case "indexParity":
-                    return index % 2 != 0 ? EVEN : ODD;
+                    return index % 2 != 0 ? "even" : "odd";
                 case "hasNext":
-                    return hasNext ? Results.TRUE : Results.FALSE;
+                    return hasNext;
                 case "isOdd":
                 case "odd":
-                    return (index % 2 == 0) ? Results.TRUE : Results.FALSE;
+                    return index % 2 == 0;
                 case "isEven":
                 case "even":
-                    return (index % 2 != 0) ? Results.TRUE : Results.FALSE;
+                    return index % 2 != 0;
                 default:
-                    return Results.NOT_FOUND;
+                    return Result.NOT_FOUND;
             }
         }
-
     }
 
 }

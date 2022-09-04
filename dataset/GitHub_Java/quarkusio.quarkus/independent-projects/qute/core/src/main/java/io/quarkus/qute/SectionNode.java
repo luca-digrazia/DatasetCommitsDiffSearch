@@ -121,22 +121,20 @@ class SectionNode implements TemplateNode {
                 // Use the main block
                 block = blocks.get(0);
             }
-            int size = block.nodes.size();
-            if (size == 1) {
+            if (block.nodes.size() == 1) {
                 return block.nodes.get(0).resolve(context);
             }
             CompletableFuture<ResultNode> result = new CompletableFuture<ResultNode>();
             @SuppressWarnings("unchecked")
-            CompletableFuture<ResultNode>[] allResults = new CompletableFuture[size];
+            CompletableFuture<ResultNode>[] allResults = new CompletableFuture[block.nodes.size()];
             List<CompletableFuture<ResultNode>> asyncResults = new LinkedList<>();
             int idx = 0;
             for (TemplateNode node : block.nodes) {
                 CompletableFuture<ResultNode> nodeResult = node.resolve(context).toCompletableFuture();
                 allResults[idx++] = nodeResult;
-                if (node.isConstant()) {
-                    continue;
+                if (!node.isConstant()) {
+                    asyncResults.add(nodeResult);
                 }
-                asyncResults.add(nodeResult);
             }
             if (asyncResults.isEmpty()) {
                 result.complete(new MultiResultNode(allResults));
@@ -146,7 +144,7 @@ class SectionNode implements TemplateNode {
                     cs = asyncResults.get(0);
                 } else {
                     cs = CompletableFuture
-                            .allOf(asyncResults.toArray(new CompletableFuture[0]));
+                            .allOf(asyncResults.toArray(Futures.EMPTY_RESULTS));
                 }
                 cs.whenComplete((v, t) -> {
                     if (t != null) {

@@ -49,11 +49,13 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
-import io.quarkus.arc.deployment.BeanDiscoveryFinishedBuildItem;
+import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
+import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.arc.processor.BeanInfo;
+import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.InjectionPointInfo;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
@@ -420,7 +422,9 @@ public class QuteProcessor {
             List<TypeCheckExcludeBuildItem> excludes,
             BuildProducer<IncorrectExpressionBuildItem> incorrectExpressions,
             BuildProducer<ImplicitValueResolverBuildItem> implicitClasses,
-            BeanDiscoveryFinishedBuildItem beanDiscovery) {
+            BeanRegistrationPhaseBuildItem registrationPhase,
+            // This producer is needed to ensure the correct ordering, ie. this build step must be executed before the ArC validation step
+            BuildProducer<BeanConfiguratorBuildItem> configurators) {
 
         IndexView index = beanArchiveIndex.getIndex();
         Function<String, String> templateIdToPathFun = new Function<String, String>() {
@@ -433,7 +437,7 @@ public class QuteProcessor {
         // IMPLEMENTATION NOTE: 
         // We do not support injection of synthetic beans with names 
         // Dependency on the ValidationPhaseBuildItem would result in a cycle in the build chain
-        Map<String, BeanInfo> namedBeans = beanDiscovery.beanStream().withName()
+        Map<String, BeanInfo> namedBeans = registrationPhase.getContext().beans().withName()
                 .collect(toMap(BeanInfo::getName, Function.identity()));
 
         // Map implicit class -> set of used members
@@ -566,13 +570,9 @@ public class QuteProcessor {
             Info info = iterator.next();
             if (match.clazz != null) {
                 // By default, we only consider properties
-                Set<String> membersUsed = implicitClassToMembersUsed.get(match.clazz);
-                if (membersUsed == null) {
-                    membersUsed = new HashSet<>();
-                    implicitClassToMembersUsed.put(match.clazz, membersUsed);
-                }
+                Set<String> membersUsed = implicitClassToMembersUsed.computeIfAbsent(match.clazz, c -> new HashSet<>());
                 AnnotationTarget member = null;
-                // First try to find a java member
+                // First try to find java members
                 if (info.isVirtualMethod()) {
                     member = findMethod(info.part.asVirtualMethod(), match.clazz, expression, index, templateIdToPathFun,
                             results);
@@ -585,10 +585,9 @@ public class QuteProcessor {
                         membersUsed.add(member.kind() == Kind.FIELD ? member.asField().name() : member.asMethod().name());
                     }
                 }
+                // Java member not found - try extension methods
                 if (member == null) {
-                    // Then try to find an etension method
-                    member = findTemplateExtensionMethod(info, match.clazz, templateExtensionMethods, expression,
-                            index,
+                    member = findTemplateExtensionMethod(info, match.clazz, templateExtensionMethods, expression, index,
                             templateIdToPathFun, results);
                 }
 
@@ -929,7 +928,7 @@ public class QuteProcessor {
             }
         }
 
-        for (InjectionPointInfo injectionPoint : validationPhase.getContext().getInjectionPoints()) {
+        for (InjectionPointInfo injectionPoint : validationPhase.getContext().get(BuildExtension.Key.INJECTION_POINTS)) {
 
             if (injectionPoint.getRequiredType().name().equals(Names.TEMPLATE)) {
 
@@ -1004,7 +1003,7 @@ public class QuteProcessor {
 
     @BuildStep
     @Record(value = STATIC_INIT)
-    void initialize(BuildProducer<SyntheticBeanBuildItem> syntheticBeans, QuteRecorder recorder,
+    void initialize(QuteConfig config, BuildProducer<SyntheticBeanBuildItem> syntheticBeans, QuteRecorder recorder,
             List<GeneratedValueResolverBuildItem> generatedValueResolvers, List<TemplatePathBuildItem> templatePaths,
             Optional<TemplateVariantsBuildItem> templateVariants) {
 
@@ -1027,7 +1026,7 @@ public class QuteProcessor {
         }
 
         syntheticBeans.produce(SyntheticBeanBuildItem.configure(QuteContext.class)
-                .supplier(recorder.createContext(generatedValueResolvers.stream()
+                .supplier(recorder.createContext(config, generatedValueResolvers.stream()
                         .map(GeneratedValueResolverBuildItem::getClassName).collect(Collectors.toList()), templates,
                         tags, variants))
                 .done());
@@ -1224,8 +1223,7 @@ public class QuteProcessor {
                 continue;
             }
             List<Type> parameters = extensionMethod.getMethod().parameters();
-            int realParamSize = parameters.size() - (TemplateExtension.ANY.equals(extensionMethod.getMatchName()) ? 2 : 1);
-            if (realParamSize > 0 && !info.isVirtualMethod()) {
+            if (parameters.size() > 1 && !info.isVirtualMethod()) {
                 // If method accepts additional params the info must be a virtual method
                 continue;
             }
@@ -1234,6 +1232,7 @@ public class QuteProcessor {
                 VirtualMethodPart virtualMethod = info.part.asVirtualMethod();
                 boolean isVarArgs = ValueResolverGenerator.isVarArgs(extensionMethod.getMethod());
                 int lastParamIdx = parameters.size() - 1;
+                int realParamSize = parameters.size() - (TemplateExtension.ANY.equals(extensionMethod.getMatchName()) ? 2 : 1);
 
                 if (isVarArgs) {
                     // For varargs methods match the minimal number of params
@@ -1264,8 +1263,8 @@ public class QuteProcessor {
                         } else {
                             paramType = parameters.get(idx);
                         }
-                        if (!Types.isAssignableFrom(paramType,
-                                result.type, index)) {
+                        if (!Types.isAssignableFrom(result.type,
+                                paramType, index)) {
                             matches = false;
                             break;
                         }
@@ -1381,8 +1380,8 @@ public class QuteProcessor {
                             } else {
                                 paramType = parameters.get(idx);
                             }
-                            if (!Types.isAssignableFrom(paramType,
-                                    result.type, index)) {
+                            if (!Types.isAssignableFrom(result.type,
+                                    paramType, index)) {
                                 matches = false;
                                 break;
                             }

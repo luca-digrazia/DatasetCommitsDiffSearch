@@ -1,7 +1,6 @@
 package io.quarkus.qute;
 
 import io.smallrye.mutiny.Multi;
-import io.smallrye.mutiny.Uni;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -80,11 +79,6 @@ class TemplateImpl implements Template {
         }
 
         @Override
-        public Uni<String> createUni() {
-            return Uni.createFrom().completionStage(this::renderAsync);
-        }
-
-        @Override
         public CompletionStage<String> renderAsync() {
             StringBuilder builder = new StringBuilder();
             return renderData(data(), builder::append).thenApply(v -> builder.toString());
@@ -100,7 +94,7 @@ class TemplateImpl implements Template {
             DataNamespaceResolver dataResolver = new DataNamespaceResolver();
             List<NamespaceResolver> namespaceResolvers = ImmutableList.<NamespaceResolver> builder()
                     .addAll(engine.getNamespaceResolvers()).add(dataResolver).build();
-            ResolutionContext rootContext = new ResolutionContextImpl(data, namespaceResolvers,
+            ResolutionContext rootContext = new ResolutionContextImpl(null, data, namespaceResolvers,
                     engine.getEvaluator(), null, this);
             dataResolver.rootContext = rootContext;
             // Async resolution
