@@ -5,7 +5,6 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -58,7 +57,7 @@ public class JaegerConfig {
      * The reporter's maximum queue size
      */
     @ConfigItem
-    public OptionalInt reporterMaxQueueSize;
+    public Optional<Integer> reporterMaxQueueSize;
 
     /**
      * The reporter's flush interval
