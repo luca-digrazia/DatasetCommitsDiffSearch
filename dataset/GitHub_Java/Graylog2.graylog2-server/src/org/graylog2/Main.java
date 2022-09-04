@@ -20,16 +20,17 @@
 
 package org.graylog2;
 
+import java.io.BufferedWriter;
 import org.graylog2.periodical.HostDistinctThread;
-import org.graylog2.periodical.SystemStatisticThread;
-import org.graylog2.periodical.SystemStatistics;
 import org.graylog2.messagehandlers.syslog.SyslogServerThread;
 import org.graylog2.messagehandlers.gelf.GELFMainThread;
 import org.graylog2.messagehandlers.gelf.GELF;
 import org.graylog2.database.MongoConnection;
 import java.io.FileInputStream;
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Properties;
+import org.graylog2.periodical.RRDThread;
 
 // TODO: indizes richtig setzen
 
@@ -73,6 +74,10 @@ public class Main {
         requiredConfigFields.add("mongodb_host");
         requiredConfigFields.add("mongodb_database");
         requiredConfigFields.add("mongodb_port");
+        requiredConfigFields.add("messages_collection_size");
+        requiredConfigFields.add("use_gelf");
+        requiredConfigFields.add("gelf_listen_port");
+        requiredConfigFields.add("rrd_storage_dir");
 
         // Check if all required configuration fields are set.
         for (Object requiredConfigFieldO : requiredConfigFields) {
@@ -104,6 +109,22 @@ public class Main {
             System.out.println("[x] Not in Debug mode.");
         }
 
+        // Write a PID file.
+        try {
+            String pid = Tools.getPID();
+            if (pid == null || pid.length() == 0) {
+                throw new Exception("Could not determine PID.");
+            }
+
+            FileWriter fstream = new FileWriter("/tmp/graylog2.pid");
+            BufferedWriter out = new BufferedWriter(fstream);
+            out.write(pid);
+            out.close();
+        } catch (Exception e) {
+            System.out.println("Could not write PID file: " + e.toString());
+            System.exit(1); // Exit with error.
+        }
+
         try {
             MongoConnection.getInstance().connect(
                     Main.masterConfig.getProperty("mongodb_user"),
@@ -119,15 +140,6 @@ public class Main {
             System.exit(1); // Exit with error.
         }
 
-        // Clear systemstatistics collection.
-        try {
-            SystemStatistics.getInstance().clearCollection();
-        } catch (Exception e) {
-            System.out.println("Could not clear system statistic collection: " + e.toString());
-            e.printStackTrace();
-            System.exit(1); // Exit with error.
-        }
-
         // Start the Syslog thread that accepts syslog packages.
         SyslogServerThread syslogServerThread = new SyslogServerThread(Integer.parseInt(Main.masterConfig.getProperty("syslog_listen_port")));
         syslogServerThread.start();
@@ -137,7 +149,7 @@ public class Main {
         if(syslogCoreThread.isAlive()) {
             System.out.println("[x] Syslog server thread is up.");
         } else {
-            System.out.println("Could not start syslog server core thread. Do you have permissions to listen on UDP port " + Main.masterConfig.getProperty("syslog_listen_port") + "?");
+            System.out.println("Could not start syslog server core thread. Do you have permissions to listen on port " + Main.masterConfig.getProperty("syslog_listen_port") + "?");
             System.exit(1); // Exit with error.
         }
 
@@ -148,15 +160,17 @@ public class Main {
             System.out.println("[x] GELF thread is up.");
         }
 
+         // Start RRD writer thread.
+        //if (GELF.isEnabled()) { XXX: TODO
+            RRDThread rrdThread = new RRDThread();
+            rrdThread.start();
+            System.out.println("[x] RRD writer thread is up.");
+        //}
+
         // Start the thread that distincts hosts.
         HostDistinctThread hostDistinctThread = new HostDistinctThread();
         hostDistinctThread.start();
         System.out.println("[x] Host distinction thread is up.");
-
-        // Start the thread that continously collects system information.
-        SystemStatisticThread systemStatisticThread = new SystemStatisticThread();
-        systemStatisticThread.start();
-        System.out.println("[x] System statistic thread is up.");
 
         System.out.println("[x] Graylog2 up and running.");
     }

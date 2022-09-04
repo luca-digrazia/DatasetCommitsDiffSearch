@@ -25,8 +25,9 @@
 package org.graylog2.messagehandlers.gelf;
 
 import org.graylog2.Log;
-import org.graylog2.Main;
 import org.graylog2.database.MongoBridge;
+import org.graylog2.messagehandlers.common.MessageCounterHook;
+import org.graylog2.messagehandlers.common.ReceiveHookManager;
 
 import org.json.simple.*;
 
@@ -40,24 +41,11 @@ public class GELFClient {
         this.clientMessage = clientMessage;
     }
 
-    public boolean isValidAndJSON() {
-        if(!this.clientMessage.contains("{")) {
-            return false;
-        }
-        return true;
-    }
-
     public boolean handle() {
-        // Do a quick check if this could be valid JSON.
-        /*if (!this.isValidAndJSON()) {
-            Log.info("Got invalid GELF message: " + this.clientMessage);
-            return false;
-        }*/
-
         try {
             JSONObject json = this.getJSON(this.clientMessage);
             if (json == null) {
-                Log.warn("JSON is null - clientMessage was: " + this.clientMessage);
+                Log.warn("JSON is null/could not be parsed (invalid JSON) - clientMessage was: " + this.clientMessage);
                 return false;
             }
 
@@ -69,22 +57,19 @@ public class GELFClient {
 
             // Store in MongoDB.
             // Connect to database.
-            MongoBridge m = new MongoBridge(
-                    Main.masterConfig.getProperty("mongodb_user"),
-                    Main.masterConfig.getProperty("mongodb_password"),
-                    Main.masterConfig.getProperty("mongodb_host"),
-                    Main.masterConfig.getProperty("mongodb_database"),
-                    Integer.valueOf(Main.masterConfig.getProperty("mongodb_port"))
-            );
+            MongoBridge m = new MongoBridge();
 
 
             // Log if we are in debug mode.
-            Log.info("Got GELF message: \n" + message.toString());
+            Log.info("Got GELF message: " + message.toString());
 
             // Insert message into MongoDB.
             m.insertGelfMessage(message);
+
+            // This is doing the upcounting for RRD.
+            ReceiveHookManager.postProcess(new MessageCounterHook());
         } catch(Exception e) {
-            Log.warn("Could not handle GELF client: " + e.getMessage());
+            Log.warn("Could not handle GELF client: " + e.toString());
             return false;
         }
 
@@ -101,22 +86,22 @@ public class GELFClient {
         this.message.line = this.jsonToInt(json.get("line"));
     }
 
-    private JSONObject getJSON(String value) {
-        try {
-            Object obj=JSONValue.parse(value);
-            if (obj.getClass().toString().equals("class org.json.simple.JSONArray")) {
-                // Return the k/v of ths JSON array if this is an array.
-                JSONArray array=(JSONArray)obj;
-                return (JSONObject) array.get(0);
-            } else if(obj.getClass().toString().equals("class org.json.simple.JSONObject")) {
-                // This is not an array. Convert it to an JSONObject directly without choosing first k/v.
-                return (JSONObject)obj;
+    private JSONObject getJSON(String value) throws Exception {
+        if (value != null) {
+            Object obj = JSONValue.parse(value);
+            if (obj != null) {
+                if (obj.getClass().toString().equals("class org.json.simple.JSONArray")) {
+                    // Return the k/v of ths JSON array if this is an array.
+                    JSONArray array = (JSONArray)obj;
+                    return (JSONObject) array.get(0);
+                } else if(obj.getClass().toString().equals("class org.json.simple.JSONObject")) {
+                    // This is not an array. Convert it to an JSONObject directly without choosing first k/v.
+                    return (JSONObject)obj;
+                }
             }
-        } catch(Exception e) {
-            Log.warn("ScopeportClient::getJSON() failed: " + e.toString() + " - Tried to convert: " + value);
         }
 
-        return new JSONObject();
+        return null;
     }
 
     private String jsonToString(Object json) {
