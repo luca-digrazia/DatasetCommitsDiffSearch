@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import javax.annotation.Nullable;
@@ -46,7 +47,7 @@ public final class SingleJarActionBuilder {
 
   /** Constructs the base spawn for a singlejar action. */
   private static SpawnAction.Builder singleJarActionBuilder(RuleContext ruleContext) {
-    Artifact singleJar = JavaToolchainProvider.from(ruleContext).getSingleJar();
+    Artifact singleJar = getSingleJar(ruleContext);
     SpawnAction.Builder builder = new SpawnAction.Builder();
     // If singlejar's name ends with .jar, it is Java application, otherwise it is native.
     // TODO(asmundak): once https://github.com/bazelbuild/bazel/issues/2241 is fixed (that is,
@@ -57,7 +58,7 @@ public final class SingleJarActionBuilder {
           .setJarExecutable(
               JavaCommon.getHostJavaExecutable(ruleContext),
               singleJar,
-              JavaToolchainProvider.from(ruleContext).getJvmOptions())
+              JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .setExecutionInfo(ExecutionRequirements.WORKER_MODE_ENABLED);
     } else {
       builder.setExecutable(singleJar);
@@ -121,6 +122,15 @@ public final class SingleJarActionBuilder {
             .setProgressMessage("Building singlejar jar %s", output.prettyPrint())
             .setMnemonic("JavaSingleJar");
     ruleContext.registerAction(builder.build(ruleContext));
+  }
+
+  /** Returns the SingleJar deploy jar Artifact. */
+  private static Artifact getSingleJar(RuleContext ruleContext) {
+    Artifact singleJar = JavaToolchainProvider.fromRuleContext(ruleContext).getSingleJar();
+    if (singleJar != null) {
+      return singleJar;
+    }
+    return ruleContext.getPrerequisiteArtifact("$singlejar", Mode.HOST);
   }
 
   private static CommandLine sourceJarCommandLine(
