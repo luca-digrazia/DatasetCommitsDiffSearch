@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.reflect.ClassPath;
 import com.google.common.reflect.ClassPath.ClassInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.RegisteredSingletonDoNotUse;
@@ -45,21 +44,14 @@ public class CodecScanner {
 
   private static final Logger log = Logger.getLogger(CodecScanner.class.getName());
 
-  public static ObjectCodecRegistry.Builder initializeCodecRegistry(String packagePrefix)
-      throws IOException, ReflectiveOperationException {
-    return initializeCodecRegistry(packagePrefix, ImmutableList.of());
-  }
-
   /**
    * Initializes an {@link ObjectCodecRegistry} builder by scanning a given package prefix.
    *
    * @param packagePrefix processes only classes in packages having this prefix
-   * @param packagePrefixBlacklist avoids processing classes in packages having this prefix
    * @see CodecRegisterer
    */
   @SuppressWarnings("unchecked")
-  public static ObjectCodecRegistry.Builder initializeCodecRegistry(
-      String packagePrefix, ImmutableList<String> packagePrefixBlacklist)
+  public static ObjectCodecRegistry.Builder initializeCodecRegistry(String packagePrefix)
       throws IOException, ReflectiveOperationException {
     log.info("Building ObjectCodecRegistry");
     ArrayList<Class<? extends ObjectCodec<?>>> codecs = new ArrayList<>();
@@ -79,11 +71,6 @@ public class CodecScanner {
               } else {
                 // Assumes that anything with a class name matching the above won't need to be
                 // serialized.
-                for (String prefix : packagePrefixBlacklist) {
-                  if (classInfo.getPackageName().startsWith(prefix)) {
-                    return;
-                  }
-                }
                 builder.addClassName(classInfo.getName().intern());
               }
             });
@@ -206,7 +193,7 @@ public class CodecScanner {
     throw new IllegalStateException(registererType + " doesn't directly implement CodecRegisterer");
   }
 
-  /** Return the {@link ClassInfo} objects matching {@code packagePrefix} sorted by name. */
+  /** Return the {@link ClassInfo} objects matching {@code packagePrefix}, sorted by name. */
   private static Stream<ClassInfo> getClassInfos(String packagePrefix) throws IOException {
     return ClassPath.from(ClassLoader.getSystemClassLoader())
         .getResources()

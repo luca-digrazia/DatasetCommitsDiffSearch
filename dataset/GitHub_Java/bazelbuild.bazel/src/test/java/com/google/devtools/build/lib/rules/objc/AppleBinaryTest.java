@@ -1035,7 +1035,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
       if (archBinary.getExecPathString().endsWith("bin_bin")) {
         Artifact protoLib =
             getFirstArtifactEndingWith(
-                getGeneratingAction(archBinary).getInputs(), "BundledProtos.a");
+                getGeneratingAction(archBinary).getInputs(), "BundledProtos_0.a");
         Artifact protoObject =
             getFirstArtifactEndingWith(
                 getGeneratingAction(protoLib).getInputs(), "Genfile.pbobjc.o");
@@ -1091,7 +1091,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     Artifact arm64Binary = getSingleArchBinary(lipoAction, "arm64");
 
     Artifact armv7ProtoLib =
-        getFirstArtifactEndingWith(getGeneratingAction(armv7Binary).getInputs(), "BundledProtos.a");
+        getFirstArtifactEndingWith(
+            getGeneratingAction(armv7Binary).getInputs(), "BundledProtos_0.a");
     Artifact armv7ProtoObject =
         getFirstArtifactEndingWith(
             getGeneratingAction(armv7ProtoLib).getInputs(), "One.pbobjc.o");
@@ -1102,7 +1103,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         getGeneratingAction(armv7ProtoObjcSource).getInputs(), "one.proto")).isNotNull();
 
     Artifact arm64ProtoLib =
-        getFirstArtifactEndingWith(getGeneratingAction(arm64Binary).getInputs(), "BundledProtos.a");
+        getFirstArtifactEndingWith(
+            getGeneratingAction(arm64Binary).getInputs(), "BundledProtos_0.a");
     Artifact arm64ProtoObject =
         getFirstArtifactEndingWith(
             getGeneratingAction(arm64ProtoLib).getInputs(), "Two.pbobjc.o");

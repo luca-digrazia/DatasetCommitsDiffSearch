@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.BuildDriver;
-import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
@@ -77,14 +76,12 @@ public class RecursivePkgFunctionTest extends BuildViewTestCase {
   private EvaluationResult<RecursivePkgValue> getEvaluationResult(SkyKey key)
       throws InterruptedException {
     BuildDriver driver = skyframeExecutor.getDriverForTesting();
-    EvaluationContext evaluationContext =
-        EvaluationContext.newBuilder()
-            .setKeepGoing(false)
-            .setNumThreads(SequencedSkyframeExecutor.DEFAULT_THREAD_COUNT)
-            .setEventHander(reporter)
-            .build();
     EvaluationResult<RecursivePkgValue> evaluationResult =
-        driver.evaluate(ImmutableList.of(key), evaluationContext);
+        driver.evaluate(
+            ImmutableList.of(key),
+            /*keepGoing=*/ false,
+            SequencedSkyframeExecutor.DEFAULT_THREAD_COUNT,
+            reporter);
     Preconditions.checkState(!evaluationResult.hasError());
     return evaluationResult;
   }

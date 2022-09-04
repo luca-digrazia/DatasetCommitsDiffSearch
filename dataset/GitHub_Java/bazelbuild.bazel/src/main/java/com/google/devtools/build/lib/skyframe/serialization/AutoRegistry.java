@@ -35,10 +35,6 @@ public class AutoRegistry {
    * where Tristate lives. */
   private static final String PACKAGE_PREFIX = "com.google.devtools";
 
-  /** Package prefixes to blacklist for {@link DynamicCodec}. */
-  private static final ImmutableList<String> PACKAGE_PREFIX_BLACKLIST =
-      ImmutableList.of("com.google.devtools.build.lib.vfs");
-
   /** Classes outside {@link AutoRegistry#PACKAGE_PREFIX} that need to be serialized. */
   private static final ImmutableList<String> EXTERNAL_CLASS_NAMES_TO_REGISTER =
       ImmutableList.of("java.io.FileNotFoundException", "java.io.IOException");
@@ -56,8 +52,7 @@ public class AutoRegistry {
 
   private static ObjectCodecRegistry create() {
     try {
-      ObjectCodecRegistry.Builder registry =
-          CodecScanner.initializeCodecRegistry(PACKAGE_PREFIX, PACKAGE_PREFIX_BLACKLIST);
+      ObjectCodecRegistry.Builder registry = CodecScanner.initializeCodecRegistry(PACKAGE_PREFIX);
       for (String className : EXTERNAL_CLASS_NAMES_TO_REGISTER) {
         registry.addClassName(className);
       }
