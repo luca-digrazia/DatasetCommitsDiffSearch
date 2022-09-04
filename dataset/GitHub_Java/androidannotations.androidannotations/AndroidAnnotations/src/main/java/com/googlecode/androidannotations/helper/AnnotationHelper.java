@@ -106,10 +106,6 @@ public class AnnotationHelper {
 		return element.getModifiers().contains(Modifier.ABSTRACT);
 	}
 	
-	public boolean isInterface(TypeElement element) {
-		return element.getKind().isInterface();
-	}
-	
 	public boolean isFinal(Element element) {
 		return element.getModifiers().contains(Modifier.FINAL);
 	}
