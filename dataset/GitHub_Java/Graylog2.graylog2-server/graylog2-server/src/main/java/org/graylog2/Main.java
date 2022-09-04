@@ -38,7 +38,11 @@ import org.graylog2.bindings.*;
 import org.graylog2.cluster.NodeService;
 import org.graylog2.cluster.NodeServiceImpl;
 import org.graylog2.notifications.Notification;
+import org.graylog2.notifications.NotificationImpl;
 import org.graylog2.notifications.NotificationService;
+import org.graylog2.outputs.BatchedElasticSearchOutput;
+import org.graylog2.outputs.ElasticSearchOutput;
+import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.plugin.Plugin;
 import org.graylog2.plugin.PluginModule;
 import org.graylog2.plugin.Tools;
@@ -58,8 +62,6 @@ import org.slf4j.bridge.SLF4JBridgeHandler;
 
 import java.io.File;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Main class of Graylog2.
@@ -137,8 +139,7 @@ public final class Main extends NodeRunner {
                 new ServerMessageInputBindings(),
                 new MessageFilterBindings(),
                 new AlarmCallbackBindings(),
-                new InitializerBindings(),
-                new MessageOutputBindings());
+                new InitializerBindings());
         LOG.debug("Adding plugin modules: " + pluginModules);
         bindingsModules.addAll(pluginModules);
         Injector injector = Guice.createInjector(bindingsModules);
@@ -239,21 +240,14 @@ public final class Main extends NodeRunner {
         // propagate default size to input plugins
         MessageInput.setDefaultRecvBufferSize(configuration.getUdpRecvBufferSizes());
 
+        // Register outputs.
+        final OutputRegistry outputRegistry = injector.getInstance(OutputRegistry.class);
+        outputRegistry.register(injector.getInstance(BatchedElasticSearchOutput.class));
+
         // Start services.
         final ServiceManagerListener serviceManagerListener = injector.getInstance(ServiceManagerListener.class);
         serviceManager.addListener(serviceManagerListener, MoreExecutors.sameThreadExecutor());
-        try {
-            serviceManager.startAsync().awaitHealthy();
-        } catch (Exception e) {
-            try {
-                serviceManager.stopAsync().awaitStopped(30, TimeUnit.SECONDS);
-            } catch (TimeoutException timeoutException) {
-                LOG.error("Unable to shutdown properly on time.");
-            }
-            LOG.error("Graylog2 startup failed. Exiting. Exception was:", e);
-            System.exit(-1);
-        }
-        LOG.info("Services started, startup times in ms: {}", serviceManager.startupTimes());
+        serviceManager.startAsync().awaitHealthy();
 
         activityWriter.write(new Activity("Started up.", Main.class));
         LOG.info("Graylog2 up and running.");
