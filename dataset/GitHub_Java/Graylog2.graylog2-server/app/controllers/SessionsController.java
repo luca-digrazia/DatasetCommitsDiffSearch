@@ -91,13 +91,8 @@ public class SessionsController extends BaseController {
             // if we have successfully created a session, we can save that id for the next request
             final String cookieContent = Crypto.encryptAES(r.username + "\t" + sessionResponse.sessionId);
             Http.Context.current().session().put("sessionid", cookieContent);
-
             // upon redirect, the auth layer will load the user with the given session and log the user in.
-            if(r.noStartpage) {
-                return redirect(routes.SystemController.index(0));
-            } else {
-                return redirect(routes.StartpageController.redirect());
-            }
+            return redirect("/");
         } catch (APIException e) {
             log.warn("Unable to authenticate user {}. Redirecting back to '/'", r.username, e);
             if (e.getCause() instanceof Graylog2ServerUnavailableException) {
@@ -117,13 +112,10 @@ public class SessionsController extends BaseController {
         final String sessionId = UserService.current().getSessionId();
         try {
             if (sessionId != null) {
-                api().delete()
-                        .path("/system/sessions/{0}", sessionId)
-                        .expect(NO_CONTENT, NOT_FOUND)
-                        .execute();
+                api().delete().path("/system/sessions/{0}", sessionId).expect(Http.Status.NO_CONTENT).execute();
             }
         } catch (APIException | IOException e) {
-            log.info("Unable to end session for user {}", UserService.current().getName());
+            log.error("Unable to end session for user {}", UserService.current().getName());
         }
         SecurityUtils.getSubject().logout();
 		session().clear();

@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import lib.APIException;
 import lib.ApiClient;
+import lib.security.Graylog2ServerUnavailableException;
 import models.api.requests.CreateUserRequest;
 import models.api.responses.system.UserResponse;
 import models.api.responses.system.UsersListResponse;
@@ -54,6 +55,14 @@ public class UserService {
             // Http.Context.current() throws a plain RuntimeException if there's no context,
             // for example in background threads.
             // That is fine, because we don't have a current user in those scenarios anyway.
+            return null;
+        }
+    }
+
+    public static String currentSessionId() {
+        try {
+            return (String) Http.Context.current().args.get("sessionId");
+        } catch (RuntimeException e) {
             return null;
         }
     }
@@ -112,42 +121,55 @@ public class UserService {
     public User authenticateSessionUser() {
         // is there a logged in user at all?
         final Http.Session session = Http.Context.current().session();
-        final String sessionId = session.get("sessionid");
-        if (sessionId == null) {
+        final String encryptedSessionId = session.get("sessionid");
+        if (encryptedSessionId == null) {
             // there is no authenticated user yet.
             log.info("Accessing the current user failed, there's no sessionid in the cookie.");
             return null;
         }
-        final String userPassHash = Crypto.decryptAES(sessionId);
-        final StringTokenizer tokenizer = new StringTokenizer(userPassHash, "\t");
+        final String userAndSessionId = Crypto.decryptAES(encryptedSessionId);
+        final StringTokenizer tokenizer = new StringTokenizer(userAndSessionId, "\t");
         if (tokenizer.countTokens() != 2) {
             return null;
         }
         final String userName = tokenizer.nextToken();
-        final String passwordSha1 = tokenizer.nextToken();
-
+        final String sessionId = tokenizer.nextToken();
+        Http.Context.current().args.put("sessionId", sessionId);
         // special case for the local admin user for the web interface
-        if (userName != null) {
-            final LocalAdminUser localAdminUser = LocalAdminUser.getInstance();
-            if (userName.equals(localAdminUser.getName())) {
-                setCurrent(localAdminUser);
-                return localAdminUser;
-            }
-        }
+//        if (userName != null) {
+//            final LocalAdminUser localAdminUser = LocalAdminUser.getInstance();
+//            if (userName.equals(localAdminUser.getName())) {
+//                setCurrent(localAdminUser);
+//                return localAdminUser;
+//            }
+//        }
         try {
             UserResponse response = api.get(UserResponse.class)
-                    .credentials(userName, passwordSha1)
                     .path("/users/{0}", userName)
+                    .session(sessionId)
                     .execute();
 
-            User currentUser = userFactory.fromResponse(response, passwordSha1);
+            User currentUser = userFactory.fromResponse(response, sessionId);
             setCurrent(currentUser);
             return currentUser;
         } catch (IOException e) {
             log.error("Could not reach graylog2 server", e);
         } catch (APIException e) {
             log.error("Unauthorized to load user " + userName, e);
+        } catch (Graylog2ServerUnavailableException e) {
+            // this leads to a different return code in RedirectAuthenticator.
+            throw e;
         }
         return null;
+    }
+
+    public void delete(String username) {
+        try {
+            api.delete().path("/users/{0}", username).expect(Http.Status.NO_CONTENT).execute();
+        } catch (APIException e) {
+            log.error("Unable to delete user " + username, e);
+        } catch (IOException e) {
+            log.error("Unable to delete user " + username, e);
+        }
     }
 }

@@ -26,7 +26,6 @@ import lib.ApiClient;
 import models.api.requests.ChangePasswordRequest;
 import models.api.requests.ChangeUserRequest;
 import models.api.responses.system.UserResponse;
-import org.apache.shiro.subject.Subject;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,26 +49,13 @@ public class User {
     private final DateTimeZone timezone;
     private final boolean readonly;
     private final boolean external;
-    private final Startpage startpage;
-
-    private Subject subject;
 
     @AssistedInject
     public User(ApiClient api, @Assisted UserResponse ur, @Nullable @Assisted String sessionId) {
-        this(api, ur.id, ur.username, ur.email, ur.fullName, ur.permissions, sessionId, ur.timezone, ur.readonly, ur.external, ur.getStartpage());
+        this(api, ur.id, ur.username, ur.email, ur.fullName, ur.permissions, sessionId, ur.timezone, ur.readonly, ur.external);
     }
 
-	public User(ApiClient api,
-                String id,
-                String name,
-                String email,
-                String fullName,
-                List<String> permissions,
-                String sessionId,
-                String timezone,
-                boolean readonly,
-                boolean external,
-                Startpage startpage) {
+	public User(ApiClient api, String id, String name, String email, String fullName, List<String> permissions, String sessionId, String timezone, boolean readonly, boolean external) {
         DateTimeZone timezone1 = null;
         this.api = api;
         this.id = id;
@@ -89,19 +75,15 @@ public class User {
         }
         this.readonly = readonly;
         this.external = external;
-        this.startpage = startpage;
     }
 
-    public boolean update(ChangeUserRequest request) {
+    public void update(ChangeUserRequest request) {
         try {
             api.put().path("/users/{0}", getName()).body(request).expect(Http.Status.NO_CONTENT).execute();
-            return true;
         } catch (APIException e) {
             log.error("Unable to update user", e);
-            return false;
         } catch (IOException e) {
             log.error("Unable to update user", e);
-            return false;
         }
     }
     @Deprecated
@@ -161,33 +143,8 @@ public class User {
         return external;
     }
 
-    public void setSubject(Subject subject) {
-        this.subject = subject;
-    }
-
-    public Subject getSubject() {
-        return subject;
-    }
-
-    public boolean setStartpage(Startpage startpage) {
-        ChangeUserRequest cur = new ChangeUserRequest(this);
-
-        if (startpage == null) {
-            cur.startpage.type = null;
-            cur.startpage.id = null;
-        } else {
-            cur.startpage.type = startpage.getType().toString().toLowerCase();
-            cur.startpage.id = startpage.getId();
-        }
-        return update(cur);
-    }
-
     public interface Factory {
         User fromResponse(UserResponse ur, String sessionId);
-    }
-
-    public Startpage getStartpage() {
-        return startpage;
     }
 
 }

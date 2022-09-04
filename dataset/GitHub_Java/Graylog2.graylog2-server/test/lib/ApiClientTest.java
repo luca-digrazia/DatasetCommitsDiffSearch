@@ -20,9 +20,8 @@ package lib;
 
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
-import org.graylog2.restclient.lib.ApiRequestBuilder;
-import org.graylog2.restclient.models.Node;
-import org.graylog2.restclient.models.api.responses.EmptyResponse;
+import models.Node;
+import models.api.responses.EmptyResponse;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;

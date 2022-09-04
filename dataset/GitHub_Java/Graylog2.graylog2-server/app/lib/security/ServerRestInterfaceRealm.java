@@ -18,7 +18,6 @@
  */
 package lib.security;
 
-import com.google.common.collect.Sets;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lib.APIException;
@@ -33,10 +32,8 @@ import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authc.SimpleAuthenticationInfo;
 import org.apache.shiro.authc.credential.AllowAllCredentialsMatcher;
 import org.apache.shiro.authz.AuthorizationInfo;
-import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
-import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.apache.shiro.subject.Subject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +41,6 @@ import play.api.PlayException;
 
 import java.io.IOException;
 import java.net.ConnectException;
-import java.util.List;
 
 /**
  * Shiro Realm implementation that uses a Graylog2-server as the source of the subject's information.
@@ -62,21 +58,13 @@ public class ServerRestInterfaceRealm extends AuthorizingRealm {
         setAuthenticationTokenClass(SessionIdAuthenticationToken.class);
         // when requesting the current user does not fail with the session id we have, then we are authenticated.
         setCredentialsMatcher(new AllowAllCredentialsMatcher());
-        setCachingEnabled(false);
     }
 
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
-        // the current user has been previously loaded via doGetAuthenticationInfo before, use those permissions
-        final User currentUser = UserService.current();
-        if (!principals.getPrimaryPrincipal().equals(currentUser.getName())) {
-            log.error("The requested principal is not the current user! TODO load the user");
-            return null;
-        }
-        final List<String> permissions = currentUser.getPermissions();
-        final SimpleAuthorizationInfo authzInfo = new SimpleAuthorizationInfo();
-        authzInfo.setStringPermissions(Sets.newHashSet(permissions));
-        return authzInfo;
+        // TODO currently we don't have any authorization information yet :(
+        // re-use the user data we load for the authentication info below (available from currentUser)
+        return null;
     }
 
 
@@ -96,10 +84,9 @@ public class ServerRestInterfaceRealm extends AuthorizingRealm {
             final User user = userFactory.fromResponse(response, sessionId);
 
             UserService.setCurrent(user);
-            user.setSubject(new Subject.Builder(SecurityUtils.getSecurityManager())
-                    .principals(new SimplePrincipalCollection(user.getName(), "REST realm"))
+            new Subject.Builder(SecurityUtils.getSecurityManager())
                     .authenticated(true)
-                    .buildSubject());
+                    .buildSubject();
         } catch (IOException e) {
             throw new Graylog2ServerUnavailableException("Could not connect to Graylog2 Server.", e);
         } catch (APIException e) {

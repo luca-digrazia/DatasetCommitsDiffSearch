@@ -62,17 +62,13 @@ public interface ApiRequestBuilder<T> {
 
     ApiRequestBuilder<T> session(String sessionId);
 
-    ApiRequestBuilder<T> extendSession(boolean extend);
-
     ApiRequestBuilder<T> unauthenticated();
 
     ApiRequestBuilder<T> body(ApiRequest body);
 
     ApiRequestBuilder<T> expect(int... httpStatusCodes);
 
-    ApiRequestBuilder<T> timeout(long value);
-
-    ApiRequestBuilder<T> timeout(long value, TimeUnit unit);
+    ApiRequestBuilder<T> timeout(int value, TimeUnit unit);
 
     ApiRequestBuilder<T> accept(MediaType mediaType);
 
