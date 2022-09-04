@@ -18,19 +18,18 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.regex.Matcher;
 
 /**
@@ -213,7 +212,7 @@ public class SourceFileReader {
           final ListMultimap<String, RuleDocumentationAttribute> docAttributes) {
         // End of a attribute, create RuleDocumentationAttribute object
         docAttributes.put(attributeName, RuleDocumentationAttribute.create(
-            ruleClassProvider.getRuleClassDefinition(ruleName),
+            ruleClassProvider.getRuleClassDefinition(ruleName).getClass(),
             attributeName, sb.toString(), startLineCnt, javaSourceFilePath, flags));
         sb = new StringBuilder();
         inBlazeAttributeDocs = false;
@@ -292,25 +291,29 @@ public class SourceFileReader {
       return line;
     }
 
-    for (Entry<String, String> variable : variables.entrySet()) {
+    for (Map.Entry<String, String> variable : variables.entrySet()) {
       line = line.replace("${" + variable.getKey() + "}", variable.getValue());
     }
     return line;
   }
 
+  private static BufferedReader createReader(String filePath) throws IOException {
+    File file = new File(filePath);
+    if (file.exists()) {
+      return Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8);
+    } else {
+      InputStream is = SourceFileReader.class.getResourceAsStream(filePath);
+      if (is != null) {
+        return new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+      } else {
+        return null;
+      }
+    }
+  }
+
   public static void readTextFile(String filePath, ReadAction action)
       throws BuildEncyclopediaDocException, IOException {
-    BufferedReader br = null;
-    try {
-      File file = new File(filePath);
-      if (file.exists()) {
-        br = new BufferedReader(new FileReader(file));
-      } else {
-        InputStream is = SourceFileReader.class.getResourceAsStream(filePath);
-        if (is != null) {
-          br = new BufferedReader(new InputStreamReader(is));
-        }
-      }
+    try (BufferedReader br = createReader(filePath)) {
       if (br != null) {
         String line = null;
         while ((line = br.readLine()) != null) {
@@ -318,10 +321,6 @@ public class SourceFileReader {
         }
       } else {
         System.out.println("Couldn't find file or resource: " + filePath);
-      }
-    } finally {
-      if (br != null) {
-        br.close();
       }
     }
   }

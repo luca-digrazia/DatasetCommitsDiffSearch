@@ -301,12 +301,10 @@ public class SplitZipTest {
         .add("pkg2/test3.class", "bye bye")
         .create("expected/shard2.jar");
 
-    assertWithMessage("shard1")
-        .that(fileSystem.toByteArray("out/shard1.jar"))
+    assertThat(fileSystem.toByteArray("out/shard1.jar")).named("shard1")
         .isEqualTo(fileSystem.toByteArray("expected/shard1.jar"));
 
-    assertWithMessage("shard2")
-        .that(fileSystem.toByteArray("out/shard2.jar"))
+    assertThat(fileSystem.toByteArray("out/shard2.jar")).named("shard2")
         .isEqualTo(fileSystem.toByteArray("expected/shard2.jar"));
   }
 
@@ -338,12 +336,10 @@ public class SplitZipTest {
         .add("d.class", "good night")
         .create("expected/shard2.jar");
 
-    assertWithMessage("shard1")
-        .that(fileSystem.toByteArray("out/shard1.jar"))
+    assertThat(fileSystem.toByteArray("out/shard1.jar")).named("shard1")
         .isEqualTo(fileSystem.toByteArray("expected/shard1.jar"));
 
-    assertWithMessage("shard2")
-        .that(fileSystem.toByteArray("out/shard2.jar"))
+    assertThat(fileSystem.toByteArray("out/shard2.jar")).named("shard2")
         .isEqualTo(fileSystem.toByteArray("expected/shard2.jar"));
   }
 
