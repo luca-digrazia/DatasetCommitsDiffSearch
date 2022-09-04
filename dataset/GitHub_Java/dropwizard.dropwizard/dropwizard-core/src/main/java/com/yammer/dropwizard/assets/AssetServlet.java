@@ -156,8 +156,7 @@ public class AssetServlet extends HttpServlet {
     private CachedAsset loadAsset(String key) throws URISyntaxException, IOException {
         Preconditions.checkArgument(key.startsWith(uriPath));
         final String requestedResourcePath = CharMatcher.is('/').trimFrom(key.substring(uriPath.length()));
-        final String absoluteRequestedResourcePath = CharMatcher.is('/').trimFrom(
-        		this.resourcePath + requestedResourcePath);
+        final String absoluteRequestedResourcePath = this.resourcePath + requestedResourcePath;
         
         URL requestedResourceURL = Resources.getResource(absoluteRequestedResourcePath);
 
