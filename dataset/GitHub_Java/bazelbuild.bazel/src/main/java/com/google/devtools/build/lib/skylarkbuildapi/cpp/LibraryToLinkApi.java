@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
@@ -23,8 +22,8 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
  * a library identifier.
  */
 @SkylarkModule(
-    name = "OldLibraryToLink",
+    name = "LibraryToLink",
     category = SkylarkModuleCategory.BUILTIN,
     documented = false,
     doc = "A library the user can link to.")
-public interface LibraryToLinkApi<FileT extends FileApi> extends LinkerInputApi<FileT> {}
+public interface LibraryToLinkApi extends LinkerInputApi {}

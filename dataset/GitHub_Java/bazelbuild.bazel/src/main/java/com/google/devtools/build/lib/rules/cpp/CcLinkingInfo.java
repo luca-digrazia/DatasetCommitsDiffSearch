@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import java.util.Collection;
 import javax.annotation.Nullable;
 
 /** Wrapper for every C++ linking provider. */
@@ -47,10 +46,10 @@ public final class CcLinkingInfo extends NativeInfo implements CcLinkingInfoApi 
               /* numMandatoryNamedOnly= */ 0,
               /* starArg= */ false,
               /* kwArg= */ false,
-              "static_mode_params_for_dynamic_library",
-              "static_mode_params_for_executable",
-              "dynamic_mode_params_for_dynamic_library",
-              "dynamic_mode_params_for_executable",
+              "static_shared_params",
+              "static_no_shared_params",
+              "no_static_shared_params",
+              "no_static_no_shared_params",
               "cc_runfiles"),
           /* defaultValues= */ ImmutableList.of(
               Runtime.NONE, Runtime.NONE, Runtime.NONE, Runtime.NONE, Runtime.NONE),
@@ -79,16 +78,16 @@ public final class CcLinkingInfo extends NativeInfo implements CcLinkingInfoApi 
             Object[] args, Environment env, Location loc) throws EvalException {
           CcCommon.checkLocationWhitelisted(loc);
           int i = 0;
-          CcLinkParams staticModeParamsForDynamicLibrary = (CcLinkParams) nullIfNone(args[i++]);
-          CcLinkParams staticModeParamsForExecutable = (CcLinkParams) nullIfNone(args[i++]);
-          CcLinkParams dynamicModeParamsForDynamicLibrary = (CcLinkParams) nullIfNone(args[i++]);
-          CcLinkParams dynamicModeParamsForExecutable = (CcLinkParams) nullIfNone(args[i++]);
+          CcLinkParams staticSharedParams = (CcLinkParams) nullIfNone(args[i++]);
+          CcLinkParams staticNoSharedParams = (CcLinkParams) nullIfNone(args[i++]);
+          CcLinkParams noStaticSharedParams = (CcLinkParams) nullIfNone(args[i++]);
+          CcLinkParams noStaticNoSharedParams = (CcLinkParams) nullIfNone(args[i++]);
           CcRunfiles ccRunfiles = (CcRunfiles) nullIfNone(args[i++]);
           CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-          if (staticModeParamsForDynamicLibrary != null) {
-            if (staticModeParamsForExecutable == null
-                || dynamicModeParamsForDynamicLibrary == null
-                || dynamicModeParamsForExecutable == null) {
+          if (staticSharedParams != null) {
+            if (staticNoSharedParams == null
+                || noStaticSharedParams == null
+                || noStaticNoSharedParams == null) {
               throw new EvalException(
                   loc,
                   "Every CcLinkParams parameter must be passed to CcLinkingInfo "
@@ -96,10 +95,10 @@ public final class CcLinkingInfo extends NativeInfo implements CcLinkingInfoApi 
             }
             ccLinkingInfoBuilder.setCcLinkParamsStore(
                 new CcLinkParamsStore(
-                    staticModeParamsForDynamicLibrary,
-                    staticModeParamsForExecutable,
-                    dynamicModeParamsForDynamicLibrary,
-                    dynamicModeParamsForExecutable));
+                    staticSharedParams,
+                    staticNoSharedParams,
+                    noStaticSharedParams,
+                    noStaticNoSharedParams));
           }
           // TODO(plf): The CcDynamicLibrariesForRuntime provider can be removed perhaps. Do not
           // add to the API until we know for sure. The CcRunfiles provider is already in the API
@@ -131,37 +130,6 @@ public final class CcLinkingInfo extends NativeInfo implements CcLinkingInfoApi 
 
   public CcLinkParamsStore getCcLinkParamsStore() {
     return ccLinkParamsStore;
-  }
-
-  @Override
-  public CcLinkParams getStaticModeParamsForDynamicLibrary() {
-    return ccLinkParamsStore.get(/* linkingStatically= */ true, /* linkShared= */ true);
-  }
-
-  @Override
-  public CcLinkParams getStaticModeParamsForExecutable() {
-    return ccLinkParamsStore.get(/* linkingStatically= */ true, /* linkShared= */ false);
-  }
-
-  @Override
-  public CcLinkParams getDynamicModeParamsForDynamicLibrary() {
-    return ccLinkParamsStore.get(/* linkingStatically= */ false, /* linkShared= */ true);
-  }
-
-  @Override
-  public CcLinkParams getDynamicModeParamsForExecutable() {
-    return ccLinkParamsStore.get(/* linkingStatically= */ false, /* linkShared= */ false);
-  }
-
-  public static CcLinkingInfo merge(Collection<CcLinkingInfo> ccLinkingInfos) {
-    CcLinkingInfo.Builder builder = new CcLinkingInfo.Builder();
-    builder.setCcLinkParamsStore(
-        CcLinkParamsStore.merge(
-            ccLinkingInfos
-                .stream()
-                .map(CcLinkingInfo::getCcLinkParamsStore)
-                .collect(ImmutableList.toImmutableList())));
-    return builder.build();
   }
 
   @Override
