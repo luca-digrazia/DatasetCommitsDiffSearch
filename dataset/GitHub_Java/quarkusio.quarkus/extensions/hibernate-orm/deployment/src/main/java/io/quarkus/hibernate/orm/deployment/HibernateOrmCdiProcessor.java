@@ -1,14 +1,13 @@
 package io.quarkus.hibernate.orm.deployment;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
 import javax.enterprise.inject.Default;
 import javax.inject.Singleton;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
 
-import org.hibernate.Session;
-import org.hibernate.SessionFactory;
 import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
@@ -31,9 +30,14 @@ import io.quarkus.hibernate.orm.runtime.PersistenceUnitUtil;
 
 public class HibernateOrmCdiProcessor {
 
-    private static final List<DotName> SESSION_FACTORY_EXPOSED_TYPES = Arrays.asList(ClassNames.ENTITY_MANAGER_FACTORY,
-            ClassNames.SESSION_FACTORY);
-    private static final List<DotName> SESSION_EXPOSED_TYPES = Arrays.asList(ClassNames.ENTITY_MANAGER, ClassNames.SESSION);
+    private static final DotName PERSISTENCE_UNIT_QUALIFIER = DotName.createSimple(PersistenceUnit.class.getName());
+
+    private static final DotName ENTITY_MANAGER_FACTORY = DotName.createSimple(EntityManagerFactory.class.getName());
+    private static final DotName JPA_PERSISTENCE_UNIT = DotName.createSimple(javax.persistence.PersistenceUnit.class.getName());
+
+    private static final DotName ENTITY_MANAGER = DotName.createSimple(EntityManager.class.getName());
+    private static final DotName JPA_PERSISTENCE_CONTEXT = DotName
+            .createSimple(javax.persistence.PersistenceContext.class.getName());
 
     @BuildStep
     AnnotationsTransformerBuildItem convertJpaResourceAnnotationsToQualifier(
@@ -52,17 +56,15 @@ public class HibernateOrmCdiProcessor {
             public void transform(TransformationContext transformationContext) {
                 FieldInfo field = transformationContext.getTarget().asField();
 
-                DotName fieldTypeName = field.type().name();
-                if (!SESSION_EXPOSED_TYPES.contains(fieldTypeName)
-                        && !SESSION_FACTORY_EXPOSED_TYPES.contains(fieldTypeName)) {
+                if (!ENTITY_MANAGER.equals(field.type().name()) && !ENTITY_MANAGER_FACTORY.equals(field.type().name())) {
                     return;
                 }
 
                 DotName jpaAnnotation;
-                if (field.hasAnnotation(ClassNames.JPA_PERSISTENCE_UNIT)) {
-                    jpaAnnotation = ClassNames.JPA_PERSISTENCE_UNIT;
-                } else if (field.hasAnnotation(ClassNames.JPA_PERSISTENCE_CONTEXT)) {
-                    jpaAnnotation = ClassNames.JPA_PERSISTENCE_CONTEXT;
+                if (field.hasAnnotation(JPA_PERSISTENCE_UNIT)) {
+                    jpaAnnotation = JPA_PERSISTENCE_UNIT;
+                } else if (field.hasAnnotation(JPA_PERSISTENCE_CONTEXT)) {
+                    jpaAnnotation = JPA_PERSISTENCE_CONTEXT;
                 } else {
                     return;
                 }
@@ -81,7 +83,7 @@ public class HibernateOrmCdiProcessor {
                     // in this case, we consider it the default too if the name matches
                     transformation.add(DotNames.DEFAULT);
                 } else {
-                    transformation.add(ClassNames.QUARKUS_PERSISTENCE_UNIT,
+                    transformation.add(PERSISTENCE_UNIT_QUALIFIER,
                             AnnotationValue.createStringValue("value", persistenceUnitNameAnnotationValue.asString()));
                 }
                 transformation.done();
@@ -116,15 +118,15 @@ public class HibernateOrmCdiProcessor {
             syntheticBeanBuildItemBuildProducer
                     .produce(createSyntheticBean(persistenceUnitName,
                             true,
-                            SessionFactory.class, SESSION_FACTORY_EXPOSED_TYPES,
-                            recorder.sessionFactorySupplier(persistenceUnitName),
+                            EntityManagerFactory.class,
+                            recorder.entityManagerFactorySupplier(persistenceUnitName),
                             true));
 
             syntheticBeanBuildItemBuildProducer
                     .produce(createSyntheticBean(persistenceUnitName,
                             true,
-                            Session.class, SESSION_EXPOSED_TYPES,
-                            recorder.sessionSupplier(persistenceUnitName),
+                            EntityManager.class,
+                            recorder.entityManagerSupplier(persistenceUnitName),
                             false));
 
             return;
@@ -136,30 +138,26 @@ public class HibernateOrmCdiProcessor {
             syntheticBeanBuildItemBuildProducer
                     .produce(createSyntheticBean(persistenceUnitName,
                             PersistenceUnitUtil.isDefaultPersistenceUnit(persistenceUnitName),
-                            SessionFactory.class, SESSION_FACTORY_EXPOSED_TYPES,
-                            recorder.sessionFactorySupplier(persistenceUnitName),
+                            EntityManagerFactory.class,
+                            recorder.entityManagerFactorySupplier(persistenceUnitName),
                             true));
 
             syntheticBeanBuildItemBuildProducer
                     .produce(createSyntheticBean(persistenceUnitName,
                             PersistenceUnitUtil.isDefaultPersistenceUnit(persistenceUnitName),
-                            Session.class, SESSION_EXPOSED_TYPES,
-                            recorder.sessionSupplier(persistenceUnitName),
+                            EntityManager.class,
+                            recorder.entityManagerSupplier(persistenceUnitName),
                             false));
         }
     }
 
     private static <T> SyntheticBeanBuildItem createSyntheticBean(String persistenceUnitName, boolean isDefaultPersistenceUnit,
-            Class<T> type, List<DotName> allExposedTypes, Supplier<T> supplier, boolean defaultBean) {
+            Class<T> type, Supplier<T> supplier, boolean defaultBean) {
         SyntheticBeanBuildItem.ExtendedBeanConfigurator configurator = SyntheticBeanBuildItem
                 .configure(type)
                 .scope(Singleton.class)
                 .unremovable()
                 .supplier(supplier);
-
-        for (DotName exposedType : allExposedTypes) {
-            configurator.addType(exposedType);
-        }
 
         if (defaultBean) {
             configurator.defaultBean();
