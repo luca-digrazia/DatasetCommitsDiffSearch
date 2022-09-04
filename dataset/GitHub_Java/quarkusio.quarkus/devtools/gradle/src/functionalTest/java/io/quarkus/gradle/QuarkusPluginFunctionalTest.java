@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import io.quarkus.cli.commands.CreateProject;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
@@ -74,16 +73,13 @@ public class QuarkusPluginFunctionalTest {
     }
 
     private void createProject(SourceType sourceType) throws IOException {
-        Map<String,Object> context = new HashMap<>();
-        context.put("path", "/greeting");
         assertThat(new CreateProject(new FileProjectWriter(projectRoot))
                            .groupId("com.acme.foo")
                            .artifactId("foo")
                            .version("1.0.0-SNAPSHOT")
                            .buildTool(BuildTool.GRADLE)
-                           .className("org.acme.GreetingResource")
                            .sourceType(sourceType)
-                           .doCreateProject(context))
+                           .doCreateProject(new HashMap<>()))
                 .withFailMessage("Project was not created")
                 .isTrue();
     }
