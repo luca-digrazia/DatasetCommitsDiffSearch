@@ -47,10 +47,6 @@ public class AndroidDataContext implements AndroidDataContextApi {
   private static final String ANNOTATE_R_FIELDS_FROM_TRANSITIVE_DEPS =
       "annotate_r_fields_from_transitive_deps";
 
-  // If specified, omit resources from transitive dependencies when generating Android R classes.
-  private static final String OMIT_TRANSITIVE_RESOURCES_FROM_ANDROID_R_CLASSES =
-      "android_resources_strict_deps";
-
   private final Label label;
   private final RuleContext ruleContext;
   private final FilesToRunProvider busybox;
@@ -199,9 +195,5 @@ public class AndroidDataContext implements AndroidDataContextApi {
 
   public boolean annotateRFieldsFromTransitiveDeps() {
     return ruleContext.getFeatures().contains(ANNOTATE_R_FIELDS_FROM_TRANSITIVE_DEPS);
-  }
-
-  boolean omitTransitiveResourcesFromAndroidRClasses() {
-    return ruleContext.getFeatures().contains(OMIT_TRANSITIVE_RESOURCES_FROM_ANDROID_R_CLASSES);
   }
 }

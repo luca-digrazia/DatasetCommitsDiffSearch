@@ -55,9 +55,7 @@ public class MergedAndroidResources extends ParsedAndroidResources {
             .withDependencies(resourceDeps)
             .setThrowOnResourceConflict(dataContext.throwOnResourceConflict())
             .setUseCompiledMerge(useCompiledMerge)
-            .setAnnotateRFieldsFromTransitiveDeps(dataContext.annotateRFieldsFromTransitiveDeps())
-            .setOmitTransitiveDependencies(
-                dataContext.omitTransitiveResourcesFromAndroidRClasses());
+            .setAnnotateRFieldsFromTransitiveDeps(dataContext.annotateRFieldsFromTransitiveDeps());
 
     parsed.asDataBindingContext().supplyLayoutInfo(builder::setDataBindingInfoZip);
 
