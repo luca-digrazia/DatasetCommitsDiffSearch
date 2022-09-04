@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,156 +15,516 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package controllers;
 
+import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.gson.Gson;
-import lib.APIException;
-import lib.Api;
 import lib.BreadcrumbList;
-import lib.ExclusiveInputException;
-import models.Input;
-import models.Node;
-import models.api.responses.system.InputTypeSummaryResponse;
-import models.api.results.MessageResult;
-import play.Logger;
+import lib.security.RestPermissions;
+import org.graylog2.restclient.lib.APIException;
+import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.lib.ExclusiveInputException;
+import org.graylog2.restclient.lib.ServerNodes;
+import org.graylog2.restclient.models.ClusterEntity;
+import org.graylog2.restclient.models.Input;
+import org.graylog2.restclient.models.InputService;
+import org.graylog2.restclient.models.InputState;
+import org.graylog2.restclient.models.Node;
+import org.graylog2.restclient.models.NodeService;
+import org.graylog2.restclient.models.Radio;
+import org.graylog2.restclient.models.api.requests.inputs.LaunchInputRequest;
+import org.graylog2.restclient.models.api.responses.system.InputLaunchResponse;
+import org.graylog2.restclient.models.api.responses.system.InputTypeSummaryResponse;
+import play.data.Form;
+import play.mvc.BodyParser;
 import play.mvc.Result;
+import views.helpers.Permissions;
 
+import javax.inject.Inject;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class InputsController extends AuthenticatedController {
 
-    public static Result manage(String nodeId) {
-        // TODO: account field attributes using JS (greater than, listen_address, ...)
-        // TODO: persist inputs
+    public static final Form<LaunchInputRequest> launchInputRequestForm = Form.form(LaunchInputRequest.class);
 
-        Node node = Node.fromId(nodeId);
+    private final NodeService nodeService;
+    private final InputService inputService;
+    private final ServerNodes servernodes;
 
-        if (node == null) {
-            String message = "Did not find node.";
-            return status(404, views.html.errors.error.render(message, new RuntimeException(), request()));
-        }
+    @Inject
+    public InputsController(NodeService nodeService, InputService inputService, ServerNodes servernodes) {
+        this.nodeService = nodeService;
+        this.inputService = inputService;
+        this.servernodes = servernodes;
+    }
 
-        BreadcrumbList bc = new BreadcrumbList();
-        bc.addCrumb("System", routes.SystemController.index(0));
-        bc.addCrumb("Nodes", routes.SystemController.nodes());
-        bc.addCrumb(node.getShortNodeId(), routes.SystemController.node(node.getNodeId()));
-        bc.addCrumb("Inputs", routes.InputsController.manage(node.getNodeId()));
-
+    public Result index() {
         try {
-            return ok(views.html.system.inputs.manage.render(
+            if (!Permissions.isPermitted(RestPermissions.INPUTS_READ)) {
+                return redirect(routes.StartpageController.redirect());
+            }
+            final Map<Input, Map<ClusterEntity, InputState>> globalInputs = Maps.newHashMap();
+            final List<InputState> localInputs = Lists.newArrayList();
+
+            for (InputState inputState : inputService.loadAllInputStates()) {
+                if (inputState.getInput().getGlobal() == false)
+                    localInputs.add(inputState);
+            }
+
+            for (Map.Entry<Input, Map<ClusterEntity, InputState>> entry : inputService.loadAllInputStatesByInput().entrySet()) {
+                if (entry.getKey().getGlobal()) {
+                    final SortedMap<ClusterEntity, InputState> inputStates = ImmutableSortedMap.copyOf(entry.getValue());
+                    globalInputs.put(entry.getKey(), inputStates);
+                }
+            }
+
+            List<Node> nodes = servernodes.all();
+            List<Radio> radios = Lists.newArrayList();
+            radios.addAll(nodeService.radios().values());
+
+            BreadcrumbList bc = new BreadcrumbList();
+            bc.addCrumb("System", routes.SystemController.index(0));
+            bc.addCrumb("Inputs", routes.InputsController.index());
+
+            return ok(views.html.system.inputs.index.render(
                     currentUser(),
                     bc,
-                    node,
-                    Input.getAllTypeInformation(node)
+                    globalInputs,
+                    localInputs,
+                    nodes,
+                    radios,
+                    inputService.getAllInputTypeInformation(),
+                    nodeService.loadMasterNode()
             ));
         } catch (IOException e) {
-            return status(500, views.html.errors.error.render(Api.ERROR_MSG_IO, e, request()));
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
             String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
         }
     }
 
-    public static Result launch(String nodeId) {
-        Map<String, Object> configuration = Maps.newHashMap();
-        Map<String, String[]> form = request().body().asFormUrlEncoded();
+    public Result manage(String nodeId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_READ)) {
+            return redirect(routes.StartpageController.redirect());
+        }
 
-        String inputType = form.get("type")[0];
-        String inputTitle = form.get("title")[0];
+        final Map<Input, Map<ClusterEntity, InputState>> globalInputs = Maps.newHashMap();
+        final List<InputState> localInputs = Lists.newArrayList();
 
         try {
-            InputTypeSummaryResponse inputInfo = Input.getTypeInformation(Node.fromId(nodeId), inputType);
+            Node node = nodeService.loadNode(nodeId);
 
-            for (Map.Entry<String, String[]> f : form.entrySet()) {
-                if (!f.getKey().startsWith("configuration_")) {
-                    continue;
+            if (node == null) {
+                String message = "Did not find node.";
+                return status(404, views.html.errors.error.render(message, new RuntimeException(), request()));
+            }
+
+            for (InputState inputState : inputService.loadAllInputStates(node)) {
+                if (inputState.getInput().getGlobal() == false)
+                    localInputs.add(inputState);
+                else {
+                    Map<ClusterEntity, InputState> clusterEntityInputStateMap = Maps.newHashMap();
+                    clusterEntityInputStateMap.put(node, inputState);
+                    globalInputs.put(inputState.getInput(), clusterEntityInputStateMap);
                 }
+            }
 
-                String key = f.getKey().substring("configuration_".length());
-                Object value;
+            BreadcrumbList bc = new BreadcrumbList();
+            bc.addCrumb("System", routes.SystemController.index(0));
+            bc.addCrumb("Nodes", routes.NodesController.nodes());
+            bc.addCrumb(node.getShortNodeId(), routes.NodesController.node(node.getNodeId()));
+            bc.addCrumb("Inputs", routes.InputsController.manage(node.getNodeId()));
 
-                if (f.getValue().length > 0) {
-                    String stringValue = f.getValue()[0];
+            return ok(views.html.system.inputs.manage.render(
+                    currentUser(),
+                    bc,
+                    node,
+                    globalInputs,
+                    localInputs,
+                    node.getAllInputTypeInformation()
+            ));
+        } catch (IOException e) {
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
+        } catch (NodeService.NodeNotFoundException e) {
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
+        }
+    }
 
-                    // Decide what to cast to. (string, bool, number)
-                    switch((String) inputInfo.requestedConfiguration.get(key).get("type")) {
-                        case "text":
-                            value = stringValue;
-                            break;
-                        case "number":
-                            value = Integer.parseInt(stringValue);
-                            break;
-                        case "boolean":
-                            value = stringValue.equals("true");
-                            break;
-                        case "dropdown":
-                            value = stringValue;
-                            break;
-                        default: continue;
+    public Result manageRadio(String radioId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_READ)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+
+        final Map<Input, Map<ClusterEntity, InputState>> globalInputs = Maps.newHashMap();
+        final List<InputState> localInputs = Lists.newArrayList();
+
+        try {
+            Radio radio = nodeService.loadRadio(radioId);
+
+            if (radio == null) {
+                String message = "Did not find radio.";
+                return status(404, views.html.errors.error.render(message, new RuntimeException(), request()));
+            }
+
+            for (InputState inputState : inputService.loadAllInputStates(radio)) {
+                if (!inputState.getInput().getGlobal())
+                    localInputs.add(inputState);
+                else {
+                    Map<ClusterEntity, InputState> clusterEntityInputStateMap = Maps.newHashMap();
+                    clusterEntityInputStateMap.put(radio, inputState);
+                    globalInputs.put(inputState.getInput(), clusterEntityInputStateMap);
+                }
+            }
+
+            BreadcrumbList bc = new BreadcrumbList();
+            bc.addCrumb("System", routes.SystemController.index(0));
+            bc.addCrumb("Nodes", routes.NodesController.nodes());
+            bc.addCrumb(radio.getShortNodeId(), routes.RadiosController.show(radio.getId()));
+            bc.addCrumb("Inputs", routes.InputsController.manageRadio(radio.getId()));
+
+            return ok(views.html.system.inputs.manage_radio.render(
+                    currentUser(),
+                    bc,
+                    radio,
+                    globalInputs,
+                    localInputs,
+                    radio.getAllInputTypeInformation(),
+                    nodeService.loadMasterNode()
+            ));
+        } catch (IOException e) {
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
+        } catch (NodeService.NodeNotFoundException e) {
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
+        }
+    }
+
+    protected Map<String, Object> extractConfiguration(Map<String, Object> form, InputTypeSummaryResponse inputInfo)
+            throws IllegalArgumentException {
+        Map<String, Object> configuration = Maps.newHashMapWithExpectedSize(form.size());
+        for (final Map.Entry<String, Object> entry : form.entrySet()) {
+            final Object value;
+            // Decide what to cast to. (string, bool, number)
+            switch ((String) inputInfo.requestedConfiguration.get(entry.getKey()).get("type")) {
+                case "text":
+                    value = String.valueOf(entry.getValue());
+                    break;
+                case "number":
+                    try {
+                        value = Integer.parseInt(String.valueOf(entry.getValue()));
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException(e);
                     }
+                    break;
+                case "boolean":
+                    value = "true".equals(String.valueOf(entry.getValue()));
+                    break;
+                case "dropdown":
+                    value = String.valueOf(entry.getValue());
+                    break;
+                default:
+                    value = entry.getValue();
+            }
 
-                } else {
-                    continue;
-                }
+            configuration.put(entry.getKey(), value);
+        }
 
-                configuration.put(key, value);
+        return configuration;
+    }
+
+    public Result launch() {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+
+        final Form<LaunchInputRequest> form = launchInputRequestForm.bindFromRequest();
+        final LaunchInputRequest request = form.get();
+        final String nodeIdParam = request.node;
+
+        try {
+            final InputTypeSummaryResponse inputInfo = getInputInfo(nodeIdParam, request);
+
+            final Map<String, Object> configuration;
+
+            try {
+                configuration = extractConfiguration(request.configuration, inputInfo);
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException("Invalid configuration for input " + request.title, e);
             }
 
             try {
-                Input.launch(Node.fromId(nodeId), inputTitle, inputType, configuration, currentUser().getId(), inputInfo.isExclusive);
+                final ClusterEntity node = getClusterEntity(nodeIdParam, request);
+                final Boolean result;
+                if (request.global) {
+                    result = (inputService.launchGlobal(request.title, request.type, configuration, inputInfo.isExclusive) != null);
+                } else {
+                    final InputLaunchResponse response = nodeService.loadMasterNode().launchInput(request.title, request.type, request.global, configuration, inputInfo.isExclusive, nodeIdParam);
+                    result = node.launchExistingInput(response.id);
+                }
+
+                if (!result) {
+                    return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, new RuntimeException("Could not launch input " + request.title), request()));
+                }
             } catch (ExclusiveInputException e) {
                 flash("error", "This input is exclusive and already running.");
-                return redirect(routes.InputsController.manage(nodeId));
+                return redirect(routes.InputsController.index());
             }
 
-            return redirect(routes.InputsController.manage(nodeId));
+            return redirect(routes.InputsController.index());
         } catch (IOException e) {
-            return status(500, views.html.errors.error.render(Api.ERROR_MSG_IO, e, request()));
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
             String message = "Could not launch input. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
+        } catch (NodeService.NodeNotFoundException e) {
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
     }
 
-    public static Result terminate(String nodeId, String inputId) {
-        try {
-            Input.terminate(Node.fromId(nodeId), inputId);
+    private InputTypeSummaryResponse getInputInfo(String nodeIdParam, LaunchInputRequest request) throws NodeService.NodeNotFoundException, APIException, IOException {
+        final ClusterEntity node = getClusterEntity(nodeIdParam, request);
 
-            return redirect(routes.InputsController.manage(nodeId));
+        if (node == null)
+            throw new RuntimeException("Could not find Node to launch input on!");
+
+        return node.getInputTypeInformation(request.type);
+    }
+
+    private ClusterEntity getClusterEntity(String nodeIdParam, LaunchInputRequest request) throws NodeService.NodeNotFoundException, APIException, IOException {
+        ClusterEntity node = null;
+        String nodeId = null;
+        if (nodeIdParam != null && !nodeIdParam.isEmpty()) {
+            nodeId = nodeIdParam;
+        } else {
+            if (request.node != null && !request.node.isEmpty()) {
+                nodeId = request.node;
+            }
+        }
+
+        if (request.global)
+            node = nodeService.loadMasterNode();
+        else if (nodeId != null) {
+            try {
+                node = nodeService.loadNode(nodeId);
+            } catch (NodeService.NodeNotFoundException e) {
+                node = nodeService.loadRadio(nodeId);
+            }
+        }
+
+        return node;
+    }
+
+    public Result update(String inputId) throws APIException, NodeService.NodeNotFoundException, IOException {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+
+        final Form<LaunchInputRequest> form = launchInputRequestForm.bindFromRequest();
+        final LaunchInputRequest request = form.get();
+
+        final String nodeIdParam;
+        if (request.global)
+            nodeIdParam = nodeService.loadMasterNode().getNodeId();
+        else
+            nodeIdParam = request.node;
+
+        final InputTypeSummaryResponse inputInfo = getInputInfo(nodeIdParam, request);
+
+        final Map<String, Object> configuration;
+
+        try {
+            configuration = extractConfiguration(request.configuration, inputInfo);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid configuration for input " + request.title, e);
+        }
+
+        try {
+            final Node node = nodeService.loadMasterNode();
+            final InputLaunchResponse response = node.updateInput(inputId, request.title, request.type, request.global, configuration, request.node);
+            inputService.restart(inputId);
+        } catch (APIException | IOException e) {
+            e.printStackTrace();
+        }
+
+        return redirect(routes.InputsController.index());
+    }
+
+    public Result terminate(String nodeId, String inputId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_TERMINATE)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+
+        try {
+            if (!nodeService.loadNode(nodeId).terminateInput(inputId)) {
+                flash("error", "Could not terminate input " + inputId);
+            }
+        } catch (NodeService.NodeNotFoundException e) {
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
+        }
+
+        return redirect(routes.InputsController.index());
+    }
+
+    public Result terminateRadio(String radioId, String inputId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_TERMINATE)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+        try {
+            if (!nodeService.loadRadio(radioId).terminateInput(inputId)) {
+                flash("error", "Could not terminate input " + inputId);
+            }
+        } catch (NodeService.NodeNotFoundException e) {
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
+        }
+
+        return redirect(routes.InputsController.index());
+    }
+
+    public Result terminateGlobal(String inputId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_TERMINATE)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+        Map<ClusterEntity, Boolean> results = inputService.terminateGlobal(inputId);
+
+        if (results.values().contains(false)) {
+            List<ClusterEntity> failingNodes = Lists.newArrayList();
+
+            for (Map.Entry<ClusterEntity, Boolean> entry : results.entrySet())
+                if (!entry.getValue())
+                    failingNodes.add(entry.getKey());
+
+            flash("error", "Could not terminate input on nodes " + Joiner.on(", ").join(failingNodes));
+        }
+
+        return redirect(routes.InputsController.index());
+
+    }
+
+    public Result stop(String inputId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_STOP)) {
+            flash("error", "You are not permitted to stop this input.");
+            return redirect(routes.InputsController.index());
+        }
+
+        try {
+            inputService.stop(inputId);
         } catch (IOException e) {
-            return status(500, views.html.errors.error.render(Api.ERROR_MSG_IO, e, request()));
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
-            String message = "Could not send terminate request. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
+            String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
         }
+
+        return redirect(routes.InputsController.index());
     }
 
-    public static Result recentMessage(String nodeId, String inputId) {
+    public Result start(String inputId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_START)) {
+            flash("error", "You are not permitted to stop this input.");
+            return redirect(routes.InputsController.index());
+        }
+
         try {
-            Node node = Node.fromId(nodeId);
-            MessageResult recentlyReceivedMessage = node.getInput(inputId).getRecentlyReceivedMessage(nodeId);
-
-            if (recentlyReceivedMessage == null) {
-                return notFound();
-            }
-
-            Map<String, Object> result = Maps.newHashMap();
-            result.put("id", recentlyReceivedMessage.getId());
-            result.put("fields", recentlyReceivedMessage.getFields());
-
-            return ok(new Gson().toJson(result)).as("application/json");
+            inputService.start(inputId);
         } catch (IOException e) {
-            return status(500);
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
-            return status(e.getHttpCode());
+            String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
+        }
+
+        return redirect(routes.InputsController.index());
+    }
+
+    public Result restart(String inputId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_START) && !Permissions.isPermitted(RestPermissions.INPUTS_STOP)) {
+            flash("error", "You are not permitted to stop this input.");
+            return redirect(routes.InputsController.index());
+        }
+
+        try {
+            inputService.restart(inputId);
+        } catch (IOException e) {
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
+        }
+
+        return redirect(routes.InputsController.index());
+    }
+
+    @BodyParser.Of(BodyParser.FormUrlEncoded.class)
+    public Result addStaticField(String nodeId, String inputId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT, inputId)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+
+        Map<String, String[]> form = request().body().asFormUrlEncoded();
+
+        if (form.get("key") == null || form.get("value") == null) {
+            flash("error", "Missing parameters.");
+            return redirect(routes.InputsController.index());
+        }
+
+        String key = form.get("key")[0];
+        String value = form.get("value")[0];
+
+        try {
+            nodeService.loadNode(nodeId).getInput(inputId).addStaticField(key, value);
+            return redirect(routes.InputsController.index());
+        } catch (IOException e) {
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Could not add static field. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
+        } catch (NodeService.NodeNotFoundException e) {
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
     }
 
+    public Result addStaticFieldGlobal(String inputId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT, inputId)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+
+        return addStaticField(servernodes.master().getNodeId(), inputId);
+    }
+
+    public Result removeStaticField(String nodeId, String inputId, String key) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT, inputId)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+
+        try {
+            Node node;
+            if (nodeId != null && !nodeId.isEmpty())
+                node = nodeService.loadNode(nodeId);
+            else
+                node = nodeService.loadMasterNode();
+
+            node.getInput(inputId).removeStaticField(key);
+
+            return redirect(routes.InputsController.index());
+        } catch (IOException e) {
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Could not delete static field. We expected HTTP 204, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
+        } catch (NodeService.NodeNotFoundException e) {
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
+        }
+    }
 }
