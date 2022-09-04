@@ -277,11 +277,11 @@ public abstract class Type<T> {
     }
 
     public ConversionException(Type<?> type, Object value, @Nullable Object what) {
-      super(message(type, value, what));
+      super(null, message(type, value, what));
     }
 
     public ConversionException(String message) {
-      super(message);
+      super(null, message);
     }
   }
 
