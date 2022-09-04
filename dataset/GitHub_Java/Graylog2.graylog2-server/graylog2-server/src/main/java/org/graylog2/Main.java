@@ -97,11 +97,6 @@ public final class Main {
             LOG.error("Invalid configuration", e);
             System.exit(1);
         }
-
-        if (configuration.getPasswordSecret().isEmpty()) {
-            LOG.error("No password secret set. Please define password_secret in your graylog2.conf.");
-            System.exit(1);
-        }
         
         if (commandLineArguments.isInstallPlugin()) {
             System.out.println("Plugin installation requested.");
@@ -117,14 +112,11 @@ public final class Main {
         }
 
         // Are we in debug mode?
-        Level logLevel = Level.INFO;
         if (commandLineArguments.isDebug()) {
             LOG.info("Running in Debug mode");
-            logLevel = Level.DEBUG;
+            org.apache.log4j.Logger.getRootLogger().setLevel(Level.ALL);
+            org.apache.log4j.Logger.getLogger(Main.class.getPackage().getName()).setLevel(Level.ALL);
         }
-
-        org.apache.log4j.Logger.getRootLogger().setLevel(logLevel);
-        org.apache.log4j.Logger.getLogger(Main.class.getPackage().getName()).setLevel(logLevel);
 
         LOG.info("Graylog2 {} starting up. (JRE: {})", Core.GRAYLOG2_VERSION, Tools.getSystemInformation());
 
