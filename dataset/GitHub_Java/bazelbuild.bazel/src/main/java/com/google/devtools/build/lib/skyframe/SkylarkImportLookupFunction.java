@@ -575,7 +575,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
 
   /** Creates the Extension to be imported. */
   private Extension createExtension(
-      StarlarkFile file,
+      StarlarkFile ast,
       Label extensionLabel,
       Map<String, Extension> importMap,
       StarlarkSemantics starlarkSemantics,
@@ -588,20 +588,19 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     // Skylark RuleClass. For example changes to comments or unused functions can modify the hash.
     // A more accurate - however much more complicated - way would be to calculate a hash based on
     // the transitive closure of the accessible AST nodes.
-    // [False! Any change to the line numbering is a semantic change -adonovan.]
     PathFragment extensionFile = extensionLabel.toPathFragment();
     try (Mutability mutability = Mutability.create("importing %s", extensionFile)) {
-      StarlarkThread thread =
+      StarlarkThread extensionThread =
           ruleClassProvider.createRuleClassStarlarkThread(
               extensionLabel,
               mutability,
               starlarkSemantics,
               eventHandler,
-              file.getContentHashCode(),
+              ast.getContentHashCode(),
               importMap,
               repositoryMapping);
-      thread.setupOverride("native", packageFactory.getNativeModule(inWorkspace));
-      execAndExport(file, extensionLabel, eventHandler, thread);
+      extensionThread.setupOverride("native", packageFactory.getNativeModule(inWorkspace));
+      execAndExport(ast, extensionLabel, eventHandler, extensionThread);
 
       Event.replayEventsOn(env.getListener(), eventHandler.getEvents());
       for (Postable post : eventHandler.getPosts()) {
@@ -610,7 +609,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
       if (eventHandler.hasErrors()) {
         throw SkylarkImportFailedException.errors(extensionFile);
       }
-      return new Extension(thread);
+      return new Extension(extensionThread);
     }
   }
 
