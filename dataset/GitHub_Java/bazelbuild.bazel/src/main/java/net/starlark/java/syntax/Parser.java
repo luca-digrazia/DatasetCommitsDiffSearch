@@ -38,7 +38,7 @@ final class Parser {
     final ImmutableList<Statement> statements;
 
     /** The comments from the parsed file. */
-    final List<Comment> comments;
+    final ImmutableList<Comment> comments;
 
     // Errors encountered during scanning or parsing.
     // These lists are ultimately owned by StarlarkFile.
@@ -47,7 +47,7 @@ final class Parser {
     private ParseResult(
         FileLocations locs,
         ImmutableList<Statement> statements,
-        List<Comment> comments,
+        ImmutableList<Comment> comments,
         List<SyntaxError> errors) {
       this.locs = locs;
       // No need to copy here; when the object is created, the parser instance is just about to go
@@ -144,6 +144,10 @@ final class Parser {
   private boolean recoveryMode;  // stop reporting errors until next statement
 
   // Intern string literals, as some files contain many literals for the same string.
+  //
+  // Ideally we would move this to the lexer, where we already do interning of identifiers. However,
+  // the parser has a special case optimization for concatenation of string literals, which the
+  // lexer can't handle.
   private final Map<String, String> stringInterner = new HashMap<>();
 
   private Parser(Lexer lexer, List<SyntaxError> errors) {
@@ -340,7 +344,6 @@ final class Parser {
           TokenKind.GLOBAL,
           TokenKind.IMPORT,
           TokenKind.IS,
-          TokenKind.LAMBDA,
           TokenKind.NONLOCAL,
           TokenKind.RAISE,
           TokenKind.TRY,
@@ -360,7 +363,6 @@ final class Parser {
         break;
       case IMPORT: error = "'import' not supported, use 'load' instead"; break;
       case IS: error = "'is' not supported, use '==' instead"; break;
-      case LAMBDA: error = "'lambda' not supported, declare a function instead"; break;
       case RAISE: error = "'raise' not supported, use 'fail' instead"; break;
       case TRY: error = "'try' not supported, all exceptions are fatal"; break;
       case WHILE: error = "'while' not supported, use 'for' instead"; break;
@@ -432,7 +434,7 @@ final class Parser {
 
   // arg = IDENTIFIER '=' test
   //     | IDENTIFIER
-  private Parameter parseFunctionParameter() {
+  private Parameter parseParameter() {
     // **kwargs
     if (token.kind == TokenKind.STAR_STAR) {
       int starStarOffset = nextToken();
@@ -481,6 +483,10 @@ final class Parser {
     ImmutableList.Builder<Argument> list = ImmutableList.builder();
     while (token.kind != TokenKind.RPAREN && token.kind != TokenKind.EOF) {
       if (seenArg) {
+        // f(expr for vars in expr) -- Python generator expression?
+        if (token.kind == TokenKind.FOR) {
+          syntaxError("Starlark does not support Python-style generator expressions");
+        }
         expect(TokenKind.COMMA);
         // If nonempty, the list may end with a comma.
         if (token.kind == TokenKind.RPAREN) {
@@ -560,7 +566,8 @@ final class Parser {
     return literal;
   }
 
-  //  primary = INTEGER
+  //  primary = INT
+  //          | FLOAT
   //          | STRING
   //          | IDENTIFIER
   //          | list_expression
@@ -572,7 +579,16 @@ final class Parser {
     switch (token.kind) {
       case INT:
         {
-          IntLiteral literal = new IntLiteral(locs, token.raw, token.start, (Number) token.value);
+          IntLiteral literal =
+              new IntLiteral(locs, token.getRaw(), token.start, (Number) token.value);
+          nextToken();
+          return literal;
+        }
+
+      case FLOAT:
+        {
+          FloatLiteral literal =
+              new FloatLiteral(locs, token.getRaw(), token.start, (double) token.value);
           nextToken();
           return literal;
         }
@@ -616,6 +632,11 @@ final class Parser {
             parseExprList(elems, /*trailingCommaAllowed=*/ true);
             int rparenOffset = expect(TokenKind.RPAREN);
             return new ListExpression(locs, /*isTuple=*/ true, lparenOffset, elems, rparenOffset);
+          }
+
+          // (expr for vars in expr) -- Python generator expression?
+          if (token.kind == TokenKind.FOR) {
+            syntaxError("Starlark does not support Python-style generator expressions");
           }
 
           expect(TokenKind.RPAREN);
@@ -734,7 +755,7 @@ final class Parser {
         int ifOffset = nextToken();
         // [x for x in li if 1, 2]  # parse error
         // [x for x in li if (1, 2)]  # ok
-        Expression cond = parseTest(0);
+        Expression cond = parseTestNoCond();
         clauses.add(new Comprehension.If(locs, ifOffset, cond));
       } else if (token.kind == closingBracket) {
         break;
@@ -910,6 +931,10 @@ final class Parser {
   // Parses a non-tuple expression ("test" in Python terminology).
   private Expression parseTest() {
     int start = token.start;
+    if (token.kind == TokenKind.LAMBDA) {
+      return parseLambda(/*allowCond=*/ true);
+    }
+
     Expression expr = parseTest(0);
     if (token.kind == TokenKind.IF) {
       nextToken();
@@ -934,6 +959,25 @@ final class Parser {
       return parseNotExpression(prec);
     }
     return parseBinOpExpression(prec);
+  }
+
+  // parseLambda parses a lambda expression.
+  // The allowCond flag allows the body to be an 'a if b else c' conditional.
+  private LambdaExpression parseLambda(boolean allowCond) {
+    int lambdaOffset = expect(TokenKind.LAMBDA);
+    ImmutableList<Parameter> params = parseParameters();
+    expect(TokenKind.COLON);
+    Expression body = allowCond ? parseTest() : parseTestNoCond();
+    return new LambdaExpression(locs, lambdaOffset, params, body);
+  }
+
+  // parseTestNoCond parses a a single-component expression without
+  // consuming a trailing 'if expr else expr'.
+  private Expression parseTestNoCond() {
+    if (token.kind == TokenKind.LAMBDA) {
+      return parseLambda(/*allowCond=*/ false);
+    }
+    return parseTest(0);
   }
 
   // not_expr = 'not' expr
@@ -1166,7 +1210,9 @@ final class Parser {
     boolean hasParam = false;
     ImmutableList.Builder<Parameter> list = ImmutableList.builder();
 
-    while (token.kind != TokenKind.RPAREN && token.kind != TokenKind.EOF) {
+    while (token.kind != TokenKind.RPAREN
+        && token.kind != TokenKind.COLON
+        && token.kind != TokenKind.EOF) {
       if (hasParam) {
         expect(TokenKind.COMMA);
         // The list may end with a comma.
@@ -1174,7 +1220,7 @@ final class Parser {
           break;
         }
       }
-      Parameter param = parseFunctionParameter();
+      Parameter param = parseParameter();
       hasParam = true;
       list.add(param);
     }
