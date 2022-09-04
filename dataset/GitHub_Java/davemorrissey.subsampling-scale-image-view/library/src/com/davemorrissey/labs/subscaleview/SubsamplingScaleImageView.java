@@ -227,7 +227,6 @@ public class SubsamplingScaleImageView extends View {
 
     // Fling detector
     private GestureDetector detector;
-    private GestureDetector singleDetector;
 
     // Tile and image decoding
     private ImageRegionDecoder decoder;
@@ -571,14 +570,6 @@ public class SubsamplingScaleImageView extends View {
                 return super.onDoubleTapEvent(e);
             }
         });
-
-        singleDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onSingleTapConfirmed(MotionEvent e) {
-                performClick();
-                return true;
-            }
-        });
     }
 
     /**
@@ -646,9 +637,6 @@ public class SubsamplingScaleImageView extends View {
 
         // Abort if not ready
         if (vTranslate == null) {
-            if (singleDetector != null) {
-                singleDetector.onTouchEvent(event);
-            }
             return true;
         }
         // Detect flings, taps and double taps
@@ -2672,13 +2660,11 @@ public class SubsamplingScaleImageView extends View {
     }
 
     private void sendStateChanged(float oldScale, PointF oldVTranslate, int origin) {
-        if (onStateChangedListener != null) {
-            if (scale != oldScale) {
-                onStateChangedListener.onScaleChanged(scale, origin);
-            }
-            if (!vTranslate.equals(oldVTranslate)) {
-                onStateChangedListener.onCenterChanged(getCenter(), origin);
-            }
+        if (onStateChangedListener != null && scale != oldScale) {
+            onStateChangedListener.onScaleChanged(scale, origin);
+        }
+        if (onStateChangedListener != null && !vTranslate.equals(oldVTranslate)) {
+            onStateChangedListener.onCenterChanged(getCenter(), origin);
         }
     }
 
