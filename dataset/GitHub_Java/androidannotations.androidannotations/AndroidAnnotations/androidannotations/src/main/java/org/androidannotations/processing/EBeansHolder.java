@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,10 +20,8 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,6 +30,7 @@ import javax.lang.model.element.Element;
 import org.androidannotations.helper.CanonicalNameConstants;
 
 import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 
@@ -44,6 +43,7 @@ public class EBeansHolder {
 		 */
 		public final JClass RUNTIME_EXCEPTION = refClass(RuntimeException.class);
 		public final JClass EXCEPTION = refClass(Exception.class);
+		public final JClass THROWABLE = refClass(Throwable.class);
 		public final JClass CHAR_SEQUENCE = refClass(CharSequence.class);
 		public final JClass CLASS_CAST_EXCEPTION = refClass(ClassCastException.class);
 		public final JClass SERIALIZABLE = refClass(Serializable.class);
@@ -52,6 +52,7 @@ public class EBeansHolder {
 		public final JClass INPUT_STREAM = refClass(InputStream.class);
 		public final JClass FILE_INPUT_STREAM = refClass(FileInputStream.class);
 		public final JClass SQL_EXCEPTION = refClass(SQLException.class);
+		public final JClass THREAD = refClass(Thread.class);
 
 		/*
 		 * Android
@@ -64,12 +65,17 @@ public class EBeansHolder {
 		public final JClass SEEKBAR = refClass(CanonicalNameConstants.SEEKBAR);
 		public final JClass ON_SEEKBAR_CHANGE_LISTENER = refClass(CanonicalNameConstants.ON_SEEKBAR_CHANGE_LISTENER);
 		public final JClass TEXT_VIEW = refClass(CanonicalNameConstants.TEXT_VIEW);
+		public final JClass COMPOUND_BUTTON = refClass(CanonicalNameConstants.COMPOUND_BUTTON);
 		public final JClass VIEW = refClass(CanonicalNameConstants.VIEW);
 		public final JClass VIEW_ON_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_CLICK_LISTENER);
+		public final JClass VIEW_ON_TOUCH_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_TOUCH_LISTENER);
+		public final JClass VIEW_ON_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_LONG_CLICK_LISTENER);
+		public final JClass VIEW_ON_FOCUS_CHANGE_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_FOCUS_CHANGE_LISTENER);
 		public final JClass VIEW_GROUP_LAYOUT_PARAMS = refClass(CanonicalNameConstants.VIEW_GROUP_LAYOUT_PARAMS);
 		public final JClass KEY_EVENT = refClass(CanonicalNameConstants.KEY_EVENT);
 		public final JClass CONTEXT = refClass(CanonicalNameConstants.CONTEXT);
 		public final JClass INTENT = refClass(CanonicalNameConstants.INTENT);
+		public final JClass COMPONENT_NAME = refClass(CanonicalNameConstants.COMPONENT_NAME);
 		public final JClass VIEW_GROUP = refClass(CanonicalNameConstants.VIEW_GROUP);
 		public final JClass LAYOUT_INFLATER = refClass(CanonicalNameConstants.LAYOUT_INFLATER);
 		public final JClass FRAGMENT_ACTIVITY = refClass(CanonicalNameConstants.FRAGMENT_ACTIVITY);
@@ -81,7 +87,6 @@ public class EBeansHolder {
 		public final JClass ON_ITEM_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_LONG_CLICK_LISTENER);
 		public final JClass ON_ITEM_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_CLICK_LISTENER);
 		public final JClass ON_ITEM_SELECTED_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_SELECTED_LISTENER);
-		public final JClass ON_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_LONG_CLICK_LISTENER);
 		public final JClass WINDOW = refClass(CanonicalNameConstants.WINDOW);
 		public final JClass MENU_ITEM = refClass(CanonicalNameConstants.MENU_ITEM);
 		public final JClass MENU_INFLATER = refClass(CanonicalNameConstants.MENU_INFLATER);
@@ -90,9 +95,11 @@ public class EBeansHolder {
 		public final JClass RESOURCES = refClass(CanonicalNameConstants.RESOURCES);
 		public final JClass CONFIGURATION = refClass(CanonicalNameConstants.CONFIGURATION);
 		public final JClass MOTION_EVENT = refClass(CanonicalNameConstants.MOTION_EVENT);
-		public final JClass ON_TOUCH_LISTENER = refClass(CanonicalNameConstants.ON_TOUCH_LISTENER);
 		public final JClass HANDLER = refClass(CanonicalNameConstants.HANDLER);
 		public final JClass KEY_STORE = refClass(CanonicalNameConstants.KEY_STORE);
+		public final JClass VIEW_SERVER = refClass(CanonicalNameConstants.VIEW_SERVER);
+		public final JClass PARCELABLE = refClass(CanonicalNameConstants.PARCELABLE);
+		public final JClass LOOPER = refClass(CanonicalNameConstants.LOOPER);
 
 		/*
 		 * Sherlock
@@ -100,6 +107,11 @@ public class EBeansHolder {
 		public final JClass SHERLOCK_MENU = refClass(CanonicalNameConstants.SHERLOCK_MENU);
 		public final JClass SHERLOCK_MENU_ITEM = refClass(CanonicalNameConstants.SHERLOCK_MENU_ITEM);
 		public final JClass SHERLOCK_MENU_INFLATER = refClass(CanonicalNameConstants.SHERLOCK_MENU_INFLATER);
+
+		/*
+		 * HoloEverywhre
+		 */
+		public final JClass HOLO_EVERYWHERE_LAYOUT_INFLATER = refClass(CanonicalNameConstants.HOLO_EVERYWHERE_LAYOUT_INFLATER);
 
 		/*
 		 * RoboGuice
@@ -127,6 +139,7 @@ public class EBeansHolder {
 		 */
 		public final JClass CONNECTION_SOURCE = refClass(CanonicalNameConstants.CONNECTION_SOURCE);
 		public final JClass OPEN_HELPER_MANAGER = refClass(CanonicalNameConstants.OPEN_HELPER_MANAGER);
+		public final JClass RUNTIME_EXCEPTION_DAO = refClass(CanonicalNameConstants.RUNTIME_EXCEPTION_DAO);
 		public final JClass DAO_MANAGER = refClass(CanonicalNameConstants.DAO_MANAGER);
 
 		/*
@@ -139,6 +152,10 @@ public class EBeansHolder {
 		public final JClass SCHEME_REGISTRY = refClass(CanonicalNameConstants.SCHEME_REGISTRY);
 		public final JClass SINGLE_CLIENT_CONN_MANAGER = refClass(CanonicalNameConstants.SINGLE_CLIENT_CONN_MANAGER);
 
+		/*
+		 * Springframework
+		 */
+		public final JClass REST_CLIENT_EXCEPTION = refClass(CanonicalNameConstants.REST_CLIENT_EXCEPTION);
 	}
 
 	private final Map<Element, EBeanHolder> eBeanHolders = new HashMap<Element, EBeanHolder>();
@@ -149,9 +166,9 @@ public class EBeansHolder {
 
 	private final Classes classes;
 
-	private final Map<String, List<Element>> originatingElementsByGeneratedClassQualifiedName = new HashMap<String, List<Element>>();
-
 	private final Set<Class<?>> apiClassesToGenerate = new HashSet<Class<?>>();
+
+	private final OriginatingElements originatingElements = new OriginatingElements();
 
 	public EBeansHolder(JCodeModel codeModel) {
 		this.codeModel = codeModel;
@@ -169,24 +186,19 @@ public class EBeansHolder {
 
 		String qualifiedName = generatedClass.fullName();
 
-		addAsOriginatingElement(qualifiedName, element);
+		originatingElements.add(qualifiedName, element);
 
 		EBeanHolder activityHolder = new EBeanHolder(this, eBeanAnnotation, generatedClass);
 		eBeanHolders.put(element, activityHolder);
 		return activityHolder;
 	}
 
-	private void addAsOriginatingElement(String qualifiedName, Element element) {
-		List<Element> originatingElements = originatingElementsByGeneratedClassQualifiedName.get(qualifiedName);
-		if (originatingElements == null) {
-			originatingElements = new ArrayList<Element>();
-			originatingElementsByGeneratedClassQualifiedName.put(qualifiedName, originatingElements);
-		}
-		originatingElements.add(element);
-	}
-
 	public EBeanHolder getEBeanHolder(Element element) {
 		return eBeanHolders.get(element);
+	}
+
+	public JClass refClass(Class<?> clazz) {
+		return codeModel.ref(clazz);
 	}
 
 	public JClass refClass(String fullyQualifiedClassName) {
@@ -211,8 +223,17 @@ public class EBeansHolder {
 		return refClass;
 	}
 
-	public JClass refClass(Class<?> clazz) {
-		return codeModel.ref(clazz);
+	public JDefinedClass definedClass(String fullyQualifiedClassName) {
+		JDefinedClass refClass = (JDefinedClass) loadedClasses.get(fullyQualifiedClassName);
+		if (refClass == null) {
+			try {
+				refClass = codeModel._class(fullyQualifiedClassName);
+			} catch (JClassAlreadyExistsException e) {
+				refClass = (JDefinedClass) refClass(fullyQualifiedClassName);
+			}
+			loadedClasses.put(fullyQualifiedClassName, refClass);
+		}
+		return refClass;
 	}
 
 	public JCodeModel codeModel() {
@@ -223,8 +244,8 @@ public class EBeansHolder {
 		return classes;
 	}
 
-	public Map<String, List<Element>> getOriginatingElementsByGeneratedClassQualifiedName() {
-		return originatingElementsByGeneratedClassQualifiedName;
+	public OriginatingElements getOriginatingElements() {
+		return originatingElements;
 	}
 
 	public Set<Class<?>> getApiClassesToGenerate() {
@@ -232,7 +253,7 @@ public class EBeansHolder {
 	}
 
 	public void generateApiClass(Element originatingElement, Class<?> apiClass) {
-		addAsOriginatingElement(apiClass.getCanonicalName(), originatingElement);
+		originatingElements.add(apiClass.getCanonicalName(), originatingElement);
 		apiClassesToGenerate.add(apiClass);
 	}
 
