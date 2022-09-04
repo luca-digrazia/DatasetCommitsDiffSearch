@@ -66,7 +66,6 @@ import com.google.devtools.build.lib.packages.FileTarget;
 import com.google.devtools.build.lib.packages.FilesetEntry;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.InputFile;
-import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
@@ -852,8 +851,10 @@ public final class RuleContext extends TargetContext
    * specified attribute of this target in the BUILD file.
    */
   public <T extends SkylarkClassObject> Iterable<T> getPrerequisites(
-      String attributeName, Mode mode, final NativeClassObjectConstructor<T> skylarkKey) {
-    return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey);
+      String attributeName, Mode mode,
+      final ClassObjectConstructor.Key skylarkKey,
+      Class<T> result) {
+    return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey, result);
   }
 
   /**
