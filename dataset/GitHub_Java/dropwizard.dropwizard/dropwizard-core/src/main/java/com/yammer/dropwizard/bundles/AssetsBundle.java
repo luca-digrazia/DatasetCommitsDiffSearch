@@ -1,6 +1,5 @@
 package com.yammer.dropwizard.bundles;
 
-import com.google.common.cache.CacheBuilderSpec;
 import com.yammer.dropwizard.Bundle;
 import com.yammer.dropwizard.config.Environment;
 import com.yammer.dropwizard.servlets.AssetServlet;
@@ -12,20 +11,20 @@ import static com.google.common.base.Preconditions.checkArgument;
  */
 public class AssetsBundle implements Bundle {
     public static final String DEFAULT_PATH = "/assets";
-    public static final CacheBuilderSpec DEFAULT_CACHE_SPEC = CacheBuilderSpec.parse("maximumSize=100");
+    public static final int DEFAULT_MAX_CACHE_SIZE = 100;
     
     private final String resourcePath;
     private final String uriPath;
-    private final CacheBuilderSpec cacheBuilderSpec;
+    private final int maxCacheSize;
 
     /**
      * Creates a new {@link AssetsBundle} which serves up static assets from
      * {@code src/main/resources/assets/*} as {@code /assets/*}.
      *
-     * @see AssetsBundle#AssetsBundle(String, CacheBuilderSpec)
+     * @see AssetsBundle#AssetsBundle(String, int)
      */
     public AssetsBundle() {
-        this(DEFAULT_PATH, DEFAULT_CACHE_SPEC);
+        this(DEFAULT_PATH, DEFAULT_MAX_CACHE_SIZE);
     }
 
     /**
@@ -35,10 +34,10 @@ public class AssetsBundle implements Bundle {
      * served up from {@code /assets/example.js}.
      *
      * @param path    the classpath and URI root of the static asset files
-     * @see AssetsBundle#AssetsBundle(String, CacheBuilderSpec)
+     * @see AssetsBundle#AssetsBundle(String, int)
      */
     public AssetsBundle(String path) {
-        this(path, DEFAULT_CACHE_SPEC, path);
+        this(path, DEFAULT_MAX_CACHE_SIZE, path);
     }
 
     /**
@@ -49,10 +48,10 @@ public class AssetsBundle implements Bundle {
      *
      * @param resourcePath    the resource path (in the classpath) of the static asset files
      * @param uriPath    the uri path for the static asset files
-     * @see AssetsBundle#AssetsBundle(String, CacheBuilderSpec)
+     * @see AssetsBundle#AssetsBundle(String, int)
      */
     public AssetsBundle(String resourcePath, String uriPath) {
-        this(resourcePath, DEFAULT_CACHE_SPEC, uriPath);
+        this(resourcePath, DEFAULT_MAX_CACHE_SIZE, uriPath);
     }
 
     /**
@@ -61,11 +60,11 @@ public class AssetsBundle implements Bundle {
      * {@code path} of {@code "/assets"}, {@code src/main/resources/assets/example.js} would be
      * served up from {@code /assets/example.js}.
      *
-     * @param resourcePath        the resource path (in the classpath) of the static asset files
-     * @param cacheBuilderSpec    the spec for the cache builder
+     * @param resourcePath    the resource path (in the classpath) of the static asset files
+     * @param maxCacheSize    the maximum number of resources to cache
      */
-    public AssetsBundle(String resourcePath, CacheBuilderSpec cacheBuilderSpec) {
-        this(resourcePath, cacheBuilderSpec, resourcePath);
+    public AssetsBundle(String resourcePath, int maxCacheSize) {
+        this(resourcePath, maxCacheSize, resourcePath);
     }
 
     /**
@@ -74,20 +73,20 @@ public class AssetsBundle implements Bundle {
      * {@code resourcePath} of {@code "/assets"} and a uriPath of {@code "/js"},
      * {@code src/main/resources/assets/example.js} would be served up from {@code /js/example.js}.
      *
-     * @param resourcePath        the resource path (in the classpath) of the static asset files
-     * @param cacheBuilderSpec    the spec for the cache builder
-     * @param uriPath             the uri path for the static asset files
+     * @param resourcePath    the resource path (in the classpath) of the static asset files
+     * @param maxCacheSize    the maximum number of resources to cache
+     * @param uriPath    the uri path for the static asset files
      */
-    public AssetsBundle(String resourcePath, CacheBuilderSpec cacheBuilderSpec, String uriPath) {
+    public AssetsBundle(String resourcePath, int maxCacheSize, String uriPath) {
         checkArgument(resourcePath.startsWith("/"), "%s is not an absolute path", resourcePath);
         checkArgument(!"/".equals(resourcePath), "%s is the classpath root");
         this.resourcePath = resourcePath.endsWith("/") ? resourcePath : (resourcePath + '/');
         this.uriPath = uriPath.endsWith("/") ? uriPath : (uriPath + '/');
-        this.cacheBuilderSpec = cacheBuilderSpec;
+        this.maxCacheSize = maxCacheSize;
     }
 
     @Override
     public void initialize(Environment environment) {
-        environment.addServlet(new AssetServlet(resourcePath, cacheBuilderSpec, uriPath), uriPath + '*');
+        environment.addServlet(new AssetServlet(resourcePath, maxCacheSize, uriPath), uriPath + '*');
     }
 }
