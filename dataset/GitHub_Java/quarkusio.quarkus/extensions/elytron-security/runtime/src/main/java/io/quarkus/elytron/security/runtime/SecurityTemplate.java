@@ -112,10 +112,9 @@ public class SecurityTemplate {
         log.debugf("UserInfoMap: %s\n", userInfo);
         Map<String, String> roleInfo = config.getRoles();
         log.debugf("RoleInfoMap: %s\n", roleInfo);
-        for (Map.Entry<String, String> userPasswordEntry : userInfo.entrySet()) {
-            String user = userPasswordEntry.getKey();
-            ClearPassword clear = ClearPassword.createRaw(ClearPassword.ALGORITHM_CLEAR,
-                    userPasswordEntry.getValue().toCharArray());
+        for (String user : userInfo.keySet()) {
+            String password = userInfo.get(user);
+            ClearPassword clear = ClearPassword.createRaw(ClearPassword.ALGORITHM_CLEAR, password.toCharArray());
             PasswordCredential passwordCred = new PasswordCredential(clear);
             List<Credential> credentials = new ArrayList<>();
             credentials.add(passwordCred);
