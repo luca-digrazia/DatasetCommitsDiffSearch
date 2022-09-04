@@ -22,9 +22,9 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -76,110 +76,55 @@ public class ValueResolverGenerator {
     private static final String IS_PREFIX = "is";
     private static final String HAS_PREFIX = "has";
 
-    public static final String TARGET = "target";
     public static final String IGNORE_SUPERCLASSES = "ignoreSuperclasses";
     public static final String IGNORE = "ignore";
     public static final String PROPERTIES = "properties";
 
     public static final int DEFAULT_PRIORITY = 10;
 
+    private final Set<String> analyzedTypes;
     private final Set<String> generatedTypes;
     private final IndexView index;
     private final ClassOutput classOutput;
-    private final Map<DotName, ClassInfo> nameToClass;
-    private final Map<DotName, AnnotationInstance> nameToTemplateData;
+    private final Map<DotName, AnnotationInstance> uncontrolled;
 
     /**
      * 
      * @param index
      * @param classOutput
-     * @param nameToClass
-     * @param nameToTemplateData
+     * @param uncontrolled The map of {@link TemplateData} metadata for classes that are not controlled by the client
      */
-    ValueResolverGenerator(IndexView index, ClassOutput classOutput, Map<DotName, ClassInfo> nameToClass,
-            Map<DotName, AnnotationInstance> nameToTemplateData) {
+    ValueResolverGenerator(IndexView index, ClassOutput classOutput, Map<DotName, AnnotationInstance> uncontrolled) {
+        this.analyzedTypes = new HashSet<>();
         this.generatedTypes = new HashSet<>();
         this.classOutput = classOutput;
         this.index = index;
-        this.nameToClass = new HashMap<>(nameToClass);
-        this.nameToTemplateData = new HashMap<>(nameToTemplateData);
+        this.uncontrolled = uncontrolled != null ? uncontrolled : Collections.emptyMap();
     }
 
     public Set<String> getGeneratedTypes() {
         return generatedTypes;
     }
 
-    /**
-     * Generate value resolvers for all classes added via {@link Builder#addClass(ClassInfo, AnnotationInstance)}.
-     */
-    public void generate() {
-
-        // Map superclasses to direct subclasses
-        // Foo extends Baz, Bar extends Baz = Baz -> Foo, Bar
-        Map<DotName, Set<DotName>> superToSub = new HashMap<>();
-        for (Entry<DotName, ClassInfo> entry : nameToClass.entrySet()) {
-            DotName superName = entry.getValue().superName();
-            if (superName != null && !OBJECT.equals(superName)) {
-                superToSub.computeIfAbsent(superName, name -> new HashSet<>()).add(entry.getKey());
-            }
-        }
-
-        // We do not expect more than 10 levels...
-        int priority = DEFAULT_PRIORITY;
-        // Remaining classes to process
-        Map<DotName, ClassInfo> remaining = new HashMap<>(this.nameToClass);
-
-        while (!remaining.isEmpty()) {
-            // Generate resolvers for classes not extended in the current set
-            Map<DotName, Set<DotName>> superToSubRemovals = new HashMap<>();
-            for (Iterator<Entry<DotName, ClassInfo>> it = remaining.entrySet().iterator(); it.hasNext();) {
-                Entry<DotName, ClassInfo> entry = it.next();
-                if (!superToSub.containsKey(entry.getKey())) {
-                    // Generate the resolver
-                    generate(entry.getKey(), priority);
-                    // Queue a class removal
-                    DotName superName = entry.getValue().superName();
-                    if (superName != null && !OBJECT.equals(superName)) {
-                        superToSubRemovals.computeIfAbsent(superName, name -> new HashSet<>()).add(entry.getKey());
-                    }
-                    // Remove the processed binding
-                    it.remove();
-                }
-            }
-            // Remove the processed classes from the map
-            for (Entry<DotName, Set<DotName>> entry : superToSubRemovals.entrySet()) {
-                Set<DotName> subs = superToSub.get(entry.getKey());
-                if (subs != null) {
-                    subs.removeAll(entry.getValue());
-                    if (subs.isEmpty()) {
-                        superToSub.remove(entry.getKey());
-                    }
-                }
-            }
-            // Lower the priority for extended classes
-            priority--;
-        }
+    public Set<String> getAnalyzedTypes() {
+        return analyzedTypes;
     }
 
-    private void generate(DotName className, int priority) {
-
-        ClassInfo clazz = nameToClass.get(className);
-        String clazzName = className.toString();
+    public void generate(ClassInfo clazz) {
+        Objects.requireNonNull(clazz);
+        String clazzName = clazz.name().toString();
+        if (analyzedTypes.contains(clazzName)) {
+            return;
+        }
+        analyzedTypes.add(clazzName);
         boolean ignoreSuperclasses = false;
 
-        AnnotationInstance templateData = nameToTemplateData.get(className);
+        // @TemplateData declared on class takes precedence
+        AnnotationInstance templateData = clazz.classAnnotation(TEMPLATE_DATA);
         if (templateData == null) {
-            // @TemplateData declared on the class
-            for (AnnotationInstance annotation : clazz.classAnnotations()) {
-                if (annotation.name().equals(TEMPLATE_DATA)) {
-                    AnnotationValue targetValue = annotation.value(TARGET);
-                    if (targetValue == null || targetValue.asClass().name().equals(className)) {
-                        templateData = annotation;
-                    }
-                }
-            }
-        }
-        if (templateData != null) {
+            // Try to find @TemplateData declared on other classes
+            templateData = uncontrolled.get(clazz.name());
+        } else {
             AnnotationValue ignoreSuperclassesValue = templateData.value(IGNORE_SUPERCLASSES);
             if (ignoreSuperclassesValue != null) {
                 ignoreSuperclasses = ignoreSuperclassesValue.asBoolean();
@@ -203,21 +148,31 @@ public class ValueResolverGenerator {
         ClassCreator valueResolver = ClassCreator.builder().classOutput(classOutput).className(generatedName)
                 .interfaces(ValueResolver.class).build();
 
-        implementGetPriority(valueResolver, priority);
+        implementGetPriority(valueResolver);
         implementAppliesTo(valueResolver, clazz);
-        implementResolve(valueResolver, clazzName, clazz, filters, ignoreSuperclasses);
+        implementResolve(valueResolver, clazzName, clazz, filters);
 
         valueResolver.close();
+
+        DotName superName = clazz.superName();
+        if (!ignoreSuperclasses && (superName != null && !superName.equals(OBJECT))) {
+            ClassInfo superClass = index.getClassByName(clazz.superClassType().name());
+            if (superClass != null) {
+                generate(superClass);
+            } else {
+                LOGGER.warnf("Skipping super class %s - not found in the index", clazz.superClassType());
+            }
+        }
     }
 
-    private void implementGetPriority(ClassCreator valueResolver, int priority) {
+    private void implementGetPriority(ClassCreator valueResolver) {
         MethodCreator getPriority = valueResolver.getMethodCreator("getPriority", int.class)
                 .setModifiers(ACC_PUBLIC);
-        getPriority.returnValue(getPriority.load(priority));
+        getPriority.returnValue(getPriority.load(DEFAULT_PRIORITY));
     }
 
     private void implementResolve(ClassCreator valueResolver, String clazzName, ClassInfo clazz,
-            Predicate<AnnotationTarget> filter, boolean ignoreSuperclasses) {
+            Predicate<AnnotationTarget> filter) {
         MethodCreator resolve = valueResolver.getMethodCreator("resolve", CompletionStage.class, EvalContext.class)
                 .setModifiers(ACC_PUBLIC);
 
@@ -252,28 +207,14 @@ public class ValueResolverGenerator {
             }
         }
 
-        Set<MethodKey> methods = clazz.methods().stream().filter(filter::test).map(MethodKey::new).collect(Collectors.toSet());
-        if (!ignoreSuperclasses) {
-            DotName superName = clazz.superName();
-            while (superName != null && !superName.equals(OBJECT)) {
-                ClassInfo superClass = index.getClassByName(superName);
-                if (superClass != null) {
-                    methods.addAll(
-                            superClass.methods().stream().filter(filter::test).map(MethodKey::new).collect(Collectors.toSet()));
-                    superName = superClass.superName();
-                } else {
-                    superName = null;
-                    LOGGER.warnf("Skipping super class %s - not found in the index", clazz.superClassType());
-                }
-            }
-        }
-
+        List<MethodInfo> methods = clazz.methods().stream().filter(filter::test).collect(Collectors.toList());
         if (!methods.isEmpty()) {
+
             // name, number of params -> list of methods
             Map<Match, List<MethodInfo>> matches = new HashMap<>();
             Map<Match, List<MethodInfo>> varargsMatches = new HashMap<>();
 
-            for (MethodInfo method : methods.stream().map(MethodKey::getMethod).collect(Collectors.toSet())) {
+            for (MethodInfo method : methods) {
 
                 List<Type> methodParams = method.parameters();
                 if (methodParams.isEmpty()) {
@@ -696,8 +637,7 @@ public class ValueResolverGenerator {
 
         private IndexView index;
         private ClassOutput classOutput;
-        private final Map<DotName, ClassInfo> nameToClass = new HashMap<>();
-        private final Map<DotName, AnnotationInstance> nameToTemplateData = new HashMap<>();
+        private Map<DotName, AnnotationInstance> uncontrolled;
 
         public Builder setIndex(IndexView index) {
             this.index = index;
@@ -709,20 +649,13 @@ public class ValueResolverGenerator {
             return this;
         }
 
-        public Builder addClass(ClassInfo clazz) {
-            return addClass(clazz, null);
-        }
-
-        public Builder addClass(ClassInfo clazz, AnnotationInstance templateData) {
-            this.nameToClass.put(clazz.name(), clazz);
-            if (templateData != null) {
-                this.nameToTemplateData.put(clazz.name(), templateData);
-            }
+        public Builder setUncontrolled(Map<DotName, AnnotationInstance> uncontrolled) {
+            this.uncontrolled = uncontrolled;
             return this;
         }
 
         public ValueResolverGenerator build() {
-            return new ValueResolverGenerator(index, classOutput, nameToClass, nameToTemplateData);
+            return new ValueResolverGenerator(index, classOutput, uncontrolled);
         }
 
     }
@@ -947,57 +880,6 @@ public class ValueResolverGenerator {
             }
             Match other = (Match) obj;
             return Objects.equals(name, other.name) && paramsCount == other.paramsCount;
-        }
-
-    }
-
-    static class MethodKey {
-
-        final String name;
-        final List<DotName> params;
-        final MethodInfo method;
-
-        public MethodKey(MethodInfo method) {
-            this.method = method;
-            this.name = method.name();
-            this.params = new ArrayList<>();
-            for (Type i : method.parameters()) {
-                params.add(i.name());
-            }
-        }
-
-        public MethodInfo getMethod() {
-            return method;
-        }
-
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + ((name == null) ? 0 : name.hashCode());
-            result = prime * result + ((params == null) ? 0 : params.hashCode());
-            return result;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (!(obj instanceof MethodKey)) {
-                return false;
-            }
-            MethodKey other = (MethodKey) obj;
-            if (!name.equals(other.name)) {
-                return false;
-            }
-            if (!params.equals(other.params)) {
-                return false;
-            }
-            return true;
         }
 
     }

@@ -28,10 +28,6 @@ public class MyService {
         return null;
     }
 
-    public boolean hasName() {
-        return name != null;
-    }
-
     public boolean isActive() {
         return true;
     }

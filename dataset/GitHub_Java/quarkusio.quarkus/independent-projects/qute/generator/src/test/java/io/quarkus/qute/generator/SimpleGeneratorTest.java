@@ -9,6 +9,7 @@ import io.quarkus.qute.TestEvalContext;
 import io.quarkus.qute.ValueResolver;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -36,31 +37,28 @@ public class SimpleGeneratorTest {
         Index index = index(MyService.class, PublicMyService.class, BaseService.class, MyItem.class, String.class,
                 CompletionStage.class,
                 List.class);
+        ValueResolverGenerator generator = new ValueResolverGenerator(index, classOutput, Collections.emptyMap());
         ClassInfo myServiceClazz = index.getClassByName(DotName.createSimple(MyService.class.getName()));
-        ValueResolverGenerator generator = ValueResolverGenerator.builder().setIndex(index).setClassOutput(classOutput)
-                .addClass(myServiceClazz)
-                .addClass(index.getClassByName(DotName.createSimple(PublicMyService.class.getName())))
-                .addClass(index.getClassByName(DotName.createSimple(MyItem.class.getName())))
-                .addClass(index.getClassByName(DotName.createSimple(String.class.getName())))
-                .addClass(index.getClassByName(DotName.createSimple(List.class.getName())))
-                .build();
-
-        generator.generate();
+        generator.generate(myServiceClazz);
+        generator.generate(index.getClassByName(DotName.createSimple(PublicMyService.class.getName())));
+        generator.generate(index.getClassByName(DotName.createSimple(MyItem.class.getName())));
+        generator.generate(index.getClassByName(DotName.createSimple(String.class.getName())));
+        generator.generate(index.getClassByName(DotName.createSimple(List.class.getName())));
         generatedTypes.addAll(generator.getGeneratedTypes());
 
         ExtensionMethodGenerator extensionMethodGenerator = new ExtensionMethodGenerator(classOutput);
         MethodInfo extensionMethod = index.getClassByName(DotName.createSimple(MyService.class.getName())).method(
                 "getDummy", Type.create(myServiceClazz.name(), Kind.CLASS), PrimitiveType.INT,
                 Type.create(DotName.createSimple(String.class.getName()), Kind.CLASS));
-        extensionMethodGenerator.generate(extensionMethod, null, null, null);
+        extensionMethodGenerator.generate(extensionMethod, null, null);
         extensionMethod = index.getClassByName(DotName.createSimple(MyService.class.getName())).method(
                 "getDummy", Type.create(myServiceClazz.name(), Kind.CLASS), PrimitiveType.INT,
                 PrimitiveType.LONG);
-        extensionMethodGenerator.generate(extensionMethod, null, null, null);
+        extensionMethodGenerator.generate(extensionMethod, null, null);
         extensionMethod = index.getClassByName(DotName.createSimple(MyService.class.getName())).method(
                 "getDummyVarargs", Type.create(myServiceClazz.name(), Kind.CLASS), PrimitiveType.INT,
                 Type.create(DotName.createSimple("[L" + String.class.getName() + ";"), Kind.ARRAY));
-        extensionMethodGenerator.generate(extensionMethod, null, null, null);
+        extensionMethodGenerator.generate(extensionMethod, null, null);
         generatedTypes.addAll(extensionMethodGenerator.getGeneratedTypes());
     }
 
