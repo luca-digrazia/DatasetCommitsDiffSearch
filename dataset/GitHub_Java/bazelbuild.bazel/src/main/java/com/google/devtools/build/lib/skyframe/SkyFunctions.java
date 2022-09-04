@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Predicate;
 import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.skyframe.FunctionHermeticity;
@@ -21,7 +20,9 @@ import com.google.devtools.build.skyframe.ShareabilityOfValue;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 
-/** Value types in Skyframe. */
+/**
+ * Value types in Skyframe.
+ */
 public final class SkyFunctions {
   public static final SkyFunctionName PRECOMPUTED =
       SkyFunctionName.createNonHermetic("PRECOMPUTED");
@@ -106,11 +107,8 @@ public final class SkyFunctions {
   public static final SkyFunctionName BUILD_CONFIGURATION =
       SkyFunctionName.createHermetic("BUILD_CONFIGURATION");
   public static final SkyFunctionName ACTION_EXECUTION = ActionLookupData.NAME;
-
-  @VisibleForTesting
-  public static final SkyFunctionName RECURSIVE_FILESYSTEM_TRAVERSAL =
+  static final SkyFunctionName RECURSIVE_FILESYSTEM_TRAVERSAL =
       SkyFunctionName.createHermetic("RECURSIVE_DIRECTORY_TRAVERSAL");
-
   public static final SkyFunctionName FILESET_ENTRY =
       SkyFunctionName.createHermetic("FILESET_ENTRY");
   static final SkyFunctionName BUILD_INFO_COLLECTION =
@@ -118,8 +116,6 @@ public final class SkyFunctions {
   public static final SkyFunctionName BUILD_INFO = SkyFunctionName.createHermetic("BUILD_INFO");
   public static final SkyFunctionName WORKSPACE_NAME =
       SkyFunctionName.createHermetic("WORKSPACE_NAME");
-  static final SkyFunctionName PLATFORM_MAPPING =
-      SkyFunctionName.createHermetic("PLATFORM_MAPPING");
   static final SkyFunctionName COVERAGE_REPORT = SkyFunctionName.createHermetic("COVERAGE_REPORT");
   public static final SkyFunctionName REPOSITORY = SkyFunctionName.createHermetic("REPOSITORY");
   public static final SkyFunctionName REPOSITORY_DIRECTORY =
