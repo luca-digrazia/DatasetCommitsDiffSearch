@@ -26,21 +26,18 @@ public class TopLevelBootstrap implements Bootstrap {
   private final Class<? extends SkylarkCommandLineApi> skylarkCommandLineApi;
   private final Class<? extends SkylarkNativeModuleApi> skylarkNativeModuleApi;
   private final Class<? extends SkylarkRuleFunctionsApi<?>> skylarkRuleFunctionsApi;
-  private final StructApi.StructProviderApi structProvider;
 
   public TopLevelBootstrap(
       Class<? extends SkylarkBuildApiGlobals> skylarkBuildApiGlobals,
       Class<? extends SkylarkAttrApi> skylarkAttrApi,
       Class<? extends SkylarkCommandLineApi> skylarkCommandLineApi,
       Class<? extends SkylarkNativeModuleApi> skylarkNativeModuleApi,
-      Class<? extends SkylarkRuleFunctionsApi<?>> skylarkRuleFunctionsApi,
-      StructApi.StructProviderApi structProvider) {
+      Class<? extends SkylarkRuleFunctionsApi<?>> skylarkRuleFunctionsApi) {
     this.skylarkAttrApi = skylarkAttrApi;
     this.skylarkBuildApiGlobals = skylarkBuildApiGlobals;
     this.skylarkCommandLineApi = skylarkCommandLineApi;
     this.skylarkNativeModuleApi = skylarkNativeModuleApi;
     this.skylarkRuleFunctionsApi = skylarkRuleFunctionsApi;
-    this.structProvider = structProvider;
   }
 
   @Override
@@ -50,6 +47,5 @@ public class TopLevelBootstrap implements Bootstrap {
     Runtime.setupModuleGlobals(builder, skylarkCommandLineApi);
     Runtime.setupModuleGlobals(builder, skylarkNativeModuleApi);
     Runtime.setupModuleGlobals(builder, skylarkRuleFunctionsApi);
-    builder.put("struct", structProvider);
   }
 }

@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.analysis.skylark;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.packages.BazelLibrary;
 import com.google.devtools.build.lib.packages.SkylarkNativeModule;
-import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.TopLevelBootstrap;
 
 /**
@@ -27,15 +26,15 @@ public final class SkylarkModules {
 
   private SkylarkModules() { }
 
-  /** A bootstrap for non-rules-specific globals of the build API. */
-  private static TopLevelBootstrap topLevelBootstrap =
-      new TopLevelBootstrap(
-          BazelBuildApiGlobals.class,
-          SkylarkAttr.class,
-          SkylarkCommandLine.class,
-          SkylarkNativeModule.class,
-          SkylarkRuleClassFunctions.class,
-          StructProvider.STRUCT);
+  /**
+   * A bootstrap for non-rules-specific globals of the build API.
+   */
+  private static TopLevelBootstrap topLevelBootstrap = new TopLevelBootstrap(
+      BazelBuildApiGlobals.class,
+      SkylarkAttr.class,
+      SkylarkCommandLine.class,
+      SkylarkNativeModule.class,
+      SkylarkRuleClassFunctions.class);
 
   /**
    * Adds bindings for skylark built-ins and non-rules-specific globals of the build API to
