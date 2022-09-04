@@ -225,9 +225,7 @@ public class JaxrsScanningProcessor {
     }
 
     @BuildStep
-    public void build(
-                      BuildProducer<FeatureBuildItem> feature,
-                      BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+    public void build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
                       BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
                       BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition,
                       BuildProducer<SubstrateResourceBuildItem> resource,
@@ -237,8 +235,6 @@ public class JaxrsScanningProcessor {
                       BuildProducer<ServletInitParamBuildItem> servletContextParams,
                       CombinedIndexBuildItem combinedIndexBuildItem
     ) throws Exception {
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.JAXRS));
-
         IndexView index = combinedIndexBuildItem.getIndex();
 
         resource.produce(new SubstrateResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
@@ -386,7 +382,11 @@ public class JaxrsScanningProcessor {
     void registerProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
                            BuildProducer<ServletInitParamBuildItem> servletContextParams,
                            CombinedIndexBuildItem combinedIndexBuildItem,
-                           List<JaxrsProviderBuildItem> contributedProviderBuildItems) throws Exception {
+                           List<JaxrsProviderBuildItem> contributedProviderBuildItems,
+                           JaxrsTemplate template,
+                           BeanContainerBuildItem beanContainerBuildItem,
+                           List<ProxyUnwrapperBuildItem> proxyUnwrappers,
+                           BuildProducer<FeatureBuildItem> feature) throws Exception {
         IndexView index = combinedIndexBuildItem.getIndex();
 
         Set<String> contributedProviders = new HashSet<>();
@@ -437,15 +437,9 @@ public class JaxrsScanningProcessor {
         for (String providerToRegister : providersToRegister) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, providerToRegister));
         }
-    }
 
-    @Record(STATIC_INIT)
-    @BuildStep
-    void setupInjection(JaxrsTemplate template,
-            BuildProducer<ServletInitParamBuildItem> servletContextParams,
-            BeanContainerBuildItem beanContainerBuildItem,
-            List<ProxyUnwrapperBuildItem> proxyUnwrappers) {
 
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.JAXRS));
         List<Function<Object, Object>> unwrappers = new ArrayList<>();
         for (ProxyUnwrapperBuildItem i : proxyUnwrappers) {
             unwrappers.add(i.getUnwrapper());
