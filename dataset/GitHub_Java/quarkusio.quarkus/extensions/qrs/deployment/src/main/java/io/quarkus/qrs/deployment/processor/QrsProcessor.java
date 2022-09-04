@@ -41,7 +41,6 @@ import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.util.JandexUtil;
 import io.quarkus.qrs.deployment.framework.EndpointIndexer;
 import io.quarkus.qrs.deployment.framework.QrsDotNames;
-import io.quarkus.qrs.runtime.QrsConfig;
 import io.quarkus.qrs.runtime.QrsRecorder;
 import io.quarkus.qrs.runtime.core.ExceptionMapping;
 import io.quarkus.qrs.runtime.core.Serialisers;
@@ -82,7 +81,6 @@ public class QrsProcessor {
     @Record(ExecutionTime.STATIC_INIT)
     public FilterBuildItem setupEndpoints(BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             BeanContainerBuildItem beanContainerBuildItem,
-            QrsConfig config,
             BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer,
             QrsRecorder recorder,
             ShutdownContextBuildItem shutdownContext) {
@@ -123,11 +121,8 @@ public class QrsProcessor {
         for (Map.Entry<DotName, String> i : pathInterfaces.entrySet()) {
             for (ClassInfo clazz : beanArchiveIndexBuildItem.getIndex().getAllKnownImplementors(i.getKey())) {
                 if (!Modifier.isAbstract(clazz.flags())) {
-                    if ((clazz.enclosingClass() == null || Modifier.isStatic(clazz.flags())) &&
-                            clazz.enclosingMethod() == null) {
-                        scannedResources.put(clazz.name(), clazz);
-                        scannedResourcePaths.put(clazz.name(), i.getValue());
-                    }
+                    scannedResources.put(clazz.name(), clazz);
+                    scannedResourcePaths.put(clazz.name(), i.getValue());
                 }
             }
         }
@@ -137,7 +132,7 @@ public class QrsProcessor {
         for (ClassInfo i : scannedResources.values()) {
             ResourceClass endpoints = EndpointIndexer.createEndpoints(beanArchiveIndexBuildItem.getIndex(), i,
                     beanContainerBuildItem.getValue(), generatedClassBuildItemBuildProducer, recorder, existingConverters,
-                    scannedResourcePaths, config);
+                    scannedResourcePaths);
             if (endpoints != null) {
                 resourceClasses.add(endpoints);
             }
@@ -164,7 +159,7 @@ public class QrsProcessor {
             possibleSubResources.put(classInfo.name(), classInfo);
             ResourceClass endpoints = EndpointIndexer.createEndpoints(beanArchiveIndexBuildItem.getIndex(), classInfo,
                     beanContainerBuildItem.getValue(), generatedClassBuildItemBuildProducer, recorder, existingConverters,
-                    scannedResourcePaths, config);
+                    scannedResourcePaths);
             if (endpoints != null) {
                 subResourceClasses.add(endpoints);
             }
@@ -270,7 +265,7 @@ public class QrsProcessor {
 
         return new FilterBuildItem(
                 recorder.handler(interceptors, exceptionMapping, serialisers, resourceClasses, subResourceClasses,
-                        shutdownContext, config),
+                        shutdownContext),
                 10);
     }
 

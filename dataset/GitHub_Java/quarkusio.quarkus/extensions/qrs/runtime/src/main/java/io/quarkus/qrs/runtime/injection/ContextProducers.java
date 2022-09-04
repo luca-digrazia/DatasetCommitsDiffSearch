@@ -6,10 +6,8 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.UriInfo;
-import javax.ws.rs.sse.Sse;
 
 import io.quarkus.qrs.runtime.core.QrsRequestContext;
-import io.quarkus.qrs.runtime.jaxrs.QrsSse;
 import io.vertx.ext.web.RoutingContext;
 
 @Singleton
@@ -28,12 +26,6 @@ public class ContextProducers {
     @Produces
     HttpHeaders headers() {
         return getContext().getHttpHeaders();
-    }
-
-    @Singleton
-    @Produces
-    Sse sse() {
-        return QrsSse.INSTANCE;
     }
 
     private QrsRequestContext getContext() {
