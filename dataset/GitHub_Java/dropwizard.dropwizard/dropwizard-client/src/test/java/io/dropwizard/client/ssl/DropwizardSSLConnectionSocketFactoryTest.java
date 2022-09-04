@@ -91,7 +91,7 @@ public class DropwizardSSLConnectionSocketFactoryTest {
         tlsConfiguration.setTrustStorePath(new File(ResourceHelpers.resourceFilePath("stores/server/other_cert_truststore.ts")));
         final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("tls_broken_client");
         try {
-            client.target(String.format("https://localhost:%d", TLS_APP_RULE.getLocalPort())).request().get();
+            final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getLocalPort())).request().get();
             fail("expected ProcessingException");
         } catch(ProcessingException e) {
            assertThat(e.getCause()).isInstanceOf(SSLHandshakeException.class);
@@ -110,7 +110,7 @@ public class DropwizardSSLConnectionSocketFactoryTest {
     public void shouldErrorIfServerCertSelfSignedAndSelfSignedCertsNotAllowed() throws Exception {
         final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("self_sign_failure");
         try {
-            client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(1))).request().get(ClientResponse.class);
+            final ClientResponse response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(1))).request().get(ClientResponse.class);
             fail("expected ProcessingException");
         } catch(ProcessingException e) {
             assertThat(e.getCause()).isInstanceOf(SSLHandshakeException.class);
@@ -134,7 +134,7 @@ public class DropwizardSSLConnectionSocketFactoryTest {
         tlsConfiguration.setKeyStoreType("PKCS12");
         final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("client_auth_broken");
         try {
-            client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(2))).request().get();
+            final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(2))).request().get();
             fail("expected ProcessingException");
         } catch(ProcessingException e) {
             assertThat(e.getCause()).isInstanceOfAny(SocketException.class, SSLHandshakeException.class);
@@ -145,7 +145,7 @@ public class DropwizardSSLConnectionSocketFactoryTest {
     public void shouldErrorIfHostnameVerificationOnAndServerHostnameDoesntMatch() throws Exception {
         final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("bad_host_broken");
         try {
-            client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(3))).request().get();
+            final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(3))).request().get();
             fail("Expected ProcessingException");
         } catch (ProcessingException e) {
             assertThat(e.getCause()).isExactlyInstanceOf(SSLPeerUnverifiedException.class);
@@ -166,7 +166,7 @@ public class DropwizardSSLConnectionSocketFactoryTest {
         tlsConfiguration.setSupportedProtocols(asList("TLSv1.2"));
         final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("reject_non_supported");
         try {
-            client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(4))).request().get();
+            final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(4))).request().get();
             fail("expected ProcessingException");
         } catch (ProcessingException e) {
             assertThat(e.getCause()).isInstanceOfAny(SocketException.class, SSLHandshakeException.class);
