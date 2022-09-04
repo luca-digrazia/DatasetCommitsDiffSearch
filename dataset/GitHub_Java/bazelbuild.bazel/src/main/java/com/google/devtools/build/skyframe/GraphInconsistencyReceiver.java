@@ -31,7 +31,6 @@ public interface GraphInconsistencyReceiver {
   enum Inconsistency {
     RESET_REQUESTED,
     CHILD_MISSING_FOR_DIRTY_NODE,
-    CHILD_FORCED_REEVALUATION_BY_PARENT,
     CHILD_UNDONE_FOR_BUILDING_NODE
   }
 

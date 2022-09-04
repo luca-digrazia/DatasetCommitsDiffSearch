@@ -71,9 +71,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
   private SkyValue value = null;
   private ErrorInfo errorInfo = null;
 
-  private final FunctionHermeticity hermeticity;
-  @Nullable private Version maxChildVersion = null;
-
   /**
    * This is not {@code null} only during cycle detection and error bubbling. The nullness of this
    * field is used to detect whether evaluation is in one of those special states.
@@ -159,7 +156,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     this.oldDeps = oldDeps;
     this.evaluatorContext = evaluatorContext;
     this.bubbleErrorInfo = null;
-    this.hermeticity = skyKey.functionName().getHermeticity();
     this.previouslyRequestedDepsValues =
         batchPrefetch(skyKey, directDeps, oldDeps, /*assertDone=*/ true, skyKey);
     Preconditions.checkState(
@@ -180,7 +176,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     this.oldDeps = oldDeps;
     this.evaluatorContext = evaluatorContext;
     this.bubbleErrorInfo = Preconditions.checkNotNull(bubbleErrorInfo);
-    this.hermeticity = skyKey.functionName().getHermeticity();
     try {
       this.previouslyRequestedDepsValues =
           batchPrefetch(skyKey, directDeps, oldDeps, /*assertDone=*/ false, skyKey);
@@ -222,27 +217,17 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
             Reason.PREFETCH,
             depKeysAsSet == null ? depKeys.getAllElementsAsIterable() : depKeysAsSet);
     if (batchMap.size() != depKeys.numElements()) {
-      NodeEntry inFlightEntry = null;
-      try {
-        inFlightEntry = evaluatorContext.getGraph().get(null, Reason.OTHER, requestor);
-      } catch (InterruptedException e) {
-        // We're crashing, don't mask it.
-        Thread.currentThread().interrupt();
-      }
       throw new IllegalStateException(
           "Missing keys for "
               + keyForDebugging
               + ": "
-              + Sets.difference(depKeys.toSet(), batchMap.keySet())
-              + "\n\n"
-              + inFlightEntry);
+              + Sets.difference(depKeys.toSet(), batchMap.keySet()));
     }
     ImmutableMap.Builder<SkyKey, SkyValue> depValuesBuilder =
         ImmutableMap.builderWithExpectedSize(batchMap.size());
     for (Entry<SkyKey, ? extends NodeEntry> entry : batchMap.entrySet()) {
       SkyValue valueMaybeWithMetadata = entry.getValue().getValueMaybeWithMetadata();
-      boolean depDone = valueMaybeWithMetadata != null;
-      if (assertDone && !depDone) {
+      if (assertDone && valueMaybeWithMetadata == null) {
         // A previously requested dep may have transitioned from done to dirty between when the node
         // was read during a previous attempt to build this node and now. Notify the graph
         // inconsistency receiver so that we can crash if that's unexpected.
@@ -252,10 +237,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
                 skyKey, entry.getKey(), Inconsistency.CHILD_UNDONE_FOR_BUILDING_NODE);
         throw new UndonePreviouslyRequestedDep(entry.getKey());
       }
-      depValuesBuilder.put(entry.getKey(), !depDone ? NULL_MARKER : valueMaybeWithMetadata);
-      if (depDone) {
-        maybeUpdateMaxChildVersion(entry.getValue());
-      }
+      depValuesBuilder.put(
+          entry.getKey(), valueMaybeWithMetadata == null ? NULL_MARKER : valueMaybeWithMetadata);
     }
     return depValuesBuilder.build();
   }
@@ -340,7 +323,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
           triState == DependencyState.DONE, "%s %s %s", skyKey, triState, errorInfo);
       state.addTemporaryDirectDeps(GroupedListHelper.create(ErrorTransienceValue.KEY));
       state.signalDep();
-      maxChildVersion = evaluatorContext.getGraphVersion();
     }
 
     this.errorInfo = Preconditions.checkNotNull(errorInfo, skyKey);
@@ -385,13 +367,9 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     Map<SkyKey, ? extends NodeEntry> missingEntries =
         evaluatorContext.getBatchValues(skyKey, Reason.DEP_REQUESTED, missingKeys);
     for (SkyKey key : missingKeys) {
-      NodeEntry depEntry = missingEntries.get(key);
-      SkyValue valueOrNullMarker = getValueOrNullMarker(depEntry);
+      SkyValue valueOrNullMarker = getValueOrNullMarker(missingEntries.get(key));
       result.put(key, valueOrNullMarker);
       newlyRequestedDepsValues.put(key, valueOrNullMarker);
-      if (valueOrNullMarker != NULL_MARKER) {
-        maybeUpdateMaxChildVersion(depEntry);
-      }
     }
     return result;
   }
@@ -447,8 +425,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     Map<SkyKey, ? extends NodeEntry> missingEntries =
         evaluatorContext.getBatchValues(skyKey, Reason.DEP_REQUESTED, missingKeys);
     for (SkyKey key : missingKeys) {
-      NodeEntry depEntry = missingEntries.get(key);
-      SkyValue valueOrNullMarker = getValueOrNullMarker(depEntry);
+      SkyValue valueOrNullMarker = getValueOrNullMarker(missingEntries.get(key));
       newlyRequestedDepsValues.put(key, valueOrNullMarker);
       if (valueOrNullMarker == NULL_MARKER) {
         // TODO(mschaller): handle registered deps that transitioned from done to dirty during eval
@@ -458,7 +435,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         Preconditions.checkState(!assertDone, "%s had not done: %s", skyKey, key);
         continue;
       }
-      maybeUpdateMaxChildVersion(depEntry);
       result.add(valueOrNullMarker);
     }
     return result;
@@ -710,6 +686,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     NestedSet<Postable> posts = buildPosts(primaryEntry, /*expectDoneDeps=*/ true);
     NestedSet<TaggedEvents> events = buildEvents(primaryEntry, /*expectDoneDeps=*/ true);
 
+    Version valueVersion;
     SkyValue valueWithMetadata;
     if (value == null) {
       Preconditions.checkNotNull(errorInfo, "%s %s", skyKey, primaryEntry);
@@ -720,54 +697,42 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
           enqueueParents == EnqueueParentBehavior.ENQUEUE, "%s %s", skyKey, primaryEntry);
       valueWithMetadata = ValueWithMetadata.normal(value, errorInfo, events, posts);
     }
-    GroupedList<SkyKey> temporaryDirectDeps = primaryEntry.getTemporaryDirectDeps();
     if (!oldDeps.isEmpty()) {
       // Remove the rdep on this entry for each of its old deps that is no longer a direct dep.
-      Set<SkyKey> depsToRemove = Sets.difference(oldDeps, temporaryDirectDeps.toSet());
+      Set<SkyKey> depsToRemove =
+          Sets.difference(oldDeps, primaryEntry.getTemporaryDirectDeps().toSet());
       Collection<? extends NodeEntry> oldDepEntries =
           evaluatorContext.getGraph().getBatch(skyKey, Reason.RDEP_REMOVAL, depsToRemove).values();
       for (NodeEntry oldDepEntry : oldDepEntries) {
         oldDepEntry.removeReverseDep(skyKey);
       }
     }
-    Version evaluationVersion = maxChildVersion;
-    if (evaluatorContext.getEvaluationVersionBehavior() == EvaluationVersionBehavior.GRAPH_VERSION
-        || hermeticity == FunctionHermeticity.NONHERMETIC) {
-      evaluationVersion = evaluatorContext.getGraphVersion();
-    } else if (bubbleErrorInfo != null) {
-      // Cycles can lead to a state where the versions of done children don't accurately reflect the
-      // state that led to this node's value. Be conservative then.
-      evaluationVersion = evaluatorContext.getGraphVersion();
-    } else if (evaluationVersion == null) {
-      Preconditions.checkState(
-          temporaryDirectDeps.isEmpty(),
-          "No max child version found, but have direct deps: %s %s",
-          skyKey,
-          primaryEntry);
-      evaluationVersion = evaluatorContext.getGraphVersion();
-    }
-    Version previousVersion = primaryEntry.getVersion();
     // If this entry is dirty, setValue may not actually change it, if it determines that
     // the data being written now is the same as the data already present in the entry.
-    Set<SkyKey> reverseDeps = primaryEntry.setValue(valueWithMetadata, evaluationVersion);
-    // Note that if this update didn't actually change the entry, this version may not be
-    // evaluationVersion.
-    Version currentVersion = primaryEntry.getVersion();
+    // We could consider using max(childVersions) here instead of graphVersion. When full
+    // versioning is implemented, this would allow evaluation at a version between
+    // max(childVersions) and graphVersion to re-use this result.
+    Set<SkyKey> reverseDeps =
+        primaryEntry.setValue(valueWithMetadata, evaluatorContext.getGraphVersion());
+    // Note that if this update didn't actually change the value entry, this version may not
+    // be the graph version.
+    valueVersion = primaryEntry.getVersion();
     Preconditions.checkState(
-        currentVersion.atMost(evaluationVersion),
-        "%s should be at most %s in the version partial ordering (graph version %s)",
-        currentVersion,
-        evaluationVersion,
+        valueVersion.atMost(evaluatorContext.getGraphVersion()),
+        "%s should be at most %s in the version partial ordering",
+        valueVersion,
         evaluatorContext.getGraphVersion());
 
-    // Tell the receiver that this value was built. If currentVersion.equals(evaluationVersion), it
-    // was evaluated this run, and so was changed. Otherwise, it is less than evaluationVersion, by
-    // the Preconditions check above, and was not actually changed this run -- when it was written
+    // Tell the receiver that this value was built. If valueVersion.equals(graphVersion), it was
+    // evaluated this run, and so was changed. Otherwise, it is less than graphVersion, by the
+    // Preconditions check above, and was not actually changed this run -- when it was written
     // above, its version stayed below this update's version, so its value remains the same.
     // We use a SkyValueSupplier here because it keeps a reference to the entry, allowing for
     // the receiver to be confident that the entry is readily accessible in memory.
     EvaluationState evaluationState =
-        currentVersion.equals(previousVersion) ? EvaluationState.CLEAN : EvaluationState.BUILT;
+        valueVersion.equals(evaluatorContext.getGraphVersion())
+            ? EvaluationState.BUILT
+            : EvaluationState.CLEAN;
     evaluatorContext
         .getProgressReceiver()
         .evaluated(
@@ -777,7 +742,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
             evaluationState);
 
     evaluatorContext.signalValuesAndEnqueueIfReady(
-        skyKey, reverseDeps, currentVersion, enqueueParents);
+        skyKey, reverseDeps, valueVersion, enqueueParents);
 
     evaluatorContext.getReplayingNestedSetPostableVisitor().visit(posts);
     evaluatorContext.getReplayingNestedSetEventVisitor().visit(events);
@@ -812,23 +777,9 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       if (!previouslyRequestedDepsValues.containsKey(key)) {
         newlyRequestedDeps.add(key);
         newlyRegisteredDeps.add(key);
-        // Be conservative with these value-not-retrieved deps: assume they have the highest
-        // possible version.
-        maxChildVersion = evaluatorContext.getGraphVersion();
       }
     }
     newlyRequestedDeps.endGroup();
-  }
-
-  private void maybeUpdateMaxChildVersion(NodeEntry depEntry) {
-    if (hermeticity == FunctionHermeticity.HERMETIC
-        && evaluatorContext.getEvaluationVersionBehavior()
-            == EvaluationVersionBehavior.MAX_CHILD_VERSIONS) {
-      Version depVersion = depEntry.getVersion();
-      if (maxChildVersion == null || maxChildVersion.atMost(depVersion)) {
-        maxChildVersion = depVersion;
-      }
-    }
   }
 
   /** Thrown during environment construction if a previously requested dep is no longer done. */
