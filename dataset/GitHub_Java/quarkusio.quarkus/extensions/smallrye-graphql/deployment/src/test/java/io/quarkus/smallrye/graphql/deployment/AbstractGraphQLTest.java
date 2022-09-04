@@ -1,29 +1,21 @@
 package io.quarkus.smallrye.graphql.deployment;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Map;
 import java.util.Properties;
 
 import javax.json.Json;
 import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
-import javax.json.JsonReader;
 
 import org.hamcrest.CoreMatchers;
 
 import io.restassured.RestAssured;
-import io.restassured.parsing.Parser;
 
 /**
  * Some shared methods
  */
 public abstract class AbstractGraphQLTest {
-
-    static {
-        RestAssured.registerParser("application/graphql+json", Parser.JSON);
-    }
 
     protected void pingTest() {
         pingPongTest("ping", "pong");
@@ -53,29 +45,20 @@ public abstract class AbstractGraphQLTest {
     }
 
     protected String getPayload(String query) {
-        return getPayload(query, null);
-    }
-
-    protected String getPayload(String query, String variables) {
-        JsonObject jsonObject = createRequestBody(query, variables);
+        JsonObject jsonObject = createRequestBody(query);
         return jsonObject.toString();
     }
 
-    protected JsonObject createRequestBody(String graphQL, String variables) {
+    protected JsonObject createRequestBody(String graphQL) {
+        return createRequestBody(graphQL, null);
+    }
+
+    protected JsonObject createRequestBody(String graphQL, JsonObject variables) {
         // Create the request
-        JsonObject vjo = Json.createObjectBuilder().build();
-        if (variables != null && !variables.isEmpty()) {
-            try (JsonReader jsonReader = Json.createReader(new StringReader(variables))) {
-                vjo = jsonReader.readObject();
-            }
+        if (variables == null || variables.isEmpty()) {
+            variables = Json.createObjectBuilder().build();
         }
-
-        JsonObjectBuilder job = Json.createObjectBuilder();
-        if (graphQL != null && !graphQL.isEmpty()) {
-            job.add(QUERY, graphQL);
-        }
-
-        return job.add(VARIABLES, vjo).build();
+        return Json.createObjectBuilder().add(QUERY, graphQL).add(VARIABLES, variables).build();
     }
 
     protected static String getPropertyAsString() {
