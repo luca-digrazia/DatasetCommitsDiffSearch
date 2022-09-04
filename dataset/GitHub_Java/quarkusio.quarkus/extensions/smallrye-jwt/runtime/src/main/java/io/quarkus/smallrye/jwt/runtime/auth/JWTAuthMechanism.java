@@ -95,6 +95,9 @@ public class JWTAuthMechanism implements AuthenticationMechanism {
         } else {
             bearerToken = exchange.getRequestHeaders().getFirst(authContextInfo.getTokenHeader());
         }
+        if (bearerToken != null && UndertowLogger.SECURITY_LOGGER.isTraceEnabled()) {
+            UndertowLogger.SECURITY_LOGGER.tracef("JWT Bearer token: %s", bearerToken);
+        }
         return bearerToken;
     }
 
