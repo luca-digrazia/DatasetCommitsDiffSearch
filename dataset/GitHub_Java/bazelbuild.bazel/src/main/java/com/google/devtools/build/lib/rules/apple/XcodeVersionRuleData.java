@@ -45,9 +45,8 @@ public class XcodeVersionRuleData implements TransitiveInfoProvider {
         NonconfigurableAttributeMapper.of(rule);
 
     this.label = label;
-    DottedVersion xcodeVersion =
-        DottedVersion.fromStringUnchecked(
-            attrMapper.get(XcodeVersionRule.VERSION_ATTR_NAME, Type.STRING));
+    DottedVersion xcodeVersion = DottedVersion.fromString(
+        attrMapper.get(XcodeVersionRule.VERSION_ATTR_NAME, Type.STRING));
     String iosSdkVersionString =
         attrMapper.get(XcodeVersionRule.DEFAULT_IOS_SDK_VERSION_ATTR_NAME, Type.STRING);
     String watchosSdkVersionString =
