@@ -504,9 +504,7 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
    */
   @Test
   public void buildHelperCreateJavaInfoExportProvider() throws Exception {
-    setBuildLanguageOptions(
-        "--incompatible_enable_exports_provider",
-        "--experimental_builtins_injection_override=-java_library");
+    setBuildLanguageOptions("--incompatible_enable_exports_provider");
     ruleBuilder().build();
     scratch.file(
         "foo/BUILD",
@@ -565,9 +563,7 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
    */
   @Test
   public void buildHelperCreateJavaInfoExportProvider001() throws Exception {
-    setBuildLanguageOptions(
-        "--incompatible_enable_exports_provider",
-        "--experimental_builtins_injection_override=-java_library");
+    setBuildLanguageOptions("--incompatible_enable_exports_provider");
     ruleBuilder().build();
     scratch.file(
         "foo/BUILD",
