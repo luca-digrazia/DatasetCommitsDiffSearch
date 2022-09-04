@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -39,13 +38,6 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
   private enum RunfilesActionAttributes {
     RUNFILES,
     ENABLE_RUNFILES,
-    INPROCESS_SYMLINKS,
-    FIXED_ENVIRONMENT,
-    VARIABLE_ENVIRONMENT
-  }
-
-  private enum SkipManifestAttributes {
-    RUNFILES,
     INPROCESS_SYMLINKS,
     FIXED_ENVIRONMENT,
     VARIABLE_ENVIRONMENT
@@ -74,8 +66,7 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
                         attributesToFlip.contains(RunfilesActionAttributes.FIXED_ENVIRONMENT),
                         attributesToFlip.contains(RunfilesActionAttributes.VARIABLE_ENVIRONMENT)),
                     attributesToFlip.contains(RunfilesActionAttributes.ENABLE_RUNFILES),
-                    attributesToFlip.contains(RunfilesActionAttributes.INPROCESS_SYMLINKS),
-                    /*skipRunfilesManifests=*/ false))
+                    attributesToFlip.contains(RunfilesActionAttributes.INPROCESS_SYMLINKS)))
         .combinations(
             FilesetActionAttributes.class,
             (attributesToFlip) ->
@@ -89,26 +80,7 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
                         attributesToFlip.contains(FilesetActionAttributes.FIXED_ENVIRONMENT),
                         attributesToFlip.contains(FilesetActionAttributes.VARIABLE_ENVIRONMENT)),
                     attributesToFlip.contains(FilesetActionAttributes.ENABLE_RUNFILES),
-                    attributesToFlip.contains(FilesetActionAttributes.INPROCESS_SYMLINKS),
-                    /*skipRunfilesManifests=*/ false))
-        .combinations(
-            SkipManifestAttributes.class,
-            (attributesToFlip) ->
-                // skipRunfilesManifests requires !filesetTree and enableRunfiles
-                new SymlinkTreeAction(
-                    ActionsTestUtil.NULL_ACTION_OWNER,
-                    inputManifest,
-                    attributesToFlip.contains(SkipManifestAttributes.RUNFILES)
-                        ? new Runfiles.Builder("TESTING", false).addArtifact(runfile).build()
-                        : new Runfiles.Builder("TESTING", false).addArtifact(runfile2).build(),
-                    outputManifest,
-                    /*filesetTree=*/ false,
-                    createActionEnvironment(
-                        attributesToFlip.contains(SkipManifestAttributes.FIXED_ENVIRONMENT),
-                        attributesToFlip.contains(SkipManifestAttributes.VARIABLE_ENVIRONMENT)),
-                    /*enableRunfiles=*/ true,
-                    attributesToFlip.contains(SkipManifestAttributes.INPROCESS_SYMLINKS),
-                    /*skipRunfilesManifests=*/ true))
+                    attributesToFlip.contains(FilesetActionAttributes.INPROCESS_SYMLINKS)))
         .runTest();
   }
 
@@ -116,24 +88,5 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
     return ActionEnvironment.create(
         fixed ? ImmutableMap.of("a", "b") : ImmutableMap.of(),
         variable ? ImmutableSet.of("c") : ImmutableSet.of());
-  }
-
-  @Test
-  public void testNullRunfilesThrows() {
-    Artifact inputManifest = getBinArtifactWithNoOwner("dir/manifest.in");
-    Artifact outputManifest = getBinArtifactWithNoOwner("dir/MANIFEST");
-    MoreAsserts.assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            new SymlinkTreeAction(
-                ActionsTestUtil.NULL_ACTION_OWNER,
-                inputManifest,
-                /*runfiles=*/ null,
-                outputManifest,
-                /*filesetTree=*/ false,
-                createActionEnvironment(false, false),
-                /*enableRunfiles=*/ true,
-                /*inprocessSymlinkCreation=*/ false,
-                /*skipRunfilesManifests=*/ false));
   }
 }
