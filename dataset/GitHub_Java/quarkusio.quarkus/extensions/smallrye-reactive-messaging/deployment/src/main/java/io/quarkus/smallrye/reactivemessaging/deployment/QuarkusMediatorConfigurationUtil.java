@@ -1,12 +1,6 @@
 package io.quarkus.smallrye.reactivemessaging.deployment;
 
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.ACKNOWLEDGMENT;
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.BLOCKING;
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.BROADCAST;
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.INCOMING;
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.MERGE;
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.OUTGOING;
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.SMALLRYE_BLOCKING;
+import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.*;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -128,20 +122,15 @@ public final class QuarkusMediatorConfigurationUtil {
                 }));
 
         AnnotationInstance blockingAnnotation = methodInfo.annotation(BLOCKING);
-        AnnotationInstance smallryeBlockingAnnotation = methodInfo.annotation(SMALLRYE_BLOCKING);
-        if (blockingAnnotation != null || smallryeBlockingAnnotation != null) {
+        if (blockingAnnotation != null) {
             mediatorConfigurationSupport.validateBlocking(validationOutput);
             configuration.setBlocking(true);
-            if (blockingAnnotation != null) {
-                AnnotationValue ordered = blockingAnnotation.value("ordered");
-                configuration.setBlockingExecutionOrdered(ordered == null || ordered.asBoolean());
-                String poolName;
-                if (blockingAnnotation.value() != null &&
-                        !(poolName = blockingAnnotation.value().asString()).equals(Blocking.DEFAULT_WORKER_POOL)) {
-                    configuration.setWorkerPoolName(poolName);
-                }
-            } else {
-                configuration.setBlockingExecutionOrdered(true);
+            AnnotationValue ordered = blockingAnnotation.value("ordered");
+            configuration.setBlockingExecutionOrdered(ordered == null || ordered.asBoolean());
+            String poolName;
+            if (blockingAnnotation.value() != null &&
+                    !(poolName = blockingAnnotation.value().asString()).equals(Blocking.DEFAULT_WORKER_POOL)) {
+                configuration.setWorkerPoolName(poolName);
             }
         }
 
