@@ -824,16 +824,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     public boolean skipParsingAction;
 
     @Option(
-        name = "experimental_omit_resources_info_provider_from_android_binary",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-        help =
-            "Omit AndroidResourcesInfo provider from android_binary rules."
-                + " Propagating resources out to other binaries is usually unintentional.")
-    public boolean omitResourcesInfoProviderFromAndroidBinary;
-
-    @Option(
         name = "android_fixed_resource_neverlinking",
         defaultValue = "false",
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -1082,7 +1072,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   private final boolean throwOnResourceConflict;
   private final boolean useParallelDex2Oat;
   private final boolean skipParsingAction;
-  private final boolean omitResourcesInfoProviderFromAndroidBinary;
   private final boolean fixedResourceNeverlinking;
   private final AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel;
   private final boolean checkForMigrationTag;
@@ -1132,8 +1121,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.throwOnResourceConflict = options.throwOnResourceConflict;
     this.useParallelDex2Oat = options.useParallelDex2Oat;
     this.skipParsingAction = options.skipParsingAction;
-    this.omitResourcesInfoProviderFromAndroidBinary =
-        options.omitResourcesInfoProviderFromAndroidBinary;
     this.fixedResourceNeverlinking = options.fixedResourceNeverlinking;
     this.robolectricTestDeprecationLevel = options.robolectricTestDeprecationLevel;
     // use --incompatible_disable_native_android_rules, and also the old flag for backwards
@@ -1339,11 +1326,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   @Override
   public boolean skipParsingAction() {
     return this.skipParsingAction;
-  }
-
-  @Override
-  public boolean omitResourcesInfoProviderFromAndroidBinary() {
-    return this.omitResourcesInfoProviderFromAndroidBinary;
   }
 
   @Override
