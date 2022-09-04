@@ -316,9 +316,8 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + " attributes, but opts into some restrictions: <ul><li>Targets of this rule"
                     + " are limited in the number of transitive dependencies they may have."
                     + " <li>The rule is considered a test rule (as if <code>test=True</code> were"
-                    + " set). This supercedes the value of <code>test</code></li> <li>The rule"
-                    + " implementation function may not register actions."
-                    + " Instead, it must register a pass/fail result via providing <a"
+                    + " set).</li> <li>The rule implementation function may not register actions."
+                    + " Instead, must register a pass/fail result via providing <a"
                     + " href='AnalysisTestResultInfo.html'>AnalysisTestResultInfo</a>.</li></ul>"),
         @Param(
             name = "build_setting",

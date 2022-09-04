@@ -14,12 +14,12 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.test;
 
-import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 
 /**
  * Encapsulates information about an analysis-phase error which would have occurred during a build.
@@ -33,7 +33,7 @@ import com.google.devtools.build.lib.syntax.StarlarkValue;
             + " created with <code>analysis_test=True</code> <b>must</b> return an instance of"
             + " this provider, and non-analysis-phase test rules <b>cannot</b> return this "
             + "provider.")
-public interface AnalysisTestResultInfoApi extends StarlarkValue {
+public interface AnalysisTestResultInfoApi extends SkylarkValue {
 
   @SkylarkCallable(
       name = "success",
@@ -41,17 +41,17 @@ public interface AnalysisTestResultInfoApi extends StarlarkValue {
           "If true, then the analysis-phase test represented by this target passed. If "
               + "false, the test failed.",
       structField = true)
-  Boolean getSuccess();
+  public Boolean getSuccess();
 
   @SkylarkCallable(
       name = "message",
       doc = "A descriptive message containing information about the test and its success/failure.",
       structField = true)
-  String getMessage();
+  public String getMessage();
 
   /** Provider class for {@link AnalysisTestResultInfoApi} objects. */
   @SkylarkModule(name = "Provider", documented = false, doc = "")
-  interface AnalysisTestResultInfoProviderApi extends ProviderApi {
+  public interface AnalysisTestResultInfoProviderApi extends ProviderApi {
 
     @SkylarkCallable(
         name = "AnalysisTestResultInfo",
@@ -76,6 +76,6 @@ public interface AnalysisTestResultInfoApi extends StarlarkValue {
     @SkylarkConstructor(
         objectType = AnalysisTestResultInfoApi.class,
         receiverNameForDoc = "AnalysisTestResultInfo")
-    AnalysisTestResultInfoApi testResultInfo(Boolean success, String message);
+    public AnalysisTestResultInfoApi testResultInfo(Boolean success, String message);
   }
 }
