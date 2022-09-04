@@ -178,7 +178,6 @@ public class RestHolder extends BaseGeneratedClassHolder {
 		JMethod setErrorHandlerMethod = codeModelHelper.implementMethod(this, methods, "setRestErrorHandler", TypeKind.VOID.toString(), RestErrorHandler.class.getName());
 
 		if (setErrorHandlerMethod != null) {
-			setRestErrorHandlerField();
 			setErrorHandlerMethod.body().assign(_this().ref(getRestErrorHandlerField()), setErrorHandlerMethod.params().get(0));
 		}
 	}
@@ -257,7 +256,9 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	}
 
 	public JFieldVar getRestErrorHandlerField() {
-		// restErrorHandlerField is created only if the method setRestErrorHandler is implemented
+		if (restErrorHandlerField == null) {
+			setRestErrorHandlerField();
+		}
 		return restErrorHandlerField;
 	}
 

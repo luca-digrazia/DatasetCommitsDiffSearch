@@ -15,15 +15,19 @@
  */
 package org.androidannotations.helper;
 
-
 import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
@@ -31,9 +35,8 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Types;
 
-import org.androidannotations.annotations.EBean;
-import org.androidannotations.holder.EBeanHolder;
 import org.androidannotations.holder.EComponentHolder;
 import org.androidannotations.holder.GeneratedClassHolder;
 
@@ -49,15 +52,17 @@ import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JStatement;
+import com.sun.codemodel.JSuperWildcard;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-
-import static com.sun.codemodel.JExpr._new;
-import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 
 public class APTCodeModelHelper {
 
 	public JClass typeMirrorToJClass(TypeMirror type, GeneratedClassHolder holder) {
+		return typeMirrorToJClass(type, holder, Collections.<String, TypeMirror>emptyMap());
+	}
+
+	private JClass typeMirrorToJClass(TypeMirror type, GeneratedClassHolder holder, Map<String, TypeMirror> substitute) {
 
 		if (type instanceof DeclaredType) {
 			DeclaredType declaredType = (DeclaredType) type;
@@ -70,7 +75,7 @@ public class APTCodeModelHelper {
 
 			List<JClass> typeArgumentJClasses = new ArrayList<JClass>();
 			for (TypeMirror typeArgument : typeArguments) {
-				typeArgumentJClasses.add(typeMirrorToJClass(typeArgument, holder));
+				typeArgumentJClasses.add(typeMirrorToJClass(typeArgument, holder, substitute));
 			}
 			if (typeArgumentJClasses.size() > 0) {
 				declaredClass = declaredClass.narrow(typeArgumentJClasses);
@@ -78,25 +83,42 @@ public class APTCodeModelHelper {
 
 			return declaredClass;
 		} else if (type instanceof WildcardType) {
-			// TODO : At his time (01/2013), it is not possible to handle the
-			// super bound because code model does not offer a way to model
-			// statement like " ? super X"
-			// (see http://java.net/jira/browse/CODEMODEL-11)
 			WildcardType wildcardType = (WildcardType) type;
+
+            TypeMirror bound = wildcardType.getExtendsBound();
+            if (bound == null) {
+                bound = wildcardType.getSuperBound();
+                if (bound == null) {
+                    return holder.classes().OBJECT.wildcard();
+                }
+                return superWildcard(typeMirrorToJClass(bound, holder, substitute));
+            }
 
 			TypeMirror extendsBound = wildcardType.getExtendsBound();
 
-			return typeMirrorToJClass(extendsBound, holder).wildcard();
+			if (extendsBound == null) {
+				return holder.classes().OBJECT.wildcard();
+			} else {
+				return typeMirrorToJClass(extendsBound, holder, substitute).wildcard();
+			}
 		} else if (type instanceof ArrayType) {
 			ArrayType arrayType = (ArrayType) type;
 
-			JClass refClass = typeMirrorToJClass(arrayType.getComponentType(), holder);
+			JClass refClass = typeMirrorToJClass(arrayType.getComponentType(), holder, substitute);
 
 			return refClass.array();
 		} else {
+			TypeMirror substituted = substitute.get(type.toString());
+			if (substituted != null && type != substituted) {
+				return typeMirrorToJClass(substituted, holder, substitute);
+			}
 			return holder.refClass(type.toString());
 		}
 	}
+
+    private JClass superWildcard(final JClass bound) {
+        return new JSuperWildcard(bound);
+    }
 
 	public static class Parameter {
 		public final String name;
@@ -108,16 +130,67 @@ public class APTCodeModelHelper {
 		}
 	}
 
+	private Map<String, TypeMirror> getActualTypes(Types typeUtils, DeclaredType baseClass, TypeMirror annotatedClass) {
+		List<TypeMirror> superTypes = new ArrayList<TypeMirror>();
+		superTypes.add(annotatedClass);
+		while(!superTypes.isEmpty()) {
+			TypeMirror x = superTypes.remove(0);
+			if (typeUtils.isSameType(typeUtils.erasure(x), typeUtils.erasure(baseClass))) {
+				DeclaredType type = (DeclaredType) x;
+				Map<String, TypeMirror> actualTypes = new HashMap<String, TypeMirror>();
+				for (int i = 0; i < type.getTypeArguments().size(); i++) {
+					TypeMirror actualArg = type.getTypeArguments().get(i);
+					TypeMirror formalArg = baseClass.getTypeArguments().get(i);
+					if (!typeUtils.isSameType(actualArg, formalArg)) {
+						actualTypes.put(formalArg.toString(), actualArg);
+					}
+				}
+				return actualTypes;
+			}
+			superTypes.addAll(typeUtils.directSupertypes(x));
+		}
+		return Collections.emptyMap();
+	}
+
+	public JClass typeBoundsToJClass(GeneratedClassHolder holder, List<? extends TypeMirror> bounds) {
+		return typeBoundsToJClass(holder, bounds, Collections.<String, TypeMirror>emptyMap());
+	}
+
+	private JClass typeBoundsToJClass(GeneratedClassHolder holder, List<? extends TypeMirror> bounds, Map<String, TypeMirror> actualTypes) {
+		if (bounds.isEmpty()) {
+			return holder.classes().OBJECT;
+		} else {
+			//TODO resolve <T extends A&B> bounds
+			return typeMirrorToJClass(bounds.get(0), holder, actualTypes);
+		}
+	}
+
 	public JMethod overrideAnnotatedMethod(ExecutableElement executableElement, GeneratedClassHolder holder) {
+        TypeMirror annotatedClass = holder.getAnnotatedElement().asType();
+		DeclaredType baseClass = (DeclaredType) executableElement.getEnclosingElement().asType();
+
+        Types typeUtils = holder.processingEnvironment().getTypeUtils();
+
+		Map<String, TypeMirror> actualTypes = getActualTypes(typeUtils, baseClass, annotatedClass);
+		Map<String, JClass> methodTypes = new LinkedHashMap<String, JClass>();
+
+		for (TypeParameterElement typeParameter : executableElement.getTypeParameters()) {
+			List<? extends TypeMirror> bounds = typeParameter.getBounds();
+			JClass jClassBounds = typeBoundsToJClass(holder, bounds, actualTypes);
+			methodTypes.put(typeParameter.toString(), jClassBounds);
+		}
+
+		actualTypes.keySet().removeAll(methodTypes.keySet());
 
 		String methodName = executableElement.getSimpleName().toString();
-
-		JClass returnType = typeMirrorToJClass(executableElement.getReturnType(), holder);
+		JClass returnType = typeMirrorToJClass(executableElement.getReturnType(), holder, actualTypes);
 
 		List<Parameter> parameters = new ArrayList<Parameter>();
-		for (VariableElement parameter : executableElement.getParameters()) {
-			String parameterName = parameter.getSimpleName().toString();
-			JClass parameterClass = typeMirrorToJClass(parameter.asType(), holder);
+		for (int i = 0; i < executableElement.getParameters().size(); i++) {
+            VariableElement parameter = executableElement.getParameters().get(i);
+
+            String parameterName = parameter.getSimpleName().toString();
+            JClass parameterClass = typeMirrorToJClass(parameter.asType(), holder, actualTypes);
 			parameters.add(new Parameter(parameterName, parameterClass));
 		}
 
@@ -130,14 +203,16 @@ public class APTCodeModelHelper {
 		JMethod method = holder.getGeneratedClass().method(JMod.PUBLIC, returnType, methodName);
 		method.annotate(Override.class);
 
-		for (VariableElement parameter : executableElement.getParameters()) {
-			String parameterName = parameter.getSimpleName().toString();
-			JClass parameterClass = typeMirrorToJClass(parameter.asType(), holder);
-			method.param(JMod.FINAL, parameterClass, parameterName);
-		}
+        for (Map.Entry<String, JClass> typeDeclaration : methodTypes.entrySet()) {
+            method.generify(typeDeclaration.getKey(), typeDeclaration.getValue());
+        }
+
+        for (Parameter parameter : parameters) {
+			method.param(JMod.FINAL, parameter.jClass, parameter.name);
+        }
 
 		for (TypeMirror superThrownType : executableElement.getThrownTypes()) {
-			JClass thrownType = typeMirrorToJClass(superThrownType, holder);
+			JClass thrownType = typeMirrorToJClass(superThrownType, holder, actualTypes);
 			method._throws(thrownType);
 		}
 
@@ -198,25 +273,25 @@ public class APTCodeModelHelper {
 		return clonedBody;
 	}
 
-    public void replaceSuperCall(JMethod method, JBlock replacement) {
-        String superCallStart = "super."+method.name()+"(";
+	public void replaceSuperCall(JMethod method, JBlock replacement) {
+		String superCallStart = "super." + method.name() + "(";
 
-        JBlock oldBody = removeBody(method);
-        JBlock newBody = method.body();
+		JBlock oldBody = removeBody(method);
+		JBlock newBody = method.body();
 
-        for (Object content : oldBody.getContents()) {
-            StringWriter writer = new StringWriter();
-            JFormatter formatter = new JFormatter(writer);
-            JStatement statement = (JStatement) content;
-            statement.state(formatter);
-            String statementString = writer.getBuffer().toString();
-            if (statementString.startsWith(superCallStart)) {
-                newBody.add(replacement);
-            } else {
-                newBody.add(statement);
-            }
-        }
-    }
+		for (Object content : oldBody.getContents()) {
+			StringWriter writer = new StringWriter();
+			JFormatter formatter = new JFormatter(writer);
+			JStatement statement = (JStatement) content;
+			statement.state(formatter);
+			String statementString = writer.getBuffer().toString();
+			if (statementString.startsWith(superCallStart)) {
+				newBody.add(replacement);
+			} else {
+				newBody.add(statement);
+			}
+		}
+	}
 
 	public String getIdStringFromIdFieldRef(JFieldRef idRef) {
 		try {
@@ -263,7 +338,7 @@ public class APTCodeModelHelper {
 	/**
 	 * Gets all of the methods of the class and includes the methods of any
 	 * implemented interfaces.
-	 *
+	 * 
 	 * @param typeElement
 	 * @return full list of methods.
 	 */
@@ -338,16 +413,6 @@ public class APTCodeModelHelper {
 		}
 
 		return null;
-	}
-
-	public JInvocation newBeanOrEBean(GeneratedClassHolder holder, DeclaredType beanType, JVar contextVar) {
-		if (beanType.asElement().getAnnotation(EBean.class) != null) {
-			String typeQualifiedName = beanType.toString();
-			JClass injectedClass = holder.refClass(typeQualifiedName + GENERATION_SUFFIX);
-			return injectedClass.staticInvoke(EBeanHolder.GET_INSTANCE_METHOD_NAME).arg(contextVar);
-		} else {
-			return _new(holder.refClass(beanType.toString()));
-		}
 	}
 
 }
