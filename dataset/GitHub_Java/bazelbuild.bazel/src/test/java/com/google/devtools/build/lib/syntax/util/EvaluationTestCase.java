@@ -74,10 +74,11 @@ public class EvaluationTestCase {
     ImmutableMap.Builder<String, Object> envBuilder = ImmutableMap.builder();
     SkylarkModules.addSkylarkGlobalsToBuilder(envBuilder); // TODO(adonovan): break bad dependency
     envBuilder.putAll(extraPredeclared);
+    Module module = Module.createForBuiltins(envBuilder.build());
 
     StarlarkThread thread =
         StarlarkThread.builder(Mutability.create("test"))
-            .setGlobals(Module.createForBuiltins(envBuilder.build()))
+            .setGlobals(module)
             .setSemantics(semantics)
             .build();
     thread.setPrintHandler(StarlarkThread.makeDebugPrintHandler(getEventHandler()));
@@ -127,13 +128,13 @@ public class EvaluationTestCase {
   /** Joins the lines, parses them as an expression, and evaluates it. */
   public final Object eval(String... lines) throws Exception {
     ParserInput input = ParserInput.fromLines(lines);
-    return EvalUtils.eval(input, thread.getGlobals(), thread);
+    return EvalUtils.eval(input, thread);
   }
 
   /** Joins the lines, parses them as a file, and executes it. */
   public final void exec(String... lines) throws SyntaxError, EvalException, InterruptedException {
     ParserInput input = ParserInput.fromLines(lines);
-    EvalUtils.exec(input, thread.getGlobals(), thread);
+    EvalUtils.exec(input, thread);
   }
 
   public void checkEvalError(String msg, String... input) throws Exception {

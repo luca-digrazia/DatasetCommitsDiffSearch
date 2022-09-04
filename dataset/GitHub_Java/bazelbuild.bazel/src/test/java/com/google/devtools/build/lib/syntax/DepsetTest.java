@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -37,8 +37,6 @@ public final class DepsetTest extends EvaluationTestCase {
     assertThat(lookup("s")).isInstanceOf(Depset.class);
   }
 
-  private static final SkylarkType TUPLE = SkylarkType.of(Tuple.class);
-
   @Test
   public void testTuples() throws Exception {
     exec(
@@ -50,10 +48,10 @@ public final class DepsetTest extends EvaluationTestCase {
         "s_six = depset(transitive = [s_one, s_five])",
         "s_seven = depset(direct = [('1', '3')], transitive = [s_one, s_five])",
         "s_eight = depset(direct = [(1, 3)], transitive = [s_one, s_two])"); // note, tuple of int
-    assertThat(get("s_one").getContentType()).isEqualTo(TUPLE);
-    assertThat(get("s_two").getContentType()).isEqualTo(TUPLE);
-    assertThat(get("s_three").getContentType()).isEqualTo(TUPLE);
-    assertThat(get("s_eight").getContentType()).isEqualTo(TUPLE);
+    assertThat(get("s_one").getContentType()).isEqualTo(SkylarkType.TUPLE);
+    assertThat(get("s_two").getContentType()).isEqualTo(SkylarkType.TUPLE);
+    assertThat(get("s_three").getContentType()).isEqualTo(SkylarkType.TUPLE);
+    assertThat(get("s_eight").getContentType()).isEqualTo(SkylarkType.TUPLE);
 
     assertThat(get("s_four").getSet(Tuple.class).toList())
         .containsExactly(
@@ -72,14 +70,6 @@ public final class DepsetTest extends EvaluationTestCase {
     assertThat(get("s").getSet(String.class).toList()).containsExactly("a", "b").inOrder();
     assertThat(get("s").getSet(Object.class).toList()).containsExactly("a", "b").inOrder();
     assertThrows(Depset.TypeException.class, () -> get("s").getSet(Integer.class));
-
-    // getSet argument must be a legal Starlark value class, or Object,
-    // but not some superclass that doesn't implement StarlarkValue.
-    Depset ints = Depset.legacyOf(Order.STABLE_ORDER, Tuple.of(1, 2, 3));
-    assertThat(ints.getSet(Integer.class).toString()).isEqualTo("{1, 2, 3}");
-    IllegalArgumentException ex =
-        assertThrows(IllegalArgumentException.class, () -> ints.getSet(Number.class));
-    assertThat(ex.getMessage()).contains("Number is not a subclass of StarlarkValue");
   }
 
   @Test
@@ -167,31 +157,31 @@ public final class DepsetTest extends EvaluationTestCase {
   @Test
   public void testEmptyGenericType() throws Exception {
     exec("s = depset()");
-    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.EMPTY);
+    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.TOP);
   }
 
   @Test
   public void testHomogeneousGenericType() throws Exception {
     exec("s = depset(['a', 'b', 'c'])");
-    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.STRING);
+    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.of(String.class));
   }
 
   @Test
   public void testHomogeneousGenericTypeDirect() throws Exception {
     exec("s = depset(['a', 'b', 'c'], transitive = [])");
-    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.STRING);
+    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.of(String.class));
   }
 
   @Test
   public void testHomogeneousGenericTypeItems() throws Exception {
     exec("s = depset(items = ['a', 'b', 'c'], transitive = [])");
-    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.STRING);
+    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.of(String.class));
   }
 
   @Test
   public void testHomogeneousGenericTypeTransitive() throws Exception {
     exec("s = depset(['a', 'b', 'c'], transitive = [depset(['x'])])");
-    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.STRING);
+    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.of(String.class));
   }
 
   @Test
@@ -244,7 +234,7 @@ public final class DepsetTest extends EvaluationTestCase {
   public void testItemsAndTransitive() throws Exception {
     new Scenario()
         .testIfExactError(
-            "for items, got depset, want sequence",
+            "expected type 'sequence' for items but got type 'depset' instead",
             "depset(items = depset(), transitive = [depset()])");
   }
 
@@ -285,11 +275,11 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testIncompatibleUnion() throws Exception {
-    new Scenario()
-        .testIfErrorContains("unsupported binary operation: depset + list", "depset([]) + ['a']");
+    new Scenario("--incompatible_depset_union=true")
+        .testIfErrorContains("`+` operator on a depset is forbidden", "depset([]) + ['a']");
 
-    new Scenario()
-        .testIfErrorContains("unsupported binary operation: depset | list", "depset([]) | ['a']");
+    new Scenario("--incompatible_depset_union=true")
+        .testIfErrorContains("`|` operator on a depset is forbidden", "depset([]) | ['a']");
   }
 
   private void assertContainsInOrder(String statement, Object... expectedElements)
@@ -300,18 +290,127 @@ public final class DepsetTest extends EvaluationTestCase {
   }
 
   @Test
+  public void testUnionOrder() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "def func():",
+        "  s1 = depset()",
+        "  s2 = depset()",
+        "  s1 += ['a']",
+        "  s2 += ['b']",
+        "  s1 += s2",
+        "  return s1",
+        "s = func()");
+    assertThat(get("s").toCollection()).containsExactly("b", "a").inOrder();
+  }
+
+  @Test
+  public void testUnionIncompatibleOrder() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
+    checkEvalError(
+        "Order mismatch: topological != postorder",
+        "depset(['a', 'b'], order='postorder') + depset(['c', 'd'], order='topological')");
+  }
+
+  @Test
+  public void testFunctionReturnsDepset() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "def func():", //
+        "  t = depset()",
+        "  t += ['a']",
+        "  return t",
+        "s = func()");
+    assertThat(get("s")).isInstanceOf(Depset.class);
+    assertThat(get("s").toCollection()).containsExactly("a");
+  }
+
+  @Test
+  public void testPlusEqualsWithList() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "def func():", //
+        "  t = depset()",
+        "  t += ['a', 'b']",
+        "  return t",
+        "s = func()");
+    assertThat(get("s").toCollection()).containsExactly("a", "b").inOrder();
+  }
+
+  @Test
+  public void testPlusEqualsNoSideEffects() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "def func():",
+        "  s1 = depset()",
+        "  s1 += ['a']",
+        "  s2 = s1",
+        "  s2 += ['b']",
+        "  return s1",
+        "s = func()");
+    assertThat(get("s").toCollection()).containsExactly("a");
+  }
+
+  @Test
+  public void testFuncParamNoSideEffects() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "def func1(t):",
+        "  t += ['b']",
+        "def func2():",
+        "  u = depset()",
+        "  u += ['a']",
+        "  func1(u)",
+        "  return u",
+        "s = func2()");
+    assertThat(get("s").toCollection()).containsExactly("a");
+  }
+
+  @Test
+  public void testTransitiveOrdering() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "def func():",
+        "  sa = depset(['a'], order='postorder')",
+        "  sb = depset(['b'], order='postorder')",
+        "  sc = depset(['c'], order='postorder') + sa",
+        "  return depset() + sb + sc",
+        "s = func()");
+    // The iterator lists the Transitive sets first
+    assertThat(get("s").toCollection()).containsExactly("b", "a", "c").inOrder();
+  }
+
+  @Test
+  public void testLeftRightDirectOrdering() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "def func():",
+        "  t = depset()",
+        "  t += [4]",
+        "  t += [2, 4]",
+        "  t += [3, 4, 5]",
+        "  return t",
+        "s = func()");
+    // All elements are direct. The iterator lists them left-to-right.
+    assertThat(get("s").toCollection()).containsExactly(4, 2, 3, 5).inOrder();
+  }
+
+  @Test
   public void testToString() throws Exception {
-    exec("s = depset([3, 4, 5], transitive = [depset([2, 4, 6])])", "x = str(s)");
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "s = depset() + [2, 4, 6] + [3, 4, 5]", //
+        "x = str(s)");
     assertThat(lookup("x")).isEqualTo("depset([2, 4, 6, 3, 5])");
   }
 
   @Test
   public void testToStringWithOrder() throws Exception {
+    setSemantics("--incompatible_depset_union=false");
     exec(
-        "s = depset([3, 4, 5], transitive = [depset([2, 4, 6])], ",
-        "           order = 'topological')",
+        "s = depset(order = 'topological') + [2, 4, 6] + [3, 4, 5]", //
         "x = str(s)");
-    assertThat(lookup("x")).isEqualTo("depset([3, 5, 6, 4, 2], order = \"topological\")");
+    assertThat(lookup("x")).isEqualTo("depset([2, 4, 6, 3, 5], order = \"topological\")");
   }
 
   private Depset get(String varname) throws Exception {
@@ -320,8 +419,10 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testToList() throws Exception {
-    setSemantics();
-    exec("s = depset([3, 4, 5], transitive = [depset([2, 4, 6])])", "x = s.to_list()");
+    setSemantics("--incompatible_depset_union=false");
+    exec(
+        "s = depset() + [2, 4, 6] + [3, 4, 5]", //
+        "x = s.to_list()");
     Object value = lookup("x");
     assertThat(value).isInstanceOf(StarlarkList.class);
     assertThat((Iterable<?>) value).containsExactly(2, 4, 6, 3, 5).inOrder();
@@ -536,33 +637,5 @@ public final class DepsetTest extends EvaluationTestCase {
       Depset.legacyOf(order, Tuple.of("3", "33")),
       Depset.legacyOf(order, Tuple.of("4", "44"))
     };
-  }
-
-  @Test
-  public void testSkylarkTypeOf() {
-    // legal values
-    assertThat(SkylarkType.of(String.class).toString()).isEqualTo("string");
-    assertThat(SkylarkType.of(Integer.class).toString()).isEqualTo("int");
-    assertThat(SkylarkType.of(Boolean.class).toString()).isEqualTo("bool");
-
-    // concrete non-values
-    assertThrows(IllegalArgumentException.class, () -> SkylarkType.of(Float.class));
-
-    // concrete classes that implement StarlarkValue
-    assertThat(SkylarkType.of(StarlarkList.class).toString()).isEqualTo("list");
-    assertThat(SkylarkType.of(Tuple.class).toString()).isEqualTo("tuple");
-    assertThat(SkylarkType.of(Dict.class).toString()).isEqualTo("dict");
-    class V implements StarlarkValue {} // no SkylarkModule annotation
-    assertThat(SkylarkType.of(V.class).toString()).isEqualTo("V");
-
-    // abstract classes that implement StarlarkValue
-    assertThat(SkylarkType.of(Sequence.class).toString()).isEqualTo("sequence");
-    assertThat(SkylarkType.of(StarlarkCallable.class).toString()).isEqualTo("function");
-    assertThat(SkylarkType.of(StarlarkIterable.class).toString()).isEqualTo("StarlarkIterable");
-
-    // superclasses of legal values that aren't values themselves
-    assertThrows(IllegalArgumentException.class, () -> SkylarkType.of(Number.class));
-    assertThrows(IllegalArgumentException.class, () -> SkylarkType.of(CharSequence.class));
-    assertThrows(IllegalArgumentException.class, () -> SkylarkType.of(Object.class));
   }
 }
