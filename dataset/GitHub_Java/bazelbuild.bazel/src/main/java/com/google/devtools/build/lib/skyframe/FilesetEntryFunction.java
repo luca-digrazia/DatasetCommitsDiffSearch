@@ -52,11 +52,9 @@ public final class FilesetEntryFunction implements SkyFunction {
   public SkyValue compute(SkyKey key, Environment env)
       throws FilesetEntryFunctionException, InterruptedException {
     FilesetTraversalParams t = (FilesetTraversalParams) key.argument();
-    if (t.getDirectTraversal().isPresent()) {
-      Preconditions.checkState(
-          t.getNestedTraversal().isEmpty(),
-          "NestedTraversal must be empty if directTraversal is present: %s", t);
-    }
+    Preconditions.checkState(
+        t.getNestedTraversal().isPresent() != t.getDirectTraversal().isPresent(),
+        "Exactly one of the nested and direct traversals must be specified: %s", t);
 
     // Create the set of excluded files. Only top-level files can be excluded, i.e. ones that are
     // directly under the root if the root is a directory.
@@ -67,26 +65,24 @@ public final class FilesetEntryFunction implements SkyFunction {
     // about the link (its target, associated metadata and again its name).
     Map<PathFragment, FilesetOutputSymlink> outputSymlinks = new LinkedHashMap<>();
 
-    if (!t.getDirectTraversal().isPresent()) {
-      // The absence of "direct" traversal indicates the presence of a "nested" fileset and
-      // getNestedTraversal will return the list FilesetTraversalParams corresponding to each
-      // FilesetEntry of the nested Fileset.
-      Map<SkyKey, SkyValue> results = env.getValues(FilesetEntryValue.keys(t.getNestedTraversal()));
+    if (t.getNestedTraversal().isPresent()) {
+      // The "nested" traversal parameters are present if and only if FilesetEntry.srcdir specifies
+      // another Fileset (a "nested" one).
+      FilesetEntryValue nested = (FilesetEntryValue) env.getValue(
+          FilesetEntryValue.key(t.getNestedTraversal().get()));
       if (env.valuesMissing()) {
         return null;
       }
 
-      for (SkyValue value : results.values()) {
-        FilesetEntryValue nested = (FilesetEntryValue) value;
-        for (FilesetOutputSymlink s : nested.getSymlinks()) {
-          if (!exclusions.contains(s.name.getPathString())) {
-            maybeStoreSymlink(s, t.getDestPath(), outputSymlinks);
-          }
+      for (FilesetOutputSymlink s : nested.getSymlinks()) {
+        if (!exclusions.contains(s.name.getPathString())) {
+          maybeStoreSymlink(s, t.getDestPath(), outputSymlinks);
         }
       }
     } else {
-      // The "direct" traversal params are present, which is the case when the FilesetEntry
-      // specifies a package's BUILD file, a directory or a list of files.
+      // The "nested" traversal params are absent if and only if the "direct" traversal params are
+      // present, which is the case when the FilesetEntry specifies a package's BUILD file, a
+      // directory or a list of files.
 
       // The root of the direct traversal is defined as follows.
       //

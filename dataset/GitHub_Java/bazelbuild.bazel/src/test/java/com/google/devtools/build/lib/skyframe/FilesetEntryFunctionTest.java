@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBound
 import com.google.devtools.build.lib.actions.FilesetTraversalParamsFactory;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
@@ -85,14 +84,10 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
         new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)));
     AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages =
         new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
-    ExternalFilesHelper externalFilesHelper =
-        new ExternalFilesHelper(
-            pkgLocator,
-            ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
-            new BlazeDirectories(
-                new ServerDirectories(outputBase, outputBase),
-                rootDirectory,
-                TestConstants.PRODUCT_NAME));
+    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(
+        pkgLocator,
+        ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
+        new BlazeDirectories(outputBase, outputBase, rootDirectory, TestConstants.PRODUCT_NAME));
 
     Map<SkyFunctionName, SkyFunction> skyFunctions = new HashMap<>();
 
