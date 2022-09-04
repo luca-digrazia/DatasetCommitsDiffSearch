@@ -393,6 +393,7 @@ public class JavaHeaderCompileActionBuilder {
     mandatoryInputs.addTransitive(compileTimeDependencyArtifacts);
 
     commandLine.addExecPaths("--classpath", classpathEntries);
+    commandLine.addAll("--processors", plugins.processorClasses());
     commandLine.addAll(
         "--builtin_processors",
         Sets.intersection(
