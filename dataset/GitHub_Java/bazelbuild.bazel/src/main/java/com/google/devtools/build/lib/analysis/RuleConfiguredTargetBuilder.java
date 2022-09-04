@@ -93,10 +93,6 @@ public final class RuleConfiguredTargetBuilder {
    */
   @Nullable
   public ConfiguredTarget build() throws ActionConflictException {
-    // If allowing analysis failures, the current target may not propagate all of the
-    // expected providers; be lenient on such cases (for example, avoid precondition checks).
-    boolean allowAnalysisFailures = ruleContext.getConfiguration().allowAnalysisFailures();
-
     if (ruleContext.getConfiguration().enforceConstraints()) {
       checkConstraints();
     }
@@ -138,13 +134,8 @@ public final class RuleConfiguredTargetBuilder {
     // Create test action and artifacts if target was successfully initialized
     // and is a test.
     if (TargetUtils.isTestRule(ruleContext.getTarget())) {
-      if (runfilesSupport != null) {
-        add(TestProvider.class, initializeTestProvider(filesToRunProvider));
-      } else {
-        if (!allowAnalysisFailures) {
-          throw new IllegalStateException("Test rules must have runfiles");
-        }
-      }
+      Preconditions.checkState(runfilesSupport != null);
+      add(TestProvider.class, initializeTestProvider(filesToRunProvider));
     }
 
     ExtraActionArtifactsProvider extraActionsProvider =

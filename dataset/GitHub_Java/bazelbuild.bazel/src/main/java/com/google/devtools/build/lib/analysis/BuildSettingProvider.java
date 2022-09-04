@@ -15,30 +15,27 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.RequiredProviders;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 
 /**
- * A built-in provider to allow select()s to know the type, default value, and label when selecting
- * on build settings
+ * A native provider to allow select()s to know the type and default value when selecting on build
+ * settings
  */
 public class BuildSettingProvider implements TransitiveInfoProvider {
 
   public static final RequiredProviders REQUIRE_BUILD_SETTING_PROVIDER =
       RequiredProviders.acceptAnyBuilder()
-          .addBuiltinSet(ImmutableSet.of(BuildSettingProvider.class))
+          .addNativeSet(ImmutableSet.of(BuildSettingProvider.class))
           .build();
 
   private final BuildSetting buildSetting;
   private final Object defaultValue;
-  private final Label label;
 
-  public BuildSettingProvider(BuildSetting buildSetting, Object defaultValue, Label label) {
+  public BuildSettingProvider(BuildSetting buildSetting, Object defaultValue) {
     this.buildSetting = buildSetting;
     this.defaultValue = defaultValue;
-    this.label = label;
   }
 
   public Type<?> getType() {
@@ -47,9 +44,5 @@ public class BuildSettingProvider implements TransitiveInfoProvider {
 
   public Object getDefaultValue() {
     return defaultValue;
-  }
-
-  public Label getLabel() {
-    return label;
   }
 }

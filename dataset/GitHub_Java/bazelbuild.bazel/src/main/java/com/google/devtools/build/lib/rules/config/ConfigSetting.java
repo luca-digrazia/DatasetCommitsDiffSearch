@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.config;
 
-import static com.google.devtools.build.lib.analysis.config.CoreOptionConverters.BUILD_SETTING_CONVERTERS;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -60,6 +58,7 @@ import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.config.ConfigRuleClasses.ConfigSettingRule;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -404,16 +403,6 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
       return targetsToAliases.build();
     }
 
-    /**
-     * The 'flag_values' attribute takes a label->string dictionary of feature flags and
-     * starlark-defined settings to their values in string form.
-     *
-     * @param attributeValue map of user-defined flag labels to their values as set in the
-     *     'flag_values' attribute
-     * @param prerequisites targets that match the keyset of the attributeValue map
-     * @param optionDetails information about the configuration to match against
-     * @param errors error consumer
-     */
     static UserDefinedFlagMatch fromAttributeValueAndPrerequisites(
         Map<Label, String> attributeValue,
         Iterable<? extends TransitiveInfoCollection> prerequisites,
@@ -457,9 +446,8 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
                   : provider.getDefaultValue();
           Object convertedSpecifiedValue;
           try {
-            convertedSpecifiedValue =
-                BUILD_SETTING_CONVERTERS.get(provider.getType()).convert(specifiedValue);
-          } catch (OptionsParsingException e) {
+            convertedSpecifiedValue = provider.getType().convert(specifiedValue, specifiedLabel);
+          } catch (ConversionException e) {
             errors.attributeError(
                 ConfigSettingRule.FLAG_SETTINGS_ATTRIBUTE,
                 String.format(
