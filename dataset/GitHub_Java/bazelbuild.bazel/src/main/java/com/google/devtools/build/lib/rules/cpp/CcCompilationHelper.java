@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
@@ -40,6 +39,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
@@ -762,7 +762,9 @@ public final class CcCompilationHelper {
       CppConfiguration cppConfiguration,
       CcToolchainProvider ccToolchain,
       FeatureConfiguration featureConfiguration,
-      RuleContext ruleContext) {
+      RuleContext ruleContext,
+      boolean generateHeaderTokensGroup,
+      boolean addSelfHeaderTokens) {
     ImmutableMap.Builder<String, NestedSet<Artifact>> outputGroupsBuilder = ImmutableMap.builder();
     outputGroupsBuilder.put(OutputGroupInfo.TEMP_FILES, ccCompilationOutputs.getTemps());
     boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
@@ -773,6 +775,15 @@ public final class CcCompilationHelper {
     outputGroupsBuilder.put(
         OutputGroupInfo.COMPILATION_PREREQUISITES,
         CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContext));
+    if (generateHeaderTokensGroup) {
+      outputGroupsBuilder.put(
+          CcCompilationHelper.HIDDEN_HEADER_TOKENS,
+          CcCompilationHelper.collectHeaderTokens(
+              ruleContext,
+              ruleContext.getFragment(CppConfiguration.class),
+              ccCompilationOutputs,
+              addSelfHeaderTokens));
+    }
     outputGroupsBuilder.putAll(
         CcCommon.createSaveFeatureStateArtifacts(
             cppConfiguration, featureConfiguration, ruleContext));
@@ -1057,14 +1068,15 @@ public final class CcCompilationHelper {
   public static NestedSet<Artifact> collectHeaderTokens(
       RuleContext ruleContext,
       CppConfiguration cppConfiguration,
-      CcCompilationOutputs ccCompilationOutputs) {
+      CcCompilationOutputs ccCompilationOutputs,
+      boolean addSelfTokens) {
     NestedSetBuilder<Artifact> headerTokens = NestedSetBuilder.stableOrder();
     for (OutputGroupInfo dep :
         ruleContext.getPrerequisites(
             "deps", TransitionMode.TARGET, OutputGroupInfo.STARLARK_CONSTRUCTOR)) {
       headerTokens.addTransitive(dep.getOutputGroup(CcCompilationHelper.HIDDEN_HEADER_TOKENS));
     }
-    if (cppConfiguration.processHeadersInDependencies()) {
+    if (addSelfTokens && cppConfiguration.processHeadersInDependencies()) {
       headerTokens.addAll(ccCompilationOutputs.getHeaderTokenFiles());
     }
     return headerTokens.build();

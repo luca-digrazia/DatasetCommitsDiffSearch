@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitionMode;
@@ -47,6 +46,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
@@ -463,7 +463,9 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             ruleContext.getFragment(CppConfiguration.class),
             ccToolchain,
             featureConfiguration,
-            ruleContext);
+            ruleContext,
+            /* generateHeaderTokensGroup= */ true,
+            /* addSelfHeaderTokens= */ true);
     CcStarlarkApiProvider.maybeAdd(ruleContext, targetBuilder);
     targetBuilder
         .setFilesToBuild(filesToBuild)
@@ -483,13 +485,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         .addOutputGroup(
             OutputGroupInfo.HIDDEN_TOP_LEVEL,
             collectHiddenTopLevelArtifacts(
-                ruleContext, ccToolchain, ccCompilationOutputs, featureConfiguration))
-        .addOutputGroup(
-            CcCompilationHelper.HIDDEN_HEADER_TOKENS,
-            CcCompilationHelper.collectHeaderTokens(
-                ruleContext,
-                ruleContext.getFragment(CppConfiguration.class),
-                ccCompilationOutputs));
+                ruleContext, ccToolchain, ccCompilationOutputs, featureConfiguration));
 
     maybeAddDeniedImplicitOutputsProvider(targetBuilder, ruleContext);
   }
