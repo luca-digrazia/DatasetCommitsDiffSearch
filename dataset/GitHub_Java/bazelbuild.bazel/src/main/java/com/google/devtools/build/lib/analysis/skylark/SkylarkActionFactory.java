@@ -105,22 +105,14 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   @Override
   public Artifact declareDirectory(String filename, Object sibling) throws EvalException {
     context.checkMutable("actions.declare_directory");
-    Artifact result;
     if (Runtime.NONE.equals(sibling)) {
-      result =
-          ruleContext.getPackageRelativeTreeArtifact(PathFragment.create(filename), newFileRoot());
+      return ruleContext.getPackageRelativeTreeArtifact(
+          PathFragment.create(filename), newFileRoot());
     } else {
       PathFragment original = ((Artifact) sibling).getRootRelativePath();
       PathFragment fragment = original.replaceName(filename);
-      result = ruleContext.getTreeArtifact(fragment, newFileRoot());
+      return ruleContext.getTreeArtifact(fragment, newFileRoot());
     }
-    if (!result.isTreeArtifact()) {
-      throw new EvalException(
-          null,
-          String.format(
-              "'%s' has already been declared as a regular file, not directory.", filename));
-    }
-    return result;
   }
 
   @Override
