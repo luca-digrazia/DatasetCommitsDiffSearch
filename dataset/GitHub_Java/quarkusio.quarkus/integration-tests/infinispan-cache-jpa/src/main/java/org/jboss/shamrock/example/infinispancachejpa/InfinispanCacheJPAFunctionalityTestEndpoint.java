@@ -7,7 +7,7 @@ import org.hibernate.cache.spi.CacheImplementor;
 import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.stat.CacheRegionStatistics;
 import org.hibernate.stat.Statistics;
-import org.infinispan.protean.hibernate.cache.ProteanInfinispanRegionFactory;
+import org.infinispan.protean.hibernate.cache.InfinispanRegionFactory;
 import org.infinispan.protean.hibernate.cache.ManualTestService;
 
 import java.io.IOException;
@@ -105,7 +105,7 @@ public class InfinispanCacheJPAFunctionalityTestEndpoint extends HttpServlet {
 
     private static void testMaxIdle(EntityManagerFactory entityManagerFactory) {
         final CacheImplementor cacherImplementor = entityManagerFactory.getCache().unwrap(CacheImplementor.class);
-        final ProteanInfinispanRegionFactory regionFactory = (ProteanInfinispanRegionFactory) cacherImplementor.getRegionFactory();
+        final InfinispanRegionFactory regionFactory = (InfinispanRegionFactory) cacherImplementor.getRegionFactory();
         ManualTestService manualTestService = regionFactory.getTimeService();
         manualTestService.advance(120, TimeUnit.SECONDS);
 
@@ -730,13 +730,10 @@ public class InfinispanCacheJPAFunctionalityTestEndpoint extends HttpServlet {
     }
 
     private static void assertCountEquals(Counts expected, Counts actual, String msg) {
-        //FIXME this is currently failing often on CI, needs to be investigated.
-        //Seems to fail more often in native mode.
-        // - https://github.com/jbossas/protean-shamrock/issues/694
-        /*if (!expected.equals(actual))
+        if (!expected.equals(actual))
             throw new RuntimeException(
                     "[" + msg + "] expected " + expected + " second level cache count, instead got: " + actual
-        );*/
+        );
     }
 
     private static void assertRegionStatsEventually(Counts expected, String region, Statistics stats) {
