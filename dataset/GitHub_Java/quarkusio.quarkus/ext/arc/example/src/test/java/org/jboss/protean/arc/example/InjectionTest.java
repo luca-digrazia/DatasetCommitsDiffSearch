@@ -12,16 +12,22 @@ import javax.enterprise.util.TypeLiteral;
 import org.jboss.protean.arc.Arc;
 import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.InstanceHandle;
-import org.jboss.protean.arc.example.Baz;
-import org.jboss.protean.arc.example.BazListProducerClient;
-import org.jboss.protean.arc.example.Foo;
-import org.jboss.protean.arc.example.FooRequest;
-import org.jboss.protean.arc.example.MyQualifier;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class InjectionTest {
 
-    @SuppressWarnings("serial")
+    @BeforeClass
+    public static void init() {
+        Arc.initialize();
+    }
+
+    @AfterClass
+    public static void shutdown() {
+        Arc.shutdown();
+    }
+
     @Test
     public void testInjection() {
         ArcContainer arc = Arc.container();
@@ -34,7 +40,7 @@ public class InjectionTest {
         assertEquals("Lu Foo", foo.get().ping());
         assertEquals("Lu Foo", foo.get().lazyPing());
         assertEquals(foo.get(), arc.instance(Foo.class, new MyQualifier.OneLiteral()).get());
-        foo.release();
+        foo.destroy();
     }
 
     @Test

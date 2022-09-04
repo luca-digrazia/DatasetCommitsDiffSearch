@@ -22,17 +22,15 @@ abstract class AbstractSharedContext implements InjectableContext {
         return (T) instances.getValue(new Key<>(contextual, creationalContext)).get();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T> T get(Contextual<T> contextual) {
-        InstanceHandleImpl<?> handle = instances.getValueIfPresent(new Key<>(contextual, null));
-        return handle != null ? (T) handle.get() : null;
+        return get(contextual, null);
     }
 
     @Override
     public Collection<InstanceHandle<?>> getAll() {
         List<InstanceHandle<?>> all = new ArrayList<>();
-        instances.forEachValue(all::add);
+        instances.forEachValue(v -> all.add(v));
         return all;
     }
 
@@ -50,7 +48,7 @@ abstract class AbstractSharedContext implements InjectableContext {
     }
 
     public synchronized void destroy() {
-        instances.forEachExistingValue(InstanceHandleImpl::destroyInternal);
+        instances.forEachValue(instance -> instance.destroyInternal());
         instances.clear();
     }
 

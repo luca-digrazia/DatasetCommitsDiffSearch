@@ -1,23 +1,7 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc;
 
 /**
- * Represents an instance handle.
+ * Represents a contextual instance handle.
  *
  * @author Martin Kouba
  *
@@ -27,37 +11,31 @@ public interface InstanceHandle<T> extends AutoCloseable {
 
     /**
      *
-     * @return an instance of {@code T} or {@code null}
+     * @return {@code true} if there is exactly one bean that matches the required type and qualifiers, {@code false} otherwise
+     */
+    boolean isAvailable();
+
+    /**
+     *
+     * @return an injected instance of {@code T} or {@code null}
      */
     T get();
 
     /**
+     * Destroys the instance and removes the instance from the underlying context.
      *
-     * @return {@code true} if an instance is available, {@code false} otherwise
      */
-    default boolean isAvailable() {
-        return get() != null;
-    }
-
-    /**
-     * Destroy/release the instance. If this is a CDI contextual instance it's also removed from the underlying context.
-     */
-    default void destroy() {
-        // No-op
-    }
+    void destroy();
 
     /**
      *
-     * @return the injectable bean for a CDI contextual instance or {@code null}
+     * @return the injectable bean
      */
-    default InjectableBean<T> getBean() {
-        return null;
-    }
+    InjectableBean<T> getBean();
 
     /**
      * Delegates to {@link #destroy()}.
      */
-    @Override
     default void close() {
         destroy();
     }

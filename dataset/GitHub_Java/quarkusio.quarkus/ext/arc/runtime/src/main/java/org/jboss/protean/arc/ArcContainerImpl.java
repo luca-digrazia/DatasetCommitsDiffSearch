@@ -12,14 +12,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.context.Initialized;
 import javax.enterprise.context.RequestScoped;
+import javax.enterprise.context.spi.Context;
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
 import javax.enterprise.inject.spi.InjectionPoint;
@@ -32,21 +31,15 @@ import javax.inject.Singleton;
  */
 class ArcContainerImpl implements ArcContainer {
 
-    private final String id;
-
-    private final AtomicBoolean running;
-
     private final List<InjectableBean<?>> beans;
 
     private final List<InjectableObserverMethod<?>> observers;
 
-    private final Map<Class<? extends Annotation>, InjectableContext> contexts;
+    private final Map<Class<? extends Annotation>, Context> contexts;
 
     private final ComputingCache<Resolvable, List<InjectableBean<?>>> resolved;
 
     public ArcContainerImpl() {
-        id = UUID.randomUUID().toString();
-        running = new AtomicBoolean(true);
         beans = new CopyOnWriteArrayList<>();
         observers = new CopyOnWriteArrayList<>();
         for (ComponentsProvider componentsProvider : ServiceLoader.load(ComponentsProvider.class)) {
@@ -62,7 +55,6 @@ class ArcContainerImpl implements ArcContainer {
     }
 
     void init() {
-        requireRunning();
         // Fire an event with qualifier @Initialized(ApplicationScoped.class)
         Set<Annotation> qualifiers = new HashSet<>(4);
         qualifiers.add(Initialized.Literal.APPLICATION);
@@ -71,32 +63,27 @@ class ArcContainerImpl implements ArcContainer {
     }
 
     @Override
-    public InjectableContext getContext(Class<? extends Annotation> scopeType) {
-        requireRunning();
+    public Context getContext(Class<? extends Annotation> scopeType) {
         return contexts.get(scopeType);
     }
 
     @Override
     public <T> InstanceHandle<T> instance(Class<T> type, Annotation... qualifiers) {
-        requireRunning();
         return instanceHandle(type, qualifiers);
     }
 
     @Override
     public <T> InstanceHandle<T> instance(TypeLiteral<T> type, Annotation... qualifiers) {
-        requireRunning();
         return instanceHandle(type.getType(), qualifiers);
     }
 
     @Override
     public ManagedContext requestContext() {
-        requireRunning();
         return (ManagedContext) getContext(RequestScoped.class);
     }
 
     @Override
     public void withinRequest(Runnable action) {
-        requireRunning();
         ManagedContext requestContext = requestContext();
         try {
             requestContext.activate();
@@ -107,24 +94,12 @@ class ArcContainerImpl implements ArcContainer {
         }
     }
 
-    @Override
-    public String toString() {
-        return "ArcContainerImpl [id=" + id + ", running=" + running + ", beans=" + beans.size() + ", observers=" + observers.size() + ", contexts="
-                + contexts.size() + "]";
-    }
-
-    void shutdown() {
-        if (running.compareAndSet(true, false)) {
-            synchronized (this) {
-                contexts.get(ApplicationScoped.class).destroy();
-                contexts.get(Singleton.class).destroy();
-                ((RequestContext) contexts.get(RequestScoped.class)).terminate();
-                contexts.clear();
-                beans.clear();
-                resolved.clear();
-                observers.clear();
-            }
-        }
+    synchronized void shutdown() {
+        ((ApplicationContext) contexts.get(ApplicationScoped.class)).destroy();
+        ((SingletonContext) contexts.get(Singleton.class)).destroy();
+        requestContext().deactivate();
+        beans.clear();
+        resolved.clear();
     }
 
     private <T> InstanceHandle<T> instanceHandle(Type type, Annotation... qualifiers) {
@@ -233,10 +208,9 @@ class ArcContainerImpl implements ArcContainer {
         }
     }
 
-    private void requireRunning() {
-        if (!running.get()) {
-            throw new IllegalStateException("Container not running: " + toString());
-        }
+    @Override
+    public String toString() {
+        return "ArcContainerImpl [beans=" + beans + ", contexts=" + contexts + "]";
     }
 
     private static final class Resolvable {

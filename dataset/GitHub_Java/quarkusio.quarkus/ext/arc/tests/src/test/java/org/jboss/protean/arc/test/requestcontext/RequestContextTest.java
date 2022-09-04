@@ -47,7 +47,6 @@ public class RequestContextTest {
 
         // Id must be different in a different request
         arc.withinRequest(() -> assertNotEquals(controller2Id, arc.instance(Controller.class).get().getId()));
-        assertNotEquals(controller2Id, arc.withinRequest(() -> arc.instance(Controller.class).get().getId()));
     }
 
 }
