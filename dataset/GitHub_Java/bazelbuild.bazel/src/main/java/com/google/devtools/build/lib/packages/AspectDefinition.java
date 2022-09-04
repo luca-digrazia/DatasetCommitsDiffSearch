@@ -195,27 +195,28 @@ public final class AspectDefinition {
       final Multimap<Attribute, Label> labelBuilder,
       Aspect aspect,
       DependencyFilter dependencyFilter) {
-    LabelVisitor<Attribute> labelVisitor = new LabelVisitor<Attribute>() {
-      @Override
-      public void visit(Label label, Attribute aspectAttribute) {
-        Label repositoryRelative = maybeGetRepositoryRelativeLabel(from, label);
-        if (repositoryRelative == null) {
-          return;
-        }
-        labelBuilder.put(aspectAttribute, repositoryRelative);
-      }
-    };
     ImmutableMap<String, Attribute> attributes = aspect.getDefinition().getAttributes();
     for (final Attribute aspectAttribute : attributes.values()) {
       if (!dependencyFilter.apply(aspect, aspectAttribute)) {
         continue;
       }
-      Type<?> type = aspectAttribute.getType();
+      Type type = aspectAttribute.getType();
       if (type.getLabelClass() != LabelClass.DEPENDENCY) {
         continue;
       }
       try {
-        type.visitLabels(labelVisitor, aspectAttribute.getDefaultValue(from), aspectAttribute);
+        type.visitLabels(
+            new LabelVisitor() {
+              @Override
+              public void visit(Label label) {
+                Label repositoryRelative = maybeGetRepositoryRelativeLabel(from, label);
+                if (repositoryRelative == null) {
+                  return;
+                }
+                labelBuilder.put(aspectAttribute, repositoryRelative);
+              }
+            },
+            aspectAttribute.getDefaultValue(from));
       } catch (InterruptedException ex) {
         // Because the LabelVisitor does not throw InterruptedException, it should not be thrown
         // by visitLabels here.
