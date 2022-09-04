@@ -14,29 +14,22 @@
 
 package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.Environment;
 
 /**
- * Test case for a SkylarkCallable method which specifies skylark-info parameters in the incorrect
- * relative order.
+ * Test case for a SkylarkCallable method which does not have an appropriate Environment parameter
+ * despite having useEnvironment set.
  */
-public class SkylarkInfoParamsWrongOrder {
+public class EnvironmentMissing {
 
-  @SkylarkCallable(
-    name = "skylark_info_params_wrong_order",
-    documented = false,
-    parameters = {
-      @Param(name = "some_param", type = String.class, named = true)
-    },
-    useLocation = true,
-    useEnvironment = true
-  )
-  public String threeArgMethod(
-      // Note environment should come after location.
-      String someParam, Environment environment, Location location) {
+  @SkylarkCallable(name = "three_arg_method_missing_env", documented = false,
+      parameters = {
+          @Param(name = "one", type = String.class, named = true),
+          @Param(name = "two", type = Integer.class, named = true),
+      },
+      useEnvironment = true)
+  public String threeArgMethod(String one, Integer two, String shouldBeEnv) {
     return "bar";
   }
 }

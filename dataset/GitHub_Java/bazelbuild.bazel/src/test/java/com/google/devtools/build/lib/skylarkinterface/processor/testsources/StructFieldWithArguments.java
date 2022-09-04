@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.devtools.build.lib.analysis.skylarkinterface.processor.testsources;
+package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 
+import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 
 /**
@@ -21,7 +22,11 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
  */
 public class StructFieldWithArguments {
 
-  @SkylarkCallable(name = "struct_field_method", structField = true, doc = "A private method")
+  @SkylarkCallable(name = "struct_field_method",
+      parameters = {
+          @Param(name = "foo", type = String.class, named = true),
+      },
+      structField = true, doc = "A private method")
   public String structFieldMethod(String foo) {
     return "puppy";
   }
