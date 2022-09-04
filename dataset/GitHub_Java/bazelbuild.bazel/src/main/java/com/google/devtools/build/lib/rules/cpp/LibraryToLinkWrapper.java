@@ -168,6 +168,36 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       return libraryListBuilder.build();
     }
 
+    public static CcLinkingContext merge(List<CcLinkingContext> ccLinkingContexts) {
+      CcLinkingContext.Builder mergedCcLinkingContext = CcLinkingContext.builder();
+      ExtraLinkTimeLibraries.Builder mergedExtraLinkTimeLibraries =
+          ExtraLinkTimeLibraries.builder();
+      for (CcLinkingContext ccLinkingContext : ccLinkingContexts) {
+        mergedCcLinkingContext
+            .addLibraries(ccLinkingContext.getLibraries())
+            .addUserLinkFlags(ccLinkingContext.getUserLinkFlags())
+            .addLinkstamps(ccLinkingContext.getLinkstamps())
+            .addNonCodeInputs(ccLinkingContext.getNonCodeInputs());
+        if (ccLinkingContext.getExtraLinkTimeLibraries() != null) {
+          mergedExtraLinkTimeLibraries.addTransitive(ccLinkingContext.getExtraLinkTimeLibraries());
+        }
+      }
+      mergedCcLinkingContext.setExtraLinkTimeLibraries(mergedExtraLinkTimeLibraries.build());
+      return mergedCcLinkingContext.build();
+    }
+
+    public List<Artifact> getDynamicLibrariesForRuntime(boolean linkingStatically) {
+      ImmutableList.Builder<Artifact> dynamicLibrariesForRuntimeBuilder = ImmutableList.builder();
+      for (LibraryToLinkWrapper libraryToLinkWrapper : libraries) {
+        Artifact artifact =
+            libraryToLinkWrapper.getDynamicLibraryForRuntimeOrNull(linkingStatically);
+        if (artifact != null) {
+          dynamicLibrariesForRuntimeBuilder.add(artifact);
+        }
+      }
+      return dynamicLibrariesForRuntimeBuilder.build();
+    }
+
     public static List<Artifact> getStaticModeParamsForExecutableLibraries(CcInfo ccInfo) {
       return getStaticModeParamsForExecutableLibraries(ccInfo.getCcLinkingContext());
     }
@@ -175,6 +205,23 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     public static List<Artifact> getStaticModeParamsForExecutableLibraries(
         CcLinkingInfo ccLinkingInfo) {
       return getStaticModeParamsForExecutableLibraries(fromCcLinkingInfo(ccLinkingInfo));
+    }
+
+    public static List<Artifact> getStaticModeParamsForDynamicLibraryLibraries(
+        CcLinkingContext ccLinkingContext) {
+      ImmutableList.Builder<Artifact> artifactListBuilder = ImmutableList.builder();
+      for (LibraryToLinkWrapper library : ccLinkingContext.getLibraries()) {
+        if (library.getPicStaticLibrary() != null) {
+          artifactListBuilder.add(library.getPicStaticLibrary());
+        } else if (library.getStaticLibrary() != null) {
+          artifactListBuilder.add(library.getStaticLibrary());
+        } else if (library.getInterfaceLibrary() != null) {
+          artifactListBuilder.add(library.getInterfaceLibrary());
+        } else {
+          artifactListBuilder.add(library.getDynamicLibrary());
+        }
+      }
+      return artifactListBuilder.build();
     }
 
     public NestedSet<LibraryToLinkWrapper> getLibraries() {
@@ -381,14 +428,26 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     return dynamicLibrary;
   }
 
+  public Artifact getResolvedSymlinkDynamicLibrary() {
+    return resolvedSymlinkDynamicLibrary;
+  }
+
   @Override
   public Artifact getInterfaceLibrary() {
     return interfaceLibrary;
   }
 
+  public Artifact getResolvedSymlinkInterfaceLibrary() {
+    return resolvedSymlinkInterfaceLibrary;
+  }
+
   @Override
   public boolean getAlwayslink() {
     return alwayslink;
+  }
+
+  public boolean getMustKeepDebug() {
+    return mustKeepDebug;
   }
 
   public static Builder builder() {

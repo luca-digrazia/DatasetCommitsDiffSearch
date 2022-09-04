@@ -52,8 +52,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.shell.ShellUtils;
@@ -104,6 +104,17 @@ public class CppHelper {
 
   public static TransitiveInfoCollection mallocForTarget(RuleContext ruleContext) {
     return mallocForTarget(ruleContext, "malloc");
+  }
+
+  /**
+   * Returns true if this target should obtain c++ make variables from the toolchain instead of from
+   * the configuration.
+   */
+  public static boolean shouldUseToolchainForMakeVariables(RuleContext ruleContext) {
+    Label toolchainType = getToolchainTypeFromRuleClass(ruleContext);
+    return ruleContext
+        .getFragment(PlatformConfiguration.class)
+        .isToolchainTypeEnabled(toolchainType);
   }
 
   /**
@@ -335,7 +346,10 @@ public class CppHelper {
       RuleContext ruleContext, TransitiveInfoCollection dep) {
 
     Label toolchainType = getToolchainTypeFromRuleClass(ruleContext);
-    if (toolchainType != null && useToolchainResolution(ruleContext)) {
+    if (toolchainType != null
+        && ruleContext
+            .getFragment(PlatformConfiguration.class)
+            .isToolchainTypeEnabled(toolchainType)) {
       return getToolchainFromPlatformConstraints(ruleContext, toolchainType);
     }
     return getToolchainFromCrosstoolTop(ruleContext, dep);
@@ -485,7 +499,7 @@ public class CppHelper {
    * CcCompilationContext}s.
    */
   public static void checkLinkstampsUnique(
-      RuleErrorConsumer listener, Iterable<Linkstamp> linkstamps) {
+      RuleErrorConsumer listener, Iterable<CcLinkParams.Linkstamp> linkstamps) {
     Map<Artifact, NestedSet<Artifact>> result = new LinkedHashMap<>();
     for (Linkstamp pair : linkstamps) {
       Artifact artifact = pair.getArtifact();
@@ -851,20 +865,5 @@ public class CppHelper {
             String.format("proto_library '%s' does not produce output for C++", dep.getLabel()));
       }
     }
-  }
-
-  static boolean useToolchainResolution(RuleContext ruleContext) {
-    CppOptions cppOptions =
-        Preconditions.checkNotNull(
-            ruleContext.getConfiguration().getOptions().get(CppOptions.class));
-
-    if (cppOptions.enableCcToolchainResolution) {
-      return true;
-    }
-
-    // TODO(https://github.com/bazelbuild/bazel/issues/7260): Remove this and the flag.
-    PlatformConfiguration platformConfig =
-        Preconditions.checkNotNull(ruleContext.getFragment(PlatformConfiguration.class));
-    return platformConfig.isToolchainTypeEnabled(getToolchainTypeFromRuleClass(ruleContext));
   }
 }
