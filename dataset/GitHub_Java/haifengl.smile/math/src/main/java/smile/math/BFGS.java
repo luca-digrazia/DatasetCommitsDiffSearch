@@ -56,16 +56,16 @@ import static smile.math.MathEx.norm;
  * <p>
  * Like the original BFGS, the limited-memory BFGS (L-BFGS) uses an
  * estimation to the inverse Hessian matrix to steer its search
- * through variable space, but where BFGS stores a dense {@code n × n}
+ * through variable space, but where BFGS stores a dense <code>n × n</code>
  * approximation to the inverse Hessian (<code>n</code> being the number of
  * variables in the problem), L-BFGS stores only a few vectors
  * that represent the approximation implicitly. Due to its resulting
  * linear memory requirement, the L-BFGS method is particularly well
  * suited for optimization problems with a large number of variables
- * (e.g., {@code > 1000}). Instead of the inverse Hessian <code>H_k</code>, L-BFGS
+ * (e.g., &gt; 1000). Instead of the inverse Hessian <code>H_k</code>, L-BFGS
  * maintains * a history of the past <code>m</code> updates of the position
  * <code>x</code> and gradient <code>∇f(x)</code>, where generally the
- * history size <code>m</code> can be small (often {@code m < 10}).
+ * history size <code>m</code> can be small (often <code>m &lt; 10</code>).
  * These updates are used to implicitly do operations requiring the
  * <code>H_k</code>-vector product.
  *
@@ -259,12 +259,12 @@ public class BFGS {
      * @param m the number of corrections used in the L-BFGS update.
      *          Values of <code>m</code> less than 3 are not recommended;
      *          large values of <code>m</code> will result in excessive
-     *          computing time. {@code 3 <= m <= 7} is recommended.
+     *          computing time. <code>3 &lt;= m &lt;= 7</code> is recommended.
      *          A common choice for m is m = 5.
      *
      * @param x on initial entry this must be set by the user to the values
      *          of the initial estimate of the solution vector. On exit with
-     *          {@code iflag = 0}, it contains the values of the variables
+     *          <code>iflag = 0</code>, it contains the values of the variables
      *          at the best point found (usually a solution).
      *
      * @param gtol the convergence tolerance on zeroing the gradient.
@@ -416,19 +416,21 @@ public class BFGS {
      * endpoints <code>stx</code> and <code>sty</code>. The interval of
      * uncertainty is initially chosen so that it contains a
      * minimizer of the modified function
-     * <pre>{@code
+     * <p>
+     * <pre>
      *      f(x+stp*s) - f(x) - ftol*stp*(gradf(x)'s).
-     * }</pre>
+     * </pre>
      * If a step is obtained for which the modified function
      * has a nonpositive function value and nonnegative derivative,
      * then the interval of uncertainty is chosen so that it
-     * contains a minimizer of {@code f(x+stp*s)}.
+     * contains a minimizer of <code>f(x+stp*s)</code>.
      * <p>
      * The algorithm is designed to find a step which satisfies
      * the sufficient decrease condition
-     * <pre>{@code
+     * <p>
+     * <pre>
      *       f(x+stp*s) &lt;= f(X) + ftol*stp*(gradf(x)'s),
-     * }</pre>
+     * </pre>
      * and the curvature condition
      * <p>
      * <pre>
@@ -451,8 +453,8 @@ public class BFGS {
      *
      * @param p the search direction.
      *
-     * @param x on output, it contains {@code xold + &gamma;*p}, where
-     *          {@code &gamma; > 0} is the step length.
+     * @param x on output, it contains <code>xold + &gamma;*p</code>, where
+     *          &gamma; > 0 is the step length.
      *
      * @param stpmax specify upper bound for the step in the line search so that
      *          we do not try to evaluate the function in regions where it is
@@ -572,12 +574,12 @@ public class BFGS {
      * @param m the number of corrections used in the L-BFGS update.
      *          Values of <code>m</code> less than 3 are not recommended;
      *          large values of <code>m</code> will result in excessive
-     *          computing time. {@code 3 <= m <= 7} is recommended.
+     *          computing time. <code>3 &lt;= m &lt;= 7</code> is recommended.
      *          A common choice for m is m = 5.
      *
      * @param x on initial entry this must be set by the user to the values
      *          of the initial estimate of the solution vector. On exit with
-     *          {@code iflag = 0}, it contains the values of the variables
+     *          <code>iflag = 0</code>, it contains the values of the variables
      *          at the best point found (usually a solution).
      *
      * @param l the lower bound.

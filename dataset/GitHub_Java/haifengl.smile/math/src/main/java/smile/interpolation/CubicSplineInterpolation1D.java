@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
@@ -39,7 +39,7 @@ public class CubicSplineInterpolation1D extends AbstractInterpolation {
     /**
      * Second derivatives of the interpolating function at the tabulated points.
      */
-    private double[] y2;
+    private final double[] y2;
 
     /**
      * Constructor.
@@ -61,9 +61,8 @@ public class CubicSplineInterpolation1D extends AbstractInterpolation {
 
         double a = (xx[khi] - x) / h;
         double b = (x - xx[klo]) / h;
-        double y = a * yy[klo] + b * yy[khi] + ((a * a * a - a) * y2[klo] + (b * b * b - b) * y2[khi]) * (h * h) / 6.0;
 
-        return y;
+        return a * yy[klo] + b * yy[khi] + ((a * a * a - a) * y2[klo] + (b * b * b - b) * y2[khi]) * (h * h) / 6.0;
     }
 
     /**

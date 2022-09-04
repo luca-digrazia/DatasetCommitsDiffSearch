@@ -28,24 +28,11 @@ package smile.interpolation;
  */
 public class BilinearInterpolation implements Interpolation2D {
 
-    /**
-     * The function values at xx.
-     */
     private final double[][] y;
-    /**
-     * To locate the control point in the first dimension.
-     */
-    private final LinearInterpolation x1terp;
-    /**
-     * To locate the control point in the second dimension.
-     */
-    private final LinearInterpolation x2terp;
+    private final LinearInterpolation x1terp, x2terp;
 
     /**
      * Constructor.
-     * @param x1 the 1st dimension value.
-     * @param x2 the 2nd dimension value.
-     * @param y the function values at <code>(x1, x2)</code>.
      */
     public BilinearInterpolation(double[] x1, double[] x2, double[][] y) {
         if (x1.length != y.length) {

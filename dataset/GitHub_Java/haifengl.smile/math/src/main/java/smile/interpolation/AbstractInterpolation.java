@@ -24,41 +24,25 @@ package smile.interpolation;
  */
 public abstract class AbstractInterpolation implements Interpolation {
 
-    /**
-     * The factor min(1, pow(n, 0.25)) to check if
-     * consecutive calls seem correlated.
-     */
     private final int dj;
-    /**
-     * The previous search location.
-     */
     private int jsav;
-    /**
-     * The indicator if consecutive calls seem correlated.
-     * This variable is used by <code>interpolate</code> to
-     * decide if to use <code>locate</code> or <code>hunt</code>
-     * on the next call, which is invisible to the user.
-     */
     private boolean cor;
     /**
      * The number of control points.
      */
     int n;
     /**
-     * The tabulated control points.
+     * Tabulated points
      */
     double[] xx;
     /**
-     * The function values at control points.
+     * Function values at xx.
      */
     double[] yy;
 
     /**
-     * Constructor. Setup for interpolation on a table of x and y.
+     * Constructor. Setup for interpolation on a table of x and y of length m.
      * The value in x must be monotonic, either increasing or decreasing.
-     *
-     * @param x the tabulated points.
-     * @param y the function values at <code>x</code>.
      */
     public AbstractInterpolation(double[] x, double[] y) {
         if (x.length != y.length) {
@@ -90,11 +74,8 @@ public abstract class AbstractInterpolation implements Interpolation {
      * centered in the subrange xx[j..j+m-1], where xx is the stored data. The
      * returned value is not less than 0, nor greater than n-1, where n is the
      * length of xx.
-     *
-     * @param x a real number.
-     * @return the index {@code j} of x in the tabulated points.
      */
-    protected int search(double x) {
+    public int search(double x) {
         return cor ? hunt(x) : locate(x);
     }
 
@@ -102,10 +83,7 @@ public abstract class AbstractInterpolation implements Interpolation {
      * Given a value x, return a value j such that x is (insofar as possible)
      * centered in the subrange xx[j..j+m-1], where xx is the stored data. The
      * returned value is not less than 0, nor greater than n-1, where n is the
-     * length of xx. This method employs the bisection algorithm.
-     *
-     * @param x a real number.
-     * @return the index {@code j} of x in the tabulated points.
+     * length of xx.
      */
     private int locate(double x) {
         int ju, jm, jl;
@@ -130,17 +108,10 @@ public abstract class AbstractInterpolation implements Interpolation {
     }
 
     /**
-     * Searches with correlated values. If two calls that
-     * are close, instead of a full bisection, it anticipates
-     * that the next call will also be.
-     * <p>
      * Given a value x, return a value j such that x is (insofar as possible)
      * centered in the subrange xx[j..j+m-1], where xx is the stored data. The
      * returned value is not less than 0, nor greater than n-1, where n is the
      * length of xx.
-     *
-     * @param x a real number.
-     * @return the index {@code j} of x in the tabulated points.
      */
     private int hunt(double x) {
         int jl = jsav, jm, ju, inc = 1;
@@ -197,11 +168,9 @@ public abstract class AbstractInterpolation implements Interpolation {
 
     /**
      * Subclasses provide this as the actual interpolation method.
-     *
      * @param jlo the value jlo is such that x is (insofar as possible)
      *        centered in the subrange xx[j..j+m-1], where xx is the stored data.
      * @param x interpolate at this value
-     * @return the raw interpolated value.
      */
     public abstract double rawinterp(int jlo, double x);
 }
