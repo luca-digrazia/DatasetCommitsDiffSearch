@@ -24,8 +24,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 
 /** Writes out an R.java source. */
 public class RSourceGenerator {
@@ -48,25 +46,23 @@ public class RSourceGenerator {
 
   /** Writes the java source with the writer values to the specified package and derived dir. */
   public void write(String packageName) throws IOException {
-    write(packageName, values);
+    writeSource(packageName, values);
   }
 
   /**
    * Writes the java source with the passed subset of the writer values.
    *
-   * @param packageName The package and the dir to write the R java source to under the output
-   *     path.
+   * @param packageName The package and the dir to write the R java source to under the output path.
    * @param symbolsToWrite A map of ResourceType to resource name that will be written. If the map
    *     specifies a resource that does not exist in the writer values, it will be ignored.
    */
-  public void write(String packageName, Map<ResourceType, Set<String>> symbolsToWrite)
-      throws IOException {
-    write(packageName, values.filter(symbolsToWrite));
+  public void write(String packageName, FieldInitializers symbolsToWrite) throws IOException {
+    writeSource(packageName, values.filter(symbolsToWrite));
   }
 
-  private void write(
+  private void writeSource(
       String packageName,
-      Iterable<Entry<ResourceType, Collection<FieldInitializer>>> initializersToWrite)
+      Iterable<Map.Entry<ResourceType, Collection<FieldInitializer>>> initializersToWrite)
       throws IOException {
     String packageDir = packageName.replace('.', '/');
     Path packagePath = outputBasePath.resolve(packageDir);
@@ -86,11 +82,11 @@ public class RSourceGenerator {
       writer.write(" */\n");
       writer.write(String.format("package %s;\n", packageName));
       writer.write("public final class R {\n");
-      for (Entry<ResourceType, Collection<FieldInitializer>> entry : initializersToWrite) {
+      for (Map.Entry<ResourceType, Collection<FieldInitializer>> entry : initializersToWrite) {
         writer.write(
             String.format("    public static final class %s {\n", entry.getKey().getName()));
-        for (FieldInitializer field : entry.getValue()) {
-          field.writeInitSource(writer, finalFields);
+        for (FieldInitializer fieldInit : entry.getValue()) {
+          fieldInit.writeInitSource(writer, finalFields);
         }
         writer.write("    }\n");
       }

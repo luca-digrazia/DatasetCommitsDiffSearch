@@ -14,18 +14,27 @@
 package com.google.devtools.build.android.resources;
 
 import com.android.resources.ResourceType;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
 import com.google.common.collect.SortedSetMultimap;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
-/** A wrapper for a {@link Collection} of {@link FieldInitializer}s. */
+/**
+ * Represents a collection of resource symbols and values suitable for writing java sources and
+ * classes.
+ */
 public class FieldInitializers
-    implements Iterable<Entry<ResourceType, Collection<FieldInitializer>>> {
+    implements Iterable<Map.Entry<ResourceType, Collection<FieldInitializer>>> {
 
   private final Map<ResourceType, Collection<FieldInitializer>> initializers;
 
@@ -36,29 +45,75 @@ public class FieldInitializers
   /** Creates a {@link FieldInitializers} copying the contents from a {@link Map}. */
   public static FieldInitializers copyOf(
       Map<ResourceType, Collection<FieldInitializer>> initializers) {
-    return new FieldInitializers(ImmutableMap.copyOf(initializers));
+    Map<ResourceType, Collection<FieldInitializer>> deeplyImmutableInitializers =
+        initializers.entrySet().stream()
+            .collect(
+                ImmutableListMultimap.flatteningToImmutableListMultimap(
+                    Map.Entry::getKey, entry -> entry.getValue().stream()))
+            .asMap();
+
+    return new FieldInitializers(deeplyImmutableInitializers);
   }
 
-  public Iterable<Entry<ResourceType, Collection<FieldInitializer>>> filter(
-      Map<ResourceType, Set<String>> symbolsToWrite) {
-    final SortedSetMultimap<ResourceType, FieldInitializer> initializersToWrite =
+  public static FieldInitializers mergedFrom(Collection<FieldInitializers> toMerge) {
+    final Map<ResourceType, Collection<FieldInitializer>> merged =
+        new EnumMap<>(ResourceType.class);
+
+    for (ResourceType resourceType : ResourceType.values()) {
+      ImmutableList<FieldInitializer> fieldInitializers =
+          toMerge.stream()
+              .flatMap(
+                  fis -> fis.initializers.getOrDefault(resourceType, ImmutableList.of()).stream())
+              .filter(distinctByKey(FieldInitializer::getFieldName))
+              .collect(ImmutableList.toImmutableList());
+
+      if (!fieldInitializers.isEmpty()) {
+        merged.put(resourceType, fieldInitializers);
+      }
+    }
+
+    return copyOf(merged);
+  }
+
+  private static <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
+    Set<Object> seen = ConcurrentHashMap.newKeySet();
+    return t -> seen.add(keyExtractor.apply(t));
+  }
+
+  public FieldInitializers filter(FieldInitializers fieldsToWrite) {
+    // Create a map to filter with.
+    final SortedSetMultimap<ResourceType, String> symbolsToWrite =
         MultimapBuilder.enumKeys(ResourceType.class).treeSetValues().build();
-    for (Entry<ResourceType, Set<String>> entry : symbolsToWrite.entrySet()) {
+    for (Map.Entry<ResourceType, Collection<FieldInitializer>> entry :
+        fieldsToWrite.initializers.entrySet()) {
+      for (FieldInitializer initializer : entry.getValue()) {
+        symbolsToWrite.put(entry.getKey(), initializer.getFieldName());
+      }
+    }
+
+    final Multimap<ResourceType, FieldInitializer> initializersToWrite =
+        MultimapBuilder.enumKeys(ResourceType.class).arrayListValues().build();
+    for (Map.Entry<ResourceType, Collection<String>> entry : symbolsToWrite.asMap().entrySet()) {
       // Resource type may be missing if resource overriding eliminates resources at the binary
       // level, which were originally present at the library level.
-      if (initializers.containsKey(entry.getKey())) {
-        for (FieldInitializer field : initializers.get(entry.getKey())) {
-          if (field.nameIsIn(entry.getValue())) {
-            initializersToWrite.put(entry.getKey(), field);
-          }
+      for (FieldInitializer field : initializers.getOrDefault(entry.getKey(), ImmutableList.of())) {
+        if (entry.getValue().contains(field.getFieldName())) {
+          initializersToWrite.put(entry.getKey(), field);
         }
       }
     }
-    return initializersToWrite.asMap().entrySet();
+    return copyOf(initializersToWrite.asMap());
   }
 
   @Override
-  public Iterator<Entry<ResourceType, Collection<FieldInitializer>>> iterator() {
+  public Iterator<Map.Entry<ResourceType, Collection<FieldInitializer>>> iterator() {
     return initializers.entrySet().iterator();
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(FieldInitializers.class)
+        .add("initializers", initializers)
+        .toString();
   }
 }
