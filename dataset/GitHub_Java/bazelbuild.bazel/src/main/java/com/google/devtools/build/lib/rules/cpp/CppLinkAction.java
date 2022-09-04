@@ -44,13 +44,20 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.extra.CppLinkInfo;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.CollectionUtils;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -105,7 +112,7 @@ public final class CppLinkAction extends AbstractAction
   private final Artifact linkOutput;
   private final LibraryToLink interfaceOutputLibrary;
   private final ImmutableMap<String, String> toolchainEnv;
-  private final ImmutableMap<String, String> executionRequirements;
+  private final ImmutableSet<String> executionRequirements;
   private final ImmutableList<Artifact> linkstampObjects;
 
   private final LinkCommandLine linkCommandLine;
@@ -161,12 +168,16 @@ public final class CppLinkAction extends AbstractAction
       LinkCommandLine linkCommandLine,
       ActionEnvironment env,
       ImmutableMap<String, String> toolchainEnv,
-      ImmutableMap<String, String> executionRequirements,
+      ImmutableSet<String> executionRequirements,
       PathFragment ldExecutable,
       String hostSystemName,
       String targetCpu) {
     super(owner, inputs, outputs, env);
-    this.mnemonic = getMnemonic(mnemonic, isLtoIndexing);
+    if (mnemonic == null) {
+      this.mnemonic = (isLtoIndexing) ? "CppLTOIndexing" : "CppLink";
+    } else {
+      this.mnemonic = mnemonic;
+    }
     this.mandatoryInputs = inputs;
     this.outputLibrary = outputLibrary;
     this.linkOutput = linkOutput;
@@ -210,7 +221,7 @@ public final class CppLinkAction extends AbstractAction
 
     result.putAll(toolchainEnv);
 
-    if (!executionRequirements.containsKey(ExecutionRequirements.REQUIRES_DARWIN)) {
+    if (!executionRequirements.contains(ExecutionRequirements.REQUIRES_DARWIN)) {
       // This prevents gcc from writing the unpredictable (and often irrelevant)
       // value of getcwd() into the debug info.
       result.put("PWD", "/proc/self/cwd");
@@ -255,7 +266,11 @@ public final class CppLinkAction extends AbstractAction
 
   @Override
   public ImmutableMap<String, String> getExecutionInfo() {
-    return executionRequirements;
+    ImmutableMap.Builder<String, String> result = ImmutableMap.<String, String>builder();
+    for (String requirement : executionRequirements) {
+      result.put(requirement, "");
+    }
+    return result.build();
   }
 
   @Override
@@ -472,13 +487,6 @@ public final class CppLinkAction extends AbstractAction
     return mnemonic;
   }
 
-  static String getMnemonic(String mnemonic, boolean isLtoIndexing) {
-    if (mnemonic == null) {
-      return isLtoIndexing ? "CppLTOIndexing" : "CppLink";
-    }
-    return mnemonic;
-  }
-
   @Override
   protected String getRawProgressMessage() {
     return (isLtoIndexing ? "LTO indexing " : "Linking ") + linkOutput.prettyPrint();
@@ -525,5 +533,175 @@ public final class CppLinkAction extends AbstractAction
 
   public static PathFragment symbolCountsFileName(PathFragment binaryName) {
     return binaryName.replaceName(binaryName.getBaseName() + ".sc");
+  }
+
+  /** TransitiveInfoProvider for ELF link actions. */
+  @Immutable
+  @ThreadSafe
+  @AutoCodec
+  public static final class Context implements TransitiveInfoProvider {
+    // Morally equivalent with {@link Builder}, except these are immutable.
+    // Keep these in sync with {@link Builder}.
+    final ImmutableSet<LinkerInput> objectFiles;
+    final ImmutableSet<Artifact> nonCodeInputs;
+    final NestedSet<LibraryToLink> libraries;
+    final NestedSet<Artifact> crosstoolInputs;
+    final ImmutableMap<Artifact, Artifact> ltoBitcodeFiles;
+    final Artifact runtimeMiddleman;
+    final NestedSet<Artifact> runtimeInputs;
+    final ArtifactCategory runtimeType;
+    final ImmutableSet<Linkstamp> linkstamps;
+    final ImmutableList<String> linkopts;
+    final LinkTargetType linkType;
+    final LinkingMode linkingMode;
+    final boolean fake;
+    final boolean isNativeDeps;
+    final boolean useTestOnlyFlags;
+
+    /**
+     * Given a {@link CppLinkActionBuilder}, creates a {@code Context} to pass to another target.
+     * Note well: Keep the Builder->Context and Context->Builder transforms consistent!
+     *
+     * @param builder a mutable {@link CppLinkActionBuilder} to clone from
+     */
+    public Context(CppLinkActionBuilder builder) {
+      this(
+          ImmutableSet.copyOf(builder.getObjectFiles()),
+          ImmutableSet.copyOf(builder.getNonCodeInputs()),
+          NestedSetBuilder.<LibraryToLink>linkOrder()
+              .addTransitive(builder.getLibraries().build())
+              .build(),
+          NestedSetBuilder.<Artifact>stableOrder()
+              .addTransitive(builder.getCrosstoolInputs())
+              .build(),
+          ImmutableMap.copyOf(builder.getLtoBitcodeFiles()),
+          builder.getRuntimeMiddleman(),
+          NestedSetBuilder.<Artifact>stableOrder()
+              .addTransitive(builder.getToolchainLibrariesInputs())
+              .build(),
+          builder.getToolchainLibrariesType(),
+          builder.getLinkstamps(),
+          ImmutableList.copyOf(builder.getLinkopts()),
+          builder.getLinkType(),
+          builder.getLinkingMode(),
+          builder.isFake(),
+          builder.isNativeDeps(),
+          builder.useTestOnlyFlags());
+    }
+
+    @AutoCodec.Instantiator
+    @VisibleForSerialization
+    Context(
+        ImmutableSet<LinkerInput> objectFiles,
+        ImmutableSet<Artifact> nonCodeInputs,
+        NestedSet<LibraryToLink> libraries,
+        NestedSet<Artifact> crosstoolInputs,
+        ImmutableMap<Artifact, Artifact> ltoBitcodeFiles,
+        Artifact runtimeMiddleman,
+        NestedSet<Artifact> runtimeInputs,
+        ArtifactCategory runtimeType,
+        ImmutableSet<Linkstamp> linkstamps,
+        ImmutableList<String> linkopts,
+        LinkTargetType linkType,
+        Link.LinkingMode linkingMode,
+        boolean fake,
+        boolean isNativeDeps,
+        boolean useTestOnlyFlags) {
+      this.objectFiles = objectFiles;
+      this.nonCodeInputs = nonCodeInputs;
+      this.libraries = libraries;
+      this.crosstoolInputs = crosstoolInputs;
+      this.ltoBitcodeFiles = ltoBitcodeFiles;
+      this.runtimeMiddleman = runtimeMiddleman;
+      this.runtimeInputs = runtimeInputs;
+      this.runtimeType = runtimeType;
+      this.linkstamps = linkstamps;
+      this.linkopts = linkopts;
+      this.linkType = linkType;
+      this.linkingMode = linkingMode;
+      this.fake = fake;
+      this.isNativeDeps = isNativeDeps;
+      this.useTestOnlyFlags = useTestOnlyFlags;
+    }
+
+    /**
+     * Returns linker inputs that are not libraries.
+     */
+    public ImmutableSet<LinkerInput> getObjectFiles() {
+      return this.objectFiles;
+    }
+    
+    /**
+     * Returns libraries that are to be inputs to the linker.
+     */
+    public NestedSet<LibraryToLink> getLibraries() {
+      return this.libraries;
+    }
+    
+    /**
+     * Returns input artifacts arising from the crosstool.
+     */
+    public NestedSet<Artifact> getCrosstoolInputs() {
+      return this.crosstoolInputs;
+    }
+    
+    /**
+     * Returns the runtime middleman artifact.
+     */
+    public Artifact getRuntimeMiddleman() {
+      return this.runtimeMiddleman;
+    }
+    
+    /**
+     * Returns runtime inputs for the linker.
+     */
+    public NestedSet<Artifact> getRuntimeInputs() {
+      return this.runtimeInputs;
+    }
+
+    /** Returns linkstamp artifacts. */
+    public ImmutableSet<Linkstamp> getLinkstamps() {
+      return this.linkstamps;
+    }
+
+    /**
+     * Returns linkopts for the linking of this target.
+     */
+    public ImmutableList<String> getLinkopts() {
+      return this.linkopts;
+    }
+    
+    /**
+     * Returns the type of the linking of this target.
+     */
+    public LinkTargetType getLinkType() {
+      return this.linkType;
+    }
+
+    /** Returns the staticness of the linking of this target. */
+    public LinkingMode getLinkingMode() {
+      return this.linkingMode;
+    }
+    
+    /**
+     * Returns true for cc_fake_binary targets.
+     */
+    public boolean isFake() {
+      return this.fake;
+    }
+    
+    /**
+     * Returns true if the linking of this target is used for a native dependency library.
+     */
+    public boolean isNativeDeps() {
+      return this.isNativeDeps;
+    }
+    
+    /**
+     * Returns true if the linking for this target uses test-specific flags.
+     */
+    public boolean useTestOnlyFlags() {
+      return this.useTestOnlyFlags;
+    }
   }
 }

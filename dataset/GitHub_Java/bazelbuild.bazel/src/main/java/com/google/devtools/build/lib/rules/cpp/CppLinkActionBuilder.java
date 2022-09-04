@@ -924,17 +924,16 @@ public class CppLinkActionBuilder {
     ImmutableSet<Artifact> expandedLinkerArtifactsNoLinkstamps =
         Sets.difference(expandedLinkerArtifacts, linkstampObjectArtifacts).immutableCopy();
 
-    CcToolchainVariables variables;
     try {
-      variables =
+      CcToolchainVariables variables =
           LinkBuildVariables.setupVariables(
               getLinkType().linkerOrArchiver().equals(LinkerOrArchiver.LINKER),
-              configuration.getBinDirectory().getExecPath(),
-              output.getExecPathString(),
+              configuration,
+              output,
               linkType.equals(LinkTargetType.DYNAMIC_LIBRARY),
-              paramFile != null ? paramFile.getExecPathString() : null,
-              thinltoParamFile != null ? thinltoParamFile.getExecPathString() : null,
-              thinltoMergedObjectFile != null ? thinltoMergedObjectFile.getExecPathString() : null,
+              paramFile,
+              thinltoParamFile,
+              thinltoMergedObjectFile,
               mustKeepDebug,
               symbolCounts,
               toolchain,
@@ -942,21 +941,21 @@ public class CppLinkActionBuilder {
               useTestOnlyFlags,
               isLtoIndexing,
               ImmutableList.copyOf(linkopts),
-              toolchain.getInterfaceSoBuilder().getExecPathString(),
-              interfaceOutput != null ? interfaceOutput.getExecPathString() : null,
+              toolchain.getInterfaceSoBuilder(),
+              interfaceOutput,
               ltoOutputRootPrefix,
-              defFile != null ? defFile.getExecPathString() : null,
+              defFile,
               fdoSupport,
               collectedLibrariesToLink.getRuntimeLibrarySearchDirectories(),
               collectedLibrariesToLink.getLibrariesToLink(),
               collectedLibrariesToLink.getLibrarySearchDirectories(),
               linkingMode.equals(LinkingMode.LEGACY_FULLY_STATIC),
               linkingMode.equals(LinkingMode.STATIC));
+      buildVariablesBuilder.addAllNonTransitive(variables);
     } catch (EvalException e) {
-      ruleContext.ruleError(e.getMessage());
-      variables = CcToolchainVariables.EMPTY;
+      ruleContext.ruleError(e.getLocalizedMessage());
     }
-    buildVariablesBuilder.addAllNonTransitive(variables);
+
     for (VariablesExtension extraVariablesExtension : variablesExtensions) {
       extraVariablesExtension.addVariables(buildVariablesBuilder);
     }

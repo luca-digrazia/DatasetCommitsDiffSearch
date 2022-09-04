@@ -176,7 +176,6 @@ public class CppCompileAction extends AbstractAction
   @Nullable private final Artifact grepIncludes;
   private final boolean shouldScanIncludes;
   private final boolean shouldPruneModules;
-  private final boolean pruneCppInputDiscovery;
   private final boolean usePic;
   private final boolean useHeaderModules;
   private final boolean isStrictSystemIncludes;
@@ -266,7 +265,6 @@ public class CppCompileAction extends AbstractAction
       Artifact sourceFile,
       boolean shouldScanIncludes,
       boolean shouldPruneModules,
-      boolean pruneCppInputDiscovery,
       boolean usePic,
       boolean useHeaderModules,
       boolean isStrictSystemIncludes,
@@ -315,7 +313,6 @@ public class CppCompileAction extends AbstractAction
         // the inputs are as declared, hence known, and remain so.
         shouldScanIncludes,
         shouldPruneModules,
-        pruneCppInputDiscovery,
         usePic,
         useHeaderModules,
         isStrictSystemIncludes,
@@ -358,7 +355,6 @@ public class CppCompileAction extends AbstractAction
       NestedSet<Artifact> prunableInputs,
       boolean shouldScanIncludes,
       boolean shouldPruneModules,
-      boolean pruneCppInputDiscovery,
       boolean usePic,
       boolean useHeaderModules,
       boolean isStrictSystemIncludes,
@@ -390,7 +386,6 @@ public class CppCompileAction extends AbstractAction
     this.prunableInputs = prunableInputs;
     this.shouldScanIncludes = shouldScanIncludes;
     this.shouldPruneModules = shouldPruneModules;
-    this.pruneCppInputDiscovery = pruneCppInputDiscovery;
     this.usePic = usePic;
     this.useHeaderModules = useHeaderModules;
     this.isStrictSystemIncludes = isStrictSystemIncludes;
@@ -634,14 +629,6 @@ public class CppCompileAction extends AbstractAction
       legalOuts.put(hdr, pregreppedSrcs.greppedHeader());
     }
     return Collections.unmodifiableMap(legalOuts);
-  }
-
-  @Override
-  @Nullable
-  public Set<Artifact> getModularHeaders() {
-    return useHeaderModules && pruneCppInputDiscovery
-        ? ccCompilationContext.getModularHeaders(usePic)
-        : null;
   }
 
   @Override

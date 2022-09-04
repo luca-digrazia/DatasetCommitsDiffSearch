@@ -726,7 +726,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           ParameterFileWriteAction paramFileWriteAction =
               new ParameterFileWriteAction(
                   owner,
-                  paramFileInfo.getInputs(),
                   paramFile,
                   commandLine,
                   paramFileInfo.getFileType(),

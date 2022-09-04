@@ -161,17 +161,19 @@ public class StandaloneTestStrategy extends TestStrategy {
                 workingDirectory);
       }
       processLastTestAttempt(attempt, dataBuilder, standaloneTestResult.testResultData());
-      ImmutableList<Pair<String, Path>> testOutputs =
-          action.getTestOutputsMapping(actionExecutionContext, execRoot);
+      ImmutableList<Pair<String, Path>> testOutputs = action.getTestOutputsMapping(execRoot);
       actionExecutionContext
           .getEventHandler()
           .post(
               TestAttempt.forExecutedTestResult(
                   action,
-                  standaloneTestResult.testResultData(),
-                  attempt,
-                  testOutputs,
                   standaloneTestResult.executionInfo(),
+                  attempt,
+                  standaloneTestResult.testResultData().getStatus(),
+                  standaloneTestResult.testResultData().getStartTimeMillisEpoch(),
+                  standaloneTestResult.testResultData().getRunDurationMillis(),
+                  testOutputs,
+                  standaloneTestResult.testResultData().getWarningList(),
                   true));
       finalizeTest(actionExecutionContext, action, dataBuilder.build());
 
@@ -211,7 +213,7 @@ public class StandaloneTestStrategy extends TestStrategy {
     // Get the normal test output paths, and then update them to use "attempt_N" names, and
     // attemptDir, before adding them to the outputs.
     ImmutableList<Pair<String, Path>> testOutputs =
-        action.getTestOutputsMapping(actionExecutionContext, actionExecutionContext.getExecRoot());
+        action.getTestOutputsMapping(actionExecutionContext.getExecRoot());
     for (Pair<String, Path> testOutput : testOutputs) {
       // e.g. /testRoot/test.dir/file, an example we follow throughout this loop's comments.
       Path testOutputPath = testOutput.getSecond();
@@ -249,10 +251,13 @@ public class StandaloneTestStrategy extends TestStrategy {
         .post(
             TestAttempt.forExecutedTestResult(
                 action,
-                data,
-                attempt,
-                testOutputsBuilder.build(),
                 result.executionInfo(),
+                attempt,
+                data.getStatus(),
+                data.getStartTimeMillisEpoch(),
+                data.getRunDurationMillis(),
+                testOutputsBuilder.build(),
+                data.getWarningList(),
                 false));
     processTestOutput(actionExecutionContext, new TestResult(action, data, false), testLog);
   }

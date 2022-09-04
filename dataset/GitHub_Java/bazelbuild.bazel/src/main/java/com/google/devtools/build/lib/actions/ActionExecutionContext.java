@@ -146,16 +146,11 @@ public class ActionExecutionContext implements Closeable {
   }
 
   public FileSystem getFileSystem() {
-    if (actionFileSystem != null) {
-      return actionFileSystem;
-    }
     return executor.getFileSystem();
   }
 
   public Path getExecRoot() {
-    return actionFileSystem != null
-        ? actionFileSystem.getPath(executor.getExecRoot().asFragment())
-        : executor.getExecRoot();
+    return executor.getExecRoot();
   }
 
   /**
@@ -175,7 +170,7 @@ public class ActionExecutionContext implements Closeable {
       }
       return artifact.getPath();
     }
-    return getExecRoot().getRelative(input.getExecPath());
+    return executor.getExecRoot().getRelative(input.getExecPath());
   }
 
   public Root getRoot(Artifact artifact) {

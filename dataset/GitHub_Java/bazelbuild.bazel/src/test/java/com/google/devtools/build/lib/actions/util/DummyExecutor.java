@@ -15,17 +15,18 @@ package com.google.devtools.build.lib.actions.util;
 
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.ShowSubcommands;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.common.options.OptionsClassProvider;
 
-/** A dummy implementation of Executor. */
-public class DummyExecutor implements Executor {
+/**
+ * A dummy implementation of Executor.
+ */
+public final class DummyExecutor implements Executor {
 
   private final FileSystem fileSystem;
   private final Path inputDir;
@@ -81,12 +82,12 @@ public class DummyExecutor implements Executor {
   }
 
   @Override
-  public OptionsProvider getOptions() {
+  public OptionsClassProvider getOptions() {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public ShowSubcommands reportsSubcommands() {
+  public boolean reportsSubcommands() {
     throw new UnsupportedOperationException();
   }
 }
