@@ -17,6 +17,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.DeterministicWriter;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import javax.annotation.Nullable;
 
 /**
  * Creates C++ module map artifact genfiles. These are then passed to Clang to do dependency
@@ -82,7 +81,10 @@ public final class CppModuleMapAction extends AbstractFileWriteAction {
       boolean externDependencies) {
     super(
         owner,
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        NestedSetBuilder.<Artifact>stableOrder()
+            .addAll(Iterables.filter(privateHeaders, Artifact::isTreeArtifact))
+            .addAll(Iterables.filter(publicHeaders, Artifact::isTreeArtifact))
+            .build(),
         cppModuleMap.getArtifact(),
         /*makeExecutable=*/ false);
     this.cppModuleMap = cppModuleMap;
@@ -228,10 +230,7 @@ public final class CppModuleMapAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(GUID);
     fp.addInt(privateHeaders.size());
     for (Artifact artifact : privateHeaders) {

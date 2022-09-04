@@ -124,6 +124,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     // The query string
     final String query = ruleContext.attributes().get("expression", Type.STRING);
 
+    @SuppressWarnings("unchecked")
     OptionsParser optionsParser =
         OptionsParser.builder()
             .optionsClasses(QueryOptions.class, KeepGoingOption.class)
@@ -309,6 +310,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     return doQuery(queryOptions, packageProvider, labelFilter, preloader, query, ruleContext);
   }
 
+  @SuppressWarnings("unchecked")
   @Nullable
   private GenQueryResult doQuery(
       QueryOptions queryOptions,
@@ -391,9 +393,10 @@ public class GenQuery implements RuleConfiguredTargetFactory {
         new GenQueryOutputStream(genQueryConfig.inMemoryCompressionEnabled());
     try {
       Set<Target> result = targets.getResult();
-      if (graphlessQuery && queryOptions.forceSortForGraphlessGenquery) {
-        result =
-            ImmutableSortedSet.copyOf(Comparator.comparing(Target::getLabel), targets.getResult());
+      if (graphlessQuery) {
+        Comparator<Target> comparator =
+            (Target t1, Target t2) -> t1.getLabel().compareTo(t2.getLabel());
+        result = ImmutableSortedSet.copyOf(comparator, targets.getResult());
       }
       QueryOutputUtils.output(
           queryOptions,

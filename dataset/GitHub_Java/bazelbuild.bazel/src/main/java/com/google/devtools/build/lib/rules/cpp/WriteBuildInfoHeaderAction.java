@@ -21,16 +21,12 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.EnvironmentalExecException;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.DeterministicWriter;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.WorkspaceStatus;
-import com.google.devtools.build.lib.server.FailureDetails.WorkspaceStatus.Code;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -38,13 +34,13 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * An action that creates a C++ header containing the build information in the form of #define
  * directives.
  */
 @Immutable
+@AutoCodec
 public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
   private static final String GUID = "7243b846-b2f2-4057-97a4-00e2da6c6ffd";
 
@@ -88,7 +84,7 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
 
   @Override
   public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx)
-      throws ExecException {
+      throws IOException {
     WorkspaceStatusAction.Context context = ctx.getContext(WorkspaceStatusAction.Context.class);
 
     final Map<String, WorkspaceStatusAction.Key> keys = new LinkedHashMap<>();
@@ -102,16 +98,7 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
 
     final Map<String, String> values = new LinkedHashMap<>();
     for (Artifact valueFile : getInputs().toList()) {
-      try {
-        values.putAll(WorkspaceStatusAction.parseValues(ctx.getInputPath(valueFile)));
-      } catch (IOException e) {
-        throw new EnvironmentalExecException(
-            e,
-            FailureDetail.newBuilder()
-                .setMessage("Failed to parse workspace status: " + e.getMessage())
-                .setWorkspaceStatus(WorkspaceStatus.newBuilder().setCode(Code.PARSE_FAILURE))
-                .build());
-      }
+      values.putAll(WorkspaceStatusAction.parseValues(ctx.getInputPath(valueFile)));
     }
 
     final boolean redacted = getInputs().isEmpty();
@@ -146,10 +133,7 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(GUID);
     fp.addBoolean(writeStableInfo);
     fp.addBoolean(writeVolatileInfo);

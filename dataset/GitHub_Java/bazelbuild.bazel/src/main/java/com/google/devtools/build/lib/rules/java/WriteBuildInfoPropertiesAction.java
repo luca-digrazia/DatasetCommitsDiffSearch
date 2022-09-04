@@ -17,8 +17,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -35,17 +33,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
-import javax.annotation.Nullable;
 
 /** An action that creates a Java properties file containing the build informations. */
 @AutoCodec
@@ -60,12 +51,12 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
   /**
    * An interface to format a timestamp. We are using our custom one to avoid external dependency.
    */
-  public interface TimestampFormatter {
+  public static interface TimestampFormatter {
     /**
      * Return a human readable string for the given {@code timestamp}. {@code timestamp} is given in
      * milliseconds since 1st of January 1970 at 0am UTC.
      */
-    String format(long timestamp);
+    public String format(long timestamp);
   }
 
   /**
@@ -175,7 +166,7 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
           keys.put("BUILD_TIME", timestampFormatter.format(timeMillis));
         }
         addValues(keys, values, context.getStableKeys());
-        Properties properties = new DeterministicProperties();
+        Properties properties = new Properties();
         keyTranslations.translate(keys, properties);
         properties.store(new StripFirstLineWriter(out), null);
       }
@@ -202,10 +193,7 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(GUID);
     fp.addString(keyTranslations.computeKey());
     fp.addBoolean(includeVolatile);
@@ -220,43 +208,5 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
   @Override
   public boolean isVolatile() {
     return includeVolatile && !getInputs().isEmpty();
-  }
-
-  /**
-   * Extension of {@link Properties} class that tries to write its contents deterministically to an
-   * output stream. The overridden methods are called internally via {@link Properties#store} and
-   * {@link Properties#store0} as an implementation detail ({@link #keys} is used in JDK 8 and
-   * {@link #entrySet} in JDK 11). If the internal implementation changes, our unit and integration
-   * tests should catch it.
-   */
-  @VisibleForTesting
-  static class DeterministicProperties extends Properties {
-    @Override
-    public Set<Map.Entry<Object, Object>> entrySet() {
-      return ImmutableSortedSet.copyOf(
-          Comparator.comparing(o -> ((String) o.getKey())), super.entrySet());
-    }
-
-    @Override
-    public synchronized Enumeration<Object> keys() {
-      Enumeration<Object> original = super.keys();
-      List<String> stored = Lists.newArrayListWithExpectedSize(size());
-      while (original.hasMoreElements()) {
-        stored.add((String) original.nextElement());
-      }
-      Collections.sort(stored);
-      Iterator<String> it = stored.iterator();
-      return new Enumeration<Object>() {
-        @Override
-        public boolean hasMoreElements() {
-          return it.hasNext();
-        }
-
-        @Override
-        public Object nextElement() {
-          return it.next();
-        }
-      };
-    }
   }
 }

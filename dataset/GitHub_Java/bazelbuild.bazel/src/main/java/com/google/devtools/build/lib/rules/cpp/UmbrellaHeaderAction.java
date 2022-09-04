@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.DeterministicWriter;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -33,7 +34,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import javax.annotation.Nullable;
 
 /**
  * Action for generating an umbrella header. All the headers are #included in the umbrella header.
@@ -47,6 +47,14 @@ public final class UmbrellaHeaderAction extends AbstractFileWriteAction {
   private final Artifact umbrellaHeader;
   private final ImmutableList<Artifact> publicHeaders;
   private final ImmutableList<PathFragment> additionalExportedHeaders;
+
+  public UmbrellaHeaderAction(
+      ActionOwner owner,
+      Artifact umbrellaHeader,
+      NestedSet<Artifact> publicHeaders,
+      Iterable<PathFragment> additionalExportedHeaders) {
+    this(owner, umbrellaHeader, publicHeaders.toList(), additionalExportedHeaders);
+  }
 
   public UmbrellaHeaderAction(
       ActionOwner owner,
@@ -114,10 +122,7 @@ public final class UmbrellaHeaderAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(GUID);
     fp.addPath(umbrellaHeader.getExecPath());
     fp.addInt(publicHeaders.size());

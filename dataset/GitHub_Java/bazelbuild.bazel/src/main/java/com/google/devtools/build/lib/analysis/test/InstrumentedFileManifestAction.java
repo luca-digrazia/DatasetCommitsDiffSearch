@@ -36,7 +36,6 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.util.Arrays;
-import javax.annotation.Nullable;
 
 /**
  * Writes a manifest of instrumented source and metadata files.
@@ -77,10 +76,7 @@ final class InstrumentedFileManifestAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     // TODO(b/150305897): use addUUID?
     fp.addString(GUID);
     // TODO(b/150308417): Not sorting is probably cheaper, might lead to unnecessary re-execution.
@@ -99,8 +95,7 @@ final class InstrumentedFileManifestAction extends AbstractFileWriteAction {
   public static Artifact getInstrumentedFileManifest(RuleContext ruleContext,
       NestedSet<Artifact> additionalSourceFiles, NestedSet<Artifact> metadataFiles) {
     // Instrumented manifest makes sense only for rules with binary output.
-    Preconditions.checkState(
-        ruleContext.getRule().hasBinaryOutput(), "not binary output: %s", ruleContext.getLabel());
+    Preconditions.checkState(ruleContext.getRule().hasBinaryOutput());
     Artifact instrumentedFileManifest = ruleContext.getBinArtifact(
         ruleContext.getTarget().getName()  + ".instrumented_files");
 
