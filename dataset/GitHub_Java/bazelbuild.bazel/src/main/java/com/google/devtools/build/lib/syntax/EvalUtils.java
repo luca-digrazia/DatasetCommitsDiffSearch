@@ -17,13 +17,16 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Concatable.Concatter;
 import com.google.devtools.build.lib.util.SpellChecker;
+import java.util.Collection;
 import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Map;
@@ -129,8 +132,8 @@ public final class EvalUtils {
    * @return true if the object is known to be a hashable value.
    */
   public static boolean isHashable(Object o) {
-    if (o instanceof StarlarkValue) {
-      return ((StarlarkValue) o).isHashable();
+    if (o instanceof SkylarkValue) {
+      return ((SkylarkValue) o).isHashable();
     }
     return isImmutable(o.getClass());
   }
@@ -143,8 +146,8 @@ public final class EvalUtils {
    */
   // NB: This is used as the basis for accepting objects in Depset-s.
   public static boolean isImmutable(Object o) {
-    if (o instanceof StarlarkValue) {
-      return ((StarlarkValue) o).isImmutable();
+    if (o instanceof SkylarkValue) {
+      return ((SkylarkValue) o).isImmutable();
     }
     return isImmutable(o.getClass());
   }
@@ -188,14 +191,14 @@ public final class EvalUtils {
       return c;
     }
     // TODO(bazel-team): We should require all Skylark-addressable values that aren't builtin types
-    // (String/Boolean/Integer) to implement StarlarkValue. We should also require them to have a
+    // (String/Boolean/Integer) to implement SkylarkValue. We should also require them to have a
     // (possibly inherited) @SkylarkModule annotation.
     Class<?> parent = SkylarkInterfaceUtils.getParentWithSkylarkModule(c);
     if (parent != null) {
       return parent;
     }
     Preconditions.checkArgument(
-        StarlarkValue.class.isAssignableFrom(c),
+        SkylarkValue.class.isAssignableFrom(c),
         "%s is not allowed as a Starlark value (getSkylarkType() failed)",
         c);
     return c;
@@ -267,6 +270,45 @@ public final class EvalUtils {
       } else {
         return c.getSimpleName();
       }
+    }
+  }
+
+  public static Collection<?> toCollection(Object o, Location loc) throws EvalException {
+    if (o instanceof Collection) {
+      return (Collection<?>) o;
+    } else if (o instanceof Sequence) {
+      return ((Sequence) o).getImmutableList();
+    } else if (o instanceof Map) {
+      // For dictionaries we iterate through the keys only
+      if (o instanceof Dict) {
+        // Dicts handle ordering themselves
+        Dict<?, ?> dict = (Dict) o;
+        List<Object> list = Lists.newArrayListWithCapacity(dict.size());
+        for (Map.Entry<?, ?> entries : dict.entrySet()) {
+          list.add(entries.getKey());
+        }
+        return ImmutableList.copyOf(list);
+      }
+      // For determinism, we sort the keys.
+      try {
+        return SKYLARK_COMPARATOR.sortedCopy(((Map<?, ?>) o).keySet());
+      } catch (ComparisonException e) {
+        throw new EvalException(loc, e);
+      }
+    } else {
+      throw new EvalException(loc,
+          "type '" + getDataTypeName(o) + "' is not a collection");
+    }
+  }
+
+  public static Iterable<?> toIterable(Object o, Location loc) throws EvalException {
+    if (o instanceof Iterable) {
+      return (Iterable<?>) o;
+    } else if (o instanceof Map) {
+      return toCollection(o, loc);
+    } else {
+      throw new EvalException(loc,
+          "type '" + getDataTypeName(o) + "' is not iterable");
     }
   }
 
@@ -504,7 +546,9 @@ public final class EvalUtils {
         toSuppress = ee;
       }
     } else {
-      suffix = SpellChecker.didYouMean(name, CallUtils.getFieldNames(semantics, object));
+      suffix =
+          SpellChecker.didYouMean(
+              name, CallUtils.getStructFieldNames(semantics, object.getClass()));
     }
     if (suffix.isEmpty() && hasMethod(semantics, object, name)) {
       // If looking up the field failed, then we know that this method must have struct_field=false
