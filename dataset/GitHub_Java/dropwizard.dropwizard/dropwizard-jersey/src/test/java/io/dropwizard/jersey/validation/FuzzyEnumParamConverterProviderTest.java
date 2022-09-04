@@ -1,17 +1,18 @@
 package io.dropwizard.jersey.validation;
 
-import io.dropwizard.jersey.errors.ErrorMessage;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import javax.annotation.Nullable;
+import java.io.IOException;
+import java.lang.annotation.Annotation;
+
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ParamConverter;
-import java.lang.annotation.Annotation;
 
-import static java.util.Objects.requireNonNull;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import org.junit.Test;
+
+import io.dropwizard.jersey.errors.ErrorMessage;
 
 public class FuzzyEnumParamConverterProviderTest {
     private final FuzzyEnumParamConverterProvider paramConverterProvider = new FuzzyEnumParamConverterProvider();
@@ -25,7 +26,6 @@ public class FuzzyEnumParamConverterProviderTest {
         A_1,
         A_2;
 
-        @Override
         public String toString() {
             return "<" + this.name() + ">";
         }
@@ -41,7 +41,6 @@ public class FuzzyEnumParamConverterProviderTest {
             this.code = code;
         }
 
-        @Nullable
         public static ExplicitFromString fromString(String str) {
             for (ExplicitFromString e : ExplicitFromString.values()) {
                 if (str.equals(e.code)) {
@@ -62,12 +61,6 @@ public class FuzzyEnumParamConverterProviderTest {
             this.code = code;
         }
 
-        @SuppressWarnings("unused")
-        public String getCode() {
-            return this.code;
-        }
-
-        @SuppressWarnings("unused")
         public static ExplicitFromStringThrowsWebApplicationException fromString(String str) {
             throw new WebApplicationException(Response.status(new Response.StatusType() {
                 @Override
@@ -98,12 +91,6 @@ public class FuzzyEnumParamConverterProviderTest {
             this.code = code;
         }
 
-        @SuppressWarnings("unused")
-        public String getCode() {
-            return this.code;
-        }
-
-        @SuppressWarnings("unused")
         public static ExplicitFromStringThrowsOtherException fromString(String str) {
             throw new RuntimeException("Boo!");
         }
@@ -119,7 +106,6 @@ public class FuzzyEnumParamConverterProviderTest {
             this.code = code;
         }
 
-        @Nullable
         public ExplicitFromStringNonStatic fromString(String str) {
             for (ExplicitFromStringNonStatic e : ExplicitFromStringNonStatic.values()) {
                 if (str.equals(e.code)) {
@@ -140,7 +126,6 @@ public class FuzzyEnumParamConverterProviderTest {
             this.code = code;
         }
 
-        @Nullable
         private static ExplicitFromStringPrivate fromString(String str) {
             for (ExplicitFromStringPrivate e : ExplicitFromStringPrivate.values()) {
                 if (str.equals(e.code)) {
@@ -155,13 +140,10 @@ public class FuzzyEnumParamConverterProviderTest {
 
     }
 
-    private <T> ParamConverter<T> getConverter(Class<T> rawType) {
-        return requireNonNull(paramConverterProvider.getConverter(rawType, null, new Annotation[] {}));
-    }
-
     @Test
-    void testFuzzyEnum() {
-        final ParamConverter<Fuzzy> converter = getConverter(Fuzzy.class);
+    public void testFuzzyEnum() throws IOException {
+        final ParamConverter<Fuzzy> converter =
+            paramConverterProvider.getConverter(Fuzzy.class, null, new Annotation[] {});
         assertThat(converter.fromString(null)).isNull();
         assertThat(converter.fromString("A.1")).isSameAs(Fuzzy.A_1);
         assertThat(converter.fromString("A-1")).isSameAs(Fuzzy.A_1);
@@ -169,81 +151,80 @@ public class FuzzyEnumParamConverterProviderTest {
         assertThat(converter.fromString(" A_1")).isSameAs(Fuzzy.A_1);
         assertThat(converter.fromString("A_1 ")).isSameAs(Fuzzy.A_1);
         assertThat(converter.fromString("A_2")).isSameAs(Fuzzy.A_2);
-
-        final WebApplicationException throwable = catchThrowableOfType(() -> converter.fromString("B"), WebApplicationException.class);
-        assertThat(throwable.getResponse())
-            .extracting(Response::getEntity)
-            .matches(e -> ((ErrorMessage) e).getCode() == 400)
-            .matches(e -> ((ErrorMessage) e).getMessage().contains("A_1"))
-            .matches(e -> ((ErrorMessage) e).getMessage().contains("A_2"));
+        assertThatThrownBy(() -> converter.fromString("B"))
+            .isInstanceOf(WebApplicationException.class)
+            .extracting(e -> (((WebApplicationException)e).getResponse()).getEntity())
+            .matches(e -> ((ErrorMessage) e[0]).getCode() == 400)
+            .matches(e -> ((ErrorMessage) e[0]).getMessage().contains("A_1"))
+            .matches(e -> ((ErrorMessage) e[0]).getMessage().contains("A_2"));
     }
 
-
     @Test
-    void testToString() {
-        final ParamConverter<WithToString> converter = getConverter(WithToString.class);
+    public void testToString() throws IOException {
+        final ParamConverter<WithToString> converter =
+            paramConverterProvider.getConverter(WithToString.class, null, new Annotation[] {});
         assertThat(converter.toString(WithToString.A_1)).isEqualTo("<A_1>");
     }
 
     @Test
-    void testNonEnum() {
-        assertThat(paramConverterProvider.getConverter(Klass.class, null, new Annotation[] {})).isNull();
+    public void testNonEnum() throws IOException {
+        final ParamConverter<Klass> converter =
+            paramConverterProvider.getConverter(Klass.class, null, new Annotation[] {});
+        assertThat(converter).isNull();
     }
 
     @Test
-    void testEnumViaExplicitFromString() {
-        final ParamConverter<ExplicitFromString> converter = getConverter(ExplicitFromString.class);
+    public void testEnumViaExplicitFromString() throws IOException {
+        final ParamConverter<ExplicitFromString> converter =
+            paramConverterProvider.getConverter(ExplicitFromString.class, null, new Annotation[] {});
         assertThat(converter.fromString("1")).isSameAs(ExplicitFromString.A);
         assertThat(converter.fromString("2")).isSameAs(ExplicitFromString.B);
-        final WebApplicationException throwable = catchThrowableOfType(() -> converter.fromString("3"), WebApplicationException.class);
-        assertThat(throwable.getResponse())
-            .extracting(Response::getEntity)
-            .matches(e -> ((ErrorMessage) e).getCode() == 400)
-            .matches(e -> ((ErrorMessage) e).getMessage().contains("is not a valid ExplicitFromString"));
+        assertThatThrownBy(() -> converter.fromString("3")).isInstanceOf(WebApplicationException.class)
+            .extracting(e -> (((WebApplicationException)e).getResponse()).getEntity())
+            .matches(e -> ((ErrorMessage) e[0]).getCode() == 400)
+            .matches(e -> ((ErrorMessage) e[0]).getMessage().contains("is not a valid ExplicitFromString"));
     }
 
     @Test
-    void testEnumViaExplicitFromStringThatThrowsWebApplicationException() {
+    public void testEnumViaExplicitFromStringThatThrowsWebApplicationException() throws IOException {
         final ParamConverter<ExplicitFromStringThrowsWebApplicationException> converter =
-            getConverter(ExplicitFromStringThrowsWebApplicationException.class);
-        final WebApplicationException throwable = catchThrowableOfType(() -> converter.fromString("3"), WebApplicationException.class);
-        assertThat(throwable.getResponse())
-            .extracting(Response::getStatusInfo)
-            .matches(e -> ((Response.StatusType) e).getStatusCode() == 418)
-            .matches(e -> ((Response.StatusType) e).getReasonPhrase().contains("I am a teapot"));
+            paramConverterProvider.getConverter(ExplicitFromStringThrowsWebApplicationException.class, null, new Annotation[] {});
+        assertThatThrownBy(() -> converter.fromString("3")).isInstanceOf(WebApplicationException.class)
+            .extracting(e -> (((WebApplicationException)e).getResponse()).getStatusInfo())
+            .matches(e -> ((Response.StatusType) e[0]).getStatusCode() == 418)
+            .matches(e -> ((Response.StatusType) e[0]).getReasonPhrase().contains("I am a teapot"));
     }
 
     @Test
-    void testEnumViaExplicitFromStringThatThrowsOtherException() {
+    public void testEnumViaExplicitFromStringThatThrowsOtherException() throws IOException {
         final ParamConverter<ExplicitFromStringThrowsOtherException> converter =
-            getConverter(ExplicitFromStringThrowsOtherException.class);
-        final WebApplicationException throwable = catchThrowableOfType(() -> converter.fromString("1"), WebApplicationException.class);
-        assertThat(throwable.getResponse())
-            .extracting(Response::getEntity)
-            .matches(e -> ((ErrorMessage) e).getCode() == 400)
-            .matches(e -> ((ErrorMessage) e).getMessage().contains("Failed to convert"));
+            paramConverterProvider.getConverter(ExplicitFromStringThrowsOtherException.class, null, new Annotation[] {});
+        assertThatThrownBy(() -> converter.fromString("1")).isInstanceOf(WebApplicationException.class)
+            .extracting(e -> (((WebApplicationException)e).getResponse()).getEntity())
+            .matches(e -> ((ErrorMessage) e[0]).getCode() == 400)
+            .matches(e -> ((ErrorMessage) e[0]).getMessage().contains("Failed to convert"));
     }
 
     @Test
-    void testEnumViaExplicitFromStringNonStatic() {
-        final ParamConverter<ExplicitFromStringNonStatic> converter = getConverter(ExplicitFromStringNonStatic.class);
-        final WebApplicationException throwable = catchThrowableOfType(() -> converter.fromString("1"), WebApplicationException.class);
-        assertThat(throwable.getResponse())
-            .extracting(Response::getEntity)
-            .matches(e -> ((ErrorMessage) e).getCode() == 400)
-            .matches(e -> ((ErrorMessage) e).getMessage().contains("A"))
-            .matches(e -> ((ErrorMessage) e).getMessage().contains("B"));
+    public void testEnumViaExplicitFromStringNonStatic() throws IOException {
+        final ParamConverter<ExplicitFromStringNonStatic> converter =
+            paramConverterProvider.getConverter(ExplicitFromStringNonStatic.class, null, new Annotation[] {});
+        assertThatThrownBy(() -> converter.fromString("1")).isInstanceOf(WebApplicationException.class)
+            .extracting(e -> (((WebApplicationException)e).getResponse()).getEntity())
+            .matches(e -> ((ErrorMessage) e[0]).getCode() == 400)
+            .matches(e -> ((ErrorMessage) e[0]).getMessage().contains("A"))
+            .matches(e -> ((ErrorMessage) e[0]).getMessage().contains("B"));
 
         assertThat(converter.fromString("A")).isSameAs(ExplicitFromStringNonStatic.A);
     }
 
     @Test
-    void testEnumViaExplicitFromStringPrivate() {
-        final ParamConverter<ExplicitFromStringPrivate> converter = getConverter(ExplicitFromStringPrivate.class);
-        final WebApplicationException throwable = catchThrowableOfType(() -> converter.fromString("1"), WebApplicationException.class);
-        assertThat(throwable.getResponse())
-            .extracting(Response::getEntity)
-            .matches(e -> ((ErrorMessage) e).getCode() == 400)
-            .matches(e -> ((ErrorMessage) e).getMessage().contains("Not permitted to call"));
+    public void testEnumViaExplicitFromStringPrivate() throws IOException {
+        final ParamConverter<ExplicitFromStringPrivate> converter =
+            paramConverterProvider.getConverter(ExplicitFromStringPrivate.class, null, new Annotation[] {});
+        assertThatThrownBy(() -> converter.fromString("1")).isInstanceOf(WebApplicationException.class)
+            .extracting(e -> (((WebApplicationException)e).getResponse()).getEntity())
+            .matches(e -> ((ErrorMessage) e[0]).getCode() == 400)
+            .matches(e -> ((ErrorMessage) e[0]).getMessage().contains("Not permitted to call"));
     }
 }
