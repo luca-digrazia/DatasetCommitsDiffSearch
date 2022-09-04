@@ -48,7 +48,7 @@ public class CollectTargetsInPackageValue implements SkyValue {
 
     @AutoCodec.VisibleForSerialization
     @AutoCodec.Instantiator
-    public static CollectTargetsInPackageKey create(
+    static CollectTargetsInPackageKey create(
         PackageIdentifier packageId, FilteringPolicy filteringPolicy) {
       return interner.intern(
           new AutoValue_CollectTargetsInPackageValue_CollectTargetsInPackageKey(
