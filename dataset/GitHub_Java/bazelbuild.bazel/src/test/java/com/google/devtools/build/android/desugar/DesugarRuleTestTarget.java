@@ -26,9 +26,5 @@ package com.google.devtools.build.android.desugar;
 class DesugarRuleTestTarget {
   interface InterfaceSubjectToDesugar {
     static void staticMethod() {}
-
-    default int defaultMethod(int x, int y) {
-      return x + y;
-    }
   }
 }

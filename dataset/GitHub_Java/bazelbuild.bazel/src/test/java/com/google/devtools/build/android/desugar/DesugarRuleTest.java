@@ -35,22 +35,13 @@ public class DesugarRuleTest {
   @Rule
   public final DesugarRule desugarRule =
       DesugarRule.builder(this, MethodHandles.lookup())
-          .enableIterativeTransformation(3)
           .addRuntimeInputs(
               "third_party/bazel/src/test/java/com/google/devtools/build/android/desugar/libdesugar_rule_test_target.jar")
           .build();
 
   @LoadClass(
-      value =
-          "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar",
-      round = 1)
+      "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar")
   private Class<?> interfaceSubjectToDesugarClass;
-
-  @LoadClass(
-      value =
-          "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar",
-      round = 2)
-  private Class<?> interfaceSubjectToDesugarClassTwice;
 
   @LoadClass(
       "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC")
@@ -61,13 +52,6 @@ public class DesugarRuleTest {
     assertThrows(
         NoSuchMethodException.class,
         () -> interfaceSubjectToDesugarClass.getDeclaredMethod("staticMethod"));
-  }
-
-  @Test
-  public void staticMethodsAreMovedFromOriginatingClass_desugarTwice() {
-    assertThrows(
-        NoSuchMethodException.class,
-        () -> interfaceSubjectToDesugarClassTwice.getDeclaredMethod("staticMethod"));
   }
 
   @Test
