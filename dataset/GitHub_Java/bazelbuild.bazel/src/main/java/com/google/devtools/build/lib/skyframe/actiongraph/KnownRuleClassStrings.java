@@ -15,29 +15,26 @@ package com.google.devtools.build.lib.skyframe.actiongraph;
 
 import com.google.devtools.build.lib.analysis.AnalysisProtos;
 import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 
-/** Cache for BuildConfigurations in the action graph. */
-public class KnownConfigurations extends BaseCache<BuildEvent, AnalysisProtos.Configuration> {
+/**
+ * Cache for RuleClassStrings in the action graph.
+ */
+public class KnownRuleClassStrings extends BaseCache<String, AnalysisProtos.RuleClass> {
 
-  KnownConfigurations(ActionGraphContainer.Builder actionGraphBuilder) {
+  KnownRuleClassStrings(ActionGraphContainer.Builder actionGraphBuilder) {
     super(actionGraphBuilder);
   }
 
   @Override
-  AnalysisProtos.Configuration createProto(BuildEvent config, String id) {
-    BuildEventStreamProtos.Configuration configProto =
-        config.asStreamProto(/*converters=*/ null).getConfiguration();
-    return AnalysisProtos.Configuration.newBuilder()
-        .setMnemonic(configProto.getMnemonic())
-        .setPlatformName(configProto.getPlatformName())
+  AnalysisProtos.RuleClass createProto(String ruleClassString, String id) {
+    return AnalysisProtos.RuleClass.newBuilder()
         .setId(id)
+        .setName(ruleClassString)
         .build();
   }
 
   @Override
-  void addToActionGraphBuilder(AnalysisProtos.Configuration configurationProto) {
-    actionGraphBuilder.addConfiguration(configurationProto);
+  void addToActionGraphBuilder(AnalysisProtos.RuleClass ruleClassProto) {
+    actionGraphBuilder.addRuleClasses(ruleClassProto);
   }
 }

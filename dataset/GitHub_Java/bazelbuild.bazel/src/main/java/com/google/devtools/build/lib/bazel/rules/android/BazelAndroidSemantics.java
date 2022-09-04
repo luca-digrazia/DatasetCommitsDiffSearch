@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.android.AndroidBinary;
 import com.google.devtools.build.lib.rules.android.AndroidCommon;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
-import com.google.devtools.build.lib.rules.android.AndroidDataContext;
 import com.google.devtools.build.lib.rules.android.AndroidSemantics;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -61,7 +60,7 @@ public class BazelAndroidSemantics implements AndroidSemantics {
 
   @Override
   public ImmutableList<Artifact> getProguardSpecsForManifest(
-      AndroidDataContext context, Artifact manifest) {
+      RuleContext ruleContext, Artifact manifest) {
     return ImmutableList.of();
   }
 

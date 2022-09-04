@@ -19,8 +19,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSe
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
 import com.google.devtools.build.lib.bazel.rules.common.BazelFilegroupRule;
 import com.google.devtools.build.lib.rules.Alias.AliasRule;
-import com.google.devtools.build.lib.rules.LabelBuildSettings.LabelBuildFlagRule;
-import com.google.devtools.build.lib.rules.LabelBuildSettings.LabelBuildSettingRule;
 import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.genquery.GenQueryRule;
 import com.google.devtools.build.lib.rules.test.TestSuiteRule;
@@ -44,13 +42,20 @@ public class GenericRules implements RuleSet {
     builder.addRuleDefinition(new AliasRule());
     builder.addRuleDefinition(new BazelFilegroupRule());
     builder.addRuleDefinition(new TestSuiteRule());
-    GenQueryRule.register(builder);
-    builder.addRuleDefinition(new LabelBuildSettingRule());
-    builder.addRuleDefinition(new LabelBuildFlagRule());
+    builder.addRuleDefinition(new GenQueryRule());
 
     try {
       builder.addWorkspaceFilePrefix(
-          ResourceFileLoader.loadResource(BazelRuleClassProvider.class, "tools.WORKSPACE"));
+          ResourceFileLoader.loadResource(BazelRuleClassProvider.class, "tools.WORKSPACE")
+              // Hackily select the java_toolchain based on the host JDK version. JDK 8 and
+              // 9 host_javabases require different toolchains, e.g. to use --patch-module
+              // instead of -Xbootclasspath/p:.
+              .replace(
+                  "%java_toolchain%",
+                  isJdk8OrEarlier()
+                      ? "@bazel_tools//tools/jdk:toolchain_jdk8"
+                      : "@bazel_tools//tools/jdk:toolchain_jdk9"));
+
     } catch (IOException e) {
       throw new IllegalStateException(e);
     }
@@ -59,5 +64,9 @@ public class GenericRules implements RuleSet {
   @Override
   public ImmutableList<RuleSet> requires() {
     return ImmutableList.of(CoreRules.INSTANCE);
+  }
+
+  private static boolean isJdk8OrEarlier() {
+    return Double.parseDouble(System.getProperty("java.class.version")) <= 52.0;
   }
 }

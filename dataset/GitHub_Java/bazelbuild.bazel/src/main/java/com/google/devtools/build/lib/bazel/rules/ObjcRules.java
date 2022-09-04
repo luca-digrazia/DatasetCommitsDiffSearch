@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.rules.objc.J2ObjcCommandLineOptions;
 import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcBuildInfoFactory;
 import com.google.devtools.build.lib.rules.objc.ObjcBundleLibraryRule;
+import com.google.devtools.build.lib.rules.objc.ObjcBundleRule;
 import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions;
 import com.google.devtools.build.lib.rules.objc.ObjcConfigurationLoader;
 import com.google.devtools.build.lib.rules.objc.ObjcFrameworkRule;
@@ -44,7 +45,6 @@ import com.google.devtools.build.lib.rules.objc.ObjcLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoAspect;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
-import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleBootstrap;
 
 /**
  * Rules for Objective-C support in Bazel.
@@ -65,6 +65,8 @@ public class ObjcRules implements RuleSet {
     ObjcProtoAspect objcProtoAspect = new ObjcProtoAspect();
 
     builder.addBuildInfoFactory(new ObjcBuildInfoFactory());
+    builder.addSkylarkAccessibleTopLevels(
+        "apple_common", new AppleSkylarkCommon(objcProtoAspect));
 
     builder.addConfig(ObjcCommandLineOptions.class, new ObjcConfigurationLoader());
     builder.addConfig(AppleCommandLineOptions.class, new AppleConfiguration.Loader());
@@ -80,6 +82,7 @@ public class ObjcRules implements RuleSet {
 
     builder.addRuleDefinition(new AppleCcToolchainRule());
     builder.addRuleDefinition(new AppleToolchain.RequiresXcodeConfigRule(toolsRepository));
+    builder.addRuleDefinition(new ObjcBundleRule());
     builder.addRuleDefinition(new ObjcBundleLibraryRule());
     builder.addRuleDefinition(new ObjcFrameworkRule());
     builder.addRuleDefinition(new ObjcImportRule());
@@ -102,8 +105,6 @@ public class ObjcRules implements RuleSet {
     builder.addRuleDefinition(new XcodeConfigRule());
     builder.addRuleDefinition(new XcodeConfigAliasRule());
     builder.addRuleDefinition(new XcodeVersionRule());
-
-    builder.addSkylarkBootstrap(new AppleBootstrap(new AppleSkylarkCommon(objcProtoAspect)));
   }
 
   @Override

@@ -14,10 +14,10 @@
 package com.google.devtools.build.lib.bazel.rules.android;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.INTEGER;
-import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.INTEGER;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
+import java.util.Map;
 
 /**
  * Definition of the {@code android_ndk_repository} rule.
@@ -34,24 +35,19 @@ import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetF
 public class AndroidNdkRepositoryRule implements RuleDefinition {
   public static final String NAME = "android_ndk_repository";
 
-  private static final ImmutableMap<String, Label> calculateBindings(Rule rule) {
-    String prefix = "@" + rule.getName() + "//:";
-    ImmutableMap.Builder<String, Label> builder = ImmutableMap.builder();
-    builder.put("android/crosstool", Label.parseAbsoluteUnchecked(prefix + "default_crosstool"));
-    builder.put("android_ndk_for_testing", Label.parseAbsoluteUnchecked(prefix + "files"));
-    return builder.build();
-  }
-
-  private static final ImmutableList<String> calculateToolchainsToRegister(Rule rule) {
-    return ImmutableList.of(String.format("@%s//:all", rule.getName()));
-  }
+  private static final Function<? super Rule, Map<String, Label>> BINDINGS_FUNCTION =
+      rule ->
+          ImmutableMap.of(
+              "android/crosstool",
+              Label.parseAbsoluteUnchecked("@" + rule.getName() + "//:default_crosstool"),
+              "android_ndk_for_testing",
+              Label.parseAbsoluteUnchecked("@" + rule.getName() + "//:files"));
 
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         .setWorkspaceOnly()
-        .setExternalBindingsFunction(AndroidNdkRepositoryRule::calculateBindings)
-        .setToolchainsToRegisterFunction(AndroidNdkRepositoryRule::calculateToolchainsToRegister)
+        .setExternalBindingsFunction(BINDINGS_FUNCTION)
         /* <!-- #BLAZE_RULE(android_ndk_repository).ATTRIBUTE(path) -->
         An absolute or relative path to an Android NDK. Either this attribute or the
         <code>$ANDROID_NDK_HOME</code> environment variable must be set.
@@ -83,15 +79,10 @@ public class AndroidNdkRepositoryRule implements RuleDefinition {
 /*<!-- #BLAZE_RULE (NAME = android_ndk_repository, TYPE = OTHER, FAMILY = Android) -->
 
 <p>Configures Bazel to use an Android NDK to support building Android targets with native
-code.
+code. NDK versions 10 up to 16 are currently supported.
 
 <p>Note that building for Android also requires an <code>android_sdk_repository</code> rule in your
 <code>WORKSPACE</code> file.
-
-<p>
-For more information, read the <a href="https://docs.bazel.build/versions/master/android-ndk.html">
-full documentation on using Android NDK with Bazel</a>.
-</p>
 
 <h4 id="android_ndk_repository_examples">Examples</h4>
 
@@ -107,13 +98,13 @@ the highest API level that it supports.
 <pre class="code">
 android_ndk_repository(
     name = "androidndk",
-    path = "./android-ndk-r20",
+    path = "./android-ndk-r12b",
     api_level = 24,
 )
 </pre>
 
 <p>The above example will use the Android NDK located inside your workspace in
-<code>./android-ndk-r20</code>. It will use the API level 24 libraries when compiling your JNI
+<code>./android-ndk-r12b</code>. It will use the API level 24 libraries when compiling your JNI
 code.
 
 <h4 id="android_ndk_repository_cpufeatures">cpufeatures</h4>

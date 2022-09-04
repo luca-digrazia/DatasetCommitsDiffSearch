@@ -45,7 +45,7 @@ public final class BazelJavaPluginRule implements RuleDefinition {
         contribute an annotation processor to the Java compiler's annotation processing, but its
         runtime classpath will still be included on the compiler's annotation processor path. (This
         is primarily intended for use by
-        <a href="https://errorprone.info/docs/plugins">Error Prone plugins</a>, which are loaded
+        <a href="http://errorprone.info/docs/plugins">Error Prone plugins</a>, which are loaded
         from the annotation processor path using
         <a href="https://docs.oracle.com/javase/8/docs/api/java/util/ServiceLoader.html">
         java.util.ServiceLoader</a>.)
@@ -70,7 +70,6 @@ public final class BazelJavaPluginRule implements RuleDefinition {
         .removeAttribute("runtime_deps")
         .removeAttribute("exports")
         .removeAttribute("exported_plugins")
-        .removeAttribute("data")
         .build();
   }
 

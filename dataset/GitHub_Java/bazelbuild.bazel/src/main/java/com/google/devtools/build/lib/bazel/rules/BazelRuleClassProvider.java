@@ -309,15 +309,15 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AndroidHostServiceFixtureRule());
 
           builder.addSkylarkAccessibleTopLevels("android_common", new AndroidSkylarkCommon());
-          builder.addSkylarkAccessibleTopLevels(ApkInfo.NAME, ApkInfo.PROVIDER);
+          builder.addSkylarkAccessibleTopLevels(ApkInfo.PROVIDER.getName(), ApkInfo.PROVIDER);
           builder.addSkylarkAccessibleTopLevels(
-              AndroidInstrumentationInfo.NAME, AndroidInstrumentationInfo.PROVIDER);
+              AndroidInstrumentationInfo.PROVIDER.getName(), AndroidInstrumentationInfo.PROVIDER);
           builder.addSkylarkAccessibleTopLevels(
-              AndroidDeviceBrokerInfo.NAME, AndroidDeviceBrokerInfo.PROVIDER);
+              AndroidDeviceBrokerInfo.PROVIDER.getName(), AndroidDeviceBrokerInfo.PROVIDER);
           builder.addSkylarkAccessibleTopLevels(
-              AndroidResourcesInfo.NAME, AndroidResourcesInfo.PROVIDER);
+              AndroidResourcesInfo.PROVIDER.getName(), AndroidResourcesInfo.PROVIDER);
           builder.addSkylarkAccessibleTopLevels(
-              AndroidNativeLibsInfo.NAME, AndroidNativeLibsInfo.PROVIDER);
+              AndroidNativeLibsInfo.PROVIDER.getName(), AndroidNativeLibsInfo.PROVIDER);
 
           try {
             builder.addWorkspaceFilePrefix(

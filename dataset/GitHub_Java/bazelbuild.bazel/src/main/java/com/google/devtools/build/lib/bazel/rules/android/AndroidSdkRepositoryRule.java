@@ -14,10 +14,10 @@
 package com.google.devtools.build.lib.bazel.rules.android;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.INTEGER;
-import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.INTEGER;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
+import java.util.Map;
 
 /**
  * Definition of the {@code android_sdk_repository} rule.
@@ -34,28 +35,25 @@ import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetF
 public class AndroidSdkRepositoryRule implements RuleDefinition {
   public static final String NAME = "android_sdk_repository";
 
-  private static final ImmutableMap<String, Label> calculateBindings(Rule rule) {
-    String prefix = "@" + rule.getName() + "//:";
-    ImmutableMap.Builder<String, Label> builder = ImmutableMap.builder();
-    builder.put("android/sdk", Label.parseAbsoluteUnchecked(prefix + "sdk"));
-    builder.put("android/d8_jar_import", Label.parseAbsoluteUnchecked(prefix + "d8_jar_import"));
-    builder.put("android/dx_jar_import", Label.parseAbsoluteUnchecked(prefix + "dx_jar_import"));
-    builder.put("android_sdk_for_testing", Label.parseAbsoluteUnchecked(prefix + "files"));
-    builder.put(
-        "has_androidsdk", Label.parseAbsoluteUnchecked("@bazel_tools//tools/android:always_true"));
-    return builder.build();
-  }
-
-  private static final ImmutableList<String> calculateToolchainsToRegister(Rule rule) {
-    return ImmutableList.of(String.format("@%s//:all", rule.getName()));
-  }
+  private static final Function<? super Rule, Map<String, Label>> BINDINGS_FUNCTION =
+      rule -> {
+        String prefix = "@" + rule.getName() + "//:";
+        ImmutableMap.Builder<String, Label> builder = ImmutableMap.builder();
+        builder.put("android/sdk", Label.parseAbsoluteUnchecked(prefix + "sdk"));
+        builder.put(
+            "android/dx_jar_import", Label.parseAbsoluteUnchecked(prefix + "dx_jar_import"));
+        builder.put("android_sdk_for_testing", Label.parseAbsoluteUnchecked(prefix + "files"));
+        builder.put(
+            "has_androidsdk",
+            Label.parseAbsoluteUnchecked("@bazel_tools//tools/android:always_true"));
+        return builder.build();
+      };
 
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         .setWorkspaceOnly()
-        .setExternalBindingsFunction(AndroidSdkRepositoryRule::calculateBindings)
-        .setToolchainsToRegisterFunction(AndroidSdkRepositoryRule::calculateToolchainsToRegister)
+        .setExternalBindingsFunction(BINDINGS_FUNCTION)
         /* <!-- #BLAZE_RULE(android_sdk_repository).ATTRIBUTE(path) -->
         An absolute or relative path to an Android SDK. Either this attribute or the
         <code>$ANDROID_HOME</code> environment variable must be set.

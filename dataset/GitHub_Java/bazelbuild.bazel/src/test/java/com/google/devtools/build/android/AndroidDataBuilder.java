@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.ide.common.res2.MergingException;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,7 +25,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
 /**
  * Utility for building {@link UnvalidatedAndroidData}, {@link ParsedAndroidData},
@@ -99,7 +98,7 @@ public class AndroidDataBuilder {
   public AndroidDataBuilder addValuesWithAttributes(
       String path, Map<String, String> attributes, String... lines) {
     ImmutableList.Builder<String> attributeBuilder = ImmutableList.builder();
-    for (Entry<String, String> attribute : attributes.entrySet()) {
+    for (Map.Entry<String, String> attribute : attributes.entrySet()) {
       if (attribute.getKey() != null && attribute.getValue() != null) {
         attributeBuilder.add(String.format("%s=\"%s\"", attribute.getKey(), attribute.getValue()));
       }
@@ -161,11 +160,7 @@ public class AndroidDataBuilder {
   public DependencyAndroidData buildDependency() throws IOException {
     writeFiles();
     return new DependencyAndroidData(
-        ImmutableList.of(resourceDir),
-        ImmutableList.of(assetDir),
-        manifest,
-        rTxt,
-        null);
+        ImmutableList.of(resourceDir), ImmutableList.of(assetDir), manifest, rTxt, null, null);
   }
 
   public MergedAndroidData buildMerged() throws IOException {
@@ -177,12 +172,12 @@ public class AndroidDataBuilder {
     Files.createDirectories(assetDir);
     Files.createDirectories(resourceDir);
     Preconditions.checkNotNull(manifest, "A manifest is required.");
-    for (Entry<Path, String> entry : filesToWrite.entrySet()) {
+    for (Map.Entry<Path, String> entry : filesToWrite.entrySet()) {
       Files.createDirectories(entry.getKey().getParent());
       Files.write(entry.getKey(), entry.getValue().getBytes(StandardCharsets.UTF_8));
       Preconditions.checkArgument(Files.exists(entry.getKey()));
     }
-    for (Entry<Path, Path> entry : filesToCopy.entrySet()) {
+    for (Map.Entry<Path, Path> entry : filesToCopy.entrySet()) {
       Path target = entry.getKey();
       Path source = entry.getValue();
       Files.createDirectories(target.getParent());
