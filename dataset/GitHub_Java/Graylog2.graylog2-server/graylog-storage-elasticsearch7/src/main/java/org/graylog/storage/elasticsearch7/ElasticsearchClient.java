@@ -62,10 +62,6 @@ public class ElasticsearchClient {
         return firstResponseFrom(result, errorMessage);
     }
 
-    public SearchResponse singleSearch(SearchRequest searchRequest, String errorMessage) {
-        return execute((c, requestOptions) -> c.search(searchRequest, requestOptions), errorMessage);
-    }
-
     private SearchResponse firstResponseFrom(MultiSearchResponse result, String errorMessage) {
         checkArgument(result != null);
         checkArgument(result.getResponses().length == 1);
@@ -85,16 +81,6 @@ public class ElasticsearchClient {
     public <R> R execute(ThrowingBiFunction<RestHighLevelClient, RequestOptions, R, IOException> fn, String errorMessage) {
         try {
             return fn.apply(client, requestOptions());
-        } catch (Exception e) {
-            throw exceptionFrom(e, errorMessage);
-        }
-    }
-
-    public <R> R executeWithIOException(ThrowingBiFunction<RestHighLevelClient, RequestOptions, R, IOException> fn, String errorMessage) throws IOException {
-        try {
-            return fn.apply(client, requestOptions());
-        } catch (IOException e) {
-            throw e;
         } catch (Exception e) {
             throw exceptionFrom(e, errorMessage);
         }
