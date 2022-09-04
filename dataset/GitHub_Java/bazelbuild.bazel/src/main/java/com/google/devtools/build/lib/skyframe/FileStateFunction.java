@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.lib.vfs.UnixGlob.FilesystemCalls;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -32,15 +31,11 @@ import java.util.concurrent.atomic.AtomicReference;
 public class FileStateFunction implements SkyFunction {
 
   private final AtomicReference<TimestampGranularityMonitor> tsgm;
-  private final AtomicReference<FilesystemCalls> syscallCache;
   private final ExternalFilesHelper externalFilesHelper;
 
-  public FileStateFunction(
-      AtomicReference<TimestampGranularityMonitor> tsgm,
-      AtomicReference<FilesystemCalls> syscallCache,
+  public FileStateFunction(AtomicReference<TimestampGranularityMonitor> tsgm,
       ExternalFilesHelper externalFilesHelper) {
     this.tsgm = tsgm;
-    this.syscallCache = syscallCache;
     this.externalFilesHelper = externalFilesHelper;
   }
 
@@ -50,11 +45,11 @@ public class FileStateFunction implements SkyFunction {
     RootedPath rootedPath = (RootedPath) skyKey.argument();
 
     try {
-      externalFilesHelper.maybeHandleExternalFile(rootedPath, false, env);
+      externalFilesHelper.maybeHandleExternalFile(rootedPath, env);
       if (env.valuesMissing()) {
         return null;
       }
-      return FileStateValue.create(rootedPath, syscallCache.get(), tsgm.get());
+      return FileStateValue.create(rootedPath, tsgm.get());
     } catch (ExternalFilesHelper.NonexistentImmutableExternalFileException e) {
       return FileStateValue.NONEXISTENT_FILE_STATE_NODE;
     } catch (IOException e) {

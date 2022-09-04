@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -269,10 +268,5 @@ class StateInformingSkyFunctionEnvironment implements SkyFunction.Environment {
 
   interface Informee {
     void inform() throws InterruptedException;
-  }
-
-  @Override
-  public void dependOnFuture(ListenableFuture<?> future) {
-    delegate.dependOnFuture(future);
   }
 }
