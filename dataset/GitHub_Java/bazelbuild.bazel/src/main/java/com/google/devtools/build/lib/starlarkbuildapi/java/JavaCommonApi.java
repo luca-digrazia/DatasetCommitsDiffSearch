@@ -42,7 +42,7 @@ public interface JavaCommonApi<
         JavaInfoT extends JavaInfoApi<FileT, ?, ?>,
         JavaToolchainT extends JavaToolchainStarlarkApiProviderApi,
         ConstraintValueT extends ConstraintValueInfoApi,
-        StarlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
+        starlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
         StarlarkActionFactoryT extends StarlarkActionFactoryApi>
     extends StarlarkValue {
 
@@ -228,7 +228,7 @@ public interface JavaCommonApi<
       },
       useStarlarkThread = true)
   JavaInfoT createJavaCompileAction(
-      StarlarkRuleContextT starlarkRuleContext,
+      starlarkRuleContextT starlarkRuleContext,
       Sequence<?> sourceJars, // <FileT> expected.
       Sequence<?> sourceFiles, // <FileT> expected.
       FileT outputJar,
@@ -469,7 +469,7 @@ public interface JavaCommonApi<
         @Param(name = "ctx", positional = false, named = true, doc = "The rule context."),
       },
       doc = "Returns true if --incompatible_use_toolchain_resolution_for_java_rules is enabled.")
-  boolean isJavaToolchainResolutionEnabled(StarlarkRuleContextT ruleContext) throws EvalException;
+  boolean isJavaToolchainResolutionEnabled(starlarkRuleContextT ruleContext) throws EvalException;
 
   @StarlarkMethod(
       name = "MessageBundleInfo",
