@@ -1363,16 +1363,7 @@ public class Matrix extends DMatrix {
      * LU decomposition.
      */
     public LU lu() {
-        return lu(false);
-    }
-
-    /**
-     * LU decomposition.
-     *
-     * @param overwrite the flag if the decomposition overwrites this matrix.
-     */
-    public LU lu(boolean overwrite) {
-        Matrix lu = overwrite ? this : clone();
+        Matrix lu = clone();
         int[] ipiv = new int[Math.min(m, n)];
         int info = LAPACK.engine.getrf(lu.layout(), lu.m, lu.n, lu.A, lu.ld, IntBuffer.wrap(ipiv));
         if (info < 0) {
@@ -1389,21 +1380,11 @@ public class Matrix extends DMatrix {
      * @throws ArithmeticException if the matrix is not positive definite.
      */
     public Cholesky cholesky() {
-        return cholesky(false);
-    }
-
-    /**
-     * Cholesky decomposition for symmetric and positive definite matrix.
-     *
-     * @param overwrite the flag if the decomposition overwrites this matrix.
-     * @throws ArithmeticException if the matrix is not positive definite.
-     */
-    public Cholesky cholesky(boolean overwrite) {
         if (uplo == null) {
             throw new IllegalArgumentException("The matrix is not symmetric");
         }
 
-        Matrix lu = overwrite ? this : clone();
+        Matrix lu = clone();
         int info = LAPACK.engine.potrf(lu.layout(), lu.uplo, lu.n, lu.A, lu.ld);
         if (info != 0) {
             logger.error("LAPACK GETRF error code: {}", info);
@@ -1417,16 +1398,7 @@ public class Matrix extends DMatrix {
      * QR Decomposition.
      */
     public QR qr() {
-        return qr(false);
-    }
-
-    /**
-     * QR Decomposition.
-     *
-     * @param overwrite the flag if the decomposition overwrites this matrix.
-     */
-    public QR qr(boolean overwrite) {
-        Matrix qr = overwrite ? this : clone();
+        Matrix qr = clone();
         double[] tau = new double[Math.min(m, n)];
         int info = LAPACK.engine.geqrf(qr.layout(), qr.m, qr.n, qr.A, qr.ld, DoubleBuffer.wrap(tau));
         if (info != 0) {
