@@ -15,18 +15,21 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.common.truth.Truth.assertWithMessage;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.MoreCollectors;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
+import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.util.Crosstool.CcToolchainConfig;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
@@ -37,6 +40,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.io.IOException;
+import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -67,7 +71,8 @@ public class CcToolchainTest extends BuildViewTestCase {
     invalidatePackages();
 
     ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
     assertThat(
             CppHelper.useInterfaceSharedLibraries(
                 getConfiguration(target).getFragment(CppConfiguration.class),
@@ -78,7 +83,7 @@ public class CcToolchainTest extends BuildViewTestCase {
     useConfiguration();
     invalidatePackages();
     target = getConfiguredTarget("//a:b");
-    toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    toolchainProvider = (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
     assertThat(
             CppHelper.useInterfaceSharedLibraries(
                 getConfiguration(target).getFragment(CppConfiguration.class),
@@ -89,7 +94,7 @@ public class CcToolchainTest extends BuildViewTestCase {
     useConfiguration("--nointerface_shared_objects");
     invalidatePackages();
     target = getConfiguredTarget("//a:b");
-    toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    toolchainProvider = (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
     assertThat(
             CppHelper.useInterfaceSharedLibraries(
                 getConfiguration(target).getFragment(CppConfiguration.class),
@@ -179,7 +184,8 @@ public class CcToolchainTest extends BuildViewTestCase {
   private boolean usePicForBinariesWithConfiguration(String... configuration) throws Exception {
     useConfiguration(configuration);
     ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
     CppConfiguration cppConfiguration = getRuleContext(target).getFragment(CppConfiguration.class);
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrThrowEvalException(
@@ -307,6 +313,8 @@ public class CcToolchainTest extends BuildViewTestCase {
         "%package(//a:@@a)%", "The package '//a:@@a' is not valid");
     assertInvalidIncludeDirectoryMessage(
         "%package(//a)%foo", "The path in the package.*is not valid");
+    assertInvalidIncludeDirectoryMessage(
+        "%package(//a)%/../bar", "The include path.*is not normalized");
   }
 
   @Test
@@ -392,7 +400,7 @@ public class CcToolchainTest extends BuildViewTestCase {
   public void testToolchainAlias() throws Exception {
     ConfiguredTarget reference = scratchConfiguredTarget("a", "ref",
         "cc_toolchain_alias(name='ref')");
-    assertThat(reference.get(CcToolchainProvider.PROVIDER.getKey())).isNotNull();
+    assertThat(reference.get(ToolchainInfo.PROVIDER.getKey())).isNotNull();
   }
 
   @Test
@@ -543,7 +551,8 @@ public class CcToolchainTest extends BuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//a:a");
     RuleContext ruleContext = getRuleContext(target);
-    CcToolchainProvider toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
     assertThat(toolchainProvider.getToolPathFragment(Tool.AR, ruleContext).toString())
         .isEqualTo("/absolute/path");
     assertThat(toolchainProvider.getToolPathFragment(Tool.CPP, ruleContext).toString())
@@ -640,7 +649,8 @@ public class CcToolchainTest extends BuildViewTestCase {
     scratch.file("a/BUILD", "cc_toolchain_alias(name = 'b')");
 
     ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
 
     assertThat(toolchainProvider.supportsDynamicLinker(FeatureConfiguration.EMPTY)).isFalse();
   }
@@ -652,7 +662,8 @@ public class CcToolchainTest extends BuildViewTestCase {
     scratch.file("libc1/header1.h", "#define FOO 1");
     useConfiguration();
     ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
 
     assertThat(toolchainProvider.getSysroot()).isEqualTo("/usr/grte/v1");
   }
@@ -672,7 +683,39 @@ public class CcToolchainTest extends BuildViewTestCase {
             CcToolchainConfig.builder().withFeatures(CppRuleClasses.SUPPORTS_DYNAMIC_LINKER));
     useConfiguration("--incompatible_use_specific_tool_files");
     ConfiguredTarget target = getConfiguredTarget("//a:a");
-    CcToolchainProvider toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
+    // Check that the mock toolchain tool file sets are an antichain, so that our subset assertions
+    // below are meaningful.
+    ImmutableList<Set<Artifact>> fileGroups =
+        ImmutableList.of(
+            toolchainProvider.getArFiles().toSet(),
+            toolchainProvider.getLinkerFiles().toSet(),
+            toolchainProvider.getCompilerFiles().toSet(),
+            toolchainProvider.getAsFiles().toSet(),
+            toolchainProvider.getAllFiles().toSet());
+    for (int i = 0; i < fileGroups.size(); i++) {
+      assertThat(fileGroups.get(i)).isNotEmpty();
+      for (int j = 0; j < fileGroups.size(); j++) {
+        if (i == j) {
+          continue;
+        }
+        Set<Artifact> one = fileGroups.get(i);
+        Set<Artifact> two = fileGroups.get(j);
+        assertWithMessage(String.format("%s should not contain %s", one, two))
+            .that(one.containsAll(two))
+            .isFalse();
+      }
+    }
+    assertThat(
+            Sets.difference(
+                toolchainProvider.getArFiles().toSet(), toolchainProvider.getLinkerFiles().toSet()))
+        .isNotEmpty();
+    assertThat(
+            Sets.difference(
+                toolchainProvider.getLinkerFiles().toSet(), toolchainProvider.getArFiles().toSet()))
+        .isNotEmpty();
+
     RuleConfiguredTarget libTarget = (RuleConfiguredTarget) getConfiguredTarget("//a:l");
     Artifact staticLib =
         getOutputGroup(libTarget, "archive").toList().stream()
@@ -715,7 +758,16 @@ public class CcToolchainTest extends BuildViewTestCase {
     assertNoEvents();
   }
 
+  @Test
+  public void testCcToolchainNotLoadedThroughMacro() throws Exception {
+    setupTestCcToolchainLoadedThroughMacro(/* loadMacro= */ false);
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//a:a");
+    assertContainsEvent("rules are deprecated");
+  }
+
   private void setupTestCcToolchainLoadedThroughMacro(boolean loadMacro) throws Exception {
+    useConfiguration("--incompatible_load_cc_rules_from_bzl");
     scratch.file("a/cc_toolchain_config.bzl", MockCcSupport.EMPTY_CC_TOOLCHAIN);
     scratch.file(
         "a/BUILD",
@@ -732,6 +784,7 @@ public class CcToolchainTest extends BuildViewTestCase {
   }
 
   private void setupTestCcToolchainSuiteLoadedThroughMacro(boolean loadMacro) throws Exception {
+    useConfiguration("--incompatible_load_cc_rules_from_bzl");
     scratch.file("a/cc_toolchain_config.bzl", MockCcSupport.EMPTY_CC_TOOLCHAIN);
     scratch.file(
         "a/BUILD",
@@ -744,6 +797,14 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    toolchains = { 'k8': ':b' },",
         ")",
         getToolchainRule("b"));
+  }
+
+  @Test
+  public void testCcToolchainSuiteNotLoadedThroughMacro() throws Exception {
+    setupTestCcToolchainSuiteLoadedThroughMacro(/* loadMacro= */ false);
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//a:a");
+    assertContainsEvent("rules are deprecated");
   }
 
   private static String getToolchainRule(String targetName) {

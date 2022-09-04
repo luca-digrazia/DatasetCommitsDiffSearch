@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.License.LicenseType;
-import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
+import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,7 +41,7 @@ public class AliasTest extends BuildViewTestCase {
         "alias(name='b', actual='a')");
 
     ConfiguredTarget b = getConfiguredTarget("//a:b");
-    assertThat(b.getProvider(CppCompilationContext.class)).isNotNull();
+    assertThat(b.get(CcInfo.PROVIDER).getCcCompilationContext()).isNotNull();
   }
 
   @Test
@@ -78,7 +78,7 @@ public class AliasTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//c:c");
     assertContainsEvent(
-        "Target '//a:a' (aliased through '//b:b') is not visible from target '//c:c'");
+        "alias '//b:b' referring to target '//a:a' is not visible from target '//c:c'");
   }
 
   @Test
@@ -94,8 +94,8 @@ public class AliasTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//d:d");
-    assertContainsEvent(
-        "Target '//a:a' (aliased through '//c:c' -> '//b:b') is not visible from target '//d:d'");
+    assertContainsEvent("alias '//c:c' referring to target '//a:a' through '//b:b' "
+        + "is not visible from target '//d:d'");
   }
 
   @Test
@@ -106,7 +106,7 @@ public class AliasTest extends BuildViewTestCase {
         "alias(name='al', actual='//a:af')",
         "filegroup(name='ta', srcs=[':al'])");
 
-    getConfiguredTarget("//b:tf");
+    getConfiguredTarget("//b:ta");
   }
 
   @Test
@@ -131,7 +131,7 @@ public class AliasTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//a:a");
-    assertContainsEvent("filegroup rule '//a:c' (aliased through '//a:b') is misplaced here");
+    assertContainsEvent("alias '//a:b' referring to filegroup rule '//a:c' is misplaced here");
   }
 
   @Test
@@ -147,7 +147,10 @@ public class AliasTest extends BuildViewTestCase {
     assertThat(getLicenses("//a:e", "//a:a")).containsExactly(LicenseType.RESTRICTED);
     assertThat(getLicenses("//a:b", "//a:a")).containsExactly(LicenseType.RESTRICTED);
     assertThat(
-        getConfiguredTarget("//a:b").getProvider(LicensesProvider.class).getTransitiveLicenses())
+            getConfiguredTarget("//a:b")
+                .getProvider(LicensesProvider.class)
+                .getTransitiveLicenses()
+                .toList())
         .hasSize(1);
   }
 
@@ -166,7 +169,7 @@ public class AliasTest extends BuildViewTestCase {
       throws Exception {
     LicensesProvider licenses =
         getConfiguredTarget(topLevelTarget).getProvider(LicensesProvider.class);
-    for (TargetLicense license : licenses.getTransitiveLicenses()) {
+    for (TargetLicense license : licenses.getTransitiveLicenses().toList()) {
       if (license.getLabel().toString().equals(licenseTarget)) {
         return license.getLicense().getLicenseTypes();
       }
@@ -246,5 +249,10 @@ public class AliasTest extends BuildViewTestCase {
 
     useConfiguration("--crosstool_top=//a:cc");
     getConfiguredTarget("//a:a");
+  }
+
+  @Test
+  public void testNoActual() throws Exception {
+    checkError("a", "a", "missing value for mandatory attribute 'actual'", "alias(name='a')");
   }
 }
