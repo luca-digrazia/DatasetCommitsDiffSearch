@@ -637,7 +637,7 @@ public class BzlLoadFunction implements SkyFunction {
     if (repoMapping == null) {
       return null;
     }
-    ImmutableList<Pair<String, Label>> loadLabels =
+    List<Pair<String, Label>> loadLabels =
         getLoadLabels(env.getListener(), file, label.getPackageIdentifier(), repoMapping);
     if (loadLabels == null) {
       // malformed load statements
@@ -752,7 +752,7 @@ public class BzlLoadFunction implements SkyFunction {
    * null. Order matches the source.
    */
   @Nullable
-  static ImmutableList<Pair<String, Label>> getLoadLabels(
+  static List<Pair<String, Label>> getLoadLabels(
       EventHandler handler,
       StarlarkFile file,
       PackageIdentifier base,
@@ -764,7 +764,7 @@ public class BzlLoadFunction implements SkyFunction {
     Label buildLabel = getBUILDLabel(base);
 
     boolean ok = true;
-    ImmutableList.Builder<Pair<String, Label>> loads = ImmutableList.builder();
+    List<Pair<String, Label>> loads = Lists.newArrayList();
     for (Statement stmt : file.getStatements()) {
       if (stmt instanceof LoadStatement) {
         LoadStatement load = (LoadStatement) stmt;
@@ -795,7 +795,7 @@ public class BzlLoadFunction implements SkyFunction {
         }
       }
     }
-    return ok ? loads.build() : null;
+    return ok ? loads : null;
   }
 
   private static Label getBUILDLabel(PackageIdentifier pkgid) {

@@ -20,7 +20,6 @@ import static com.google.common.truth.Truth.assertWithMessage;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.analysis.util.MockRule;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -220,15 +219,11 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
     assertContainsEvent(
         "File \"/workspace/tools/builtins_staging/helper.bzl\", line 1, column 37, in <toplevel>");
     assertContainsEvent("Error: integer division by zero");
-
-    // We assert only the parts of the message before and after the module name, since the module
-    // identified by the message depends on whether or not the test environment has a prelude file.
-    Event ev = assertContainsEvent("Internal error while loading Starlark builtins");
-    assertThat(ev.getMessage())
-        .contains(
-            "Failed to load builtins sources: "
-                + "in /workspace/tools/builtins_staging/exports.bzl: "
-                + "Extension file 'helper.bzl' (internal) has errors");
+    assertContainsEvent(
+        "error loading package 'pkg': Internal error while loading Starlark builtins for "
+            + "//pkg:dummy.bzl: Failed to load builtins sources: in "
+            + "/workspace/tools/builtins_staging/exports.bzl: Extension file "
+            + "'helper.bzl' (internal) has errors");
   }
 
   @Test
@@ -242,14 +237,10 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
     writePkgBzl();
 
     buildAndAssertFailure();
-
-    // We assert only the parts of the message before and after the module name, since the module
-    // identified by the message depends on whether or not the test environment has a prelude file.
-    Event ev = assertContainsEvent("Internal error while loading Starlark builtins");
-    assertThat(ev.getMessage())
-        .contains(
-            "Failed to apply declared builtins: "
-                + "got NoneType for 'exported_toplevels dict', want dict");
+    assertContainsEvent(
+        "error loading package 'pkg': Internal error while loading Starlark builtins for "
+            + "//pkg:dummy.bzl: Failed to apply declared builtins: got NoneType for "
+            + "'exported_toplevels dict', want dict");
   }
 
   // TODO(#11437): Remove once disabling is not allowed.

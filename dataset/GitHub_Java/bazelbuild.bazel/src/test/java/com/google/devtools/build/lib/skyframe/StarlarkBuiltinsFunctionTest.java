@@ -26,7 +26,7 @@ import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
-import net.starlark.java.eval.Structure;
+import net.starlark.java.eval.ClassObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -100,7 +100,7 @@ public class StarlarkBuiltinsFunctionTest extends BuildViewTestCase {
     assertThat(value.predeclaredForBuildBzl).containsEntry("overridable_symbol", "new_value");
     // Overridden native field.
     Object nativeField =
-        ((Structure) value.predeclaredForBuildBzl.get("native")).getValue("overridable_rule");
+        ((ClassObject) value.predeclaredForBuildBzl.get("native")).getValue("overridable_rule");
     assertThat(nativeField).isEqualTo("new_rule");
     // Stuff for native rules.
     assertThat(value.exportedToJava).containsExactly("for_native_code", "secret_sauce").inOrder();
@@ -163,7 +163,7 @@ public class StarlarkBuiltinsFunctionTest extends BuildViewTestCase {
   @Test
   public void parseErrorInExportsHandledGracefully() throws Exception {
     assertBuiltinsFailure(
-        "Failed to load builtins sources: compilation of module 'exports.bzl' (internal) failed",
+        "Failed to load builtins sources: Extension 'exports.bzl' (internal) has errors",
         //
         "exported_toplevels = {}",
         "exported_rules = {}",
@@ -174,7 +174,7 @@ public class StarlarkBuiltinsFunctionTest extends BuildViewTestCase {
   @Test
   public void evalErrorInExportsHandledGracefully() throws Exception {
     assertBuiltinsFailure(
-        "Failed to load builtins sources: initialization of module 'exports.bzl' (internal) failed",
+        "Failed to load builtins sources: Extension file 'exports.bzl' (internal) has errors",
         //
         "exported_toplevels = {}",
         "exported_rules = {}",
@@ -185,7 +185,7 @@ public class StarlarkBuiltinsFunctionTest extends BuildViewTestCase {
   @Test
   public void builtinsBzlCannotAccessNative() throws Exception {
     assertBuiltinsFailure(
-        "compilation of module 'exports.bzl' (internal) failed",
+        "Extension 'exports.bzl' (internal) has errors",
         //
         "native.overridable_rule",
         "exported_toplevels = {}",
@@ -197,7 +197,7 @@ public class StarlarkBuiltinsFunctionTest extends BuildViewTestCase {
   @Test
   public void builtinsBzlCannotAccessRuleSpecificSymbol() throws Exception {
     assertBuiltinsFailure(
-        "compilation of module 'exports.bzl' (internal) failed",
+        "Extension 'exports.bzl' (internal) has errors",
         //
         "overridable_symbol",
         "exported_toplevels = {}",
