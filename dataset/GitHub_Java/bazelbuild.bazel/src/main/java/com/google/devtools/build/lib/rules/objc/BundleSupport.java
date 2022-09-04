@@ -26,18 +26,17 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashMap;
@@ -238,11 +237,10 @@ final class BundleSupport {
           .compiledStoryboardZip(storyboardInput);
 
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                  XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+          ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
               .setMnemonic("StoryboardCompile")
               .setExecutable(attributes.ibtoolWrapper())
-              .addCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, storyboardInput))
+              .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, storyboardInput))
               .addOutput(zipOutput)
               .addInput(storyboardInput)
               .build(ruleContext));
@@ -287,13 +285,12 @@ final class BundleSupport {
     for (Xcdatamodel datamodel : xcdatamodels) {
       Artifact outputZip = datamodel.getOutputZip();
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                  XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+          ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
               .setMnemonic("MomCompile")
               .setExecutable(attributes.momcWrapper())
               .addOutput(outputZip)
               .addInputs(datamodel.getInputs())
-              .addCommandLine(
+              .setCommandLine(
                   CustomCommandLine.builder()
                       .addExecPath(outputZip)
                       .addDynamicString(datamodel.archiveRootForMomczip())
@@ -319,11 +316,10 @@ final class BundleSupport {
           FileSystemUtils.replaceExtension(original.getExecPath(), ".nib"));
 
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                  XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+          ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
               .setMnemonic("XibCompile")
               .setExecutable(attributes.ibtoolWrapper())
-              .addCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, original))
+              .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, original))
               .addOutput(zipOutput)
               .addInput(original)
               // Disable sandboxing due to Bazel issue #2189.
@@ -336,11 +332,10 @@ final class BundleSupport {
     for (Artifact strings : objcProvider.get(ObjcProvider.STRINGS)) {
       Artifact bundled = bundling.getIntermediateArtifacts().convertedStringsFile(strings);
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                  XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+          ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
               .setMnemonic("ConvertStringsPlist")
               .setExecutable(PathFragment.create("/usr/bin/plutil"))
-              .addCommandLine(
+              .setCommandLine(
                   CustomCommandLine.builder()
                       .add("-convert")
                       .add("binary1")
@@ -382,7 +377,7 @@ final class BundleSupport {
             .addTransitiveInputs(mergingContentArtifacts)
             .addOutput(bundling.getIntermediateArtifacts().mergedInfoplist())
             .addInput(plMergeControlArtifact)
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .addExecPath("--control", plMergeControlArtifact)
                     .build())
@@ -419,14 +414,16 @@ final class BundleSupport {
     // zip file will be rooted at the bundle root, and we have to prepend the bundle root to each
     // entry when merging it with the final .ipa file.
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
             .setMnemonic("AssetCatalogCompile")
             .setExecutable(attributes.actoolWrapper())
             .addTransitiveInputs(objcProvider.get(ASSET_CATALOG))
             .addOutput(zipOutput)
             .addOutput(actoolPartialInfoplist)
-            .addCommandLine(actoolzipCommandLine(objcProvider, zipOutput, actoolPartialInfoplist))
+            .setCommandLine(actoolzipCommandLine(
+                objcProvider,
+                zipOutput,
+                actoolPartialInfoplist))
             .disableSandboxing()
             .build(ruleContext));
   }
@@ -453,9 +450,7 @@ final class BundleSupport {
     }
 
     return commandLine
-        .addAll(
-            ImmutableList.copyOf(
-                Iterables.transform(provider.get(XCASSETS_DIR), PathFragment::getSafePathString)))
+        .addAll(ImmutableList.copyOf(PathFragment.safePathStrings(provider.get(XCASSETS_DIR))))
         .addAll(ImmutableList.copyOf(extraActoolArgs))
         .build();
   }
