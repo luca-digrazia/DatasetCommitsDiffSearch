@@ -14,108 +14,113 @@
 
 package com.google.devtools.build.lib.analysis.platform;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
-import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintValueInfoApi;
+import com.google.devtools.build.lib.util.Fingerprint;
+import java.util.Objects;
+import net.starlark.java.eval.Printer;
 
 /** Provider for a platform constraint value that fulfills a {@link ConstraintSettingInfo}. */
-@SkylarkModule(
-  name = "ConstraintValueInfo",
-  doc = "A value for a constraint setting that can be used to define a platform.",
-  category = SkylarkModuleCategory.PROVIDER
-)
 @Immutable
-public class ConstraintValueInfo extends SkylarkClassObject {
+@AutoCodec
+public class ConstraintValueInfo extends NativeInfo implements ConstraintValueInfoApi {
+  /** Name used in Starlark for accessing this provider. */
+  public static final String STARLARK_NAME = "ConstraintValueInfo";
 
-  /** Name used in Skylark for accessing this provider. */
-  public static final String SKYLARK_NAME = "ConstraintValueInfo";
-
-  private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
-      FunctionSignature.WithValues.create(
-          FunctionSignature.of(
-              /*numMandatoryPositionals=*/ 2,
-              /*numOptionalPositionals=*/ 0,
-              /*numMandatoryNamedOnly*/ 0,
-              /*starArg=*/ false,
-              /*kwArg=*/ false,
-              /*names=*/ "label",
-              "constraint_setting"),
-          /*defaultValues=*/ null,
-          /*types=*/ ImmutableList.<SkylarkType>of(
-              SkylarkType.of(Label.class), SkylarkType.of(ConstraintSettingInfo.class)));
-
-  /** Skylark constructor and identifier for this provider. */
-  public static final ClassObjectConstructor SKYLARK_CONSTRUCTOR =
-      new NativeClassObjectConstructor(SKYLARK_NAME, SIGNATURE) {
-        @Override
-        protected ConstraintValueInfo createInstanceFromSkylark(Object[] args, Location loc)
-            throws EvalException {
-          // Based on SIGNATURE above, the args are label, constraint_setting.
-          Label label = (Label) args[0];
-          ConstraintSettingInfo constraint = (ConstraintSettingInfo) args[1];
-          return ConstraintValueInfo.create(constraint, label, loc);
-        }
-      };
-
-  /** Identifier used to retrieve this provider from rules which export it. */
-  public static final SkylarkProviderIdentifier SKYLARK_IDENTIFIER =
-      SkylarkProviderIdentifier.forKey(SKYLARK_CONSTRUCTOR.getKey());
+  /** Provider singleton constant. */
+  public static final BuiltinProvider<ConstraintValueInfo> PROVIDER =
+      new BuiltinProvider<ConstraintValueInfo>(STARLARK_NAME, ConstraintValueInfo.class) {};
 
   private final ConstraintSettingInfo constraint;
   private final Label label;
 
-  private ConstraintValueInfo(ConstraintSettingInfo constraint, Label label, Location location) {
-    super(
-        SKYLARK_CONSTRUCTOR,
-        ImmutableMap.<String, Object>of(
-            "constraint", constraint,
-            "label", label),
-        location);
-
+  @VisibleForSerialization
+  ConstraintValueInfo(ConstraintSettingInfo constraint, Label label) {
     this.constraint = constraint;
     this.label = label;
   }
 
-  @SkylarkCallable(
-    name = "constraint",
-    doc =
-        "The <a href=\"ConstraintSettingInfo.html\">ConstraintSettingInfo</a> this value can be "
-            + "applied to.",
-    structField = true
-  )
+  @Override
+  public BuiltinProvider<ConstraintValueInfo> getProvider() {
+    return PROVIDER;
+  }
+
+  @Override
   public ConstraintSettingInfo constraint() {
     return constraint;
   }
 
-  @SkylarkCallable(
-    name = "label",
-    doc = "The label of the target that created this constraint value.",
-    structField = true
-  )
+  @Override
   public Label label() {
     return label;
   }
 
-  /** Returns a new {@link ConstraintValueInfo} with the given data. */
-  public static ConstraintValueInfo create(ConstraintSettingInfo constraint, Label value) {
-    return create(constraint, value, Location.BUILTIN);
+  /**
+   * Returns a {@link ConfigMatchingProvider} that matches if the owning target's platform includes
+   * this constraint.
+   *
+   * <p>The {@link com.google.devtools.build.lib.rules.platform.ConstraintValue} rule can't directly
+   * return a {@link ConfigMatchingProvider} because, as part of a platform's definition, it doesn't
+   * have access to the platform during its analysis.
+   *
+   * <p>Instead, a target with a <code>select()</code> on a {@link
+   * com.google.devtools.build.lib.rules.platform.ConstraintValue} passes its platform info to this
+   * method.
+   */
+  public ConfigMatchingProvider configMatchingProvider(PlatformInfo platformInfo) {
+    return new ConfigMatchingProvider(
+        label,
+        ImmutableMultimap.of(),
+        ImmutableMap.of(),
+        // Technically a select() on a constraint_value requires PlatformConfiguration, since that's
+        // used to build the platform this checks against. But platformInfo's existence implies
+        // the owning target already depends on PlatformConfiguration. And we can't reference
+        // PlatformConfiguration.class here without a build dependency cycle.
+        ImmutableSet.of(),
+        platformInfo.constraints().hasConstraintValue(this));
+  }
+
+  @Override
+  public void repr(Printer printer) {
+    Printer.format(
+        printer,
+        "ConstraintValueInfo(setting=%s, %s)",
+        constraint.label().toString(),
+        label.toString());
   }
 
   /** Returns a new {@link ConstraintValueInfo} with the given data. */
-  public static ConstraintValueInfo create(
-      ConstraintSettingInfo constraint, Label value, Location location) {
-    return new ConstraintValueInfo(constraint, value, location);
+  public static ConstraintValueInfo create(ConstraintSettingInfo constraint, Label value) {
+    return new ConstraintValueInfo(constraint, value);
+  }
+
+  /** Add this constraint value to the given fingerprint. */
+  public void addTo(Fingerprint fp) {
+    this.constraint.addTo(fp);
+    fp.addString(label.getCanonicalForm());
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof ConstraintValueInfo)) {
+      return false;
+    }
+    ConstraintValueInfo that = (ConstraintValueInfo) o;
+    return Objects.equals(constraint, that.constraint)
+        && Objects.equals(label, that.label);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(constraint, label);
   }
 }
