@@ -141,18 +141,17 @@ public class ConfiguredTargetQueryEnvironment
   }
 
   @Override
-  public ImmutableList<NamedThreadSafeOutputFormatterCallback<ConfiguredTarget>>
-      getDefaultOutputFormatters(
-          TargetAccessor<ConfiguredTarget> accessor,
-          Reporter reporter,
-          SkyframeExecutor skyframeExecutor,
-          BuildConfiguration hostConfiguration,
-          @Nullable RuleTransitionFactory trimmingTransitionFactory,
-          PackageManager packageManager) {
+  public ImmutableList<CqueryThreadsafeCallback> getDefaultOutputFormatters(
+      TargetAccessor<ConfiguredTarget> accessor,
+      Reporter reporter,
+      SkyframeExecutor skyframeExecutor,
+      BuildConfiguration hostConfiguration,
+      @Nullable RuleTransitionFactory trimmingTransitionFactory,
+      PackageManager packageManager) {
     AspectResolver aspectResolver =
         cqueryOptions.aspectDeps.createResolver(packageManager, reporter);
     OutputStream out = reporter.getOutErr().getOutputStream();
-    return new ImmutableList.Builder<NamedThreadSafeOutputFormatterCallback<ConfiguredTarget>>()
+    return new ImmutableList.Builder<CqueryThreadsafeCallback>()
         .add(
             new LabelAndConfigurationOutputFormatterCallback(
                 reporter, cqueryOptions, out, skyframeExecutor, accessor))
