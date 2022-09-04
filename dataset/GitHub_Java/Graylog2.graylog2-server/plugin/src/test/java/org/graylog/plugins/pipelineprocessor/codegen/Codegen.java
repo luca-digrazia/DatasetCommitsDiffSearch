@@ -20,6 +20,7 @@ import org.graylog.plugins.pipelineprocessor.parser.FunctionRegistry;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.reflections.ReflectionUtils;
 import org.slf4j.Logger;
@@ -34,6 +35,9 @@ import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+@Ignore("Replaced by CodegenPipelineRuleParserTest")
 public class Codegen extends BaseParserTest {
     private static final Logger log = LoggerFactory.getLogger(Codegen.class);
     private static final Path PARENT = Paths.get("/Users/kroepke/projects/graylog/graylog-project-repos/graylog-plugin-pipeline-processor/plugin/");
@@ -60,9 +64,9 @@ public class Codegen extends BaseParserTest {
 
     @Test
     public void runCodegen() throws IOException {
-        final Rule rule = parser.parseRule(ruleForTest(), true);
+        final Rule rule = parser.parseRule(ruleForTest(), true).withId("1");
 
-        final String sourceCode = CodeGenerator.codeForRule(rule);
+        final String sourceCode = CodeGenerator.sourceCodeForRule(rule);
         Files.write(sourceCode,
                 OUTFILE.toFile(),
                 StandardCharsets.UTF_8);
@@ -75,6 +79,7 @@ public class Codegen extends BaseParserTest {
             //noinspection unchecked
             Class<GeneratedRule> rule$1 = (Class<GeneratedRule>) JCC.loadFromJava(ruleClassloader, "org.graylog.plugins.pipelineprocessor.$dynamic.rules.rule$1", sourceCode);
 
+            //noinspection unchecked
             final Set<Constructor> constructors = ReflectionUtils.getConstructors(rule$1, input -> input.getParameterCount() == 1);
             final Constructor onlyElement = Iterables.getOnlyElement(constructors);
             final GeneratedRule generatedRule = (GeneratedRule) onlyElement.newInstance(functionRegistry);
@@ -83,7 +88,14 @@ public class Codegen extends BaseParserTest {
             message.addField("message", "#1234");
             message.addField("something_that_doesnt_exist", "foo");
             final EvaluationContext context = new EvaluationContext(message);
-            log.info("created dynamic rule {} matches: {}", generatedRule.name(), generatedRule.when(context));
+
+            final boolean when = generatedRule.when(context);
+            if (when) {
+                generatedRule.then(context);
+            }
+            log.info("created dynamic rule {} matches: {}", generatedRule.name(), when);
+
+            assertThat(context.currentMessage().hasField("some_identifier")).isTrue();
 
         } catch (InvocationTargetException | ClassNotFoundException | InstantiationException | IllegalAccessException e) {
             log.error("Cannot load dynamically created class!", e);
