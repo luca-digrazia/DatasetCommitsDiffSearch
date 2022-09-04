@@ -511,8 +511,7 @@ public class RunCommand implements BlazeCommand  {
         runfilesSupport.getRunfilesDirectory(),
         false);
     helper.createSymlinksUsingCommand(
-        env.getExecRoot(), env.getBlazeWorkspace().getBinTools(),
-        /* shellEnvironment= */ ImmutableMap.of(), /* outErr= */ null);
+        env.getExecRoot(), env.getBlazeWorkspace().getBinTools(), ImmutableMap.of());
     return workingDir;
   }
 

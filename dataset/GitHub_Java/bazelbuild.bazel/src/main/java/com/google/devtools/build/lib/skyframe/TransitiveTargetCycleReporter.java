@@ -54,7 +54,7 @@ class TransitiveTargetCycleReporter extends AbstractLabelCycleReporter {
   }
 
   @Override
-  protected boolean shouldSkipOnPathToCycle(SkyKey key) {
+  protected boolean shouldSkip(SkyKey key) {
     return SkyFunctions.PREPARE_ANALYSIS_PHASE.equals(key.functionName());
   }
 
@@ -63,11 +63,12 @@ class TransitiveTargetCycleReporter extends AbstractLabelCycleReporter {
       ExtendedEventHandler eventHandler, SkyKey topLevelKey, CycleInfo cycleInfo) {
     List<SkyKey> keys = Lists.newArrayList();
     if (!cycleInfo.getPathToCycle().isEmpty()) {
-      if (!shouldSkipOnPathToCycle(topLevelKey)) {
+      if (!shouldSkip(topLevelKey)) {
         keys.add(topLevelKey);
       }
-      cycleInfo.getPathToCycle().stream()
-          .filter(key -> !shouldSkipOnPathToCycle(key))
+      cycleInfo.getPathToCycle()
+          .stream()
+          .filter(key -> !shouldSkip(key))
           .forEach(keys::add);
     }
     keys.addAll(cycleInfo.getCycle());
