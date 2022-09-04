@@ -15,7 +15,9 @@
  *******************************************************************************/
 package smile.math.special;
 
-import smile.math.MathEx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import smile.math.Math;
 
 /**
  * The gamma, digamma, and incomplete gamma functions.
@@ -23,7 +25,7 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class Gamma {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Gamma.class);
+    private static final Logger logger = LoggerFactory.getLogger(Gamma.class);
 
     /** Utility classes should not have public constructors. */
     private Gamma() {
@@ -66,7 +68,7 @@ public class Gamma {
 
         if (x >= 0.0) {
             if (x >= 1.0 && x - (int) x == 0.0) {
-                fg = MathEx.factorial((int) x - 1);
+                fg = Math.factorial((int) x - 1);
             } else {
                 first = Math.pow(first, x + 0.5) * Math.exp(-first);
                 for (int i = 1; i <= LANCZOS_N; i++) {
@@ -91,7 +93,7 @@ public class Gamma {
 
         if (x >= 0.0) {
             if (x >= 1.0 && x - (int) x == 0.0) {
-                fg = MathEx.logFactorial((int) x - 1);
+                fg = Math.logFactorial((int) x - 1);
             } else {
                 first -= (x + 0.5) * Math.log(first);
                 for (int i = 1; i <= LANCZOS_N; i++) {
