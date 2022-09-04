@@ -15,7 +15,7 @@ import javax.lang.model.type.DeclaredType;
 
 import io.quarkus.annotation.processor.Constants;
 
-public class DocGeneratorUtil {
+class DocGeneratorUtil {
     static final String VERTX_JAVA_DOC_SITE = "https://vertx.io/docs/apidocs/";
     static final String OFFICIAL_JAVA_DOC_BASE_LINK = "https://docs.oracle.com/javase/8/docs/api/";
     static final String AGROAL_API_JAVA_DOC_SITE = "https://jar-download.com/javaDoc/io.agroal/agroal-api/1.5/index.html?";
@@ -237,62 +237,13 @@ public class DocGeneratorUtil {
         return acceptedValues.stream().collect(Collectors.joining("`, `", "`", "`"));
     }
 
-    static String getTypeFormatInformationNote(ConfigDocKey configDocKey) {
-        if (configDocKey.getType().equals(Duration.class.getName())) {
+    static String getTypeFormatInformationNote(ConfigItem configItem) {
+        if (configItem.getType().equals(Duration.class.getName())) {
             return Constants.DURATION_INFORMATION;
-        } else if (configDocKey.getType().equals(Constants.MEMORY_SIZE_TYPE)) {
+        } else if (configItem.getType().equals(Constants.MEMORY_SIZE_TYPE)) {
             return Constants.MEMORY_SIZE_INFORMATION;
         }
 
         return Constants.EMPTY;
-    }
-
-    static boolean hasDurationInformationNote(ConfigDocKey configDocKey) {
-        return configDocKey.hasType() && configDocKey.getType().equals(Duration.class.getName());
-    }
-
-    static boolean hasMemoryInformationNote(ConfigDocKey configDocKey) {
-        return configDocKey.hasType() && configDocKey.getType().equals(Constants.MEMORY_SIZE_TYPE);
-    }
-
-    /**
-     * Guess extension name from given configuration root file
-     */
-    public static String computeExtensionDocFileName(String configRoot) {
-        final Matcher matcher = Constants.PKG_PATTERN.matcher(configRoot);
-        if (!matcher.find()) {
-            return configRoot + Constants.ADOC_EXTENSION;
-        }
-
-        String extensionName = matcher.group(1);
-        final String subgroup = matcher.group(2);
-        final StringBuilder key = new StringBuilder(Constants.QUARKUS);
-        key.append(Constants.DASH);
-
-        if (Constants.DEPLOYMENT.equals(extensionName) || Constants.RUNTIME.equals(extensionName)) {
-            final String configClass = configRoot.substring(configRoot.lastIndexOf(Constants.DOT) + 1);
-            extensionName = hyphenate(configClass);
-            key.append(Constants.CORE);
-            key.append(extensionName);
-        } else if (subgroup != null && !Constants.DEPLOYMENT.equals(subgroup)
-                && !Constants.RUNTIME.equals(subgroup) && !Constants.COMMON.equals(subgroup)
-                && subgroup.matches(Constants.DIGIT_OR_LOWERCASE)) {
-            key.append(extensionName);
-            key.append(Constants.DASH);
-            key.append(subgroup);
-
-            final String qualifier = matcher.group(3);
-            if (qualifier != null && !Constants.DEPLOYMENT.equals(qualifier)
-                    && !Constants.RUNTIME.equals(qualifier) && !Constants.COMMON.equals(qualifier)
-                    && qualifier.matches(Constants.DIGIT_OR_LOWERCASE)) {
-                key.append(Constants.DASH);
-                key.append(qualifier);
-            }
-        } else {
-            key.append(extensionName);
-        }
-
-        key.append(Constants.ADOC_EXTENSION);
-        return key.toString();
     }
 }
