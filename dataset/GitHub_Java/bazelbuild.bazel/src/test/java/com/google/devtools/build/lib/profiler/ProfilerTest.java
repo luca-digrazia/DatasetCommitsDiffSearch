@@ -16,8 +16,8 @@ package com.google.devtools.build.lib.profiler;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.profiler.Profiler.Format.BINARY_BAZEL_FORMAT;
 import static com.google.devtools.build.lib.profiler.Profiler.Format.JSON_TRACE_FILE_FORMAT;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -105,7 +105,7 @@ public class ProfilerTest {
         BlazeClock.nanoTime(),
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
     return buffer;
   }
 
@@ -122,7 +122,7 @@ public class ProfilerTest {
         BlazeClock.nanoTime(),
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
   }
 
   @Test
@@ -225,7 +225,7 @@ public class ProfilerTest {
         BlazeClock.instance().nanoTime(),
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
     try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION, "action task")) {
       // Next task takes less than 10 ms but should be recorded anyway.
       clock.advanceMillis(1);
@@ -259,7 +259,7 @@ public class ProfilerTest {
         BlazeClock.instance().nanoTime(),
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
     profiler.logSimpleTask(10000, 20000, ProfilerTask.VFS_STAT, "stat");
     profiler.logSimpleTask(20000, 30000, ProfilerTask.REMOTE_EXECUTION, "remote execution");
 
@@ -372,7 +372,7 @@ public class ProfilerTest {
         BlazeClock.instance().nanoTime(),
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
     profiler.logSimpleTask(10000, 20000, ProfilerTask.VFS_STAT, "stat");
 
     assertThat(ProfilerTask.VFS_STAT.collectsSlowestInstances()).isTrue();
@@ -596,7 +596,7 @@ public class ProfilerTest {
         initialNanoTime,
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
     profiler.logSimpleTask(badClock.nanoTime(), ProfilerTask.INFO, "some task");
     profiler.stop();
   }
@@ -651,11 +651,15 @@ public class ProfilerTest {
         BlazeClock.instance().nanoTime(),
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
     profiler.logSimpleTaskDuration(
         Profiler.nanoTimeMaybe(), Duration.ofSeconds(10), ProfilerTask.INFO, "foo");
-    IOException expected = assertThrows(IOException.class, () -> profiler.stop());
-    assertThat(expected).hasMessageThat().isEqualTo("Expected failure.");
+    try {
+      profiler.stop();
+      fail();
+    } catch (IOException expected) {
+      assertThat(expected).hasMessageThat().isEqualTo("Expected failure.");
+    }
   }
 
   @Test
@@ -678,11 +682,15 @@ public class ProfilerTest {
         BlazeClock.instance().nanoTime(),
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
     profiler.logSimpleTaskDuration(
         Profiler.nanoTimeMaybe(), Duration.ofSeconds(10), ProfilerTask.INFO, "foo");
-    IOException expected = assertThrows(IOException.class, () -> profiler.stop());
-    assertThat(expected).hasMessageThat().isEqualTo("Expected failure.");
+    try {
+      profiler.stop();
+      fail();
+    } catch (IOException expected) {
+      assertThat(expected).hasMessageThat().isEqualTo("Expected failure.");
+    }
   }
 
   private ByteArrayOutputStream getJsonProfileOutputStream(boolean slimProfile) throws IOException {
@@ -699,7 +707,7 @@ public class ProfilerTest {
         BlazeClock.instance().nanoTime(),
         /* enabledCpuUsageProfiling= */ false,
         slimProfile,
-        /* enableActionCountProfile= */ false);
+        /* enableJsonMetadata= */ false);
     long curTime = Profiler.nanoTimeMaybe();
     for (int i = 0; i < 100_000; i++) {
       Duration duration;

@@ -146,8 +146,6 @@ public final class Profiler {
 
   private static final TaskData POISON_PILL = new TaskData(0, 0, null, null, "poison pill");
 
-  private static final long ACTION_COUNT_BUCKET_MS = 200;
-
   /** File format enum. */
   public enum Format {
     BINARY_BAZEL_FORMAT,
@@ -433,9 +431,6 @@ public final class Profiler {
   /** Thread that collects local cpu usage data (if enabled). */
   private CollectLocalCpuUsage cpuUsageThread;
 
-  private TimeSeries actionCountTimeSeries;
-  private long actionCountStartTime;
-
   private Profiler() {
     initHistograms();
     for (ProfilerTask task : ProfilerTask.values()) {
@@ -518,18 +513,13 @@ public final class Profiler {
       long execStartTimeNanos,
       boolean enabledCpuUsageProfiling,
       boolean slimProfile,
-      boolean enableActionCountProfile)
+      boolean enableJsonMetadata)
       throws IOException {
     Preconditions.checkState(!isActive(), "Profiler already active");
     initHistograms();
 
     this.profiledTasks = profiledTasks;
     this.clock = clock;
-    if (enableActionCountProfile) {
-      this.actionCountStartTime = clock.nanoTime();
-      this.actionCountTimeSeries =
-          new TimeSeries(Duration.ofNanos(actionCountStartTime).toMillis(), ACTION_COUNT_BUCKET_MS);
-    }
 
     // sanity check for current limitation on the number of supported types due
     // to using enum.ordinal() to store them instead of EnumSet for performance reasons.
@@ -554,7 +544,8 @@ public final class Profiler {
           break;
         case JSON_TRACE_FILE_FORMAT:
           writer =
-              new JsonTraceFileWriter(stream, execStartTimeNanos, slimProfile, outputBase, buildID);
+              new JsonTraceFileWriter(
+                  stream, execStartTimeNanos, slimProfile, enableJsonMetadata, outputBase, buildID);
           break;
         case JSON_TRACE_FILE_COMPRESSED_FORMAT:
           writer =
@@ -562,6 +553,7 @@ public final class Profiler {
                   new GZIPOutputStream(stream),
                   execStartTimeNanos,
                   slimProfile,
+                  enableJsonMetadata,
                   outputBase,
                   buildID);
       }
@@ -596,23 +588,6 @@ public final class Profiler {
     return Iterables.concat(slowestTasksByType);
   }
 
-  private void collectActionCounts() {
-    if (actionCountTimeSeries != null) {
-      long endTimeMillis = Duration.ofNanos(clock.nanoTime()).toMillis();
-      long profileStartMillis = Duration.ofNanos(actionCountStartTime).toMillis();
-      int len = (int) ((endTimeMillis - profileStartMillis) / ACTION_COUNT_BUCKET_MS) + 1;
-      double[] actionCountValues = actionCountTimeSeries.toDoubleArray(len);
-      Profiler profiler = Profiler.instance();
-      for (int i = 0; i < len; i++) {
-        long timeMillis = profileStartMillis + i * ACTION_COUNT_BUCKET_MS;
-        long timeNanos = TimeUnit.MILLISECONDS.toNanos(timeMillis);
-        profiler.logEventAtTime(
-            timeNanos, ProfilerTask.ACTION_COUNTS, String.valueOf(actionCountValues[i]));
-      }
-      actionCountTimeSeries = null;
-    }
-  }
-
   /**
    * Disable profiling and complete profile file creation.
    * Subsequent calls to beginTask/endTask will no longer
@@ -622,8 +597,6 @@ public final class Profiler {
     if (!isActive()) {
       return;
     }
-
-    collectActionCounts();
 
     if (cpuUsageThread != null) {
       cpuUsageThread.stopCollecting();
@@ -849,11 +822,6 @@ public final class Profiler {
     return profile(ProfilerTask.INFO, description);
   }
 
-  private boolean countAction(ProfilerTask type, TaskData taskData) {
-    return type == ProfilerTask.ACTION
-        || (type == ProfilerTask.INFO && "discoverInputs".equals(taskData.description));
-  }
-
   /**
    * Records the end of the task and moves tasks from the thread-local stack to
    * the main queue. Will validate that given task type matches task at the top
@@ -883,11 +851,6 @@ public final class Profiler {
       }
 
       if (shouldRecordTask) {
-        if (actionCountTimeSeries != null && countAction(type, data)) {
-          actionCountTimeSeries.addRange(
-              Duration.ofNanos(data.startTimeNanos).toMillis(),
-              Duration.ofNanos(endTime).toMillis());
-        }
         SlowestTaskAggregator aggregator = slowestTasks[type.ordinal()];
         if (aggregator != null) {
           aggregator.add(data);
@@ -1047,6 +1010,7 @@ public final class Profiler {
     private final ThreadLocal<Boolean> metadataPosted =
         ThreadLocal.withInitial(() -> Boolean.FALSE);
     private final boolean slimProfile;
+    private final boolean enableJsonMetadata;
     private final UUID buildID;
     private final String outputBase;
 
@@ -1061,11 +1025,13 @@ public final class Profiler {
         OutputStream outStream,
         long profileStartTimeNanos,
         boolean slimProfile,
+        boolean enableJsonMetadata,
         String outputBase,
         UUID buildID) {
       this.outStream = outStream;
       this.profileStartTimeNanos = profileStartTimeNanos;
       this.slimProfile = slimProfile;
+      this.enableJsonMetadata = enableJsonMetadata;
       this.buildID = buildID;
       this.outputBase = outputBase;
     }
@@ -1191,14 +1157,16 @@ public final class Profiler {
                 // The buffer size of 262144 is chosen at random.
                 new OutputStreamWriter(
                     new BufferedOutputStream(outStream, 262144), StandardCharsets.UTF_8))) {
-          writer.beginObject();
-          writer.name("otherData");
-          writer.beginObject();
-          writer.name("build_id").value(buildID.toString());
-          writer.name("output_base").value(outputBase);
-          writer.name("date").value(new Date().toString());
-          writer.endObject();
-          writer.name("traceEvents");
+          if (enableJsonMetadata) {
+            writer.beginObject();
+            writer.name("otherData");
+            writer.beginObject();
+            writer.name("build_id").value(buildID.toString());
+            writer.name("output_base").value(outputBase);
+            writer.name("date").value(new Date().toString());
+            writer.endObject();
+            writer.name("traceEvents");
+          }
           writer.beginArray();
           TaskData data;
 
@@ -1237,13 +1205,7 @@ public final class Profiler {
               writer.endObject();
               continue;
             }
-
-            if (data.type == ProfilerTask.LOCAL_CPU_USAGE
-                || data.type == ProfilerTask.ACTION_COUNTS) {
-              // Skip counts equal to zero. They will show up as a thin line in the profile.
-              if ("0.0".equals(data.description)) {
-                continue;
-              }
+            if (data.type == ProfilerTask.LOCAL_CPU_USAGE) {
               writer.setIndent("  ");
               writer.beginObject();
               writer.setIndent("");
@@ -1287,7 +1249,9 @@ public final class Profiler {
           receivedPoisonPill = true;
           writer.setIndent("  ");
           writer.endArray();
-          writer.endObject();
+          if (enableJsonMetadata) {
+            writer.endObject();
+          }
         } catch (IOException e) {
           this.savedException = e;
           if (!receivedPoisonPill) {
