@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.fail;
 public class LogbackExcludedTest {
 
     @Test
-    void testLogbackExcludedClassNotFound() throws Exception {
+    public void testLogbackExcludedClassNotFound() throws Exception {
         testBuildConfigurationMetadata(className -> {
             if (className.startsWith("ch.qos.logback.")) {
                 throw new ClassNotFoundException();
@@ -34,7 +34,7 @@ public class LogbackExcludedTest {
     }
 
     @Test
-    void testLogbackExcludedNoClassDef() throws Exception {
+    public void testLogbackExcludedNoClassDef() throws Exception {
         testBuildConfigurationMetadata(className -> {
             if (className.startsWith("ch.qos.logback.")) {
                 throw new NoClassDefFoundError();
@@ -43,7 +43,7 @@ public class LogbackExcludedTest {
     }
 
     @Test
-    void testPropagatedException() throws Exception {
+    public void testPropagatedException() throws Exception {
         AtomicReference<RuntimeException> thrown = new AtomicReference<>();
         try {
             testBuildConfigurationMetadata(className -> {
