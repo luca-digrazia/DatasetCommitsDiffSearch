@@ -191,14 +191,11 @@ public class ConfUtils {
       for (int i = 0; i < jars.length; i++) {
         if (new Path(jars[i]).isAbsoluteAndSchemeAuthorityNull()) {
           sb.append("file://").append(jars[i]);
-          if (i != jars.length - 1) {
-            sb.append(",");
-          }
         } else {
           sb.append(jars[i]);
-          if (i != jars.length - 1) {
-            sb.append(",");
-          }
+        }
+        if (i != jars.length - 1) {
+          sb.append(",");
         }
       }
       conf.set(AngelConf.ANGEL_JOB_LIBJARS, sb.toString());
@@ -206,16 +203,32 @@ public class ConfUtils {
     }
   }
 
-  private static void addResourceFiles(Configuration conf, String fileNames)
+  public static void addResourceFiles(Configuration conf, String fileNames)
     throws MalformedURLException {
     String[] fileNameArray = fileNames.split(",");
     StringBuilder sb = new StringBuilder();
+
     for (int i = 0; i < fileNameArray.length; i++) {
-      if (i != 0) {
+      Path filePath = new Path(fileNameArray[i]);
+      if(!filePath.isAbsolute()) {
+        String pwd = "";
+        File pwdFile = new File("");
+        try{
+          pwd = pwdFile.getAbsolutePath();
+        } catch(Throwable e){
+          LOG.warn("get pwd failed " + e.getMessage());
+        }
+        LOG.info("PWD=" + pwd);
+
+        sb.append("file://").append(pwd).append(File.separatorChar).append(fileNameArray[i]);
+      } else if (filePath.isAbsoluteAndSchemeAuthorityNull()) {
+        sb.append("file://").append(fileNameArray[i]);
+      } else {
+        sb.append(fileNameArray[i]);
+      }
+      if (i != fileNameArray.length - 1) {
         sb.append(",");
       }
-      URL url = new File(fileNameArray[i]).toURI().toURL();
-      sb.append(url.toString());
     }
 
     String addJars = conf.get(AngelConf.ANGEL_JOB_LIBJARS);
