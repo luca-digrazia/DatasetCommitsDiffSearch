@@ -20,6 +20,7 @@ import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.MethodParameterInfo;
 import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.processor.BeanProcessor;
 import org.jboss.protean.arc.processor.BeanProcessor.Builder;
@@ -110,12 +111,13 @@ public class ArcAnnotationProcessor implements ResourceProcessor {
             if (anno.target().kind() == AnnotationTarget.Kind.FIELD) {
                 FieldInfo info = anno.target().asField();
                 if (Modifier.isPrivate(info.flags())) {
-                    context.addReflectiveField(info);
+                    //TODO: this should be more fine grained
+                    context.addReflectiveClass(false, true, info.declaringClass().name().toString());
                 }
             } else if (anno.target().kind() == AnnotationTarget.Kind.METHOD) {
                 MethodInfo methodInfo = anno.target().asMethod();
                 if (Modifier.isPrivate(methodInfo.flags())) {
-                    context.addReflectiveMethod(methodInfo);
+                    context.addReflectiveClass(true, false, methodInfo.declaringClass().name().toString());
                 }
             }
         }
