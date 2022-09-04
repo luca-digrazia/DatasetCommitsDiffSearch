@@ -549,14 +549,14 @@ public class MatrixTransportClient implements MatrixTransportInterface {
 
   @Override
   public FutureResult<IndexPartGetRowResult> indexGetRow(int userRequestId, int matrixId, int rowId,
-    PartitionKey partKey, IndicesView indices, InitFunc func) {
+    PartitionKey partKey, IndicesView indices) {
     ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(partKey);
 
     RowType rowType =
       PSAgentContext.get().getMatrixMetaManager().getMatrixMeta(partKey.getMatrixId()).getRowType();
     ValueType valueType = getValueType(rowType);
     IndexPartGetRowRequest request =
-      new IndexPartGetRowRequest(userRequestId, matrixId, rowId, partKey, indices, valueType, func);
+      new IndexPartGetRowRequest(userRequestId, matrixId, rowId, partKey, indices, valueType);
     LOG.debug("get request=" + request);
 
     FutureResult<IndexPartGetRowResult> future = new FutureResult<>();
@@ -572,14 +572,14 @@ public class MatrixTransportClient implements MatrixTransportInterface {
   }
 
   @Override public FutureResult<IndexPartGetRowsResult> indexGetRows(int requestId, int matrixId,
-    PartitionKey partKey, List<Integer> rowIds, IndicesView colIds, InitFunc func) {
+    PartitionKey partKey, List<Integer> rowIds, IndicesView colIds) {
     ParameterServerId serverId = PSAgentContext.get().getMatrixMetaManager().getMasterPS(partKey);
 
     RowType rowType =
       PSAgentContext.get().getMatrixMetaManager().getMatrixMeta(partKey.getMatrixId()).getRowType();
     ValueType valueType = getValueType(rowType);
     IndexPartGetRowsRequest request =
-      new IndexPartGetRowsRequest(requestId, matrixId, rowIds, partKey, colIds, valueType, func);
+      new IndexPartGetRowsRequest(requestId, matrixId, rowIds, partKey, colIds, valueType);
     LOG.debug("get request=" + request);
 
     FutureResult<IndexPartGetRowsResult> future = new FutureResult<>();
