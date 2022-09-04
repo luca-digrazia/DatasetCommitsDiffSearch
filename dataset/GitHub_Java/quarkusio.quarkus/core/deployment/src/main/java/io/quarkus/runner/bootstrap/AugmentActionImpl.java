@@ -92,7 +92,7 @@ public class AugmentActionImpl implements AugmentAction {
 
     /**
      * Leaving this here for backwards compatibility, even though this is only internal.
-     *
+     * 
      * @Deprecated use one of the other constructors
      */
     @Deprecated
@@ -127,11 +127,6 @@ public class AugmentActionImpl implements AugmentAction {
                 //to date even if the process is restarted
                 launchMode = LaunchMode.NORMAL;
                 devModeType = DevModeType.REMOTE_LOCAL_SIDE;
-                break;
-            case CONTINUOUS_TEST:
-                //the process that actually launches the tests is a dev mode process
-                launchMode = LaunchMode.DEVELOPMENT;
-                devModeType = DevModeType.TEST_ONLY;
                 break;
             case REMOTE_DEV_SERVER:
                 launchMode = LaunchMode.DEVELOPMENT;
@@ -309,7 +304,7 @@ public class AugmentActionImpl implements AugmentAction {
             chainBuilder.setClassLoader(classLoader);
 
             ExtensionLoader.loadStepsFrom(classLoader, new Properties(),
-                    curatedApplication.getAppModel(), launchMode, devModeType, null)
+                    curatedApplication.getAppModel().getPlatformProperties(), launchMode, devModeType, null)
                     .accept(chainBuilder);
             chainBuilder.loadProviders(classLoader);
 
@@ -328,8 +323,7 @@ public class AugmentActionImpl implements AugmentAction {
                     .build();
             BuildExecutionBuilder execBuilder = chain.createExecutionBuilder("main")
                     .produce(new LaunchModeBuildItem(launchMode,
-                            devModeType == null ? Optional.empty() : Optional.of(devModeType),
-                            curatedApplication.getQuarkusBootstrap().isAuxiliaryApplication()))
+                            devModeType == null ? Optional.empty() : Optional.of(devModeType)))
                     .produce(new ShutdownContextBuildItem())
                     .produce(new RawCommandLineArgumentsBuildItem())
                     .produce(new LiveReloadBuildItem());
@@ -353,13 +347,10 @@ public class AugmentActionImpl implements AugmentAction {
             Class<? extends BuildItem>... finalOutputs) {
         ClassLoader old = Thread.currentThread().getContextClassLoader();
         try {
-            QuarkusClassLoader classLoader = curatedApplication.getAugmentClassLoader();
-            Thread.currentThread().setContextClassLoader(classLoader);
+            Thread.currentThread().setContextClassLoader(curatedApplication.getAugmentClassLoader());
             ProfileManager.setLaunchMode(launchMode);
-            ProfileManager.setRuntimeDefaultProfile(
-                    Optional.ofNullable(quarkusBootstrap.getBuildSystemProperties())
-                            .map(properties -> properties.getProperty(ProfileManager.QUARKUS_PROFILE_PROP))
-                            .orElse(null));
+
+            QuarkusClassLoader classLoader = curatedApplication.getAugmentClassLoader();
 
             QuarkusAugmentor.Builder builder = QuarkusAugmentor.builder()
                     .setRoot(quarkusBootstrap.getApplicationRoot())
@@ -373,7 +364,6 @@ public class AugmentActionImpl implements AugmentAction {
                 builder.setBaseName(quarkusBootstrap.getBaseName());
             }
 
-            builder.setAuxiliaryApplication(curatedApplication.getQuarkusBootstrap().isAuxiliaryApplication());
             builder.setLaunchMode(launchMode);
             builder.setDevModeType(devModeType);
             builder.setRebuild(quarkusBootstrap.isRebuild());
@@ -406,7 +396,6 @@ public class AugmentActionImpl implements AugmentAction {
                 throw new RuntimeException(e);
             }
         } finally {
-            ProfileManager.setRuntimeDefaultProfile(null);
             Thread.currentThread().setContextClassLoader(old);
         }
     }
