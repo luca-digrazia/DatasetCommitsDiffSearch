@@ -15,10 +15,11 @@
  */
 package org.androidannotations.api;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 import android.os.Handler;
 
@@ -28,8 +29,7 @@ import android.os.Handler;
  */
 public class UiThreadExecutor {
 
-	private static final Map<String, List<Runnable>> TASKS = new HashMap<String, List<Runnable>>();
-	private static final Map<Runnable, Handler> HANDLERS = new HashMap<Runnable, Handler>();
+	private static final Map<Runnable, TaskInfo> TASKS = new WeakHashMap<Runnable, TaskInfo>();
 
 	private UiThreadExecutor() {
 		// should not be instantiated
@@ -47,13 +47,7 @@ public class UiThreadExecutor {
 	 *            the {@link Handler} which runs the task
 	 */
 	public static synchronized void addTask(String id, Runnable task, Handler handler) {
-		List<Runnable> runnables = TASKS.get(id);
-		if (runnables == null) {
-			runnables = new ArrayList<Runnable>();
-			TASKS.put(id, runnables);
-		}
-		runnables.add(task);
-		HANDLERS.put(task, handler);
+		TASKS.put(task, new TaskInfo(id, handler));
 	}
 
 	/**
@@ -63,24 +57,28 @@ public class UiThreadExecutor {
 	 *            the cancellation identifier
 	 */
 	public static synchronized void cancelAll(String id) {
-		List<Runnable> runnables = TASKS.remove(id);
-		if (runnables != null) {
-			for (Runnable runnable : runnables) {
-				HANDLERS.remove(runnable).removeCallbacks(runnable);
+		Set<Entry<Runnable, TaskInfo>> entrySet = TASKS.entrySet();
+		Iterator<Entry<Runnable, TaskInfo>> iterator = entrySet.iterator();
+
+		while (iterator.hasNext()) {
+			Entry<Runnable, TaskInfo> next = iterator.next();
+			Runnable task = next.getKey();
+			TaskInfo info = next.getValue();
+
+			if (info.id.equals(id)) {
+				info.handler.removeCallbacks(task);
 			}
 		}
 	}
 
-	public static synchronized void done(String id, Runnable runnable) {
-		Handler handler = HANDLERS.remove(runnable);
-		if (handler != null) {
-			List<Runnable> runnables = TASKS.get(id);
-			runnables.remove(runnable);
-			// potentially empty array stays in map for reducing garbage
-			// collecting -
-			// it is highly possible, that array will be reused at the next
-			// addTask call
+	private static class TaskInfo {
+		String id;
+
+		Handler handler;
+
+		TaskInfo(String id, Handler handler) {
+			this.id = id;
+			this.handler = handler;
 		}
 	}
-
 }
