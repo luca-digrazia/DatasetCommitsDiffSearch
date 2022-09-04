@@ -76,10 +76,7 @@ public class TestSupport {
     String runMemleaks =
         ruleContext.getFragment(ObjcConfiguration.class).runMemleaks() ? "true" : "false";
 
-    // TODO(ulfjack): This is missing the action environment, and the inherited parts from both. Is
-    // that intentional? We should either fix it, or clearly document why we're doing that.
-    ImmutableMap<String, String> testEnv =
-        ruleContext.getConfiguration().getTestActionEnvironment().getFixedEnv();
+    ImmutableMap<String, String> testEnv = ruleContext.getConfiguration().getTestEnv();
 
     // The substitutions below are common for simulator and lab device.
     ImmutableList.Builder<Substitution> substitutions =
