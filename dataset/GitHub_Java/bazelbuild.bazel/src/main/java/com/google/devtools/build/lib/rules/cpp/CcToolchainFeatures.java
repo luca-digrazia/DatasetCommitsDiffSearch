@@ -44,6 +44,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.WithFeatureSet;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
@@ -662,17 +663,17 @@ public class CcToolchainFeatures implements Serializable {
   }
 
   private static boolean isWithFeaturesSatisfied(
-      Collection<WithFeatureSet> withFeatureSets, Set<String> enabledFeatureNames) {
+      Collection<CToolchain.WithFeatureSet> withFeatureSets, Set<String> enabledFeatureNames) {
     if (withFeatureSets.isEmpty()) {
       return true;
     }
-    for (WithFeatureSet featureSet : withFeatureSets) {
+    for (CToolchain.WithFeatureSet featureSet : withFeatureSets) {
       boolean negativeMatch =
           featureSet
-              .getNotFeatures()
+              .getNotFeatureList()
               .stream()
               .anyMatch(notFeature -> enabledFeatureNames.contains(notFeature));
-      boolean positiveMatch = enabledFeatureNames.containsAll(featureSet.getFeatures());
+      boolean positiveMatch = enabledFeatureNames.containsAll(featureSet.getFeatureList());
 
       if (!negativeMatch && positiveMatch) {
         return true;
@@ -688,7 +689,7 @@ public class CcToolchainFeatures implements Serializable {
   static class FlagSet implements Serializable {
     private final ImmutableSet<String> actions;
     private final ImmutableSet<String> expandIfAllAvailable;
-    private final ImmutableSet<WithFeatureSet> withFeatureSets;
+    private final ImmutableSet<CToolchain.WithFeatureSet> withFeatureSets;
     private final ImmutableList<FlagGroup> flagGroups;
 
     private FlagSet(CToolchain.FlagSet flagSet) throws InvalidConfigurationException {
@@ -702,11 +703,7 @@ public class CcToolchainFeatures implements Serializable {
         throws InvalidConfigurationException {
       this.actions = actions;
       this.expandIfAllAvailable = ImmutableSet.copyOf(flagSet.getExpandIfAllAvailableList());
-      ImmutableSet.Builder<WithFeatureSet> featureSetBuilder = ImmutableSet.builder();
-      for (CToolchain.WithFeatureSet withFeatureSet : flagSet.getWithFeatureList()) {
-        featureSetBuilder.add(new WithFeatureSet(withFeatureSet));
-      }
-      this.withFeatureSets = featureSetBuilder.build();
+      this.withFeatureSets = ImmutableSet.copyOf(flagSet.getWithFeatureList());
       ImmutableList.Builder<FlagGroup> builder = ImmutableList.builder();
       for (CToolchain.FlagGroup flagGroup : flagSet.getFlagGroupList()) {
         builder.add(new FlagGroup(flagGroup));
@@ -719,7 +716,7 @@ public class CcToolchainFeatures implements Serializable {
     FlagSet(
         ImmutableSet<String> actions,
         ImmutableSet<String> expandIfAllAvailable,
-        ImmutableSet<WithFeatureSet> withFeatureSets,
+        ImmutableSet<CToolchain.WithFeatureSet> withFeatureSets,
         ImmutableList<FlagGroup> flagGroups) {
       this.actions = actions;
       this.expandIfAllAvailable = expandIfAllAvailable;
@@ -768,52 +765,6 @@ public class CcToolchainFeatures implements Serializable {
     }
   }
 
-  @Immutable
-  @AutoCodec
-  @VisibleForSerialization
-  static class WithFeatureSet implements Serializable {
-    private final ImmutableSet<String> features;
-    private final ImmutableSet<String> notFeatures;
-
-    private WithFeatureSet(CToolchain.WithFeatureSet withFeatureSet) {
-      this.features = ImmutableSet.copyOf(withFeatureSet.getFeatureList());
-      this.notFeatures = ImmutableSet.copyOf(withFeatureSet.getNotFeatureList());
-    }
-
-    @AutoCodec.Instantiator
-    @VisibleForSerialization
-    WithFeatureSet(ImmutableSet<String> features, ImmutableSet<String> notFeatures) {
-      this.features = features;
-      this.notFeatures = notFeatures;
-    }
-
-    public ImmutableSet<String> getFeatures() {
-      return features;
-    }
-
-    public ImmutableSet<String> getNotFeatures() {
-      return notFeatures;
-    }
-
-    @Override
-    public boolean equals(@Nullable Object object) {
-      if (this == object) {
-        return true;
-      }
-      if (object instanceof WithFeatureSet) {
-        WithFeatureSet that = (WithFeatureSet) object;
-        return Iterables.elementsEqual(features, that.features)
-            && Iterables.elementsEqual(notFeatures, that.notFeatures);
-      }
-      return false;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(features, notFeatures);
-    }
-  }
-
   /** Groups a set of environment variables to apply for certain actions. */
   @Immutable
   @AutoCodec
@@ -821,7 +772,7 @@ public class CcToolchainFeatures implements Serializable {
   static class EnvSet implements Serializable {
     private final ImmutableSet<String> actions;
     private final ImmutableList<EnvEntry> envEntries;
-    private final ImmutableSet<WithFeatureSet> withFeatureSets;
+    private final ImmutableSet<CToolchain.WithFeatureSet> withFeatureSets;
 
     private EnvSet(CToolchain.EnvSet envSet) throws InvalidConfigurationException {
       this.actions = ImmutableSet.copyOf(envSet.getActionList());
@@ -829,13 +780,8 @@ public class CcToolchainFeatures implements Serializable {
       for (CToolchain.EnvEntry envEntry : envSet.getEnvEntryList()) {
         builder.add(new EnvEntry(envEntry));
       }
-      ImmutableSet.Builder<WithFeatureSet> withFeatureSetsBuilder = ImmutableSet.builder();
-      for (CToolchain.WithFeatureSet withFeatureSet : envSet.getWithFeatureList()) {
-        withFeatureSetsBuilder.add(new WithFeatureSet(withFeatureSet));
-      }
-
       this.envEntries = builder.build();
-      this.withFeatureSets = withFeatureSetsBuilder.build();
+      this.withFeatureSets = ImmutableSet.copyOf(envSet.getWithFeatureList());
     }
 
     @AutoCodec.Instantiator
@@ -1073,15 +1019,7 @@ public class CcToolchainFeatures implements Serializable {
           actionConfig
               .getToolList()
               .stream()
-              .map(
-                  t ->
-                      new Tool(
-                          t,
-                          crosstoolTop,
-                          t.getWithFeatureList()
-                              .stream()
-                              .map(f -> new WithFeatureSet(f))
-                              .collect(ImmutableSet.toImmutableSet())))
+              .map(t -> new Tool(t, crosstoolTop, ImmutableSet.copyOf(t.getWithFeatureList())))
               .collect(ImmutableList.toImmutableList());
 
       ImmutableList.Builder<FlagSet> flagSetBuilder = ImmutableList.builder();
