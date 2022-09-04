@@ -18,14 +18,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.eventbus.Subscribe;
-import com.google.devtools.build.lib.actions.SpawnStrategy;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
-import com.google.devtools.build.lib.exec.RunfilesTreeUpdater;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
@@ -34,7 +33,6 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.commands.CleanCommand.CleanStartingEvent;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers;
 import com.google.devtools.build.lib.sandbox.SandboxOptions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.worker.WorkerOptions.MultiResourceConverter;
@@ -145,7 +143,6 @@ public class WorkerModule extends BlazeModule {
     LocalEnvProvider localEnvProvider = LocalEnvProvider.forCurrentOs(env.getClientEnv());
     WorkerSpawnRunner spawnRunner =
         new WorkerSpawnRunner(
-            new SandboxHelpers(),
             env.getExecRoot(),
             workerPool,
             extraFlags,
@@ -156,14 +153,11 @@ public class WorkerModule extends BlazeModule {
                 .getOptions(SandboxOptions.class)
                 .symlinkedSandboxExpandsTreeArtifactsInRunfilesTree,
             env.getBlazeWorkspace().getBinTools(),
-            env.getLocalResourceManager(),
-            // TODO(buchgr): Replace singleton by a command-scoped RunfilesTreeUpdater
-            RunfilesTreeUpdater.INSTANCE);
-    builder.addActionContext(
-        SpawnStrategy.class, new WorkerSpawnStrategy(env.getExecRoot(), spawnRunner), "worker");
+            env.getLocalResourceManager());
+    builder.addActionContext(new WorkerSpawnStrategy(env.getExecRoot(), spawnRunner));
 
-    builder.addStrategyByContext(SpawnStrategy.class, "standalone");
-    builder.addStrategyByContext(SpawnStrategy.class, "worker");
+    builder.addStrategyByContext(SpawnActionContext.class, "standalone");
+    builder.addStrategyByContext(SpawnActionContext.class, "worker");
   }
 
   private static SpawnRunner createFallbackRunner(
@@ -175,9 +169,7 @@ public class WorkerModule extends BlazeModule {
         localExecutionOptions,
         env.getLocalResourceManager(),
         localEnvProvider,
-        env.getBlazeWorkspace().getBinTools(),
-        // TODO(buchgr): Replace singleton by a command-scoped RunfilesTreeUpdater
-        RunfilesTreeUpdater.INSTANCE);
+        env.getBlazeWorkspace().getBinTools());
   }
 
   @Subscribe

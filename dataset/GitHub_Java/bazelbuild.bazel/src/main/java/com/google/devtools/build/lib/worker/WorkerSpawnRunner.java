@@ -36,11 +36,9 @@ import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.exec.BinTools;
-import com.google.devtools.build.lib.exec.RunfilesTreeUpdater;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
@@ -83,7 +81,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private final boolean sandboxUsesExpandedTreeArtifactsInRunfiles;
   private final BinTools binTools;
   private final ResourceManager resourceManager;
-  private final RunfilesTreeUpdater runfilesTreeUpdater;
 
   public WorkerSpawnRunner(
       Path execRoot,
@@ -94,8 +91,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       LocalEnvProvider localEnvProvider,
       boolean sandboxUsesExpandedTreeArtifactsInRunfiles,
       BinTools binTools,
-      ResourceManager resourceManager,
-      RunfilesTreeUpdater runfilesTreeUpdater) {
+      ResourceManager resourceManager) {
     this.execRoot = execRoot;
     this.workers = Preconditions.checkNotNull(workers);
     this.extraFlags = extraFlags;
@@ -105,7 +101,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
     this.sandboxUsesExpandedTreeArtifactsInRunfiles = sandboxUsesExpandedTreeArtifactsInRunfiles;
     this.binTools = binTools;
     this.resourceManager = resourceManager;
-    this.runfilesTreeUpdater = runfilesTreeUpdater;
   }
 
   @Override
@@ -141,14 +136,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
           String.format(ERROR_MESSAGE_PREFIX + REASON_NO_TOOLS, spawn.getMnemonic()));
     }
 
-    runfilesTreeUpdater.updateRunfilesDirectory(
-        execRoot,
-        spawn.getRunfilesSupplier(),
-        context.getPathResolver(),
-        binTools,
-        spawn.getEnvironment(),
-        context.getFileOutErr());
-
     // We assume that the spawn to be executed always gets at least one @flagfile.txt or
     // --flagfile=flagfile.txt argument, which contains the flags related to the work itself (as
     // opposed to start-up options for the executed tool). Thus, we can extract those elements from
@@ -162,14 +149,12 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
     SortedMap<PathFragment, HashCode> workerFiles =
         WorkerFilesHash.getWorkerFilesWithHashes(
-            spawn,
-            context.getArtifactExpander(),
-            context.getPathResolver(),
+            spawn, context.getArtifactExpander(), context.getPathResolver(),
             context.getMetadataProvider());
 
     HashCode workerFilesCombinedHash = WorkerFilesHash.getCombinedHash(workerFiles);
 
-    SandboxInputs inputFiles =
+    Map<PathFragment, Path> inputFiles =
         SandboxHelpers.processInputFiles(
             spawn, context, execRoot, sandboxUsesExpandedTreeArtifactsInRunfiles);
     SandboxOutputs outputs = SandboxHelpers.getOutputs(spawn);
@@ -268,8 +253,8 @@ final class WorkerSpawnRunner implements SpawnRunner {
    * files. The @ itself can be escaped with @@. This deliberately does not expand --flagfile= style
    * arguments, because we want to get rid of the expansion entirely at some point in time.
    *
-   * <p>Also check that the argument is not an external repository label, because they start with
-   * `@` and are not flagfile locations.
+   * Also check that the argument is not an external repository label, because they start with `@`
+   * and are not flagfile locations.
    *
    * @param execRoot the current execroot of the build (relative paths will be assumed to be
    *     relative to this directory).
@@ -299,7 +284,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       WorkerKey key,
       WorkRequest request,
       SpawnExecutionContext context,
-      SandboxInputs inputFiles,
+      Map<PathFragment, Path> inputFiles,
       SandboxOutputs outputs)
       throws InterruptedException, ExecException {
     Worker worker = null;
@@ -384,6 +369,8 @@ final class WorkerSpawnRunner implements SpawnRunner {
         }
       }
 
+      context.lockOutputFiles();
+
       if (response == null) {
         throw new UserExecException(
             ErrorMessage.builder()
@@ -395,7 +382,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
       }
 
       try {
-        context.lockOutputFiles();
         worker.finishExecution(execRoot);
       } catch (IOException e) {
         throw new UserExecException(

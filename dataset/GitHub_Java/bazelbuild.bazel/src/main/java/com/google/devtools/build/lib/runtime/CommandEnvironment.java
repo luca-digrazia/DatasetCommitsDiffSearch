@@ -178,7 +178,7 @@ public final class CommandEnvironment {
         Preconditions.checkNotNull(
             options.getOptions(CommonCommandOptions.class),
             "CommandEnvironment needs its options provider to have CommonCommandOptions loaded.");
-    this.clientEnv = makeMapFromMapEntries(clientOptions.clientEnv);
+    this.clientEnv = computeClientEnv(clientOptions.clientEnv);
     this.commandId = computeCommandId(commandOptions.invocationId, warnings);
     this.buildRequestId = computeBuildRequestId(commandOptions.buildRequestId, warnings);
     this.crashData = new String[] { commandId + " (build id)" };
@@ -317,13 +317,12 @@ public final class CommandEnvironment {
     return Collections.unmodifiableMap(result);
   }
 
-  private static Map<String, String> makeMapFromMapEntries(
-      List<Map.Entry<String, String>> mapEntryList) {
-    Map<String, String> result = new TreeMap<>();
-    for (Map.Entry<String, String> entry : mapEntryList) {
-      result.put(entry.getKey(), entry.getValue());
+  private Map<String, String> computeClientEnv(List<Map.Entry<String, String>> clientEnvList) {
+    Map<String, String> clientEnv = new TreeMap<>();
+    for (Map.Entry<String, String> entry : clientEnvList) {
+      clientEnv.put(entry.getKey(), entry.getValue());
     }
-    return Collections.unmodifiableMap(result);
+    return Collections.unmodifiableMap(clientEnv);
   }
 
   private UUID computeCommandId(UUID idFromOptions, List<String> warnings) {
@@ -461,11 +460,11 @@ public final class CommandEnvironment {
   }
 
   /**
-   * Returns the directory where actions' temporary files will be written. Is below the directory
+   * Returns the directory where actions' outputs and errors will be written. Is below the directory
    * returned by {@link #getExecRoot}.
    */
-  public Path getActionTempsDirectory() {
-    return getDirectories().getActionTempsDirectory(getExecRoot());
+  public Path getActionConsoleOutputDirectory() {
+    return getDirectories().getActionConsoleOutputDirectory(getExecRoot());
   }
 
   /**
@@ -639,7 +638,7 @@ public final class CommandEnvironment {
       throws AbruptExitException {
     CommonCommandOptions commonOptions = options.getOptions(CommonCommandOptions.class);
     commandStartTime -= commonOptions.startupTime;
-    eventBus.post(new BuildMetadataEvent(makeMapFromMapEntries(commonOptions.buildMetadata)));
+
     eventBus.post(
         new GotOptionsEvent(runtime.getStartupOptionsProvider(), options, invocationPolicy));
     throwPendingException();
@@ -708,15 +707,9 @@ public final class CommandEnvironment {
     // Start the performance and memory profilers.
     runtime.beforeCommand(this, commonOptions);
 
-    eventBus.post(
-        new CommandStartEvent(
-            command.name(),
-            getCommandId(),
-            getBuildRequestId(),
-            getClientEnv(),
-            workingDirectory,
-            getDirectories(),
-            waitTimeInMs + commonOptions.waitTime));
+    eventBus.post(new CommandStartEvent(
+        command.name(), getCommandId(), getClientEnv(), workingDirectory, getDirectories(),
+        waitTimeInMs + commonOptions.waitTime));
 
     // Modules that are subscribed to CommandStartEvents may create pending exceptions.
     throwPendingException();

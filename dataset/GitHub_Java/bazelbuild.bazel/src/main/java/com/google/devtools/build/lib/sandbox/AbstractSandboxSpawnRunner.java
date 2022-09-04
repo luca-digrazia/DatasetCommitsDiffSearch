@@ -32,13 +32,14 @@ import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.exec.TreeDeleter;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.shell.AbnormalTerminationException;
+import com.google.devtools.build.lib.shell.Command;
+import com.google.devtools.build.lib.shell.CommandException;
+import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.shell.ExecutionStatistics;
-import com.google.devtools.build.lib.shell.Subprocess;
-import com.google.devtools.build.lib.shell.SubprocessBuilder;
-import com.google.devtools.build.lib.shell.TerminationStatus;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.util.io.FileOutErr;
+import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
@@ -103,7 +104,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       throws IOException, InterruptedException {
     try {
       sandbox.createFileSystem();
-      FileOutErr outErr = context.getFileOutErr();
+      OutErr outErr = context.getFileOutErr();
       context.prefetchInputs();
 
       SpawnResult result = run(originalSpawn, sandbox, outErr, timeout, statisticsPath);
@@ -126,10 +127,14 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
   private final SpawnResult run(
       Spawn originalSpawn,
       SandboxedSpawn sandbox,
-      FileOutErr outErr,
+      OutErr outErr,
       Duration timeout,
       Path statisticsPath)
       throws IOException, InterruptedException {
+    Command cmd = new Command(
+        sandbox.getArguments().toArray(new String[0]),
+        sandbox.getEnvironment(),
+        sandbox.getSandboxExecRoot().getPathFile());
     String failureMessage;
     if (sandboxOptions.sandboxDebug) {
       failureMessage =
@@ -150,29 +155,23 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
               + SANDBOX_DEBUG_SUGGESTION;
     }
 
-    SubprocessBuilder subprocessBuilder = new SubprocessBuilder();
-    subprocessBuilder.setWorkingDirectory(sandbox.getSandboxExecRoot().getPathFile());
-    subprocessBuilder.setStdout(outErr.getOutputPath().getPathFile());
-    subprocessBuilder.setStderr(outErr.getErrorPath().getPathFile());
-    subprocessBuilder.setEnv(sandbox.getEnvironment());
-    subprocessBuilder.setArgv(sandbox.getArguments());
     long startTime = System.currentTimeMillis();
-    TerminationStatus terminationStatus;
+    CommandResult commandResult;
     try {
-      Subprocess subprocess = subprocessBuilder.start();
-      subprocess.getOutputStream().close();
-      try {
-        subprocess.waitFor();
-        terminationStatus = new TerminationStatus(subprocess.exitValue(), subprocess.timedout());
-      } catch (InterruptedException e) {
-        subprocess.destroy();
-        throw e;
+      commandResult = cmd.execute(outErr.getOutputStream(), outErr.getErrorStream());
+      if (Thread.currentThread().isInterrupted()) {
+        throw new InterruptedException();
       }
-    } catch (IOException e) {
+    } catch (AbnormalTerminationException e) {
+      if (Thread.currentThread().isInterrupted()) {
+        throw new InterruptedException();
+      }
+      commandResult = e.getResult();
+    } catch (CommandException e) {
+      // At the time this comment was written, this must be a ExecFailedException encapsulating an
+      // IOException from the underlying Subprocess.Factory.
       String msg = e.getMessage() == null ? e.getClass().getName() : e.getMessage();
-      outErr
-          .getErrorStream()
-          .write(("Action failed to execute: java.io.IOException: " + msg + "\n").getBytes(UTF_8));
+      outErr.getErrorStream().write(("Action failed to execute: " + msg + "\n").getBytes(UTF_8));
       outErr.getErrorStream().flush();
       return new SpawnResult.Builder()
           .setRunnerName(getName())
@@ -184,8 +183,11 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
 
     // TODO(b/62588075): Calculate wall time inside commands instead?
     Duration wallTime = Duration.ofMillis(System.currentTimeMillis() - startTime);
-    boolean wasTimeout = terminationStatus.timedOut() || wasTimeout(timeout, wallTime);
-    int exitCode = wasTimeout ? POSIX_TIMEOUT_EXIT_CODE : terminationStatus.getRawExitCode();
+    boolean wasTimeout = wasTimeout(timeout, wallTime);
+    int exitCode =
+        wasTimeout
+            ? POSIX_TIMEOUT_EXIT_CODE
+            : commandResult.getTerminationStatus().getRawExitCode();
     Status status =
         wasTimeout
             ? Status.TIMEOUT
