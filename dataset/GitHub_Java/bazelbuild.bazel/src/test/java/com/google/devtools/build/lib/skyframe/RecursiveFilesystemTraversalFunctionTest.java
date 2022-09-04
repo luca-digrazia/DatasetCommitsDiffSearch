@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
+import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -44,8 +45,8 @@ import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFuncti
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFile;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.TraversalRequest;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
-import com.google.devtools.build.lib.testutil.TimestampGranularityUtils;
 import com.google.devtools.build.lib.util.io.OutErr;
+import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -480,8 +481,10 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     progressReceiver.clear();
 
     // Add a new file to the directory and see that the value is rebuilt.
-    TimestampGranularityUtils.waitForTimestampGranularity(
-        directoryArtifact.getPath().stat().getLastChangeTime(), OutErr.SYSTEM_OUT_ERR);
+    TimestampGranularityMonitor.waitForTimestampGranularity(
+        directoryArtifact.getPath().stat().getLastChangeTime(),
+        BlazeClock.instance(),
+        OutErr.SYSTEM_OUT_ERR);
     RootedPath file3 = createFile(childOf(directoryArtifact, "foo.txt"));
     if (directoryArtifact.isSourceArtifact()) {
       invalidateDirectory(directoryArtifact);
@@ -829,8 +832,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     progressReceiver.clear();
 
     // Change the mtime of the file but not the digest. See that the value is *not* rebuilt.
-    TimestampGranularityUtils.waitForTimestampGranularity(
-        path.asPath().stat().getLastChangeTime(), OutErr.SYSTEM_OUT_ERR);
+    TimestampGranularityMonitor.waitForTimestampGranularity(
+        path.asPath().stat().getLastChangeTime(), BlazeClock.instance(), OutErr.SYSTEM_OUT_ERR);
     path.asPath().setLastModifiedTime(System.currentTimeMillis());
     RecursiveFilesystemTraversalValue v2 = traverseAndAssertFiles(params, expected);
     assertThat(v2).isEqualTo(v1);
