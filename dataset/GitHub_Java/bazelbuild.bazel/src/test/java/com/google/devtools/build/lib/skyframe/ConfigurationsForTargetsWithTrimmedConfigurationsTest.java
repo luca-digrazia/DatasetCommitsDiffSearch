@@ -62,10 +62,10 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
     return super.defaultFlags().with(Flag.TRIMMED_CONFIGURATIONS);
   }
 
-  private static class NoopSplitTransition implements SplitTransition {
+  private static class EmptySplitTransition implements SplitTransition {
     @Override
     public List<BuildOptions> split(BuildOptions buildOptions) {
-      return ImmutableList.of(buildOptions);
+      return ImmutableList.of();
     }
   }
 
@@ -111,7 +111,7 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
           "empty_split",
           attr("with_empty_transition", LABEL)
               .allowedFileTypes(FileTypeSet.ANY_FILE)
-              .cfg(new NoopSplitTransition()));
+              .cfg(new EmptySplitTransition()));
 
   /** Rule with a split transition on an attribute. */
   private static final MockRule ATTRIBUTE_TRANSITION_RULE = () ->

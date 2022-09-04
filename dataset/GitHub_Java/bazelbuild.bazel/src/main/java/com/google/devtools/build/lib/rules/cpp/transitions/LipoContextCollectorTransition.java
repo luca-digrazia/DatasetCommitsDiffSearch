@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp.transitions;
 
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.cpp.FdoSupport;
 
@@ -32,7 +32,7 @@ public class LipoContextCollectorTransition implements PatchTransition {
   private LipoContextCollectorTransition() {}
 
   @Override
-  public BuildOptions apply(BuildOptions options) {
+  public BuildOptions patch(BuildOptions options) {
     // If this target and its transitive closure don't have C++ options, there's no
     // LIPO context to change.
     if (!options.contains(CppOptions.class)) {
@@ -46,10 +46,5 @@ public class LipoContextCollectorTransition implements PatchTransition {
     collectorOptions.get(CppOptions.class).lipoConfigurationState =
         CppOptions.LipoConfigurationState.LIPO_CONTEXT_COLLECTOR;
     return collectorOptions;
-  }
-
-  @Override
-  public boolean defaultsToSelf() {
-    return false;
   }
 }

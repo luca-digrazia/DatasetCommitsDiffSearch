@@ -21,6 +21,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Stopwatch;
+import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -178,7 +179,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1319,7 +1319,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     try {
       progressReceiver.executionProgressReceiver = executionProgressReceiver;
       Iterable<SkyKey> artifactKeys = ArtifactSkyKey.mandatoryKeys(artifactsToBuild);
-      Iterable<TargetCompletionValue.TargetCompletionKey> targetKeys =
+      Iterable<SkyKey> targetKeys =
           TargetCompletionValue.keys(targetsToBuild, topLevelArtifactContext, targetsToTest);
       Iterable<SkyKey> aspectKeys = AspectCompletionValue.keys(aspects, topLevelArtifactContext);
       Iterable<SkyKey> testKeys =
@@ -2320,16 +2320,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
 
     @Override
-    public void evaluated(
-        SkyKey skyKey,
-        Supplier<EvaluationSuccessState> evaluationSuccessState,
-        EvaluationState state) {
+    public void evaluated(SkyKey skyKey, Supplier<SkyValue> valueSupplier, EvaluationState state) {
       if (ignoreInvalidations) {
         return;
       }
-      skyframeBuildView.getProgressReceiver().evaluated(skyKey, evaluationSuccessState, state);
+      skyframeBuildView.getProgressReceiver().evaluated(skyKey, valueSupplier, state);
       if (executionProgressReceiver != null) {
-        executionProgressReceiver.evaluated(skyKey, evaluationSuccessState, state);
+        executionProgressReceiver.evaluated(skyKey, valueSupplier, state);
       }
     }
   }

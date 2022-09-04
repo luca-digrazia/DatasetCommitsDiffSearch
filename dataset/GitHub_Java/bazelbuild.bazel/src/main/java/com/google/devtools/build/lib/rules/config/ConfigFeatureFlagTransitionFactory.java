@@ -18,11 +18,14 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_KEYED_STRIN
 
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import java.util.Map;
 
 /**
@@ -34,23 +37,47 @@ import java.util.Map;
 public class ConfigFeatureFlagTransitionFactory implements RuleTransitionFactory {
 
   /** Transition which resets the set of flag-value pairs to the map it was constructed with. */
-  private static final class ConfigFeatureFlagValuesTransition implements PatchTransition {
+  @AutoCodec
+  @VisibleForSerialization
+  static final class ConfigFeatureFlagValuesTransition implements PatchTransition {
     private final ImmutableSortedMap<Label, String> flagValues;
+    private final int cachedHashCode;
 
     public ConfigFeatureFlagValuesTransition(Map<Label, String> flagValues) {
+      this(ImmutableSortedMap.copyOf(flagValues), flagValues.hashCode());
+    }
+
+    @AutoCodec.Instantiator
+    ConfigFeatureFlagValuesTransition(
+        ImmutableSortedMap<Label, String> flagValues, int cachedHashCode) {
       this.flagValues = ImmutableSortedMap.copyOf(flagValues);
+      this.cachedHashCode = cachedHashCode;
     }
 
     @Override
-    public BuildOptions apply(BuildOptions options) {
+    public BuildOptions patch(BuildOptions options) {
+      if (!options.contains(ConfigFeatureFlagOptions.class)) {
+        return options;
+      }
       BuildOptions result = options.clone();
-      result.get(ConfigFeatureFlagConfiguration.Options.class).replaceFlagValues(flagValues);
+      result.get(ConfigFeatureFlagOptions.class).replaceFlagValues(flagValues);
       return result;
     }
 
     @Override
-    public boolean defaultsToSelf() {
-      throw new UnsupportedOperationException("supported in dynamic mode only");
+    public boolean equals(Object other) {
+      return other instanceof ConfigFeatureFlagValuesTransition
+          && this.flagValues.equals(((ConfigFeatureFlagValuesTransition) other).flagValues);
+    }
+
+    @Override
+    public int hashCode() {
+      return cachedHashCode;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("ConfigFeatureFlagValuesTransition{flagValues=%s}", flagValues);
     }
   }
 
@@ -69,7 +96,35 @@ public class ConfigFeatureFlagTransitionFactory implements RuleTransitionFactory
 
   @Override
   public PatchTransition buildTransitionFor(Rule rule) {
-    return new ConfigFeatureFlagValuesTransition(
-        NonconfigurableAttributeMapper.of(rule).get(attributeName, LABEL_KEYED_STRING_DICT));
+    NonconfigurableAttributeMapper attrs = NonconfigurableAttributeMapper.of(rule);
+    if (attrs.isAttributeValueExplicitlySpecified(attributeName)) {
+      return new ConfigFeatureFlagValuesTransition(
+          attrs.get(attributeName, LABEL_KEYED_STRING_DICT));
+    } else {
+      return NoTransition.INSTANCE;
+    }
+  }
+
+  /**
+   * Returns the attribute examined by this transition factory.
+   */
+  public String getAttributeName() {
+    return this.attributeName;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    return other instanceof ConfigFeatureFlagTransitionFactory
+        && this.attributeName.equals(((ConfigFeatureFlagTransitionFactory) other).attributeName);
+  }
+
+  @Override
+  public int hashCode() {
+    return attributeName.hashCode();
+  }
+
+  @Override
+  public String toString() {
+    return String.format("ConfigFeatureFlagTransitionFactory{attributeName=%s}", attributeName);
   }
 }

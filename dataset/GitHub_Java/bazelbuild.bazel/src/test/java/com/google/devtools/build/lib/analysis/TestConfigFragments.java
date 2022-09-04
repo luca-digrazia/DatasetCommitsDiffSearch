@@ -14,46 +14,41 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 
 /**
  * Grab bag file for test configuration fragments and fragment factories.
  */
 public class TestConfigFragments {
   /**
-   * A {@link PatchTransition} that appends a given value to
-   * {@link BuildConfiguration.Options#testArguments}.
+   * A {@link PatchTransition} that appends a given value to {@link
+   * BuildConfiguration.Options#hostCpu}.
    */
-  private static class TestArgTransition implements PatchTransition {
+  @AutoCodec
+  @VisibleForSerialization
+  static class HostCpuTransition implements PatchTransition {
 
     private final String patchMessage;
 
-    TestArgTransition(String patchMessage) {
+    HostCpuTransition(String patchMessage) {
       this.patchMessage = patchMessage;
     }
 
     @Override
-    public boolean defaultsToSelf() {
-      throw new UnsupportedOperationException(
-          "dynamic configurations don't use global transition tables");
-    }
-
-    @Override
-    public BuildOptions apply(BuildOptions options) {
+    public BuildOptions patch(BuildOptions options) {
       BuildOptions toOptions = options.clone();
       BuildConfiguration.Options coreOptions =
           toOptions.get(BuildConfiguration.Options.class);
-      coreOptions.testArguments = new ImmutableList.Builder<String>()
-          .addAll(coreOptions.testArguments).add(patchMessage).build();
+      String prefix = coreOptions.hostCpu.startsWith("$") ? coreOptions.hostCpu : "";
+      coreOptions.hostCpu = prefix + "$" + patchMessage;
       return toOptions;
     }
   }
@@ -69,8 +64,7 @@ public class TestConfigFragments {
     }
 
     @Override
-    public BuildConfiguration.Fragment create(ConfigurationEnvironment env,
-        BuildOptions buildOptions) throws InvalidConfigurationException {
+    public BuildConfiguration.Fragment create(BuildOptions buildOptions) {
       return fragment;
     }
 
@@ -85,29 +79,32 @@ public class TestConfigFragments {
     }
   }
 
-  /**
-   * Factory for a test fragment with a top-level configuration hook.
-   */
+  @AutoCodec
+  static class Hook1Fragment extends BuildConfiguration.Fragment {
+    @Override
+    public PatchTransition topLevelConfigurationHook(Target toTarget) {
+      return new HostCpuTransition("CONFIG HOOK 1");
+    }
+  }
+
+  /** Factory for a test fragment with a top-level configuration hook. */
   public static SimpleFragmentFactory FragmentWithTopLevelConfigHook1Factory =
-      new SimpleFragmentFactory(new BuildConfiguration.Fragment() {
-        @Override
-        public PatchTransition topLevelConfigurationHook(Target toTarget) {
-          return new TestArgTransition("CONFIG HOOK 1");
-        }
-      });
+      new SimpleFragmentFactory(new Hook1Fragment());
 
   /**
-   * Factory for a test fragment with a top-level configuration hook.
+   * The class definition for the BuildConfiguration.Fragment needs to be different than the one of
+   * its peer above. This is because Bazel indexes configuration fragments by class name. So we need
+   * to make sure all fragment definitions retain distinct class names.
    */
+  @AutoCodec
+  static class Hook2Fragment extends BuildConfiguration.Fragment {
+    @Override
+    public PatchTransition topLevelConfigurationHook(Target toTarget) {
+      return new HostCpuTransition("CONFIG HOOK 2");
+    }
+  }
+
+  /** Factory for a test fragment with a top-level configuration hook. */
   public static SimpleFragmentFactory FragmentWithTopLevelConfigHook2Factory =
-      // The anonymous class definition for the BuildConfiguration.Fragment needs to be different
-      // than the one of its peer above. This is because Bazel indexes configuration fragments
-      // by class name. So we need to make sure all fragment definitions retain distinct class
-      // names (i.e. "TestConfigFragments$1", "TestConfigFragments$2", etc).
-      new SimpleFragmentFactory(new BuildConfiguration.Fragment() {
-        @Override
-        public PatchTransition topLevelConfigurationHook(Target toTarget) {
-          return new TestArgTransition("CONFIG HOOK 2");
-        }
-      });
+      new SimpleFragmentFactory(new Hook2Fragment());
 }

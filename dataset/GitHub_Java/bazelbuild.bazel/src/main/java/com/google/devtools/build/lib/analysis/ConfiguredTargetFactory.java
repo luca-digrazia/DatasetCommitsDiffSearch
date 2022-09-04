@@ -340,7 +340,6 @@ public final class ConfiguredTargetFactory {
             .setConfigConditions(configConditions)
             .setUniversalFragments(ruleClassProvider.getUniversalFragments())
             .setToolchainContext(toolchainContext)
-            .setConstraintSemantics(ruleClassProvider.getConstraintSemantics())
             .build();
     if (ruleContext.hasErrors()) {
       return null;
@@ -465,7 +464,6 @@ public final class ConfiguredTargetFactory {
             .setConfigConditions(configConditions)
             .setUniversalFragments(ruleClassProvider.getUniversalFragments())
             .setToolchainContext(toolchainContext)
-            .setConstraintSemantics(ruleClassProvider.getConstraintSemantics())
             .build();
     if (ruleContext.hasErrors()) {
       return null;

@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.transitions.DisableLipoTransition;
@@ -41,7 +41,7 @@ public class LipoTransitionsTest extends BuildViewTestCase {
   }
 
   private CppOptions doTransition(PatchTransition transition, BuildOptions fromOptions) {
-    return transition.apply(fromOptions).get(CppOptions.class);
+    return transition.patch(fromOptions).get(CppOptions.class);
   }
 
   @Test
@@ -77,7 +77,7 @@ public class LipoTransitionsTest extends BuildViewTestCase {
   public void disableLipoFromContextCollectorConfig() throws Exception {
     useLipoOptimizationConfig();
     BuildOptions contextCollectorOptions =
-        LipoContextCollectorTransition.INSTANCE.apply(getTargetConfiguration().getOptions());
+        LipoContextCollectorTransition.INSTANCE.patch(getTargetConfiguration().getOptions());
     CppOptions toOptions = doTransition(DisableLipoTransition.INSTANCE, contextCollectorOptions);
     assertThat(toOptions).isEqualTo(contextCollectorOptions.get(CppOptions.class));
   }
@@ -86,7 +86,7 @@ public class LipoTransitionsTest extends BuildViewTestCase {
   public void disableLipoFromAlreadyDisabledConfig() throws Exception {
     useLipoOptimizationConfig();
     BuildOptions dataOptions =
-        DisableLipoTransition.INSTANCE.apply(getTargetConfiguration().getOptions());
+        DisableLipoTransition.INSTANCE.patch(getTargetConfiguration().getOptions());
     CppOptions toOptions = doTransition(DisableLipoTransition.INSTANCE, dataOptions);
     assertThat(toOptions).isEqualTo(dataOptions.get(CppOptions.class));
   }
@@ -157,7 +157,7 @@ public class LipoTransitionsTest extends BuildViewTestCase {
   public void contextCollectorFromContextCollectorConfig() throws Exception {
     useLipoOptimizationConfig();
     BuildOptions contextCollectorOptions =
-        LipoContextCollectorTransition.INSTANCE.apply(getTargetConfiguration().getOptions());
+        LipoContextCollectorTransition.INSTANCE.patch(getTargetConfiguration().getOptions());
     CppOptions toOptions =
         doTransition(LipoContextCollectorTransition.INSTANCE, contextCollectorOptions);
     assertThat(toOptions).isEqualTo(contextCollectorOptions.get(CppOptions.class));
@@ -167,7 +167,7 @@ public class LipoTransitionsTest extends BuildViewTestCase {
   public void contextCollectorFromDataConfig() throws Exception {
     useLipoOptimizationConfig();
     BuildOptions dataOptions =
-        DisableLipoTransition.INSTANCE.apply(getTargetConfiguration().getOptions());
+        DisableLipoTransition.INSTANCE.patch(getTargetConfiguration().getOptions());
     CppOptions toOptions = doTransition(LipoContextCollectorTransition.INSTANCE, dataOptions);
     assertThat(toOptions).isEqualTo(dataOptions.get(CppOptions.class));
   }

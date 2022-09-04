@@ -15,24 +15,24 @@
 package com.google.devtools.build.lib.rules.cpp.transitions;
 
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 
 /**
  * Configuration transition that turns off LIPO/FDO settings.
  *
- * <p>Has no effect on non-LIPO-enabled configurations or the LIPO context collector
- * configuration.
- *
+ * <p>Has no effect on non-LIPO-enabled configurations or the LIPO context collector configuration.
  */
 public final class DisableLipoTransition implements PatchTransition {
-  public static final DisableLipoTransition INSTANCE = new DisableLipoTransition();
+
+  @AutoCodec public static final DisableLipoTransition INSTANCE = new DisableLipoTransition();
 
   private DisableLipoTransition() {}
 
   @Override
-  public BuildOptions apply(BuildOptions options) {
+  public BuildOptions patch(BuildOptions options) {
     // If this target and its transitive closure don't have C++ options, there's no
     // LIPO context to change.
     if (!options.contains(CppOptions.class)) {
@@ -47,10 +47,5 @@ public final class DisableLipoTransition implements PatchTransition {
     lipoDisabledOptions.get(CppOptions.class).lipoConfigurationState =
         CppOptions.LipoConfigurationState.IGNORE_LIPO;
     return lipoDisabledOptions;
-  }
-
-  @Override
-  public boolean defaultsToSelf() {
-    return false;
   }
 }
