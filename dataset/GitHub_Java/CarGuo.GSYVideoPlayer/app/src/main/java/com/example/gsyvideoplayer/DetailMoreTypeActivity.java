@@ -13,9 +13,10 @@ import android.widget.RelativeLayout;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
+import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.model.SwitchVideoModel;
 import com.example.gsyvideoplayer.video.SampleVideo;
-import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack;
+import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
@@ -62,7 +63,7 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
         ButterKnife.bind(this);
 
         String source1 = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
-        //String source1 = "https://res.exexm.com/cw_145225549855002";
+        //String source1 = "http://baobab.wdjcdn.com/14564977406580.mp4";
         String name = "普通";
         SwitchVideoModel switchVideoModel = new SwitchVideoModel(name, source1);
 
@@ -112,7 +113,7 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
             }
         });
 
-        detailPlayer.setStandardVideoAllCallBack(new GSYSampleCallBack() {
+        detailPlayer.setStandardVideoAllCallBack(new SampleListener() {
             @Override
             public void onPrepared(String url, Object... objects) {
                 super.onPrepared(url, objects);
