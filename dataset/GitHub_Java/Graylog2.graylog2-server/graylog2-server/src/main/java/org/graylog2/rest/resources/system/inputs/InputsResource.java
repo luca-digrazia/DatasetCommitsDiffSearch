@@ -45,7 +45,6 @@ import org.graylog2.rest.resources.system.inputs.responses.InputsList;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.inputs.InputDescription;
 import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.graylog2.shared.rest.resources.system.inputs.requests.InputLaunchRequest;
 import org.graylog2.shared.system.activities.Activity;
@@ -83,14 +82,12 @@ public class InputsResource extends RestResource {
     private final InputService inputService;
     private final InputRegistry inputRegistry;
     private final ActivityWriter activityWriter;
-    private final MessageInputFactory messageInputFactory;
 
     @Inject
-    public InputsResource(InputService inputService, InputRegistry inputRegistry, ActivityWriter activityWriter, MessageInputFactory messageInputFactory) {
+    public InputsResource(InputService inputService, InputRegistry inputRegistry, ActivityWriter activityWriter) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.activityWriter = activityWriter;
-        this.messageInputFactory = messageInputFactory;
     }
 
     @GET
@@ -182,7 +179,7 @@ public class InputsResource extends RestResource {
         // Build input.
         final MessageInput input;
         try {
-            input = messageInputFactory.create(lr.type(), inputConfig);
+            input = inputRegistry.create(lr.type(), inputConfig);
             input.setTitle(lr.title());
             input.setGlobal(lr.global());
             input.setCreatorUserId(getCurrentUser().getName());
@@ -248,7 +245,7 @@ public class InputsResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     public InputTypesSummary types() {
         Map<String, String> types = new HashMap<>();
-        for (Map.Entry<String, InputDescription> entry : messageInputFactory.getAvailableInputs().entrySet())
+        for (Map.Entry<String, InputDescription> entry : inputRegistry.getAvailableInputs().entrySet())
             types.put(entry.getKey(), entry.getValue().getName());
         return InputTypesSummary.create(types);
     }
@@ -264,30 +261,25 @@ public class InputsResource extends RestResource {
     public void terminate(@ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) {
         checkPermission(RestPermissions.INPUTS_TERMINATE, inputId);
 
-        MessageInput messageInput = inputRegistry.getRunningInput(inputId);
+        MessageInput input = inputRegistry.getRunningInput(inputId);
 
-        if (messageInput == null) {
+        if (input == null) {
             LOG.info("Cannot terminate input. Input not found.");
             throw new NotFoundException();
         }
 
-        final String msg = "Attempting to terminate input [" + messageInput.getName() + "]. Reason: REST request.";
+        final String msg = "Attempting to terminate input [" + input.getName() + "]. Reason: REST request.";
         LOG.info(msg);
         activityWriter.write(new Activity(msg, InputsResource.class));
 
-        inputRegistry.terminate(messageInput);
+        inputRegistry.terminate(input);
 
-        if (serverStatus.hasCapability(ServerStatus.Capability.MASTER) || !messageInput.getGlobal()) {
+        if (serverStatus.hasCapability(ServerStatus.Capability.MASTER) || !input.getGlobal()) {
             // Remove from list and mongo.
-            try {
-                final Input input = inputService.find(messageInput.getId());
-                inputService.destroy(input);
-            } catch (org.graylog2.database.NotFoundException e) {
-                LOG.warn("Input not found while deleting it: ", e);
-            }
+            inputRegistry.cleanInput(input);
         }
 
-        final String msg2 = "Terminated input [" + messageInput.getName() + "]. Reason: REST request.";
+        final String msg2 = "Terminated input [" + input.getName() + "]. Reason: REST request.";
         LOG.info(msg2);
         activityWriter.write(new Activity(msg2, InputsResource.class));
     }
@@ -385,7 +377,7 @@ public class InputsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input type registered.")
     })
     public InputTypeInfo info(@ApiParam(name = "inputType", required = true) @PathParam("inputType") String inputType) {
-        final InputDescription description = messageInputFactory.getAvailableInputs().get(inputType);
+        final InputDescription description = inputRegistry.getAvailableInputs().get(inputType);
         if (description == null) {
             final String message = "Unknown input type " + inputType + " requested.";
             LOG.error(message);
