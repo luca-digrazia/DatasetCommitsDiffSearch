@@ -1996,11 +1996,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public Artifact getSourceArtifactForNinjaBuild(PathFragment execPath, Root root) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public ExtendedEventHandler getEventHandler() {
       return reporter;
     }
