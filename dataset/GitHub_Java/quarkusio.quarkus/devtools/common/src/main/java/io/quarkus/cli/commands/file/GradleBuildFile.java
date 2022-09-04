@@ -3,14 +3,11 @@ package io.quarkus.cli.commands.file;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 import java.util.Scanner;
-import java.util.function.Consumer;
 
 import org.apache.maven.model.Dependency;
 
@@ -26,7 +23,7 @@ public class GradleBuildFile extends BuildFile {
 
     private String settingsContent = "";
     private String buildContent = "";
-    private Properties propertiesContent = new Properties();
+    private String propertiesContent = "";
     private ArrayList<Dependency> dependencies = null;
 
     public GradleBuildFile(ProjectWriter writer) throws IOException {
@@ -41,7 +38,7 @@ public class GradleBuildFile extends BuildFile {
         }
         if (writer.exists(GRADLE_PROPERTIES_PATH)) {
             final byte[] properties = writer.getContent(GRADLE_PROPERTIES_PATH);
-            propertiesContent.load(new ByteArrayInputStream(properties));
+            propertiesContent = new String(properties, StandardCharsets.UTF_8);
         }
     }
 
@@ -49,9 +46,7 @@ public class GradleBuildFile extends BuildFile {
     public void write() throws IOException {
         write(SETTINGS_GRADLE_PATH, settingsContent);
         write(BUILD_GRADLE_PATH, buildContent);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        propertiesContent.store(out, "Gradle properties");
-        write(GRADLE_PROPERTIES_PATH, out.toString(StandardCharsets.UTF_8.toString()));
+        write(GRADLE_PROPERTIES_PATH, propertiesContent);
     }
 
     public void completeFile(String groupId, String artifactId, String version) throws IOException {
@@ -130,54 +125,32 @@ public class GradleBuildFile extends BuildFile {
     }
 
     private void completeProperties(String artifactId) {
-        if (propertiesContent.getProperty("quarkusVersion") == null) {
-            propertiesContent.setProperty("quarkusVersion", getPluginVersion());
+        StringBuilder res = new StringBuilder(propertiesContent);
+        if (!propertiesContent.contains("quarkusVersion = ")) {
+            res.append(System.lineSeparator()).append("quarkusVersion = ").append(getPluginVersion()).append(artifactId)
+                    .append(System.lineSeparator());
         }
+        propertiesContent = res.toString();
     }
 
     @Override
     protected void addDependencyInBuildFile(Dependency dependency) {
         StringBuilder newBuildContent = new StringBuilder();
-        readLineByLine(buildContent, new AppendDependency(newBuildContent, dependency));
-        buildContent = newBuildContent.toString();
-    }
-
-    private void readLineByLine(String content, Consumer<String> lineConsumer) {
-        try (Scanner scanner = new Scanner(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))) {
+        try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes(StandardCharsets.UTF_8)))) {
             while (scanner.hasNextLine()) {
                 String currentLine = scanner.nextLine();
-                lineConsumer.accept(currentLine);
-            }
-        }
-    }
-
-    private static class AppendDependency implements Consumer<String> {
-
-        private StringBuilder newContent;
-        private Dependency dependency;
-
-        public AppendDependency(StringBuilder newContent, Dependency dependency) {
-            this.newContent = newContent;
-            this.dependency = dependency;
-        }
-
-        @Override
-        public void accept(String currentLine) {
-            newContent.append(currentLine).append(System.lineSeparator());
-            if (currentLine.startsWith("dependencies {")) {
-                newContent.append("    implementation '")
-                        .append(dependency.getGroupId())
-                        .append(":")
-                        .append(dependency.getArtifactId());
-                if (dependency.getVersion() != null && !dependency.getVersion().isEmpty()) {
-                    newContent.append(":")
-                            .append(dependency.getVersion());
+                newBuildContent.append(currentLine).append(System.lineSeparator());
+                if (currentLine.startsWith("dependencies {")) {
+                    newBuildContent.append("    implementation '")
+                            .append(dependency.getGroupId())
+                            .append(":")
+                            .append(dependency.getArtifactId())
+                            .append("'")
+                            .append(System.lineSeparator());
                 }
-                newContent.append("'")
-                        .append(System.lineSeparator());
             }
         }
-
+        buildContent = newBuildContent.toString();
     }
 
     @Override
@@ -193,12 +166,11 @@ public class GradleBuildFile extends BuildFile {
     }
 
     @Override
-    public List<Dependency> getDependencies() {
+    protected List<Dependency> getDependencies() {
         if (dependencies == null) {
             dependencies = new ArrayList<>();
             boolean inDependencies = false;
-            try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes(StandardCharsets.UTF_8)),
-                    StandardCharsets.UTF_8.toString())) {
+            try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes(StandardCharsets.UTF_8)))) {
                 while (scanner.hasNextLine()) {
                     String currentLine = scanner.nextLine();
                     if (currentLine.startsWith("dependencies {")) {
@@ -207,8 +179,8 @@ public class GradleBuildFile extends BuildFile {
                         inDependencies = false;
                     } else if (inDependencies && currentLine.contains("implementation ")
                             && !currentLine.contains("enforcedPlatform")) {
-                        String dep = extractString(currentLine);
-                        if (dep != null) {
+                        if (currentLine.indexOf('\'') != -1) {
+                            String dep = currentLine.substring(currentLine.indexOf('\'') + 1, currentLine.lastIndexOf('\''));
                             dependencies.add(MojoUtils.parse(dep.trim().toLowerCase()));
                         }
                     }
@@ -216,63 +188,6 @@ public class GradleBuildFile extends BuildFile {
             }
         }
         return dependencies;
-    }
-
-    @Override
-    public String getProperty(String propertyName) {
-        return propertiesContent.getProperty(propertyName);
-    }
-
-    @Override
-    protected List<Dependency> getManagedDependencies() {
-        List<Dependency> constraints = new ArrayList<>();
-        readLineByLine(buildContent, new GetConstraints(constraints));
-        return constraints;
-    }
-
-    private static class GetConstraints implements Consumer<String> {
-
-        private List<Dependency> result;
-        private boolean inConstraints = false;
-        private boolean inImplementation = false;
-
-        public GetConstraints(List<Dependency> result) {
-            this.result = result;
-        }
-
-        @Override
-        public void accept(String currentLine) {
-            if (currentLine.contains("constraints {")) {
-                inConstraints = true;
-            } else if (inConstraints && currentLine.contains("implementation")) {
-                String constraint = extractString(currentLine);
-                if (constraint != null) {
-                    result.add(MojoUtils.parse(constraint));
-                }
-            } else if (currentLine.contains("}")) {
-                if (inImplementation) {
-                    inImplementation = false;
-                } else {
-                    inConstraints = false;
-                }
-            } else if (!inConstraints && currentLine.contains("implementation")
-                    && (currentLine.contains("enforcedPlatform") || currentLine.contains("platform"))) {
-                String dep = extractString(currentLine);
-                if (dep != null) {
-                    result.add(MojoUtils.parse(dep.trim().toLowerCase()));
-                }
-            }
-        }
-
-    }
-
-    private static String extractString(String line) {
-        if (line.indexOf('\'') != -1) {
-            return line.substring(line.indexOf('\'') + 1, line.lastIndexOf('\''));
-        } else if (line.indexOf('"') != -1) {
-            return line.substring(line.indexOf('"') + 1, line.lastIndexOf('"'));
-        }
-        return null;
     }
 
 }

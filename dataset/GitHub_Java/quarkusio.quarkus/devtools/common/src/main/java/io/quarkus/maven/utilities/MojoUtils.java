@@ -1,36 +1,6 @@
-/*
- *
- *   Copyright (c) 2016-2018 Red Hat, Inc.
- *
- *   Red Hat licenses this file to you under the Apache License, version
- *   2.0 (the "License"); you may not use this file except in compliance
- *   with the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- *   implied.  See the License for the specific language governing
- *   permissions and limitations under the License.
- */
-
 package io.quarkus.maven.utilities;
 
-
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.maven.model.Dependency;
-import org.apache.maven.model.Model;
-import org.apache.maven.model.Plugin;
-import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
-import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
-import org.apache.maven.project.MavenProject;
-import org.codehaus.plexus.util.xml.Xpp3Dom;
-import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
-import io.quarkus.dependencies.Extension;
-
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -38,7 +8,24 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.Model;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
+import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
+import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.quarkus.dependencies.Extension;
 
 /**
  * @author kameshs
@@ -46,9 +33,10 @@ import java.util.*;
 public class MojoUtils {
 
     public static final String JAVA_EXTENSION = ".java";
+    public static final String KOTLIN_EXTENSION = ".kt";
 
     private static final String PLUGIN_VERSION_PROPERTY_NAME = "quarkus.version";
-    public static final String SHAMROCK_VERSION_PROPERTY = "${" + PLUGIN_VERSION_PROPERTY_NAME + "}";
+    public static final String QUARKUS_VERSION_PROPERTY = "${" + PLUGIN_VERSION_PROPERTY_NAME + "}";
 
     private static final Properties properties = new Properties();
 
@@ -66,7 +54,6 @@ public class MojoUtils {
         return all;
     }
 
-
     public static String getPluginArtifactId() {
         return get("plugin-artifactId");
     }
@@ -81,6 +68,14 @@ public class MojoUtils {
 
     public static String getBomArtifactId() {
         return get("bom-artifactId");
+    }
+
+    public static String getProposedMavenVersion() {
+        return get("proposed-maven-version");
+    }
+
+    public static String getMavenWrapperVersion() {
+        return get("maven-wrapper-version");
     }
 
     private static void loadProperties() {
@@ -101,7 +96,7 @@ public class MojoUtils {
      * Checks whether or not the given project has a plugin with the given key. The key is given using the
      * "groupId:artifactId" syntax.
      *
-     * @param project   the project
+     * @param project the project
      * @param pluginKey the plugin
      * @return an Optional completed if the plugin is found.
      */
@@ -121,8 +116,8 @@ public class MojoUtils {
     /**
      * Checks whether the project has the dependency
      *
-     * @param model    - the project to check existence of dependency
-     * @param groupId    - the dependency groupId
+     * @param model - the project to check existence of dependency
+     * @param groupId - the dependency groupId
      * @param artifactId - the dependency artifactId
      * @return true if the project has the dependency
      */
@@ -167,7 +162,7 @@ public class MojoUtils {
     /**
      * Defines the plugin without its version or extensions.
      *
-     * @param groupId    The group id
+     * @param groupId The group id
      * @param artifactId The artifact id
      * @return The plugin instance
      */
@@ -178,9 +173,9 @@ public class MojoUtils {
     /**
      * Defines a plugin without extensions.
      *
-     * @param groupId    The group id
+     * @param groupId The group id
      * @param artifactId The artifact id
-     * @param version    The plugin version
+     * @param version The plugin version
      * @return The plugin instance
      */
     public static Plugin plugin(String groupId, String artifactId, String version) {
@@ -190,9 +185,9 @@ public class MojoUtils {
     /**
      * Defines a plugin.
      *
-     * @param groupId      The group id
-     * @param artifactId   The artifact id
-     * @param version      The plugin version
+     * @param groupId The group id
+     * @param artifactId The artifact id
+     * @param version The plugin version
      * @param dependencies The plugin extensions
      * @return The plugin instance
      */
@@ -217,8 +212,18 @@ public class MojoUtils {
         }
     }
 
+    public static String[] readGavFromPom(final InputStream resourceAsStream) throws IOException {
+        Model model = readPom(resourceAsStream);
+        return new String[] { model.getGroupId(), model.getArtifactId(), model.getVersion() };
+    }
+
     public static void write(Model model, File outputFile) throws IOException {
-        try (OutputStream stream = new FileOutputStream(outputFile)) {
+        FileOutputStream fileOutputStream = new FileOutputStream(outputFile);
+        write(model, fileOutputStream);
+    }
+
+    public static void write(Model model, OutputStream fileOutputStream) throws IOException {
+        try (OutputStream stream = fileOutputStream) {
             new MavenXpp3Writer().write(stream, model);
         }
     }
@@ -226,14 +231,15 @@ public class MojoUtils {
     public static List<Extension> loadExtensions() {
         try {
             ObjectMapper mapper = new ObjectMapper()
-                                      .enable(JsonParser.Feature.ALLOW_COMMENTS)
-                                      .enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS);
-            List<Extension> extensions = mapper.readValue(MojoUtils.class.getClassLoader().getResourceAsStream("extensions.json"),
+                    .enable(JsonParser.Feature.ALLOW_COMMENTS)
+                    .enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS);
+            List<Extension> extensions = mapper.readValue(
+                    MojoUtils.class.getClassLoader().getResourceAsStream("extensions.json"),
                     new TypeReference<List<Extension>>() {
-                // Do nothing.
-            });
+                        // Do nothing.
+                    });
             //TODO This is temporary until "extensions.json" is the generated version
-            extensions.forEach(e -> e.setVersion(MojoUtils.SHAMROCK_VERSION_PROPERTY));
+            extensions.forEach(e -> e.setVersion(MojoUtils.QUARKUS_VERSION_PROPERTY));
             return extensions;
         } catch (IOException e) {
             throw new RuntimeException("Unable to load the extensions.json file", e);
@@ -242,6 +248,21 @@ public class MojoUtils {
 
     public static String credentials(final Dependency d) {
         return String.format("%s:%s", d.getGroupId(), d.getArtifactId());
+    }
+
+    public static boolean checkProjectForMavenBuildPlugin(MavenProject project) {
+        for (Plugin plugin : project.getBuildPlugins()) {
+            if (plugin.getGroupId().equals(MojoUtils.getPluginGroupId())
+                    && plugin.getArtifactId().equals(MojoUtils.getPluginArtifactId())) {
+                for (PluginExecution pluginExecution : plugin.getExecutions()) {
+                    if (pluginExecution.getGoals().contains("build")) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -283,7 +304,7 @@ public class MojoUtils {
             for (Element e : children) {
                 dom.addChild(e.toDom());
             }
-            for(Attribute attribute : attributes.attributes) {
+            for (Attribute attribute : attributes.attributes) {
                 dom.setAttribute(attribute.name, attribute.value);
             }
 
@@ -297,7 +318,7 @@ public class MojoUtils {
     public static class Attributes {
         private List<Attribute> attributes;
 
-        public Attributes(Attribute ... attributes) {
+        public Attributes(Attribute... attributes) {
             this.attributes = Arrays.asList(attributes);
         }
     }
@@ -313,6 +334,23 @@ public class MojoUtils {
             this.name = name;
             this.value = value;
         }
+    }
+
+    public static String[] readGavFromSettingsGradle(ByteArrayInputStream buildFileInputStream, String[] gavIn) {
+        String[] gavOut = Arrays.copyOf(gavIn, gavIn.length);
+        try (Scanner scanner = new Scanner(buildFileInputStream, StandardCharsets.UTF_8.name())) {
+            while (scanner.hasNextLine()) {
+                String currentLine = scanner.nextLine();
+                if (currentLine.startsWith("group")) {
+                    gavOut[0] = currentLine.substring(currentLine.indexOf('\'') + 1, currentLine.lastIndexOf('\''));
+                } else if (currentLine.startsWith("rootProject.name")) {
+                    gavOut[1] = currentLine.substring(currentLine.indexOf('\'') + 1, currentLine.lastIndexOf('\''));
+                } else if (currentLine.startsWith("version")) {
+                    gavOut[2] = currentLine.substring(currentLine.indexOf('\'') + 1, currentLine.lastIndexOf('\''));
+                }
+            }
+        }
+        return gavOut;
     }
 
 }
