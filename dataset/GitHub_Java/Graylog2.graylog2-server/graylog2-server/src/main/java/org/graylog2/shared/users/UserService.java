@@ -18,11 +18,12 @@ package org.graylog2.shared.users;
 
 import org.graylog2.plugin.database.PersistedService;
 import org.graylog2.plugin.database.users.User;
+import org.graylog2.shared.security.ldap.LdapEntry;
+import org.graylog2.shared.security.ldap.LdapSettings;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 public interface UserService extends PersistedService {
@@ -35,18 +36,12 @@ public interface UserService extends PersistedService {
 
     List<User> loadAll();
 
-    /**
-     * @deprecated If you <b>really</b> need the root user, use {@link UserService#getRootUser()} instead.
-     */
-    @Deprecated
-    User getAdminUser();
+    @Nullable
+    User syncFromLdapEntry(LdapEntry userEntry, LdapSettings ldapSettings, String username);
 
-    /**
-     * Get the root user. The root user might not be present in all environments and there shouldn't really be
-     * a need to explicitly refer to the root user. But if you really need it, here you go.
-     * @return The root user, if present. An empty optional otherwise.
-     */
-    Optional<User> getRootUser();
+    void updateFromLdap(User user, LdapEntry userEntry, LdapSettings ldapSettings, String username);
+
+    User getAdminUser();
 
     long count();
 
