@@ -25,7 +25,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
@@ -966,7 +965,7 @@ public class CppHelper {
   }
 
   /** Returns the corresponding compiled TreeArtifact given the source TreeArtifact. */
-  public static SpecialArtifact getCompileOutputTreeArtifact(
+  public static Artifact getCompileOutputTreeArtifact(
       RuleContext ruleContext, Artifact sourceTreeArtifact, boolean usePic) {
     PathFragment objectDir = getObjDirectory(ruleContext.getLabel(), usePic);
     PathFragment rootRelativePath = sourceTreeArtifact.getRootRelativePath();

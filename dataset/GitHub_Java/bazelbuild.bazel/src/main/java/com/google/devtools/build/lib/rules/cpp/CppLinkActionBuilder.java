@@ -765,7 +765,7 @@ public class CppLinkActionBuilder {
     // optimizations applied to the associated main binaries anyway.
     boolean allowLtoIndexing =
         linkStaticness == LinkStaticness.DYNAMIC
-            || !(ruleContext.isTestTarget() || ruleContext.isTestOnlyTarget())
+            || !ruleContext.isTestTarget()
             || !featureConfiguration.isEnabled(
                 CppRuleClasses.THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS);
 

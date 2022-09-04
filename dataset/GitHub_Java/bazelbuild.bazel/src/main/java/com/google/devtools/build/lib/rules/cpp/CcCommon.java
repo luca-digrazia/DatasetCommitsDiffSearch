@@ -15,6 +15,8 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.base.Strings;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
@@ -50,9 +52,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
@@ -177,7 +176,7 @@ public final class CcCommon {
   }
 
   public ImmutableList<String> getCopts() {
-    if (!getCoptsFilter(ruleContext).passesFilter("-Wno-future-warnings")) {
+    if (!getCoptsFilter(ruleContext).apply("-Wno-future-warnings")) {
       ruleContext.attributeWarning(
           "nocopts",
           String.format(
@@ -360,55 +359,18 @@ public final class CcCommon {
     }
   }
 
-  /** A filter that removes copts from a c++ compile action according to a nocopts regex. */
-  @AutoCodec
-  static class CoptsFilter {
-    public static final ObjectCodec<CoptsFilter> CODEC = new CcCommon_CoptsFilter_AutoCodec();
-
-    private final Pattern noCoptsPattern;
-    private final boolean allPasses;
-
-    @VisibleForSerialization
-    CoptsFilter(Pattern noCoptsPattern, boolean allPasses) {
-      this.noCoptsPattern = noCoptsPattern;
-      this.allPasses = allPasses;
-    }
-
-    /** Creates a filter that filters all matches to a regex. */
-    public static CoptsFilter fromRegex(Pattern noCoptsPattern) {
-      return new CoptsFilter(noCoptsPattern, false);
-    }
-
-    /** Creates a filter that passes on all inputs. */
-    public static CoptsFilter alwaysPasses() {
-      return new CoptsFilter(null, true);
-    }
-
-    /**
-     * Returns true if the provided string passes through the filter, or false if it should be
-     * removed.
-     */
-    public boolean passesFilter(String flag) {
-      if (allPasses) {
-        return true;
-      } else {
-        return !noCoptsPattern.matcher(flag).matches();
-      }
-    }
-  }
-
   /** Returns copts filter built from the make variable expanded nocopts attribute. */
-  CoptsFilter getCoptsFilter() {
+  Predicate<String> getCoptsFilter() {
     return getCoptsFilter(ruleContext);
   }
 
   /** @see CcCommon#getCoptsFilter() */
-  private static CoptsFilter getCoptsFilter(RuleContext ruleContext) {
+  private static Predicate<String> getCoptsFilter(RuleContext ruleContext) {
     Pattern noCoptsPattern = getNoCoptsPattern(ruleContext);
     if (noCoptsPattern == null) {
-      return CoptsFilter.alwaysPasses();
+      return Predicates.alwaysTrue();
     }
-    return CoptsFilter.fromRegex(noCoptsPattern);
+    return flag -> !noCoptsPattern.matcher(flag).matches();
   }
 
   @Nullable
@@ -440,7 +402,7 @@ public final class CcCommon {
    * otherwise.
    */
   static boolean noCoptsMatches(String option, RuleContext ruleContext) {
-    return !getCoptsFilter(ruleContext).passesFilter(option);
+    return !getCoptsFilter(ruleContext).apply(option);
   }
 
   private static final String DEFINES_ATTRIBUTE = "defines";
