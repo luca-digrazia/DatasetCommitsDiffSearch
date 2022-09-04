@@ -15,14 +15,12 @@
  */
 package org.androidannotations.handler;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldRef;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JVar;
+import static com.sun.codemodel.JExpr.ref;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.type.TypeMirror;
+
 import org.androidannotations.annotations.InstanceState;
 import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.AnnotationHelper;
@@ -31,10 +29,14 @@ import org.androidannotations.holder.HasInstanceState;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-
-import static com.sun.codemodel.JExpr.ref;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
 public class InstanceStateHandler extends BaseAnnotationHandler<HasInstanceState> {
 
@@ -48,7 +50,7 @@ public class InstanceStateHandler extends BaseAnnotationHandler<HasInstanceState
 
 		validatorHelper.isNotPrivate(element, valid);
 
-		validatorHelper.canBePutInABundle(element, valid);
+		validatorHelper.canBeSavedAsInstanceState(element, valid);
 	}
 
 	@Override
@@ -62,8 +64,11 @@ public class InstanceStateHandler extends BaseAnnotationHandler<HasInstanceState
 		JVar restoreStateBundleParam = holder.getRestoreStateBundleParam();
 
 		AnnotationHelper annotationHelper = new AnnotationHelper(processingEnv);
-		BundleHelper bundleHelper = new BundleHelper(annotationHelper, element);
 		APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
+
+		TypeMirror type = codeModelHelper.getActualType(element, holder);
+
+		BundleHelper bundleHelper = new BundleHelper(annotationHelper, type);
 
 		JFieldRef ref = ref(fieldName);
 		saveStateBody.invoke(saveStateBundleParam, bundleHelper.getMethodNameToSave()).arg(fieldName).arg(ref);

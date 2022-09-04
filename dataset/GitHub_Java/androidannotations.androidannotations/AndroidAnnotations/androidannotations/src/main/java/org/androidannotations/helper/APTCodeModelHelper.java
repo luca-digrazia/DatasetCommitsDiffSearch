@@ -19,9 +19,12 @@ import static com.sun.codemodel.JExpr._new;
 import static com.sun.codemodel.JExpr.lit;
 import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 
+import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.holder.GeneratedClassHolder;
+
+import javax.lang.model.util.ElementFilter;
 import java.io.StringWriter;
 import java.lang.annotation.Annotation;
-import java.lang.annotation.Inherited;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,13 +45,10 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.WildcardType;
-import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
 
 import org.androidannotations.annotations.EBean;
 import org.androidannotations.holder.EBeanHolder;
-import org.androidannotations.holder.EComponentHolder;
-import org.androidannotations.holder.GeneratedClassHolder;
 
 import com.sun.codemodel.JAnnotatable;
 import com.sun.codemodel.JAnnotationUse;
@@ -252,11 +252,9 @@ public class APTCodeModelHelper {
 
 	public void addNonAAAnotations(JAnnotatable annotatable, List<? extends AnnotationMirror> annotationMirrors, GeneratedClassHolder holder) {
 		for (AnnotationMirror annotationMirror : annotationMirrors) {
-			if (annotationMirror.getAnnotationType().asElement().getAnnotation(Inherited.class) == null) {
-				JClass annotationClass = typeMirrorToJClass(annotationMirror.getAnnotationType(), holder);
-				if (!annotationClass.fullName().startsWith("org.androidannotations")) {
-					addAnnotation(annotatable, annotationMirror, holder);
-				}
+			JClass annotationClass = typeMirrorToJClass(annotationMirror.getAnnotationType(), holder);
+			if (!annotationClass.fullName().startsWith("org.androidannotations")) {
+				addAnnotation(annotatable, annotationMirror, holder);
 			}
 		}
 	}
@@ -278,7 +276,7 @@ public class APTCodeModelHelper {
 		return hasAnnotation(annotatable, annotationMirror.getAnnotationType().toString());
 	}
 
-	public boolean hasAnnotation(JAnnotatable annotatable, Class<? extends Annotation> annotationClass) {
+	private boolean hasAnnotation(JAnnotatable annotatable, Class<? extends Annotation> annotationClass) {
 		return hasAnnotation(annotatable, annotationClass.getCanonicalName());
 	}
 
@@ -407,7 +405,7 @@ public class APTCodeModelHelper {
 	/**
 	 * Gets all of the methods of the class and includes the methods of any
 	 * implemented interfaces.
-	 *
+	 * 
 	 * @param typeElement
 	 * @return full list of methods.
 	 */
@@ -513,7 +511,7 @@ public class APTCodeModelHelper {
 		}
 	}
 
-	// TODO it would be nice to cache the result map for better performance
+	//TODO it would be nice to cache the result map for better performance
 	public TypeMirror getActualType(Element element, GeneratedClassHolder holder) {
 		Types types = holder.processingEnvironment().getTypeUtils();
 		DeclaredType typeMirror = (DeclaredType) element.getEnclosingElement().asType();

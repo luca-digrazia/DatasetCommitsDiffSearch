@@ -78,8 +78,6 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
     }
 
     private void addActionInOnHandleIntent(EIntentServiceHolder holder, ExecutableElement executableElement, String methodName, JFieldVar actionKeyField) {
-	    JMethod onHandleIntentMethod = holder.getOnHandleIntentMethod();
-
         // If action match, call the method
         JInvocation actionCondition = actionKeyField.invoke("equals").arg(holder.getOnHandleIntentIntentAction());
         JBlock callActionBlock = holder.getOnHandleIntentBody()._if(actionCondition)._then();
@@ -90,10 +88,9 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
         List<? extends VariableElement> methodParameters = executableElement.getParameters();
         if (methodParameters.size() > 0) {
             // Extras
-	        JVar intent = holder.getOnHandleIntentIntent();
             JVar extras = callActionBlock.decl(classes().BUNDLE, "extras");
-            extras.init(intent.invoke("getExtras"));
-            callActionBlock = callActionBlock._if(extras.ne(_null()))._then();
+            extras.init(holder.getOnHandleIntentIntent().invoke("getExtras"));
+            JBlock extrasNotNullBlock = callActionBlock._if(extras.ne(_null()))._then();
 
             // Extras params
             for (VariableElement param : methodParameters) {
@@ -101,15 +98,27 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
                 String extraParamName = paramName + "Extra";
                 JFieldVar paramVar = getStaticExtraField(holder, paramName);
                 JClass extraParamClass = codeModelHelper.typeMirrorToJClass(param.asType(), holder);
-
                 BundleHelper bundleHelper = new BundleHelper(annotationHelper, param.asType());
-                JExpression getExtraExpression = bundleHelper.getExpressionToRestoreFromIntentOrBundle(extraParamClass, intent, extras, paramVar, onHandleIntentMethod);
 
-                JVar extraField = callActionBlock.decl(extraParamClass, extraParamName, getExtraExpression);
+                JExpression getExtraExpression = JExpr.invoke(extras, bundleHelper.getMethodNameToRestore()).arg(paramVar);
+                if (bundleHelper.restoreCallNeedCastStatement()) {
+                    getExtraExpression = JExpr.cast(extraParamClass, getExtraExpression);
+
+                    if (bundleHelper.restoreCallNeedsSuppressWarning()) {
+                        JMethod onHandleIntentMethod = holder.getOnHandleIntentMethod();
+                        if (onHandleIntentMethod.annotations().size() == 0) {
+                            onHandleIntentMethod.annotate(SuppressWarnings.class).param("value", "unchecked");
+                        }
+                    }
+                }
+
+                JVar extraField = extrasNotNullBlock.decl(extraParamClass, extraParamName, getExtraExpression);
                 callActionInvocation.arg(extraField);
             }
+            extrasNotNullBlock.add(callActionInvocation);
+        } else {
+            callActionBlock.add(callActionInvocation);
         }
-        callActionBlock.add(callActionInvocation);
         callActionBlock._return();
     }
 
@@ -120,15 +129,22 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
         // setAction
         body.invoke("action").arg(actionKeyField);
 
-        for (VariableElement param : executableElement.getParameters()) {
-            String paramName = param.getSimpleName().toString();
-            JClass parameterClass = codeModelHelper.typeMirrorToJClass(param.asType(), holder);
+        // For each method params, we get put value into extras
+        List<? extends VariableElement> methodParameters = executableElement.getParameters();
+        if (methodParameters.size() > 0) {
 
-            JFieldVar paramVar = getStaticExtraField(holder, paramName);
-            JVar methodParam = method.param(parameterClass, paramName);
+            // Extras params
+            for (VariableElement param : methodParameters) {
+                String paramName = param.getSimpleName().toString();
+                JClass parameterClass = codeModelHelper.typeMirrorToJClass(param.asType(), holder);
 
-            JMethod putExtraMethod = holder.getIntentBuilder().getPutExtraMethod(param.asType(), paramName, paramVar);
-            body.invoke(putExtraMethod).arg(methodParam);
+                JFieldVar paramVar = getStaticExtraField(holder, paramName);
+                JVar methodParam = method.param(parameterClass, paramName);
+
+                JMethod putExtraMethod = holder.getIntentBuilder().getPutExtraMethod(param.asType(), paramName, paramVar);
+                body.invoke(putExtraMethod).arg(methodParam);
+            }
+
         }
         body._return(JExpr._this());
     }
