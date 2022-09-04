@@ -44,11 +44,11 @@ public abstract class AlertConditionDecorator {
     }
 
     public int getGrace() {
-        return (int) ((Number) getParameter("grace", 0.0)).longValue();
+        return (int) ((Double) getParameter("grace", 0.0)).longValue();
     }
 
     public int getBacklog() {
-        return (int) ((Number) getParameter("backlog", 0.0)).longValue();
+        return (int) ((Double) getParameter("backlog", 0.0)).longValue();
     }
 
     public abstract Call getFormAction(String streamId);
