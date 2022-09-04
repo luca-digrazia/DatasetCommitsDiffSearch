@@ -4,6 +4,8 @@ import static com.mongodb.AuthenticationMechanism.GSSAPI;
 import static com.mongodb.AuthenticationMechanism.MONGODB_X509;
 import static com.mongodb.AuthenticationMechanism.PLAIN;
 import static com.mongodb.AuthenticationMechanism.SCRAM_SHA_1;
+import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
+import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
@@ -18,10 +20,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.annotation.PreDestroy;
+import javax.enterprise.inject.Any;
 import javax.inject.Singleton;
 
 import org.bson.codecs.configuration.CodecProvider;
-import org.bson.codecs.configuration.CodecRegistries;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.ClassModel;
 import org.bson.codecs.pojo.Conventions;
@@ -35,6 +37,8 @@ import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoCredential;
 import com.mongodb.MongoException;
+import com.mongodb.ReadConcern;
+import com.mongodb.ReadConcernLevel;
 import com.mongodb.ReadPreference;
 import com.mongodb.ServerAddress;
 import com.mongodb.WriteConcern;
@@ -48,6 +52,9 @@ import com.mongodb.connection.SslSettings;
 import com.mongodb.event.CommandListener;
 import com.mongodb.event.ConnectionPoolListener;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.InstanceHandle;
+import io.quarkus.mongodb.health.MongoHealthCheck;
 import io.quarkus.mongodb.impl.ReactiveMongoClientImpl;
 import io.quarkus.mongodb.reactive.ReactiveMongoClient;
 
@@ -75,6 +82,25 @@ public class MongoClients {
     public MongoClients(MongodbConfig mongodbConfig, MongoClientSupport mongoClientSupport) {
         this.mongodbConfig = mongodbConfig;
         this.mongoClientSupport = mongoClientSupport;
+
+        try {
+            //JDK bug workaround
+            //https://github.com/quarkusio/quarkus/issues/14424
+            //force class init to prevent possible deadlock when done by mongo threads
+            Class.forName("sun.net.ext.ExtendedSocketOptions", true, ClassLoader.getSystemClassLoader());
+        } catch (ClassNotFoundException e) {
+        }
+
+        try {
+            Class.forName("org.eclipse.microprofile.health.HealthCheck");
+            InstanceHandle<MongoHealthCheck> instance = Arc.container()
+                    .instance(MongoHealthCheck.class, Any.Literal.INSTANCE);
+            if (instance.isAvailable()) {
+                instance.get().configure(mongodbConfig);
+            }
+        } catch (ClassNotFoundException e) {
+            // Ignored - no health check
+        }
     }
 
     public MongoClient createMongoClient(String clientName) throws MongoException {
@@ -226,6 +252,61 @@ public class MongoClients {
             settings.applyConnectionString(connectionString);
         }
 
+        configureCodecRegistry(defaultCodecRegistry, settings);
+
+        settings.commandListenerList(getCommandListeners(mongoClientSupport.getCommandListeners()));
+
+        config.applicationName.ifPresent(settings::applicationName);
+
+        if (config.credentials != null) {
+            MongoCredential credential = createMongoCredential(config);
+            if (credential != null) {
+                settings.credential(credential);
+            }
+        }
+
+        if (config.writeConcern != null) {
+            WriteConcernConfig wc = config.writeConcern;
+            WriteConcern concern = (wc.safe ? WriteConcern.ACKNOWLEDGED : WriteConcern.UNACKNOWLEDGED)
+                    .withJournal(wc.journal);
+
+            if (wc.wTimeout.isPresent()) {
+                concern = concern.withWTimeout(wc.wTimeout.get().toMillis(), TimeUnit.MILLISECONDS);
+            }
+
+            Optional<String> maybeW = wc.w;
+            if (maybeW.isPresent()) {
+                String w = maybeW.get();
+                if ("majority".equalsIgnoreCase(w)) {
+                    concern = concern.withW(w);
+                } else {
+                    int wInt = Integer.parseInt(w);
+                    concern = concern.withW(wInt);
+                }
+            }
+            settings.writeConcern(concern);
+            settings.retryWrites(wc.retryWrites);
+        }
+        if (config.tls) {
+            settings.applyToSslSettings(new SslSettingsBuilder(config, mongoClientSupport.isDisableSslSupport()));
+        }
+        settings.applyToClusterSettings(new ClusterSettingBuilder(config));
+        settings.applyToConnectionPoolSettings(
+                new ConnectionPoolSettingsBuilder(config, mongoClientSupport.getConnectionPoolListeners()));
+        settings.applyToServerSettings(new ServerSettingsBuilder(config));
+        settings.applyToSocketSettings(new SocketSettingsBuilder(config));
+
+        if (config.readPreference.isPresent()) {
+            settings.readPreference(ReadPreference.valueOf(config.readPreference.get()));
+        }
+        if (config.readConcern.isPresent()) {
+            settings.readConcern(new ReadConcern(ReadConcernLevel.fromString(config.readConcern.get())));
+        }
+
+        return settings.build();
+    }
+
+    private void configureCodecRegistry(CodecRegistry defaultCodecRegistry, MongoClientSettings.Builder settings) {
         List<CodecProvider> providers = new ArrayList<>();
         if (!mongoClientSupport.getCodecProviders().isEmpty()) {
             providers.addAll(getCodecProviders(mongoClientSupport.getCodecProviders()));
@@ -251,52 +332,10 @@ public class MongoClients {
             pojoCodecProviderBuilder.register(getPropertyCodecProviders(mongoClientSupport.getPropertyCodecProviders())
                     .toArray(new PropertyCodecProvider[0]));
         }
-        providers.add(pojoCodecProviderBuilder.build());
-        CodecRegistry registry = CodecRegistries.fromRegistries(defaultCodecRegistry,
-                CodecRegistries.fromProviders(providers));
+        CodecRegistry registry = !providers.isEmpty() ? fromRegistries(fromProviders(providers), defaultCodecRegistry,
+                fromProviders(pojoCodecProviderBuilder.build()))
+                : fromRegistries(defaultCodecRegistry, fromProviders(pojoCodecProviderBuilder.build()));
         settings.codecRegistry(registry);
-
-        settings.commandListenerList(getCommandListeners(mongoClientSupport.getCommandListeners()));
-
-        config.applicationName.ifPresent(settings::applicationName);
-
-        if (config.credentials != null) {
-            MongoCredential credential = createMongoCredential(config);
-            if (credential != null) {
-                settings.credential(credential);
-            }
-        }
-
-        if (config.writeConcern != null) {
-            WriteConcernConfig wc = config.writeConcern;
-            WriteConcern concern = (wc.safe ? WriteConcern.ACKNOWLEDGED : WriteConcern.UNACKNOWLEDGED)
-                    .withJournal(wc.journal);
-
-            if (wc.wTimeout.isPresent()) {
-                concern = concern.withWTimeout(wc.wTimeout.get().toMillis(), TimeUnit.MILLISECONDS);
-            }
-
-            Optional<String> maybeW = wc.w;
-            if (maybeW.isPresent()) {
-                concern = concern.withW(maybeW.get());
-            }
-            settings.writeConcern(concern);
-            settings.retryWrites(wc.retryWrites);
-        }
-        if (config.tls) {
-            settings.applyToSslSettings(new SslSettingsBuilder(config, mongoClientSupport.isDisableSslSupport()));
-        }
-        settings.applyToClusterSettings(new ClusterSettingBuilder(config));
-        settings.applyToConnectionPoolSettings(
-                new ConnectionPoolSettingsBuilder(config, mongoClientSupport.getConnectionPoolListeners()));
-        settings.applyToServerSettings(new ServerSettingsBuilder(config));
-        settings.applyToSocketSettings(new SocketSettingsBuilder(config));
-
-        if (config.readPreference.isPresent()) {
-            settings.readPreference(ReadPreference.valueOf(config.readPreference.get()));
-        }
-
-        return settings.build();
     }
 
     private static List<ServerAddress> parseHosts(List<String> addresses) {
