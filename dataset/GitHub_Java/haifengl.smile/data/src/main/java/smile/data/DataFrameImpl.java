@@ -18,20 +18,18 @@ package smile.data;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
-import smile.data.type.StructField;
-import smile.data.type.StructType;
-import smile.data.vector.*;
 import smile.math.matrix.Matrix;
 
 /**
@@ -40,44 +38,46 @@ import smile.math.matrix.Matrix;
  * @author Haifeng Li
  */
 class DataFrameImpl implements DataFrame {
-    /** DataFrame schema. */
-    private StructType schema;
     /** The column vectors. */
-    private List<BaseVector> columns;
+    private List<BaseVector> vectors;
+    /** The column names. */
+    private List<String> names;
+    /** The column types. */
+    private List<Class> types;
+    /** The column name -> index map. */
+    private Map<String, Integer> columnIndex;
     /** The number of rows. */
     private final int size;
 
     /**
      * Constructor.
-     * @param columns The columns of data frame.
+     * @param data The underlying data collection.
      */
-    public DataFrameImpl(Collection<BaseVector> columns) {
-        if (columns.isEmpty()) {
+    public DataFrameImpl(Collection<BaseVector> data) {
+        if (data.isEmpty()) {
             throw new IllegalArgumentException("Empty collection of columns");
         }
 
-        this.columns = new ArrayList<>(columns);
-
-        StructField[] fields = columns.stream()
-                .map(v -> new StructField(v.name(), v.type()))
-                .collect(Collectors.toList())
-                .toArray(new StructField[columns.size()]);
-        this.schema = new StructType(fields);
+        this.vectors = new ArrayList<>(data);
+        this.names = data.stream().map(v -> v.name()).collect(Collectors.toList());
+        this.types = data.stream().map(v -> v.type()).collect(Collectors.toList());
 
         Set<String> set = new HashSet<>();
-        for (BaseVector v : columns) {
+        for (BaseVector v : data) {
             if (!set.add(v.name())) {
                 throw new IllegalArgumentException(String.format("Duplicated column name: %s", v.name()));
             }
         }
 
-        BaseVector first = columns.iterator().next();
+        BaseVector first = data.iterator().next();
         this.size = first.size();
-        for (BaseVector v : columns) {
+        for (BaseVector v : data) {
             if (v.size() != first.size()) {
                 throw new IllegalArgumentException(String.format("Column %s size %d != %d", v.name(), v.size(), first.size()));
             }
         }
+
+        initColumnIndex();
     }
 
     /**
@@ -88,61 +88,6 @@ class DataFrameImpl implements DataFrame {
      */
     @SuppressWarnings("unchecked")
     public <T> DataFrameImpl(Collection<T> data, Class<T> clazz) {
-        this.size = data.size();
-        this.columns = new ArrayList<>();
-        List<StructField> structFields = new ArrayList<>();
-
-        Field[] fields = clazz.getFields();
-        for (Field field : fields) {
-            String name = field.getName();
-            names.add(name);
-
-            Class<?> type = field.getType();
-            types.add(type);
-
-            if (type == int.class) {
-                int[] values = data.stream().mapToInt(o -> {
-                    try {
-                        return field.getInt(o);
-                    } catch (ReflectiveOperationException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }).toArray();
-                IntVector vector = IntVector.of(name, values);
-                columns.add(vector);
-            } else if (type == long.class) {
-                long[] values = data.stream().mapToLong(o -> {
-                    try {
-                        return field.getLong(o);
-                    } catch (ReflectiveOperationException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }).toArray();
-                LongVector vector = LongVector.of(name, values);
-                columns.add(vector);
-            } else if (type == double.class) {
-                double[] values = data.stream().mapToDouble(o -> {
-                    try {
-                        return field.getDouble(o);
-                    } catch (ReflectiveOperationException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }).toArray();
-                DoubleVector vector = DoubleVector.of(name, values);
-                columns.add(vector);
-            } else {
-                T[] values = (T[]) data.stream().map(o -> {
-                    try {
-                        return (T) field.get(o);
-                    } catch (ReflectiveOperationException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }).toArray();
-                Vector<T> vector = Vector.of(name, values);
-                columns.add(vector);
-            }
-        }
-
         BeanInfo info;
         try {
             info = Introspector.getBeanInfo(clazz);
@@ -151,6 +96,11 @@ class DataFrameImpl implements DataFrame {
         }
 
         PropertyDescriptor[] props = info.getPropertyDescriptors();
+
+        this.size = data.size();
+        this.vectors = new ArrayList<>(props.length);
+        this.names = new ArrayList<>(props.length);
+        this.types = new ArrayList<>(props.length);
 
         for (PropertyDescriptor prop : props) {
             if (!prop.getName().equals("class")) {
@@ -169,8 +119,8 @@ class DataFrameImpl implements DataFrame {
                             throw new RuntimeException(ex);
                         }
                     }).toArray();
-                    IntVector vector = IntVector.of(name, values);
-                    columns.add(vector);
+                    IntVector vector = new IntVectorImpl(name, values);
+                    vectors.add(vector);
                 } else if (type == long.class) {
                     Method read = prop.getReadMethod();
                     long[] values = data.stream().mapToLong(o -> {
@@ -180,8 +130,8 @@ class DataFrameImpl implements DataFrame {
                             throw new RuntimeException(ex);
                         }
                     }).toArray();
-                    LongVector vector = LongVector.of(name, values);
-                    columns.add(vector);
+                    LongVector vector = new LongVectorImpl(name, values);
+                    vectors.add(vector);
                 } else if (type == double.class) {
                     Method read = prop.getReadMethod();
                     double[] values = data.stream().mapToDouble(o -> {
@@ -191,8 +141,8 @@ class DataFrameImpl implements DataFrame {
                             throw new RuntimeException(ex);
                         }
                     }).toArray();
-                    DoubleVector vector = DoubleVector.of(name, values);
-                    columns.add(vector);
+                    DoubleVector vector = new DoubleVectorImpl(name, values);
+                    vectors.add(vector);
                 } else {
                     Method read = prop.getReadMethod();
                     T[] values = (T[]) data.stream().map(o -> {
@@ -202,16 +152,21 @@ class DataFrameImpl implements DataFrame {
                             throw new RuntimeException(ex);
                         }
                     }).toArray();
-                    Vector<T> vector = Vector.of(name, values);
-                    columns.add(vector);
+                    Vector<T> vector = new VectorImpl<>(name, values);
+                    vectors.add(vector);
                 }
             }
         }
+
+        initColumnIndex();
     }
 
-    @Override
-    public StructType schema() {
-        return schema;
+    /** Initialize column index. */
+    private void initColumnIndex() {
+        columnIndex = new HashMap<>();
+        for (int i = 0; i < names.size(); i++) {
+            columnIndex.put(names.get(i), i);
+        }
     }
 
     @Override
@@ -220,8 +175,18 @@ class DataFrameImpl implements DataFrame {
     }
 
     @Override
+    public String[] names() {
+        return names.toArray(new String[names.size()]);
+    }
+
+    @Override
+    public Class[] types() {
+        return types.toArray(new Class[types.size()]);
+    }
+
+    @Override
     public int columnIndex(String name) {
-        return schema.fieldIndex(name);
+        return columnIndex.get(name);
     }
 
     @Override
@@ -231,51 +196,51 @@ class DataFrameImpl implements DataFrame {
 
     @Override
     public int ncols() {
-        return columns.size();
+        return names.size();
     }
 
     @Override
-    public Stream<Tuple> stream() {
-        Spliterator<Tuple> spliterator = new DatasetSpliterator<>(this, Spliterator.ORDERED);
+    public Stream<Row> stream() {
+        Spliterator<Row> spliterator = new DatasetSpliterator<>(this, Spliterator.ORDERED);
         return java.util.stream.StreamSupport.stream(spliterator, true);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <T> Vector<T> column(int i) {
-        return (Vector<T>) columns.get(i);
+        return (Vector<T>) vectors.get(i);
     }
 
     @Override
     public IntVector intColumn(int i) {
-        return (IntVector) columns.get(i);
+        return (IntVector) vectors.get(i);
     }
 
     @Override
     public LongVector longColumn(int i) {
-        return (LongVector) columns.get(i);
+        return (LongVector) vectors.get(i);
     }
 
     @Override
     public DoubleVector doubleColumn(int i) {
-        return (DoubleVector) columns.get(i);
+        return (DoubleVector) vectors.get(i);
     }
 
     @Override
     public DataFrame select(int... cols) {
         List<BaseVector> sub = new ArrayList<>();
         for (int i = 0; i < cols.length; i++) {
-            sub.add(columns.get(cols[i]));
+            sub.add(vectors.get(cols[i]));
         }
         return new DataFrameImpl(sub);
     }
 
     @Override
     public DataFrame drop(int... cols) {
-        List<BaseVector> sub = new ArrayList<>(columns);
+        List<BaseVector> sub = new ArrayList<>(vectors);
         List<BaseVector> drops = new ArrayList<>();
         for (int i = 0; i < cols.length; i++) {
-            drops.add(columns.get(cols[i]));
+            drops.add(vectors.get(cols[i]));
         }
         sub.removeAll(drops);
         return new DataFrameImpl(sub);
@@ -283,7 +248,7 @@ class DataFrameImpl implements DataFrame {
 
     @Override
     public DataFrame bind(DataFrame... dataframes) {
-        List<BaseVector> all = new ArrayList<>(columns);
+        List<BaseVector> all = new ArrayList<>(vectors);
         for (DataFrame df : dataframes) {
             for (int i = 0; i < df.ncols(); i++) {
                 all.add(df.column(i));
@@ -294,13 +259,13 @@ class DataFrameImpl implements DataFrame {
 
     @Override
     public DataFrame bind(BaseVector... vectors) {
-        List<BaseVector> columns = new ArrayList<>(this.columns);
-        Collections.addAll(columns, vectors);
-        return new DataFrameImpl(columns);
+        List<BaseVector> all = new ArrayList<>(this.vectors);
+        Collections.addAll(all, vectors);
+        return new DataFrameImpl(all);
     }
 
     @Override
-    public Tuple get(int i) {
+    public Row get(int i) {
         return new DataFrameRow(i);
     }
 
@@ -309,7 +274,7 @@ class DataFrameImpl implements DataFrame {
         throw new UnsupportedOperationException();
     }
 
-    class DataFrameRow implements Tuple {
+    class DataFrameRow implements Row {
         /** Row index. */
         int i;
 
@@ -319,52 +284,27 @@ class DataFrameImpl implements DataFrame {
 
         @Override
         public int size() {
-            return columns.size();
+            return vectors.size();
         }
 
         @Override
         public Object get(int j) {
-            return columns.get(j).get(i);
-        }
-
-        @Override
-        public boolean getBoolean(int j) {
-            return ((BooleanVector) columns.get(j)).getBoolean(i);
-        }
-
-        @Override
-        public char getChar(int j) {
-            return ((CharVector) columns.get(j)).getChar(i);
-        }
-
-        @Override
-        public byte getByte(int j) {
-            return ((ByteVector) columns.get(j)).getByte(i);
-        }
-
-        @Override
-        public short getShort(int j) {
-            return ((ShortVector) columns.get(j)).getShort(i);
+            return vectors.get(j).get(i);
         }
 
         @Override
         public int getInt(int j) {
-            return ((IntVector) columns.get(j)).getInt(i);
+            return ((IntVector) vectors.get(j)).getInt(i);
         }
 
         @Override
         public long getLong(int j) {
-            return ((LongVector) columns.get(j)).getLong(i);
-        }
-
-        @Override
-        public float getFloat(int j) {
-            return ((FloatVector) columns.get(j)).getFloat(i);
+            return ((LongVector) vectors.get(j)).getLong(i);
         }
 
         @Override
         public double getDouble(int j) {
-            return ((DoubleVector) columns.get(j)).getDouble(i);
+            return ((DoubleVector) vectors.get(j)).getDouble(i);
         }
 
         @Override

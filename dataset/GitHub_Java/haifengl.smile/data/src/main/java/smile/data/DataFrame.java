@@ -22,40 +22,18 @@ import java.util.List;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import smile.data.type.DataType;
-import smile.data.type.StructField;
-import smile.data.type.StructType;
-import smile.data.vector.*;
-import smile.math.Math;
-import smile.util.Strings;
 
 /**
  * An immutable collection of data organized into named columns.
  *
  * @author Haifeng Li
  */
-public interface DataFrame extends Dataset<Tuple> {
-    /** Returns the schema of DataFrame. */
-    StructType schema();
+public interface DataFrame extends Dataset<Row> {
+    /** Returns all column names as an array. */
+    String[] names();
 
-    /** Returns the column names. */
-    default String[] names() {
-        StructField[] fields = schema().fields();
-        return Arrays.stream(fields)
-                .map(field -> field.name)
-                .collect(Collectors.toList())
-                .toArray(new String[fields.length]);
-    }
-
-    /** Returns the column types. */
-    default DataType[] types() {
-        StructField[] fields = schema().fields();
-        return Arrays.stream(fields)
-                .map(field -> field.type)
-                .collect(Collectors.toList())
-                .toArray(new DataType[fields.length]);
-    }
-
+    /** Returns all column types as an array. */
+    Class[] types();
     /**
      * Returns the number of rows.
      */
@@ -71,8 +49,8 @@ public interface DataFrame extends Dataset<Tuple> {
     /** Returns the structure of data frame. */
     default DataFrame structure() {
         List<BaseVector> vectors = Arrays.asList(
-                Vector.of("Column", names()),
-                Vector.of("Type", types())
+                new VectorImpl<>("Column", names()),
+                new VectorImpl<>("Type", types())
         );
 
         return new DataFrameImpl(vectors);
@@ -203,39 +181,6 @@ public interface DataFrame extends Dataset<Tuple> {
      */
     smile.math.matrix.Matrix toMatrix();
 
-    /** Returns statistic summary. */
-    /*
-    default DataFrame summary() {
-        Attribute[] attr = {
-                new NumericAttribute("min"),
-                new NumericAttribute("q1"),
-                new NumericAttribute("median"),
-                new NumericAttribute("mean"),
-                new NumericAttribute("q3"),
-                new NumericAttribute("max"),
-        };
-
-        AttributeDataset stat = new AttributeDataset(name + " Summary", attr);
-
-        for (int i = 0; i < ncols(); i++) {
-            double[] x = column(i).vector();
-            double[] s = new double[attr.length];
-            s[0] = Math.min(x);
-            s[1] = Math.q1(x);
-            s[2] = Math.median(x);
-            s[3] = Math.mean(x);
-            s[4] = Math.q3(x);
-            s[5] = Math.max(x);
-            Row datum = new Row(s);
-            datum.name = attributes[i].getName();
-            datum.description = attributes[i].getDescription();
-            stat.add(datum);
-        }
-
-        return stat;
-    }
-    */
-
     /**
      * Returns the string representation of top rows.
      * @param numRows Number of rows to show
@@ -288,7 +233,7 @@ public interface DataFrame extends Dataset<Tuple> {
         }
 
         // Create SeparateLine
-        String sep = IntStream.of(colWidths).mapToObj(w -> Strings.fill('-', w)).collect(Collectors.joining("+"));
+        String sep = IntStream.of(colWidths).mapToObj(w -> Utils.string('-', w)).collect(Collectors.joining("+"));
         sep = "+" + sep + "+\n";
         sb.append(sep);
 
@@ -297,9 +242,9 @@ public interface DataFrame extends Dataset<Tuple> {
         header.append('|');
         for (int i = 0; i < numCols; i++) {
             if (truncate) {
-                header.append(Strings.leftPad(names[i], colWidths[i], ' '));
+                header.append(Utils.leftPad(names[i], colWidths[i], ' '));
             } else {
-                header.append(Strings.rightPad(names[i], colWidths[i], ' '));
+                header.append(Utils.rightPad(names[i], colWidths[i], ' '));
             }
             header.append('|');
         }
@@ -313,9 +258,9 @@ public interface DataFrame extends Dataset<Tuple> {
             line.append('|');
             for (int i = 0; i < numCols; i++) {
                 if (truncate) {
-                    line.append(Strings.leftPad(row[i], colWidths[i], ' '));
+                    line.append(Utils.leftPad(row[i], colWidths[i], ' '));
                 } else {
-                    line.append(Strings.rightPad(row[i], colWidths[i], ' '));
+                    line.append(Utils.rightPad(row[i], colWidths[i], ' '));
                 }
                 line.append('|');
             }
