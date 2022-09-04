@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.protobuf.ByteString;
@@ -74,7 +73,8 @@ public class SingleBuildFileCacheTest {
           }
         };
     underTest = new SingleBuildFileCache("/", fs);
-    FileSystemUtils.createEmptyFile(fs.getPath("/empty"));
+    Path file = fs.getPath("/empty");
+    file.getOutputStream().close();
   }
 
   @Test
@@ -104,7 +104,7 @@ public class SingleBuildFileCacheTest {
   public void testCache() throws Exception {
     ActionInput empty = ActionInputHelper.fromPath("/empty");
     underTest.getMetadata(empty).getDigest();
-    assertThat(calls).containsKey("/empty");
+    assert(calls.containsKey("/empty"));
     assertThat((int) calls.get("/empty")).isEqualTo(1);
     underTest.getMetadata(empty).getDigest();
     assertThat((int) calls.get("/empty")).isEqualTo(1);
@@ -129,9 +129,9 @@ public class SingleBuildFileCacheTest {
 
     ActionInput input = ActionInputHelper.fromPath("/unreadable");
     Path file = fs.getPath("/unreadable");
-    FileSystemUtils.createEmptyFile(file);
+    file.getOutputStream().close();
     file.chmod(0);
     ByteString actualDigest = ByteString.copyFrom(underTest.getMetadata(input).getDigest());
-    assertThat(actualDigest).isEqualTo(expectedDigest);
+    assertThat(expectedDigest).isEqualTo(actualDigest);
   }
 }

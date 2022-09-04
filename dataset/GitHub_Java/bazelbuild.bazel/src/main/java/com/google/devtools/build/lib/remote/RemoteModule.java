@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.remote;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
@@ -103,9 +101,9 @@ public final class RemoteModule extends BlazeModule {
   public void serverInit(OptionsProvider startupOptions, ServerBuilder builder) {
     builder.addBuildEventArtifactUploader(new BuildEventArtifactUploader() {
       @Override
-      public ListenableFuture<PathConverter> upload(Set<Path> files) {
+      public PathConverter upload(Set<Path> files) {
         // TODO(ulfjack): Actually hook up upload here.
-        return Futures.immediateFuture(converter);
+        return converter;
       }
     }, "remote");
   }

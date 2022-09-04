@@ -1304,7 +1304,8 @@ public abstract class FileSystemTest {
     Fingerprint fp = new Fingerprint();
     fp.addBytes(new byte[0]);
     assertThat(fp.hexDigestAndReset())
-        .isEqualTo(BaseEncoding.base16().lowerCase().encode(xFile.getDigest()));
+        .isEqualTo(
+            BaseEncoding.base16().lowerCase().encode(xFile.getDigest(DigestHashFunction.MD5)));
   }
 
   @Test
@@ -1317,7 +1318,8 @@ public abstract class FileSystemTest {
     Fingerprint fp = new Fingerprint();
     fp.addBytes(buffer);
     assertThat(fp.hexDigestAndReset())
-        .isEqualTo(BaseEncoding.base16().lowerCase().encode(xFile.getDigest()));
+        .isEqualTo(
+            BaseEncoding.base16().lowerCase().encode(xFile.getDigest(DigestHashFunction.MD5)));
   }
 
   @Test

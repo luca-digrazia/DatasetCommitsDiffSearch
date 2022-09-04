@@ -262,7 +262,7 @@ public final class BinTools {
 
     private static FileArtifactValue hash(Path path) throws IOException {
       DigestHashFunction hashFn = path.getFileSystem().getDigestFunction();
-      Hasher hasher = hashFn.getHashFunction().newHasher();
+      Hasher hasher = hashFn.getHash().newHasher();
       int bytesCopied = 0;
       try (InputStream in = path.getInputStream()) {
         byte[] buffer = new byte[1024];

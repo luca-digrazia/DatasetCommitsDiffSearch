@@ -74,7 +74,6 @@ import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.util.MutableHandlerRegistry;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.concurrent.Executors;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -177,10 +176,10 @@ public class GrpcRemoteCacheTest {
     Scratch scratch = new Scratch();
     scratch.file(authTlsOptions.googleCredentials, new JacksonFactory().toString(json));
 
-    CallCredentials creds = null;
-    try (InputStream in = scratch.resolve(authTlsOptions.googleCredentials).getInputStream()) {
-      GoogleAuthUtils.newCallCredentials(in, authTlsOptions.googleAuthScopes);
-    }
+    CallCredentials creds =
+        GoogleAuthUtils.newCallCredentials(
+            scratch.resolve(authTlsOptions.googleCredentials).getInputStream(),
+            authTlsOptions.googleAuthScopes);
     RemoteOptions remoteOptions = Options.getDefaults(RemoteOptions.class);
     RemoteRetrier retrier =
         new RemoteRetrier(
