@@ -20,14 +20,6 @@ import io.restassured.http.ContentType;
 @QuarkusTest
 public class PanacheFunctionalityTest {
 
-    /**
-     * Tests that direct use of the entity in the test class does not break transformation
-     *
-     * see https://github.com/quarkusio/quarkus/issues/1724
-     */
-    @SuppressWarnings("unused")
-    Person p = new Person();
-
     @Test
     public void testPanacheFunctionality() throws Exception {
         RestAssured.when().get("/test/model-dao").then().body(is("OK"));
@@ -80,7 +72,7 @@ public class PanacheFunctionalityTest {
      */
     @DisabledOnNativeImage
     @Test
-    public void jacksonDeserializationIgnoresPersistentAttribute() throws JsonProcessingException {
+    public void jacksonDeserilazationIgnoresPersitantAttribute() throws JsonProcessingException {
         // set Up
         Person person = new Person();
         person.name = "max";
