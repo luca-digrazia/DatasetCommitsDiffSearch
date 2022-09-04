@@ -97,7 +97,7 @@ public class BazelAndroidLocalTest extends AndroidLocalTestBase {
         ruleContext.getPrerequisites("deps", Mode.TARGET, RunfilesProvider.class);
     for (RunfilesProvider runfilesProvider : runfilesProviders) {
       Runfiles dataRunfiles = runfilesProvider.getDataRunfiles();
-      for (Artifact artifact : dataRunfiles.getAllArtifacts().toList()) {
+      for (Artifact artifact : dataRunfiles.getAllArtifacts()) {
         if (artifact.getFilename().equals("robolectric-deps.properties")) {
           return artifact;
         }
