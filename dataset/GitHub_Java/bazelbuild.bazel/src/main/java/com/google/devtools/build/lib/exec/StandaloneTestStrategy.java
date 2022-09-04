@@ -255,8 +255,20 @@ public class StandaloneTestStrategy extends TestStrategy {
             testOutErr,
             streamed,
             startTimeMillis,
-            SpawnContinuation.ofBeginExecution(
-                spawn, actionExecutionContext.withFileOutErr(testOutErr)))
+            new SpawnContinuation() {
+              @Override
+              public ListenableFuture<?> getFuture() {
+                return null;
+              }
+
+              @Override
+              public SpawnContinuation execute() throws ExecException, InterruptedException {
+                SpawnActionContext spawnActionContext =
+                    actionExecutionContext.getContext(SpawnActionContext.class);
+                return spawnActionContext.beginExecution(
+                    spawn, actionExecutionContext.withFileOutErr(testOutErr));
+              }
+            })
         .execute();
   }
 
