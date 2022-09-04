@@ -43,7 +43,6 @@ import org.jboss.resteasy.reactive.common.model.ResourceInterceptors;
 import org.jboss.resteasy.reactive.common.model.ResourceParamConverterProvider;
 import org.jboss.resteasy.reactive.common.model.ResourceReader;
 import org.jboss.resteasy.reactive.common.model.ResourceWriter;
-import org.jboss.resteasy.reactive.common.processor.AdditionalReaderWriter;
 import org.jboss.resteasy.reactive.common.processor.AdditionalReaders;
 import org.jboss.resteasy.reactive.common.processor.AdditionalWriters;
 import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
@@ -390,15 +389,15 @@ public class QuarkusRestProcessor {
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, builtinReader.readerClass.getName()));
             }
 
-            for (AdditionalReaderWriter.Entry additionalReader : additionalReaders.get()) {
-                Class readerClass = additionalReader.getHandlerClass();
+            for (AdditionalReaders.Entry additionalReader : additionalReaders.get()) {
+                Class readerClass = additionalReader.getReaderClass();
                 registerReader(recorder, serialisers, additionalReader.getEntityClass(), readerClass,
                         beanContainerBuildItem.getValue(), additionalReader.getMediaType(), additionalReader.getConstraint());
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, readerClass.getName()));
             }
 
-            for (AdditionalReaderWriter.Entry entry : additionalWriters.get()) {
-                Class writerClass = entry.getHandlerClass();
+            for (AdditionalWriters.Entry<?> entry : additionalWriters.get()) {
+                Class<? extends MessageBodyWriter<?>> writerClass = entry.getWriterClass();
                 registerWriter(recorder, serialisers, entry.getEntityClass(), writerClass,
                         beanContainerBuildItem.getValue(), entry.getMediaType());
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, writerClass.getName()));
