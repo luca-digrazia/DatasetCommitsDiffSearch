@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.Set;
 
 import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
@@ -16,23 +15,31 @@ import io.quarkus.runtime.annotations.ConfigItem;
 public class HibernateOrmConfigPersistenceUnit {
 
     /**
-     * The name of the datasource which this persistence unit uses.
-     * <p>
-     * If undefined, it will use the default datasource.
+     * Class name of the Hibernate ORM dialect. The complete list of bundled dialects is available in the
+     * https://docs.jboss.org/hibernate/stable/orm/javadocs/org/hibernate/dialect/package-summary.html[Hibernate ORM JavaDoc].
+     *
+     * [NOTE]
+     * ====
+     * Not all the dialects are supported in GraalVM native executables: we currently provide driver extensions for PostgreSQL,
+     * MariaDB, Microsoft SQL Server and H2.
+     * ====
+     *
+     * @asciidoclet
      */
-    public Optional<String> datasource;
-
-    /**
-     * The packages in which the entities affected to this persistence unit are located.
-     */
-    public Optional<Set<String>> packages;
-
-    /**
-     * Dialect related configuration.
-     */
+    // TODO should it be dialects
+    //TODO should it be shortcuts like "postgresql" "h2" etc
     @ConfigItem
-    @ConfigDocSection
-    public HibernateOrmConfigPersistenceUnitDialect dialect;
+    public Optional<String> dialect;
+
+    /**
+     * The storage engine to use when the dialect supports multiple storage engines.
+     *
+     * E.g. `MyISAM` or `InnoDB` for MySQL.
+     *
+     * @asciidoclet
+     */
+    @ConfigItem(name = "dialect.storage-engine")
+    public Optional<String> dialectStorageEngine;
 
     // @formatter:off
     /**
@@ -79,14 +86,6 @@ public class HibernateOrmConfigPersistenceUnit {
      */
     @ConfigItem(defaultValue = "-1")
     public int batchFetchSize;
-
-    /**
-     * The maximum depth of outer join fetch tree for single-ended associations (one-to-one, many-to-one).
-     *
-     * A `0` disables default outer join fetching.
-     */
-    @ConfigItem
-    public OptionalInt maxFetchDepth;
 
     /**
      * Pluggable strategy contract for applying physical naming rules for database object names.
@@ -150,57 +149,15 @@ public class HibernateOrmConfigPersistenceUnit {
     public boolean secondLevelCachingEnabled;
 
     public boolean isAnyPropertySet() {
-        return datasource.isPresent() ||
-                packages.isPresent() ||
-                dialect.isAnyPropertySet() ||
+        return dialect.isPresent() ||
+                dialectStorageEngine.isPresent() ||
                 sqlLoadScript.isPresent() ||
                 batchFetchSize > 0 ||
-                maxFetchDepth.isPresent() ||
-                physicalNamingStrategy.isPresent() ||
-                implicitNamingStrategy.isPresent() ||
                 query.isAnyPropertySet() ||
                 database.isAnyPropertySet() ||
                 jdbc.isAnyPropertySet() ||
                 log.isAnyPropertySet() ||
-                !cache.isEmpty() ||
-                !secondLevelCachingEnabled;
-    }
-
-    @ConfigGroup
-    public static class HibernateOrmConfigPersistenceUnitDialect {
-
-        /**
-         * Class name of the Hibernate ORM dialect. The complete list of bundled dialects is available in the
-         * https://docs.jboss.org/hibernate/stable/orm/javadocs/org/hibernate/dialect/package-summary.html[Hibernate ORM
-         * JavaDoc].
-         *
-         * [NOTE]
-         * ====
-         * Not all the dialects are supported in GraalVM native executables: we currently provide driver extensions for
-         * PostgreSQL,
-         * MariaDB, Microsoft SQL Server and H2.
-         * ====
-         *
-         * @asciidoclet
-         */
-        // TODO should it be dialects
-        //TODO should it be shortcuts like "postgresql" "h2" etc
-        @ConfigItem(name = ConfigItem.PARENT)
-        public Optional<String> dialect;
-
-        /**
-         * The storage engine to use when the dialect supports multiple storage engines.
-         *
-         * E.g. `MyISAM` or `InnoDB` for MySQL.
-         *
-         * @asciidoclet
-         */
-        @ConfigItem
-        public Optional<String> storageEngine;
-
-        public boolean isAnyPropertySet() {
-            return dialect.isPresent() || storageEngine.isPresent();
-        }
+                !cache.isEmpty();
     }
 
     @ConfigGroup
@@ -265,7 +222,7 @@ public class HibernateOrmConfigPersistenceUnit {
          * <p>
          * Used for DDL generation and also for the SQL import scripts.
          */
-        @ConfigItem(defaultValue = DEFAULT_CHARSET)
+        @ConfigItem(defaultValue = "UTF-8")
         public Charset charset;
 
         /**
