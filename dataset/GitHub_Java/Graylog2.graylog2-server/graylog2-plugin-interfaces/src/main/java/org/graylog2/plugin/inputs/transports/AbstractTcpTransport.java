@@ -66,7 +66,6 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                 new ServerBootstrap(new NioServerSocketChannelFactory(bossExecutor, workerExecutor));
 
         bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(8192));
-        bootstrap.setOption("receiveBufferSize", getRecvBufferSize());
         bootstrap.setOption("child.receiveBufferSize", getRecvBufferSize());
 
         return bootstrap;
