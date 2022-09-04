@@ -1,31 +1,24 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.feature;
 
-import smile.data.DataFrame;
-import smile.data.type.DataType;
-import smile.data.type.StructField;
-import smile.data.type.StructType;
-import smile.math.MathEx;
+import smile.data.Attribute;
+import smile.math.Math;
 import smile.sort.QuickSelect;
-
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Robustly standardizes numeric feature by subtracting
@@ -34,57 +27,59 @@ import java.util.stream.IntStream;
  * @author Haifeng Li
  */
 public class RobustStandardizer extends Standardizer {
-    private static final long serialVersionUID = 2L;
 
     /**
      * Constructor.
-     * @param schema the schema of data.
-     * @param median median.
-     * @param iqr IQR.
      */
-    public RobustStandardizer(StructType schema, double[] median, double[] iqr) {
-        super(schema, median, iqr);
+    public RobustStandardizer() {
+
     }
 
     /**
-     * Learns transformation parameters from a dataset.
-     * @param data The training data.
+     * Constructor.
+     * @param copy  If false, try to avoid a copy and do inplace scaling instead.
      */
-    public static RobustStandardizer fit(DataFrame data) {
-        if (data.isEmpty()) {
-            throw new IllegalArgumentException("Empty data frame");
-        }
+    public RobustStandardizer(boolean copy) {
+        super(copy);
+    }
 
-        StructType schema = data.schema();
-        double[] median = new double[schema.length()];
-        double[] iqr = new double[schema.length()];
+    @Override
+    public void learn(Attribute[] attributes, double[][] data) {
+        int n = data.length;
+        int p = data[0].length;
 
-        for (int i = 0; i < median.length; i++) {
-            if (schema.field(i).isNumeric()) {
-                final int col = i;
-                final smile.sort.IQAgent agent = new smile.sort.IQAgent();
-                // IQAgent is stateful and thus should not be used with parallel stream
-                data.stream().sequential().forEach(t -> agent.add(t.getDouble(col)));
-                median[i] = agent.quantile(0.5);
-                iqr[i] = agent.quantile(0.75) - agent.quantile(0.25);
+        mu = new double[p];
+        std = new double[p];
+        double[] x = new double[n];
+
+        for (int j = 0; j < p; j++) {
+            if (attributes[j].getType() != Attribute.Type.NUMERIC) {
+                mu[j] = Double.NaN;
+            } else {
+                for (int i = 0; i < n; i++) {
+                    x[i] = data[i][j];
+                }
+
+                mu[j] = QuickSelect.median(x);
+                std[j] = QuickSelect.q3(x) - QuickSelect.q1(x);
+                if (Math.isZero(std[j])) {
+                    throw new IllegalArgumentException("Column " + j + " has constant values between Q1 and Q3.");
+                }
             }
         }
-
-        return new RobustStandardizer(schema, median, iqr);
-    }
-
-    /**
-     * Learns transformation parameters from a dataset.
-     * @param data The training data.
-     */
-    public static RobustStandardizer fit(double[][] data) {
-        return fit(DataFrame.of(data));
     }
 
     @Override
     public String toString() {
-        return IntStream.range(0, mu.length)
-                .mapToObj(i -> String.format("%s[%.4f, %.4f]", schema.field(i).name, mu[i], std[i]))
-                .collect(Collectors.joining(",", "RobustStandardizer(", ")"));
+        StringBuilder sb = new StringBuilder();
+        sb.append("RobustStandardizer(");
+        if (mu != null) {
+            sb.append("\n");
+            for (int i = 0; i < mu.length; i++) {
+                sb.append(String.format("  [%.4f, %.4f]%n", mu[i], std[i]));
+            }
+        }
+        sb.append(")");
+        return sb.toString();
     }
 }

@@ -18,7 +18,6 @@ package smile.feature;
 
 import smile.data.Attribute;
 import smile.data.NumericAttribute;
-import java.io.Serializable;
 
 /**
  * Feature transformation. In general, learning algorithms benefit from
@@ -27,8 +26,7 @@ import java.io.Serializable;
  *
  * @author Haifeng Li
  */
-public abstract class FeatureTransform implements Serializable {
-    private static final long serialVersionUID = 1L;
+public abstract class FeatureTransform {
     /**
      * If false, try to avoid a copy and do inplace transformation instead.
      */

@@ -16,6 +16,7 @@
 
 package smile.feature;
 
+import smile.data.NumericAttribute;
 import smile.math.Math;
 import smile.data.Attribute;
 import smile.sort.QuickSelect;
