@@ -80,7 +80,6 @@ import com.google.devtools.build.lib.rules.config.ConfigRules;
 import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoAspect;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoLibraryRule;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.platform.PlatformRules;
 import com.google.devtools.build.lib.rules.proto.BazelProtoLibraryRule;
@@ -258,14 +257,10 @@ public class BazelRuleClassProvider {
       new RuleSet() {
         @Override
         public void init(ConfiguredRuleClassProvider.Builder builder) {
-          LabelLateBoundDefault<JavaConfiguration> hostJdkAttribute =
-              JavaSemantics.hostJdkAttribute(builder);
-          LabelLateBoundDefault<JavaConfiguration> javaToolchainAttribute =
-              JavaSemantics.javaToolchainAttribute(builder);
-          BazelJavaProtoAspect bazelJavaProtoAspect =
-              new BazelJavaProtoAspect(hostJdkAttribute, javaToolchainAttribute);
+          LabelLateBoundDefault<?> hostJdkAttribute = JavaSemantics.hostJdkAttribute(builder);
+          BazelJavaProtoAspect bazelJavaProtoAspect = new BazelJavaProtoAspect(hostJdkAttribute);
           BazelJavaLiteProtoAspect bazelJavaLiteProtoAspect =
-              new BazelJavaLiteProtoAspect(hostJdkAttribute, javaToolchainAttribute);
+              new BazelJavaLiteProtoAspect(hostJdkAttribute);
           builder.addNativeAspectClass(bazelJavaProtoAspect);
           builder.addNativeAspectClass(bazelJavaLiteProtoAspect);
           builder.addRuleDefinition(new BazelJavaProtoLibraryRule(bazelJavaProtoAspect));

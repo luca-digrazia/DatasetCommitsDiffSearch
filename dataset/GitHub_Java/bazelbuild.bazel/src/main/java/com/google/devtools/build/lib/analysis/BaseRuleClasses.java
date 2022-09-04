@@ -357,8 +357,7 @@ public class BaseRuleClasses {
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("toolchains", LABEL_LIST)
               .allowedFileTypes(FileTypeSet.NO_FILE)
-              .mandatoryProviders(ImmutableList.of(TemplateVariableInfo.PROVIDER.id()))
-              .dontCheckConstraints())
+              .mandatoryProviders(ImmutableList.of(TemplateVariableInfo.PROVIDER.id())))
           .build();
     }
 

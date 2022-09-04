@@ -91,7 +91,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   public static final String INTERMEDIATE_DWP_DIR = "_dwps";
 
   private static Runfiles collectRunfiles(
-      RuleContext ruleContext,
+      RuleContext context,
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider toolchain,
       CcLinkingOutputs linkingOutputs,
@@ -103,29 +103,16 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       boolean fake,
       ImmutableSet<CppSource> cAndCppSources,
       boolean linkCompileOutputSeparately) {
-    Runfiles.Builder builder =
-        new Runfiles.Builder(
-            ruleContext.getWorkspaceName(),
-            ruleContext.getConfiguration().legacyExternalRunfiles());
+    Runfiles.Builder builder = new Runfiles.Builder(
+        context.getWorkspaceName(), context.getConfiguration().legacyExternalRunfiles());
     Function<TransitiveInfoCollection, Runfiles> runfilesMapping =
-        CppHelper.runfilesFunction(ruleContext, linkingMode != Link.LinkingMode.DYNAMIC);
+        CcRunfiles.runfilesFunction(linkingMode != Link.LinkingMode.DYNAMIC);
     builder.addTransitiveArtifacts(filesToBuild);
     // Add the shared libraries to the runfiles. This adds any shared libraries that are in the
     // srcs of this target.
     builder.addArtifacts(linkingOutputs.getLibrariesForRunfiles(true));
-    builder.addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
-    // TODO(plf): Why do we need .so files produced by cc_library in data dependencies of cc_binary?
-    // This can probably be removed safely.
-    for (TransitiveInfoCollection transitiveInfoCollection :
-        ruleContext.getPrerequisites("data", Mode.DONT_CHECK)) {
-      builder.merge(
-          CppHelper.runfilesFunction(ruleContext, /* linkingStatically= */ true)
-              .apply(transitiveInfoCollection));
-      builder.merge(
-          CppHelper.runfilesFunction(ruleContext, /* linkingStatically= */ false)
-              .apply(transitiveInfoCollection));
-    }
-    builder.add(ruleContext, runfilesMapping);
+    builder.addRunfiles(context, RunfilesProvider.DEFAULT_RUNFILES);
+    builder.add(context, runfilesMapping);
     // Add the C++ runtime libraries if linking them dynamically.
     if (linkingMode == Link.LinkingMode.DYNAMIC) {
       builder.addTransitiveArtifacts(toolchain.getDynamicRuntimeLinkInputs(featureConfiguration));
@@ -138,9 +125,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // the malloc library package, which is specified by the "malloc" attribute.
     // As the BUILD encyclopedia says, the "malloc" attribute should be ignored
     // if linkshared=1.
-    boolean linkshared = isLinkShared(ruleContext);
+    boolean linkshared = isLinkShared(context);
     if (!linkshared) {
-      TransitiveInfoCollection malloc = CppHelper.mallocForTarget(ruleContext);
+      TransitiveInfoCollection malloc = CppHelper.mallocForTarget(context);
       builder.addTarget(malloc, RunfilesProvider.DEFAULT_RUNFILES);
       builder.addTarget(malloc, runfilesMapping);
     }
@@ -168,7 +155,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       // or header modules.
       builder.addSymlinksToArtifacts(ccCompilationContext.getAdditionalInputs());
       builder.addSymlinksToArtifacts(
-          ccCompilationContext.getTransitiveModules(usePic(ruleContext, toolchain)));
+          ccCompilationContext.getTransitiveModules(usePic(context, toolchain)));
     }
     return builder.build();
   }

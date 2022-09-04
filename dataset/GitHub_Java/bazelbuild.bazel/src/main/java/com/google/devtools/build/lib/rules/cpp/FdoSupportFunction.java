@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoException;
 import com.google.devtools.build.lib.skyframe.WorkspaceNameValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -59,7 +60,6 @@ public class FdoSupportFunction implements SkyFunction {
     Path fdoZip =
         key.getFdoZip() == null ? null : directories.getWorkspace().getRelative(key.getFdoZip());
     FdoSupport fdoSupport;
-
     try {
       fdoSupport =
           FdoSupport.create(
@@ -72,6 +72,8 @@ public class FdoSupportFunction implements SkyFunction {
       if (env.valuesMissing()) {
         return null;
       }
+    } catch (FdoException e) {
+      throw new FdoSkyException(e, Transience.PERSISTENT);
     } catch (IOException e) {
       throw new FdoSkyException(e, Transience.TRANSIENT);
     }

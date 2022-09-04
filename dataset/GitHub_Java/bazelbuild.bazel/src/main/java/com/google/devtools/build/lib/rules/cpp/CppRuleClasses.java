@@ -39,11 +39,9 @@ import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault.Resolver;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OsUtils;
 
@@ -67,12 +65,8 @@ public class CppRuleClasses {
     return LabelLateBoundDefault.fromTargetConfiguration(
         CppConfiguration.class,
         env.getToolsLabel(CROSSTOOL_LABEL),
-        CC_TOOLCHAIN_CONFIGURATION_RESOLVER);
+        (rules, attributes, cppConfig) -> cppConfig.getCcToolchainRuleLabel());
   }
-
-  @AutoCodec
-  static final Resolver<CppConfiguration, Label> CC_TOOLCHAIN_CONFIGURATION_RESOLVER =
-      (rule, attributes, configuration) -> configuration.getCcToolchainRuleLabel();
 
   public static LabelLateBoundDefault<CppConfiguration> ccHostToolchainAttribute(
       RuleDefinitionEnvironment env) {
@@ -126,6 +120,11 @@ public class CppRuleClasses {
    * A string constant for the parse_headers feature.
    */
   public static final String PARSE_HEADERS = "parse_headers";
+
+  /**
+   * A string constant for the preprocess_headers feature.
+   */
+  public static final String PREPROCESS_HEADERS = "preprocess_headers";
 
   /**
    * A string constant for the module_maps feature; this is a precondition to the layering_check and

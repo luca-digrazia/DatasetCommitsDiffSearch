@@ -231,7 +231,6 @@ public final class CcCompilationHelper {
   private String purpose = null;
   private boolean generateNoPicAction;
   private boolean generatePicAction;
-  private boolean allowCoverageInstrumentation = true;
 
   // TODO(plf): Pull out of class.
   private CcCompilationContext ccCompilationContext;
@@ -711,10 +710,6 @@ public final class CcCompilationHelper {
     return this;
   }
 
-  public void setAllowCoverageInstrumentation(boolean allowCoverageInstrumentation) {
-    this.allowCoverageInstrumentation = allowCoverageInstrumentation;
-  }
-
   /**
    * Create the C++ compile actions, and the corresponding compilation related providers.
    *
@@ -943,8 +938,6 @@ public final class CcCompilationHelper {
     ccCompilationContextBuilder.addQuoteIncludeDir(repositoryPath);
     ccCompilationContextBuilder.addQuoteIncludeDir(
         ruleContext.getConfiguration().getGenfilesFragment().getRelative(repositoryPath));
-    ccCompilationContextBuilder.addQuoteIncludeDir(
-        ruleContext.getConfiguration().getBinFragment().getRelative(repositoryPath));
 
     for (PathFragment systemIncludeDir : systemIncludeDirs) {
       ccCompilationContextBuilder.addSystemIncludeDir(systemIncludeDir);
@@ -1942,10 +1935,7 @@ public final class CcCompilationHelper {
   }
 
   /** Returns true iff code coverage is enabled for the given target. */
-  public boolean isCodeCoverageEnabled() {
-    if (!allowCoverageInstrumentation) {
-      return false;
-    }
+  private boolean isCodeCoverageEnabled() {
     if (configuration.isCodeCoverageEnabled()) {
       // If rule is matched by the instrumentation filter, enable instrumentation
       if (InstrumentedFilesCollector.shouldIncludeLocalSources(ruleContext)) {

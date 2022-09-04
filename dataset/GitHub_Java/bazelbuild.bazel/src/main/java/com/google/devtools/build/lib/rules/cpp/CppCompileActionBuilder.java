@@ -80,7 +80,6 @@ public class CppCompileActionBuilder {
   @Nullable private String actionName;
   private ImmutableList<Artifact> builtinIncludeFiles;
   private Iterable<Artifact> inputsForInvalidation = ImmutableList.of();
-  private Iterable<Artifact> additionalPrunableHeaders = ImmutableList.of();
   // New fields need to be added to the copy constructor.
 
   /**
@@ -291,7 +290,6 @@ public class CppCompileActionBuilder {
     NestedSetBuilder<Artifact> prunableHeadersBuilder = NestedSetBuilder.stableOrder();
     prunableHeadersBuilder.addTransitive(ccCompilationContext.getDeclaredIncludeSrcs());
     prunableHeadersBuilder.addTransitive(cppSemantics.getAdditionalPrunableIncludes());
-    prunableHeadersBuilder.addAll(additionalPrunableHeaders);
 
     NestedSet<Artifact> prunableHeaders = prunableHeadersBuilder.build();
 
@@ -655,14 +653,5 @@ public class CppCompileActionBuilder {
   public CppCompileActionBuilder setActionEnvironment(ActionEnvironment env) {
     this.env = env;
     return this;
-  }
-
-  public void setAdditionalPrunableHeaders(Iterable<Artifact> additionalPrunableHeaders) {
-    this.additionalPrunableHeaders = Preconditions.checkNotNull(additionalPrunableHeaders);
-  }
-
-  public boolean shouldCompileHeaders() {
-    Preconditions.checkNotNull(featureConfiguration);
-    return ccToolchain.shouldProcessHeaders(featureConfiguration);
   }
 }

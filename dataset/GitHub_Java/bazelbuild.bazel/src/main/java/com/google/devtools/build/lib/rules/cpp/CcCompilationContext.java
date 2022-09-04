@@ -522,7 +522,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
      *
      * <p>Filters out fileset directory artifacts, which are not valid inputs.
      */
-    public Builder addDeclaredIncludeSrcs(Iterable<Artifact> declaredIncludeSrcs) {
+    public Builder addDeclaredIncludeSrcs(Collection<Artifact> declaredIncludeSrcs) {
       for (Artifact source : declaredIncludeSrcs) {
         addDeclaredIncludeSrc(source);
       }
@@ -636,11 +636,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
               ImmutableList.copyOf(quoteIncludeDirs),
               ImmutableList.copyOf(systemIncludeDirs),
               ImmutableList.copyOf(defines)),
-          // TODO(b/110873917): We don't have the middle man compilation prerequisite, therefore, we
-          // use the compilation prerequisites as they were passed to the builder, i.e. we use every
-          // header instead of a middle man.
           prerequisiteStampFile == null
-              ? ImmutableSet.copyOf(compilationPrerequisites)
+              ? ImmutableSet.of()
               : ImmutableSet.of(prerequisiteStampFile),
           declaredIncludeDirs.build(),
           declaredIncludeWarnDirs.build(),
@@ -662,7 +659,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
      */
     private Artifact createMiddleman(ActionOwner owner,
         MiddlemanFactory middlemanFactory) {
-      if (middlemanFactory == null || compilationPrerequisites.isEmpty()) {
+      if (compilationPrerequisites.isEmpty()) {
         return null;
       }
 

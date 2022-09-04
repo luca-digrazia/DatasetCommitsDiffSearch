@@ -90,11 +90,14 @@ public final class CcImportRule implements RuleDefinition {
         provided by some service.
 
         <p>If alwayslink doesn't work with VS 2017 on Windows, that is due to a
-        <a href="https://github.com/bazelbuild/bazel/issues/3949">known issue</a>,
+        [known issue](https://github.com/bazelbuild/bazel/issues/3949),
         please upgrade your VS 2017 to the latest version.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("alwayslink", BOOLEAN))
-        .add(attr("data", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE).dontCheckConstraints())
+        .add(
+            attr("data", LABEL_LIST)
+                .allowedFileTypes(FileTypeSet.ANY_FILE)
+                .dontCheckConstraints())
         .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
         .build();
   }
