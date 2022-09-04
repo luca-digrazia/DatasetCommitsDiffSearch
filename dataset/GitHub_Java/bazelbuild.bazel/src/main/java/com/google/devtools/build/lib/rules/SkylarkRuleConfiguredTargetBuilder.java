@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -269,7 +270,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
     }
 
     if (!isParsed) {
-      addSimpleProviders(builder, ruleContext, loc, executable, null, null, null);
+      addSimpleProviders(builder, ruleContext, loc, executable, null, null, null, null);
     }
 
     try {
@@ -364,19 +365,18 @@ public final class SkylarkRuleConfiguredTargetBuilder {
       }
     }
 
-    addSimpleProviders(
-        builder, ruleContext, loc, executable, statelessRunfiles, dataRunfiles, defaultRunfiles);
+    addSimpleProviders(builder, ruleContext, loc, executable, statelessRunfiles, dataRunfiles,
+        defaultRunfiles, (isDefaultProvider ? provider : null));
   }
 
-  private static void addSimpleProviders(
-      RuleConfiguredTargetBuilder builder,
+  private static void addSimpleProviders(RuleConfiguredTargetBuilder builder,
       RuleContext ruleContext,
       Location loc,
       Artifact executable,
       Runfiles statelessRunfiles,
       Runfiles dataRunfiles,
-      Runfiles defaultRunfiles)
-      throws EvalException {
+      Runfiles defaultRunfiles,
+      SkylarkClassObject defaultProvider) throws EvalException {
 
     if ((statelessRunfiles != null) && (dataRunfiles != null || defaultRunfiles != null)) {
       throw new EvalException(loc, "Cannot specify the provider 'runfiles' "
@@ -414,6 +414,19 @@ public final class SkylarkRuleConfiguredTargetBuilder {
           ruleContext.getAnalysisEnvironment().getRegisteredActions());
       builder.addSkylarkDeclaredProvider(actions, loc);
     }
+
+    // Populate default provider fields and build it
+    ImmutableMap.Builder<String, Object> attrBuilder = new ImmutableMap.Builder<>();
+    // TODO: Add actual attributes that users expect to access from default providers
+    attrBuilder.put("runfiles", runfilesProvider);
+    SkylarkClassObject statelessDefaultProvider =
+        new SkylarkClassObject(
+            SkylarkRuleContext.getDefaultProvider(),
+            attrBuilder.build());
+
+    // Add the default provider
+    builder.addSkylarkDeclaredProvider(statelessDefaultProvider, (defaultProvider == null) ? loc
+        : Optional.fromNullable(defaultProvider.getCreationLocOrNull()).or(loc));
   }
 
   private static <T> T cast(String paramName, ClassObject struct, Class<T> expectedGenericType,

@@ -47,7 +47,7 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
 
   @Override
   public boolean isImmutable() {
-    return mutability().isFrozen();
+    return !mutability().isMutable();
   }
 
   @Override

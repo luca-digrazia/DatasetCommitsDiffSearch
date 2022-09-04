@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
-import com.google.devtools.build.lib.rules.java.JavaProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
@@ -431,7 +430,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     Object result = evalRuleContextCode(ruleContext, "ruleContext.attr.srcs");
     // Check for a known provider
     TransitiveInfoCollection tic1 = (TransitiveInfoCollection) ((SkylarkList) result).get(0);
-    assertNotNull(JavaProvider.getProvider(JavaSourceJarsProvider.class, tic1));
+    assertNotNull(tic1.getProvider(JavaSourceJarsProvider.class));
     // Check an unimplemented provider too
     assertNull(tic1.getProvider(SkylarkProviders.class)
         .getValue(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME));

@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.EvalException;
+import java.util.List;
 
 /**
  * A class that exposes Java common methods for proto compilation.
@@ -136,7 +137,7 @@ public class JavaProtoSkylarkCommon {
     }
   )
   // TODO(elenairina): Consider a nicer way of returning this, taking in a JavaToolchainProvider.
-  public static ImmutableList<String> getJavacOpts(
+  public static List<String> getJavacOpts(
       SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) throws EvalException {
     ConfiguredTarget javaToolchainConfigTarget =
         (ConfiguredTarget) checkNotNull(skylarkRuleContext.getAttr().getValue(javaToolchainAttr));

@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -56,10 +55,8 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     try (Mutability mutability = Mutability.create("aspect")) {
       AspectDescriptor aspectDescriptor = new AspectDescriptor(
           skylarkAspect.getAspectClass(), parameters);
-      AnalysisEnvironment analysisEnv = ruleContext.getAnalysisEnvironment();
       try {
-        skylarkRuleContext = new SkylarkRuleContext(
-            ruleContext, aspectDescriptor, analysisEnv.getSkylarkSemantics());
+        skylarkRuleContext = new SkylarkRuleContext(ruleContext, aspectDescriptor);
       } catch (EvalException e) {
         ruleContext.ruleError(e.getMessage());
         return null;
@@ -67,8 +64,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
       Environment env =
           Environment.builder(mutability)
               .setGlobals(skylarkAspect.getFuncallEnv().getGlobals())
-              .setSemantics(analysisEnv.getSkylarkSemantics())
-              .setEventHandler(analysisEnv.getEventHandler())
+              .setEventHandler(ruleContext.getAnalysisEnvironment().getEventHandler())
               .build(); // NB: loading phase functions are not available: this is analysis already,
       // so we do *not* setLoadingPhase().
       Object aspectSkylarkObject;

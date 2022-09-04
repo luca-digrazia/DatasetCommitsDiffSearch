@@ -23,45 +23,46 @@ import java.util.IdentityHashMap;
 import java.util.List;
 
 /**
- * Manages the capability to mutate an {@link Environment} and its contained Skylark objects.
+ * A Mutability is a resource associated with an {@link Environment} during an evaluation,
+ * that gives those who possess it a revokable capability to mutate this Environment and
+ * the objects created within that {@link Environment}. At the end of the evaluation,
+ * the resource is irreversibly closed, at which point the capability is revoked,
+ * and it is not possible to mutate either this {@link Environment} or these objects.
  *
- * <p>Once the {@code Environment} is done evaluating, its {@code Mutability} is irreversibly closed
- * ("frozen"). At that point, it is no longer possible to mutate either the {@code Environment} or
- * its objects. This protects each {@code Environment} from unintentional and unsafe modification.
- * Before freezing, only a single thread may use the {@code Environment}, but after freezing, any
- * number of threads may access it.
+ * <p>Evaluation in an {@link Environment} may thus mutate objects created in the same
+ * {@link Environment}, but may not mutate {@link Freezable} objects (lists, sets, dicts)
+ * created in a previous, concurrent or future {@link Environment}, and conversely,
+ * the bindings and objects in this {@link Environment} will be protected from
+ * mutation by evaluation in a different {@link Environment}.
  *
- * <p>It is illegal for an evaluation in one {@code Environment} to affect another {@code
- * Environment}, even if the second {@code Environment} has not yet been frozen.
+ * <p>In addition, a Mutability tracks which of its objects are temporarily locked from mutation.
+ * This is used to prevent modification of iterables during loops. A Freezable may be locked
+ * multiple times (e.g., nested loops over the same iterable). Locking an object does not prohibit
+ * mutating its deeply contained values, e.g. in the case of a list of lists.
  *
- * <p>A {@code Mutability} also tracks which {@link Freezable} objects in its {@code Environment}
- * are temporarily locked from mutation. This is used to prevent modification of iterables during
- * loops. A {@code Freezable} may be locked multiple times (e.g., nested loops over the same
- * iterable). Locking an object does not prohibit mutating its deeply contained values, such as in
- * the case of a list of lists.
+ * <p>Only a single thread may use the {@link Environment} and objects created within it while the
+ * Mutability is still mutable as tested by {@link #isMutable}. Once the Mutability resource
+ * is closed, the {@link Environment} and its objects are immutable and can be simultaneously used
+ * by arbitrarily many threads.
  *
- * <p>To ensure safety, {@code Mutability}s must be created using the try-with-resource style:
- * <pre>{@code
- * try (Mutability mutability = Mutability.create(fmt, ...)) { ... }
- * }</pre>
- * The general pattern is to create a {@code Mutability}, build an {@code Environment}, mutate that
- * {@code Environment} and its objects, and possibly return the result from within the {@code try}
- * block, relying on the try-with-resource construct to ensure that everything gets frozen before
- * the result is used. The only code that should create a {@code Mutability} without using
- * try-with-resource is test code that is not part of the Bazel jar.
+ * <p>The safe usage of a Mutability requires to always use try-with-resource style:
+ * <code>try (Mutability mutability = Mutability.create(fmt, ...)) { ... }</code>
+ * Thus, you can create a Mutability, build an {@link Environment}, mutate that {@link Environment}
+ * and create mutable objects as you evaluate in that {@link Environment}, and finally return the
+ * resulting {@link Environment}, at which point the resource is closed, and the {@link Environment}
+ * and the objects it contains all become immutable.
+ * (Unsafe usage is allowed only in test code that is not part of the Bazel jar.)
  */
 // TODO(bazel-team): When we start using Java 8, this safe usage pattern can be enforced
 // through the use of a higher-order function.
 public final class Mutability implements AutoCloseable, Serializable {
 
-  private boolean isFrozen;
-
+  private boolean isMutable;
   // For each locked Freezable, store all Locations where it is locked.
   // This field is set null once the Mutability is closed. This saves some
   // space, and avoids a concurrency bug from multiple Skylark modules
   // accessing the same Mutability at once.
   private IdentityHashMap<Freezable, List<Location>> lockedItems;
-
   private final String annotation; // For error reporting.
 
   /**
@@ -70,7 +71,7 @@ public final class Mutability implements AutoCloseable, Serializable {
    * describing to the user the context in which this Mutability was active.
    */
   private Mutability(String annotation) {
-    this.isFrozen = false;
+    this.isMutable = true;
     // Seems unlikely that we'll often lock more than 10 things at once.
     this.lockedItems = new IdentityHashMap<>(10);
     this.annotation = Preconditions.checkNotNull(annotation);
@@ -94,22 +95,22 @@ public final class Mutability implements AutoCloseable, Serializable {
 
   @Override
   public String toString() {
-    return String.format(isFrozen ? "(%s)" : "[%s]", annotation);
+    return String.format(isMutable ? "[%s]" : "(%s)", annotation);
   }
 
-  boolean isFrozen() {
-    return isFrozen;
+  boolean isMutable() {
+    return isMutable;
   }
 
   /**
-   * Return whether a {@link Freezable} belonging to this {@code Mutability} is currently locked.
+   * Return whether a {@link Freezable} belonging to this Mutability is currently locked.
    * Frozen objects are not considered locked, though they are of course immutable nonetheless.
    */
   public boolean isLocked(Freezable object) {
     if (!object.mutability().equals(this)) {
       throw new AssertionError("trying to check the lock of an object from a different context");
     }
-    if (isFrozen) {
+    if (!isMutable) {
       return false;
     }
     return lockedItems.containsKey(object);
@@ -135,7 +136,7 @@ public final class Mutability implements AutoCloseable, Serializable {
     if (!object.mutability().equals(this)) {
       throw new AssertionError("trying to lock an object from a different context");
     }
-    if (isFrozen) {
+    if (!isMutable) {
       return;
     }
     List<Location> locList;
@@ -157,7 +158,7 @@ public final class Mutability implements AutoCloseable, Serializable {
     if (!object.mutability().equals(this)) {
       throw new AssertionError("trying to unlock an object from a different context");
     }
-    if (isFrozen) {
+    if (!isMutable) {
       // It's okay if we somehow got frozen while there were still locked objects.
       return;
     }
@@ -182,7 +183,7 @@ public final class Mutability implements AutoCloseable, Serializable {
   public void close() {
     // No need to track per-Freezable info since everything is immutable now.
     lockedItems = null;
-    isFrozen = true;
+    isMutable = false;
   }
 
   /**
@@ -204,15 +205,15 @@ public final class Mutability implements AutoCloseable, Serializable {
   }
 
   /**
-   * Each {@code Freezable} object possesses a {@link Mutability} that determines whether the object
-   * is still mutable. All {@code Freezable} objects created in the same {@link Environment} will
-   * share the same {@code Mutability}, inherited from this {@code Environment}. Only evaluation in
-   * the same {@code Environment} is allowed to mutate these objects, and only until the
-   * {@code Mutability} is irreversibly frozen.
+   * Each {@link Freezable} object possesses a revokable Mutability attribute telling whether
+   * the object is still mutable. All {@link Freezable} objects created in the same
+   * {@link Environment} will share the same Mutability, inherited from this {@link Environment}.
+   * Only evaluation in the same {@link Environment} is allowed to mutate these objects,
+   * and only until the Mutability is irreversibly revoked.
    */
   public interface Freezable {
     /**
-     * Returns the {@link Mutability} associated with this Freezable object.
+     * Returns the {@link Mutability} capability associated with this Freezable object.
      * This should not change over the lifetime of the object.
      */
     Mutability mutability();
@@ -227,7 +228,7 @@ public final class Mutability implements AutoCloseable, Serializable {
    */
   public static void checkMutable(Freezable object, Environment env)
       throws MutabilityException {
-    if (object.mutability().isFrozen()) {
+    if (!object.mutability().isMutable()) {
       // Throw MutabilityException, not AssertionError, even if the object was from
       // another context.
       throw new MutabilityException("trying to mutate a frozen object");
