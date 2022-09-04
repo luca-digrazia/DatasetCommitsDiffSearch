@@ -57,18 +57,14 @@ public abstract class ProcessBufferProcessor implements WorkHandler<MessageEvent
         // TODO The DecodingProcessor does not need to be a EventHandler. We decided to do it like this to keep the change as small as possible for 1.0.0.
         decodingProcessor.onEvent(event, 0L, false);
 
-        if (event.isSingleMessage()) {
-            dispatchMessage(event.getMessage());
-        } else {
-            final Collection<Message> messageList = event.getMessages();
-            if (messageList == null) {
-                // skip message events which could not be decoded properly
-                return;
-            }
+        final Collection<Message> messageList = event.getMessages();
+        if (messageList == null) {
+            // skip message events which could not be decoded properly
+            return;
+        }
 
-            for (final Message message : messageList) {
-                dispatchMessage(message);
-            }
+        for (final Message message : messageList) {
+            dispatchMessage(message);
         }
     }
 
