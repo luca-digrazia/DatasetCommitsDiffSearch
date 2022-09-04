@@ -72,25 +72,21 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
     }
 
     DottedVersion iosSdkVersion = (appleOptions.iosSdkVersion != null)
-        ? DottedVersion.maybeUnwrap(appleOptions.iosSdkVersion)
-        : xcodeVersionProperties.getDefaultIosSdkVersion();
+        ? appleOptions.iosSdkVersion : xcodeVersionProperties.getDefaultIosSdkVersion();
     DottedVersion iosMinimumOsVersion = (appleOptions.iosMinimumOs != null)
-        ? DottedVersion.maybeUnwrap(appleOptions.iosMinimumOs) : iosSdkVersion;
+        ? appleOptions.iosMinimumOs : iosSdkVersion;
     DottedVersion watchosSdkVersion = (appleOptions.watchOsSdkVersion != null)
-        ? DottedVersion.maybeUnwrap(appleOptions.watchOsSdkVersion)
-        : xcodeVersionProperties.getDefaultWatchosSdkVersion();
+        ? appleOptions.watchOsSdkVersion : xcodeVersionProperties.getDefaultWatchosSdkVersion();
     DottedVersion watchosMinimumOsVersion = (appleOptions.watchosMinimumOs != null)
-        ? DottedVersion.maybeUnwrap(appleOptions.watchosMinimumOs) : watchosSdkVersion;
+        ? appleOptions.watchosMinimumOs : watchosSdkVersion;
     DottedVersion tvosSdkVersion = (appleOptions.tvOsSdkVersion != null)
-        ? DottedVersion.maybeUnwrap(appleOptions.tvOsSdkVersion)
-        : xcodeVersionProperties.getDefaultTvosSdkVersion();
+        ? appleOptions.tvOsSdkVersion : xcodeVersionProperties.getDefaultTvosSdkVersion();
     DottedVersion tvosMinimumOsVersion = (appleOptions.tvosMinimumOs != null)
-        ? DottedVersion.maybeUnwrap(appleOptions.tvosMinimumOs) : tvosSdkVersion;
+        ? appleOptions.tvosMinimumOs : tvosSdkVersion;
     DottedVersion macosSdkVersion = (appleOptions.macOsSdkVersion != null)
-        ? DottedVersion.maybeUnwrap(appleOptions.macOsSdkVersion)
-        : xcodeVersionProperties.getDefaultMacosSdkVersion();
+        ? appleOptions.macOsSdkVersion : xcodeVersionProperties.getDefaultMacosSdkVersion();
     DottedVersion macosMinimumOsVersion = (appleOptions.macosMinimumOs != null)
-        ? DottedVersion.maybeUnwrap(appleOptions.macosMinimumOs) : macosSdkVersion;
+        ? appleOptions.macosMinimumOs : macosSdkVersion;
 
     XcodeConfigProvider xcodeVersions = new XcodeConfigProvider(
         iosSdkVersion, iosMinimumOsVersion,
