@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static java.util.stream.Collectors.joining;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -146,31 +145,8 @@ public class RegisteredToolchainsFunction implements SkyFunction {
           valuesMissing = true;
           continue;
         }
-
         ConfiguredTarget target =
             ((ConfiguredTargetValue) valueOrException.get()).getConfiguredTarget();
-        if (configuration.trimConfigurationsRetroactively()
-            && !target.getConfigurationKey().getFragments().isEmpty()) {
-          // No fragment may be present on a toolchain rule in retroactive trimming mode.
-          // This is because trimming expects that platform and toolchain resolution uses only
-          // the platform configuration. In theory, this means toolchains could use platforms, but
-          // the current expectation is that toolchains should not use anything at all, so better
-          // to go with the stricter expectation for now.
-          String extraFragmentDescription =
-              target.getConfigurationKey().getFragments().stream()
-                  .map(cl -> cl.getSimpleName())
-                  .collect(joining(","));
-
-          throw new RegisteredToolchainsFunctionException(
-              new InvalidToolchainLabelException(
-                  toolchainLabel,
-                  "this toolchain uses configuration, which is forbidden in retroactive trimming "
-                      + "mode: "
-                      + "extra fragments are ["
-                      + extraFragmentDescription
-                      + "]"),
-              Transience.PERSISTENT);
-        }
         DeclaredToolchainInfo toolchainInfo = target.getProvider(DeclaredToolchainInfo.class);
 
         if (toolchainInfo == null) {
@@ -207,10 +183,6 @@ public class RegisteredToolchainsFunction implements SkyFunction {
           formatMessage(
               invalidLabel.getCanonicalForm(),
               "target does not provide the DeclaredToolchainInfo provider"));
-    }
-
-    public InvalidToolchainLabelException(Label invalidLabel, String reason) {
-      super(formatMessage(invalidLabel.getCanonicalForm(), reason));
     }
 
     public InvalidToolchainLabelException(TargetPatternUtil.InvalidTargetPatternException e) {
