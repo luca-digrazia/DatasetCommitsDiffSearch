@@ -17,18 +17,19 @@
 
 package com.tencent.angel.ml.sketchML;
 
+import com.tencent.angel.ml.math.vector.DenseDoubleVector;
 import com.tencent.angel.ml.math.vector.TDoubleVector;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public class AvgQSketch {
-
+  private static final Log LOG = LogFactory.getLog(AvgQSketch.class);
   private int size;
-  private double[] indices;
-  private int[] counts;
+  private double indices[];
 
   public AvgQSketch(int size) {
     this.size = size;
     this.indices = new double[size];
-    this.counts = new int[size];
   }
 
   public void create(TDoubleVector vec) {
@@ -47,10 +48,6 @@ public class AvgQSketch {
       indices[i] = min + (i + 1) * span;
     }
     indices[size - 1] = max;
-    for (int indice = 0; indice < vec.getDimension(); indice++) {
-      counts[indexOf(vec.get(indice))-1] ++;
-    }
-    //System.out.println("Indices: " + Arrays.toString(indices));
   }
 
   public int indexOf(double query) {
@@ -62,39 +59,20 @@ public class AvgQSketch {
         break;
       }
     }
-    return ret + 1;
-  }
-
-  public double get(int index) {
-    return indices[index - 1];
-  }
-
-  public double[] getValues() {
-    return indices;
-  }
-
-  public int[] getCounts() {
-    return counts;
-  }
-
-  public int maxCount() {
-    int ret = 0;
-    for (int count : counts) {
-      ret = Math.max(ret, count);
-    }
     return ret;
   }
 
-  public double min(){
-    return indices[0];
+  public double get(int index) {
+    return indices[index];
   }
 
-  public double max() {
-    return indices[indices.length - 1];
-  }
-
-  public int getZeroIndex() {
-    return indexOf(0.0) + 1;
+  public static void main(String[] argv) {
+    LOG.info("begin");
+    double[] vecValues = {9, 3, 1, 8, 7, 6, 2, 4, 5, 0};
+    DenseDoubleVector vec = new DenseDoubleVector(10, vecValues);
+    AvgQSketch sk = new AvgQSketch(10);
+    sk.create(vec);
+    LOG.info(sk.indexOf(9));
   }
 
 }
