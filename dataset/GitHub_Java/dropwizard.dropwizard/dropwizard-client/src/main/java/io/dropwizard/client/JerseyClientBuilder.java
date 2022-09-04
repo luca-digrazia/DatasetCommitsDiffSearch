@@ -11,7 +11,6 @@ import io.dropwizard.jersey.validation.HibernateValidationFeature;
 import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
-import javax.net.ssl.HostnameVerifier;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.config.Registry;
@@ -19,6 +18,7 @@ import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.spi.Connector;
 import org.glassfish.jersey.client.spi.ConnectorProvider;
 
 import javax.validation.Validator;
@@ -222,22 +222,6 @@ public class JerseyClientBuilder {
      */
     public JerseyClientBuilder using(DnsResolver resolver) {
         apacheHttpClientBuilder.using(resolver);
-        return this;
-    }
-
-    /**
-     * Use the given {@link HostnameVerifier} instance.
-     *
-     * Note that if {@link io.dropwizard.client.ssl.TlsConfiguration#isVerifyHostname()}
-     * returns false, all host name verification is bypassed, including
-     * host name verification performed by a verifier specified
-     * through this interface.
-     *
-     * @param verifier a {@link HostnameVerifier} instance
-     * @return {@code this}
-     */
-    public JerseyClientBuilder using(HostnameVerifier verifier) {
-        apacheHttpClientBuilder.using(verifier);
         return this;
     }
 

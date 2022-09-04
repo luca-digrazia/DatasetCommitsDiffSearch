@@ -17,10 +17,10 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.InOrder;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.lang.reflect.Method;
-
-import static org.hibernate.resource.transaction.spi.TransactionStatus.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doAnswer;
@@ -41,7 +41,7 @@ public class UnitOfWorkApplicationListenerTest {
 
     private final RequestEvent requestStartEvent = mock(RequestEvent.class);
     private final RequestEvent requestMethodStartEvent = mock(RequestEvent.class);
-    private final RequestEvent responseFinishedEvent = mock(RequestEvent.class);
+    private final RequestEvent responseFiltersStartEvent = mock(RequestEvent.class);
     private final RequestEvent requestMethodExceptionEvent = mock(RequestEvent.class);
     private final Session session = mock(Session.class);
     private final Session analyticsSession = mock(Session.class);
@@ -58,20 +58,20 @@ public class UnitOfWorkApplicationListenerTest {
         when(session.getSessionFactory()).thenReturn(sessionFactory);
         when(session.beginTransaction()).thenReturn(transaction);
         when(session.getTransaction()).thenReturn(transaction);
-        when(transaction.getStatus()).thenReturn(ACTIVE);
+        when(transaction.isActive()).thenReturn(true);
 
         when(analyticsSessionFactory.openSession()).thenReturn(analyticsSession);
         when(analyticsSession.getSessionFactory()).thenReturn(analyticsSessionFactory);
         when(analyticsSession.beginTransaction()).thenReturn(analyticsTransaction);
         when(analyticsSession.getTransaction()).thenReturn(analyticsTransaction);
-        when(analyticsTransaction.getStatus()).thenReturn(ACTIVE);
+        when(analyticsTransaction.isActive()).thenReturn(true);
 
         when(appEvent.getType()).thenReturn(ApplicationEvent.Type.INITIALIZATION_APP_FINISHED);
         when(requestMethodStartEvent.getType()).thenReturn(RequestEvent.Type.RESOURCE_METHOD_START);
-        when(responseFinishedEvent.getType()).thenReturn(RequestEvent.Type.FINISHED);
+        when(responseFiltersStartEvent.getType()).thenReturn(RequestEvent.Type.RESP_FILTERS_START);
         when(requestMethodExceptionEvent.getType()).thenReturn(RequestEvent.Type.ON_EXCEPTION);
         when(requestMethodStartEvent.getUriInfo()).thenReturn(uriInfo);
-        when(responseFinishedEvent.getUriInfo()).thenReturn(uriInfo);
+        when(responseFiltersStartEvent.getUriInfo()).thenReturn(uriInfo);
         when(requestMethodExceptionEvent.getUriInfo()).thenReturn(uriInfo);
 
         prepareAppEvent("methodWithDefaultAnnotation");
@@ -191,7 +191,7 @@ public class UnitOfWorkApplicationListenerTest {
 
     @Test
     public void doesNotCommitAnInactiveTransaction() throws Exception {
-        when(transaction.getStatus()).thenReturn(NOT_ACTIVE);
+        when(transaction.isActive()).thenReturn(false);
 
         execute();
 
@@ -209,7 +209,7 @@ public class UnitOfWorkApplicationListenerTest {
 
     @Test
     public void doesNotRollbackAnInactiveTransaction() throws Exception {
-        when(transaction.getStatus()).thenReturn(NOT_ACTIVE);
+        when(transaction.isActive()).thenReturn(false);
 
         executeWithException();
 
@@ -281,7 +281,7 @@ public class UnitOfWorkApplicationListenerTest {
         listener.onEvent(appEvent);
         RequestEventListener requestListener = listener.onRequest(requestStartEvent);
         requestListener.onEvent(requestMethodStartEvent);
-        requestListener.onEvent(responseFinishedEvent);
+        requestListener.onEvent(responseFiltersStartEvent);
     }
 
     private void executeWithException() {

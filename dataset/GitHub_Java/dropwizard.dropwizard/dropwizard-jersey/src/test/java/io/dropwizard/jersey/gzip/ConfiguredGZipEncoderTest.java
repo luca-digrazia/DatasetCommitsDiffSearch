@@ -1,15 +1,5 @@
 package io.dropwizard.jersey.gzip;
 
-import org.junit.jupiter.api.Test;
-
-import javax.annotation.Nullable;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.client.ClientRequestContext;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.ext.WriterInterceptorContext;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
@@ -17,13 +7,27 @@ import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.zip.GZIPOutputStream;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.client.ClientRequestContext;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.ext.WriterInterceptorContext;
+
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.core.MultivaluedHashMap;
+
+import org.junit.Test;
+
+import static org.junit.Assert.*;
+import static org.hamcrest.CoreMatchers.*;
+
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+
 public class ConfiguredGZipEncoderTest {
     @Test
-    void gzipParametersSpec() throws IOException {
+    public void gzipParametersSpec() throws IOException {
         ClientRequestContext context = mock(ClientRequestContext.class);
         MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
         when(context.getHeaders()).thenReturn(headers);
@@ -32,47 +36,55 @@ public class ConfiguredGZipEncoderTest {
 
         new ConfiguredGZipEncoder(true).filter(context);
 
-        assertThat(headers.getFirst(HttpHeaders.CONTENT_ENCODING).toString()).isEqualTo("gzip");
+        assertThat(headers.getFirst(HttpHeaders.CONTENT_ENCODING).toString(), is("gzip"));
     }
 
     @Test
-    void aroundWriteToSpec() throws IOException, WebApplicationException {
+    public void aroundWriteToSpec() throws IOException, WebApplicationException {
         MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
         headers.add(HttpHeaders.CONTENT_ENCODING, "gzip");
         WriterInterceptorContextMock context = new WriterInterceptorContextMock(headers);
         new ConfiguredGZipEncoder(true).aroundWriteTo(context);
-        assertThat(context.getOutputStream()).isInstanceOf(GZIPOutputStream.class);
-        assertThat(context.isProceedCalled()).isTrue();
+        assertThat(context.getOutputStream(), is(instanceOf(GZIPOutputStream.class)));
+        assertThat(context.isProceedCalled(), is(true));
     }
     @Test
-    void aroundWriteToSpecX_GZip() throws IOException, WebApplicationException {
+    public void aroundWriteToSpecX_GZip() throws IOException, WebApplicationException {
         MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
         headers.add(HttpHeaders.CONTENT_ENCODING, "x-gzip");
         WriterInterceptorContextMock context = new WriterInterceptorContextMock(headers);
         new ConfiguredGZipEncoder(true).aroundWriteTo(context);
-        assertThat(context.getOutputStream()).isInstanceOf(GZIPOutputStream.class);
-        assertThat(context.isProceedCalled()).isTrue();
+        assertThat(context.getOutputStream(), is(instanceOf(GZIPOutputStream.class)));
+        assertThat(context.isProceedCalled(), is(true));
     }
     @Test
-    void otherEncodingWillNotAroundWrite() throws IOException, WebApplicationException {
+    public void otherEncodingWillNotAroundWrite() throws IOException, WebApplicationException {
         MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
         headers.add(HttpHeaders.CONTENT_ENCODING, "someOtherEnc");
         WriterInterceptorContextMock context = new WriterInterceptorContextMock(headers);
         new ConfiguredGZipEncoder(true).aroundWriteTo(context);
-        assertThat(context.getOutputStream()).isNotInstanceOf(GZIPOutputStream.class);
-        assertThat(context.isProceedCalled()).isTrue();
+        assertThat(context.getOutputStream(), is(not(instanceOf(GZIPOutputStream.class))));
+        assertThat(context.isProceedCalled(), is(true));
     }
     @Test
-    void noEncodingwillNotAroundWrite() throws IOException, WebApplicationException {
+    public void noEncodingwillNotAroundWrite() throws IOException, WebApplicationException {
         MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
         headers.add(HttpHeaders.CONTENT_ENCODING, null);
         WriterInterceptorContextMock context = new WriterInterceptorContextMock(headers);
         new ConfiguredGZipEncoder(true).aroundWriteTo(context);
-        assertThat(context.getOutputStream()).isNotInstanceOf(GZIPOutputStream.class);
-        assertThat(context.isProceedCalled()).isTrue();
+        assertThat(context.getOutputStream(), is(not(instanceOf(GZIPOutputStream.class))));
+        assertThat(context.isProceedCalled(), is(true));
     }
 
-    private static class WriterInterceptorContextMock implements WriterInterceptorContext {
+
+    @Test(expected = NullPointerException.class)
+    public void contextMayNotBeNull() throws IOException {
+        ClientRequestContext context = null;
+        new ConfiguredGZipEncoder(false).filter(context);
+    }
+
+
+    private class WriterInterceptorContextMock implements WriterInterceptorContext {
         private final MultivaluedMap<String, Object> headers;
         private OutputStream os = new OutputStream() {
             @Override
@@ -88,11 +100,10 @@ public class ConfiguredGZipEncoderTest {
 
         @Override
         public void proceed() throws IOException, WebApplicationException {
-            proceedCalled = true;
+            proceedCalled=true;
         }
 
         @Override
-        @Nullable
         public Object getEntity() {
             return null;
         }
@@ -118,13 +129,11 @@ public class ConfiguredGZipEncoderTest {
         }
 
         @Override
-        @Nullable
         public Object getProperty(String name) {
             return null;
         }
 
         @Override
-        @Nullable
         public Collection<String> getPropertyNames() {
             return null;
         }
@@ -150,7 +159,6 @@ public class ConfiguredGZipEncoderTest {
         }
 
         @Override
-        @Nullable
         public Class<?> getType() {
             return null;
         }
@@ -161,7 +169,6 @@ public class ConfiguredGZipEncoderTest {
         }
 
         @Override
-        @Nullable
         public Type getGenericType() {
             return null;
         }
@@ -172,7 +179,6 @@ public class ConfiguredGZipEncoderTest {
         }
 
         @Override
-        @Nullable
         public MediaType getMediaType() {
             return null;
         }

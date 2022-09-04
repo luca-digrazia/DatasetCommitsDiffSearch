@@ -3,19 +3,17 @@ package io.dropwizard.jersey.jackson;
 import com.fasterxml.jackson.annotation.JsonIgnoreType;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.reflect.TypeToken;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.validation.Validated;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.hibernate.validator.constraints.NotEmpty;
+import org.junit.Before;
+import org.junit.Test;
 
-import javax.annotation.Nullable;
 import javax.validation.Valid;
 import javax.validation.constraints.Min;
-import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
-import javax.validation.groups.Default;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedHashMap;
@@ -24,9 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -35,13 +31,14 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
-import static org.assertj.core.api.Assumptions.assumeThat;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assume.assumeThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"serial", "unchecked"})
 public class JacksonMessageBodyProviderTest {
     private static final Annotation[] NONE = new Annotation[0];
 
@@ -72,14 +69,11 @@ public class JacksonMessageBodyProviderTest {
         @NotEmpty
         @Valid
         @JsonProperty
-        public List<Example> examples = Collections.emptyList();
+        public List<Example> examples;
     }
 
-    public interface Partial1 {
-    }
-
-    public interface Partial2 extends Default {
-    }
+    public interface Partial1{}
+    public interface Partial2{}
 
     public static class PartialExample {
         @Min(value = 0, groups = Partial1.class)
@@ -87,7 +81,6 @@ public class JacksonMessageBodyProviderTest {
         public int id;
 
         @NotNull(groups = Partial2.class)
-        @Nullable
         @JsonProperty
         public String text;
     }
@@ -106,9 +99,9 @@ public class JacksonMessageBodyProviderTest {
     private final JacksonMessageBodyProvider provider =
             new JacksonMessageBodyProvider(mapper);
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
-        assumeThat(Locale.getDefault().getLanguage()).isEqualTo("en");
+        assumeThat(Locale.getDefault().getLanguage(), is("en"));
     }
 
     @Test
@@ -155,7 +148,7 @@ public class JacksonMessageBodyProviderTest {
 
     @Test
     public void deserializesRequestEntities() throws Exception {
-        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1}".getBytes(StandardCharsets.UTF_8));
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1}".getBytes());
         final Class<?> klass = Example.class;
 
         final Object obj = provider.readFrom((Class<Object>) klass,
@@ -178,7 +171,7 @@ public class JacksonMessageBodyProviderTest {
         doReturn(Validated.class).when(valid).annotationType();
         when(valid.value()).thenReturn(new Class<?>[]{Partial1.class, Partial2.class});
 
-        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1,\"text\":\"hello Cemo\"}".getBytes(StandardCharsets.UTF_8));
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1,\"text\":\"hello Cemo\"}".getBytes());
         final Class<?> klass = PartialExample.class;
 
         final Object obj = provider.readFrom((Class<Object>) klass,
@@ -201,7 +194,7 @@ public class JacksonMessageBodyProviderTest {
         doReturn(Validated.class).when(valid).annotationType();
         when(valid.value()).thenReturn(new Class<?>[]{Partial1.class});
 
-        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1}".getBytes(StandardCharsets.UTF_8));
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1}".getBytes());
         final Class<?> klass = PartialExample.class;
 
         final Object obj = provider.readFrom((Class<Object>) klass,
@@ -220,7 +213,7 @@ public class JacksonMessageBodyProviderTest {
 
     @Test
     public void throwsAJsonProcessingExceptionForMalformedRequestEntities() throws Exception {
-        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":-1d".getBytes(StandardCharsets.UTF_8));
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":-1d".getBytes());
 
         try {
             final Class<?> klass = Example.class;
@@ -234,7 +227,7 @@ public class JacksonMessageBodyProviderTest {
         } catch (JsonProcessingException e) {
             assertThat(e.getMessage())
                     .startsWith("Unexpected character ('d' (code 100)): " +
-                                        "was expecting comma to separate Object entries\n");
+                                        "was expecting comma to separate OBJECT entries\n");
         }
     }
 
@@ -260,39 +253,40 @@ public class JacksonMessageBodyProviderTest {
     @Test
     public void returnsValidatedCollectionRequestEntities() throws Exception {
         testValidatedCollectionType(Collection.class,
-            new TypeReference<Collection<Example>>() {
-            }.getType());
+                new TypeToken<Collection<Example>>() {}.getType());
     }
 
     @Test
     public void returnsValidatedSetRequestEntities() throws Exception {
         testValidatedCollectionType(Set.class,
-            new TypeReference<Set<Example>>() {
-            }.getType());
+                new TypeToken<Set<Example>>() {}.getType());
     }
 
     @Test
     public void returnsValidatedListRequestEntities() throws Exception {
         testValidatedCollectionType(List.class,
-            new TypeReference<List<Example>>() {
-            }.getType());
+                new TypeToken<List<Example>>() {}.getType());
     }
 
     private void testValidatedCollectionType(Class<?> klass, Type type) throws IOException {
         final Annotation valid = mock(Annotation.class);
         doReturn(Valid.class).when(valid).annotationType();
 
-        final ByteArrayInputStream entity = new ByteArrayInputStream("[{\"id\":1}, {\"id\":2}]".getBytes(StandardCharsets.UTF_8));
+        final ByteArrayInputStream entity = new ByteArrayInputStream("[{\"id\":1}, {\"id\":2}]".getBytes());
 
         final Object obj = provider.readFrom((Class<Object>) klass,
-            type,
-            new Annotation[]{valid},
-            MediaType.APPLICATION_JSON_TYPE,
-            new MultivaluedHashMap<>(),
-            entity);
+                type,
+                new Annotation[]{ valid },
+                MediaType.APPLICATION_JSON_TYPE,
+                new MultivaluedHashMap<>(),
+                entity);
 
-        assertThat(obj).isInstanceOf(klass);
-        assertThat((Iterable<Example>) obj).extracting(item -> item.id).contains(1 , 2);
+        assertThat(obj)
+                .isInstanceOf(klass);
+
+        Iterator<Example> iterator = ((Iterable<Example>)obj).iterator();
+        assertThat(iterator.next().id).isEqualTo(1);
+        assertThat(iterator.next().id).isEqualTo(2);
     }
 
 }

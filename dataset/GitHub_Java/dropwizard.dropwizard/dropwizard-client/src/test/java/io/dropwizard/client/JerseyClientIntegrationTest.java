@@ -3,12 +3,14 @@ package io.dropwizard.client;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Optional;
 import com.google.common.io.CharStreams;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.dropwizard.jackson.Jackson;
-import org.glassfish.jersey.logging.LoggingFeature;
+import org.glassfish.jersey.filter.LoggingFilter;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,7 +25,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.GZIPInputStream;
@@ -296,7 +297,7 @@ public class JerseyClientIntegrationTest {
         String uri = "http://127.0.0.1:" + httpServer.getAddress().getPort() + "/test";
 
         WebTarget target = jersey.target(uri);
-        target.register(new LoggingFeature());
+        target.register(new LoggingFilter());
         String firstResponse = target.request()
                 .buildGet()
                 .invoke()

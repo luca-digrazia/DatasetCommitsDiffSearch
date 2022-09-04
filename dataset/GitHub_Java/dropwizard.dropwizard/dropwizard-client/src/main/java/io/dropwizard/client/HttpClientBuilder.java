@@ -41,6 +41,7 @@ import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.protocol.HttpContext;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -240,19 +241,6 @@ public class HttpClientBuilder {
     }
 
     /**
-     * Configures an Apache {@link org.apache.http.impl.client.HttpClientBuilder HttpClientBuilder}.
-     *
-     * Intended for use by subclasses to inject HttpClientBuilder
-     * configuration. The default implementation is an identity
-     * function.
-     */
-    protected org.apache.http.impl.client.HttpClientBuilder customizeBuilder(
-        org.apache.http.impl.client.HttpClientBuilder builder
-    ) {
-        return builder;
-    }
-
-    /**
      * Map the parameters in {@link HttpClientConfiguration} to configuration on a
      * {@link org.apache.http.impl.client.HttpClientBuilder} instance
      *
@@ -289,8 +277,7 @@ public class HttpClientBuilder {
                 .setSoTimeout(timeout)
                 .build();
 
-        customizeBuilder(builder)
-                .setRequestExecutor(new InstrumentedHttpRequestExecutor(metricRegistry, metricNameStrategy, name))
+        builder.setRequestExecutor(new InstrumentedHttpRequestExecutor(metricRegistry, metricNameStrategy, name))
                 .setConnectionManager(manager)
                 .setDefaultRequestConfig(requestConfig)
                 .setDefaultSocketConfig(socketConfig)
@@ -358,7 +345,7 @@ public class HttpClientBuilder {
      */
     protected String createUserAgent(String name) {
         final String defaultUserAgent = environmentName == null ? name : String.format("%s (%s)", environmentName, name);
-        return configuration.getUserAgent().orElse(defaultUserAgent);
+        return configuration.getUserAgent().or(defaultUserAgent);
     }
 
 

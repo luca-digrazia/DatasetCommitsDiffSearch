@@ -1,7 +1,6 @@
 package io.dropwizard.setup;
 
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.health.HealthCheckRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -85,8 +84,6 @@ public class Environment {
                 .threadFactory(new ThreadFactoryBuilder().setDaemon(true).build())
                 .rejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy())
                 .build();
-
-        SharedMetricRegistries.add("default", metricRegistry);
     }
 
     /**

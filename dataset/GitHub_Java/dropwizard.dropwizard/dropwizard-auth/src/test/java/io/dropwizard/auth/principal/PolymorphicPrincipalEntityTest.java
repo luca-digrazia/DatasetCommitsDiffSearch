@@ -1,33 +1,32 @@
 package io.dropwizard.auth.principal;
 
-import io.dropwizard.auth.AbstractAuthResourceConfig;
-import io.dropwizard.auth.Authenticator;
-import io.dropwizard.auth.PolymorphicAuthDynamicFeature;
-import io.dropwizard.auth.PolymorphicAuthValueFactoryProvider;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import io.dropwizard.auth.*;
 import io.dropwizard.auth.basic.BasicCredentialAuthFilter;
 import io.dropwizard.auth.basic.BasicCredentials;
 import io.dropwizard.logging.BootstrapLogging;
-import io.dropwizard.util.Maps;
-import io.dropwizard.util.Sets;
-import org.glassfish.jersey.internal.inject.AbstractBinder;
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.servlet.ServletProperties;
 import org.glassfish.jersey.test.DeploymentContext;
 import org.glassfish.jersey.test.JerseyTest;
 import org.glassfish.jersey.test.ServletDeploymentContext;
 import org.glassfish.jersey.test.TestProperties;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
+import java.io.IOException;
 import java.security.Principal;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 /**
  * Testing that polymorphic principal entity injection works.
@@ -40,18 +39,6 @@ public class PolymorphicPrincipalEntityTest extends JerseyTest {
 
     static {
         BootstrapLogging.bootstrap();
-    }
-
-    @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
-    }
-
-    @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
     }
 
     @Override
@@ -84,7 +71,7 @@ public class PolymorphicPrincipalEntityTest extends JerseyTest {
 
         @Override protected AbstractBinder getAuthBinder() {
             return new PolymorphicAuthValueFactoryProvider.Binder<>(
-                Sets.of(JsonPrincipal.class, NullPrincipal.class));
+                ImmutableSet.of(JsonPrincipal.class, NullPrincipal.class));
         }
 
         @Override protected DynamicFeature getAuthDynamicFeature(ContainerRequestFilter authFilter) {
@@ -104,15 +91,15 @@ public class PolymorphicPrincipalEntityTest extends JerseyTest {
                 }
             };
 
-            final BasicCredentialAuthFilter<?> jsonAuthFilter = new BasicCredentialAuthFilter.Builder<JsonPrincipal>()
+            final BasicCredentialAuthFilter jsonAuthFilter = new BasicCredentialAuthFilter.Builder<JsonPrincipal>()
                 .setAuthenticator(jsonAuthenticator)
                 .buildAuthFilter();
 
-            final BasicCredentialAuthFilter<?> nullAuthFilter = new BasicCredentialAuthFilter.Builder<NullPrincipal>()
+            final BasicCredentialAuthFilter nullAuthFilter = new BasicCredentialAuthFilter.Builder<NullPrincipal>()
                 .setAuthenticator(nullAuthenticator)
                 .buildAuthFilter();
 
-            return new PolymorphicAuthDynamicFeature<>(Maps.of(
+            return new PolymorphicAuthDynamicFeature<Principal>(ImmutableMap.of(
                 JsonPrincipal.class, jsonAuthFilter,
                 NullPrincipal.class, nullAuthFilter
             ));
@@ -120,7 +107,7 @@ public class PolymorphicPrincipalEntityTest extends JerseyTest {
     }
 
     @Test
-    void jsonPrincipalEntityResourceAuth200() {
+    public void jsonPrincipalEntityResourceAuth200() {
         assertThat(target("/auth-test/json-principal-entity").request()
                    .header(HttpHeaders.AUTHORIZATION, "Basic " + JSON_USERNAME_ENCODED_TOKEN)
                    .get(String.class))
@@ -128,14 +115,17 @@ public class PolymorphicPrincipalEntityTest extends JerseyTest {
     }
 
     @Test
-    void jsonPrincipalEntityResourceNoAuth401() {
-        assertThatExceptionOfType(WebApplicationException.class)
-            .isThrownBy(() -> target("/auth-test/json-principal-entity").request().get(String.class))
-            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(401));
+    public void jsonPrincipalEntityResourceNoAuth401() {
+        try {
+          target("/auth-test/json-principal-entity").request().get(String.class);
+          failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
+            assertThat(e.getResponse().getStatus()).isEqualTo(401);
+        }
     }
 
     @Test
-    void nullPrincipalEntityResourceAuth200() {
+    public void nullPrincipalEntityResourceAuth200() {
         assertThat(target("/auth-test/null-principal-entity").request()
                 .header(HttpHeaders.AUTHORIZATION, "Basic " + NULL_USERNAME_ENCODED_TOKEN)
                 .get(String.class))
@@ -143,40 +133,12 @@ public class PolymorphicPrincipalEntityTest extends JerseyTest {
     }
 
     @Test
-    void nullPrincipalEntityResourceNoAuth401() {
-        assertThatExceptionOfType(WebApplicationException.class)
-            .isThrownBy(() -> target("/auth-test/null-principal-entity").request().get(String.class))
-            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(401));
-    }
-
-    @Test
-    void resourceWithValidOptionalAuthentication200() {
-        assertThat(target("/auth-test/optional").request()
-            .header(HttpHeaders.AUTHORIZATION, "Basic " + NULL_USERNAME_ENCODED_TOKEN)
-            .get(String.class))
-            .isEqualTo("principal was present");
-    }
-
-    @Test
-    void resourceWithInvalidOptionalAuthentication200() {
-        assertThat(target("/auth-test/optional").request()
-            .header(HttpHeaders.AUTHORIZATION, "Basic cats")
-            .get(String.class))
-            .isEqualTo("principal was not present");
-    }
-
-    @Test
-    void resourceWithoutOptionalAuthentication200() {
-        assertThat(target("/auth-test/optional").request()
-            .get(String.class))
-            .isEqualTo("principal was not present");
-    }
-
-    @Test
-    void resourceWithDifferentOptionalAuthentication200() {
-        assertThat(target("/auth-test/optional").request()
-            .header(HttpHeaders.AUTHORIZATION, "Basic " + JSON_USERNAME_ENCODED_TOKEN)
-            .get(String.class))
-            .isEqualTo("principal was not present");
+    public void nullPrincipalEntityResourceNoAuth401() {
+        try {
+          target("/auth-test/null-principal-entity").request().get(String.class);
+          failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
+            assertThat(e.getResponse().getStatus()).isEqualTo(401);
+        }
     }
 }
