@@ -70,9 +70,11 @@ public class CppCompileActionBuilder {
   private boolean usePic;
   private boolean allowUsingHeaderModules;
   private UUID actionClassId = GUID;
+  private Class<? extends CppCompileActionContext> actionContext;
   private CppConfiguration cppConfiguration;
   private ImmutableMap<Artifact, IncludeScannable> lipoScannableMap;
-  private final ImmutableList.Builder<Artifact> additionalIncludeScanningRoots;
+  private final ImmutableList.Builder<Artifact> additionalIncludeFiles =
+      new ImmutableList.Builder<>();
   private Boolean shouldScanIncludes;
   private Map<String, String> executionInfo = new LinkedHashMap<>();
   private Map<String, String> environment = new LinkedHashMap<>();
@@ -119,11 +121,25 @@ public class CppCompileActionBuilder {
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
     this.lipoScannableMap = ImmutableMap.copyOf(lipoScannableMap);
     this.mandatoryInputsBuilder = NestedSetBuilder.stableOrder();
-    this.additionalIncludeScanningRoots = new ImmutableList.Builder<>();
     this.allowUsingHeaderModules = true;
     this.localShellEnvironment = configuration.getLocalShellEnvironment();
     this.codeCoverageEnabled = configuration.isCodeCoverageEnabled();
+    this.actionContext = CppCompileActionContext.class;
     this.ccToolchain = ccToolchain;
+  }
+
+  private static ImmutableMap<Artifact, IncludeScannable> getLipoScannableMap(
+      RuleContext ruleContext, CcToolchainProvider toolchain) {
+    if (!CppHelper.isLipoOptimization(ruleContext.getFragment(CppConfiguration.class), toolchain)
+        // Rules that do not contain sources that are compiled into object files, but may
+        // contain headers, will still create CppCompileActions without providing a
+        // lipo_context_collector.
+        || ruleContext.attributes().getAttributeDefinition(":lipo_context_collector") == null) {
+      return ImmutableMap.<Artifact, IncludeScannable>of();
+    }
+    LipoContextProvider provider = ruleContext.getPrerequisite(
+        ":lipo_context_collector", Mode.DONT_CHECK, LipoContextProvider.class);
+    return provider.getIncludeScannables();
   }
 
   /**
@@ -135,8 +151,6 @@ public class CppCompileActionBuilder {
     this.sourceFile = other.sourceFile;
     this.mandatoryInputsBuilder = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(other.mandatoryInputsBuilder.build());
-    this.additionalIncludeScanningRoots =
-        new ImmutableList.Builder<Artifact>().addAll(other.additionalIncludeScanningRoots.build());
     this.optionalSourceFile = other.optionalSourceFile;
     this.outputFile = other.outputFile;
     this.dwoFile = other.dwoFile;
@@ -149,6 +163,7 @@ public class CppCompileActionBuilder {
     this.coptsFilter = other.coptsFilter;
     this.extraSystemIncludePrefixes = ImmutableList.copyOf(other.extraSystemIncludePrefixes);
     this.actionClassId = other.actionClassId;
+    this.actionContext = other.actionContext;
     this.cppConfiguration = other.cppConfiguration;
     this.configuration = other.configuration;
     this.usePic = other.usePic;
@@ -162,26 +177,6 @@ public class CppCompileActionBuilder {
     this.cppSemantics = other.cppSemantics;
     this.ccToolchain = other.ccToolchain;
     this.actionName = other.actionName;
-  }
-
-  private static ImmutableMap<Artifact, IncludeScannable> getLipoScannableMap(
-      RuleContext ruleContext, CcToolchainProvider toolchain) {
-    if (!CppHelper.isLipoOptimization(ruleContext.getFragment(CppConfiguration.class), toolchain)
-        // Rules that do not contain sources that are compiled into object files, but may
-        // contain headers, will still create CppCompileActions without providing a
-        // lipo_context_collector.
-        || ruleContext
-                .attributes()
-                .getAttributeDefinition(TransitiveLipoInfoProvider.LIPO_CONTEXT_COLLECTOR)
-            == null) {
-      return ImmutableMap.<Artifact, IncludeScannable>of();
-    }
-    LipoContextProvider provider =
-        ruleContext.getPrerequisite(
-            TransitiveLipoInfoProvider.LIPO_CONTEXT_COLLECTOR,
-            Mode.DONT_CHECK,
-            LipoContextProvider.class);
-    return provider.getIncludeScannables();
   }
 
   public PathFragment getTempOutputFile() {
@@ -361,14 +356,12 @@ public class CppCompileActionBuilder {
               owner,
               allInputs,
               featureConfiguration,
-              cppConfiguration.getCrosstoolTopPathFragment(),
               variables,
               sourceFile,
               shouldScanIncludes,
               shouldPruneModules(),
               usePic,
               useHeaderModules,
-              cppConfiguration.isStrictSystemIncludes(),
               realMandatoryInputs,
               getBuiltinIncludeFiles(),
               prunableInputs,
@@ -376,7 +369,9 @@ public class CppCompileActionBuilder {
               tempOutputFile,
               dotdFile,
               localShellEnvironment,
+              cppConfiguration,
               context,
+              actionContext,
               coptsFilter,
               getLipoScannables(realMandatoryInputs),
               cppSemantics,
@@ -388,14 +383,12 @@ public class CppCompileActionBuilder {
               owner,
               allInputs,
               featureConfiguration,
-              cppConfiguration.getCrosstoolTopPathFragment(),
               variables,
               sourceFile,
               shouldScanIncludes,
               shouldPruneModules(),
               usePic,
               useHeaderModules,
-              cppConfiguration.isStrictSystemIncludes(),
               realMandatoryInputs,
               getBuiltinIncludeFiles(),
               prunableInputs,
@@ -406,10 +399,12 @@ public class CppCompileActionBuilder {
               ltoIndexingFile,
               optionalSourceFile,
               localShellEnvironment,
+              cppConfiguration,
               context,
+              actionContext,
               coptsFilter,
               getLipoScannables(realMandatoryInputs),
-              additionalIncludeScanningRoots.build(),
+              additionalIncludeFiles.build(),
               actionClassId,
               ImmutableMap.copyOf(executionInfo),
               ImmutableMap.copyOf(environment),
@@ -545,6 +540,12 @@ public class CppCompileActionBuilder {
     return this;
   }
 
+  public CppCompileActionBuilder setActionContext(
+      Class<? extends CppCompileActionContext> actionContext) {
+    this.actionContext = actionContext;
+    return this;
+  }
+
   public CppCompileActionBuilder setActionClassId(UUID uuid) {
     this.actionClassId = uuid;
     return this;
@@ -571,9 +572,8 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  public CppCompileActionBuilder addAdditionalIncludeScanningRoots(
-      Iterable<Artifact> additionalIncludeScanningRoots) {
-    this.additionalIncludeScanningRoots.addAll(additionalIncludeScanningRoots);
+  public CppCompileActionBuilder addAdditionalIncludes(List<Artifact> includes) {
+    additionalIncludeFiles.addAll(includes);
     return this;
   }
 

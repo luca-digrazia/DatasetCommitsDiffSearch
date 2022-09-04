@@ -21,6 +21,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -53,6 +54,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -298,13 +300,15 @@ public final class CppModel {
   }
 
   /**
-   * Adds a single source file to be compiled. Note that this should only be called for primary
-   * compilation units, including module files or headers to be parsed or preprocessed.
+   * Adds a single source file to be compiled. The given build variables will be added to those used
+   * to compile this source file. Note that this should only be called for primary compilation
+   * units, including module files or headers to be parsed or preprocessed.
    */
   public CppModel addCompilationUnitSources(
-      Iterable<Artifact> sourceFiles, Label sourceLabel, CppSource.Type type) {
+      Iterable<Artifact> sourceFiles, Label sourceLabel, Map<String, String> buildVariables,
+      CppSource.Type type) {
     for (Artifact sourceFile : sourceFiles) {
-      this.sourceFiles.add(CppSource.create(sourceFile, sourceLabel, type));
+      this.sourceFiles.add(CppSource.create(sourceFile, sourceLabel, buildVariables, type));
     }
     return this;
   }
@@ -520,7 +524,8 @@ public final class CppModel {
       Artifact gcnoFile,
       Artifact dwoFile,
       Artifact ltoIndexingFile,
-      CppModuleMap cppModuleMap) {
+      CppModuleMap cppModuleMap,
+      Map<String, String> sourceSpecificBuildVariables) {
     CcToolchainFeatures.Variables.Builder buildVariables =
         new CcToolchainFeatures.Variables.Builder(ccToolchain.getBuildVariables());
 
@@ -645,6 +650,8 @@ public final class CppModel {
           LTO_INDEXING_BITCODE_FILE_VARIABLE_NAME, ltoIndexingFile.getExecPathString());
     }
 
+    buildVariables.addAllStringVariables(sourceSpecificBuildVariables);
+
     for (VariablesExtension extension : variablesExtensions) {
       extension.addVariables(buildVariables);
     }
@@ -737,7 +744,8 @@ public final class CppModel {
                 // info). In that case the LtoBackendAction will generate the dwo.
                 /* generateDwo= */ CppHelper.useFission(cppConfiguration, ccToolchain)
                     && !bitcodeOutput,
-                isGenerateDotdFile(sourceArtifact));
+                isGenerateDotdFile(sourceArtifact),
+                source.getBuildVariables());
             break;
         }
       } else {
@@ -793,7 +801,8 @@ public final class CppModel {
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        builder.getContext().getCppModuleMap());
+        builder.getContext().getCppModuleMap(),
+        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     CppCompileAction compileAction = builder.buildOrThrowRuleError(ruleContext);
     env.registerAction(compileAction);
@@ -847,7 +856,8 @@ public final class CppModel {
         gcnoFile,
         dwoFile,
         /* ltoIndexingFile= */ null,
-        builder.getContext().getCppModuleMap());
+        builder.getContext().getCppModuleMap(),
+        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
 
     builder.setGcnoFile(gcnoFile);
     builder.setDwoFile(dwoFile);
@@ -887,7 +897,8 @@ public final class CppModel {
         /* addObject= */ false,
         /* enableCoverage= */ false,
         /* generateDwo= */ false,
-        isGenerateDotdFile(moduleMapArtifact));
+        isGenerateDotdFile(moduleMapArtifact),
+        ImmutableMap.of());
   }
 
   private void createClifMatchAction(
@@ -914,7 +925,8 @@ public final class CppModel {
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        builder.getContext().getCppModuleMap());
+        builder.getContext().getCppModuleMap(),
+        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     CppCompileAction compileAction = builder.buildOrThrowRuleError(ruleContext);
     env.registerAction(compileAction);
@@ -934,7 +946,8 @@ public final class CppModel {
       boolean addObject,
       boolean enableCoverage,
       boolean generateDwo,
-      boolean generateDotd)
+      boolean generateDotd,
+      Map<String, String> sourceSpecificBuildVariables)
       throws RuleErrorException {
     ImmutableList.Builder<Artifact> directOutputs = new ImmutableList.Builder<>();
     PathFragment ccRelativeName = sourceArtifact.getRootRelativePath();
@@ -993,7 +1006,8 @@ public final class CppModel {
             gcnoFile,
             dwoFile,
             ltoIndexingFile,
-            cppModuleMap);
+            cppModuleMap,
+            sourceSpecificBuildVariables);
 
         if (maySaveTemps) {
           result.addTemps(
@@ -1060,7 +1074,8 @@ public final class CppModel {
             gcnoFile,
             noPicDwoFile,
             ltoIndexingFile,
-            cppModuleMap);
+            cppModuleMap,
+            sourceSpecificBuildVariables);
 
         if (maySaveTemps) {
           result.addTemps(
@@ -1117,7 +1132,8 @@ public final class CppModel {
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        builder.getContext().getCppModuleMap());
+        builder.getContext().getCppModuleMap(),
+        source.getBuildVariables());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     // Make sure this builder doesn't reference ruleContext outside of analysis phase.
     CppCompileActionTemplate actionTemplate =
@@ -1174,7 +1190,8 @@ public final class CppModel {
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        builder.getContext().getCppModuleMap());
+        builder.getContext().getCppModuleMap(),
+        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     CppCompileAction action = builder.buildOrThrowRuleError(ruleContext);
     env.registerAction(action);
@@ -1564,7 +1581,8 @@ public final class CppModel {
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        builder.getContext().getCppModuleMap());
+        builder.getContext().getCppModuleMap(),
+        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(ruleContext, dBuilder);
     CppCompileAction dAction = dBuilder.buildOrThrowRuleError(ruleContext);
     ruleContext.registerAction(dAction);
@@ -1581,7 +1599,8 @@ public final class CppModel {
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        builder.getContext().getCppModuleMap());
+        builder.getContext().getCppModuleMap(),
+        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(ruleContext, sdBuilder);
     CppCompileAction sdAction = sdBuilder.buildOrThrowRuleError(ruleContext);
     ruleContext.registerAction(sdAction);
