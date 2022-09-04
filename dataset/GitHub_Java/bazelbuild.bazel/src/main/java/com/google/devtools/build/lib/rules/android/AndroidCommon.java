@@ -625,7 +625,8 @@ public class AndroidCommon {
     nativeHeaderOutput = helper.createNativeHeaderJar(classJar);
 
     JavaCompileAction javaCompileAction =
-        helper.createCompileAction(classJar, manifestProtoOutput, genSourceJar, nativeHeaderOutput);
+        helper.createCompileActionWithInstrumentation(
+            classJar, manifestProtoOutput, genSourceJar, javaArtifactsBuilder, nativeHeaderOutput);
     outputDepsProto = javaCompileAction.getOutputDepsProto();
 
     if (generateExtensionRegistry) {
@@ -800,6 +801,10 @@ public class AndroidCommon {
 
   public Artifact getClassJar() {
     return classJar;
+  }
+
+  public Artifact getInstrumentedJar() {
+    return javaCommon.getJavaCompilationArtifacts().getInstrumentedJar();
   }
 
   public NestedSet<Artifact> getTransitiveNeverLinkLibraries() {
