@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,7 +44,6 @@ import org.jboss.logging.Logger.Level;
 public class BeanDeployment {
 
     private static final Logger LOGGER = Logger.getLogger(BeanDeployment.class);
-    public static final EnumSet<Type.Kind> CLASS_TYPES = EnumSet.of(Type.Kind.CLASS, Type.Kind.PARAMETERIZED_TYPE);
 
     private final BuildContextImpl buildContext;
 
@@ -535,8 +533,8 @@ public class BeanDeployment {
         Set<MethodInfo> producerMethods = new HashSet<>();
         Set<MethodInfo> disposerMethods = new HashSet<>();
         Set<FieldInfo> producerFields = new HashSet<>();
-        Map<MethodInfo, Set<ClassInfo>> syncObserverMethods = new HashMap<>();
-        Map<MethodInfo, Set<ClassInfo>> asyncObserverMethods = new HashMap<>();
+        Set<MethodInfo> syncObserverMethods = new HashSet<>();
+        Set<MethodInfo> asyncObserverMethods = new HashSet<>();
 
         for (ClassInfo beanClass : index.getKnownClasses()) {
 
@@ -592,11 +590,7 @@ public class BeanDeployment {
                 beanClasses.add(beanClass);
             }
 
-            // non-inherited stuff:
             for (MethodInfo method : beanClass.methods()) {
-                if (Methods.isSynthetic(method)) {
-                    continue;
-                }
                 if (annotationStore.getAnnotations(method).isEmpty()) {
                     continue;
                 }
@@ -611,54 +605,29 @@ public class BeanDeployment {
                 } else if (annotationStore.hasAnnotation(method, DotNames.DISPOSES)) {
                     // Disposers are not inherited
                     disposerMethods.add(method);
-                }
-            }
-
-            // inherited stuff
-            ClassInfo aClass = beanClass;
-            Set<ClassInfo> scannedClasses = new HashSet<>();
-            Set<MethodInfo> methods = new HashSet<>();
-            while (aClass != null) {
-                if (!scannedClasses.add(aClass)) {
-                    continue;
-                }
-                for (MethodInfo method : aClass.methods()) {
-                    if (Methods.isSynthetic(method) || Methods.isOverriden(method, methods)) {
-                        continue;
-                    }
-                    methods.add(method);
-                    if (annotationStore.getAnnotations(method).isEmpty()) {
-                        continue;
-                    }
-                    if (annotationStore.hasAnnotation(method, DotNames.OBSERVES)) {
-                        syncObserverMethods.computeIfAbsent(method, ignored -> new HashSet<>())
-                                .add(beanClass);
-                        if (!Modifier.isAbstract(beanClass.flags())) {
-                            // add only concrete classes
-                            beanClasses.add(beanClass);
-                            if (!hasBeanDefiningAnnotation) {
-                                LOGGER.debugf("Observer method found but %s has no bean defining annotation - using @Dependent",
-                                        beanClass);
-                            }
+                } else if (annotationStore.hasAnnotation(method, DotNames.OBSERVES)) {
+                    // TODO observers are inherited
+                    syncObserverMethods.add(method);
+                    if (!Modifier.isAbstract(beanClass.flags())) {
+                        // add only concrete classes
+                        beanClasses.add(beanClass);
+                        if (!hasBeanDefiningAnnotation) {
+                            LOGGER.debugf("Observer method found but %s has no bean defining annotation - using @Dependent",
+                                    beanClass);
                         }
-                    } else if (annotationStore.hasAnnotation(method, DotNames.OBSERVES_ASYNC)) {
-                        asyncObserverMethods.computeIfAbsent(method, ignored -> new HashSet<>())
-                                .add(beanClass);
-                        if (!Modifier.isAbstract(beanClass.flags())) {
-                            // add only concrete classes
-                            beanClasses.add(beanClass);
-                            if (!hasBeanDefiningAnnotation) {
-                                LOGGER.debugf("Observer method found but %s has no bean defining annotation - using @Dependent",
-                                        beanClass);
-                            }
+                    }
+                } else if (annotationStore.hasAnnotation(method, DotNames.OBSERVES_ASYNC)) {
+                    // TODO observers are inherited
+                    asyncObserverMethods.add(method);
+                    if (!Modifier.isAbstract(beanClass.flags())) {
+                        // add only concrete classes
+                        beanClasses.add(beanClass);
+                        if (!hasBeanDefiningAnnotation) {
+                            LOGGER.debugf("Observer method found but %s has no bean defining annotation - using @Dependent",
+                                    beanClass);
                         }
                     }
                 }
-                Type superType = aClass.superClassType();
-                aClass = superType != null && !superType.name().equals(DotNames.OBJECT)
-                        && CLASS_TYPES.contains(superType.kind())
-                                ? index.getClassByName(superType.name())
-                                : null;
             }
             for (FieldInfo field : beanClass.fields()) {
                 if (annotationStore.hasAnnotation(field, DotNames.PRODUCES)) {
@@ -712,14 +681,23 @@ public class BeanDeployment {
             }
         }
 
-        for (Map.Entry<MethodInfo, Set<ClassInfo>> syncObserverEntry : syncObserverMethods.entrySet()) {
-            registerObserverMethods(syncObserverEntry.getValue(), observers, injectionPoints,
-                    beanClassToBean, syncObserverEntry.getKey(), false);
+        for (MethodInfo observerMethod : syncObserverMethods) {
+            BeanInfo declaringBean = beanClassToBean.get(observerMethod.declaringClass());
+            if (declaringBean != null) {
+                Injection injection = Injection.forObserver(observerMethod, declaringBean.getImplClazz(), this,
+                        injectionPointTransformer);
+                observers.add(new ObserverInfo(declaringBean, observerMethod, injection, false));
+                injectionPoints.addAll(injection.injectionPoints);
+            }
         }
-
-        for (Map.Entry<MethodInfo, Set<ClassInfo>> syncObserverEntry : asyncObserverMethods.entrySet()) {
-            registerObserverMethods(syncObserverEntry.getValue(), observers, injectionPoints,
-                    beanClassToBean, syncObserverEntry.getKey(), true);
+        for (MethodInfo observerMethod : asyncObserverMethods) {
+            BeanInfo declaringBean = beanClassToBean.get(observerMethod.declaringClass());
+            if (declaringBean != null) {
+                Injection injection = Injection.forObserver(observerMethod, declaringBean.getImplClazz(), this,
+                        injectionPointTransformer);
+                observers.add(new ObserverInfo(declaringBean, observerMethod, injection, true));
+                injectionPoints.addAll(injection.injectionPoints);
+            }
         }
 
         if (LOGGER.isTraceEnabled()) {
@@ -728,23 +706,6 @@ public class BeanDeployment {
             }
         }
         return beans;
-    }
-
-    private void registerObserverMethods(Collection<ClassInfo> classes,
-            List<ObserverInfo> observers,
-            List<InjectionPointInfo> injectionPoints,
-            Map<ClassInfo, BeanInfo> beanClassToBean,
-            MethodInfo observerMethod,
-            boolean async) {
-        for (ClassInfo key : classes) {
-            BeanInfo declaringBean = beanClassToBean.get(key);
-            if (declaringBean != null) {
-                Injection injection = Injection.forObserver(observerMethod, declaringBean.getImplClazz(), this,
-                        injectionPointTransformer);
-                observers.add(new ObserverInfo(declaringBean, observerMethod, injection, async));
-                injectionPoints.addAll(injection.injectionPoints);
-            }
-        }
     }
 
     private DisposerInfo findDisposer(BeanInfo declaringBean, AnnotationTarget annotationTarget, List<DisposerInfo> disposers) {
