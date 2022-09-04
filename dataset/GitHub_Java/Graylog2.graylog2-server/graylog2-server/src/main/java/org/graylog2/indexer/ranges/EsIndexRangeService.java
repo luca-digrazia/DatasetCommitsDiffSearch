@@ -282,6 +282,7 @@ public class EsIndexRangeService implements IndexRangeService {
                 .setIndex(indexName)
                 .setType(IndexMapping.TYPE_INDEX_RANGE)
                 .setId(indexName)
+                .setRefresh(true)
                 .setSource(source)
                 .request();
         final IndexResponse response = client.index(request).actionGet();

@@ -48,7 +48,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import javax.inject.Inject;
 import java.util.Set;
-import java.util.SortedSet;
 
 import static com.lordofthejars.nosqlunit.elasticsearch.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
 import static com.lordofthejars.nosqlunit.elasticsearch.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
@@ -61,7 +60,7 @@ public class EsIndexRangeServiceTest {
     public static final EmbeddedElasticsearch EMBEDDED_ELASTICSEARCH = newEmbeddedElasticsearchRule()
             .settings(ImmutableSettings.settingsBuilder().put("action.auto_create_index", false).build())
             .build();
-    private static final ImmutableSet<String> INDEX_NAMES = ImmutableSet.of("graylog", "graylog_1", "graylog_2", "graylog_3", "graylog_4", "graylog_5", "ignored");
+    private static final ImmutableSet<String> INDEX_NAMES = ImmutableSet.of("graylog", "graylog_1", "graylog_2", "ignored");
     private static final ElasticsearchConfiguration ELASTICSEARCH_CONFIGURATION = new ElasticsearchConfiguration() {
         @Override
         public String getIndexPrefix() {
@@ -87,7 +86,7 @@ public class EsIndexRangeServiceTest {
     @Before
     public void setUp() throws Exception {
         indices = new Indices(client, ELASTICSEARCH_CONFIGURATION, new IndexMapping(client));
-        final Deflector deflector = new Deflector(null, ELASTICSEARCH_CONFIGURATION, new NullActivityWriter(), null, null, indices);
+        final Deflector deflector = new Deflector(null, ELASTICSEARCH_CONFIGURATION, new NullActivityWriter(), null, null, null, indices);
         indexRangeService = new EsIndexRangeService(client, objectMapper, indices, deflector,
                 new EventBus("local"), new EventBus("cluster"), new MetricRegistry());
     }
@@ -109,23 +108,14 @@ public class EsIndexRangeServiceTest {
         indexRangeService.get("does-not-exist");
     }
 
-    /**
-     * Test the following constellation:
-     *                        [-        index range       -]
-     * [- graylog_1 -][- graylog_2 -][- graylog_3 -][- graylog_4 -][- graylog_5 -]
-     */
     @Test
-    @UsingDataSet(locations = "EsIndexRangeServiceTest-distinct.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void findReturnsIndexRangesWithinGivenRange() throws Exception {
-        final DateTime begin = new DateTime(2015, 1, 2, 12, 0, DateTimeZone.UTC);
-        final DateTime end = new DateTime(2015, 1, 4, 12, 0, DateTimeZone.UTC);
-        final SortedSet<IndexRange> indexRanges = indexRangeService.find(begin, end);
+        final DateTime begin = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC);
+        Set<IndexRange> indexRanges = indexRangeService.find(begin, end);
 
-        assertThat(indexRanges).containsExactly(
-                IndexRange.create("graylog_2", new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), 42),
-                IndexRange.create("graylog_3", new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), 42),
-                IndexRange.create("graylog_4", new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 5, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 5, 0, 0, DateTimeZone.UTC), 42)
-        );
+        assertThat(indexRanges).hasSize(1);
     }
 
     @Test
