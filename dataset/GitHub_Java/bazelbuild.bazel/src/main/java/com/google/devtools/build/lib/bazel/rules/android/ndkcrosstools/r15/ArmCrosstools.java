@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkPaths;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.Builder;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationMode;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationModeFlags;
 import java.util.List;
@@ -38,7 +37,7 @@ final class ArmCrosstools {
     this.clangVersion = clangVersion;
   }
 
-  ImmutableList<Builder> createCrosstools() {
+  ImmutableList<CToolchain.Builder> createCrosstools() {
     return ImmutableList.<CToolchain.Builder>builder()
         .add(createAarch64ClangToolchain())
         .addAll(createArmeabiClangToolchain())
@@ -75,7 +74,7 @@ final class ArmCrosstools {
             .addCompilerFlag("-Wno-unused-command-line-argument")
             .addCompilerFlag("-no-canonical-prefixes")
             .addCompilerFlag(
-                "-I%ndk%/usr/include/%triple%"
+                "-isystem%ndk%/usr/include/%triple%"
                     .replace("%ndk%", ndkPaths.createBuiltinSysroot())
                     .replace("%triple%", targetPlatform))
             .addCompilerFlag("-D__ANDROID_API__=" + ndkPaths.getCorrectedApiLevel("arm"))
@@ -100,15 +99,15 @@ final class ArmCrosstools {
                 CompilationModeFlags.newBuilder()
                     .setMode(CompilationMode.DBG)
                     .addCompilerFlag("-O0")
+                    .addCompilerFlag("-g")
                     .addCompilerFlag("-UNDEBUG"));
 
     stlImpl.addStlImpl(toolchain, "4.9");
     return toolchain;
   }
 
-  private List<Builder> createArmeabiClangToolchain() {
-    String targetPlatform = "arm-linux-androideabi";
-    ImmutableList<Builder> toolchains =
+  private List<CToolchain.Builder> createArmeabiClangToolchain() {
+    ImmutableList<CToolchain.Builder> toolchains =
         ImmutableList.of(
             createBaseArmeabiClangToolchain()
                 .setToolchainIdentifier("arm-linux-androideabi-clang" + clangVersion)
@@ -118,11 +117,6 @@ final class ArmCrosstools {
                 .addCompilerFlag("-march=armv5te")
                 .addCompilerFlag("-mtune=xscale")
                 .addCompilerFlag("-msoft-float")
-                .addCompilerFlag(
-                    "-I%ndk%/usr/include/%triple%"
-                        .replace("%ndk%", ndkPaths.createBuiltinSysroot())
-                        .replace("%triple%", targetPlatform))
-                .addCompilerFlag("-D__ANDROID_API__=" + ndkPaths.getCorrectedApiLevel("arm"))
                 .addLinkerFlag("-target")
                 // LLVM_TRIPLE
                 .addLinkerFlag("armv5te-none-linux-androideabi"),
@@ -134,11 +128,6 @@ final class ArmCrosstools {
                 .addCompilerFlag("-march=armv7-a")
                 .addCompilerFlag("-mfloat-abi=softfp")
                 .addCompilerFlag("-mfpu=vfpv3-d16")
-                .addCompilerFlag(
-                    "-I%ndk%/usr/include/%triple%"
-                        .replace("%ndk%", ndkPaths.createBuiltinSysroot())
-                        .replace("%triple%", targetPlatform))
-                .addCompilerFlag("-D__ANDROID_API__=" + ndkPaths.getCorrectedApiLevel("arm"))
                 .addLinkerFlag("-target")
                 .addLinkerFlag("armv7-none-linux-androideabi") // LLVM_TRIPLE
                 .addLinkerFlag("-Wl,--fix-cortex-a8"));
@@ -159,6 +148,11 @@ final class ArmCrosstools {
             .addCxxBuiltinIncludeDirectory(
                 ndkPaths.createClangToolchainBuiltinIncludeDirectory(clangVersion))
             .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm"))
+            .addCompilerFlag("-D__ANDROID_API__=" + ndkPaths.getCorrectedApiLevel("arm"))
+            .addCompilerFlag(
+                "-isystem%ndk%/usr/include/%triple%"
+                    .replace("%ndk%", ndkPaths.createBuiltinSysroot())
+                    .replace("%triple%", targetPlatform))
 
             // Compiler flags
             .addCompilerFlag("-gcc-toolchain")
