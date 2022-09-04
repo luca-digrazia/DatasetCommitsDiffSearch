@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.data.vector;
@@ -23,15 +22,12 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
 import smile.data.measure.OrdinalScale;
 import smile.data.type.DataType;
-import smile.data.type.StructField;
 
 /**
  * An immutable generic vector.
@@ -39,8 +35,6 @@ import smile.data.type.StructField;
  * @author Haifeng Li
  */
 public interface Vector<T> extends BaseVector<T, T, Stream<T>> {
-    /** Returns the array of elements. */
-    T[] toArray();
 
     /**
      * Returns a vector of LocalDate. If the vector is of strings, it uses the default
@@ -51,6 +45,20 @@ public interface Vector<T> extends BaseVector<T, T, Stream<T>> {
     Vector<LocalDate> toDate();
 
     /**
+     * Returns a vector of LocalDate. This method assumes that this is a string vector and
+     * uses the given date format pattern to parse strings.
+     */
+    default Vector<LocalDate> toDate(String pattern) {
+        return toDate(DateTimeFormatter.ofPattern(pattern));
+    }
+
+    /**
+     * Returns a vector of LocalDate. This method assumes that this is a string vector and
+     * uses the given date format pattern to parse strings.
+     */
+    Vector<LocalDate> toDate(DateTimeFormatter format);
+
+    /**
      * Returns a vector of LocalTime. If the vector is of strings, it uses the default
      * ISO time formatter that parses a time without an offset, such as '10:15' or '10:15:30'.
      * If the vector is of other time related objects such as Instant, java.util.Date,
@@ -59,12 +67,54 @@ public interface Vector<T> extends BaseVector<T, T, Stream<T>> {
     Vector<LocalTime> toTime();
 
     /**
+     * Returns a vector of LocalTime. This method assumes that this is a string vector and
+     * uses the given time format pattern to parse strings.
+     */
+    default Vector<LocalTime> toTime(String pattern) {
+        return toTime(DateTimeFormatter.ofPattern(pattern));
+    }
+
+    /**
+     * Returns a vector of LocalDate. This method assumes that this is a string vector and
+     * uses the given time format pattern to parse strings.
+     */
+    Vector<LocalTime> toTime(DateTimeFormatter format);
+
+    /**
      * Returns a vector of LocalDateTime. If the vector is of strings, it uses the default
      * ISO date time formatter that parses a date without an offset, such as '2011-12-03T10:15:30'.
      * If the vector is of other time related objects such as Instant, java.util.Date,
      * java.sql.Timestamp, etc., do a proper conversion.
      */
     Vector<LocalDateTime> toDateTime();
+
+    /**
+     * Returns a vector of LocalDateTime. This method assumes that this is a string vector and
+     * uses the given date time format pattern to parse strings.
+     */
+    default Vector<LocalDateTime> toDateTime(String pattern) {
+        return toDateTime(DateTimeFormatter.ofPattern(pattern));
+    }
+
+    /**
+     * Returns a vector of LocalDateTime. This method assumes that this is a string vector and
+     * uses the given date time format pattern to parse strings.
+     */
+    Vector<LocalDateTime> toDateTime(DateTimeFormatter format);
+
+    /**
+     * Converts strings to nominal values. Depending on how many levels
+     * in the nominal scale, the type of returned vector may be byte, short
+     * or integer. The missing values/nulls will be converted to -1.
+     */
+    BaseVector toNominal(NominalScale scale);
+
+    /**
+     * Converts strings to ordinal values. Depending on how many levels
+     * in the nominal scale, the type of returned vector may be byte, short
+     * or integer. The missing values/nulls will be converted to -1.
+     */
+    BaseVector toOrdinal(OrdinalScale scale);
 
     /** Returns the distinct values. */
     default List<T> distinct() {
@@ -119,10 +169,7 @@ public interface Vector<T> extends BaseVector<T, T, Stream<T>> {
      */
     default String toString(int n) {
         String suffix = n >= size() ? "]" : String.format(", ... %,d more]", size() - n);
-        Measure m = measure().orElse(null);
-        Stream<T> stream = stream().limit(n);
-        Stream<String> s = m != null ? stream.map(i -> m.toString(i)) : stream.map(Objects::toString);
-        return s.collect(Collectors.joining(", ", "[", suffix));
+        return stream().limit(n).map(Object::toString).collect(Collectors.joining(", ", "[", suffix));
     }
 
     /**
@@ -145,14 +192,5 @@ public interface Vector<T> extends BaseVector<T, T, Stream<T>> {
      */
     static <T> Vector<T> of(String name, DataType type, T[] vector) {
         return new VectorImpl<>(name, type, vector);
-    }
-
-    /** Creates a named vector.
-     *
-     * @param field the struct field of vector.
-     * @param vector the data of vector.
-     */
-    static <T> Vector of(StructField field, T[] vector) {
-        return new VectorImpl<>(field, vector);
     }
 }
