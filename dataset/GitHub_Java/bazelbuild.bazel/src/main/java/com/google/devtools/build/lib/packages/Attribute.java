@@ -86,12 +86,11 @@ public final class Attribute implements Comparable<Attribute> {
   // TODO(https://github.com/bazelbuild/bazel/issues/7814): Remove this, have callers create
   // factories.
   @AutoValue
-  abstract static class StaticTransitionFactory
-      implements TransitionFactory<AttributeTransitionData> {
+  abstract static class StaticTransitionFactory implements TransitionFactory<RuleTransitionData> {
     abstract ConfigurationTransition transition();
 
     @Override
-    public ConfigurationTransition create(AttributeTransitionData unused) {
+    public ConfigurationTransition create(RuleTransitionData unused) {
       return transition();
     }
 
@@ -105,7 +104,7 @@ public final class Attribute implements Comparable<Attribute> {
       return transition() instanceof SplitTransition;
     }
 
-    static TransitionFactory<AttributeTransitionData> of(ConfigurationTransition transition) {
+    static TransitionFactory<RuleTransitionData> of(ConfigurationTransition transition) {
       return new AutoValue_Attribute_StaticTransitionFactory(transition);
     }
   }
@@ -380,7 +379,7 @@ public final class Attribute implements Comparable<Attribute> {
   public static class ImmutableAttributeFactory {
     private final Type<?> type;
     private final String doc;
-    private final TransitionFactory<AttributeTransitionData> transitionFactory;
+    private final TransitionFactory<RuleTransitionData> transitionFactory;
     private final RuleClassNamePredicate allowedRuleClassesForLabels;
     private final RuleClassNamePredicate allowedRuleClassesForLabelsWarning;
     private final FileTypeSet allowedFileTypesForLabels;
@@ -400,7 +399,7 @@ public final class Attribute implements Comparable<Attribute> {
         String doc,
         ImmutableSet<PropertyFlag> propertyFlags,
         Object value,
-        TransitionFactory<AttributeTransitionData> transitionFactory,
+        TransitionFactory<RuleTransitionData> transitionFactory,
         RuleClassNamePredicate allowedRuleClassesForLabels,
         RuleClassNamePredicate allowedRuleClassesForLabelsWarning,
         FileTypeSet allowedFileTypesForLabels,
@@ -487,8 +486,7 @@ public final class Attribute implements Comparable<Attribute> {
   public static class Builder <TYPE> {
     private final String name;
     private final Type<TYPE> type;
-    private TransitionFactory<AttributeTransitionData> transitionFactory =
-        NoTransition.createFactory();
+    private TransitionFactory<RuleTransitionData> transitionFactory = NoTransition.createFactory();
     private RuleClassNamePredicate allowedRuleClassesForLabels = ANY_RULE;
     private RuleClassNamePredicate allowedRuleClassesForLabelsWarning = NO_RULE;
     private FileTypeSet allowedFileTypesForLabels;
@@ -624,7 +622,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     /** Defines the configuration transition for this attribute. */
-    public Builder<TYPE> cfg(TransitionFactory<AttributeTransitionData> transitionFactory) {
+    public Builder<TYPE> cfg(TransitionFactory<RuleTransitionData> transitionFactory) {
       Preconditions.checkNotNull(transitionFactory);
       Preconditions.checkState(
           NoTransition.isInstance(this.transitionFactory),
@@ -1926,7 +1924,7 @@ public final class Attribute implements Comparable<Attribute> {
   // (We assume a hypothetical Type.isValid(Object) predicate.)
   private final Object defaultValue;
 
-  private final TransitionFactory<AttributeTransitionData> transitionFactory;
+  private final TransitionFactory<RuleTransitionData> transitionFactory;
 
   /**
    * For label or label-list attributes, this predicate returns which rule
@@ -1983,7 +1981,7 @@ public final class Attribute implements Comparable<Attribute> {
       Type<?> type,
       Set<PropertyFlag> propertyFlags,
       Object defaultValue,
-      TransitionFactory<AttributeTransitionData> transitionFactory,
+      TransitionFactory<RuleTransitionData> transitionFactory,
       RuleClassNamePredicate allowedRuleClassesForLabels,
       RuleClassNamePredicate allowedRuleClassesForLabelsWarning,
       FileTypeSet allowedFileTypesForLabels,
@@ -2145,7 +2143,7 @@ public final class Attribute implements Comparable<Attribute> {
    * Returns the configuration transition factory for this attribute for label or label list
    * attributes. For other attributes it will always return {@code NONE}.
    */
-  public TransitionFactory<AttributeTransitionData> getTransitionFactory() {
+  public TransitionFactory<RuleTransitionData> getTransitionFactory() {
     return transitionFactory;
   }
 
