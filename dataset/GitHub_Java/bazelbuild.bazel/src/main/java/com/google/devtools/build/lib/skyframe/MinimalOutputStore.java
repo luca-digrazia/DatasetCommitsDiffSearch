@@ -14,8 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.ArtifactFileMetadata;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 
 /**
@@ -25,31 +23,11 @@ import com.google.devtools.build.lib.actions.FileArtifactValue;
  * <p>This store is intended for use with in-memory file systems, where aggressive caching would not
  * be worthwhile.
  */
-// TODO(b/115361150): See if even less data can be retained. Specifically, we shouldn't need to
-// call injectRemoteFile for anything, including children of tree artifacts.
 final class MinimalOutputStore extends OutputStore {
-
   @Override
-  void putAdditionalOutputData(Artifact artifact, FileArtifactValue value) {
+  void putArtifactData(Artifact artifact, FileArtifactValue value) {
     if (value.isMarkerValue()) {
-      super.putAdditionalOutputData(artifact, value);
+      super.putArtifactData(artifact, value);
     }
-  }
-
-  @Override
-  void putArtifactData(Artifact artifact, ArtifactFileMetadata value) {}
-
-  @Override
-  void addTreeArtifactContents(Artifact artifact, TreeFileArtifact contents) {}
-
-  @Override
-  void injectRemoteFile(Artifact output, byte[] digest, long size, int locationIndex) {
-    if (isChildOfTreeArtifact(output)) {
-      super.injectRemoteFile(output, digest, size, locationIndex);
-    }
-  }
-
-  private static boolean isChildOfTreeArtifact(Artifact artifact) {
-    return artifact.hasParent() && artifact.getParent().isTreeArtifact();
   }
 }

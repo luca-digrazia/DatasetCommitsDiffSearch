@@ -179,7 +179,8 @@ public class RemoteSpawnCacheTest {
         public MetadataInjector getMetadataInjector() {
           return new MetadataInjector() {
             @Override
-            public void injectRemoteFile(Artifact output, RemoteFileArtifactValue metadata) {
+            public void injectRemoteFile(
+                Artifact output, byte[] digest, long size, int locationIndex, String actionId) {
               throw new UnsupportedOperationException();
             }
 
