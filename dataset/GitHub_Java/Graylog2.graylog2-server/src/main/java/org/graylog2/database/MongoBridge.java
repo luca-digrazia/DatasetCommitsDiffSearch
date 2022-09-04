@@ -31,7 +31,6 @@ import org.graylog2.Log;
 import org.graylog2.Main;
 import org.graylog2.Tools;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
-import org.graylog2.messagehandlers.syslog.GraylogSyslogServerEvent;
 
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 
@@ -59,7 +58,7 @@ public class MongoBridge {
         DBCollection coll = null;
 
         // Create a capped collection if the collection does not yet exist.
-        if(MongoConnection.getInstance().getDatabase().collectionExists("messages")) {
+        if(MongoConnection.getInstance().getDatabase().getCollectionNames().contains("messages")) {
             coll = MongoConnection.getInstance().getDatabase().getCollection("messages");
         } else {
             long messagesCollSize = Long.parseLong(Main.masterConfig.getProperty("messages_collection_size").trim());
@@ -74,6 +73,7 @@ public class MongoBridge {
         coll.ensureIndex(new BasicDBObject("created_at", 1));
         coll.ensureIndex(new BasicDBObject("deleted", 1));
         coll.ensureIndex(new BasicDBObject("host", 1));
+        coll.ensureIndex(new BasicDBObject("message", 1));
         coll.ensureIndex(new BasicDBObject("facility", 1));
         coll.ensureIndex(new BasicDBObject("level", 1));
 
@@ -117,12 +117,6 @@ public class MongoBridge {
         dbObj.put("created_at", Tools.getUTCTimestamp());
         // Documents in capped collections cannot grow so we have to do that now and cannot just add 'deleted => true' later.
         dbObj.put("deleted", false);
-
-        // Add AMQP receiver queue if this is an extended event.
-        if (event instanceof GraylogSyslogServerEvent) {
-            GraylogSyslogServerEvent extendedEvent = (GraylogSyslogServerEvent) event;
-            dbObj.put("_amqp_queue", extendedEvent.getAmqpReceiverQueue());
-        }
 
         coll.insert(dbObj);
     }
@@ -177,8 +171,7 @@ public class MongoBridge {
      * @param hostname The host to increment.
      */
     public void upsertHost(String hostname) {
-        return;
-        /*BasicDBObject query = new BasicDBObject();
+        BasicDBObject query = new BasicDBObject();
         query.put("host", hostname);
 
         BasicDBObject update = new BasicDBObject();
@@ -190,7 +183,7 @@ public class MongoBridge {
             Log.emerg("MongoBridge::upsertHost(): Could not get hosts collection.");
         } else {
             db.getCollection("hosts").update(query, update, true, false);
-        }*/
+        }
     }
 
     public void writeThroughput(int current, int highest) {
