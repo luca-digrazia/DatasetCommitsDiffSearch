@@ -53,7 +53,6 @@ import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCall
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
 import com.google.devtools.build.lib.query2.output.QueryOptions;
 import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
-import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.GraphBackedRecursivePackageProvider;
@@ -105,6 +104,8 @@ public class ConfiguredTargetQueryEnvironment
   private ConfiguredTargetAccessor accessor;
   protected WalkableGraph graph;
 
+  private static final Function<ConfiguredTarget, SkyKey> CT_TO_SKYKEY =
+      target -> ConfiguredTargetValue.key(getCorrectLabel(target), target.getConfiguration());
   private static final Function<SkyKey, ConfiguredTargetKey> SKYKEY_TO_CTKEY =
       skyKey -> (ConfiguredTargetKey) skyKey.argument();
   private static final ImmutableList<TargetPatternKey> ALL_PATTERNS;
@@ -147,7 +148,6 @@ public class ConfiguredTargetQueryEnvironment
     this.parserPrefix = parserPrefix;
     this.pkgPath = pkgPath;
     this.walkableGraphSupplier = walkableGraphSupplier;
-    this.accessor = new ConfiguredTargetAccessor(walkableGraphSupplier.get());
   }
 
   private void beforeEvaluateQuery() throws InterruptedException, QueryException {
@@ -160,6 +160,7 @@ public class ConfiguredTargetQueryEnvironment
             eventHandler,
             FilteringPolicies.NO_FILTER,
             MultisetSemaphore.unbounded());
+    accessor = new ConfiguredTargetAccessor(walkableGraphSupplier.get());
     checkSettings(settings);
   }
 
@@ -172,10 +173,6 @@ public class ConfiguredTargetQueryEnvironment
 
   private static ImmutableList<QueryFunction> getCqueryFunctions() {
     return ImmutableList.of(new ConfigFunction());
-  }
-
-  public BuildConfiguration getHostConfiguration() {
-    return hostConfiguration;
   }
 
   /**
@@ -407,22 +404,22 @@ public class ConfiguredTargetQueryEnvironment
     // host config. This is somewhat counterintuitive and subject to change in the future but seems
     // like the best option right now.
     if (settings.contains(Setting.NO_HOST_DEPS)) {
-      BuildConfiguration currentConfig = getConfiguration(target);
+      BuildConfiguration currentConfig = target.getConfiguration();
       if (currentConfig != null && currentConfig.isHostConfiguration()) {
         deps =
             deps.stream()
                 .filter(
                     dep ->
-                        getConfiguration(dep) != null
-                            && getConfiguration(dep).isHostConfiguration())
+                        dep.getConfiguration() != null
+                            && dep.getConfiguration().isHostConfiguration())
                 .collect(Collectors.toList());
       } else {
         deps =
             deps.stream()
                 .filter(
                     dep ->
-                        getConfiguration(dep) != null
-                            && !getConfiguration(dep).isHostConfiguration())
+                        dep.getConfiguration() == null
+                            || !dep.getConfiguration().isHostConfiguration())
                 .collect(Collectors.toList());
       }
     }
@@ -433,26 +430,11 @@ public class ConfiguredTargetQueryEnvironment
               .filter(
                   dep ->
                       !implicitDeps.contains(
-                          ConfiguredTargetKey.of(getCorrectLabel(dep), getConfiguration(dep))))
+                          ConfiguredTargetKey.of(
+                              getCorrectLabel(dep), dep.getConfiguration())))
               .collect(Collectors.toList());
     }
     return deps;
-  }
-
-  @Nullable
-  private BuildConfiguration getConfiguration(ConfiguredTarget target) {
-    try {
-      return target.getConfigurationKey() == null
-          ? null
-          : ((BuildConfigurationValue) graph.getValue(target.getConfigurationKey()))
-              .getConfiguration();
-    } catch (InterruptedException e) {
-      throw new IllegalStateException("Unexpected interruption during configured target query");
-    }
-  }
-
-  private ConfiguredTargetKey getSkyKey(ConfiguredTarget target) {
-    return ConfiguredTargetKey.of(target, getConfiguration(target));
   }
 
   @Override
@@ -460,7 +442,7 @@ public class ConfiguredTargetQueryEnvironment
       throws InterruptedException {
     Map<SkyKey, ConfiguredTarget> targetsByKey = new HashMap<>(Iterables.size(targets));
     for (ConfiguredTarget target : targets) {
-      targetsByKey.put(getSkyKey(target), target);
+      targetsByKey.put(CT_TO_SKYKEY.apply(target), target);
     }
     Map<SkyKey, Collection<ConfiguredTarget>> directDeps =
         targetifyValues(graph.getDirectDeps(targetsByKey.keySet()));
@@ -503,7 +485,7 @@ public class ConfiguredTargetQueryEnvironment
       throws InterruptedException {
     Map<SkyKey, ConfiguredTarget> targetsByKey = new HashMap<>(Iterables.size(targets));
     for (ConfiguredTarget target : targets) {
-      targetsByKey.put(getSkyKey(target), target);
+      targetsByKey.put(CT_TO_SKYKEY.apply(target), target);
     }
     Map<SkyKey, Collection<ConfiguredTarget>> reverseDepsByKey =
         targetifyValues(graph.getReverseDeps(targetsByKey.keySet()));

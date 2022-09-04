@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Utility methods for use by ConfiguredTarget implementations.
@@ -114,17 +115,18 @@ public abstract class Util {
 
   private static void addLabelsAndConfigs(
       Set<ConfiguredTargetKey> set, List<ConfiguredTargetAndData> deps) {
-    for (ConfiguredTargetAndData dep : deps) {
+    for (ConfiguredTarget dep :
+        deps.stream()
+            .map(ConfiguredTargetAndData::getConfiguredTarget)
+            .collect(Collectors.toList())) {
       // This must be done because {@link AliasConfiguredTarget#getLabel} returns the label of the
       // "actual" configured target instead of the alias.
-      if (dep.getConfiguredTarget() instanceof AliasConfiguredTarget) {
+      if (dep instanceof AliasConfiguredTarget) {
         set.add(
             ConfiguredTargetKey.of(
-                ((AliasConfiguredTarget) dep.getConfiguredTarget()).getOriginalLabel(),
-                dep.getConfiguration()));
+                ((AliasConfiguredTarget) dep).getOriginalLabel(), dep.getConfiguration()));
       } else {
-        set.add(
-            ConfiguredTargetKey.of(dep.getConfiguredTarget().getLabel(), dep.getConfiguration()));
+        set.add(ConfiguredTargetKey.of(dep.getLabel(), dep.getConfiguration()));
       }
     }
   }
