@@ -77,6 +77,7 @@ class ConfigDoItemFinder {
      * Scan configuration group first and record them in a properties file as they can be shared across
      * different modules.
      *
+     * @param allConfigurationGroups
      */
     ScannedConfigDocsItemHolder findInMemoryConfigurationItems() throws IOException {
 
@@ -206,7 +207,7 @@ class ConfigDoItemFinder {
             if (isConfigGroup(type)) {
                 List<ConfigDocItem> groupConfigItems = readConfigGroupItems(configPhase, rootName, name, type,
                         configSection, withinAMap, generateSeparateConfigGroupDocsFiles);
-                DocGeneratorUtil.appendConfigItemsIntoExistingOnes(configDocItems, groupConfigItems);
+                configDocItems.addAll(groupConfigItems);
             } else {
                 final ConfigDocKey configDocKey = new ConfigDocKey();
                 configDocKey.setWithinAMap(withinAMap);
@@ -229,7 +230,7 @@ class ConfigDoItemFinder {
                                 name += String.format(NAMED_MAP_CONFIG_ITEM_FORMAT, configDocMapKey);
                                 List<ConfigDocItem> groupConfigItems = readConfigGroupItems(configPhase, rootName, name, type,
                                         configSection, true, generateSeparateConfigGroupDocsFiles);
-                                DocGeneratorUtil.appendConfigItemsIntoExistingOnes(configDocItems, groupConfigItems);
+                                configDocItems.addAll(groupConfigItems);
                                 continue;
                             } else {
                                 type = BACK_TICK + stringifyType(declaredType) + BACK_TICK;
@@ -255,7 +256,7 @@ class ConfigDoItemFinder {
                                     configSection.setOptional(true);
                                     List<ConfigDocItem> groupConfigItems = readConfigGroupItems(configPhase, rootName, name,
                                             typeInString, configSection, withinAMap, generateSeparateConfigGroupDocsFiles);
-                                    DocGeneratorUtil.appendConfigItemsIntoExistingOnes(configDocItems, groupConfigItems);
+                                    configDocItems.addAll(groupConfigItems);
                                     continue;
                                 } else if ((typeInString.startsWith(List.class.getName())
                                         || typeInString.startsWith(Set.class.getName())
