@@ -19,12 +19,10 @@
  */
 package org.graylog2.rest.resources.users;
 
-import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.apache.shiro.crypto.hash.SimpleHash;
 import org.bson.types.ObjectId;
 import org.graylog2.database.ValidationException;
 import org.graylog2.rest.resources.RestResource;
@@ -90,13 +88,18 @@ public class UsersResource extends RestResource {
             throw new WebApplicationException(400);
         }
 
-        CreateRequest cr = getCreateRequest(body);
+        CreateRequest cr;
+        try {
+            cr = objectMapper.readValue(body, CreateRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
         // Create user.
         Map<String, Object> userData = Maps.newHashMap();
         userData.put("username", cr.username);
-        final String hashedPassword = new SimpleHash("SHA-1", cr.password, core.getConfiguration().getPasswordSecret()).toString();
-        userData.put("password", hashedPassword);
+        userData.put("password", cr.password);
         userData.put("full_name", cr.fullname);
         userData.put("email", cr.email);
         userData.put("permissions", cr.permissions);
@@ -110,59 +113,11 @@ public class UsersResource extends RestResource {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
-        // TODO don't expose mongo object id here, we never accept it. set location header instead
+
         Map<String, Object> result = Maps.newHashMap();
         result.put("id", id.toStringMongod());
 
         return Response.status(Response.Status.CREATED).entity(json(result)).build();
-    }
-
-    @PUT
-    @Path("{username}")
-    @RequiresPermissions(RestPermissions.USERS_EDIT)
-    public Response changeUser(@PathParam("username") String username, String body) {
-        if (body == null || body.isEmpty()) {
-            throw new BadRequestException("Missing request body.");
-        }
-
-        CreateRequest cr = getCreateRequest(body);
-
-        final User user = User.load(username, core);
-        if (user.isReadOnly()) {
-            throw new BadRequestException("Cannot modify readonly user " + username);
-        }
-        // we only allow setting a subset of the fields in CreateRequest
-        if (cr.email != null) {
-            user.setEmail(cr.email);
-        }
-        if (cr.fullname != null) {
-            user.setFullName(cr.fullname);
-        }
-        if (cr.permissions != null) {
-            user.setPermissions(cr.permissions);
-        }
-        try {
-            // TODO JPA this is wrong, the primary key is the username
-            user.save();
-        } catch (ValidationException e) {
-            LOG.error("Validation error.", e);
-            throw new BadRequestException("Validation error for " + username, e);
-        }
-
-        return Response.noContent().build();
-    }
-
-    @DELETE
-    @Path("{username}")
-    @RequiresPermissions(RestPermissions.USERS_EDIT)
-    public Response deleteUser(@PathParam("username") String username) {
-        final User user = User.load(username, core);
-        if (user.isReadOnly()) {
-            throw new BadRequestException("Cannot delete readonly user " + username);
-        }
-
-        user.destroy();
-        return Response.noContent().build();
     }
 
     @PUT
@@ -181,10 +136,9 @@ public class UsersResource extends RestResource {
         try {
             user.save();
         } catch (ValidationException e) {
-            LOG.error("Validation error.", e);
-            throw new BadRequestException("Validation error for " + username, e);
+            throw new InternalServerErrorException(e);
         }
-        return Response.noContent().build();
+        return Response.status(Response.Status.CREATED).build();
     }
 
     @DELETE
@@ -207,7 +161,7 @@ public class UsersResource extends RestResource {
 
     private HashMap<String, Object> toMap(User user, boolean includePermissions) {
         final HashMap<String,Object> map = Maps.newHashMap();
-        map.put("id", Objects.firstNonNull(user.getId(), "").toString());
+        map.put("id", user.getId().toString());
         map.put("username", user.getName());
         map.put("email", user.getEmail());
         map.put("full_name", user.getFullName());
@@ -216,17 +170,6 @@ public class UsersResource extends RestResource {
         }
         map.put("read_only", user.isReadOnly());
         return map;
-    }
-
-    private CreateRequest getCreateRequest(String body) {
-        CreateRequest cr;
-        try {
-            cr = objectMapper.readValue(body, CreateRequest.class);
-        } catch(IOException e) {
-            LOG.error("Error while parsing JSON", e);
-            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
-        }
-        return cr;
     }
 
 

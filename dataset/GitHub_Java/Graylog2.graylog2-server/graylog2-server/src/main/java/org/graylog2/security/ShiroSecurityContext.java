@@ -20,9 +20,8 @@
 package org.graylog2.security;
 
 import org.apache.shiro.authc.AuthenticationException;
-import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.UsernamePasswordToken;
 import org.apache.shiro.subject.Subject;
-import org.apache.shiro.util.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,36 +34,16 @@ import java.security.Principal;
 public class ShiroSecurityContext implements SecurityContext {
     private static final Logger log = LoggerFactory.getLogger(ShiroSecurityContext.class);
 
-    private Subject subject;
-    private final AuthenticationToken token;
+    private final Subject subject;
+    private final UsernamePasswordToken token;
     private final boolean secure;
     private final String authcScheme;
 
-    public ShiroSecurityContext(Subject subject, AuthenticationToken token, boolean isSecure, String authcScheme) {
+    public ShiroSecurityContext(Subject subject, UsernamePasswordToken token, boolean isSecure, String authcScheme) {
         this.subject = subject;
         this.token = token;
         secure = isSecure;
         this.authcScheme = authcScheme;
-    }
-
-    public String getUsername() {
-        if (token == null) {
-            return null;
-        }
-        if (token.getPrincipal() == null) {
-            return null;
-        }
-        return token.getPrincipal().toString();
-    }
-
-    public String getPassword() {
-        if (token == null) {
-            return null;
-        }
-        if (token.getCredentials() == null) {
-            return null;
-        }
-        return token.getCredentials().toString();
     }
 
     public Subject getSubject() {
@@ -94,8 +73,6 @@ public class ShiroSecurityContext implements SecurityContext {
 
     public void loginSubject() throws AuthenticationException {
         subject.login(token);
-        // the subject instance will change to include the session
-        subject = ThreadContext.getSubject();
     }
 
     public class ShiroPrincipal implements Principal {

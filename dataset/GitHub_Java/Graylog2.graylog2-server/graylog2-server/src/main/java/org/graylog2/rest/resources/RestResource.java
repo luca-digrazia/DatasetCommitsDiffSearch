@@ -20,7 +20,6 @@
 
 package org.graylog2.rest.resources;
 
-import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,7 +35,6 @@ import javax.inject.Inject;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 import java.security.Principal;
@@ -120,7 +118,7 @@ public abstract class RestResource {
         return r;
     }
 
-    protected Map<String, Object> buildTimerMap(Timer t) {
+    protected Map<String, Object> buildMetricsMap(Timer t) {
         Map<String, Object> metrics = Maps.newHashMap();
 
         if (t == null) {
@@ -151,52 +149,6 @@ public abstract class RestResource {
         metrics.put("rate", rate);
 
         return metrics;
-    }
-
-    protected Map<String, Object> buildMeterMap(Meter m) {
-        Map<String, Object> metrics = Maps.newHashMap();
-
-        if (m == null) {
-            return metrics;
-        }
-
-        Map<String, Object> rate = Maps.newHashMap();
-        rate.put("one_minute", m.getOneMinuteRate());
-        rate.put("five_minute", m.getFiveMinuteRate());
-        rate.put("fifteen_minute", m.getFifteenMinuteRate());
-        rate.put("total", m.getCount());
-        rate.put("mean", m.getMeanRate());
-
-        metrics.put("rate_unit", "events/second");
-        metrics.put("rate", rate);
-
-        return metrics;
-    }
-
-    protected String guessContentType(String filename) {
-        // A really dump but for us good enough apporach. We only need this for a very few static files we control.
-
-        if (filename.endsWith(".png")) {
-            return "image/png";
-        }
-
-        if (filename.endsWith(".gif")) {
-            return "image/gif";
-        }
-
-        if (filename.endsWith(".css")) {
-            return "text/css";
-        }
-
-        if (filename.endsWith(".js")) {
-            return "application/javascript";
-        }
-
-        if (filename.endsWith(".html")) {
-            return "text/html";
-        }
-
-        return MediaType.TEXT_PLAIN;
     }
 
 }
