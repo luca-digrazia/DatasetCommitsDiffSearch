@@ -3,10 +3,12 @@ package org.jboss.shamrock.deployment;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
+import org.jboss.protean.gizmo.MethodCreator;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
 import org.objectweb.asm.ClassVisitor;
 
@@ -76,13 +78,8 @@ public interface ProcessorContext {
     /**
      * Adds a bytecode transformer that can transform application classes.
      * <p>
-     * This takes the form of a function that takes the class name as a String, and returns a Function that wraps an
-     * ASM {@link ClassVisitor}.
-     *
-     * If this function returns null then no transform is applied. If it returns a function then it will be transformed.
-     *
-     * The transformation is applied by calling each function that has been registered it turn to create a chain
-     * of visitors. These visitors are then applied and the result is saved to the output.
+     * This takes the form of a function that takes a string, and returns an ASM visitor, or null if transformation
+     * is not required.
      *
      * At present these transformations are only applied to application classes, not classes provided by dependencies
      */
@@ -123,8 +120,7 @@ public interface ProcessorContext {
     /**
      *
      * @param capability
-     * @return if the given capability is present
-     * @see Capabilities
+     * @return
      */
     boolean isCapabilityPresent(String capability);
 
