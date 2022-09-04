@@ -33,10 +33,14 @@ public class SearchPage extends FluentPage {
     private String keyword;
     private String interval;
     private Integer pageNumber;
+    private String streamId;
+    private String sortField;
+    private String sortOrder;
+    private String fields;
 
     @Override
     public String getUrl() {
-        return routes.SearchController.index(queryString, rangeType, relativeTimeSpan, fromTime, toTime, keyword, interval, pageNumber).url();
+        return routes.SearchController.index(queryString, rangeType, relativeTimeSpan, fromTime, toTime, keyword, interval, pageNumber, streamId, sortField, sortOrder, fields).url();
     }
 
     @Override
