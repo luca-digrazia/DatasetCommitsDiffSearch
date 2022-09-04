@@ -90,11 +90,6 @@ public class NDMatrix implements DenseMatrix {
     }
 
     @Override
-    public int ld() {
-        return nrows();
-    }
-
-    @Override
     public int nrows() {
         return A.rows();
     }
