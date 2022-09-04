@@ -430,9 +430,7 @@ public class JarResultBuildStep {
                         .getTransformedClassesByJar().values()) {
                     for (TransformedClassesBuildItem.TransformedClass transformed : transformedSet) {
                         Path target = out.getPath(transformed.getFileName());
-                        if (target.getParent() != null) {
-                            Files.createDirectories(target.getParent());
-                        }
+                        Files.createDirectories(target.getParent());
                         Files.write(target, transformed.getData());
                     }
                 }
@@ -445,17 +443,13 @@ public class JarResultBuildStep {
             for (GeneratedClassBuildItem i : generatedClasses) {
                 String fileName = i.getName().replace(".", "/") + ".class";
                 Path target = out.getPath(fileName);
-                if (target.getParent() != null) {
-                    Files.createDirectories(target.getParent());
-                }
+                Files.createDirectories(target.getParent());
                 Files.write(target, i.getClassData());
             }
 
             for (GeneratedResourceBuildItem i : generatedResources) {
                 Path target = out.getPath(i.getName());
-                if (target.getParent() != null) {
-                    Files.createDirectories(target.getParent());
-                }
+                Files.createDirectories(target.getParent());
                 Files.write(target, i.getClassData());
             }
         }
@@ -598,10 +592,8 @@ public class JarResultBuildStep {
                                         throws IOException {
                                     final Path relativePath = resolvedDep.relativize(file);
                                     final Path targetPath = runnerZipFs.getPath(relativePath.toString());
-                                    if (targetPath.getParent() != null) {
-                                        Files.createDirectories(targetPath.getParent());
-                                    }
-                                    Files.copy(file, targetPath, StandardCopyOption.REPLACE_EXISTING); //replace only needed for testing
+                                    Files.createDirectories(targetPath.getParent());
+                                    Files.copy(file, targetPath);
                                     return FileVisitResult.CONTINUE;
                                 }
                             });
@@ -808,10 +800,8 @@ public class JarResultBuildStep {
                                                 .add(read(file));
                                     } else if (file.getFileName().toString().endsWith(".class")) {
                                         final Path targetPath = runnerZipFs.getPath(relativePath.toString());
-                                        if (targetPath.getParent() != null) {
-                                            Files.createDirectories(targetPath.getParent());
-                                        }
-                                        Files.copy(file, targetPath, StandardCopyOption.REPLACE_EXISTING); //replace only needed for testing
+                                        Files.createDirectories(targetPath.getParent());
+                                        Files.copy(file, targetPath);
                                     }
                                     return FileVisitResult.CONTINUE;
                                 }
