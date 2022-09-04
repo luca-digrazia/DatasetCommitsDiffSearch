@@ -24,6 +24,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.analysis.RuleContext.PrerequisiteValidator;
@@ -31,11 +32,10 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConvenienceSymlinks.SymlinkDefinition;
 import com.google.devtools.build.lib.analysis.config.Fragment;
-import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentProvider;
-import com.google.devtools.build.lib.analysis.config.SymlinkDefinition;
 import com.google.devtools.build.lib.analysis.config.transitions.ComposingTransitionFactory;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
@@ -74,7 +74,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.zip.ZipEntry;
@@ -120,7 +119,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     // possible (but unlikely) future caveats of this approach.
 
     @Override
-    protected synchronized byte[] getFastDigest(PathFragment path) {
+    protected synchronized byte[] getFastDigest(PathFragment path) throws IOException {
       return EMPTY_DIGEST;
     }
 
@@ -163,7 +162,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
         ImmutableMap.builder();
     private final ImmutableList.Builder<SymlinkDefinition> symlinkDefinitions =
         ImmutableList.builder();
-    private final Set<String> reservedActionMnemonics = new TreeSet<>();
+    private Set<String> reservedActionMnemonics = new TreeSet<>();
     private BuildConfiguration.ActionEnvironmentProvider actionEnvironmentProvider =
         (BuildOptions options) -> ActionEnvironment.EMPTY;
     private ConstraintSemantics<RuleContext> constraintSemantics =
@@ -171,9 +170,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
 
     private ThirdPartyLicenseExistencePolicy thirdPartyLicenseExistencePolicy =
         ThirdPartyLicenseExistencePolicy.USER_CONTROLLABLE;
-
-    // TODO(b/192694287): Remove once we migrate all tests from the allowlist
-    @Nullable private Label networkAllowlistForTests;
+    private boolean enableExecutionTransition = false;
 
     public Builder addWorkspaceFilePrefix(String contents) {
       defaultWorkspaceFilePrefix.append(contents);
@@ -340,8 +337,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
 
     /**
      * Sets the logic that lets rules declare which environments they support and validates rules
-     * don't depend on rules that aren't compatible with the same environments. Defaults to {@link
-     * ConstraintSemantics}. See {@link ConstraintSemantics} for more details.
+     * don't depend on rules that aren't compatible with the same environments. Defaults to
+     * {@ConstraintSemantics}. See {@ConstraintSemantics} for more details.
      */
     public Builder setConstraintSemantics(ConstraintSemantics<RuleContext> constraintSemantics) {
       this.constraintSemantics = constraintSemantics;
@@ -390,7 +387,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     /**
      * Overrides the transition factory run over all targets.
      *
-     * @see #addTrimmingTransitionFactory(TransitionFactory)
+     * @see {@link #addTrimmingTransitionFactory(TransitionFactory<Rule>)}
      */
     @VisibleForTesting(/* for testing trimming transition factories without relying on prod use */ )
     public Builder overrideTrimmingTransitionFactoryForTesting(TransitionFactory<Rule> factory) {
@@ -411,6 +408,16 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       return this;
     }
 
+    @Override
+    public boolean enableExecutionTransition() {
+      return enableExecutionTransition;
+    }
+
+    public Builder enableExecutionTransition(boolean flag) {
+      this.enableExecutionTransition = flag;
+      return this;
+    }
+
     /**
      * Overrides the predicate which determines whether the analysis cache should be invalidated for
      * the given options diff.
@@ -422,7 +429,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       return this.setShouldInvalidateCacheForOptionDiff(shouldInvalidateCacheForOptionDiff);
     }
 
-    private static RuleConfiguredTargetFactory createFactory(
+    private RuleConfiguredTargetFactory createFactory(
         Class<? extends RuleConfiguredTargetFactory> factoryClass) {
       try {
         Constructor<? extends RuleConfiguredTargetFactory> ctor = factoryClass.getConstructor();
@@ -435,7 +442,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       }
     }
 
-    private void commitRuleDefinition(Class<? extends RuleDefinition> definitionClass) {
+    private RuleClass commitRuleDefinition(Class<? extends RuleDefinition> definitionClass) {
       RuleDefinition instance =
           checkNotNull(
               ruleDefinitionMap.get(definitionClass.getName()),
@@ -478,6 +485,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       ruleMap.put(definitionClass, ruleClass);
       ruleClassMap.put(ruleClass.getName(), ruleClass);
       ruleDefinitionMap.put(ruleClass.getName(), instance);
+
+      return ruleClass;
     }
 
     /**
@@ -556,8 +565,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
           defaultWorkspaceFileSuffix.toString(),
           ImmutableList.copyOf(buildInfoFactories),
           ImmutableList.copyOf(configurationOptions),
-          FragmentClassSet.of(configurationFragmentClasses),
-          FragmentClassSet.of(universalFragments),
+          ImmutableList.copyOf(configurationFragmentClasses),
+          ImmutableList.copyOf(universalFragments),
           trimmingTransitionFactory,
           toolchainTaggedTrimmingTransition,
           shouldInvalidateCacheForOptionDiff,
@@ -573,18 +582,13 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     }
 
     @Override
-    public String getToolsRepository() {
-      return toolsRepository;
-    }
-
-    public Builder setNetworkAllowlistForTests(Label allowlist) {
-      networkAllowlistForTests = allowlist;
-      return this;
+    public Label getToolsLabel(String labelValue) {
+      return Label.parseAbsoluteUnchecked(toolsRepository + labelValue);
     }
 
     @Override
-    public Optional<Label> getNetworkAllowlistForTests() {
-      return Optional.ofNullable(networkAllowlistForTests);
+    public String getToolsRepository() {
+      return toolsRepository;
     }
   }
 
@@ -633,7 +637,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
   private final ImmutableList<Class<? extends FragmentOptions>> configurationOptions;
 
   /** The set of configuration fragment factories. */
-  private final FragmentClassSet configurationFragmentClasses;
+  private final ImmutableList<Class<? extends Fragment>> configurationFragmentClasses;
 
   /**
    * Maps build option names to matching config fragments. This is used to determine correct
@@ -655,9 +659,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
    * Configuration fragments that should be available to all rules even when they don't explicitly
    * require it.
    */
-  private final FragmentClassSet universalFragments;
-
-  private final FragmentClassSet allFragments;
+  private final ImmutableList<Class<? extends Fragment>> universalFragments;
 
   private final ImmutableList<BuildInfoFactory> buildInfoFactories;
 
@@ -694,8 +696,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       String defaultWorkspaceFileSuffix,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       ImmutableList<Class<? extends FragmentOptions>> configurationOptions,
-      FragmentClassSet configurationFragmentClasses,
-      FragmentClassSet universalFragments,
+      ImmutableList<Class<? extends Fragment>> configurationFragmentClasses,
+      ImmutableList<Class<? extends Fragment>> universalFragments,
       @Nullable TransitionFactory<Rule> trimmingTransitionFactory,
       PatchTransition toolchainTaggedTrimmingTransition,
       OptionsDiffPredicate shouldInvalidateCacheForOptionDiff,
@@ -737,7 +739,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     this.configurationFragmentMap = createFragmentMap(configurationFragmentClasses);
     this.constraintSemantics = constraintSemantics;
     this.thirdPartyLicenseExistencePolicy = thirdPartyLicenseExistencePolicy;
-    this.allFragments = FragmentClassSet.union(configurationFragmentClasses, universalFragments);
   }
 
   /**
@@ -747,7 +748,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
    * that's all that's needed to satisfy the config_setting.
    */
   private static Map<String, Class<? extends Fragment>> computeOptionsToFragmentMap(
-      FragmentClassSet configurationFragments) {
+      ImmutableList<Class<? extends Fragment>> configurationFragments) {
     Map<String, Class<? extends Fragment>> result = new LinkedHashMap<>();
     Map<Class<? extends FragmentOptions>, Integer> visitedOptionsClasses = new HashMap<>();
     for (Class<? extends Fragment> fragment : configurationFragments) {
@@ -827,7 +828,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
 
   /** Returns the set of configuration fragments provided by this module. */
   @Override
-  public FragmentClassSet getConfigurationFragments() {
+  public ImmutableList<Class<? extends Fragment>> getConfigurationFragments() {
     return configurationFragmentClasses;
   }
 
@@ -878,7 +879,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
    * Returns the configuration fragment that should be available to all rules even when they don't
    * explicitly require it.
    */
-  public FragmentClassSet getUniversalFragments() {
+  public ImmutableList<Class<? extends Fragment>> getUniversalFragments() {
     return universalFragments;
   }
 
@@ -909,7 +910,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
   }
 
   private static ImmutableMap<String, Class<?>> createFragmentMap(
-      FragmentClassSet configurationFragments) {
+      Iterable<Class<? extends Fragment>> configurationFragments) {
     ImmutableMap.Builder<String, Class<?>> mapBuilder = ImmutableMap.builder();
     for (Class<? extends Fragment> fragmentClass : configurationFragments) {
       StarlarkBuiltin fragmentModule = StarlarkAnnotations.getStarlarkBuiltin(fragmentClass);
@@ -994,8 +995,12 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
   }
 
   /** Returns all registered {@link Fragment} classes. */
-  public FragmentClassSet getAllFragments() {
-    return allFragments;
+  public ImmutableSortedSet<Class<? extends Fragment>> getAllFragments() {
+    ImmutableSortedSet.Builder<Class<? extends Fragment>> fragmentsBuilder =
+        ImmutableSortedSet.orderedBy(BuildConfiguration.lexicalFragmentSorter);
+    fragmentsBuilder.addAll(getConfigurationFragments());
+    fragmentsBuilder.addAll(getUniversalFragments());
+    return fragmentsBuilder.build();
   }
 
   /** Returns a reserved set of action mnemonics. These cannot be used from a Starlark action. */
