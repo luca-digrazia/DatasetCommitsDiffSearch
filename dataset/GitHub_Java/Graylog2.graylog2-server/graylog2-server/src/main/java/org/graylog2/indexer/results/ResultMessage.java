@@ -48,18 +48,18 @@ public class ResultMessage {
 
     public static ResultMessage parseFromSource(SearchHit hit) {
         ResultMessage m = new ResultMessage();
-        Map<String, Object> message;
-
         // There is no _source field if addFields is used for the request. Just use the returned fields in that case.
         if (hit.getSource() != null) {
-            message = hit.getSource();
+            m.setMessage(hit.getSource());
         } else {
-            message = Maps.newHashMap();
+            Map<String, Object> map = Maps.newHashMap();
+
             for (Map.Entry<String, SearchHitField> o : hit.fields().entrySet()) {
-                message.put(o.getKey(), o.getValue().getValue());
+                map.put(o.getKey(), o.getValue().getValue());
             }
+            m.setMessage(map);
+
         }
-        m.setMessage(hit.getId(), message);
         m.setIndex(hit.getIndex());
         m.setHighlightRanges(hit.getHighlightFields());
         return m;
@@ -67,15 +67,13 @@ public class ResultMessage {
 
     public static ResultMessage parseFromSource(GetResponse r) {
         ResultMessage m = new ResultMessage();
-        m.setMessage(r.getId(), r.getSource());
+        m.setMessage(r.getSource());
         m.setIndex(r.getIndex());
         return m;
     }
 
-    public void setMessage(String id, Map<String, Object> message) {
+    public void setMessage(Map<String, Object> message) {
         this.message = message;
-        this.message.put("_id", id);
-
         if (this.message.containsKey("timestamp")) {
             final Object tsField = this.message.get("timestamp");
             try {
