@@ -116,9 +116,9 @@ public final class CcCommon {
 
   public static final ImmutableSet<String> ALL_LINK_ACTIONS =
       ImmutableSet.of(
-          LinkTargetType.EXECUTABLE.getActionName(),
           Link.LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
-          Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName());
+          Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName(),
+          LinkTargetType.EXECUTABLE.getActionName());
 
   public static final ImmutableSet<String> ALL_ARCHIVE_ACTIONS =
       ImmutableSet.of(Link.LinkTargetType.STATIC_LIBRARY.getActionName());
@@ -834,11 +834,6 @@ public final class CcCommon {
         && fdoMode != FdoMode.AUTO_FDO
         && !allUnsupportedFeatures.contains(CppRuleClasses.FDO_OPTIMIZE)) {
       allFeatures.add(CppRuleClasses.FDO_OPTIMIZE);
-      // For LLVM, support implicit enabling of ThinLTO for FDO unless it has been
-      // explicitly disabled.
-      if (toolchain.isLLVMCompiler() && !allUnsupportedFeatures.contains(CppRuleClasses.THIN_LTO)) {
-        allFeatures.add(CppRuleClasses.ENABLE_FDO_THINLTO);
-      }
     }
     if (isFdo && fdoMode == FdoMode.AUTO_FDO) {
       allFeatures.add(CppRuleClasses.AUTOFDO);

@@ -111,6 +111,7 @@ public final class CcToolchainRule implements RuleDefinition {
         .add(attr("output_licenses", LICENSE))
         .add(attr("cpu", STRING).mandatory())
         .add(attr("compiler", STRING))
+        .add(attr("libc", STRING))
         .add(
             attr("all_files", LABEL)
                 .legacyAllowAnyFileType()
@@ -176,6 +177,7 @@ public final class CcToolchainRule implements RuleDefinition {
         // TODO(b/78578234): Make this the default and remove the late-bound versions.
         .add(attr("libc_top", LABEL).allowedFileTypes())
         .add(attr(LIBC_TOP_ATTR, LABEL).value(LIBC_TOP_VALUE))
+
         .add(attr(FDO_OPTIMIZE_ATTR, LABEL).singleArtifact().value(FDO_OPTIMIZE_VALUE))
         .add(
             attr(FDO_PROFILE_ATTR, LABEL)
@@ -193,10 +195,6 @@ public final class CcToolchainRule implements RuleDefinition {
                 .value(CppRuleClasses.LIPO_CONTEXT_COLLECTOR)
                 .skipPrereqValidatorCheck())
         .add(attr("proto", Type.STRING))
-        .add(
-            attr("toolchain_identifier", Type.STRING)
-                .nonconfigurable("Used in configuration creation")
-                .value(""))
         .build();
   }
 

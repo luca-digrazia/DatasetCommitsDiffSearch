@@ -383,7 +383,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     FileTypeSet validExtensions =
         FileTypeSet.of(
             CppFileTypes.GCC_AUTO_PROFILE,
-            CppFileTypes.XBINARY_PROFILE,
             CppFileTypes.LLVM_PROFILE,
             CppFileTypes.LLVM_PROFILE_RAW,
             FileType.of(".zip"));
@@ -399,8 +398,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       fdoMode = FdoMode.AUTO_FDO;
     } else if (isLLVMOptimizedFdo(toolchainInfo.isLLVMCompiler(), fdoZip)) {
       fdoMode = FdoMode.LLVM_FDO;
-    } else if (CppFileTypes.XBINARY_PROFILE.matches(fdoZip.getBaseName())) {
-      fdoMode = FdoMode.XBINARY_FDO;
     } else {
       fdoMode = FdoMode.VANILLA;
     }
@@ -756,7 +753,12 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     if (compiler.isEmpty()) {
       compiler = null;
     }
-    CrosstoolConfigurationIdentifier config = new CrosstoolConfigurationIdentifier(cpu, compiler);
+    String libc = ruleContext.attributes().get("libc", Type.STRING);
+    if (libc.isEmpty()) {
+      libc = null;
+    }
+    CrosstoolConfigurationIdentifier config =
+        new CrosstoolConfigurationIdentifier(cpu, compiler, libc);
 
     try {
       return CrosstoolConfigurationLoader.selectToolchain(

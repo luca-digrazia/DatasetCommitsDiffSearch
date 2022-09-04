@@ -52,7 +52,6 @@ import java.util.Map;
  */
 @AutoCodec
 public final class LtoBackendArtifacts {
-
   // A file containing mapping of symbol => bitcode file containing the symbol.
   // It will be null when this is a shared non-lto backend.
   private final Artifact index;
@@ -198,7 +197,8 @@ public final class LtoBackendArtifacts {
       builder.addImportsInfo(bitcodeFiles, imports);
       // Although the imports file is not used by the LTOBackendAction while the action is
       // executing, it is needed during the input discovery phase, and we must list it as an input
-      // to the action in order for it to be preserved under --discard_orphaned_artifacts.
+      // to the action // in order for it to be preserved under
+      // --experimental_discard_orphaned_artifacts.
       builder.addInput(imports);
     }
     if (index != null) {
@@ -235,7 +235,7 @@ public final class LtoBackendArtifacts {
             fdoSupport
                 .getFdoSupport()
                 .buildProfileForLtoBackend(
-                    fdoSupport, featureConfiguration, buildVariablesBuilder));
+                    fdoSupport, featureConfiguration, buildVariablesBuilder, ruleContext));
 
     if (profileArtifacts.getProfileArtifact() != null) {
       builder.addInput(profileArtifacts.getProfileArtifact());
@@ -259,8 +259,7 @@ public final class LtoBackendArtifacts {
     execArgs.addAll(commandLine);
     CcToolchainVariables buildVariables = buildVariablesBuilder.build();
     // Feature options should go after --copt for consistency with compile actions.
-    execArgs.addAll(
-        featureConfiguration.getCommandLine(CppActionNames.LTO_BACKEND, buildVariables));
+    execArgs.addAll(featureConfiguration.getCommandLine("lto-backend", buildVariables));
     // If this is a PIC compile (set based on the CppConfiguration), the PIC
     // option should be added after the rest of the command line so that it
     // cannot be overridden. This is consistent with the ordering in the

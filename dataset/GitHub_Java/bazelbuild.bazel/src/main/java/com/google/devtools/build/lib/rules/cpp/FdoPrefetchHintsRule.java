@@ -58,7 +58,7 @@ public final class FdoPrefetchHintsRule implements RuleDefinition {
   }
 }
 
-/*<!-- #BLAZE_RULE (NAME = fdo_prefetch_hints, TYPE = LIBRARY, FAMILY = C / C++) -->
+/*<!-- #BLAZE_RULE (NAME = fdo_prefetch_hints, TYPE = LIBRARY, FAMILY = Cpp) -->
 
 <p>Represents an FDO prefetch hints profile that is either in the workspace or at a specified
 absolute path.
