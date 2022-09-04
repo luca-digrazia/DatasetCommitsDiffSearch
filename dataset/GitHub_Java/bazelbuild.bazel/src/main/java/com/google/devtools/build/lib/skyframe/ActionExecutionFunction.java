@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -87,6 +88,14 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     stateMap = Maps.newConcurrentMap();
   }
 
+  private static final Function<String, SkyKey> VAR_TO_SKYKEY =
+      new Function<String, SkyKey>() {
+        @Override
+        public SkyKey apply(String var) {
+          return LegacySkyKey.create(SkyFunctions.CLIENT_ENVIRONMENT_VARIABLE, var);
+        }
+      };
+
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env) throws ActionExecutionFunctionException,
       InterruptedException {
@@ -109,9 +118,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
 
     // Look up the parts of the environment that influence the action.
     Map<SkyKey, SkyValue> clientEnvLookup =
-        env.getValues(
-            Iterables.transform(
-                action.getClientEnvironmentVariables(), ClientEnvironmentFunction::key));
+        env.getValues(Iterables.transform(action.getClientEnvironmentVariables(), VAR_TO_SKYKEY));
     if (env.valuesMissing()) {
       return null;
     }
