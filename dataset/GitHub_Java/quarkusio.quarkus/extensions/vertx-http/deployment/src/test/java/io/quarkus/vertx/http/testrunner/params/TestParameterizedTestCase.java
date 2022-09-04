@@ -35,13 +35,12 @@ public class TestParameterizedTestCase {
 
     @Test
     public void testParameterizedTests() throws InterruptedException {
-        ContinuousTestingTestUtils utils = new ContinuousTestingTestUtils();
-        TestStatus ts = utils.waitForNextCompletion();
-        ;
-
+        TestStatus ts = ContinuousTestingTestUtils.waitForFirstRunToComplete();
+        Assertions.assertEquals(1L, ts.getLastRun());
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(4L, ts.getTestsPassed());
         Assertions.assertEquals(0L, ts.getTestsSkipped());
+        Assertions.assertEquals(-1L, ts.getRunning());
 
         test.modifyTestSourceFile(ParamET.class, new Function<String, String>() {
             @Override
@@ -49,11 +48,12 @@ public class TestParameterizedTestCase {
                 return s.replace("4", "3");
             }
         });
-        ts = utils.waitForNextCompletion();
+        ts = ContinuousTestingTestUtils.waitForRun(2);
+        Assertions.assertEquals(2L, ts.getLastRun());
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(5L, ts.getTestsPassed()); //passing test should not have been run
         Assertions.assertEquals(0L, ts.getTestsSkipped());
-
+        Assertions.assertEquals(-1L, ts.getRunning());
         Assertions.assertEquals(5L, ts.getTotalTestsPassed());
 
         test.modifySourceFile(HelloResource.class, new Function<String, String>() {
@@ -62,11 +62,13 @@ public class TestParameterizedTestCase {
                 return s.replace("hello", "boo");
             }
         });
-        ts = utils.waitForNextCompletion();
+        ts = ContinuousTestingTestUtils.waitForRun(3);
+        Assertions.assertEquals(3L, ts.getLastRun());
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(0L, ts.getTestsPassed());
         Assertions.assertEquals(4L, ts.getTotalTestsPassed());
         Assertions.assertEquals(0L, ts.getTestsSkipped());
+        Assertions.assertEquals(-1L, ts.getRunning());
 
     }
 }
