@@ -1,3 +1,18 @@
+/**
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package com.googlecode.androidannotations.test15.instancestate;
 
 import java.util.ArrayList;
@@ -6,146 +21,151 @@ import android.app.Activity;
 import android.os.Bundle;
 
 import com.googlecode.androidannotations.annotations.EActivity;
-import com.googlecode.androidannotations.annotations.SaveOnActivityDestroy;
+import com.googlecode.androidannotations.annotations.InstanceState;
 import com.googlecode.androidannotations.test15.R;
 
 @EActivity(R.layout.main)
 public class SaveInstanceStateActivity extends Activity {
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Long nullWrappedLong = 42l;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	boolean myBoolean;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	boolean[] myBooleanArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Boolean myBooleanObject;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Boolean[] myBooleanObjectArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	byte myByte;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	byte[] myByteArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Byte myByteObject;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Byte[] myByteObjectArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	char myChar;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	char[] myCharacterArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Character myCharacterObject;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Character[] myCharacterObjectArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	CharSequence myCharSequence;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	double myDouble;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	double[] myDoubleArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Double myDoubleObject;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Double[] myDoubleObjectArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	float myFloat;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	float[] myFloatArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Float myFloatObject;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Float[] myFloatObjectArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	int myInt;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	int[] myIntegerArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Integer myIntegerObject;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Integer[] myIntegerObjectArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	ArrayList<Integer> myIntegerArrayList;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	long myLong;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	long[] myLongArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Long myLongObject;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Long[] myLongObjectArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	short myShort;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	short[] myShortArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Short myShortObject;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Short[] myShortObjectArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	String myString;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	String[] myStringArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	ArrayList<String> myStringList;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	MySerializableBean mySerializableBean;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	MySerializableBean[] mySerializableBeanArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	MyParcelableBean myParcelableBean;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	MyParcelableBean[] myParcelableBeanArray;
 
-	@SaveOnActivityDestroy
+	@InstanceState
 	Bundle myBundle;
 
-	/*
-	 * This should be solved before we merge this feature. We should also create
-	 * the associated test.
-	 */
-	// @SaveOnActivityDestroy
-	// MyGenericSerializableBeasn<MySerializableBean> myGenericSerializableBean;
+	@InstanceState
+	MyGenericSerializableBean<Integer> myGenericSerializableBean;
+
+	@InstanceState
+	MyGenericSerializableBean<Integer>[] myGenericSerializableBeanArray;
+
+	@InstanceState
+	MyGenericParcelableBean<String> myGenericParcelableBean;
+
+	@InstanceState
+	MyGenericParcelableBean<Integer>[] myGenericParcelableBeanArray;
 
 }
