@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.configuration;
 
@@ -20,10 +20,13 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
-import org.testng.Assert;
-import org.testng.annotations.Test;
+import org.junit.Test;
+
+import java.util.Collections;
+import java.util.Map;
 
 import static java.util.Collections.singletonMap;
+import static org.junit.Assert.assertEquals;
 
 public class MongoDbConfigurationTest {
     @Test
@@ -31,7 +34,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_max_connections", "12345")), configuration).process();
 
-        Assert.assertEquals(12345, configuration.getMaxConnections());
+        assertEquals(12345, configuration.getMaxConnections());
     }
 
     @Test
@@ -39,7 +42,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(), configuration).process();
 
-        Assert.assertEquals(1000, configuration.getMaxConnections());
+        assertEquals(1000, configuration.getMaxConnections());
     }
 
     @Test
@@ -47,7 +50,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_threads_allowed_to_block_multiplier", "12345")), configuration).process();
 
-        Assert.assertEquals(12345, configuration.getThreadsAllowedToBlockMultiplier());
+        assertEquals(12345, configuration.getThreadsAllowedToBlockMultiplier());
     }
 
     @Test
@@ -55,70 +58,47 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(), configuration).process();
 
-        Assert.assertEquals(5, configuration.getThreadsAllowedToBlockMultiplier());
+        assertEquals(5, configuration.getThreadsAllowedToBlockMultiplier());
     }
 
     @Test
-    public void testGetMongoDBReplicaSetServersEmpty() throws RepositoryException, ValidationException {
+    public void validateSucceedsIfUriIsMissing() throws RepositoryException, ValidationException {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "")), configuration).process();
+        new JadConfig(new InMemoryRepository(Collections.emptyMap()), configuration).process();
+        assertEquals("mongodb://localhost/graylog", configuration.getUri());
+    }
 
-        Assert.assertNull(configuration.getReplicaSet());
+    @Test(expected = ValidationException.class)
+    public void validateFailsIfUriIsEmpty() throws RepositoryException, ValidationException {
+        MongoDbConfiguration configuration = new MongoDbConfiguration();
+        new JadConfig(new InMemoryRepository(singletonMap("mongodb_uri", "")), configuration).process();
+    }
+
+    @Test(expected = ValidationException.class)
+    public void validateFailsIfUriIsInvalid() throws RepositoryException, ValidationException {
+        MongoDbConfiguration configuration = new MongoDbConfiguration();
+        new JadConfig(new InMemoryRepository(singletonMap("mongodb_uri", "Boom")), configuration).process();
     }
 
     @Test
-    public void testGetMongoDBReplicaSetServersMalformed() throws RepositoryException, ValidationException {
+    public void validateSucceedsIfUriIsValid() throws Exception {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "malformed#!#")), configuration).process();
+        final Map<String, String> properties = singletonMap(
+                "mongodb_uri", "mongodb://example.com:1234,127.0.0.1:5678/TEST"
+        );
+        new JadConfig(new InMemoryRepository(properties), configuration).process();
 
-        Assert.assertNull(configuration.getReplicaSet());
+        assertEquals("mongodb://example.com:1234,127.0.0.1:5678/TEST", configuration.getMongoClientURI().toString());
     }
 
     @Test
-    public void testGetMongoDBReplicaSetServersUnknownHost() throws RepositoryException, ValidationException {
-
+    public void validateSucceedsWithIPv6Address() throws Exception {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "this-host-hopefully-does-not-exist.:27017")), configuration).process();
+        final Map<String, String> properties = singletonMap(
+                "mongodb_uri", "mongodb://[2001:DB8::DEAD:BEEF:CAFE:BABE]:1234,127.0.0.1:5678/TEST"
+        );
+        new JadConfig(new InMemoryRepository(properties), configuration).process();
 
-        Assert.assertNull(configuration.getReplicaSet());
-    }
-
-    @Test
-    public void testGetMongoDBReplicaSetServersMalformedPort() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "127.0.0.1:HAHA")), configuration).process();
-
-        Assert.assertNull(configuration.getReplicaSet());
-    }
-
-    @Test
-    public void testGetMongoDBReplicaSetServersDefaultPort() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "127.0.0.1")), configuration).process();
-
-        Assert.assertEquals(configuration.getReplicaSet().get(0).getPort(), 27017);
-    }
-
-    @Test
-    public void testGetMongoDBReplicaSetServers() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "127.0.0.1:27017,127.0.0.1:27018")), configuration).process();
-
-        Assert.assertEquals(2, configuration.getReplicaSet().size());
-    }
-
-    @Test
-    public void testGetMongoDBReplicaSetServersIPv6() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "fe80::221:6aff:fe6f:6c88,[fe80::221:6aff:fe6f:6c89]:27018,127.0.0.1:27019")), configuration).process();
-
-        Assert.assertEquals(3, configuration.getReplicaSet().size());
-    }
-
-
-    @Test(expectedExceptions = ValidationException.class)
-    public void testValidateMongoDbAuth() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_useauth", "true")), configuration).process();
+        assertEquals("mongodb://[2001:DB8::DEAD:BEEF:CAFE:BABE]:1234,127.0.0.1:5678/TEST", configuration.getMongoClientURI().toString());
     }
 }
