@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.manifold;
 
@@ -107,9 +107,9 @@ public class LLE implements Serializable {
 
         // Use largest connected component of nearest neighbor graph.
         int[][] N = new int[data.length][k];
-        Graph graph = NearestNeighborGraph.of(data, k, (v1, v2, weight, j) -> {
+        Graph graph = NearestNeighborGraph.of(data, k, Optional.of((v1, v2, weight, j) -> {
             N[v1][j] = v2;
-        });
+        }));
         NearestNeighborGraph nng = NearestNeighborGraph.largest(graph);
 
         int[] index = nng.index;

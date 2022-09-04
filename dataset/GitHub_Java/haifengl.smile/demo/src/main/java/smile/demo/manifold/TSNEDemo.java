@@ -24,12 +24,11 @@ import javax.swing.*;
 
 import org.apache.commons.csv.CSVFormat;
 import smile.data.DataFrame;
-import smile.io.Read;
-import smile.plot.swing.Palette;
-import smile.plot.swing.Canvas;
+import smile.io.DatasetReader;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
 import smile.manifold.TSNE;
 import smile.math.MathEx;
-import smile.plot.swing.ScatterPlot;
 import smile.projection.PCA;
 
 /**
@@ -94,10 +93,14 @@ public class TSNEDemo extends JPanel implements Runnable, ActionListener {
 
         double[][] y = tsne.coordinates;
 
-        Canvas plot = ScatterPlot.of(y, labels).canvas();
+        PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+
+        for (int i = 0; i < y.length; i++) {
+            plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+        }
 
         plot.setTitle("t-SNE");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         return pane;
     }
@@ -132,10 +135,10 @@ public class TSNEDemo extends JPanel implements Runnable, ActionListener {
 
             try {
                 CSVFormat format = CSVFormat.DEFAULT.withDelimiter(' ').withIgnoreSurroundingSpaces(true);
-                DataFrame dataset = Read.csv(smile.util.Paths.getTestData("mnist/mnist2500_X.txt"), format);
+                DataFrame dataset = DatasetReader.csv(smile.util.Paths.getTestData("mnist/mnist2500_X.txt"), format);
                 data = dataset.toArray();
 
-                dataset = Read.csv(smile.util.Paths.getTestData("mnist/mnist2500_labels.txt"));
+                dataset = DatasetReader.csv(smile.util.Paths.getTestData("mnist/mnist2500_labels.txt"));
                 labels = dataset.column(0).toIntArray();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);

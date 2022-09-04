@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,18 +13,17 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.manifold;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 import smile.math.MathEx;
 import smile.stat.distribution.GaussianDistribution;
 
 /**
- * The t-distributed stochastic neighbor embedding. The t-SNE is a nonlinear
+ * The t-distributed stochastic neighbor embedding (t-SNE) is a nonlinear
  * dimensionality reduction technique that is particularly well suited
  * for embedding high-dimensional data into a space of two or three
  * dimensions, which can then be visualized in a scatter plot. Specifically,
@@ -45,29 +44,19 @@ import smile.stat.distribution.GaussianDistribution;
  *
  * <h2>References</h2>
  * <ol>
- * <li>L.J.P. van der Maaten. Accelerating t-SNE using Tree-Based Algorithms.
- *     Journal of Machine Learning Research 15(Oct):3221-3245, 2014. </li>
- * <li>L.J.P. van der Maaten and G.E. Hinton. Visualizing Non-Metric
- *     Similarities in Multiple Maps. Machine Learning 87(1):33-55, 2012. </li>
- * <li>L.J.P. van der Maaten. Learning a Parametric Embedding by Preserving
- *     Local Structure. In Proceedings of the Twelfth International Conference
- *     on Artificial Intelligence &amp; Statistics (AI-STATS),
- *     JMLR W&amp;CP 5:384-391, 2009. </li>
- * <li>L.J.P. van der Maaten and G.E. Hinton. Visualizing High-Dimensional
- *     Data Using t-SNE. Journal of Machine Learning Research
- *     9(Nov):2579-2605, 2008. </li>
+ * <li>L.J.P. van der Maaten. Accelerating t-SNE using Tree-Based Algorithms. Journal of Machine Learning Research 15(Oct):3221-3245, 2014. </li>
+ * <li>L.J.P. van der Maaten and G.E. Hinton. Visualizing Non-Metric Similarities in Multiple Maps. Machine Learning 87(1):33-55, 2012. </li>
+ * <li>L.J.P. van der Maaten. Learning a Parametric Embedding by Preserving Local Structure. In Proceedings of the Twelfth International Conference on Artificial Intelligence & Statistics (AI-STATS), JMLR W&CP 5:384-391, 2009. </li>
+ * <li>L.J.P. van der Maaten and G.E. Hinton. Visualizing High-Dimensional Data Using t-SNE. Journal of Machine Learning Research 9(Nov):2579-2605, 2008. </li>
  * </ol>
- *
- * @see UMAP
  *
  * @author Haifeng Li
  */
-public class TSNE implements Serializable {
-    private static final long serialVersionUID = 2L;
+public class TSNE {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TSNE.class);
 
     /**
-     * The coordinate matrix in embedding space.
+     * Coordinate matrix.
      */
     public final double[][] coordinates;
 
@@ -89,8 +78,7 @@ public class TSNE implements Serializable {
 
     /** Constructor. Train t-SNE for 1000 iterations, perplexity = 20 and learning rate = 200.
      *
-     * @param X the input data. If X is a square matrix, it is assumed to be
-     *          the squared distance/dissimilarity matrix.
+     * @param X input data. If X is a square matrix, it is assumed to be the squared distance/dissimilarity matrix.
      * @param d the dimension of embedding space.
      */
     public TSNE(double[][] X, int d) {
@@ -99,8 +87,7 @@ public class TSNE implements Serializable {
 
     /** Constructor. Train t-SNE for given number of iterations.
      *
-     * @param X the input data. If X is a square matrix, it is assumed to be
-     *         the squared distance/dissimilarity matrix.
+     * @param X input data. If X is a square matrix, it is assumed to be the squared distance/dissimilarity matrix.
      * @param d the dimension of embedding space.
      * @param perplexity the perplexity of the conditional distribution.
      * @param eta the learning rate.

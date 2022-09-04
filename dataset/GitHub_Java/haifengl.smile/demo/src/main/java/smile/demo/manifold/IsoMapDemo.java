@@ -17,6 +17,7 @@
 
 package smile.demo.manifold;
 
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GridLayout;
 
@@ -24,9 +25,10 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
-import smile.plot.swing.Canvas;
+import smile.graph.Graph;
+import smile.plot.PlotCanvas;
 import smile.manifold.IsoMap;
-import smile.plot.swing.Wireframe;
+import smile.math.MathEx;
 
 /**
  *
@@ -53,12 +55,23 @@ public class IsoMapDemo extends ManifoldDemo {
         IsoMap isomap = IsoMap.of(data, k);
         System.out.format("Learn IsoMap from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
-        double[][] vertices = isomap.coordinates;
-        int[][] edges = isomap.graph.getEdges().stream().map(edge -> new int[]{edge.v1, edge.v2}).toArray(int[][]::new);
+        double[][] y = isomap.coordinates;
 
-        Canvas plot = Wireframe.of(vertices, edges).canvas();
+        PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+        plot.points(y, 'o', Color.RED);
+
+        int n = y.length;
+        Graph graph = isomap.graph;
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < i; j++) {
+                if (graph.hasEdge(i, j)) {
+                    plot.line(y[i], y[j]);
+                }
+            }
+        }
+
         plot.setTitle("IsoMap");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         return pane;
     }

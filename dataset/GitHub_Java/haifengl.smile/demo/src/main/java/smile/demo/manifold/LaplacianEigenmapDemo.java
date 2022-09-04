@@ -17,6 +17,7 @@
 
 package smile.demo.manifold;
 
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GridLayout;
 
@@ -27,9 +28,10 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-import smile.plot.swing.Canvas;
+import smile.graph.Graph;
+import smile.plot.PlotCanvas;
 import smile.manifold.LaplacianEigenmap;
-import smile.plot.swing.Wireframe;
+import smile.math.MathEx;
 
 /**
  * 
@@ -72,12 +74,23 @@ public class LaplacianEigenmapDemo extends ManifoldDemo {
         LaplacianEigenmap eigenmap = LaplacianEigenmap.of(data, k, 2, sigma);
         System.out.format("Learn Laplacian Eigenmap from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
-        double[][] vertices = eigenmap.coordinates;
-        int[][] edges = eigenmap.graph.getEdges().stream().map(edge -> new int[]{edge.v1, edge.v2}).toArray(int[][]::new);
+        double[][] y = eigenmap.coordinates;
 
-        Canvas plot = Wireframe.of(vertices, edges).canvas();
+        PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+        plot.points(y, 'o', Color.RED);
+
+        int n = y.length;
+        Graph graph = eigenmap.graph;
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < i; j++) {
+                if (graph.hasEdge(i, j)) {
+                    plot.line(y[i], y[j]);
+                }
+            }
+        }
+
         plot.setTitle("Laplacian Eigenmap");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         sigmaField.setEnabled(true);
         return pane;
