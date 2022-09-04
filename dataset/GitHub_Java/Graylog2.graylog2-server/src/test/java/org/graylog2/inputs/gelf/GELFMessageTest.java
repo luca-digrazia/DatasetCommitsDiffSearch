@@ -99,19 +99,18 @@ public class GELFMessageTest {
     }
 
     @Test
-    public void testGelfMessageChunkCreation() throws Exception {
+    public void testAsChunk() throws Exception {
         String id = "foobar01";
         int seqNum = 1;
         int seqCnt = 5;
         byte[] data = TestHelper.gzipCompress(GELF_JSON);
 
         GELFMessage msg = new GELFMessage(TestHelper.buildGELFMessageChunk(id, seqNum, seqCnt, data));
-        GELFMessageChunk chunk = new GELFMessageChunk(msg);
         
-        assertEquals(TestHelper.toHex(id), chunk.getId());
-        assertEquals(seqNum, chunk.getSequenceNumber());
-        assertEquals(seqCnt, chunk.getSequenceCount());
-        assertArrayEquals(data, chunk.getData());
+        assertEquals(TestHelper.toHex(id), msg.asChunk().getId());
+        assertEquals(seqNum, msg.asChunk().getSequenceNumber());
+        assertEquals(seqCnt, msg.asChunk().getSequenceCount());
+        assertArrayEquals(data, msg.asChunk().getData());
     }
 
 }

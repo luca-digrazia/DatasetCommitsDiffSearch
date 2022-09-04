@@ -47,7 +47,7 @@ public class TestHelper {
 
     public static byte[] gzipCompress(String what) throws IOException {
         // GZIP compress message.
-        ByteArrayInputStream compressMe = new ByteArrayInputStream(what.getBytes("UTF-8"));
+        ByteArrayInputStream compressMe = new ByteArrayInputStream(what.getBytes());
         ByteArrayOutputStream compressedMessage = new ByteArrayOutputStream();
         GZIPOutputStream out = new GZIPOutputStream(compressedMessage);
         for (int c = compressMe.read(); c != -1; c = compressMe.read()) {

@@ -101,7 +101,7 @@ public final class GELFMessageChunk {
         return this.sequenceNumber;
     }
 
-    private void read() throws Exception {
+    public void read() throws Exception {
         extractId();
         extractSequenceCount();
         extractSequenceNumber();
