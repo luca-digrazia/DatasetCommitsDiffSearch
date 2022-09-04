@@ -45,8 +45,7 @@ public final class ResourceApk {
   private final AndroidResources primaryResources;
   private final AndroidAssets primaryAssets;
 
-  // The non-binary XML version of AndroidManifest.xml
-  private final ProcessedAndroidManifest manifest;
+  private final Artifact manifest; // The non-binary XML version of AndroidManifest.xml
   private final Artifact rTxt;
   @Nullable private final Artifact resourceProguardConfig;
   @Nullable private final Artifact mainDexProguardConfig;
@@ -69,7 +68,7 @@ public final class ResourceApk {
         resourceContainer,
         resourceContainer.getAndroidResources(),
         resourceContainer.getAndroidAssets(),
-        resourceContainer.getProcessedManifest(),
+        resourceContainer.getManifest(),
         resourceContainer.getRTxt(),
         resourceProguardConfig,
         mainDexProguardConfig);
@@ -89,7 +88,7 @@ public final class ResourceApk {
         resources,
         resources,
         assets,
-        resources.getProcessedManifest(),
+        resources.getManifest(),
         resources.getRTxt(),
         resourceProguardConfig,
         mainDexProguardConfig);
@@ -104,7 +103,7 @@ public final class ResourceApk {
       @Nullable ValidatedAndroidData validatedResources,
       AndroidResources primaryResources,
       AndroidAssets primaryAssets,
-      ProcessedAndroidManifest manifest,
+      Artifact manifest,
       Artifact rTxt,
       @Nullable Artifact resourceProguardConfig,
       @Nullable Artifact mainDexProguardConfig) {
@@ -156,7 +155,7 @@ public final class ResourceApk {
   }
 
   public Artifact getManifest() {
-    return manifest.getManifest();
+    return manifest;
   }
 
   public Artifact getRTxt() {
@@ -174,7 +173,7 @@ public final class ResourceApk {
   static ResourceApk fromTransitiveResources(
       ResourceDependencies resourceDeps,
       AssetDependencies assetDeps,
-      ProcessedAndroidManifest manifest,
+      Artifact manifest,
       Artifact rTxt) {
     return new ResourceApk(
         null,
@@ -217,9 +216,9 @@ public final class ResourceApk {
    * <p>If the ResourceApk was generated from local resources, that will be the direct dependencies
    * and the rest will be transitive.
    */
-  AndroidResourcesInfo toResourceInfo(Label label) {
+  private AndroidResourcesInfo toResourceInfo(Label label) {
     if (validatedResources == null) {
-      return resourceDeps.toInfo(label, manifest, rTxt);
+      return resourceDeps.toInfo(label);
     }
     return resourceDeps.toInfo(validatedResources);
   }

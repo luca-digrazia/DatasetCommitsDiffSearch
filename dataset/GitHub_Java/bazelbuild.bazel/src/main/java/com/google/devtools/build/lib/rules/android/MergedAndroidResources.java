@@ -38,7 +38,7 @@ public class MergedAndroidResources extends ParsedAndroidResources {
   private final ProcessedAndroidManifest manifest;
 
   public static MergedAndroidResources mergeFrom(
-      RuleContext ruleContext, ParsedAndroidResources parsed, ResourceDependencies resourceDeps)
+      RuleContext ruleContext, ParsedAndroidResources parsed, boolean neverlink)
       throws InterruptedException, RuleErrorException {
 
     AndroidConfiguration androidConfiguration = AndroidCommon.getAndroidConfig(ruleContext);
@@ -54,7 +54,7 @@ public class MergedAndroidResources extends ParsedAndroidResources {
     AndroidResourceMergingActionBuilder builder =
         new AndroidResourceMergingActionBuilder(ruleContext)
             .setJavaPackage(parsed.getJavaPackage())
-            .withDependencies(resourceDeps)
+            .withDependencies(ResourceDependencies.fromRuleDeps(ruleContext, neverlink))
             .setThrowOnResourceConflict(androidConfiguration.throwOnResourceConflict())
             .setUseCompiledMerge(useCompiledMerge);
 
@@ -128,10 +128,6 @@ public class MergedAndroidResources extends ParsedAndroidResources {
 
   @Override
   public ProcessedAndroidManifest getStampedManifest() {
-    return manifest;
-  }
-
-  public ProcessedAndroidManifest getProcessedManifest() {
     return manifest;
   }
 

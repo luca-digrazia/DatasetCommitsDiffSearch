@@ -32,19 +32,16 @@ public class ParsedAndroidResources extends AndroidResources
   private final StampedAndroidManifest manifest;
 
   public static ParsedAndroidResources parseFrom(
-      RuleContext ruleContext,
-      AndroidResources resources,
-      StampedAndroidManifest manifest,
-      boolean enableDataBinding,
-      AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
+      RuleContext ruleContext, AndroidResources resources, StampedAndroidManifest manifest)
+      throws RuleErrorException, InterruptedException {
 
-    boolean isAapt2 = aaptVersion == AndroidAaptVersion.AAPT2;
+    boolean isAapt2 =
+        AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2;
 
     AndroidResourceParsingActionBuilder builder =
         new AndroidResourceParsingActionBuilder(ruleContext);
 
-    if (enableDataBinding && isAapt2) {
+    if (DataBinding.isEnabled(ruleContext) && isAapt2) {
       // TODO(corysmith): Centralize the data binding processing and zipping into a single
       // action. Data binding processing needs to be triggered here as well as the merger to
       // avoid aapt2 from throwing an error during compilation.
@@ -126,14 +123,9 @@ public class ParsedAndroidResources extends AndroidResources
   }
 
   /** Merges this target's resources with resources from dependencies. */
-  MergedAndroidResources merge(
-      RuleContext ruleContext,
-      ResourceDependencies resourceDeps,
-      boolean enableDataBinding,
-      AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
-    return MergedAndroidResources.mergeFrom(
-        ruleContext, this, resourceDeps, enableDataBinding, aaptVersion);
+  public MergedAndroidResources merge(RuleContext ruleContext, boolean neverlink)
+      throws InterruptedException, RuleErrorException {
+    return MergedAndroidResources.mergeFrom(ruleContext, this, neverlink);
   }
 
   @Override

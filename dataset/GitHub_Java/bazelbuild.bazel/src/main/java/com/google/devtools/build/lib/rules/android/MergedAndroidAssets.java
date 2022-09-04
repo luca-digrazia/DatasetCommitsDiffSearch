@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import java.util.Objects;
 
 /** Android assets that have been merged together with their dependencies. */
@@ -23,16 +25,22 @@ public class MergedAndroidAssets extends ParsedAndroidAssets {
   private final Artifact mergedAssets;
   private final AssetDependencies assetDependencies;
 
+  public static MergedAndroidAssets mergeFrom(
+      RuleContext ruleContext, ParsedAndroidAssets parsed, boolean neverlink)
+      throws InterruptedException {
+    return mergeFrom(ruleContext, parsed, AssetDependencies.fromRuleDeps(ruleContext, neverlink));
+  }
+
+  @VisibleForTesting
   static MergedAndroidAssets mergeFrom(
-      AndroidDataContext dataContext, ParsedAndroidAssets parsed, AssetDependencies deps)
+      RuleContext ruleContext, ParsedAndroidAssets parsed, AssetDependencies deps)
       throws InterruptedException {
 
     Artifact mergedAssets =
-        dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_ASSETS_ZIP);
+        ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_ASSETS_ZIP);
 
-    BusyBoxActionBuilder builder =
-        BusyBoxActionBuilder.create(dataContext.getRuleContext(), "MERGE_ASSETS");
-    if (dataContext.getAndroidConfig().throwOnResourceConflict()) {
+    BusyBoxActionBuilder builder = BusyBoxActionBuilder.create(ruleContext, "MERGE_ASSETS");
+    if (AndroidCommon.getAndroidConfig(ruleContext).throwOnResourceConflict()) {
       builder.addFlag("--throwOnAssetConflict");
     }
 

@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
@@ -53,11 +52,7 @@ public class ProcessedAndroidData {
 
   /** Processes Android data (assets, resources, and manifest) for android_binary targets. */
   public static ProcessedAndroidData processBinaryDataFrom(
-      RuleContext ruleContext,
-      StampedAndroidManifest manifest,
-      boolean conditionalKeepRules,
-      Map<String, String> manifestValues,
-      AndroidAaptVersion aaptVersion)
+      RuleContext ruleContext, StampedAndroidManifest manifest, boolean conditionalKeepRules)
       throws RuleErrorException, InterruptedException {
     if (conditionalKeepRules
         && AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) != AndroidAaptVersion.AAPT2) {
@@ -66,7 +61,7 @@ public class ProcessedAndroidData {
     }
 
     AndroidResourcesProcessorBuilder builder =
-        builderForNonIncrementalTopLevelTarget(ruleContext, manifest, manifestValues, aaptVersion)
+        builderForNonIncrementalTopLevelTarget(ruleContext, manifest)
             .setUseCompiledResourcesForMerge(
                 AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2
                     && AndroidCommon.getAndroidConfig(ruleContext).skipParsingAction())
@@ -100,13 +95,11 @@ public class ProcessedAndroidData {
       RuleContext ruleContext,
       StampedAndroidManifest manifest,
       Artifact apkOut,
-      String proguardPrefix,
-      Map<String, String> manifestValues)
+      String proguardPrefix)
       throws RuleErrorException {
 
     AndroidResourcesProcessorBuilder builder =
-        builderForTopLevelTarget(ruleContext, manifest, proguardPrefix, manifestValues)
-            .setApkOut(apkOut);
+        builderForTopLevelTarget(ruleContext, manifest, proguardPrefix).setApkOut(apkOut);
 
     return buildActionForBinary(ruleContext, builder, manifest);
   }
@@ -142,14 +135,10 @@ public class ProcessedAndroidData {
 
   /** Processes Android data (assets, resources, and manifest) for android_local_test targets. */
   public static ProcessedAndroidData processLocalTestDataFrom(
-      RuleContext ruleContext,
-      StampedAndroidManifest manifest,
-      Map<String, String> manifestValues,
-      AndroidAaptVersion aaptVersion)
+      RuleContext ruleContext, StampedAndroidManifest manifest)
       throws RuleErrorException, InterruptedException {
 
-    return builderForNonIncrementalTopLevelTarget(
-            ruleContext, manifest, manifestValues, aaptVersion)
+    return builderForNonIncrementalTopLevelTarget(ruleContext, manifest)
         .setUseCompiledResourcesForMerge(
             AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2
                 && AndroidCommon.getAndroidConfig(ruleContext).skipParsingAction())
@@ -172,24 +161,27 @@ public class ProcessedAndroidData {
       RuleContext ruleContext,
       StampedAndroidManifest manifest,
       String packageUnderTest,
-      boolean hasLocalResourceFiles,
-      AndroidAaptVersion aaptVersion,
-      AndroidResources resources,
-      ResourceDependencies resourceDeps,
-      AndroidAssets assets,
-      AssetDependencies assetDeps)
-      throws InterruptedException {
+      boolean hasLocalResourceFiles)
+      throws InterruptedException, RuleErrorException {
 
     AndroidResourcesProcessorBuilder builder =
-        builderForNonIncrementalTopLevelTarget(
-                ruleContext, manifest, ImmutableMap.of(), aaptVersion)
+        builderForNonIncrementalTopLevelTarget(ruleContext, manifest)
             .setMainDexProguardOut(AndroidBinary.createMainDexProguardSpec(ruleContext))
             .setPackageUnderTest(packageUnderTest)
-            .setIsTestWithResources(hasLocalResourceFiles)
-            .withResourceDependencies(resourceDeps)
-            .withAssetDependencies(assetDeps);
+            .setIsTestWithResources(hasLocalResourceFiles);
 
-    return builder.build(resources, assets, manifest);
+    if (hasLocalResourceFiles) {
+      builder
+          .withResourceDependencies(
+              ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false))
+          .withAssetDependencies(
+              AssetDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false));
+    }
+
+    return builder.build(
+        AndroidResources.from(ruleContext, "local_resource_files"),
+        AndroidAssets.from(ruleContext),
+        manifest);
   }
 
   /**
@@ -198,22 +190,18 @@ public class ProcessedAndroidData {
    * <p>The builder will be populated with commonly-used settings and outputs.
    */
   private static AndroidResourcesProcessorBuilder builderForNonIncrementalTopLevelTarget(
-      RuleContext ruleContext,
-      StampedAndroidManifest manifest,
-      Map<String, String> manifestValues,
-      AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
+      RuleContext ruleContext, StampedAndroidManifest manifest)
+      throws InterruptedException, RuleErrorException {
 
-    return builderForTopLevelTarget(ruleContext, manifest, "", manifestValues)
-        .targetAaptVersion(aaptVersion)
+    return builderForTopLevelTarget(ruleContext, manifest, "")
+        .targetAaptVersion(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
 
         // Outputs
         .setApkOut(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK))
         .setRTxtOut(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT))
         .setSourceJarOut(
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR))
-        .setSymbols(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_MERGED_SYMBOLS));
+        .setSymbols(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_MERGED_SYMBOLS));
   }
 
   /**
@@ -222,10 +210,9 @@ public class ProcessedAndroidData {
    * <p>The builder will be populated with commonly-used settings and outputs.
    */
   private static AndroidResourcesProcessorBuilder builderForTopLevelTarget(
-      RuleContext ruleContext,
-      StampedAndroidManifest manifest,
-      String proguardPrefix,
-      Map<String, String> manifestValues) {
+      RuleContext ruleContext, StampedAndroidManifest manifest, String proguardPrefix) {
+    Map<String, String> manifestValues = ApplicationManifest.getManifestValues(ruleContext);
+
     return new AndroidResourcesProcessorBuilder(ruleContext)
         // Settings
         .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
@@ -285,10 +272,10 @@ public class ProcessedAndroidData {
    * <p>Registers an action to run R class generation, the last step needed in resource processing.
    * Returns the fully processed data, including validated resources, wrapped in a ResourceApk.
    */
-  public ResourceApk generateRClass(RuleContext ruleContext, AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
+  public ResourceApk generateRClass(RuleContext ruleContext)
+      throws RuleErrorException, InterruptedException {
     return new RClassGeneratorActionBuilder(ruleContext)
-        .targetAaptVersion(aaptVersion)
+        .targetAaptVersion(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
         .withDependencies(resourceDeps)
         .setClassJarOut(
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
