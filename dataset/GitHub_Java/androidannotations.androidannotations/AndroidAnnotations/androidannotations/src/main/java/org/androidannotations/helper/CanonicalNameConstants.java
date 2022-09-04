@@ -52,7 +52,6 @@ public final class CanonicalNameConstants {
 	public static final String LOG = "android.util.Log";
 	public static final String PARCELABLE = "android.os.Parcelable";
 	public static final String INTENT = "android.content.Intent";
-	public static final String INTENT_FILTER = "android.content.IntentFilter";
 	public static final String COMPONENT_NAME = "android.content.ComponentName";
 	public static final String BUNDLE = "android.os.Bundle";
 	public static final String APPLICATION = "android.app.Application";
@@ -62,6 +61,7 @@ public final class CanonicalNameConstants {
 	public static final String SEEKBAR = "android.widget.SeekBar";
 	public static final String ON_SEEKBAR_CHANGE_LISTENER = "android.widget.SeekBar.OnSeekBarChangeListener";
 	public static final String TEXT_VIEW = "android.widget.TextView";
+	public static final String TEXT_VIEW_ON_EDITOR_ACTION_LISTENER = "android.widget.TextView.OnEditorActionListener";
 	public static final String COMPOUND_BUTTON = "android.widget.CompoundButton";
 	public static final String COMPOUND_BUTTON_ON_CHECKED_CHANGE_LISTENER = "android.widget.CompoundButton.OnCheckedChangeListener";
 	public static final String VIEW = "android.view.View";
