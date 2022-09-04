@@ -172,27 +172,11 @@ import static com.codahale.metrics.MetricRegistry.name;
  *         </td>
  *     </tr>
  *     <tr>
- *         <td>{@code excludedProtocols}</td>
- *         <td>(none)</td>
- *         <td>
- *             A list of protocols (e.g., {@code SSLv3}, {@code TLSv1}) which are excluded. These
- *             protocols will be refused.
- *         </td>
- *     </tr>
- *     <tr>
  *         <td>{@code supportedCipherSuites}</td>
  *         <td>(none)</td>
  *         <td>
  *             A list of cipher suites (e.g., {@code TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256}) which
  *             are supported. All other cipher suites will be refused
- *         </td>
- *     </tr>
- *    <tr>
- *         <td>{@code excludedCipherSuites}</td>
- *         <td>(none)</td>
- *         <td>
- *             A list of cipher suites (e.g., {@code TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256}) which
- *             are excluded. These cipher suites will be refused.
  *         </td>
  *     </tr>
  *     <tr>
@@ -250,9 +234,7 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
     private boolean validateCerts = true;
     private boolean validatePeers = true;
     private List<String> supportedProtocols;
-    private List<String> excludedProtocols;
     private List<String> supportedCipherSuites;
-    private List<String> excludedCipherSuites;
     private boolean allowRenegotiation = true;
     private String endpointIdentificationAlgorithm;
 
@@ -477,28 +459,8 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
     }
 
     @JsonProperty
-    public List<String> getExcludedProtocols() {
-        return excludedProtocols;
-    }
-
-    @JsonProperty
-    public void setExcludedProtocols(List<String> excludedProtocols) {
-        this.excludedProtocols = excludedProtocols;
-    }
-
-    @JsonProperty
     public List<String> getSupportedCipherSuites() {
         return supportedCipherSuites;
-    }
-
-    @JsonProperty
-    public List<String> getExcludedCipherSuites() {
-        return excludedCipherSuites;
-    }
-
-    @JsonProperty
-    public void setExcludedCipherSuites(List<String> excludedCipherSuites) {
-        this.excludedCipherSuites = excludedCipherSuites;
     }
 
     @JsonProperty
@@ -574,22 +536,6 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
                 final String[] cipherSuites = factory.getSupportedCipherSuites();
                 LOGGER.info("Supported protocols: {}", Arrays.toString(protocols));
                 LOGGER.info("Supported cipher suites: {}", Arrays.toString(cipherSuites));
-
-                if (getSupportedProtocols() != null) {
-                    LOGGER.info("Configured protocols: {}", getSupportedProtocols());
-                }
-
-                if (getExcludedProtocols() != null) {
-                    LOGGER.info("Excluded protocols: {}", getExcludedProtocols());
-                }
-
-                if (getSupportedCipherSuites() != null) {
-                    LOGGER.info("Configured cipher suites: {}", getSupportedCipherSuites());
-                }
-
-                if (getExcludedCipherSuites() != null) {
-                    LOGGER.info("Excluded cipher suites: {}", getExcludedCipherSuites());
-                }
             } catch (NoSuchAlgorithmException ignored) {
 
             }
@@ -697,16 +643,8 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
             factory.setIncludeProtocols(Iterables.toArray(supportedProtocols, String.class));
         }
 
-        if (excludedProtocols != null) {
-            factory.setExcludeProtocols(Iterables.toArray(excludedProtocols, String.class));
-        }
-
         if (supportedCipherSuites != null) {
             factory.setIncludeCipherSuites(Iterables.toArray(supportedCipherSuites, String.class));
-        }
-
-        if (excludedCipherSuites != null) {
-            factory.setExcludeCipherSuites(Iterables.toArray(excludedCipherSuites, String.class));
         }
 
         return factory;

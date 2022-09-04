@@ -11,16 +11,14 @@ import javax.validation.ConstraintViolation;
 import javax.validation.Validation;
 import javax.validation.Validator;
 
-import org.apache.commons.lang3.SystemUtils;
+import org.apache.commons.lang.SystemUtils;
 import org.junit.Test;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Collections2;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assume.assumeFalse;
-import static org.junit.Assume.assumeTrue;
+import static org.fest.assertions.api.Assertions.assertThat;
+import static org.junit.Assert.fail;
 
 public class HttpsConnectorFactoryTest {
     private static final String WINDOWS_MY_KEYSTORE_NAME = "Windows-MY";
@@ -50,23 +48,20 @@ public class HttpsConnectorFactoryTest {
     }
 
     @Test
-    public void canBuildContextFactoryWhenWindowsKeyStoreAvailable() throws Exception {
-        // ignore test when Windows Keystore unavailable
-        assumeTrue(canAccessWindowsKeyStore());
-
-        final HttpsConnectorFactory factory = new HttpsConnectorFactory();
+    public void windowsKeyStore() throws Exception {
+        HttpsConnectorFactory factory = new HttpsConnectorFactory();
         factory.setKeyStoreType(WINDOWS_MY_KEYSTORE_NAME);
-
-        assertNotNull(factory.buildSslContextFactory());
-    }
-
-    @Test(expected = IllegalStateException.class)
-    public void windowsKeyStoreUnavailableThrowsException() throws Exception {
-        assumeFalse(canAccessWindowsKeyStore());
-
-        final HttpsConnectorFactory factory = new HttpsConnectorFactory();
-        factory.setKeyStoreType(WINDOWS_MY_KEYSTORE_NAME);
-        factory.buildSslContextFactory();
+        if (canAccessWindowsKeyStore()) {
+            factory.buildSslContextFactory();
+            return;
+        } else {
+            try {
+                factory.buildSslContextFactory();
+                fail("Windows key store should not be supported here");
+            } catch (IllegalStateException ex) {
+                assertThat(ex.getMessage()).containsIgnoringCase("not supported");
+            }
+        }
     }
 
     private boolean canAccessWindowsKeyStore() {
