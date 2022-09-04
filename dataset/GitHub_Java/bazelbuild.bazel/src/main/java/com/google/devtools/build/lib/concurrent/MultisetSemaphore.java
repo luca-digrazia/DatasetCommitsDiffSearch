@@ -13,18 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.concurrent;
 
-import com.google.common.collect.ConcurrentHashMultiset;
-import com.google.common.collect.MapMaker;
-import com.google.common.collect.Maps;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.util.Preconditions;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -67,6 +60,8 @@ public abstract class MultisetSemaphore<T> {
    */
   public abstract void releaseAll(Set<T> valuesToRelease);
 
+  public abstract int estimateCurrentNumUniqueValues();
+
   /**
    * Returns a {@link MultisetSemaphore} with a backing {@link Semaphore} that has an unbounded
    * number of permits; that is, {@link #acquireAll} will never block.
@@ -80,7 +75,6 @@ public abstract class MultisetSemaphore<T> {
     private static final int UNSET_INT = -1;
 
     private int maxNumUniqueValues = UNSET_INT;
-    private MapMaker mapMaker = new MapMaker();
 
     private Builder() {
     }
@@ -92,20 +86,9 @@ public abstract class MultisetSemaphore<T> {
     public Builder maxNumUniqueValues(int maxNumUniqueValues) {
       Preconditions.checkState(
           maxNumUniqueValues > 0,
-          "maxNumUniqueValues must be positive (was %d)",
+          "maxNumUniqueValues must be positive (was %s)",
           maxNumUniqueValues);
       this.maxNumUniqueValues = maxNumUniqueValues;
-      return this;
-    }
-
-    /**
-     * Sets the concurrency level (expected number of concurrent usages) of internal data structures
-     * of the to-be-constructed {@link MultisetSemaphore}.
-     *
-     * <p>This is a hint for tweaking performance and lock contention.
-     */
-    public Builder concurrencyLevel(int concurrencyLevel) {
-      mapMaker = mapMaker.concurrencyLevel(concurrencyLevel);
       return this;
     }
 
@@ -113,7 +96,7 @@ public abstract class MultisetSemaphore<T> {
       Preconditions.checkState(
           maxNumUniqueValues != UNSET_INT,
           "maxNumUniqueValues(int) must be specified");
-      return new BoundedMultisetSemaphore<>(maxNumUniqueValues, mapMaker);
+      return new NaiveMultisetSemaphore<>(maxNumUniqueValues);
     }
   }
 
@@ -141,89 +124,77 @@ public abstract class MultisetSemaphore<T> {
     @Override
     public void releaseAll(Set<T> valuesToRelease) {
     }
+
+    @Override
+    public int estimateCurrentNumUniqueValues() {
+      // We can't give a good estimate since we don't track values at all.
+      return 0;
+    }
   }
 
-  private static class BoundedMultisetSemaphore<T> extends MultisetSemaphore<T> {
-    // Implementation strategy:
-    //
-    // We have a single Semaphore, access to which is managed by two levels of Multisets, the first
-    // of which is an approximate accounting of the current multiplicities, and the second of which
-    // is an accurate accounting of the current multiplicities. The first level is used to decide
-    // how many permits to acquire from the semaphore on acquireAll and the second level is used to
-    // decide how many permits to release from the semaphore on releaseAll. The separation between
-    // these two levels ensure the atomicity of acquireAll and releaseAll.
-
-    // We also have a map of CountDownLatches, used to handle the case where there is a not-empty
-    // set that is a subset of the set of values for which multiple threads are concurrently trying
-    // to acquire permits.
-
+  private static class NaiveMultisetSemaphore<T> extends MultisetSemaphore<T> {
+    private final int maxNumUniqueValues;
     private final Semaphore semaphore;
-    private final ConcurrentHashMultiset<T> tentativeValues;
-    private final ConcurrentHashMultiset<T> actualValues;
-    private final ConcurrentMap<T, CountDownLatch> latches;
+    private final Object lock = new Object();
+    // Protected by 'lock'.
+    private final HashMultiset<T> actualValues = HashMultiset.create();
 
-    private BoundedMultisetSemaphore(int maxNumUniqueValues, MapMaker mapMaker) {
+    private NaiveMultisetSemaphore(int maxNumUniqueValues) {
+      this.maxNumUniqueValues = maxNumUniqueValues;
       this.semaphore = new Semaphore(maxNumUniqueValues);
-      // TODO(nharmata): Use ConcurrentHashMultiset#create(ConcurrentMap<E, AtomicInteger>) when
-      // Bazel is switched to use a more recent version of Guava. Until then we'll have unnecessary
-      // contention when using these Multisets.
-      this.tentativeValues = ConcurrentHashMultiset.create();
-      this.actualValues = ConcurrentHashMultiset.create();
-      this.latches = mapMaker.makeMap();
     }
 
     @Override
     public void acquireAll(Set<T> valuesToAcquire) throws InterruptedException {
-      int numValuesToAcquire = valuesToAcquire.size();
-      HashMap<T, CountDownLatch> latchesToCountDownByValue =
-          Maps.newHashMapWithExpectedSize(numValuesToAcquire);
-      ArrayList<CountDownLatch> latchesToAwait = new ArrayList<>(numValuesToAcquire);
-      for (T value : valuesToAcquire) {
-        int oldCount = tentativeValues.add(value, 1);
-        if (oldCount == 0) {
-          // The value was just uniquely added by us.
-          CountDownLatch latch = new CountDownLatch(1);
-          Preconditions.checkState(latches.put(value, latch) == null, value);
-          latchesToCountDownByValue.put(value, latch);
-        } else {
-          CountDownLatch latch = latches.get(value);
-          if (latch != null) {
-            // The value was recently added by another thread, and that thread is still waiting to
-            // acquire a permit for it.
-            latchesToAwait.add(latch);
+      int oldNumNeededPermits;
+      synchronized (lock) {
+        oldNumNeededPermits = computeNumNeededPermitsLocked(valuesToAcquire);
+      }
+      while (true) {
+        semaphore.acquire(oldNumNeededPermits);
+        synchronized (lock) {
+          int newNumNeededPermits = computeNumNeededPermitsLocked(valuesToAcquire);
+          if (newNumNeededPermits != oldNumNeededPermits) {
+            // While we were doing 'acquire' above, another thread won the race to acquire the first
+            // usage of one of the values in 'valuesToAcquire' or release the last usage of one of
+            // the values. This means we either acquired too many or too few permits, respectively,
+            // above. Release the permits we did acquire, in order to restore the accuracy of the
+            // semaphore's current count, and then try again.
+            semaphore.release(oldNumNeededPermits);
+            oldNumNeededPermits = newNumNeededPermits;
+            continue;
+          } else {
+            // Our modification to the semaphore was correct, so it's sound to update the multiset.
+            valuesToAcquire.forEach(actualValues::add);
+            return;
           }
         }
       }
+    }
 
-      int numUniqueValuesToAcquire = latchesToCountDownByValue.size();
-      semaphore.acquire(numUniqueValuesToAcquire);
-      for (T value : valuesToAcquire) {
-        actualValues.add(value);
-      }
-      for (Map.Entry<T, CountDownLatch> entry : latchesToCountDownByValue.entrySet()) {
-        T value = entry.getKey();
-        CountDownLatch latchToCountDown = entry.getValue();
-        latchToCountDown.countDown();
-        Preconditions.checkState(latchToCountDown == latches.remove(value), value);
-      }
-      for (CountDownLatch latchToAwait : latchesToAwait) {
-        latchToAwait.await();
-      }
+    private int computeNumNeededPermitsLocked(Set<T> valuesToAcquire) {
+      // We need a permit for each value that is not already in the multiset.
+      return (int) valuesToAcquire.stream()
+          .filter(v -> actualValues.count(v) == 0)
+          .count();
     }
 
     @Override
     public void releaseAll(Set<T> valuesToRelease) {
-      int numUniqueValuesToRelease = 0;
-      for (T value : valuesToRelease) {
-        int oldCount = actualValues.remove(value, 1);
-        Preconditions.checkState(oldCount >= 0, "%d %s", oldCount, value);
-        if (oldCount == 1) {
-          numUniqueValuesToRelease++;
-        }
-        tentativeValues.remove(value, 1);
+      synchronized (lock) {
+        // We need to release a permit for each value that currently has multiplicity 1.
+        int numPermitsToRelease =
+            valuesToRelease
+                .stream()
+                .mapToInt(v -> actualValues.remove(v, 1) == 1 ? 1 : 0)
+                .sum();
+        semaphore.release(numPermitsToRelease);
       }
+    }
 
-      semaphore.release(numUniqueValuesToRelease);
+    @Override
+    public int estimateCurrentNumUniqueValues() {
+      return maxNumUniqueValues - semaphore.availablePermits();
     }
   }
 }

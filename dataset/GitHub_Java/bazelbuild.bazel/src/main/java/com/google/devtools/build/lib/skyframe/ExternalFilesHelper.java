@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.BundledFileSystem;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
@@ -25,7 +24,6 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.repository.ExternalPackageHelper;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.TestType;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -35,6 +33,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Common utilities for dealing with paths outside the package roots. */
 public class ExternalFilesHelper {
+  private static final boolean IN_TEST = System.getenv("TEST_TMPDIR") != null;
+
   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   private final AtomicReference<PathPackageLocator> pkgLocator;
@@ -72,7 +72,7 @@ public class ExternalFilesHelper {
       BlazeDirectories directories,
       ManagedDirectoriesKnowledge managedDirectoriesKnowledge,
       ExternalPackageHelper externalPackageHelper) {
-    return TestType.isInTest()
+    return IN_TEST
         ? createForTesting(
             pkgLocator,
             externalFileAction,
@@ -152,13 +152,6 @@ public class ExternalFilesHelper {
 
   /** Classification of a path encountered by Bazel. */
   public enum FileType {
-    /**
-     * A path to a file located inside of Bazel, e.g. the bundled builtins_bzl root (for {@code
-     * --experimental_builtins_bzl_root=%bundled%}) that live in an InMemoryFileSystem. These files
-     * must not change throughout the lifetime of the server.
-     */
-    BUNDLED,
-
     /** A path inside the package roots. */
     INTERNAL,
 
@@ -267,14 +260,7 @@ public class ExternalFilesHelper {
     return Pair.of(fileType, null);
   }
 
-  /**
-   * Returns the classification of a path, and updates this instance's state regarding what kinds of
-   * paths have been seen.
-   */
   private FileType detectFileType(RootedPath rootedPath) {
-    if (rootedPath.getRoot().getFileSystem() instanceof BundledFileSystem) {
-      return FileType.BUNDLED;
-    }
     PathPackageLocator packageLocator = pkgLocator.get();
     if (packageLocator.getPathEntries().contains(rootedPath.getRoot())) {
       return FileType.INTERNAL;
@@ -320,7 +306,6 @@ public class ExternalFilesHelper {
             externalFileAction);
         RepositoryFunction.addManagedDirectoryDependencies(pair.getSecond(), env);
         break;
-      case BUNDLED:
       case INTERNAL:
         break;
       case EXTERNAL:

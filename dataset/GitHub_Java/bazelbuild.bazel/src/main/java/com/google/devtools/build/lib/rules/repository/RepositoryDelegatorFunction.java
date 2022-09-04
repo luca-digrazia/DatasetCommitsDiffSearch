@@ -96,7 +96,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
   private final ImmutableMap<String, RepositoryFunction> handlers;
 
   // Delegate function to handle Starlark remote repositories
-  private final RepositoryFunction starlarkHandler;
+  private final RepositoryFunction skylarkHandler;
 
   // This is a reference to isFetch in BazelRepositoryModule, which tracks whether the current
   // command is a fetch. Remote repository lookups are only allowed during fetches.
@@ -113,14 +113,14 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
 
   public RepositoryDelegatorFunction(
       ImmutableMap<String, RepositoryFunction> handlers,
-      @Nullable RepositoryFunction starlarkHandler,
+      @Nullable RepositoryFunction skylarkHandler,
       AtomicBoolean isFetch,
       Supplier<Map<String, String>> clientEnvironmentSupplier,
       BlazeDirectories directories,
       ManagedDirectoriesKnowledge managedDirectoriesKnowledge,
       ExternalPackageHelper externalPackageHelper) {
     this.handlers = handlers;
-    this.starlarkHandler = starlarkHandler;
+    this.skylarkHandler = skylarkHandler;
     this.isFetch = isFetch;
     this.clientEnvironmentSupplier = clientEnvironmentSupplier;
     this.directories = directories;
@@ -319,7 +319,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
   private RepositoryFunction getHandler(Rule rule) {
     RepositoryFunction handler;
     if (rule.getRuleClassObject().isStarlark()) {
-      handler = starlarkHandler;
+      handler = skylarkHandler;
     } else {
       handler = handlers.get(rule.getRuleClass());
     }
@@ -564,7 +564,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     }
   }
 
-  private static class RepositoryFetching implements FetchProgress {
+  private class RepositoryFetching implements FetchProgress {
     final String id;
     final boolean finished;
     final String message;
