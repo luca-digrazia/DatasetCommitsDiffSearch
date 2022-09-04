@@ -48,28 +48,29 @@ public abstract class MethodDeclInfo
 
   public abstract ImmutableList<String> exceptions();
 
-  public static MethodDeclInfoBuilder builder() {
-    return new AutoValue_MethodDeclInfo.Builder()
-        .setSignature(null)
-        .setExceptions(ImmutableList.of());
-  }
-
   public static MethodDeclInfo create(
       MethodKey methodKey,
       int ownerAccess,
       int memberAccess,
       @Nullable String signature,
       @Nullable String[] exceptions) {
-    return builder()
-        .setMethodKey(methodKey)
-        .setOwnerAccess(ownerAccess)
-        .setMemberAccess(memberAccess)
-        .setSignature(signature)
-        .setExceptionArray(exceptions)
-        .build();
+    return create(
+        methodKey,
+        ownerAccess,
+        memberAccess,
+        signature,
+        exceptions == null ? ImmutableList.of() : ImmutableList.copyOf(exceptions));
   }
 
-  public abstract MethodDeclInfoBuilder toBuilder();
+  private static MethodDeclInfo create(
+      MethodKey methodKey,
+      int ownerAccess,
+      int memberAccess,
+      String signature,
+      ImmutableList<String> exceptions) {
+    return new AutoValue_MethodDeclInfo(
+        methodKey, ownerAccess, memberAccess, signature, exceptions);
+  }
 
   public final ClassName owner() {
     return methodKey().owner();
@@ -141,44 +142,52 @@ public abstract class MethodDeclInfo
 
   /** The synthetic constructor for a private constructor. */
   public final MethodDeclInfo bridgeOfConstructor(ClassName nestCompanion) {
-    int memberAccess = (memberAccess() & ~ACC_PRIVATE) | ACC_SYNTHETIC;
-    return toBuilder()
-        .setMethodKey(methodKey().bridgeOfConstructor(nestCompanion))
-        .setMemberAccess(memberAccess)
-        .build();
+    return create(
+        methodKey().bridgeOfConstructor(nestCompanion),
+        ownerAccess(),
+        (memberAccess() & ~ACC_PRIVATE) | ACC_SYNTHETIC,
+        /* signature= */ null,
+        exceptions());
   }
 
   /** The synthetic bridge method for a private static method in a class. */
   public final MethodDeclInfo bridgeOfClassStaticMethod() {
-    return toBuilder()
-        .setMethodKey(methodKey().bridgeOfClassStaticMethod())
-        .setMemberAccess(ACC_STATIC | ACC_SYNTHETIC)
-        .build();
+    return create(
+        methodKey().bridgeOfClassStaticMethod(),
+        ownerAccess(),
+        ACC_STATIC | ACC_SYNTHETIC,
+        /* signature= */ null,
+        exceptions());
   }
 
   /** The synthetic bridge method for a private instance method in a class. */
   public final MethodDeclInfo bridgeOfClassInstanceMethod() {
-    return toBuilder()
-        .setMethodKey(methodKey().bridgeOfClassInstanceMethod())
-        .setMemberAccess(ACC_STATIC | ACC_SYNTHETIC)
-        .build();
+    return create(
+        methodKey().bridgeOfClassInstanceMethod(),
+        ownerAccess(),
+        /* memberAccess= */ ACC_STATIC | ACC_SYNTHETIC,
+        /* signature= */ null,
+        exceptions());
   }
 
   /** The substitute method for a private static method in an interface. */
   public final MethodDeclInfo substituteOfInterfaceStaticMethod() {
-    return toBuilder()
-        .setMethodKey(methodKey().substituteOfInterfaceStaticMethod())
-        .setMemberAccess((memberAccess() & ~0xf) | ACC_PUBLIC | ACC_STATIC)
-        .build();
+    return create(
+        methodKey().substituteOfInterfaceStaticMethod(),
+        ownerAccess(),
+        (memberAccess() & ~0xf) | ACC_PUBLIC | ACC_STATIC,
+        /* signature= */ null,
+        exceptions());
   }
 
   /** The substitute method for a private instance method in an interface. */
   public final MethodDeclInfo substituteOfInterfaceInstanceMethod() {
-    // Unset static and access modifier bits.
-    return toBuilder()
-        .setMethodKey(methodKey().substituteOfInterfaceInstanceMethod())
-        .setMemberAccess((memberAccess() & ~0xf) | ACC_PUBLIC | ACC_STATIC)
-        .build();
+    return create(
+        methodKey().substituteOfInterfaceInstanceMethod(),
+        ownerAccess(),
+        (memberAccess() & ~0xf) | ACC_PUBLIC | ACC_STATIC, // Unset static and access modifier bits.
+        /* signature= */ null,
+        exceptions());
   }
 
   public final MethodVisitor accept(ClassVisitor cv) {
@@ -209,37 +218,16 @@ public abstract class MethodDeclInfo
 
   @Override
   public MethodDeclInfo acceptTypeMapper(TypeMapper typeMapper) {
-    return toBuilder()
-        .setMethodKey(methodKey().acceptTypeMapper(typeMapper))
-        .setSignature(typeMapper.mapSignature(signature(), /* typeSignature= */ false))
-        .setExceptionArray(typeMapper.mapTypes(exceptionArray()))
-        .build();
+    return create(
+        methodKey().acceptTypeMapper(typeMapper),
+        ownerAccess(),
+        memberAccess(),
+        typeMapper.mapSignature(signature(), /* typeSignature= */ false),
+        typeMapper.mapTypes(exceptionArray()));
   }
 
   @Override
   public int compareTo(MethodDeclInfo other) {
     return methodKey().compareTo(other.methodKey());
-  }
-
-  /** The builder for {@link MethodDeclInfo}. */
-  @AutoValue.Builder
-  public abstract static class MethodDeclInfoBuilder {
-
-    public abstract MethodDeclInfoBuilder setMethodKey(MethodKey value);
-
-    public abstract MethodDeclInfoBuilder setOwnerAccess(int value);
-
-    public abstract MethodDeclInfoBuilder setMemberAccess(int value);
-
-    public abstract MethodDeclInfoBuilder setSignature(String value);
-
-    public abstract MethodDeclInfoBuilder setExceptions(ImmutableList<String> value);
-
-    public final MethodDeclInfoBuilder setExceptionArray(String[] exceptions) {
-      return setExceptions(
-          exceptions == null ? ImmutableList.of() : ImmutableList.copyOf(exceptions));
-    }
-
-    public abstract MethodDeclInfo build();
   }
 }

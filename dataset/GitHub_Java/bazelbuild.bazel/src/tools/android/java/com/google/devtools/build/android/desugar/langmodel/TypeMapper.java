@@ -16,22 +16,25 @@
 
 package com.google.devtools.build.android.desugar.langmodel;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static java.util.stream.Collectors.toCollection;
 
+import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import org.objectweb.asm.commons.Remapper;
 
 /** Maps a type to another based on binary names. */
 public final class TypeMapper extends Remapper {
 
-  private final Function<ClassName, ClassName> classNameMapper;
+  private final UnaryOperator<ClassName> classNameMapper;
 
-  public TypeMapper(Function<ClassName, ClassName> classNameMapper) {
+  public TypeMapper(UnaryOperator<ClassName> classNameMapper) {
     this.classNameMapper = classNameMapper;
   }
 
@@ -44,13 +47,19 @@ public final class TypeMapper extends Remapper {
     return classNameMapper.apply(internalName);
   }
 
-  public <E extends TypeMappable<E>> ImmutableList<? extends E> map(
-      ImmutableList<E> mappableTypes) {
+  public <E extends TypeMappable<E>> ImmutableList<E> map(ImmutableList<E> mappableTypes) {
     return mappableTypes.stream().map(e -> e.acceptTypeMapper(this)).collect(toImmutableList());
   }
 
   public <E extends TypeMappable<E>> ImmutableSet<? extends E> map(ImmutableSet<E> mappableTypes) {
     return mappableTypes.stream().map(e -> e.acceptTypeMapper(this)).collect(toImmutableSet());
+  }
+
+  public <E extends TypeMappable<? extends E>> ConcurrentHashMultiset<E> map(
+      ConcurrentHashMultiset<E> mappableTypes) {
+    return mappableTypes.stream()
+        .map(e -> e.acceptTypeMapper(this))
+        .collect(toCollection(ConcurrentHashMultiset::create));
   }
 
   public <K extends TypeMappable<K>, V extends TypeMappable<V>> ImmutableMap<K, V> map(
@@ -59,5 +68,16 @@ public final class TypeMapper extends Remapper {
         .collect(
             toImmutableMap(
                 e -> e.getKey().acceptTypeMapper(this), e -> e.getValue().acceptTypeMapper(this)));
+  }
+
+  public <K extends TypeMappable<? extends K>, V> ImmutableMap<K, V> mapKey(
+      ImmutableMap<K, V> mappableTypes) {
+    return mappableTypes.entrySet().stream()
+        .collect(toImmutableMap(e -> e.getKey().acceptTypeMapper(this), e -> e.getValue()));
+  }
+
+  public TypeMapper andThen(TypeMapper after) {
+    return new TypeMapper(
+        className -> className.acceptTypeMapper(this).acceptTypeMapper(checkNotNull(after)));
   }
 }
