@@ -43,19 +43,6 @@ import javax.annotation.Nullable;
  */
 public class ActionExecutionContext implements Closeable {
 
-  /** Enum for --subcommands flag */
-  public enum ShowSubcommands {
-    TRUE(true, false), PRETTY_PRINT(true, true), FALSE(false, false);
-
-    private final boolean shouldShowSubcommands;
-    private final boolean prettyPrintArgs;
-
-    private ShowSubcommands(boolean shouldShowSubcommands, boolean prettyPrintArgs) {
-      this.shouldShowSubcommands = shouldShowSubcommands;
-      this.prettyPrintArgs = prettyPrintArgs;
-    }
-  }
-
   private final Executor executor;
   private final MetadataProvider actionInputFileCache;
   private final ActionInputPrefetcher actionInputPrefetcher;
@@ -69,7 +56,6 @@ public class ActionExecutionContext implements Closeable {
   @Nullable private final Environment env;
 
   @Nullable private final FileSystem actionFileSystem;
-  @Nullable private final Object skyframeDepsResult;
 
   @Nullable private ImmutableList<FilesetOutputSymlink> outputSymlinks;
 
@@ -86,8 +72,7 @@ public class ActionExecutionContext implements Closeable {
       ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> inputFilesetMappings,
       @Nullable ArtifactExpander artifactExpander,
       @Nullable SkyFunction.Environment env,
-      @Nullable FileSystem actionFileSystem,
-      @Nullable Object skyframeDepsResult) {
+      @Nullable FileSystem actionFileSystem) {
     this.actionInputFileCache = actionInputFileCache;
     this.actionInputPrefetcher = actionInputPrefetcher;
     this.actionKeyContext = actionKeyContext;
@@ -99,7 +84,6 @@ public class ActionExecutionContext implements Closeable {
     this.artifactExpander = artifactExpander;
     this.env = env;
     this.actionFileSystem = actionFileSystem;
-    this.skyframeDepsResult = skyframeDepsResult;
     this.pathResolver = ArtifactPathResolver.createPathResolver(actionFileSystem,
         // executor is only ever null in testing.
         executor == null ? null : executor.getExecRoot());
@@ -115,8 +99,7 @@ public class ActionExecutionContext implements Closeable {
       Map<String, String> clientEnv,
       ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> inputFilesetMappings,
       ArtifactExpander artifactExpander,
-      @Nullable FileSystem actionFileSystem,
-      @Nullable Object skyframeDepsResult) {
+      @Nullable FileSystem actionFileSystem) {
     this(
         executor,
         actionInputFileCache,
@@ -128,8 +111,7 @@ public class ActionExecutionContext implements Closeable {
         inputFilesetMappings,
         artifactExpander,
         /*env=*/ null,
-        actionFileSystem,
-        skyframeDepsResult);
+        actionFileSystem);
   }
 
   public static ActionExecutionContext forInputDiscovery(
@@ -153,8 +135,7 @@ public class ActionExecutionContext implements Closeable {
         ImmutableMap.of(),
         /*artifactExpander=*/ null,
         env,
-        actionFileSystem,
-        /*skyframeDepsResult=*/ null);
+        actionFileSystem);
   }
 
   public ActionInputPrefetcher getActionInputPrefetcher() {
@@ -255,15 +236,19 @@ public class ActionExecutionContext implements Closeable {
   }
 
   /**
+   * Whether this Executor reports subcommands. If not, reportSubcommand has no effect.
+   * This is provided so the caller of reportSubcommand can avoid wastefully constructing the
+   * subcommand string.
+   */
+  public boolean reportsSubcommands() {
+    return executor.reportsSubcommands();
+  }
+
+  /**
    * Report a subcommand event to this Executor's Reporter and, if action
    * logging is enabled, post it on its EventBus.
    */
-  public void maybeReportSubcommand(Spawn spawn) {
-    ShowSubcommands showSubcommands = executor.reportsSubcommands();
-    if (!showSubcommands.shouldShowSubcommands) {
-      return;
-    }
-
+  public void reportSubcommand(Spawn spawn) {
     String reason;
     ActionOwner owner = spawn.getResourceOwner().getOwner();
     if (owner == null) {
@@ -272,7 +257,7 @@ public class ActionExecutionContext implements Closeable {
       reason = Label.print(owner.getLabel())
           + " [" + spawn.getResourceOwner().prettyPrint() + "]";
     }
-    String message = Spawns.asShellCommand(spawn, getExecRoot(), showSubcommands.prettyPrintArgs);
+    String message = Spawns.asShellCommand(spawn, getExecRoot());
     getEventHandler().handle(Event.of(EventKind.SUBCOMMAND, null, "# " + reason + "\n" + message));
   }
 
@@ -282,11 +267,6 @@ public class ActionExecutionContext implements Closeable {
 
   public ArtifactExpander getArtifactExpander() {
     return artifactExpander;
-  }
-
-  @Nullable
-  public Object getSkyframeDepsResult() {
-    return skyframeDepsResult;
   }
 
   /**
@@ -329,7 +309,6 @@ public class ActionExecutionContext implements Closeable {
         inputFilesetMappings,
         artifactExpander,
         env,
-        actionFileSystem,
-        skyframeDepsResult);
+        actionFileSystem);
   }
 }
