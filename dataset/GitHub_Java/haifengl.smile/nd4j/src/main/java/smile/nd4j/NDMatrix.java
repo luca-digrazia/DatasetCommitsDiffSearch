@@ -16,10 +16,7 @@
 
 package smile.nd4j;
 
-import smile.math.matrix.Cholesky;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.LU;
-import smile.math.matrix.QR;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.inverse.InvertMatrix;
@@ -30,8 +27,6 @@ import org.nd4j.linalg.inverse.InvertMatrix;
  * @author Haifeng Li
  */
 public class NDMatrix implements DenseMatrix {
-    private static final long serialVersionUID = 1L;
-
     /**
      * The matrix storage.
      */
@@ -95,11 +90,6 @@ public class NDMatrix implements DenseMatrix {
     }
 
     @Override
-    public double[] data() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public int ld() {
         return nrows();
     }
@@ -123,21 +113,6 @@ public class NDMatrix implements DenseMatrix {
     public double set(int i, int j, double x) {
         A.putScalar(i, j, x);
         return x;
-    }
-
-    @Override
-    public LU lu() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Cholesky cholesky() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public QR qr() {
-        throw new UnsupportedOperationException();
     }
 
     @Override
