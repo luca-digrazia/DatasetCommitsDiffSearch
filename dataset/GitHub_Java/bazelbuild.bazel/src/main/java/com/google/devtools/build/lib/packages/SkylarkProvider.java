@@ -22,8 +22,9 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.SkylarkInfo.Layout;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -46,7 +47,7 @@ import javax.annotation.Nullable;
  */
 public class SkylarkProvider extends ProviderFromFunction implements SkylarkExportable {
 
-  private static final FunctionSignature.WithValues SCHEMALESS_SIGNATURE =
+  private static final FunctionSignature.WithValues<Object, SkylarkType> SCHEMALESS_SIGNATURE =
       FunctionSignature.WithValues.create(FunctionSignature.KWARGS);
 
   /** Default value for {@link #errorMessageFormatForUnknownField}. */
@@ -137,7 +138,8 @@ public class SkylarkProvider extends ProviderFromFunction implements SkylarkExpo
             : makeErrorMessageFormatForUnknownField(key.getExportedName());
   }
 
-  private static FunctionSignature.WithValues buildSignature(@Nullable Iterable<String> fields) {
+  private static FunctionSignature.WithValues<Object, SkylarkType> buildSignature(
+      @Nullable Iterable<String> fields) {
     if (fields == null) {
       return SCHEMALESS_SIGNATURE;
     }
@@ -146,8 +148,7 @@ public class SkylarkProvider extends ProviderFromFunction implements SkylarkExpo
   }
 
   @Override
-  protected SkylarkInfo createInstanceFromSkylark(
-      Object[] args, StarlarkThread thread, Location loc) {
+  protected SkylarkInfo createInstanceFromSkylark(Object[] args, Environment env, Location loc) {
     if (layout == null) {
       @SuppressWarnings("unchecked")
       Map<String, Object> kwargs = (Map<String, Object>) args[0];

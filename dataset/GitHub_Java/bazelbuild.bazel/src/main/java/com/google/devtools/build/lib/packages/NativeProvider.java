@@ -17,9 +17,10 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.Pair;
 import javax.annotation.Nullable;
 
@@ -37,7 +38,7 @@ import javax.annotation.Nullable;
  * </pre>
  *
  * To allow construction from Skylark and custom construction logic, override {@link
- * ProviderFromFunction#createInstanceFromSkylark(Object[], StarlarkThread, Location)}.
+ * ProviderFromFunction#createInstanceFromSkylark(Object[], Environment, Location)}.
  *
  * @deprecated use {@link BuiltinProvider} instead.
  */
@@ -65,7 +66,7 @@ public abstract class NativeProvider<V extends InfoInterface> extends ProviderFr
     String getSkylarkName();
   }
 
-  private static final FunctionSignature.WithValues SIGNATURE =
+  private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
       FunctionSignature.WithValues.create(FunctionSignature.KWARGS);
 
   protected NativeProvider(Class<V> clazz, String name) {
@@ -74,7 +75,9 @@ public abstract class NativeProvider<V extends InfoInterface> extends ProviderFr
 
   @SuppressWarnings("unchecked")
   protected NativeProvider(
-      Class<V> valueClass, String name, FunctionSignature.WithValues signature) {
+      Class<V> valueClass,
+      String name,
+      FunctionSignature.WithValues<Object, SkylarkType> signature) {
     super(name, signature, Location.BUILTIN);
     Class<? extends NativeProvider<?>> clazz = (Class<? extends NativeProvider<?>>) getClass();
     key = new NativeKey(name, clazz);
@@ -125,8 +128,8 @@ public abstract class NativeProvider<V extends InfoInterface> extends ProviderFr
   }
 
   @Override
-  protected InfoInterface createInstanceFromSkylark(
-      Object[] args, StarlarkThread thread, Location loc) throws EvalException {
+  protected InfoInterface createInstanceFromSkylark(Object[] args, Environment env, Location loc)
+      throws EvalException {
     throw new EvalException(
         loc, String.format("'%s' cannot be constructed from Starlark", getPrintableName()));
   }

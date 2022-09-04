@@ -16,10 +16,11 @@ package com.google.devtools.build.lib.packages;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import javax.annotation.Nullable;
 
 /**
@@ -39,7 +40,9 @@ abstract class ProviderFromFunction extends BaseFunction implements Provider {
    *     Location#BUILTIN} if it is a native provider.
    */
   protected ProviderFromFunction(
-      @Nullable String name, FunctionSignature.WithValues signature, Location location) {
+      @Nullable String name,
+      FunctionSignature.WithValues<Object, SkylarkType> signature,
+      Location location) {
     super(name, signature, location);
   }
 
@@ -48,10 +51,10 @@ abstract class ProviderFromFunction extends BaseFunction implements Provider {
   }
 
   @Override
-  protected Object call(Object[] args, @Nullable FuncallExpression ast, StarlarkThread thread)
+  protected Object call(Object[] args, @Nullable FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException {
     Location loc = ast != null ? ast.getLocation() : Location.BUILTIN;
-    return createInstanceFromSkylark(args, thread, loc);
+    return createInstanceFromSkylark(args, env, loc);
   }
 
   /**
@@ -64,5 +67,5 @@ abstract class ProviderFromFunction extends BaseFunction implements Provider {
    * @param args an array of argument values sorted as per the signature ({@see BaseFunction#call})
    */
   protected abstract InfoInterface createInstanceFromSkylark(
-      Object[] args, StarlarkThread thread, Location loc) throws EvalException;
+      Object[] args, Environment env, Location loc) throws EvalException;
 }

@@ -278,7 +278,7 @@ public abstract class StarlarkSemantics {
           .incompatibleDisallowOldStyleArgsAdd(true)
           .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(false)
           .incompatibleDisallowStructProviderSyntax(false)
-          .incompatibleDisallowUnverifiedHttpDownloads(true)
+          .incompatibleDisallowUnverifiedHttpDownloads(false)
           .incompatibleExpandDirectories(true)
           .incompatibleNewActionsApi(true)
           .incompatibleNoAttrLicense(true)
