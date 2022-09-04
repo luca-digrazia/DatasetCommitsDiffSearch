@@ -29,7 +29,6 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.devmode.HotReplacementContext;
 import io.quarkus.deployment.devmode.HotReplacementSetup;
-import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.runtime.Timing;
 
 public class RuntimeUpdatesProcessor implements HotReplacementContext {
@@ -372,7 +371,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                     watchedFileTimestamps.put(file, 0L);
                     Path target = classesDir.resolve(path);
                     try {
-                        FileUtil.deleteDirectory(target);
+                        Files.deleteIfExists(target);
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
                     }

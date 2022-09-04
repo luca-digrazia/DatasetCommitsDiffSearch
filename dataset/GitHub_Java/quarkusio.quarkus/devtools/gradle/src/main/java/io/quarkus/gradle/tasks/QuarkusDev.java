@@ -132,6 +132,7 @@ public class QuarkusDev extends QuarkusTask {
         this.jvmArgs = jvmArgs;
     }
 
+    @Optional
     @Input
     public boolean isPreventnoverify() {
         return preventnoverify;
