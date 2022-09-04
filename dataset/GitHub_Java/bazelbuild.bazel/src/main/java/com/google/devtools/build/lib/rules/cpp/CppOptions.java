@@ -27,6 +27,8 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.StripMode;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.util.OptionsUtils;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.EnumConverter;
@@ -436,6 +438,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "fdo_instrument",
     defaultValue = "null",
+    converter = OptionsUtils.PathFragmentConverter.class,
     category = "flags",
     implicitRequirements = {"--copt=-Wno-error"},
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -451,13 +454,13 @@ public class CppOptions extends FragmentOptions {
    * determines whether these options are actually "active" for this configuration. Instead, use the
    * equivalent getter method, which takes that into account.
    */
-  public String fdoInstrumentForBuild;
+  public PathFragment fdoInstrumentForBuild;
 
   /**
    * Returns the --fdo_instrument value if FDO is specified and active for this configuration,
    * the default value otherwise.
    */
-  public String getFdoInstrument() {
+  public PathFragment getFdoInstrument() {
     return enableLipoSettings() ? fdoInstrumentForBuild : null;
   }
 

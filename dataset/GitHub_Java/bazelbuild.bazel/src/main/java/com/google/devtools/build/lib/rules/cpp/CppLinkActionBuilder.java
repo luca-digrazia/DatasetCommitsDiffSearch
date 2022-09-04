@@ -486,7 +486,7 @@ public class CppLinkActionBuilder {
    * used as input to the LTO indexing step.
    */
   private static NestedSet<LibraryToLink> computeLtoIndexingUniqueLibraries(
-      NestedSet<LibraryToLink> originalUniqueLibraries, boolean includeLinkStaticInLtoIndexing) {
+      NestedSet<LibraryToLink> originalUniqueLibraries) {
     NestedSetBuilder<LibraryToLink> uniqueLibrariesBuilder = NestedSetBuilder.linkOrder();
     for (LibraryToLink lib : originalUniqueLibraries) {
       if (!lib.containsObjectFiles()) {
@@ -495,22 +495,6 @@ public class CppLinkActionBuilder {
       }
       ImmutableSet.Builder<Artifact> newObjectFilesBuilder = ImmutableSet.builder();
       for (Artifact a : lib.getObjectFiles()) {
-        // If this link includes object files from another library, that library must be
-        // statically linked.
-        if (!includeLinkStaticInLtoIndexing) {
-          Preconditions.checkNotNull(lib.getSharedNonLtoBackends());
-          LtoBackendArtifacts ltoArtifacts = lib.getSharedNonLtoBackends().getOrDefault(a, null);
-          // Either we have a shared LTO artifact, or this wasn't bitcode to start with.
-          Preconditions.checkState(
-              ltoArtifacts != null || !lib.getLtoBitcodeFiles().containsKey(a));
-          if (ltoArtifacts != null) {
-            // Include the native object produced by the shared LTO backend in the LTO indexing
-            // step instead of the bitcode file. The LTO indexing step invokes the linker which
-            // must see all objects used to produce the final link output.
-            newObjectFilesBuilder.add(ltoArtifacts.getObjectFile());
-            continue;
-          }
-        }
         newObjectFilesBuilder.add(lib.getLtoBitcodeFiles().getOrDefault(a, a));
       }
       uniqueLibrariesBuilder.add(
@@ -631,7 +615,6 @@ public class CppLinkActionBuilder {
       PathFragment ltoOutputRootPrefix,
       NestedSet<LibraryToLink> uniqueLibraries,
       boolean allowLtoIndexing,
-      boolean includeLinkStaticInLtoIndexing,
       ImmutableSet<String> features) {
     Set<Artifact> compiled = new LinkedHashSet<>();
     for (LibraryToLink lib : uniqueLibraries) {
@@ -641,18 +624,13 @@ public class CppLinkActionBuilder {
     // This flattens the set of object files, so for M binaries and N .o files,
     // this is O(M*N). If we had a nested set of .o files, we could have O(M + N) instead.
     Map<PathFragment, Artifact> allBitcode = new HashMap<>();
-    // Since this link includes object files from another library, we know that library must be
-    // statically linked, so we need to look at includeLinkStaticInLtoIndexing to decide whether
-    // to include its objects in the LTO indexing for this target.
-    if (includeLinkStaticInLtoIndexing) {
-      for (LibraryToLink lib : uniqueLibraries) {
-        if (!lib.containsObjectFiles()) {
-          continue;
-        }
-        for (Artifact objectFile : lib.getObjectFiles()) {
-          if (compiled.contains(objectFile)) {
-            allBitcode.put(objectFile.getExecPath(), objectFile);
-          }
+    for (LibraryToLink lib : uniqueLibraries) {
+      if (!lib.containsObjectFiles()) {
+        continue;
+      }
+      for (Artifact objectFile : lib.getObjectFiles()) {
+        if (compiled.contains(objectFile)) {
+          allBitcode.put(objectFile.getExecPath(), objectFile);
         }
       }
     }
@@ -672,7 +650,7 @@ public class CppLinkActionBuilder {
       // each target linking this library needs a unique set of LTO backends.
       for (Artifact objectFile : lib.getObjectFiles()) {
         if (compiled.contains(objectFile)) {
-          if (includeLinkStaticInLtoIndexing) {
+          if (allowLtoIndexing) {
             List<String> backendArgv = new ArrayList<>(argv);
             backendArgv.addAll(collectPerFileLtoBackendOpts(objectFile));
             LtoBackendArtifacts ltoArtifacts =
@@ -871,15 +849,11 @@ public class CppLinkActionBuilder {
     // the targest share the dynamic libraries which were produced via smaller subsets of
     // LTO indexing/backends. ThinLTO on the tests will be different than the ThinLTO
     // optimizations applied to the associated main binaries anyway.
-    // Even for dynamically linked tests, disallow linkstatic libraries from participating
-    // in the test's LTO indexing step for similar reasons.
-    boolean includeLinkStaticInLtoIndexing =
-        !(ruleContext.isTestTarget() || ruleContext.isTestOnlyTarget())
+    boolean allowLtoIndexing =
+        linkStaticness == LinkStaticness.DYNAMIC
+            || !(ruleContext.isTestTarget() || ruleContext.isTestOnlyTarget())
             || !featureConfiguration.isEnabled(
                 CppRuleClasses.THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS);
-    boolean allowLtoIndexing =
-        includeLinkStaticInLtoIndexing
-            || (linkStaticness == LinkStaticness.DYNAMIC && !ltoBitcodeFiles.isEmpty());
 
     // ruleContext can only be null during testing. This is kind of ugly.
     final ImmutableSet<String> features =
@@ -900,11 +874,7 @@ public class CppLinkActionBuilder {
       // the LTO indexing step).
       allLtoArtifacts =
           createLtoArtifacts(
-              ltoOutputRootPrefix,
-              originalUniqueLibraries,
-              allowLtoIndexing,
-              includeLinkStaticInLtoIndexing,
-              features);
+              ltoOutputRootPrefix, originalUniqueLibraries, allowLtoIndexing, features);
 
       if (!allowLtoIndexing) {
         return null;
@@ -919,9 +889,7 @@ public class CppLinkActionBuilder {
     ImmutableSet<LinkerInput> linkstampObjectFileInputs;
     if (isLtoIndexing) {
       objectFileInputs = computeLtoIndexingObjectFileInputs();
-      uniqueLibraries =
-          computeLtoIndexingUniqueLibraries(
-              originalUniqueLibraries, includeLinkStaticInLtoIndexing);
+      uniqueLibraries = computeLtoIndexingUniqueLibraries(originalUniqueLibraries);
       linkstampObjectFileInputs = ImmutableSet.of();
     } else {
       objectFileInputs = ImmutableSet.copyOf(objectFiles);
@@ -2180,22 +2148,6 @@ public class CppLinkActionBuilder {
     }
 
     /**
-     * Returns true if this artifact is produced from a bitcode file that will be input to the LTO
-     * indexing step, in which case that step will add it to the generated thinltoParamFile for
-     * inclusion in the final link step if the linker decides to include it.
-     *
-     * @param a is an artifact produced by an LTO backend.
-     */
-    private boolean handledByLtoIndexing(Artifact a) {
-      // If no LTO indexing is allowed for this link, then none are handled by LTO indexing.
-      // Otherwise, this may be from a linkstatic library that we decided not to include in
-      // LTO indexing because we are linking a test, to improve scalability when linking many tests.
-      return allowLtoIndexing
-          && !a.getRootRelativePath()
-              .startsWith(PathFragment.create(SHARED_NONLTO_BACKEND_ROOT_PREFIX));
-    }
-
-    /**
      * Adds command-line options for a static library or non-library input into options.
      *
      * @param librariesToLink - a collection that will be exposed as a build variable.
@@ -2227,7 +2179,7 @@ public class CppLinkActionBuilder {
             if (ltoMap != null && (a = ltoMap.remove(member)) != null) {
               // When ltoMap is non-null the backend artifact may be missing due to libraries that
               // list .o files explicitly, or generate .o files from assembler.
-              if (handledByLtoIndexing(a)) {
+              if (allowLtoIndexing) {
                 // The LTO artifacts that should be included in the final link
                 // are listed in the thinltoParamFile, generated by the LTO indexing.
                 continue;
@@ -2259,7 +2211,7 @@ public class CppLinkActionBuilder {
         Artifact inputArtifact = input.getArtifact();
         Artifact a;
         if (ltoMap != null && (a = ltoMap.remove(inputArtifact)) != null) {
-          if (handledByLtoIndexing(a)) {
+          if (allowLtoIndexing) {
             // The LTO artifacts that should be included in the final link
             // are listed in the thinltoParamFile, generated by the LTO indexing.
             return;
