@@ -15,12 +15,20 @@
  */
 package org.androidannotations.rest.spring;
 
+import java.io.IOException;
 
-import org.androidannotations.rest.spring.annotations.Rest;
-import org.springframework.http.converter.json.MappingJacksonHttpMessageConverter;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.web.client.ResponseErrorHandler;
 
-@Rest(converters = { MappingJacksonHttpMessageConverter.class }, responseErrorHandler = ResponseErrorHandler.class)
-public interface ClientWithNonClassResponseErrorHandler {
+public class ValidResponseErrorHandler implements ResponseErrorHandler {
 
+	@Override
+	public boolean hasError(ClientHttpResponse clientHttpResponse) throws IOException {
+		return false;
+	}
+
+	@Override
+	public void handleError(ClientHttpResponse clientHttpResponse) throws IOException {
+
+	}
 }
