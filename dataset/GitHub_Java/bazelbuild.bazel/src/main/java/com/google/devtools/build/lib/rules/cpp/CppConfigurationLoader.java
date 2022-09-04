@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -190,12 +189,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     cToolchain =
         CppToolchainInfo.addLegacyFeatures(
             cToolchain, crosstoolTopLabel.getPackageIdentifier().getPathUnderExecRoot());
-    CcToolchainConfigInfo ccToolchainConfigInfo;
-    try {
-      ccToolchainConfigInfo = CcToolchainConfigInfo.fromToolchain(cToolchain);
-    } catch (EvalException e) {
-      throw new InvalidConfigurationException(e);
-    }
+    CcToolchainConfigInfo ccToolchainConfigInfo = CcToolchainConfigInfo.fromToolchain(cToolchain);
 
     String ccToolchainSuiteProtoAttributeValue =
         StringUtil.emptyToNull(

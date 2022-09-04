@@ -21,6 +21,7 @@ import static com.google.devtools.build.lib.rules.objc.CompilationSupport.ABSOLU
 import static com.google.devtools.build.lib.rules.objc.CompilationSupport.BOTH_MODULE_NAME_AND_MODULE_MAP_SPECIFIED;
 import static com.google.devtools.build.lib.rules.objc.CompilationSupport.FILE_IN_SRCS_AND_HDRS_WARNING_FORMAT;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ASSET_CATALOG;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.CC_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
@@ -54,7 +55,7 @@ import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
+import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -100,7 +101,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         ")");
 
     useConfiguration(
-        "--apple_platform_type=ios",
         "--cpu=ios_x86_64",
         "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
 
@@ -177,7 +177,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testObjcPlusPlusCompile() throws Exception {
     useConfiguration(
-        "--apple_platform_type=ios",
         "--cpu=ios_i386",
         "--ios_cpu=i386",
         "--ios_minimum_os=9.10.11");
@@ -407,7 +406,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCompilationActions_simulator() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_i386", "--ios_cpu=i386");
+    useConfiguration(
+        "--cpu=ios_i386",
+        "--ios_cpu=i386");
 
     scratch.file("objc/a.m");
     scratch.file("objc/non_arc.m");
@@ -457,7 +458,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCompilationActions_device() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_armv7", "--ios_cpu=armv7");
+    useConfiguration(
+        "--cpu=ios_armv7",
+        "--ios_cpu=armv7");
 
     scratch.file("objc/a.m");
     scratch.file("objc/non_arc.m");
@@ -550,7 +553,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCompilationActionsWithCopts() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_i386", "--ios_cpu=i386");
+    useConfiguration("--cpu=ios_i386", "--ios_cpu=i386");
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setAndCreateFiles("hdrs", "c.h")
@@ -617,7 +620,8 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testCompilationActionsWithEmbeddedBitcode() throws Exception {
     useConfiguration(
-        "--apple_platform_type=ios", "--ios_multi_cpus=arm64", "--apple_bitcode=embedded");
+        "--ios_multi_cpus=arm64",
+        "--apple_bitcode=embedded");
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setAndCreateFiles("hdrs", "c.h")
@@ -631,7 +635,8 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testCompilationActionsWithEmbeddedBitcodeMarkers() throws Exception {
     useConfiguration(
-        "--apple_platform_type=ios", "--ios_multi_cpus=arm64", "--apple_bitcode=embedded_markers");
+        "--ios_multi_cpus=arm64",
+        "--apple_bitcode=embedded_markers");
 
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
@@ -745,7 +750,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testArchiveAction_simulator() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_i386", "--ios_cpu=i386");
+    useConfiguration(
+        "--cpu=ios_i386",
+        "--ios_cpu=i386");
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setAndCreateFiles("hdrs", "c.h")
@@ -774,7 +781,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testArchiveAction_device() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_armv7", "--ios_cpu=armv7");
+    useConfiguration(
+        "--cpu=ios_armv7",
+        "--ios_cpu=armv7");
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setAndCreateFiles("hdrs", "c.h")
@@ -803,7 +812,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testFullyLinkArchiveAction_simulator() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_i386", "--ios_cpu=i386");
+    useConfiguration(
+        "--cpu=ios_i386",
+        "--ios_cpu=i386");
     createLibraryTargetWriter("//objc:lib_dep")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setAndCreateFiles("hdrs", "a.h", "b.h")
@@ -840,7 +851,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testFullyLinkArchiveAction_device() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_armv7", "--ios_cpu=armv7");
+    useConfiguration(
+        "--cpu=ios_armv7",
+        "--ios_cpu=armv7");
     createLibraryTargetWriter("//objc:lib_dep")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setAndCreateFiles("hdrs", "a.h", "b.h")
@@ -908,7 +921,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testPropagatesDefinesToDependersTransitively() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_x86_64", "--ios_cpu=x86_64");
+    useConfiguration(
+        "--cpu=ios_x86_64",
+        "--ios_cpu=x86_64");
     createLibraryTargetWriter("//lib1:lib1")
         .setAndCreateFiles("srcs", "a.m")
         .setAndCreateFiles("non_arc_srcs", "b.m")
@@ -1113,6 +1128,24 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
+  public void testExportsBundleDependencies() throws Exception {
+    scratch.file("bundle/bar/x.bundle/1");
+    scratch.file(
+        "bundle/BUILD",
+        "objc_bundle(",
+        "    name = 'bundle',",
+        "    bundle_imports = glob(['bar/**']),",
+        ")");
+    createLibraryTargetWriter("//lib:lib")
+        .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
+        .setList("bundles", "//bundle:bundle")
+        .write();
+    ObjcProvider provider = providerForTarget("//lib:lib");
+    assertThat(provider.get(BUNDLE_FILE))
+        .contains(new BundleableFile(getSourceArtifact("bundle/bar/x.bundle/1"), "x.bundle/1"));
+  }
+
+  @Test
   public void testDylibsProvided() throws Exception {
     createLibraryTargetWriter("//lib:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
@@ -1227,7 +1260,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testAppleSdkVersionEnv() throws Exception {
-    useConfiguration("--apple_platform_type=ios");
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setAndCreateFiles("hdrs", "c.h")
@@ -1239,7 +1271,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testNonDefaultAppleSdkVersionEnv() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--ios_sdk_version=8.1");
+    useConfiguration("--ios_sdk_version=8.1");
 
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
@@ -1390,7 +1422,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCompilationActionsWithPch() throws Exception {
-    useConfiguration("--apple_platform_type=ios");
     ApplePlatform platform = ApplePlatform.IOS_SIMULATOR;
     scratch.file("objc/foo.pch");
     createLibraryTargetWriter("//objc:lib")
@@ -1475,14 +1506,12 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     ObjcProvider objcProvider = providerForTarget("//objc2:lib");
 
     Iterable<Artifact> linkerInputArtifacts =
-        Iterables.transform(
-            objcProvider.get(CC_LIBRARY),
-            new Function<LibraryToLink, Artifact>() {
-              @Override
-              public Artifact apply(LibraryToLink library) {
-                return library.getStaticLibrary();
-              }
-            });
+        Iterables.transform(objcProvider.get(CC_LIBRARY), new Function<LinkerInput, Artifact>() {
+      @Override
+      public Artifact apply(LinkerInput library) {
+        return library.getArtifact();
+      }
+    });
 
     assertThat(linkerInputArtifacts)
         .containsAllOf(
@@ -1710,7 +1739,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testAppleSdkDefaultPlatformEnv() throws Exception {
-    useConfiguration("--apple_platform_type=ios");
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setAndCreateFiles("hdrs", "c.h")
@@ -1722,7 +1750,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testAppleSdkDevicePlatformEnv() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_arm64");
+    useConfiguration("--cpu=ios_arm64");
 
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
@@ -2045,82 +2073,5 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     CommandAction compileAction = compileAction("//cc/lib", "a.o");
     assertThat(Artifact.toRootRelativePaths(compileAction.getPossibleInputsForTesting()))
         .contains("cc/txt_dep/hdr.h");
-  }
-
-  @Test
-  public void testIncompatibleResourceAttributeFlag_assetCatalogs() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=true");
-
-    checkError(
-        "x",
-        "x",
-        "objc_library resource attributes are not allowed. Please use the 'data' attribute instead",
-        "objc_library(name = 'x', asset_catalogs = ['fg'])");
-  }
-
-  @Test
-  public void testIncompatibleResourceAttributeFlag_datamodels() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=true");
-
-    checkError(
-        "x",
-        "x",
-        "objc_library resource attributes are not allowed. Please use the 'data' attribute instead",
-        "objc_library(name = 'x', datamodels = ['fg'])");
-  }
-
-  @Test
-  public void testIncompatibleResourceAttributeFlag_resources() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=true");
-
-    checkError(
-        "x",
-        "x",
-        "objc_library resource attributes are not allowed. Please use the 'data' attribute instead",
-        "objc_library(name = 'x', resources = ['fg'])");
-  }
-
-  @Test
-  public void testIncompatibleResourceAttributeFlag_storyboards() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=true");
-
-    checkError(
-        "x",
-        "x",
-        "objc_library resource attributes are not allowed. Please use the 'data' attribute instead",
-        "objc_library(name = 'x', storyboards = ['fg.storyboard'])");
-  }
-
-  @Test
-  public void testIncompatibleResourceAttributeFlag_strings() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=true");
-
-    checkError(
-        "x",
-        "x",
-        "objc_library resource attributes are not allowed. Please use the 'data' attribute instead",
-        "objc_library(name = 'x', strings = ['fg.strings'])");
-  }
-
-  @Test
-  public void testIncompatibleResourceAttributeFlag_structuredResources() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=true");
-
-    checkError(
-        "x",
-        "x",
-        "objc_library resource attributes are not allowed. Please use the 'data' attribute instead",
-        "objc_library(name = 'x', structured_resources = ['fg'])");
-  }
-
-  @Test
-  public void testIncompatibleResourceAttributeFlag_xibs() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=true");
-
-    checkError(
-        "x",
-        "x",
-        "objc_library resource attributes are not allowed. Please use the 'data' attribute instead",
-        "objc_library(name = 'x', xibs = ['fg.xib'])");
   }
 }

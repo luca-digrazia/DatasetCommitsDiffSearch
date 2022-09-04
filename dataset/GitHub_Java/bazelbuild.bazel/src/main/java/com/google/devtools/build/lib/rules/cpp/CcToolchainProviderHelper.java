@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeSupportFunction.CcSkyframeSupportException;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.StringUtil;
@@ -670,7 +669,7 @@ public class CcToolchainProviderHelper {
               cppConfiguration.disableLegacyCrosstoolFields(),
               cppConfiguration.disableCompilationModeFlags(),
               cppConfiguration.disableLinkingModeFlags());
-        } catch (EvalException e) {
+        } catch (InvalidConfigurationException e) {
           throw ruleContext.throwWithRuleError(e.getMessage());
         }
       }
@@ -697,7 +696,7 @@ public class CcToolchainProviderHelper {
           cppConfiguration.disableLegacyCrosstoolFields(),
           cppConfiguration.disableCompilationModeFlags(),
           cppConfiguration.disableLinkingModeFlags());
-    } catch (EvalException e) {
+    } catch (InvalidConfigurationException e) {
       throw ruleContext.throwWithRuleError(e.getMessage());
     }
   }
