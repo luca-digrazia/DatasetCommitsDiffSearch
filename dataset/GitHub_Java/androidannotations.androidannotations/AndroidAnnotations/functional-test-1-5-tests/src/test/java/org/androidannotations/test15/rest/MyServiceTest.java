@@ -242,9 +242,7 @@ public class MyServiceTest {
 		String xtValue = "1234";
 		String sjsaidValue = "5678";
 
-		final String fancyHeaderName = "SomeFancyHeader";
-		final String fancyToken = "fancyHeaderToken";
-		myService.setHeader(fancyHeaderName, fancyToken);
+		myService.setHeader("SomeFancyHeader", "fancyHeaderToken");
 		
 		addPendingResponse("[]", "xt", xtValue, "sjsaid", sjsaidValue);
 		myService.authenticate();
@@ -252,20 +250,5 @@ public class MyServiceTest {
 		assertEquals(xtValue, myService.getCookie("xt"));
 		assertEquals(sjsaidValue, myService.getCookie("sjsaid"));
 
-		RestTemplate restTemplate = mock(RestTemplate.class);
-		myService.setRestTemplate(restTemplate);
-
-		// deletes
-        ArgumentMatcher<HttpEntity<Void>> matcher = new ArgumentMatcher<HttpEntity<Void>>() {
-
-			@Override
-			public boolean matches(Object argument) {
-				final String expected = fancyToken;
-				return expected.equals(((HttpEntity<?>) argument).getHeaders().get(fancyHeaderName).get(0));
-			}
-		};
-		addPendingResponse("");
-		myService.removeEvent(0);
-		verify(restTemplate).exchange(Mockito.anyString(), eq(HttpMethod.DELETE), argThat(matcher), Mockito.<Class<Object>> any(), Mockito.<Map<String, ?>> any());
 	}
 }
