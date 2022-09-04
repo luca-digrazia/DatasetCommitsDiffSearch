@@ -134,7 +134,6 @@ import io.quarkus.kubernetes.spi.KubernetesHealthLivenessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesHealthReadinessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesLabelBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
-import io.quarkus.kubernetes.spi.KubernetesRoleBindingBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesRoleBuildItem;
 import io.quarkus.runtime.LaunchMode;
 
@@ -273,7 +272,6 @@ class KubernetesProcessor {
             List<KubernetesLabelBuildItem> kubernetesLabels,
             List<KubernetesEnvBuildItem> kubernetesEnvs,
             List<KubernetesRoleBuildItem> kubernetesRoles,
-            List<KubernetesRoleBindingBuildItem> kubernetesRoleBindings,
             List<KubernetesPortBuildItem> kubernetesPorts,
             EnabledKubernetesDeploymentTargetsBuildItem kubernetesDeploymentTargets,
             Optional<BaseImageInfoBuildItem> baseImage,
@@ -384,7 +382,6 @@ class KubernetesProcessor {
                     kubernetesLabels,
                     kubernetesEnvs,
                     kubernetesRoles,
-                    kubernetesRoleBindings,
                     kubernetesPorts,
                     baseImage,
                     containerImage,
@@ -423,7 +420,7 @@ class KubernetesProcessor {
             }
 
             if (!generatedFileNames.isEmpty()) {
-                log.debugf("Generated the Kubernetes manifests: '%s' in '%s'", String.join(",", generatedFileNames),
+                log.infof("Generated the Kubernetes manifests: '%s' in '%s'", String.join(",", generatedFileNames),
                         outputTarget.getOutputDirectory() + File.separator + KUBERNETES);
             }
 
@@ -669,7 +666,6 @@ class KubernetesProcessor {
             List<KubernetesLabelBuildItem> kubernetesLabels,
             List<KubernetesEnvBuildItem> kubernetesEnvs,
             List<KubernetesRoleBuildItem> kubernetesRoles,
-            List<KubernetesRoleBindingBuildItem> kubernetesRoleBindings,
             List<KubernetesPortBuildItem> kubernetesPorts,
             Optional<BaseImageInfoBuildItem> baseImage,
             Optional<ContainerImageInfoBuildItem> containerImage,
@@ -743,16 +739,11 @@ class KubernetesProcessor {
                 .forEach(p -> session.configurators().add(new AddPort(p)));
 
         //Handle RBAC
-        // TODO why this condition?
         if (!kubernetesPorts.isEmpty()) {
             session.resources().decorate(new ApplyServiceAccountNamedDecorator());
             session.resources().decorate(new AddServiceAccountResourceDecorator());
-            kubernetesRoles.forEach(r -> session.resources().decorate(new AddRoleResourceDecorator(r)));
-            kubernetesRoleBindings.forEach(rb -> session.resources().decorate(
-                    new AddRoleBindingResourceDecorator(rb.getName(), null, rb.getRole(),
-                            rb.isClusterWide()
-                                    ? AddRoleBindingResourceDecorator.RoleKind.ClusterRole
-                                    : AddRoleBindingResourceDecorator.RoleKind.Role)));
+            kubernetesRoles
+                    .forEach(r -> session.resources().decorate(new AddRoleBindingResourceDecorator(r.getRole())));
         }
 
         handleServices(session, kubernetesConfig, openshiftConfig, knativeConfig, kubernetesName, openshiftName, knativeName);
