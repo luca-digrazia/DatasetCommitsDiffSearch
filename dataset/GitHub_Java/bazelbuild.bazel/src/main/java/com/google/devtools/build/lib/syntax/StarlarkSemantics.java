@@ -46,7 +46,6 @@ public abstract class StarlarkSemantics {
   // features by name. The features can be named string constants, defined close to the code they
   // affect, to avoid accidential misspellings.
   public enum FlagIdentifier {
-    EXPERIMENTAL_ACTION_ARGS(StarlarkSemantics::experimentalActionArgs),
     EXPERIMENTAL_ALLOW_INCREMENTAL_REPOSITORY_UPDATES(
         StarlarkSemantics::experimentalAllowIncrementalRepositoryUpdates),
     EXPERIMENTAL_ASPECT_OUTPUT_PROPAGATION(StarlarkSemantics::experimentalAspectOutputPropagation),
@@ -129,8 +128,6 @@ public abstract class StarlarkSemantics {
       AutoValue_StarlarkSemantics.class;
 
   // <== Add new options here in alphabetic order ==>
-  public abstract boolean experimentalActionArgs();
-
   public abstract boolean experimentalAllowIncrementalRepositoryUpdates();
 
   public abstract boolean experimentalAspectOutputPropagation();
@@ -201,8 +198,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleStringJoinRequiresStrings();
 
-  public abstract boolean incompatibleVisibilityPrivateAttributesAtDefinition();
-
   public abstract boolean internalSkylarkFlagTestCanary();
 
   public abstract boolean incompatibleDoNotSplitLinkingCmdline();
@@ -250,7 +245,6 @@ public abstract class StarlarkSemantics {
   public static final StarlarkSemantics DEFAULT_SEMANTICS =
       builder()
           // <== Add new options here in alphabetic order ==>
-          .experimentalActionArgs(false)
           .experimentalAllowTagsPropagation(false)
           .experimentalAspectOutputPropagation(false)
           .experimentalBuildSettingApi(true)
@@ -287,7 +281,6 @@ public abstract class StarlarkSemantics {
           .incompatibleRunShellCommandString(false)
           .incompatibleRestrictNamedParams(true)
           .incompatibleStringJoinRequiresStrings(true)
-          .incompatibleVisibilityPrivateAttributesAtDefinition(false)
           .internalSkylarkFlagTestCanary(false)
           .incompatibleDoNotSplitLinkingCmdline(true)
           .incompatibleDepsetForLibrariesToLinkGetter(true)
@@ -301,8 +294,6 @@ public abstract class StarlarkSemantics {
   public abstract static class Builder {
 
     // <== Add new options here in alphabetic order ==>
-    public abstract Builder experimentalActionArgs(boolean value);
-
     public abstract Builder experimentalAllowIncrementalRepositoryUpdates(boolean value);
 
     public abstract Builder experimentalAllowTagsPropagation(boolean value);
@@ -375,8 +366,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleRunShellCommandString(boolean value);
 
     public abstract Builder incompatibleStringJoinRequiresStrings(boolean value);
-
-    public abstract Builder incompatibleVisibilityPrivateAttributesAtDefinition(boolean value);
 
     public abstract Builder internalSkylarkFlagTestCanary(boolean value);
 

@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandAction;
+import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -265,25 +266,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     super.useConfiguration(args);
   }
 
-  protected void useConfigurationWithCustomXcode(String... args) throws Exception {
-    ImmutableList<String> extraArgs = MockObjcSupport.requiredObjcCrosstoolFlagsNoXcodeConfig();
-    args = Arrays.copyOf(args, args.length + extraArgs.size());
-    for (int i = 0; i < extraArgs.size(); i++) {
-      args[(args.length - extraArgs.size()) + i] = extraArgs.get(i);
-    }
-    super.useConfiguration(args);
-  }
-
-  /** Asserts that an action specifies the given requirement. */
-  protected void assertHasRequirement(Action action, String executionRequirement) {
-    assertThat(action.getExecutionInfo()).containsKey(executionRequirement);
-  }
-
-  /** Asserts that an action does not specify the given requirement. */
-  protected void assertNotHasRequirement(Action action, String executionRequirement) {
-    assertThat(action.getExecutionInfo()).doesNotContainKey(executionRequirement);
-  }
-
   /**
    * Returns the arguments to pass to clang for specifying module map artifact location and
    * module name.
@@ -317,7 +299,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       throws InterruptedException, OptionsParsingException, InvalidConfigurationException {
     ImmutableList.Builder<BuildConfiguration> splitConfigs = ImmutableList.builder();
 
-    for (BuildOptions splitOptions : splitTransition.split(configuration.getOptions()).values()) {
+    for (BuildOptions splitOptions : splitTransition.split(configuration.getOptions())) {
       splitConfigs.add(getSkyframeExecutor().getConfigurationForTesting(
           reporter, configuration.fragmentClasses(), splitOptions));
     }
@@ -465,8 +447,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
    * Asserts that the given action can specify execution requirements, and requires execution on
    * darwin.
    */
-  protected void assertRequiresDarwin(Action action) {
-    assertHasRequirement(action, ExecutionRequirements.REQUIRES_DARWIN);
+  protected void assertRequiresDarwin(ExecutionInfoSpecifier action) {
+    assertThat(action.getExecutionInfo()).containsKey(ExecutionRequirements.REQUIRES_DARWIN);
   }
 
   protected ConfiguredTarget addBinWithTransitiveDepOnFrameworkImport() throws Exception {

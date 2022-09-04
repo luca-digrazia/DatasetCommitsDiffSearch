@@ -118,7 +118,6 @@ public class SkylarkSemanticsConsistencyTest {
   private static StarlarkSemanticsOptions buildRandomOptions(Random rand) throws Exception {
     return parseOptions(
         // <== Add new options here in alphabetic order ==>
-        "--experimental_action_args=" + rand.nextBoolean(),
         "--experimental_allow_incremental_repository_updates=" + rand.nextBoolean(),
         "--experimental_aspect_output_propagation=" + rand.nextBoolean(),
         "--experimental_build_setting_api=" + rand.nextBoolean(),
@@ -160,7 +159,6 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_restrict_named_params=" + rand.nextBoolean(),
         "--incompatible_run_shell_command_string=" + rand.nextBoolean(),
         "--incompatible_string_join_requires_strings=" + rand.nextBoolean(),
-        "--incompatible_visibility_private_attributes_at_definition=" + rand.nextBoolean(),
         "--incompatible_restrict_string_escapes=" + rand.nextBoolean(),
         "--incompatible_disallow_dict_lookup_unhashable_keys=" + rand.nextBoolean(),
         "--incompatible_disallow_hashing_frozen_mutables=" + rand.nextBoolean(),
@@ -174,7 +172,6 @@ public class SkylarkSemanticsConsistencyTest {
   private static StarlarkSemantics buildRandomSemantics(Random rand) {
     return StarlarkSemantics.builder()
         // <== Add new options here in alphabetic order ==>
-        .experimentalActionArgs(rand.nextBoolean())
         .experimentalAllowIncrementalRepositoryUpdates(rand.nextBoolean())
         .experimentalAspectOutputPropagation(rand.nextBoolean())
         .experimentalBuildSettingApi(rand.nextBoolean())
@@ -214,7 +211,6 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleRestrictNamedParams(rand.nextBoolean())
         .incompatibleRunShellCommandString(rand.nextBoolean())
         .incompatibleStringJoinRequiresStrings(rand.nextBoolean())
-        .incompatibleVisibilityPrivateAttributesAtDefinition(rand.nextBoolean())
         .incompatibleRestrictStringEscapes(rand.nextBoolean())
         .incompatibleDisallowDictLookupUnhashableKeys(rand.nextBoolean())
         .incompatibleDisallowHashingFrozenMutables(rand.nextBoolean())

@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.List;
 import java.util.Set;
@@ -391,6 +392,14 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         .write();
 
     assertThat(view.hasErrors(getConfiguredTarget("//objc:lib"))).isFalse();
+  }
+
+  static Iterable<String> iquoteArgs(ObjcProvider provider, BuildConfiguration configuration) {
+    return Interspersing.beforeEach(
+        "-iquote",
+        Iterables.transform(
+            ObjcCommon.userHeaderSearchPaths(provider, configuration),
+            PathFragment::getSafePathString));
   }
 
   @Test
@@ -1291,10 +1300,10 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
                 .add("-arch x86_64")
                 .add("-isysroot", AppleToolchain.sdkDir())
                 .addAll(FASTBUILD_COPTS)
-                .add("-iquote", ".")
-                .add(
-                    "-iquote",
-                    getAppleCrosstoolConfiguration().getGenfilesFragment().getSafePathString())
+                .addAll(
+                    iquoteArgs(
+                        getConfiguredTarget("//objc:lib").get(ObjcProvider.SKYLARK_CONSTRUCTOR),
+                        getAppleCrosstoolConfiguration()))
                 .add("-include", "objc/some.pch")
                 .add("-fobjc-arc")
                 .add("-c", "objc/a.m")

@@ -350,8 +350,7 @@ public class CompilationSupport {
             .setPurpose(purpose)
             .addQuoteIncludeDirs(
                 ObjcCommon.userHeaderSearchPaths(objcProvider, ruleContext.getConfiguration()))
-            .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext))
-            .setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext));
+            .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext));
 
     if (pchHdr != null) {
       result.addNonModuleMapHeader(pchHdr);
@@ -544,8 +543,7 @@ public class CompilationSupport {
         extraInputs,
         ruleContext.getFragment(ObjcConfiguration.class),
         intermediateArtifacts,
-        buildConfiguration,
-        attributes.enableModules());
+        buildConfiguration);
   }
 
   private FeatureConfiguration getFeatureConfiguration(
@@ -577,7 +575,7 @@ public class CompilationSupport {
         && !getCustomModuleMap(ruleContext).isPresent()) {
       activatedCrosstoolSelectables.add(OBJC_MODULE_FEATURE_NAME);
     }
-    if (!attributes.enableModules()) {
+    if (!CompilationAttributes.Builder.fromRuleContext(ruleContext).build().enableModules()) {
       activatedCrosstoolSelectables.add(NO_ENABLE_MODULES_FEATURE_NAME);
     }
     if (configuration.getFragment(ObjcConfiguration.class).shouldStripBinary()) {

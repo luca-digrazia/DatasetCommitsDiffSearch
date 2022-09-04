@@ -64,17 +64,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   // <== Add new options here in alphabetic order ==>
 
   @Option(
-      name = "experimental_action_args",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help =
-          "If set to true, Action objects support an `args` field: "
-              + "a frozen Args object which contains all action arguments.")
-  public boolean experimentalActionArgs;
-
-  @Option(
       name = "experimental_allow_incremental_repository_updates",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -398,20 +387,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
               + "instead return a list of provider instances.")
   public boolean incompatibleDisallowStructProviderSyntax;
 
-  @Option(
-      name = "incompatible_visibility_private_attributes_at_definition",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, the visibility of private rule attributes is checked with respect "
-              + "to the rule definition, rather than the rule usage.")
-  public boolean incompatibleVisibilityPrivateAttributesAtDefinition;
-
   /** Controls legacy arguments to ctx.actions.Args#add. */
   @Option(
       name = "incompatible_disallow_old_style_args_add",
@@ -662,7 +637,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
     StarlarkSemantics semantics =
         StarlarkSemantics.builder()
             // <== Add new options here in alphabetic order ==>
-            .experimentalActionArgs(experimentalActionArgs)
             .experimentalAllowIncrementalRepositoryUpdates(
                 experimentalAllowIncrementalRepositoryUpdates)
             .experimentalAllowTagsPropagation(experimentalAllowTagsPropagation)
@@ -703,8 +677,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleRestrictNamedParams(incompatibleRestrictNamedParams)
             .incompatibleRunShellCommandString(incompatibleRunShellCommandString)
             .incompatibleStringJoinRequiresStrings(incompatibleStringJoinRequiresStrings)
-            .incompatibleVisibilityPrivateAttributesAtDefinition(
-                incompatibleVisibilityPrivateAttributesAtDefinition)
             .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)
             .incompatibleDoNotSplitLinkingCmdline(incompatibleDoNotSplitLinkingCmdline)
             .incompatibleDepsetForLibrariesToLinkGetter(incompatibleDepsetForLibrariesToLinkGetter)
