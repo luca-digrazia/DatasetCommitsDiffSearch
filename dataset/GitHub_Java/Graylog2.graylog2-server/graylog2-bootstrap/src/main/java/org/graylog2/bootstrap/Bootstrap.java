@@ -50,7 +50,10 @@ import org.graylog2.plugin.Version;
 import org.graylog2.plugin.inject.Graylog2Module;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.system.NodeIdPersistenceException;
-import org.graylog2.shared.bindings.*;
+import org.graylog2.shared.bindings.GenericBindings;
+import org.graylog2.shared.bindings.GuiceInjectorHolder;
+import org.graylog2.shared.bindings.GuiceInstantiationService;
+import org.graylog2.shared.bindings.InstantiationService;
 import org.graylog2.shared.initializers.ServiceManagerListener;
 import org.graylog2.shared.journal.KafkaJournalModule;
 import org.graylog2.shared.journal.NoopJournalModule;
@@ -163,17 +166,11 @@ public abstract class Bootstrap implements Runnable {
         final JadConfig jadConfig = new JadConfig();
         jadConfig.addConverterFactory(new JodaTimeConverterFactory());
 
-        final Set<Plugin> plugins = loadPlugins(pluginPath);
-        final Set<PluginModule> pluginModules = new HashSet<>();
+        final Set<PluginModule> pluginModules = loadPluginModules(pluginPath);
 
-        for (Plugin plugin : plugins)
-            for (PluginModule pluginModule : pluginModules) {
-                pluginModules.addAll(plugin.modules());
-                for (PluginConfigBean configBean : pluginModule.getConfigBeans())
-                    jadConfig.addConfigurationBean(configBean);
-            }
-
-        PluginBindings pluginBindings = new PluginBindings(plugins);
+        for (PluginModule pluginModule : pluginModules)
+            for (PluginConfigBean configBean : pluginModule.getConfigBeans())
+                jadConfig.addConfigurationBean(configBean);
 
         if (isDumpDefaultConfig()) {
             for (Object bean : getCommandConfigurationBeans())
@@ -194,7 +191,7 @@ public abstract class Bootstrap implements Runnable {
             System.exit(1);
         }
 
-        final Injector injector = setupInjector(configModule, pluginModules, pluginBindings);
+        final Injector injector = setupInjector(configModule, pluginModules);
 
         if (injector == null) {
             LOG.error("Injector could not be created, exiting! (Please include the previous error messages in bug reports.)");
@@ -294,14 +291,14 @@ public abstract class Bootstrap implements Runnable {
         return pluginLoaderConfig.getPluginDir();
     }
 
-    protected Set<Plugin> loadPlugins(String pluginPath) {
+    protected Set<PluginModule> loadPluginModules(String pluginPath) {
         final File pluginDir = new File(pluginPath);
-        final Set<Plugin> plugins = new HashSet<>();
+        final Set<PluginModule> pluginModules = new HashSet<>();
 
         final LegacyPluginLoader legacyPluginLoader = new LegacyPluginLoader(pluginDir);
         for (Plugin plugin : legacyPluginLoader.loadPlugins()) {
             if (version.sameOrHigher(plugin.metadata().getRequiredVersion()))
-                plugins.add(plugin);
+                pluginModules.addAll(plugin.modules());
             else
                 LOG.error("Plugin \"" + plugin.metadata().getName() + "\" requires version " + plugin.metadata().getRequiredVersion() + " - not loading!");
         }
@@ -309,13 +306,13 @@ public abstract class Bootstrap implements Runnable {
         final PluginLoader pluginLoader = new PluginLoader(pluginDir);
         for (Plugin plugin : pluginLoader.loadPlugins()) {
             if (version.sameOrHigher(plugin.metadata().getRequiredVersion()))
-                plugins.add(plugin);
+                pluginModules.addAll(plugin.modules());
             else
                 LOG.error("Plugin \"" + plugin.metadata().getName() + "\" requires version " + plugin.metadata().getRequiredVersion() + " - not loading!");
         }
 
-        LOG.debug("Loaded plugins: " + plugins);
-        return plugins;
+        LOG.debug("Loaded modules: " + pluginModules);
+        return pluginModules;
     }
 
     protected List<Module> getSharedBindingsModules(InstantiationService instantiationService) {
@@ -342,7 +339,7 @@ public abstract class Bootstrap implements Runnable {
         return result;
     }
 
-    protected Injector setupInjector(NamedConfigParametersModule configModule, Set<PluginModule> pluginModules, Module... otherModules) {
+    protected Injector setupInjector(NamedConfigParametersModule configModule, Set<PluginModule> pluginModules) {
         try {
             final GuiceInstantiationService instantiationService = new GuiceInstantiationService();
 
@@ -350,7 +347,6 @@ public abstract class Bootstrap implements Runnable {
             modules.add(configModule);
             modules.addAll(getSharedBindingsModules(instantiationService));
             modules.addAll(getCommandBindings());
-            modules.addAll(Arrays.asList(otherModules));
             if (configuration.isMessageJournalEnabled()) {
                 modules.add(new KafkaJournalModule());
             } else {
