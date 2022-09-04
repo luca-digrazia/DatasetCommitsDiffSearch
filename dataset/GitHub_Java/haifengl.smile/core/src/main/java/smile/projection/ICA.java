@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.projection;
 
@@ -24,7 +24,7 @@ import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.EVD;
-import smile.projection.ica.Exp;
+import smile.projection.ica.Gaussian;
 import smile.projection.ica.LogCosh;
 import smile.stat.distribution.GaussianDistribution;
 
@@ -60,7 +60,6 @@ import smile.stat.distribution.GaussianDistribution;
  */
 public class ICA implements Serializable {
     private static final long serialVersionUID = 2L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ICA.class);
 
     /**
      * The independent components (row-wise).
@@ -103,7 +102,7 @@ public class ICA implements Serializable {
                 f = new LogCosh();
                 break;
             case "Gaussian":
-                f = new Exp();
+                f = new Gaussian();
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported contrast function: " + contrast);
@@ -119,10 +118,10 @@ public class ICA implements Serializable {
      *
      * @param data training data.
      * @param p the number of independent components.
-     * @param contrast the contrast function which is capable of separating or
-     *                 extracting independent sources from a linear mixture.
-     *                 It must be a non-quadratic non-linear function that
-     *                 has second-order derivative.
+     * @param contrast the contrast function is a(statistical) functions which
+     *                 is capable of separating or extracting independent
+     *                 sources from a linear mixture. It must be a non-quadratic
+     *                 non-linear function that has second-order derivative.
      * @param tol the tolerance of convergence test.
      * @param maxIter the maximum number of iterations.
      */
@@ -162,7 +161,7 @@ public class ICA implements Serializable {
             double[] w = W[i];
 
             double diff = Double.MAX_VALUE;
-            for (int iter = 0; iter < maxIter && diff > tol; iter++) {
+            for (int iter = 0; diff > tol && iter < maxIter; iter++) {
                 System.arraycopy(w, 0, wold, 0, n);
 
                 // Calculate derivative of projection
@@ -214,7 +213,7 @@ public class ICA implements Serializable {
             }
 
             if (diff > tol) {
-                logger.warn(String.format("Component %d did not converge in %d iterations.", i, maxIter));
+                throw new IllegalStateException(String.format("Component %d did not converge in %d iterations.", i, maxIter));
             }
         }
 
