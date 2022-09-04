@@ -289,8 +289,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     CppLinkInfo cppLinkInfo = info.getExtension(CppLinkInfo.cppLinkInfo);
     assertThat(cppLinkInfo).isNotNull();
 
-    Iterable<String> inputs =
-        Artifact.asExecPaths(action.getLinkCommandLine().getLinkerInputArtifacts());
+    Iterable<String> inputs = Artifact.asExecPaths(
+        LinkerInputs.toLibraryArtifacts(action.getLinkCommandLine().getLinkerInputs()));
     assertThat(cppLinkInfo.getInputFileList()).containsExactlyElementsIn(inputs);
     assertThat(cppLinkInfo.getOutputFile())
         .isEqualTo(action.getPrimaryOutput().getExecPathString());
@@ -323,8 +323,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     CppLinkInfo cppLinkInfo = info.getExtension(CppLinkInfo.cppLinkInfo);
     assertThat(cppLinkInfo).isNotNull();
 
-    Iterable<String> inputs =
-        Artifact.asExecPaths(action.getLinkCommandLine().getLinkerInputArtifacts());
+    Iterable<String> inputs = Artifact.asExecPaths(
+        LinkerInputs.toLibraryArtifacts(action.getLinkCommandLine().getLinkerInputs()));
     assertThat(cppLinkInfo.getInputFileList()).containsExactlyElementsIn(inputs);
     assertThat(cppLinkInfo.getOutputFile())
         .isEqualTo(action.getPrimaryOutput().getExecPathString());
