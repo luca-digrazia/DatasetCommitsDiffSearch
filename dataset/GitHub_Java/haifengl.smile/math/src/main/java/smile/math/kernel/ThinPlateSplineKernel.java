@@ -43,7 +43,7 @@ public class ThinPlateSplineKernel implements MercerKernel<double[]>, IsotropicK
      */
     public ThinPlateSplineKernel(double sigma) {
         if (sigma <= 0) {
-            throw new IllegalArgumentException("sigma is not positive: " + sigma);
+            throw new IllegalArgumentException("sigma is not positive.");
         }
 
         this.sigma = sigma;
@@ -61,6 +61,10 @@ public class ThinPlateSplineKernel implements MercerKernel<double[]>, IsotropicK
 
     @Override
     public double k(double[] x, double[] y) {
+        if (x.length != y.length) {
+            throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
+        }
+
         double d = MathEx.squaredDistance(x, y);
         return d/(sigma*sigma) * Math.log(Math.sqrt(d)/sigma);
     }

@@ -45,7 +45,7 @@ public class SparseThinPlateSplineKernel implements MercerKernel<SparseArray>, I
      */
     public SparseThinPlateSplineKernel(double sigma) {
         if (sigma <= 0) {
-            throw new IllegalArgumentException("sigma is not positive: " + sigma);
+            throw new IllegalArgumentException("sigma is not positive.");
         }
 
         this.sigma = sigma;
