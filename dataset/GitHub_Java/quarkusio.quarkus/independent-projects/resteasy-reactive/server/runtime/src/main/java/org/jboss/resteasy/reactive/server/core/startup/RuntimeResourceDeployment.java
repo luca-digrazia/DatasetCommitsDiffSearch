@@ -4,7 +4,6 @@ import static org.jboss.resteasy.reactive.common.util.DeploymentUtils.loadClass;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -13,11 +12,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
@@ -33,18 +29,17 @@ import org.jboss.resteasy.reactive.common.model.ParameterType;
 import org.jboss.resteasy.reactive.common.model.ResourceClass;
 import org.jboss.resteasy.reactive.common.util.MediaTypeHelper;
 import org.jboss.resteasy.reactive.common.util.QuarkusMultivaluedHashMap;
-import org.jboss.resteasy.reactive.common.util.ReflectionBeanFactoryCreator;
 import org.jboss.resteasy.reactive.common.util.ServerMediaType;
 import org.jboss.resteasy.reactive.common.util.types.TypeSignatureParser;
 import org.jboss.resteasy.reactive.server.core.DeploymentInfo;
 import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
 import org.jboss.resteasy.reactive.server.core.parameters.AsyncResponseExtractor;
+import org.jboss.resteasy.reactive.server.core.parameters.BeanParamExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.BodyParamExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.ContextParamExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.CookieParamExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.FormParamExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.HeaderParamExtractor;
-import org.jboss.resteasy.reactive.server.core.parameters.InjectParamExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.LocatableResourcePathParamExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.MatrixParamExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.NullParamExtractor;
@@ -60,15 +55,14 @@ import org.jboss.resteasy.reactive.server.handlers.AbortChainHandler;
 import org.jboss.resteasy.reactive.server.handlers.BlockingHandler;
 import org.jboss.resteasy.reactive.server.handlers.ExceptionHandler;
 import org.jboss.resteasy.reactive.server.handlers.FixedProducesHandler;
-import org.jboss.resteasy.reactive.server.handlers.FormBodyHandler;
 import org.jboss.resteasy.reactive.server.handlers.InputHandler;
 import org.jboss.resteasy.reactive.server.handlers.InstanceHandler;
 import org.jboss.resteasy.reactive.server.handlers.InvocationHandler;
 import org.jboss.resteasy.reactive.server.handlers.ParameterHandler;
 import org.jboss.resteasy.reactive.server.handlers.PerRequestInstanceHandler;
+import org.jboss.resteasy.reactive.server.handlers.ReadBodyHandler;
 import org.jboss.resteasy.reactive.server.handlers.RequestDeserializeHandler;
 import org.jboss.resteasy.reactive.server.handlers.ResourceLocatorHandler;
-import org.jboss.resteasy.reactive.server.handlers.ResourceRequestFilterHandler;
 import org.jboss.resteasy.reactive.server.handlers.ResponseHandler;
 import org.jboss.resteasy.reactive.server.handlers.ResponseWriterHandler;
 import org.jboss.resteasy.reactive.server.handlers.SseResponseWriterHandler;
@@ -96,7 +90,7 @@ public class RuntimeResourceDeployment {
     private final ServerSerialisers serialisers;
     private final ResteasyReactiveConfig quarkusRestConfig;
     private final Supplier<Executor> executorSupplier;
-    private final CustomServerRestHandlers customServerRestHandlers;
+    private final Supplier<ServerRestHandler> blockingInputHandlerSupplier;
     private final RuntimeInterceptorDeployment runtimeInterceptorDeployment;
     private final DynamicEntityWriter dynamicEntityWriter;
     private final ResourceLocatorHandler resourceLocatorHandler;
@@ -106,14 +100,14 @@ public class RuntimeResourceDeployment {
     private final boolean defaultBlocking;
 
     public RuntimeResourceDeployment(DeploymentInfo info, Supplier<Executor> executorSupplier,
-            CustomServerRestHandlers customServerRestHandlers,
+            Supplier<ServerRestHandler> blockingInputHandlerSupplier,
             RuntimeInterceptorDeployment runtimeInterceptorDeployment, DynamicEntityWriter dynamicEntityWriter,
             ResourceLocatorHandler resourceLocatorHandler, boolean defaultBlocking) {
         this.info = info;
         this.serialisers = info.getSerialisers();
         this.quarkusRestConfig = info.getConfig();
         this.executorSupplier = executorSupplier;
-        this.customServerRestHandlers = customServerRestHandlers;
+        this.blockingInputHandlerSupplier = blockingInputHandlerSupplier;
         this.runtimeInterceptorDeployment = runtimeInterceptorDeployment;
         this.dynamicEntityWriter = dynamicEntityWriter;
         this.resourceLocatorHandler = resourceLocatorHandler;
@@ -147,12 +141,8 @@ public class RuntimeResourceDeployment {
         for (int i = 0; i < method.getParameters().length; ++i) {
             parameterClasses[i] = loadClass(method.getParameters()[i].declaredType);
         }
-        Set<String> classAnnotationNames = new HashSet<>();
-        for (Annotation annotation : resourceClass.getAnnotations()) {
-            classAnnotationNames.add(annotation.annotationType().getName());
-        }
         ResteasyReactiveResourceInfo lazyMethod = new ResteasyReactiveResourceInfo(method.getName(), resourceClass,
-                parameterClasses, classAnnotationNames, method.getMethodAnnotationNames());
+                parameterClasses, method.getMethodAnnotationNames());
 
         RuntimeInterceptorDeployment.MethodInterceptorContext interceptorDeployment = runtimeInterceptorDeployment
                 .forMethod(method, lazyMethod);
@@ -166,43 +156,18 @@ public class RuntimeResourceDeployment {
         // when a method is blocking, we also want all the request filters to run on the worker thread
         // because they can potentially set thread local variables
         //we don't need to run this for Servlet and other runtimes that default to blocking
-        Optional<Integer> blockingHandlerIndex = Optional.empty();
         if (!defaultBlocking) {
             if (method.isBlocking()) {
                 handlers.add(new BlockingHandler(executorSupplier));
-                blockingHandlerIndex = Optional.of(handlers.size() - 1);
                 score.add(ScoreSystem.Category.Execution, ScoreSystem.Diagnostic.ExecutionBlocking);
             } else {
                 score.add(ScoreSystem.Category.Execution, ScoreSystem.Diagnostic.ExecutionNonBlocking);
             }
         }
 
-        // special case for AsyncFile which can't do async IO and handle interceptors
-        if (method.getReturnType().equals("Lio/vertx/core/file/AsyncFile;")
-                && interceptorDeployment.hasWriterInterceptors()) {
-            throw new RuntimeException(
-                    "Endpoints that return an AsyncFile cannot have any WriterInterceptor set");
-        }
-
         //spec doesn't seem to test this, but RESTEasy does not run request filters again for sub resources (which makes sense)
         if (!locatableResource) {
-            List<ResourceRequestFilterHandler> containerRequestFilterHandlers = interceptorDeployment
-                    .setupRequestFilterHandler();
-            if (blockingHandlerIndex.isPresent()) {
-                int initialIndex = blockingHandlerIndex.get();
-                for (int i = 0; i < containerRequestFilterHandlers.size(); i++) {
-                    ResourceRequestFilterHandler handler = containerRequestFilterHandlers.get(i);
-                    if (handler.isNonBlockingRequired()) {
-                        // the non-blocking handlers are added in the order we have already determined, but they need to
-                        // be added before the blocking handler
-                        handlers.add(initialIndex + i, handler);
-                    } else {
-                        handlers.add(handler);
-                    }
-                }
-            } else {
-                handlers.addAll(containerRequestFilterHandlers);
-            }
+            handlers.addAll(interceptorDeployment.setupRequestFilterHandler());
         }
 
         // some parameters need the body to be read
@@ -221,28 +186,12 @@ public class RuntimeResourceDeployment {
         // form params can be everywhere (field, beanparam, param)
         if (method.isFormParamRequired() && !defaultBlocking) {
             // read the body as multipart in one go
-            handlers.add(new FormBodyHandler(bodyParameter != null));
-        } else if (method.isMultipart()) {
-            Supplier<ServerRestHandler> multipartHandlerSupplier = customServerRestHandlers.getMultipartHandlerSupplier();
-            if (multipartHandlerSupplier != null) {
-                // multipart needs special body handling
-                handlers.add(multipartHandlerSupplier.get());
-            } else {
-                throw new RuntimeException(
-                        "The current execution environment does not implement a ServerRestHandler for multipart form support");
-            }
+            handlers.add(new ReadBodyHandler(bodyParameter != null));
         } else if (bodyParameter != null) {
             if (!defaultBlocking) {
-                if (method.isBlocking()) {
-                    Supplier<ServerRestHandler> blockingInputHandlerSupplier = customServerRestHandlers
-                            .getBlockingInputHandlerSupplier();
-                    if (blockingInputHandlerSupplier != null) {
-                        // when the method is blocking, we will already be on a worker thread
-                        handlers.add(blockingInputHandlerSupplier.get());
-                    } else {
-                        throw new RuntimeException(
-                                "The current execution environment does not implement a ServerRestHandler for blocking input");
-                    }
+                if (method.isBlocking() && (blockingInputHandlerSupplier != null)) {
+                    // when the method is blocking, we will already be on a worker thread
+                    handlers.add(blockingInputHandlerSupplier.get());
                 } else if (!method.isBlocking()) {
                     // allow the body to be read by chunks
                     handlers.add(new InputHandler(quarkusRestConfig.getInputBufferSize(), executorSupplier));
@@ -263,6 +212,7 @@ public class RuntimeResourceDeployment {
 
         // given that we may inject form params in the endpoint we need to make sure we read the body before
         // we create/inject our endpoint
+        EndpointInvoker invoker = method.getInvoker().get();
         ServerRestHandler instanceHandler = null;
         if (!locatableResource) {
             if (clazz.isPerRequestResource()) {
@@ -304,16 +254,10 @@ public class RuntimeResourceDeployment {
 
             handlers.add(new ParameterHandler(i, param.getDefaultValue(), extractor,
                     converter, param.parameterType,
-                    param.isObtainedAsCollection(), param.isOptional()));
+                    param.isObtainedAsCollection()));
         }
         addHandlers(handlers, method, info, HandlerChainCustomizer.Phase.BEFORE_METHOD_INVOKE);
-        EndpointInvoker invoker = method.getInvoker().get();
-        ServerRestHandler alternate = alternateInvoker(method, invoker);
-        if (alternate != null) {
-            handlers.add(alternate);
-        } else {
-            handlers.add(new InvocationHandler(invoker));
-        }
+        handlers.add(new InvocationHandler(invoker));
         addHandlers(handlers, method, info, HandlerChainCustomizer.Phase.AFTER_METHOD_INVOKE);
 
         Type returnType = TypeSignatureParser.parse(method.getReturnType());
@@ -402,7 +346,6 @@ public class RuntimeResourceDeployment {
             responseFilterHandlers = Collections.emptyList();
         } else {
             handlers.add(new ResponseHandler());
-            addHandlers(handlers, method, info, HandlerChainCustomizer.Phase.AFTER_RESPONSE_CREATED);
             responseFilterHandlers = new ArrayList<>(interceptorDeployment.setupResponseFilterHandler());
             handlers.addAll(responseFilterHandlers);
             handlers.add(new ResponseWriterHandler(dynamicEntityWriter));
@@ -449,16 +392,6 @@ public class RuntimeResourceDeployment {
         }
     }
 
-    private ServerRestHandler alternateInvoker(ServerResourceMethod method, EndpointInvoker invoker) {
-        for (int i = 0; i < method.getHandlerChainCustomizers().size(); i++) {
-            ServerRestHandler ret = method.getHandlerChainCustomizers().get(i).alternateInvocationHandler(invoker);
-            if (ret != null) {
-                return ret;
-            }
-        }
-        return null;
-    }
-
     public ParameterExtractor parameterExtractor(Map<String, Integer> pathParameterIndexes, boolean locatableResource,
             ParameterType type, String javaType,
             String name,
@@ -496,9 +429,7 @@ public class RuntimeResourceDeployment {
                 extractor = new MatrixParamExtractor(name, single, encoded);
                 return extractor;
             case BEAN:
-                return new InjectParamExtractor((BeanFactory<Object>) info.getFactoryCreator().apply(loadClass(javaType)));
-            case MULTI_PART_FORM:
-                return new InjectParamExtractor((BeanFactory<Object>) new ReflectionBeanFactoryCreator().apply(javaType));
+                return new BeanParamExtractor((BeanFactory<Object>) info.getFactoryCreator().apply(loadClass(javaType)));
             case CUSTOM:
                 return customExtractor;
             default:

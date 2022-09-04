@@ -16,7 +16,7 @@ import javax.ws.rs.RuntimeType;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.Feature;
-import org.jboss.resteasy.reactive.common.jaxrs.QuarkusRestConfiguration;
+import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
 import org.jboss.resteasy.reactive.common.model.ResourceClass;
 import org.jboss.resteasy.reactive.common.model.ResourceFeature;
 import org.jboss.resteasy.reactive.common.model.ResourceInterceptors;
@@ -24,22 +24,24 @@ import org.jboss.resteasy.reactive.common.model.ResourceMethod;
 import org.jboss.resteasy.reactive.server.core.Deployment;
 import org.jboss.resteasy.reactive.server.core.DeploymentInfo;
 import org.jboss.resteasy.reactive.server.core.ExceptionMapping;
-import org.jboss.resteasy.reactive.server.core.Features;
-import org.jboss.resteasy.reactive.server.core.ParamConverterProviders;
 import org.jboss.resteasy.reactive.server.core.RequestContextFactory;
 import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
 import org.jboss.resteasy.reactive.server.core.serialization.DynamicEntityWriter;
 import org.jboss.resteasy.reactive.server.handlers.ClassRoutingHandler;
 import org.jboss.resteasy.reactive.server.handlers.ExceptionHandler;
-import org.jboss.resteasy.reactive.server.handlers.QuarkusRestInitialHandler;
 import org.jboss.resteasy.reactive.server.handlers.ResourceLocatorHandler;
 import org.jboss.resteasy.reactive.server.handlers.ResourceRequestFilterHandler;
 import org.jboss.resteasy.reactive.server.handlers.ResponseHandler;
 import org.jboss.resteasy.reactive.server.handlers.ResponseWriterHandler;
-import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestFeatureContext;
+import org.jboss.resteasy.reactive.server.handlers.RestInitialHandler;
+import org.jboss.resteasy.reactive.server.jaxrs.FeatureContextImpl;
 import org.jboss.resteasy.reactive.server.mapping.RequestMapper;
 import org.jboss.resteasy.reactive.server.mapping.RuntimeResource;
 import org.jboss.resteasy.reactive.server.mapping.URITemplate;
+import org.jboss.resteasy.reactive.server.model.Features;
+import org.jboss.resteasy.reactive.server.model.HandlerChainCustomizer;
+import org.jboss.resteasy.reactive.server.model.ParamConverterProviders;
+import org.jboss.resteasy.reactive.server.model.ServerResourceMethod;
 import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
 import org.jboss.resteasy.reactive.spi.BeanFactory;
 import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
@@ -48,6 +50,7 @@ public class RuntimeDeploymentManager {
     public static final ServerRestHandler[] EMPTY_REST_HANDLER_ARRAY = new ServerRestHandler[0];
     private final DeploymentInfo info;
     private final Supplier<Executor> executorSupplier;
+    private final Supplier<ServerRestHandler> blockingInputHandlerSupplier;
     private final Consumer<Closeable> closeTaskHandler;
     private final RequestContextFactory requestContextFactory;
     private final ThreadSetupAction threadSetupAction;
@@ -55,10 +58,12 @@ public class RuntimeDeploymentManager {
 
     public RuntimeDeploymentManager(DeploymentInfo info,
             Supplier<Executor> executorSupplier,
+            Supplier<ServerRestHandler> blockingInputHandlerSupplier,
             Consumer<Closeable> closeTaskHandler,
             RequestContextFactory requestContextFactory, ThreadSetupAction threadSetupAction, String rootPath) {
         this.info = info;
         this.executorSupplier = executorSupplier;
+        this.blockingInputHandlerSupplier = blockingInputHandlerSupplier;
         this.closeTaskHandler = closeTaskHandler;
         this.requestContextFactory = requestContextFactory;
         this.threadSetupAction = threadSetupAction;
@@ -78,9 +83,9 @@ public class RuntimeDeploymentManager {
 
         DynamicEntityWriter dynamicEntityWriter = new DynamicEntityWriter(serialisers);
 
-        QuarkusRestConfiguration quarkusRestConfiguration = configureFeatures(features, interceptors, exceptionMapping);
+        ConfigurationImpl configurationImpl = configureFeatures(features, interceptors, exceptionMapping);
 
-        RuntimeInterceptorDeployment interceptorDeployment = new RuntimeInterceptorDeployment(info, quarkusRestConfiguration,
+        RuntimeInterceptorDeployment interceptorDeployment = new RuntimeInterceptorDeployment(info, configurationImpl,
                 closeTaskHandler);
         ResourceLocatorHandler resourceLocatorHandler = new ResourceLocatorHandler(
                 new Function<Class<?>, BeanFactory.BeanInstance<?>>() {
@@ -90,7 +95,8 @@ public class RuntimeDeploymentManager {
                     }
                 });
         RuntimeResourceDeployment runtimeResourceDeployment = new RuntimeResourceDeployment(info, executorSupplier,
-                interceptorDeployment, dynamicEntityWriter, resourceLocatorHandler);
+                blockingInputHandlerSupplier,
+                interceptorDeployment, dynamicEntityWriter, resourceLocatorHandler, requestContextFactory.isDefaultBlocking());
         List<ResourceClass> possibleSubResource = new ArrayList<>(locatableResourceClasses);
         possibleSubResource.addAll(resourceClasses); //the TCK uses normal resources also as sub resources
         for (ResourceClass clazz : possibleSubResource) {
@@ -98,8 +104,9 @@ public class RuntimeDeploymentManager {
             URITemplate classPathTemplate = clazz.getPath() == null ? null : new URITemplate(clazz.getPath(), true);
             for (ResourceMethod method : clazz.getMethods()) {
                 //TODO: add DynamicFeature for these
+                //TODO: remove the cast
                 RuntimeResource runtimeResource = runtimeResourceDeployment.buildResourceMethod(
-                        clazz, method, true, classPathTemplate);
+                        clazz, (ServerResourceMethod) method, true, classPathTemplate, info);
 
                 RuntimeMappingDeployment.buildMethodMapper(templates, method, runtimeResource);
             }
@@ -120,13 +127,13 @@ public class RuntimeDeploymentManager {
             }
             for (ResourceMethod method : clazz.getMethods()) {
                 RuntimeResource runtimeResource = runtimeResourceDeployment.buildResourceMethod(
-                        clazz, method, false, classTemplate);
+                        clazz, (ServerResourceMethod) method, false, classTemplate, info);
 
                 RuntimeMappingDeployment.buildMethodMapper(perClassMappers, method, runtimeResource);
             }
 
         }
-        List<RequestMapper.RequestPath<QuarkusRestInitialHandler.InitialMatch>> classMappers = new ArrayList<>();
+        List<RequestMapper.RequestPath<RestInitialHandler.InitialMatch>> classMappers = new ArrayList<>();
         for (Map.Entry<URITemplate, Map<String, TreeMap<URITemplate, List<RequestMapper.RequestPath<RuntimeResource>>>>> entry : mappers
                 .entrySet()) {
             URITemplate classTemplate = entry.getKey();
@@ -144,7 +151,7 @@ public class RuntimeDeploymentManager {
                 }
             }
             classMappers.add(new RequestMapper.RequestPath<>(true, classTemplate,
-                    new QuarkusRestInitialHandler.InitialMatch(new ServerRestHandler[] { classRoutingHandler },
+                    new RestInitialHandler.InitialMatch(new ServerRestHandler[] { classRoutingHandler },
                             maxMethodTemplateNameCount + classTemplateNameCount)));
         }
 
@@ -172,7 +179,11 @@ public class RuntimeDeploymentManager {
         }
 
         //pre matching interceptors are run first
-        List<ResourceRequestFilterHandler> preMatchHandlers = null;
+        List<ServerRestHandler> preMatchHandlers = new ArrayList<>();
+        for (int i = 0; i < info.getGlobalHandlerCustomizers().size(); i++) {
+            preMatchHandlers
+                    .addAll(info.getGlobalHandlerCustomizers().get(i).handlers(HandlerChainCustomizer.Phase.BEFORE_PRE_MATCH));
+        }
         if (!interceptors.getContainerRequestFilters().getPreMatchInterceptors().isEmpty()) {
             preMatchHandlers = new ArrayList<>(interceptorDeployment.getPreMatchContainerRequestFilters().size());
             for (ContainerRequestFilter containerRequestFilter : interceptorDeployment.getPreMatchContainerRequestFilters()
@@ -180,25 +191,27 @@ public class RuntimeDeploymentManager {
                 preMatchHandlers.add(new ResourceRequestFilterHandler(containerRequestFilter, true));
             }
         }
+        for (int i = 0; i < info.getGlobalHandlerCustomizers().size(); i++) {
+            preMatchHandlers
+                    .addAll(info.getGlobalHandlerCustomizers().get(i).handlers(HandlerChainCustomizer.Phase.AFTER_PRE_MATCH));
+        }
 
-        Deployment deployment = new Deployment(exceptionMapping, info.getCtxResolvers(), serialisers,
+        return new Deployment(exceptionMapping, info.getCtxResolvers(), serialisers,
                 abortHandlingChain.toArray(EMPTY_REST_HANDLER_ARRAY), dynamicEntityWriter,
-                prefix, paramConverterProviders, quarkusRestConfiguration, applicationSupplier,
+                prefix, paramConverterProviders, configurationImpl, applicationSupplier,
                 threadSetupAction, requestContextFactory, preMatchHandlers, classMappers);
-
-        return deployment;
     }
 
     //TODO: this needs plenty more work to support all possible types and provide all information the FeatureContext allows
-    private QuarkusRestConfiguration configureFeatures(Features features, ResourceInterceptors interceptors,
+    private ConfigurationImpl configureFeatures(Features features, ResourceInterceptors interceptors,
             ExceptionMapping exceptionMapping) {
 
-        QuarkusRestConfiguration configuration = new QuarkusRestConfiguration(RuntimeType.SERVER);
+        ConfigurationImpl configuration = new ConfigurationImpl(RuntimeType.SERVER);
         if (features.getResourceFeatures().isEmpty()) {
             return configuration;
         }
 
-        QuarkusRestFeatureContext featureContext = new QuarkusRestFeatureContext(interceptors, exceptionMapping,
+        FeatureContextImpl featureContext = new FeatureContextImpl(interceptors, exceptionMapping,
                 configuration, info.getFactoryCreator());
         List<ResourceFeature> resourceFeatures = features.getResourceFeatures();
         for (ResourceFeature resourceFeature : resourceFeatures) {

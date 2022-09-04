@@ -58,11 +58,11 @@ public abstract class ResteasyReactiveRequestContext
      */
     private Object[] parameters;
     private RuntimeResource target;
-
     /**
-     * info about path params and other data about previously matched sub resource locators
+     * When a subresource has been located and the processing has been restarted (and thus target point to the new subresource),
+     * this field contains the target that resulted in the offloading to the new target
      */
-    private PreviousResource previousResource;
+    private RuntimeResource locatorTarget;
 
     /**
      * The parameter values extracted from the path.
@@ -79,6 +79,11 @@ public abstract class ResteasyReactiveRequestContext
      * Note: those are decoded.
      */
     private Object pathParamValues;
+    /**
+     * When a subresource has been located and the processing has been restarted (and thus target point to the new subresource),
+     * this field contains the pathParamValues of the target that resulted in the offloading to the new target
+     */
+    private Object locatorPathParamValues;
 
     private UriInfo uriInfo;
     /**
@@ -173,7 +178,8 @@ public abstract class ResteasyReactiveRequestContext
         position = 0;
         parameters = new Object[target.getParameterTypes().length];
         if (setLocatorTarget) {
-            previousResource = new PreviousResource(this.target, pathParamValues, previousResource);
+            this.locatorTarget = this.target;
+            this.locatorPathParamValues = this.pathParamValues;
         }
         this.target = target;
     }
@@ -214,6 +220,10 @@ public abstract class ResteasyReactiveRequestContext
 
     public String getPathParam(int index) {
         return doGetPathParam(index, pathParamValues);
+    }
+
+    public String getLocatorPathParam(int index) {
+        return doGetPathParam(index, locatorPathParamValues);
     }
 
     private String doGetPathParam(int index, Object pathParamValues) {
@@ -308,6 +318,10 @@ public abstract class ResteasyReactiveRequestContext
 
     public RuntimeResource getTarget() {
         return target;
+    }
+
+    public RuntimeResource getLocatorTarget() {
+        return locatorTarget;
     }
 
     public void mapExceptionIfPresent() {
@@ -914,76 +928,4 @@ public abstract class ResteasyReactiveRequestContext
     protected abstract Executor getEventLoop();
 
     public abstract Runnable registerTimer(long millis, Runnable task);
-
-    public String getResourceLocatorPathParam(String name) {
-        return getResourceLocatorPathParam(name, previousResource);
-    }
-
-    private String getResourceLocatorPathParam(String name, PreviousResource previousResource) {
-        if (previousResource == null) {
-            return null;
-        }
-
-        int index = 0;
-        URITemplate classPath = previousResource.locatorTarget.getClassPath();
-        if (classPath != null) {
-            for (URITemplate.TemplateComponent component : classPath.components) {
-                if (component.name != null) {
-                    if (component.name.equals(name)) {
-                        return doGetPathParam(index, previousResource.locatorPathParamValues);
-                    }
-                    index++;
-                } else if (component.names != null) {
-                    for (String nm : component.names) {
-                        if (nm.equals(name)) {
-                            return doGetPathParam(index, previousResource.locatorPathParamValues);
-                        }
-                    }
-                    index++;
-                }
-            }
-        }
-        for (URITemplate.TemplateComponent component : previousResource.locatorTarget.getPath().components) {
-            if (component.name != null) {
-                if (component.name.equals(name)) {
-                    return doGetPathParam(index, previousResource.locatorPathParamValues);
-                }
-                index++;
-            } else if (component.names != null) {
-                for (String nm : component.names) {
-                    if (nm.equals(name)) {
-                        return doGetPathParam(index, previousResource.locatorPathParamValues);
-                    }
-                }
-                index++;
-            }
-        }
-        return getResourceLocatorPathParam(name, previousResource.prev);
-    }
-
-    static class PreviousResource {
-
-        public PreviousResource(RuntimeResource locatorTarget, Object locatorPathParamValues, PreviousResource prev) {
-            this.locatorTarget = locatorTarget;
-            this.locatorPathParamValues = locatorPathParamValues;
-            this.prev = prev;
-        }
-
-        /**
-         * When a subresource has been located and the processing has been restarted (and thus target point to the new
-         * subresource),
-         * this field contains the target that resulted in the offloading to the new target
-         */
-        private final RuntimeResource locatorTarget;
-
-        /**
-         * When a subresource has been located and the processing has been restarted (and thus target point to the new
-         * subresource),
-         * this field contains the pathParamValues of the target that resulted in the offloading to the new target
-         */
-        private final Object locatorPathParamValues;
-
-        private final PreviousResource prev;
-
-    }
 }

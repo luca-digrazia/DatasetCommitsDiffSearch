@@ -24,6 +24,11 @@ public class ServletRequestContextFactory implements RequestContextFactory {
         io.undertow.servlet.handlers.ServletRequestContext src = (io.undertow.servlet.handlers.ServletRequestContext) context;
         return new ServletRequestContext(deployment, providers, (HttpServletRequest) src.getServletRequest(),
                 (HttpServletResponse) src.getServletResponse(), requestContext, handlerChain, abortHandlerChain,
-                (RoutingContext) ((VertxHttpExchange) src.getExchange().getDelegate()).getContext());
+                (RoutingContext) ((VertxHttpExchange) src.getExchange().getDelegate()).getContext(), src.getExchange());
+    }
+
+    @Override
+    public boolean isDefaultBlocking() {
+        return true;
     }
 }
