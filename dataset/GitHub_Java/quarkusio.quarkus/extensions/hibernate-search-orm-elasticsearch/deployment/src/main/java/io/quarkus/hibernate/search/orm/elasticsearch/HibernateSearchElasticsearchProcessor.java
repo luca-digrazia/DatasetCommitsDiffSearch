@@ -2,33 +2,24 @@ package io.quarkus.hibernate.search.orm.elasticsearch;
 
 import static io.quarkus.hibernate.search.orm.elasticsearch.HibernateSearchClasses.GSON_CLASSES;
 import static io.quarkus.hibernate.search.orm.elasticsearch.HibernateSearchClasses.INDEXED;
-import static io.quarkus.hibernate.search.orm.elasticsearch.HibernateSearchClasses.PROPERTY_MAPPING_META_ANNOTATION;
-import static io.quarkus.hibernate.search.orm.elasticsearch.HibernateSearchClasses.TYPE_MAPPING_META_ANNOTATION;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import org.hibernate.search.backend.elasticsearch.ElasticsearchVersion;
+import org.hibernate.search.backend.elasticsearch.analysis.ElasticsearchAnalysisConfigurer;
+import org.hibernate.search.backend.elasticsearch.index.layout.IndexLayoutStrategy;
+import org.hibernate.search.engine.reporting.FailureHandler;
+import org.hibernate.search.mapper.orm.automaticindexing.session.AutomaticIndexingSynchronizationStrategy;
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
-import org.jboss.jandex.AnnotationTarget.Kind;
-import org.jboss.jandex.ArrayType;
-import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.ParameterizedType;
-import org.jboss.jandex.PrimitiveType;
-import org.jboss.jandex.Type;
-import org.jboss.jandex.UnresolvedTypeVariable;
-import org.jboss.jandex.VoidType;
 
+import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -40,11 +31,14 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
+import io.quarkus.hibernate.orm.deployment.PersistenceUnitDescriptorBuildItem;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationRuntimeConfiguredBuildItem;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationStaticConfiguredBuildItem;
+import io.quarkus.hibernate.orm.runtime.PersistenceUnitUtil;
 import io.quarkus.hibernate.search.orm.elasticsearch.runtime.ElasticsearchVersionSubstitution;
 import io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSearchElasticsearchBuildTimeConfig;
-import io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSearchElasticsearchBuildTimeConfig.ElasticsearchBackendBuildTimeConfig;
+import io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit;
+import io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit.ElasticsearchBackendBuildTimeConfig;
 import io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSearchElasticsearchRecorder;
 import io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSearchElasticsearchRuntimeConfig;
 
@@ -64,177 +58,141 @@ class HibernateSearchElasticsearchProcessor {
     @Record(ExecutionTime.STATIC_INIT)
     public void build(RecorderContext recorderContext, HibernateSearchElasticsearchRecorder recorder,
             CombinedIndexBuildItem combinedIndexBuildItem,
+            List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<HibernateSearchElasticsearchPersistenceUnitConfiguredBuildItem> configuredPersistenceUnits,
             BuildProducer<HibernateOrmIntegrationStaticConfiguredBuildItem> integrations,
             BuildProducer<FeatureBuildItem> feature) {
         feature.produce(new FeatureBuildItem(Feature.HIBERNATE_SEARCH_ELASTICSEARCH));
 
         IndexView index = combinedIndexBuildItem.getIndex();
-
         Collection<AnnotationInstance> indexedAnnotations = index.getAnnotations(INDEXED);
-        if (indexedAnnotations.isEmpty()) {
-            // we don't have any indexed entity, we can bail out
+
+        // Make it possible to record the ElasticsearchVersion as bytecode:
+        recorderContext.registerSubstitution(ElasticsearchVersion.class,
+                String.class, ElasticsearchVersionSubstitution.class);
+
+        for (PersistenceUnitDescriptorBuildItem puDescriptor : persistenceUnitDescriptorBuildItems) {
+            Collection<AnnotationInstance> indexedAnnotationsForPU = new ArrayList<>();
+            for (AnnotationInstance indexedAnnotation : indexedAnnotations) {
+                String targetName = indexedAnnotation.target().asClass().name().toString();
+                if (puDescriptor.getManagedClassNames().contains(targetName)) {
+                    indexedAnnotationsForPU.add(indexedAnnotation);
+                }
+            }
+            buildForPersistenceUnit(recorder, indexedAnnotationsForPU, puDescriptor.getPersistenceUnitName(),
+                    configuredPersistenceUnits, integrations);
+        }
+
+        registerReflectionForGson(reflectiveClass);
+    }
+
+    private void buildForPersistenceUnit(HibernateSearchElasticsearchRecorder recorder,
+            Collection<AnnotationInstance> indexedAnnotationsForPU, String persistenceUnitName,
+            BuildProducer<HibernateSearchElasticsearchPersistenceUnitConfiguredBuildItem> configuredPersistenceUnits,
+            BuildProducer<HibernateOrmIntegrationStaticConfiguredBuildItem> integrations) {
+        if (indexedAnnotationsForPU.isEmpty()) {
+            // we don't have any indexed entity, we can disable Hibernate Search
+            integrations.produce(new HibernateOrmIntegrationStaticConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH,
+                    persistenceUnitName).setInitListener(recorder.createDisabledListener()));
             return;
         }
 
+        HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit puConfig = PersistenceUnitUtil
+                .isDefaultPersistenceUnit(persistenceUnitName)
+                        ? buildTimeConfig.defaultPersistenceUnit
+                        : buildTimeConfig.persistenceUnits.get(persistenceUnitName);
+
         boolean defaultBackendIsUsed = false;
-        for (AnnotationInstance indexedAnnotation : indexedAnnotations) {
+        for (AnnotationInstance indexedAnnotation : indexedAnnotationsForPU) {
             if (indexedAnnotation.value("backend") == null) {
                 defaultBackendIsUsed = true;
                 break;
             }
         }
 
-        checkConfig(buildTimeConfig, defaultBackendIsUsed);
+        checkConfig(persistenceUnitName, puConfig, defaultBackendIsUsed);
 
-        // Make it possible to record the ElasticsearchVersion as bytecode:
-        recorderContext.registerSubstitution(ElasticsearchVersion.class,
-                String.class, ElasticsearchVersionSubstitution.class);
+        configuredPersistenceUnits
+                .produce(new HibernateSearchElasticsearchPersistenceUnitConfiguredBuildItem(persistenceUnitName));
 
-        // Register the Hibernate Search integration
+        if (puConfig == null) {
+            return;
+        }
+
         integrations.produce(new HibernateOrmIntegrationStaticConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH,
-                recorder.createStaticInitListener(buildTimeConfig)));
+                persistenceUnitName).setInitListener(recorder.createStaticInitListener(puConfig)));
+    }
 
-        // Register the required reflection declarations
-        registerReflection(index, reflectiveClass);
+    @BuildStep
+    void registerBeans(List<HibernateSearchElasticsearchPersistenceUnitConfiguredBuildItem> searchEnabledPUs,
+            BuildProducer<UnremovableBeanBuildItem> unremovableBean) {
+        if (searchEnabledPUs.isEmpty()) {
+            return;
+        }
+
+        // Some user-injectable beans are retrieved programmatically and shouldn't be removed
+        unremovableBean.produce(UnremovableBeanBuildItem.beanTypes(FailureHandler.class,
+                AutomaticIndexingSynchronizationStrategy.class,
+                ElasticsearchAnalysisConfigurer.class, IndexLayoutStrategy.class));
     }
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     void setRuntimeConfig(HibernateSearchElasticsearchRecorder recorder,
             HibernateSearchElasticsearchRuntimeConfig runtimeConfig,
+            List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
             BuildProducer<HibernateOrmIntegrationRuntimeConfiguredBuildItem> runtimeConfigured) {
-        runtimeConfigured.produce(new HibernateOrmIntegrationRuntimeConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH,
-                recorder.createRuntimeInitListener(runtimeConfig)));
+        for (PersistenceUnitDescriptorBuildItem puDescriptor : persistenceUnitDescriptorBuildItems) {
+            runtimeConfigured.produce(new HibernateOrmIntegrationRuntimeConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH,
+                    puDescriptor.getPersistenceUnitName())
+                            .setInitListener(
+                                    recorder.createRuntimeInitListener(runtimeConfig, puDescriptor.getPersistenceUnitName())));
+        }
     }
 
-    private static void checkConfig(HibernateSearchElasticsearchBuildTimeConfig buildTimeConfig,
-            boolean defaultBackendIsUsed) {
+    private static void checkConfig(String persistenceUnitName,
+            HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit buildTimeConfig, boolean defaultBackendIsUsed) {
+        List<String> propertyKeysWithNoVersion = new ArrayList<>();
         if (defaultBackendIsUsed) {
             // we validate that the version is present for the default backend
-            if (!buildTimeConfig.defaultBackend.version.isPresent()) {
-                throw new ConfigurationError(
-                        "The Elasticsearch version needs to be defined via the quarkus.hibernate-search-orm.elasticsearch.version property.");
+            if (buildTimeConfig == null || !buildTimeConfig.defaultBackend.version.isPresent()) {
+                propertyKeysWithNoVersion.add(elasticsearchVersionPropertyKey(persistenceUnitName, null));
             }
         }
 
         // we validate that the version is present for all the named backends
-        List<String> namedBackendsWithNoVersion = new ArrayList<>();
-        for (Entry<String, ElasticsearchBackendBuildTimeConfig> additionalBackendEntry : buildTimeConfig.namedBackends.backends
-                .entrySet()) {
+        Map<String, ElasticsearchBackendBuildTimeConfig> backends = buildTimeConfig != null
+                ? buildTimeConfig.namedBackends.backends
+                : Collections.emptyMap();
+        for (Entry<String, ElasticsearchBackendBuildTimeConfig> additionalBackendEntry : backends.entrySet()) {
             if (!additionalBackendEntry.getValue().version.isPresent()) {
-                namedBackendsWithNoVersion.add(additionalBackendEntry.getKey());
+                propertyKeysWithNoVersion
+                        .add(elasticsearchVersionPropertyKey(persistenceUnitName, additionalBackendEntry.getKey()));
             }
         }
-        if (!namedBackendsWithNoVersion.isEmpty()) {
-            throw new ConfigurationError("The Elasticsearch version property needs to be defined for backends "
-                    + String.join(", ", namedBackendsWithNoVersion));
+        if (!propertyKeysWithNoVersion.isEmpty()) {
+            throw new ConfigurationError(
+                    "The Elasticsearch version needs to be defined via properties: "
+                            + String.join(", ", propertyKeysWithNoVersion) + ".");
         }
     }
 
-    private void registerReflection(IndexView index, BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
-        Set<DotName> reflectiveClassCollector = new HashSet<>();
-
-        if (buildTimeConfig.defaultBackend.indexDefaults.analysis.configurer.isPresent()) {
-            reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(true, false,
-                            buildTimeConfig.defaultBackend.indexDefaults.analysis.configurer.get()));
+    private static String elasticsearchVersionPropertyKey(String persistenceUnitName, String backendName) {
+        StringBuilder keyBuilder = new StringBuilder("quarkus.hibernate-search-orm.");
+        if (!PersistenceUnitUtil.isDefaultPersistenceUnit(persistenceUnitName)) {
+            keyBuilder.append(persistenceUnitName).append(".");
         }
-        for (HibernateSearchElasticsearchBuildTimeConfig.ElasticsearchIndexBuildTimeConfig indexConfig : buildTimeConfig.defaultBackend.indexes
-                .values()) {
-            if (indexConfig.analysis.configurer.isPresent()) {
-                reflectiveClass.produce(
-                        new ReflectiveClassBuildItem(true, false, indexConfig.analysis.configurer.get()));
-            }
+        keyBuilder.append("elasticsearch.");
+        if (backendName != null) {
+            keyBuilder.append(backendName).append(".");
         }
+        keyBuilder.append("version");
+        return keyBuilder.toString();
+    }
 
-        if (buildTimeConfig.defaultBackend.layout.strategy.isPresent()) {
-            reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(true, false, buildTimeConfig.defaultBackend.layout.strategy.get()));
-        }
-
-        if (buildTimeConfig.backgroundFailureHandler.isPresent()) {
-            reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(true, false, buildTimeConfig.backgroundFailureHandler.get()));
-        }
-
-        for (AnnotationInstance propertyMappingMetaAnnotationInstance : index
-                .getAnnotations(PROPERTY_MAPPING_META_ANNOTATION)) {
-            for (AnnotationInstance propertyMappingAnnotationInstance : index
-                    .getAnnotations(propertyMappingMetaAnnotationInstance.name())) {
-                AnnotationTarget annotationTarget = propertyMappingAnnotationInstance.target();
-                if (annotationTarget.kind() == Kind.FIELD) {
-                    FieldInfo fieldInfo = annotationTarget.asField();
-                    addReflectiveClass(index, reflectiveClassCollector, fieldInfo.declaringClass());
-                    addReflectiveType(index, reflectiveClassCollector, fieldInfo.type());
-                } else if (annotationTarget.kind() == Kind.METHOD) {
-                    MethodInfo methodInfo = annotationTarget.asMethod();
-                    addReflectiveClass(index, reflectiveClassCollector, methodInfo.declaringClass());
-                    addReflectiveType(index, reflectiveClassCollector, methodInfo.returnType());
-                }
-            }
-        }
-
-        for (AnnotationInstance typeBridgeMappingInstance : index.getAnnotations(TYPE_MAPPING_META_ANNOTATION)) {
-            for (AnnotationInstance typeBridgeInstance : index.getAnnotations(typeBridgeMappingInstance.name())) {
-                addReflectiveClass(index, reflectiveClassCollector, typeBridgeInstance.target().asClass());
-            }
-        }
-
-        reflectiveClassCollector.addAll(GSON_CLASSES);
-
-        String[] reflectiveClasses = reflectiveClassCollector.stream().map(DotName::toString).toArray(String[]::new);
+    private void registerReflectionForGson(BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+        String[] reflectiveClasses = GSON_CLASSES.stream().map(DotName::toString).toArray(String[]::new);
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, reflectiveClasses));
-    }
-
-    private static void addReflectiveClass(IndexView index, Set<DotName> reflectiveClassCollector,
-            ClassInfo classInfo) {
-        if (skipClass(classInfo.name(), reflectiveClassCollector)) {
-            return;
-        }
-
-        reflectiveClassCollector.add(classInfo.name());
-
-        for (ClassInfo subclass : index.getAllKnownSubclasses(classInfo.name())) {
-            reflectiveClassCollector.add(subclass.name());
-        }
-        for (ClassInfo implementor : index.getAllKnownImplementors(classInfo.name())) {
-            reflectiveClassCollector.add(implementor.name());
-        }
-
-        Type superClassType = classInfo.superClassType();
-        while (superClassType != null && !superClassType.name().toString().equals("java.lang.Object")) {
-            reflectiveClassCollector.add(superClassType.name());
-            if (superClassType instanceof ClassType) {
-                superClassType = index.getClassByName(superClassType.name()).superClassType();
-            } else if (superClassType instanceof ParameterizedType) {
-                ParameterizedType parameterizedType = superClassType.asParameterizedType();
-                for (Type typeArgument : parameterizedType.arguments()) {
-                    addReflectiveType(index, reflectiveClassCollector, typeArgument);
-                }
-                superClassType = parameterizedType.owner();
-            }
-        }
-    }
-
-    private static void addReflectiveType(IndexView index, Set<DotName> reflectiveClassCollector, Type type) {
-        if (type instanceof VoidType || type instanceof PrimitiveType || type instanceof UnresolvedTypeVariable) {
-            return;
-        } else if (type instanceof ClassType) {
-            ClassInfo classInfo = index.getClassByName(type.name());
-            addReflectiveClass(index, reflectiveClassCollector, classInfo);
-        } else if (type instanceof ArrayType) {
-            addReflectiveType(index, reflectiveClassCollector, type.asArrayType().component());
-        } else if (type instanceof ParameterizedType) {
-            ParameterizedType parameterizedType = type.asParameterizedType();
-            addReflectiveType(index, reflectiveClassCollector, parameterizedType.owner());
-            for (Type typeArgument : parameterizedType.arguments()) {
-                addReflectiveType(index, reflectiveClassCollector, typeArgument);
-            }
-        }
-    }
-
-    private static boolean skipClass(DotName name, Set<DotName> processedClasses) {
-        return name.toString().startsWith("java.") || processedClasses.contains(name);
     }
 }
