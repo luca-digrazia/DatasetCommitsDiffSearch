@@ -5,7 +5,6 @@ import android.opengl.GLES20;
 import android.opengl.Matrix;
 
 import com.shuyu.gsyvideoplayer.render.glrender.GSYVideoGLViewSimpleRender;
-import com.shuyu.gsyvideoplayer.utils.Debuger;
 
 import javax.microedition.khronos.opengles.GL10;
 

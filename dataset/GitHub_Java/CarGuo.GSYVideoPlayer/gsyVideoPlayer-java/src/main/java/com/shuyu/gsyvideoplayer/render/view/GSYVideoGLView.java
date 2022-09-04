@@ -7,7 +7,6 @@ import android.util.AttributeSet;
 import android.view.Surface;
 
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
-import com.shuyu.gsyvideoplayer.listener.GSYVideoGLRenderErrorListener;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoShotListener;
 import com.shuyu.gsyvideoplayer.render.glrender.GSYVideoGLViewBaseRender;
 import com.shuyu.gsyvideoplayer.render.glrender.GSYVideoGLViewSimpleRender;
@@ -116,11 +115,6 @@ public class GSYVideoGLView extends GLSurfaceView {
 
     public void setGSYVideoShotListener(GSYVideoShotListener listener, boolean high) {
         this.mRenderer.setGSYVideoShotListener(listener, high);
-    }
-
-
-    public void setGSYVideoGLRenderErrorListener(GSYVideoGLRenderErrorListener videoGLRenderErrorListener) {
-        this.mRenderer.setGSYVideoGLRenderErrorListener(videoGLRenderErrorListener);
     }
 
     @Override

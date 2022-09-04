@@ -57,7 +57,6 @@ import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
 import com.shuyu.gsyvideoplayer.utils.GifCreateHelper;
-import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 
 import java.io.File;
@@ -75,7 +74,7 @@ import butterknife.ButterKnife;
  * Created by guoshuyu on 2017/6/18.
  */
 
-public class DetailFilterActivity extends GSYBaseActivityDetail<StandardGSYVideoPlayer> {
+public class DetailFilterActivity extends GSYBaseActivityDetail {
 
     @BindView(R.id.post_detail_nested_scroll)
     NestedScrollView postDetailNestedScroll;
@@ -177,10 +176,9 @@ public class DetailFilterActivity extends GSYBaseActivityDetail<StandardGSYVideo
         //图片穿孔透视播放
         //detailPlayer.setCustomGLRenderer(new GSYVideoGLViewCustomRender3());
 
-        //高斯拉伸视频铺满背景，替换黑色，前台正常比例播放
-        //detailPlayer.setEffectFilter(new GaussianBlurEffect(6.0f, GaussianBlurEffect.TYPEXY));
-        //detailPlayer.setCustomGLRenderer(new GSYVideoGLViewCustomRender4());
-        //detailPlayer.setGLRenderMode(GSYVideoGLView.MODE_RENDER_SIZE);
+
+        detailPlayer.setCustomGLRenderer(new GSYVideoGLViewCustomRender4());
+        detailPlayer.setGLRenderMode(GSYVideoGLView.MODE_RENDER_SIZE);
 
         changeFilter.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -219,11 +217,11 @@ public class DetailFilterActivity extends GSYBaseActivityDetail<StandardGSYVideo
                     percentageType = 1;
                 }
                 //水印图动起来
-                cancelTask2();
+                /*cancelTask2();
                 mTimerTask2 = new TaskLocal2();
                 timer.schedule(mTimerTask2, 0, 400);
 
-                moveBitmap = !moveBitmap;
+                moveBitmap = !moveBitmap;*/
             }
         });
 
@@ -251,7 +249,7 @@ public class DetailFilterActivity extends GSYBaseActivityDetail<StandardGSYVideo
     }
 
     @Override
-    public StandardGSYVideoPlayer getGSYVideoPlayer() {
+    public GSYBaseVideoPlayer getGSYVideoPlayer() {
         return detailPlayer;
     }
 
