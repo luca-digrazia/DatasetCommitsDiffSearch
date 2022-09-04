@@ -36,21 +36,6 @@ public final class ImageUtil {
     }
 
     /**
-     * Return the registry part of the docker image.
-     * 
-     * @param image The actual docker image.
-     * @return The registry or null, if not registry was found.
-     */
-    public static String getRegistry(String image) {
-        String[] parts = image.split(SLASH);
-        if (parts.length <= 2) {
-            return null;
-        } else {
-            return parts[0];
-        }
-    }
-
-    /**
      * Return the docker image repository.
      * 
      * @param image The docker image.
