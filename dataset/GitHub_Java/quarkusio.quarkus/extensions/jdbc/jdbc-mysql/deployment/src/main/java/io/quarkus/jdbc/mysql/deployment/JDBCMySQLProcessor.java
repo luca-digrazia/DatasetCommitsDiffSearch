@@ -38,9 +38,8 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBui
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
-import io.quarkus.deployment.pkg.steps.NativeOrNativeSourcesBuild;
+import io.quarkus.deployment.pkg.steps.NativeBuild;
 import io.quarkus.jdbc.mysql.runtime.MySQLAgroalConnectionConfigurer;
-import io.quarkus.jdbc.mysql.runtime.MySQLServiceBindingConverter;
 
 public class JDBCMySQLProcessor {
 
@@ -87,7 +86,7 @@ public class JDBCMySQLProcessor {
         return new NativeImageSystemPropertyBuildItem("com.mysql.cj.disableAbandonedConnectionCleanup", "true");
     }
 
-    @BuildStep(onlyIfNot = NativeOrNativeSourcesBuild.class)
+    @BuildStep(onlyIfNot = NativeBuild.class)
     SystemPropertyBuildItem disableAbandonedConnectionCleanUpInJVMMode() {
         return new SystemPropertyBuildItem("com.mysql.cj.disableAbandonedConnectionCleanup", "true");
     }
@@ -123,9 +122,7 @@ public class JDBCMySQLProcessor {
             BuildProducer<ServiceProviderBuildItem> serviceProvider,
             BuildProducer<DefaultDataSourceDbKindBuildItem> dbKind) {
         if (capabilities.isPresent(Capability.KUBERNETES_SERVICE_BINDING)) {
-            serviceProvider.produce(
-                    new ServiceProviderBuildItem("io.quarkus.kubernetes.service.binding.runtime.ServiceBindingConverter",
-                            MySQLServiceBindingConverter.class.getName()));
+            //TODO: add binding class
             dbKind.produce(new DefaultDataSourceDbKindBuildItem(DatabaseKind.MYSQL));
         }
     }
