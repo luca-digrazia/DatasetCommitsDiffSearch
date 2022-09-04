@@ -1,128 +1,30 @@
 package io.quarkus.it.keycloak;
 
+import static io.quarkus.test.keycloak.server.KeycloakTestResourceLifecycleManager.getAccessToken;
+import static io.quarkus.test.keycloak.server.KeycloakTestResourceLifecycleManager.getRefreshToken;
+import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.equalTo;
 
-import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Base64;
+import java.util.concurrent.TimeUnit;
 
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
-import org.keycloak.representations.AccessTokenResponse;
-import org.keycloak.representations.idm.ClientRepresentation;
-import org.keycloak.representations.idm.CredentialRepresentation;
-import org.keycloak.representations.idm.RealmRepresentation;
-import org.keycloak.representations.idm.RoleRepresentation;
-import org.keycloak.representations.idm.RolesRepresentation;
-import org.keycloak.representations.idm.UserRepresentation;
-import org.keycloak.util.JsonSerialization;
 
+import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.keycloak.server.KeycloakTestResourceLifecycleManager;
 import io.restassured.RestAssured;
 
 /**
  * @author <a href="mailto:psilva@redhat.com">Pedro Igor</a>
  */
 @QuarkusTest
+@QuarkusTestResource(KeycloakTestResourceLifecycleManager.class)
 public class BearerTokenAuthorizationTest {
-
-    private static final String KEYCLOAK_SERVER_URL = System.getProperty("keycloak.url", "http://localhost:8180/auth");
-    private static final String KEYCLOAK_REALM = "quarkus";
-
-    @BeforeAll
-    public static void configureKeycloakRealm() throws IOException {
-        RealmRepresentation realm = createRealm(KEYCLOAK_REALM);
-
-        realm.getClients().add(createClient("quarkus-app"));
-        realm.getUsers().add(createUser("alice", "user"));
-        realm.getUsers().add(createUser("admin", "user", "admin"));
-        realm.getUsers().add(createUser("jdoe", "user", "confidential"));
-
-        RestAssured
-                .given()
-                .auth().oauth2(getAdminAccessToken())
-                .contentType("application/json")
-                .body(JsonSerialization.writeValueAsBytes(realm))
-                .when()
-                .post(KEYCLOAK_SERVER_URL + "/admin/realms").then()
-                .statusCode(201);
-    }
-
-    @AfterAll
-    public static void removeKeycloakRealm() {
-        RestAssured
-                .given()
-                .auth().oauth2(getAdminAccessToken())
-                .when()
-                .delete(KEYCLOAK_SERVER_URL + "/admin/realms/" + KEYCLOAK_REALM).then().statusCode(204);
-    }
-
-    private static String getAdminAccessToken() {
-        return RestAssured
-                .given()
-                .param("grant_type", "password")
-                .param("username", "admin")
-                .param("password", "admin")
-                .param("client_id", "admin-cli")
-                .when()
-                .post(KEYCLOAK_SERVER_URL + "/realms/master/protocol/openid-connect/token")
-                .as(AccessTokenResponse.class).getToken();
-    }
-
-    private static RealmRepresentation createRealm(String name) {
-        RealmRepresentation realm = new RealmRepresentation();
-
-        realm.setRealm(name);
-        realm.setEnabled(true);
-        realm.setUsers(new ArrayList<>());
-        realm.setClients(new ArrayList<>());
-
-        RolesRepresentation roles = new RolesRepresentation();
-        List<RoleRepresentation> realmRoles = new ArrayList<>();
-
-        roles.setRealm(realmRoles);
-        realm.setRoles(roles);
-
-        realm.getRoles().getRealm().add(new RoleRepresentation("user", null, false));
-        realm.getRoles().getRealm().add(new RoleRepresentation("admin", null, false));
-        realm.getRoles().getRealm().add(new RoleRepresentation("confidential", null, false));
-
-        return realm;
-    }
-
-    private static ClientRepresentation createClient(String clientId) {
-        ClientRepresentation client = new ClientRepresentation();
-
-        client.setClientId(clientId);
-        client.setPublicClient(false);
-        client.setSecret("secret");
-        client.setDirectAccessGrantsEnabled(true);
-        client.setEnabled(true);
-
-        return client;
-    }
-
-    private static UserRepresentation createUser(String username, String... realmRoles) {
-        UserRepresentation user = new UserRepresentation();
-
-        user.setUsername(username);
-        user.setEnabled(true);
-        user.setCredentials(new ArrayList<>());
-        user.setRealmRoles(Arrays.asList(realmRoles));
-
-        CredentialRepresentation credential = new CredentialRepresentation();
-
-        credential.setType(CredentialRepresentation.PASSWORD);
-        credential.setValue(username);
-        credential.setTemporary(false);
-
-        user.getCredentials().add(credential);
-
-        return user;
-    }
 
     @Test
     public void testSecureAccessSuccessWithCors() {
@@ -141,7 +43,7 @@ public class BearerTokenAuthorizationTest {
 
         for (String username : Arrays.asList("alice", "jdoe", "admin")) {
             RestAssured.given().auth().oauth2(getAccessToken(username))
-                    .when().get("/api/users/me")
+                    .when().get("/api/users/preferredUserName")
                     .then()
                     .statusCode(200)
                     .body("userName", equalTo(username));
@@ -149,10 +51,32 @@ public class BearerTokenAuthorizationTest {
     }
 
     @Test
-    public void testSecureAccessSuccess() {
+    public void testSecureAccessSuccessCustomPrincipal() {
         for (String username : Arrays.asList("alice", "jdoe", "admin")) {
             RestAssured.given().auth().oauth2(getAccessToken(username))
                     .when().get("/api/users/me")
+                    .then()
+                    .statusCode(200)
+                    .body("userName", equalTo(username + "@gmail.com"));
+        }
+    }
+
+    @Test
+    public void testBasicAuth() {
+        byte[] basicAuthBytes = "alice:password".getBytes(StandardCharsets.UTF_8);
+        RestAssured.given()
+                .header("Authorization", "Basic " + Base64.getEncoder().encodeToString(basicAuthBytes))
+                .when().get("/api/users/me")
+                .then()
+                .statusCode(200)
+                .body("userName", equalTo("alice"));
+    }
+
+    @Test
+    public void testSecureAccessSuccessPreferredUsername() {
+        for (String username : Arrays.asList("alice", "jdoe", "admin")) {
+            RestAssured.given().auth().oauth2(getAccessToken(username))
+                    .when().get("/api/users/preferredUserName")
                     .then()
                     .statusCode(200)
                     .body("userName", equalTo(username));
@@ -165,7 +89,31 @@ public class BearerTokenAuthorizationTest {
                 .when().get("/api/admin")
                 .then()
                 .statusCode(200)
-                .body(Matchers.containsString("granted"));
+                .body(Matchers.containsString("granted:admin"));
+    }
+
+    @Test
+    public void testAccessAdminResourceCustomHeaderNoBearerScheme() {
+        RestAssured.given().header("X-Forwarded-Authorization", getAccessToken("admin"))
+                .when().get("/api/admin")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
+    public void testAccessAdminResourceCustomHeaderBearerScheme() {
+        RestAssured.given().header("X-Forwarded-Authorization", getAccessToken("admin"))
+                .when().get("/api/admin")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
+    public void testAccessAdminResourceWithRefreshToken() {
+        RestAssured.given().auth().oauth2(getRefreshToken("admin"))
+                .when().get("/api/admin")
+                .then()
+                .statusCode(401);
     }
 
     @Test
@@ -186,22 +134,39 @@ public class BearerTokenAuthorizationTest {
     }
 
     @Test
-    public void testDeniedNoBearerToken() {
+    public void testVerificationFailedNoBearerToken() {
         RestAssured.given()
                 .when().get("/api/users/me").then()
-                .statusCode(401);
+                .statusCode(401)
+                .header("WWW-Authenticate", equalTo("Bearer"));
     }
 
-    private String getAccessToken(String userName) {
-        return RestAssured
-                .given()
-                .param("grant_type", "password")
-                .param("username", userName)
-                .param("password", userName)
-                .param("client_id", "quarkus-app")
-                .param("client_secret", "secret")
-                .when()
-                .post(KEYCLOAK_SERVER_URL + "/realms/" + KEYCLOAK_REALM + "/protocol/openid-connect/token")
-                .as(AccessTokenResponse.class).getToken();
+    @Test
+    public void testVerificationFailedInvalidToken() {
+        RestAssured.given().auth().oauth2("123")
+                .when().get("/api/users/me").then()
+                .statusCode(401)
+                .header("WWW-Authenticate", equalTo("Bearer"));
+    }
+
+    //see https://github.com/quarkusio/quarkus/issues/5809
+    @RepeatedTest(20)
+    public void testOidcAndVertxHandler() {
+        RestAssured.given().auth().oauth2(getAccessToken("alice"))
+                .when().body("Hello World").post("/vertx")
+                .then()
+                .statusCode(200)
+                .body(equalTo("Hello World"));
+    }
+
+    @Test
+    public void testExpiredBearerToken() throws InterruptedException {
+        String token = getAccessToken("alice");
+
+        await()
+                .pollDelay(3, TimeUnit.SECONDS)
+                .atMost(5, TimeUnit.SECONDS).until(
+                        () -> RestAssured.given().auth().oauth2(token).when()
+                                .get("/api/users/me").thenReturn().statusCode() == 401);
     }
 }
