@@ -249,7 +249,7 @@ public class ElasticNetTest {
             }
 
             System.out.format("Weather 10-CV avg error rate =  %.2f%%%n", (100.0 * error / testSize) / k);
-            assertTrue(error <= 10);
+            assertTrue(error == 9);
         } catch (Exception ex) {
             System.err.println(ex);
         }
