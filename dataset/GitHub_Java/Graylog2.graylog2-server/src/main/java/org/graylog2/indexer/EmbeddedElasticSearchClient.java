@@ -1,7 +1,6 @@
 package org.graylog2.indexer;
 
 import com.beust.jcommander.internal.Maps;
-import com.google.common.collect.Sets;
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 import org.elasticsearch.action.ActionFuture;
@@ -45,16 +44,9 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import org.elasticsearch.action.count.CountRequestBuilder;
-import org.elasticsearch.action.count.CountResponse;
-import org.elasticsearch.action.support.replication.ReplicationType;
-import org.elasticsearch.common.settings.ImmutableSettings;
-import org.elasticsearch.common.settings.Settings;
 
 import static org.elasticsearch.index.query.QueryBuilders.rangeQuery;
 import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
-import org.graylog2.plugin.streams.Stream;
 
 // TODO this class blocks for most of its operations, but is called from the main thread for some of them
 // TODO figure out how to gracefully deal with failure to connect (or losing connection) to the elastic search cluster!
@@ -62,7 +54,6 @@ public class EmbeddedElasticSearchClient {
     private static final Logger LOG = Logger.getLogger(EmbeddedElasticSearchClient.class);
 
     private Client client;
-    private final MessageGateway messageGateway;
     public static final String TYPE = "message";
     public static final String RECENT_INDEX_NAME = "graylog2_recent";
     
@@ -81,7 +72,6 @@ public class EmbeddedElasticSearchClient {
 
     public EmbeddedElasticSearchClient(Core graylogServer) {
         server = graylogServer;
-        messageGateway = new MessageGateway(graylogServer);
 
         final NodeBuilder builder = nodeBuilder().client(true);
         String esSettings;
@@ -105,21 +95,8 @@ public class EmbeddedElasticSearchClient {
 
     }
     
-    public Client getClient() {
-        return client;
-    }
-
-    public MessageGateway getMessageGateway() {
-        return messageGateway;
-    }
-    
     public String allIndicesAlias() {
         return server.getConfiguration().getElasticSearchIndexPrefix() + "_*";
-    }
-    
-    public String allIndicesExceptRecentIndexAlias() {
-        // e.g. graylog2_*,-graylog2_recent
-        return allIndicesAlias() + ",-" + RECENT_INDEX_NAME;
     }
     
     public long getTotalIndexSize() {
@@ -194,28 +171,19 @@ public class EmbeddedElasticSearchClient {
     }
 
     public boolean createIndex(String indexName) {
-        Map<String, Integer> settings = Maps.newHashMap();
-        settings.put("number_of_shards", server.getConfiguration().getElasticSearchShards());
-        settings.put("number_of_replicas", server.getConfiguration().getElasticSearchReplicas());
-
-        CreateIndexRequest cir = new CreateIndexRequest(indexName);
-        cir.settings(settings);
-        
-        final ActionFuture<CreateIndexResponse> createFuture = client.admin().indices().create(cir);
+        final ActionFuture<CreateIndexResponse> createFuture = client.admin().indices().create(new CreateIndexRequest(indexName));
         final boolean acknowledged = createFuture.actionGet().acknowledged();
         if (!acknowledged) {
             return false;
         }
-        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, indexName, server.getConfiguration().getElasticSearchAnalyzer());
+        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, indexName);
         final boolean mappingCreated = client.admin().indices().putMapping(mappingRequest).actionGet().acknowledged();
         return acknowledged && mappingCreated;
     }
     
     public boolean createRecentIndex() {
         Map<String, Object> settings = Maps.newHashMap();
-        settings.put("store.type", server.getConfiguration().getRecentIndexStoreType());
-        settings.put("number_of_shards", server.getConfiguration().getElasticSearchShards());
-        settings.put("number_of_replicas", server.getConfiguration().getElasticSearchReplicas());
+        settings.put("index.store.type", server.getConfiguration().getRecentIndexStoreType());
         
         CreateIndexRequestBuilder crb = new CreateIndexRequestBuilder(client.admin().indices());
         crb.setIndex(RECENT_INDEX_NAME);
@@ -226,7 +194,7 @@ public class EmbeddedElasticSearchClient {
         if (!acknowledged) {
             return false;
         }
-        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, RECENT_INDEX_NAME, server.getConfiguration().getElasticSearchAnalyzer());
+        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, RECENT_INDEX_NAME);
         final boolean mappingCreated = client.admin().indices().putMapping(mappingRequest).actionGet().acknowledged();
         return acknowledged && mappingCreated;
     }
@@ -270,12 +238,6 @@ public class EmbeddedElasticSearchClient {
             recentIndex.add(buildIndexRequest(RECENT_INDEX_NAME, source, msg.getId(), server.getConfiguration().getRecentIndexTtlMinutes())); // Recent index.
         }
 
-        mainIndex.setConsistencyLevel(WriteConsistencyLevel.ONE);
-        recentIndex.setConsistencyLevel(WriteConsistencyLevel.ONE);
-        
-        mainIndex.setReplicationType(ReplicationType.ASYNC);
-        recentIndex.setReplicationType(ReplicationType.ASYNC);
-        
         final ActionFuture<BulkResponse> mainBulkFuture = client.bulk(mainIndex.request());
         final ActionFuture<BulkResponse> recentBulkFuture = client.bulk(recentIndex.request());
         
@@ -300,7 +262,7 @@ public class EmbeddedElasticSearchClient {
         final QueryBuilder qb = rangeQuery("created_at").from(0).to(to);
         
         b.setTypes(new String[] {TYPE});
-        b.setIndices(server.getDeflector().getAllDeflectorIndexNames());
+        b.setIndices(server.getDeflector().getAllIndexNames());
         b.setQuery(qb);
         
         ActionFuture<DeleteByQueryResponse> future = client.deleteByQuery(b.request());
@@ -366,7 +328,7 @@ public class EmbeddedElasticSearchClient {
         b.setOpType(OpType.INDEX);
         b.setType(TYPE);
         b.setConsistencyLevel(WriteConsistencyLevel.ONE);
-
+        
         // Set a TTL?
         if (ttlMinutes > 0) {
             b.setTTL(ttlMinutes*60*1000); // TTL is specified in milliseconds.
@@ -374,5 +336,4 @@ public class EmbeddedElasticSearchClient {
         
         return b;
     }
-
 }
