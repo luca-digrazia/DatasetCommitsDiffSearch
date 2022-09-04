@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.Attribute.LabelListLateBoundDefault;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaOptimizationMode;
@@ -463,7 +462,7 @@ public interface JavaSemantics {
       List<String> jvmFlags,
       JavaTargetAttributes.Builder attributesBuilder,
       boolean shouldStrip)
-      throws InterruptedException, RuleErrorException;
+      throws InterruptedException;
 
   /**
    * Add a source artifact to a {@link JavaTargetAttributes.Builder}. It is called when a source

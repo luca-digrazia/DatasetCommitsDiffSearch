@@ -78,7 +78,7 @@ public class JavaCommon {
             NestedSetBuilder<Artifact> metadataFilesBuilder) {
           for (Artifact artifact : objectFiles) {
             ActionAnalysisMetadata action = analysisEnvironment.getLocalGeneratingAction(artifact);
-            if (JavaCompileActionBuilder.isJavaCompileAction(action)) {
+            if (action instanceof JavaCompileAction) {
               addOutputs(metadataFilesBuilder, action, JavaSemantics.COVERAGE_METADATA);
             } else if (action != null
                 && action.getMnemonic().equals(ResourceJarActionBuilder.MNEMONIC)) {
@@ -252,12 +252,7 @@ public class JavaCommon {
    */
   public JavaCompilationArgsProvider collectJavaCompilationArgs(
       boolean isNeverLink, boolean srcLessDepsExport) {
-    return collectJavaCompilationArgs(
-        isNeverLink, srcLessDepsExport, /* javaProtoLibraryStrictDeps= */ false);
-  }
-
-  public JavaCompilationArgsProvider collectJavaCompilationArgs(
-      boolean isNeverLink, boolean srcLessDepsExport, boolean javaProtoLibraryStrictDeps) {
+    boolean javaProtoLibraryStrictDeps = semantics.isJavaProtoLibraryStrictDeps(ruleContext);
     return collectJavaCompilationArgs(
         /* isNeverLink= */ isNeverLink,
         /* srcLessDepsExport= */ srcLessDepsExport,
@@ -443,8 +438,9 @@ public class JavaCommon {
   public static NestedSet<Artifact> computePerPackageData(
       RuleContext ruleContext, JavaToolchainProvider toolchain) {
     NestedSetBuilder<Artifact> data = NestedSetBuilder.naiveLinkOrder();
-    computePerPackageConfiguration(ruleContext, toolchain).stream()
-        .map(JavaPackageConfigurationProvider::data)
+    computePerPackageConfiguration(ruleContext, toolchain)
+        .stream()
+        .map(p -> p.data())
         .forEach(data::addTransitive);
     return data.build();
   }
