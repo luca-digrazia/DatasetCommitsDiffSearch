@@ -28,9 +28,6 @@ import org.graylog.plugins.views.search.Filter;
 import org.graylog.plugins.views.search.SearchType;
 import org.graylog.plugins.views.search.engine.BackendQuery;
 import org.graylog.plugins.views.search.timeranges.DerivedTimeRange;
-import org.graylog2.contentpacks.EntityDescriptorIds;
-import org.graylog2.contentpacks.model.entities.EventListEntity;
-import org.graylog2.contentpacks.model.entities.SearchTypeEntity;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -142,18 +139,5 @@ public abstract class EventList implements SearchType {
 
             public abstract Result build();
         }
-    }
-
-    @Override
-    public SearchTypeEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
-        return EventListEntity.builder()
-                .streams(mappedStreams(entityDescriptorIds))
-                .filter(filter())
-                .id(id())
-                .name(name().orElse(null))
-                .query(query().orElse(null))
-                .type(type())
-                .timerange(timerange().orElse(null))
-                .build();
     }
 }
