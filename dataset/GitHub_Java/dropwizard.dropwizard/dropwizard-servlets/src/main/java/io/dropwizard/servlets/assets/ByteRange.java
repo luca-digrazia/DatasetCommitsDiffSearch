@@ -25,7 +25,7 @@ public final class ByteRange {
     public static ByteRange parse(final String byteRange,
                                   final int resourceLength) {
         // missing separator
-        if (!byteRange.contains("-")) {
+        if (byteRange.indexOf("-") == -1) {
             final int start = Integer.parseInt(byteRange);
             return new ByteRange(start, resourceLength - 1);
         }
