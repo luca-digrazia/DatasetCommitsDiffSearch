@@ -20,21 +20,24 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
+import org.graylog2.indexer.retention.strategies.RetentionStrategyConfig;
+import org.hibernate.validator.constraints.NotEmpty;
 
-import java.util.Set;
+import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 
-@AutoValue
 @JsonAutoDetect
-public abstract class RotationStrategies {
+@AutoValue
+public abstract class RetentionStrategySummary {
     @JsonProperty
-    public abstract int total();
+    public abstract String strategy();
 
     @JsonProperty
-    public abstract Set<String> strategies();
+    public abstract RetentionStrategyConfig config();
 
     @JsonCreator
-    public static RotationStrategies create(@JsonProperty("total") int total,
-                                            @JsonProperty("strategies") Set<String> strategies) {
-        return new AutoValue_RotationStrategies(total, strategies);
+    public static RetentionStrategySummary create(@JsonProperty("strategy") @NotEmpty String strategy,
+                                                  @JsonProperty("config") @Valid @NotNull RetentionStrategyConfig config) {
+        return new AutoValue_RetentionStrategySummary(strategy, config);
     }
 }
