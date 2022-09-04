@@ -14,18 +14,21 @@ import io.restassured.RestAssured;
 
 public class DefaultGroupsUnitTest {
     private static Class<?>[] testClasses = {
-            DefaultGroupsEndpoint.class
+            DefaultGroupsEndpoint.class,
+            TokenUtils.class
     };
     /**
      * The test generated JWT token string
      */
     private String token;
-    // Time claims in the token
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(testClasses)
+                    .addAsResource("publicKey.pem")
+                    .addAsResource("privateKey.pem")
+                    .addAsResource("TokenNoGroups.json")
                     .addAsResource("applicationDefaultGroups.properties", "application.properties"));
 
     @BeforeEach
@@ -37,10 +40,9 @@ public class DefaultGroupsUnitTest {
      * Validate a request with MP-JWT without a 'groups' claim is successful
      * due to the default value being provided in the configuration
      *
-     * @throws Exception
      */
     @Test
-    public void echoGroups() throws Exception {
+    public void echoGroups() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .get("/endp/echo").andReturn();
@@ -49,5 +51,15 @@ public class DefaultGroupsUnitTest {
         String replyString = response.body().asString();
         // The missing 'groups' claim's default value, 'User' is expected
         Assertions.assertEquals("User", replyString);
+    }
+
+    @Test
+    public void echoGroupsWithParser() {
+        io.restassured.response.Response response = RestAssured.given().auth()
+                .oauth2(token)
+                .get("/endp/echo-parser").andReturn();
+
+        Assertions.assertEquals(HttpURLConnection.HTTP_OK, response.getStatusCode());
+        Assertions.assertEquals("parser:User", response.body().asString());
     }
 }
