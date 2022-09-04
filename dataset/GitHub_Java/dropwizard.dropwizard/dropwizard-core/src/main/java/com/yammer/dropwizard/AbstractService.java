@@ -43,13 +43,12 @@ public abstract class AbstractService<T extends Configuration> {
     private final SortedMap<String, Command> commands;
 
     /**
-     * Creates a new service with the given name. If name is {@code null} the service is named as
-     * the subclass by using {@link Class#getSimpleName()}.
+     * Creates a new service with the given name.
      *
      * @param name    the service's name
      */
     protected AbstractService(String name) {
-        this.name = (name == null) ? getClass().getSimpleName() : name;
+        this.name = name;
         this.bundles = Lists.newArrayList();
         this.configuredBundles = Lists.newArrayList();
         this.modules = Lists.newArrayList();
@@ -60,7 +59,6 @@ public abstract class AbstractService<T extends Configuration> {
     /**
      * A simple reminder that this particular class isn't meant to be extended by non-DW classes.
      */
-    @SuppressWarnings("UnusedDeclaration")
     protected abstract void subclassServiceInsteadOfThis();
 
     public final String getName() {
@@ -84,7 +82,7 @@ public abstract class AbstractService<T extends Configuration> {
             // should typically have one of type parameters (first one) that matches:
             for (Type param : ((ParameterizedType) t).getActualTypeArguments()) {
                 if (param instanceof Class<?>) {
-                    final Class<?> cls = (Class<?>) param;
+                    Class<?> cls = (Class<?>) param;
                     if (Configuration.class.isAssignableFrom(cls)) {
                         return (Class<T>) cls;
                     }
@@ -234,16 +232,13 @@ public abstract class AbstractService<T extends Configuration> {
      * An implementation that chooses to return {@code null} is responsible for creating
      * a container with the given config by other means during initialization and startup.
      * 
-     *
-     * @param resourceConfig    the Jersey resource config to use for the container
-     * @param serviceConfig     the service configuration object
+     * @param config the Jersey resource config to use for the container
      * @return a Jersey servlet container, or {@code null} if the Jersey container
      *         will be created by other means 
      */
     @CheckForNull
-    public ServletContainer getJerseyContainer(DropwizardResourceConfig resourceConfig,
-                                               T serviceConfig) {
-        return new ServletContainer(resourceConfig);
+    public ServletContainer getJerseyContainer(DropwizardResourceConfig config) {
+        return new ServletContainer(config);
     }
     
     private static boolean isHelp(String[] arguments) {

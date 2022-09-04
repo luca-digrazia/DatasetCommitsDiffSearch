@@ -93,14 +93,6 @@ public class Size {
         this.unit = checkNotNull(unit);
     }
 
-    public long getQuantity() {
-        return count;
-    }
-
-    public SizeUnit getUnit() {
-        return unit;
-    }
-
     public long toBytes() {
         return SizeUnit.BYTES.convert(count, unit);
     }

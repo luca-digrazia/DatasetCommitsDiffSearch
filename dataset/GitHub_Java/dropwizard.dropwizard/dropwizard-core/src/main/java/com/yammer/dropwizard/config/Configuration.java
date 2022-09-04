@@ -1,7 +1,6 @@
 package com.yammer.dropwizard.config;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.base.Objects;
+import org.codehaus.jackson.annotate.JsonProperty;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
@@ -41,17 +40,17 @@ import javax.validation.constraints.NotNull;
  *
  * @see <a href="http://www.yaml.org/YAML_for_ruby.html">YAML Cookbook</a>
  */
-@SuppressWarnings("UnusedDeclaration")
+@SuppressWarnings("FieldMayBeFinal")
 public class Configuration {
     @Valid
     @NotNull
-    @JsonProperty("http")
-    private HttpConfiguration httpConfiguration = new HttpConfiguration();
+    @JsonProperty
+    protected HttpConfiguration http = new HttpConfiguration();
 
     @Valid
     @NotNull
-    @JsonProperty("logging")
-    private LoggingConfiguration loggingConfiguration = new LoggingConfiguration();
+    @JsonProperty
+    protected LoggingConfiguration logging = new LoggingConfiguration();
 
     /**
      * Returns the HTTP-specific section of the configuration file.
@@ -59,14 +58,7 @@ public class Configuration {
      * @return HTTP-specific configuration parameters
      */
     public HttpConfiguration getHttpConfiguration() {
-        return httpConfiguration;
-    }
-
-    /**
-     * Sets the HTTP-specific section of the configuration file.
-     */
-    public void setHttpConfiguration(HttpConfiguration config) {
-        this.httpConfiguration = config;
+        return http;
     }
 
     /**
@@ -75,19 +67,6 @@ public class Configuration {
      * @return logging-specific configuration parameters
      */
     public LoggingConfiguration getLoggingConfiguration() {
-        return loggingConfiguration;
-    }
-
-    /**
-     * Sets the logging-specific section of the configuration file.
-     */
-    public void setLoggingConfiguration(LoggingConfiguration config) {
-        this.loggingConfiguration = config;
-    }
-
-    @Override
-    public String toString() {
-        return Objects.toStringHelper(this).add("http", httpConfiguration).add("logging",
-                                                                               loggingConfiguration).toString();
+        return logging;
     }
 }
