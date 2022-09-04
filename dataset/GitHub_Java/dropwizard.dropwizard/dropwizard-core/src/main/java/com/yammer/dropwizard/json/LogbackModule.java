@@ -1,14 +1,16 @@
 package com.yammer.dropwizard.json;
 
 import ch.qos.logback.classic.Level;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.Version;
-import com.fasterxml.jackson.databind.*;
-import com.fasterxml.jackson.databind.deser.Deserializers;
+import org.codehaus.jackson.JsonParser;
+import org.codehaus.jackson.Version;
+import org.codehaus.jackson.map.*;
+import org.codehaus.jackson.map.annotate.JsonCachable;
+import org.codehaus.jackson.type.JavaType;
 
 import java.io.IOException;
 
-public class LogbackModule extends Module {
+class LogbackModule extends Module {
+    @JsonCachable
     private static class LevelDeserializer extends JsonDeserializer<Level> {
         @Override
         public Level deserialize(JsonParser jp,
@@ -16,12 +18,10 @@ public class LogbackModule extends Module {
 
             final String text = jp.getText();
 
-            // required because YAML maps "off" to a boolean false
             if ("false".equalsIgnoreCase(text)) {
                 return Level.OFF;
             }
 
-            // required because YAML maps "on" to a boolean true
             if ("true".equalsIgnoreCase(text)) {
                 return Level.ALL;
             }
@@ -34,11 +34,14 @@ public class LogbackModule extends Module {
         @Override
         public JsonDeserializer<?> findBeanDeserializer(JavaType type,
                                                         DeserializationConfig config,
-                                                        BeanDescription beanDesc) throws JsonMappingException {
+                                                        DeserializerProvider provider,
+                                                        BeanDescription beanDesc,
+                                                        BeanProperty property) throws JsonMappingException {
             if (Level.class.isAssignableFrom(type.getRawClass())) {
                 return new LevelDeserializer();
             }
-            return super.findBeanDeserializer(type, config, beanDesc);
+
+            return super.findBeanDeserializer(type, config, provider, beanDesc, property);
         }
     }
 
