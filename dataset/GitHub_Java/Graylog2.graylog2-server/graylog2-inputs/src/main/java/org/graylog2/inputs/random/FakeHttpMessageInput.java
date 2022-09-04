@@ -23,7 +23,6 @@ import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.codecs.RandomHttpMessageCodec;
 import org.graylog2.inputs.transports.RandomMessageTransport;
 import org.graylog2.plugin.LocalMetricRegistry;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
 
@@ -35,11 +34,11 @@ public class FakeHttpMessageInput extends MessageInput {
     public FakeHttpMessageInput(@Assisted Configuration configuration,
                                 RandomMessageTransport.Factory transportFactory,
                                 RandomHttpMessageCodec.Factory codecFactory,
-                                MetricRegistry metricRegistry, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor, ServerStatus serverStatus) {
+                                MetricRegistry metricRegistry, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor) {
         super(metricRegistry,
               transportFactory.create(configuration),
               localRegistry, codecFactory.create(configuration),
-              config, descriptor, serverStatus);
+              config, descriptor);
     }
 
     public interface Factory extends MessageInput.Factory<FakeHttpMessageInput> {

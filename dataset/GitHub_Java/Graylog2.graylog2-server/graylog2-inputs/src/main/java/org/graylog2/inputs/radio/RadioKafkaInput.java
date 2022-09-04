@@ -24,7 +24,6 @@ import org.graylog2.inputs.codecs.RadioMessageCodec;
 import org.graylog2.inputs.kafka.KafkaInput;
 import org.graylog2.inputs.transports.RadioKafkaTransport;
 import org.graylog2.plugin.LocalMetricRegistry;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
 
@@ -39,13 +38,13 @@ public class RadioKafkaInput extends KafkaInput {
                            RadioMessageCodec.Factory codec,
                            LocalMetricRegistry localRegistry,
                            Config config,
-                           Descriptor descriptor, ServerStatus serverStatus) {
+                           Descriptor descriptor) {
         super(metricRegistry,
               transport.create(configuration),
               codec.create(configuration),
               localRegistry,
               config,
-              descriptor, serverStatus);
+              descriptor);
     }
 
     public interface Factory extends MessageInput.Factory<RadioKafkaInput> {

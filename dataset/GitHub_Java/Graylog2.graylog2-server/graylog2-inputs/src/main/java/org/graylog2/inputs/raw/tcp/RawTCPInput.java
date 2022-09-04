@@ -45,7 +45,7 @@ import org.graylog2.plugin.inputs.MessageInput;
 
 public class RawTCPInput extends MessageInput {
 
-    private static final String NAME = "Raw/Plaintext TCP";
+    private static final String NAME = "Raw/Plaintext TCP (transport based)";
 
     @AssistedInject
     public RawTCPInput(@Assisted final Configuration configuration,

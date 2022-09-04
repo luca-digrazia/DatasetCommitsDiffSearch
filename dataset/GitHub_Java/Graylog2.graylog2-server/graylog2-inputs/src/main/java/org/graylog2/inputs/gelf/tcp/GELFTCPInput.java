@@ -23,7 +23,6 @@ import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.codecs.GelfCodec;
 import org.graylog2.inputs.transports.TcpTransport;
 import org.graylog2.plugin.LocalMetricRegistry;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
 
@@ -38,9 +37,9 @@ public class GELFTCPInput extends MessageInput {
                         GelfCodec.Factory gelfCodecFactory,
                         LocalMetricRegistry localRegistry,
                         Config config,
-                        Descriptor descriptor, ServerStatus serverStatus) {
+                        Descriptor descriptor) {
         super(metricRegistry, tcpFactory.create(configuration), localRegistry, gelfCodecFactory.create(configuration),
-              config, descriptor, serverStatus);
+              config, descriptor);
     }
 
     public interface Factory extends MessageInput.Factory<GELFTCPInput> {
