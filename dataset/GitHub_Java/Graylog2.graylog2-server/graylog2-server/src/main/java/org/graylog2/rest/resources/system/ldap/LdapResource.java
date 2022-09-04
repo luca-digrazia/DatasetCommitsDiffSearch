@@ -18,9 +18,6 @@ package org.graylog2.rest.resources.system.ldap;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
 import org.apache.directory.api.ldap.model.cursor.CursorException;
 import org.apache.directory.api.ldap.model.exception.LdapException;
 import org.apache.directory.ldap.client.api.LdapConnectionConfig;
@@ -28,6 +25,9 @@ import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.ValidationException;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
+import org.graylog2.rest.documentation.annotations.ApiParam;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.ldap.requests.LdapSettingsRequest;
 import org.graylog2.rest.resources.system.ldap.requests.LdapTestConfigRequest;
@@ -44,8 +44,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -53,11 +51,15 @@ import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
-import java.util.Collections;
 import java.util.Map;
+
+import static javax.ws.rs.core.Response.noContent;
+import static javax.ws.rs.core.Response.ok;
 
 @RequiresAuthentication
 @RequiresPermissions(RestPermissions.LDAP_EDIT)
@@ -84,13 +86,12 @@ public class LdapResource extends RestResource {
     @ApiOperation("Get the LDAP configuration if it is configured")
     @Path("/settings")
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Object> getLdapSettings() {
+    public Response getLdapSettings() {
         final LdapSettings ldapSettings = ldapSettingsService.load();
         if (ldapSettings == null) {
-            return Collections.emptyMap();
+            return noContent().build();
         }
-
-        final Map<String, Object> result = Maps.newHashMap();
+        Map<String, Object> result = Maps.newHashMap();
         result.put("enabled", ldapSettings.isEnabled());
         result.put("system_username", ldapSettings.getSystemUserName());
         result.put("system_password", ldapSettings.getSystemPassword()); // TODO AES encrypt
@@ -103,7 +104,7 @@ public class LdapResource extends RestResource {
         result.put("trust_all_certificates", ldapSettings.isTrustAllCertificates());
         result.put("default_group", ldapSettings.getDefaultGroup());
 
-        return result;
+        return ok(json(result)).build();
     }
 
     @POST
@@ -112,9 +113,9 @@ public class LdapResource extends RestResource {
     @Path("/test")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public LdapTestConfigResponse testLdapConfiguration(@ApiParam(name = "Configuration to test", required = true)
-                                                        @Valid @NotNull LdapTestConfigRequest request) {
-        final LdapTestConfigResponse response = new LdapTestConfigResponse();
+    public LdapTestConfigResponse testLdapConfiguration(@ApiParam(title = "Configuration to test", required = true) LdapTestConfigRequest request) {
+        LdapTestConfigResponse response = new LdapTestConfigResponse();
+
         final LdapConnectionConfig config = new LdapConnectionConfig();
         final URI ldapUri = request.ldapUri;
         config.setLdapHost(ldapUri.getHost());
@@ -124,7 +125,6 @@ public class LdapResource extends RestResource {
         if (request.trustAllCertificates) {
             config.setTrustManagers(new TrustAllX509TrustManager());
         }
-
         if (request.systemUsername != null && !request.systemUsername.isEmpty()) {
             config.setName(request.systemUsername);
             config.setCredentials(request.systemPassword);
@@ -197,8 +197,14 @@ public class LdapResource extends RestResource {
     @ApiOperation("Update the LDAP configuration")
     @Path("/settings")
     @Consumes(MediaType.APPLICATION_JSON)
-    public void updateLdapSettings(@ApiParam(name = "JSON body", required = true)
-                                   @Valid @NotNull LdapSettingsRequest request) throws ValidationException {
+    public void updateLdapSettings(@ApiParam(title = "JSON body", required = true) String body) {
+        LdapSettingsRequest request;
+        try {
+            request = objectMapper.readValue(body, LdapSettingsRequest.class);
+        } catch (IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
         // load the existing config, or create a new one. we only support having one, currently
         LdapSettings ldapSettings = ldapSettingsService.load();
         if (ldapSettings == null) {
@@ -216,7 +222,12 @@ public class LdapResource extends RestResource {
         ldapSettings.setDisplayNameAttribute(request.displayNameAttribute);
         ldapSettings.setDefaultGroup(request.defaultGroup);
 
-        ldapSettingsService.save(ldapSettings);
+        try {
+            ldapSettingsService.save(ldapSettings);
+        } catch (ValidationException e) {
+            LOG.error("Invalid LDAP settings, not updated!", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
         ldapAuthenticator.applySettings(ldapSettings);
     }
 
