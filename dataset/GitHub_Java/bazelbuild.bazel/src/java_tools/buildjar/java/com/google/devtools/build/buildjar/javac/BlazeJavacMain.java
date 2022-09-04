@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.buildjar.InvalidCommandLineException;
 import com.google.devtools.build.buildjar.javac.FormattedDiagnostic.Listener;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
-import com.google.devtools.build.buildjar.javac.statistics.BlazeJavacStatistics;
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.api.ClientCodeWrapper.Trusted;
 import com.sun.tools.javac.api.JavacTool;
@@ -38,11 +37,13 @@ import java.io.IOError;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import javax.tools.Diagnostic;
 import javax.tools.StandardLocation;
 
@@ -79,10 +80,8 @@ public class BlazeJavacMain {
     }
 
     Context context = new Context();
-    BlazeJavacStatistics.preRegister(context);
     CacheFSInfo.preRegister(context);
     setupBlazeJavaCompiler(arguments.plugins(), context);
-    BlazeJavacStatistics.Builder builder = context.get(BlazeJavacStatistics.Builder.class);
 
     boolean ok = false;
     StringWriter errOutput = new StringWriter();
@@ -131,12 +130,8 @@ public class BlazeJavacMain {
       }
     }
     errWriter.flush();
-    return BlazeJavacResult.createFullResult(
-        ok,
-        filterDiagnostics(diagnostics.build()),
-        errOutput.toString(),
-        compiler,
-        builder.build());
+    return new BlazeJavacResult(
+        ok, filterDiagnostics(diagnostics.build()), errOutput.toString(), compiler);
   }
 
   private static final ImmutableSet<String> IGNORED_DIAGNOSTIC_CODES =
@@ -166,7 +161,8 @@ public class BlazeJavacMain {
       ImmutableList<FormattedDiagnostic> diagnostics) {
     boolean werror =
         diagnostics.stream().anyMatch(d -> d.getCode().equals("compiler.err.warnings.and.werror"));
-    return diagnostics.stream()
+    return diagnostics
+        .stream()
         .filter(d -> shouldReportDiagnostic(werror, d))
         // Print errors last to make them more visible.
         .sorted(comparing(FormattedDiagnostic::getKind).reversed())
@@ -217,7 +213,9 @@ public class BlazeJavacMain {
         // otherwise it reports an error:
         // "file should be on source path, or on patch path for module"
         ImmutableList<Path> moduleInfos =
-            arguments.sourceFiles().stream()
+            arguments
+                .sourceFiles()
+                .stream()
                 .filter(f -> f.getFileName().toString().equals("module-info.java"))
                 .collect(toImmutableList());
         if (moduleInfos.size() == 1) {
@@ -265,15 +263,19 @@ public class BlazeJavacMain {
     protected ClassLoader getClassLoader(URL[] urls) {
       return new URLClassLoader(
           urls,
-          new ClassLoader(getPlatformClassLoader()) {
+          new ClassLoader(null) {
             @Override
             protected Class<?> findClass(String name) throws ClassNotFoundException {
+              Class<?> c = Class.forName(name);
               if (name.startsWith("com.google.errorprone.")
                   || name.startsWith("org.checkerframework.dataflow.")
                   || name.startsWith("com.sun.source.")
-                  || name.startsWith("com.sun.tools.")
-                  || name.startsWith("com.google.devtools.build.buildjar.javac.statistics.")) {
-                return Class.forName(name);
+                  || name.startsWith("com.sun.tools.")) {
+                return c;
+              }
+              if (c.getClassLoader() == null
+                  || Objects.equals(getClassLoaderName(c.getClassLoader()), "platform")) {
+                return c;
               }
               throw new ClassNotFoundException(name);
             }
@@ -281,14 +283,19 @@ public class BlazeJavacMain {
     }
   }
 
-  public static ClassLoader getPlatformClassLoader() {
+  // TODO(cushon): remove this use of reflection if Java 9 is released.
+  private static String getClassLoaderName(ClassLoader classLoader) {
+    Method method;
     try {
-      // In JDK 9+, all platform classes are visible to the platform class loader:
-      // https://docs.oracle.com/javase/9/docs/api/java/lang/ClassLoader.html#getPlatformClassLoader--
-      return (ClassLoader) ClassLoader.class.getMethod("getPlatformClassLoader").invoke(null);
-    } catch (ReflectiveOperationException e) {
-      // In earlier releases, set 'null' as the parent to delegate to the boot class loader.
+      method = ClassLoader.class.getMethod("getName");
+    } catch (NoSuchMethodException e) {
+      // ClassLoader#getName doesn't exist in JDK 8 and earlier.
       return null;
+    }
+    try {
+      return (String) method.invoke(classLoader, new Object[] {});
+    } catch (ReflectiveOperationException e) {
+      throw new LinkageError(e.getMessage(), e);
     }
   }
 
