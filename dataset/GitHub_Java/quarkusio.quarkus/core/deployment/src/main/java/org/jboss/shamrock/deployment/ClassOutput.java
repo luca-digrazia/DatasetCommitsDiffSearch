@@ -14,6 +14,19 @@ public interface ClassOutput {
      * @param data      The bytecode bytes
      * @throws IOException If the class cannot be written
      */
-    void writeClass(String className, byte[] data) throws IOException;
+    void writeClass(boolean applicationClass, String className, byte[] data) throws IOException;
 
+    //TODO: we should not need both these classes
+    static org.jboss.protean.gizmo.ClassOutput gizmoAdaptor(ClassOutput out, boolean applicationClass) {
+        return new org.jboss.protean.gizmo.ClassOutput() {
+            @Override
+            public void write(String name, byte[] data) {
+                try {
+                    out.writeClass(applicationClass, name, data);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+    }
 }
