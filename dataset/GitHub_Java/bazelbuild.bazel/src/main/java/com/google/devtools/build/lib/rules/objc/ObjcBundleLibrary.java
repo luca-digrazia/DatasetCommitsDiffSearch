@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
-import com.google.devtools.build.lib.rules.apple.XcodeConfig;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.InvalidFamilyNameException;
@@ -104,7 +103,7 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
         .setObjcProvider(common.getObjcProvider())
         .addInfoplistInputFromRule(ruleContext)
         .setIntermediateArtifacts(intermediateArtifacts)
-        .setMinimumOsVersion(XcodeConfig.getMinimumOsForPlatformType(ruleContext, PlatformType.IOS))
+        .setMinimumOsVersion(appleConfiguration.getMinimumOsForPlatformType(PlatformType.IOS))
         .setTargetDeviceFamilies(families)
         .build();
   }
