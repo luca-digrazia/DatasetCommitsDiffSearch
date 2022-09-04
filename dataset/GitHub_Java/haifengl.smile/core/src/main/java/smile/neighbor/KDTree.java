@@ -266,7 +266,7 @@ public class KDTree <E> implements NearestNeighborSearch<double[], E>, KNNSearch
             search(q, nearer, neighbor);
 
             // now look in further half
-            if (neighbor.distance >= Math.abs(diff)) {
+            if (neighbor.distance >= diff) {
                 search(q, further, neighbor);
             }
         }
@@ -310,7 +310,7 @@ public class KDTree <E> implements NearestNeighborSearch<double[], E>, KNNSearch
             search(q, nearer, heap);
 
             // now look in further half
-            if (heap.peek().distance >= Math.abs(diff)) {
+            if (heap.peek().distance >= diff) {
                 search(q, further, heap);
             }
         }
@@ -377,7 +377,7 @@ public class KDTree <E> implements NearestNeighborSearch<double[], E>, KNNSearch
             throw new IllegalArgumentException("Neighbor array length is larger than the dataset size");
         }
 
-        HeapSelect<NeighborBuilder<double[], E>> heap = new HeapSelect<>(NeighborBuilder.class, k);
+        HeapSelect<NeighborBuilder<double[], E>> heap = new HeapSelect<>(k);
         for (int i = 0; i < k; i++) {
             heap.add(new NeighborBuilder<>());
         }
