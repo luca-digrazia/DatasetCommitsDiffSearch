@@ -3,10 +3,11 @@ package io.quarkus.arc.test.validation;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import io.quarkus.arc.test.ArcTestContainer;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.spi.DefinitionException;
 import javax.enterprise.inject.spi.DeploymentException;
+
+import io.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -29,7 +30,7 @@ public class NormalScopedPrivateNoArgsConstructorTest {
 
         private Unproxyable() {
         }
-
+        
     }
 
 }
