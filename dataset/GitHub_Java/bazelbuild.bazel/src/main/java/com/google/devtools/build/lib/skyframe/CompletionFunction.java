@@ -13,256 +13,344 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.eventbus.EventBus;
+
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionInputMap;
+import com.google.devtools.build.lib.actions.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MissingInputFileException;
-import com.google.devtools.build.lib.analysis.AspectCompleteEvent;
+import com.google.devtools.build.lib.actions.Artifact.ArchivedTreeArtifact;
+import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
+import com.google.devtools.build.lib.actions.CompletionContext;
+import com.google.devtools.build.lib.actions.CompletionContext.PathResolverFactory;
+import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
+import com.google.devtools.build.lib.actions.InputFileErrorException;
+import com.google.devtools.build.lib.analysis.ConfiguredObjectValue;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
-import com.google.devtools.build.lib.analysis.TargetCompleteEvent;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsInOutputGroup;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsToBuild;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.SuccessfulArtifactFilter;
+import com.google.devtools.build.lib.bugreport.BugReporter;
+import com.google.devtools.build.lib.causes.Cause;
+import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.skyframe.ArtifactFunction.MissingArtifactValue;
+import com.google.devtools.build.lib.skyframe.ArtifactFunction.SourceArtifactException;
+import com.google.devtools.build.lib.skyframe.CompletionFunction.TopLevelActionLookupKey;
+import com.google.devtools.build.lib.skyframe.MetadataConsumerForMetrics.FilesMetricConsumer;
+import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException2;
-
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-
 import javax.annotation.Nullable;
+import net.starlark.java.syntax.Location;
 
-/**
- * CompletionFunction builds the artifactsToBuild collection of a {@link ConfiguredTarget}.
- */
-public final class CompletionFunction<TValue extends SkyValue, TResult extends SkyValue>
+/** CompletionFunction builds the artifactsToBuild collection of a {@link ConfiguredTarget}. */
+public final class CompletionFunction<
+        ValueT extends ConfiguredObjectValue,
+        ResultT extends SkyValue,
+        KeyT extends TopLevelActionLookupKey,
+        FailureT>
     implements SkyFunction {
 
-  /**
-   * A strategy for completing the build.
-   */
-  public interface Completor<TValue, TResult extends SkyValue> {
+  /** A strategy for completing the build. */
+  interface Completor<
+      ValueT, ResultT extends SkyValue, KeyT extends TopLevelActionLookupKey, FailureT> {
 
     /**
-     * Obtains an analysis result value from environment.
+     * Returns the options which determine the artifacts to build for the top-level targets.
+     *
+     * <p>For the Top level targets we made a conscious decision to include the
+     * TopLevelArtifactContext within the SkyKey as an argument to the CompletionFunction rather
+     * than a separate SkyKey. As a result we do have <num top level targets> extra SkyKeys for
+     * every unique TopLevelArtifactContexts used over the lifetime of Blaze. This is a minor
+     * tradeoff, since it significantly improves null build times when we're switching the
+     * TopLevelArtifactContexts frequently (common for IDEs), by reusing existing SkyKeys from
+     * earlier runs, instead of causing an eager invalidation were the TopLevelArtifactContext
+     * modeled as a separate SkyKey.
      */
-    TValue getValueFromSkyKey(SkyKey skyKey, Environment env);
+
+    /** Creates an event reporting an absent input artifact. */
+    Event getRootCauseError(ValueT value, KeyT key, LabelCause rootCause, Environment env)
+        throws InterruptedException;
+
+    @Nullable
+    Object getLocationIdentifier(ValueT value, KeyT key, Environment env)
+        throws InterruptedException;
+
+    /** Provides a successful completion value. */
+    ResultT getResult();
 
     /**
-     * Returns all artefacts that need to be built to complete the {@code value}
+     * Creates supplementary data needed to call {@link #createFailed(Object, NestedSet,
+     * CompletionContext, ImmutableMap, Object)}; returns null if skyframe found missing values.
      */
-    ArtifactsToBuild getAllArtifactsToBuild(TValue value, TopLevelArtifactContext context);
+    @Nullable
+    FailureT getFailureData(KeyT key, ValueT value, Environment env) throws InterruptedException;
 
-    /**
-     * Creates an event reporting an absent input artifact.
-     */
-    Event getRootCauseError(TValue value, Label rootCause);
+    /** Creates a failed completion value. */
+    ExtendedEventHandler.Postable createFailed(
+        ValueT value,
+        NestedSet<Cause> rootCauses,
+        CompletionContext ctx,
+        ImmutableMap<String, ArtifactsInOutputGroup> outputs,
+        FailureT failureData)
+        throws InterruptedException;
 
-    /**
-     * Creates an error message reporting {@code missingCount} missing input files.
-     */
-    MissingInputFileException getMissingFilesException(TValue value, int missingCount);
-
-    /**
-     * Creates a successful completion value.
-     */
-    TResult createResult(TValue value);
-
-    /**
-     * Creates a failed completion value.
-     */
-    SkyValue createFailed(TValue value, NestedSet<Label> rootCauses);
+    /** Creates a succeeded completion value; returns null if skyframe found missing values. */
+    @Nullable
+    ExtendedEventHandler.Postable createSucceeded(
+        KeyT skyKey,
+        ValueT value,
+        CompletionContext completionContext,
+        ArtifactsToBuild artifactsToBuild,
+        Environment env)
+        throws InterruptedException;
   }
 
-  private static class TargetCompletor
-      implements Completor<ConfiguredTargetValue, TargetCompletionValue> {
-    @Override
-    public ConfiguredTargetValue getValueFromSkyKey(SkyKey skyKey, Environment env) {
-      LabelAndConfiguration lac = (LabelAndConfiguration) skyKey.argument();
-      return (ConfiguredTargetValue)
-          env.getValue(ConfiguredTargetValue.key(lac.getLabel(), lac.getConfiguration()));
-    }
+  interface TopLevelActionLookupKey extends SkyKey {
+    ActionLookupKey actionLookupKey();
 
-    @Override
-    public ArtifactsToBuild getAllArtifactsToBuild(
-        ConfiguredTargetValue value, TopLevelArtifactContext topLevelContext) {
-      return TopLevelArtifactHelper.getAllArtifactsToBuild(
-          value.getConfiguredTarget(), topLevelContext);
-    }
-
-    @Override
-    public Event getRootCauseError(ConfiguredTargetValue ctValue, Label rootCause) {
-      return Event.error(
-          ctValue.getConfiguredTarget().getTarget().getLocation(),
-          String.format(
-              "%s: missing input file '%s'", ctValue.getConfiguredTarget().getLabel(), rootCause));
-    }
-
-    @Override
-    public MissingInputFileException getMissingFilesException(
-        ConfiguredTargetValue value, int missingCount) {
-      return new MissingInputFileException(
-          value.getConfiguredTarget().getTarget().getLocation()
-              + " "
-              + missingCount
-              + " input file(s) do not exist",
-          value.getConfiguredTarget().getTarget().getLocation());
-    }
-
-    @Override
-    public TargetCompletionValue createResult(ConfiguredTargetValue value) {
-      return new TargetCompletionValue(value.getConfiguredTarget());
-    }
-
-    @Override
-    public SkyValue createFailed(ConfiguredTargetValue value, NestedSet<Label> rootCauses) {
-      return TargetCompleteEvent.createFailed(value.getConfiguredTarget(), rootCauses);
-    }
+    TopLevelArtifactContext topLevelArtifactContext();
   }
 
-  private static class AspectCompletor implements Completor<AspectValue, AspectCompletionValue> {
-    @Override
-    public AspectValue getValueFromSkyKey(SkyKey skyKey, Environment env) {
-      AspectKey aspectKey = (AspectKey) skyKey.argument();
-      return (AspectValue) env.getValue(AspectValue.key(aspectKey));
-    }
+  private final PathResolverFactory pathResolverFactory;
+  private final Completor<ValueT, ResultT, KeyT, FailureT> completor;
+  private final SkyframeActionExecutor skyframeActionExecutor;
+  private final FilesMetricConsumer topLevelArtifactsMetric;
+  private final BugReporter bugReporter;
 
-    @Override
-    public ArtifactsToBuild getAllArtifactsToBuild(
-        AspectValue value, TopLevelArtifactContext topLevelArtifactContext) {
-      return TopLevelArtifactHelper.getAllArtifactsToBuild(value, topLevelArtifactContext);
-    }
-
-    @Override
-    public Event getRootCauseError(AspectValue value, Label rootCause) {
-      return Event.error(
-          value.getLocation(),
-          String.format(
-              "%s, aspect %s: missing input file '%s'",
-              value.getLabel(),
-              value.getAspect().getName(),
-              rootCause));
-    }
-
-    @Override
-    public MissingInputFileException getMissingFilesException(AspectValue value, int missingCount) {
-      return new MissingInputFileException(
-          value.getLabel()
-              + ", aspect "
-              + value.getAspect().getName()
-              + missingCount
-              + " input file(s) do not exist",
-          value.getLocation());
-    }
-
-    @Override
-    public AspectCompletionValue createResult(AspectValue value) {
-      return new AspectCompletionValue(value);
-    }
-
-    @Override
-    public SkyValue createFailed(AspectValue value, NestedSet<Label> rootCauses) {
-      return AspectCompleteEvent.createFailed(value, rootCauses);
-    }
-  }
-
-  public static SkyFunction targetCompletionFunction(AtomicReference<EventBus> eventBusRef) {
-    return new CompletionFunction<>(eventBusRef, new TargetCompletor());
-  }
-
-  public static SkyFunction aspectCompletionFunction(AtomicReference<EventBus> eventBusRef) {
-    return new CompletionFunction<>(eventBusRef, new AspectCompletor());
-  }
-
-  private final AtomicReference<EventBus> eventBusRef;
-  private final Completor<TValue, TResult> completor;
-
-  private CompletionFunction(
-      AtomicReference<EventBus> eventBusRef, Completor<TValue, TResult> completor) {
-    this.eventBusRef = eventBusRef;
+  CompletionFunction(
+      PathResolverFactory pathResolverFactory,
+      Completor<ValueT, ResultT, KeyT, FailureT> completor,
+      SkyframeActionExecutor skyframeActionExecutor,
+      FilesMetricConsumer topLevelArtifactsMetric,
+      BugReporter bugReporter) {
+    this.pathResolverFactory = pathResolverFactory;
     this.completor = completor;
+    this.skyframeActionExecutor = skyframeActionExecutor;
+    this.topLevelArtifactsMetric = topLevelArtifactsMetric;
+    this.bugReporter = bugReporter;
   }
 
+  @SuppressWarnings("unchecked") // Cast to KeyT
   @Nullable
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env) throws CompletionFunctionException {
-    TValue value = completor.getValueFromSkyKey(skyKey, env);
-    TopLevelArtifactContext topLevelContext = PrecomputedValue.TOP_LEVEL_CONTEXT.get(env);
+  public SkyValue compute(SkyKey skyKey, Environment env)
+      throws CompletionFunctionException, InterruptedException {
+    WorkspaceNameValue workspaceNameValue =
+        (WorkspaceNameValue) env.getValue(WorkspaceNameValue.key());
+    if (workspaceNameValue == null) {
+      return null;
+    }
+
+    KeyT key = (KeyT) skyKey;
+    Pair<ValueT, ArtifactsToBuild> valueAndArtifactsToBuild = getValueAndArtifactsToBuild(key, env);
+    if (env.valuesMissing()) {
+      return null;
+    }
+    ValueT value = valueAndArtifactsToBuild.first;
+    ArtifactsToBuild artifactsToBuild = valueAndArtifactsToBuild.second;
+
+    // Avoid iterating over nested set twice.
+    ImmutableList<Artifact> allArtifacts = artifactsToBuild.getAllArtifacts().toList();
+    Map<SkyKey, ValueOrException2<ActionExecutionException, SourceArtifactException>> inputDeps =
+        env.getValuesOrThrow(
+            Artifact.keys(allArtifacts),
+            ActionExecutionException.class,
+            SourceArtifactException.class);
+
+    ActionInputMap inputMap = new ActionInputMap(inputDeps.size());
+    Map<Artifact, ImmutableCollection<? extends Artifact>> expandedArtifacts = new HashMap<>();
+    Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets = new HashMap<>();
+    Map<SpecialArtifact, ArchivedTreeArtifact> archivedTreeArtifacts = new HashMap<>();
+    Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets = new HashMap<>();
+
+    ActionExecutionException firstActionExecutionException = null;
+    NestedSetBuilder<Cause> rootCausesBuilder = NestedSetBuilder.stableOrder();
+    ImmutableSet.Builder<Artifact> builtArtifactsBuilder = ImmutableSet.builder();
+    // Don't double-count files due to Skyframe restarts.
+    FilesMetricConsumer currentConsumer = new FilesMetricConsumer();
+    for (Artifact input : allArtifacts) {
+      try {
+        SkyValue artifactValue = inputDeps.get(Artifact.key(input)).get();
+        if (artifactValue != null) {
+          if (artifactValue instanceof MissingArtifactValue) {
+            handleSourceFileError(
+                input,
+                ((MissingArtifactValue) artifactValue).getDetailedExitCode(),
+                rootCausesBuilder,
+                env,
+                value,
+                key);
+          } else {
+            builtArtifactsBuilder.add(input);
+            ActionInputMapHelper.addToMap(
+                inputMap,
+                expandedArtifacts,
+                archivedTreeArtifacts,
+                expandedFilesets,
+                topLevelFilesets,
+                input,
+                artifactValue,
+                env,
+                currentConsumer);
+          }
+        }
+      } catch (ActionExecutionException e) {
+        rootCausesBuilder.addTransitive(e.getRootCauses());
+        // Prefer a catastrophic exception as the one we propagate.
+        if (firstActionExecutionException == null
+            || (!firstActionExecutionException.isCatastrophe() && e.isCatastrophe())) {
+          firstActionExecutionException = e;
+        }
+      } catch (SourceArtifactException e) {
+        if (!input.isSourceArtifact()) {
+          bugReporter.sendBugReport(
+              new IllegalStateException(
+                  "Non-source artifact had SourceArtifactException: " + input, e));
+        }
+        handleSourceFileError(input, e.getDetailedExitCode(), rootCausesBuilder, env, value, key);
+      }
+    }
+    expandedFilesets.putAll(topLevelFilesets);
+
+    NestedSet<Cause> rootCauses = rootCausesBuilder.build();
+    @Nullable FailureT failureData = null;
+    if (!rootCauses.isEmpty()) {
+      failureData = completor.getFailureData(key, value, env);
+      if (failureData == null) {
+        return null;
+      }
+    }
+
+    final CompletionContext ctx;
+    try {
+      ctx =
+          CompletionContext.create(
+              expandedArtifacts,
+              expandedFilesets,
+              key.topLevelArtifactContext().expandFilesets(),
+              key.topLevelArtifactContext().fullyResolveFilesetSymlinks(),
+              inputMap,
+              pathResolverFactory,
+              skyframeActionExecutor.getExecRoot(),
+              workspaceNameValue.getName());
+    } catch (IOException e) {
+      throw new CompletionFunctionException(e);
+    }
+
+    if (!rootCauses.isEmpty()) {
+      ImmutableMap<String, ArtifactsInOutputGroup> builtOutputs =
+          new SuccessfulArtifactFilter(builtArtifactsBuilder.build())
+              .filterArtifactsInOutputGroup(artifactsToBuild.getAllArtifactsByOutputGroup());
+      env.getListener()
+          .post(completor.createFailed(value, rootCauses, ctx, builtOutputs, failureData));
+      if (firstActionExecutionException != null) {
+        throw new CompletionFunctionException(firstActionExecutionException);
+      }
+      // locationPrefix theoretically *could* be null because of missing deps, but not in reality,
+      // and we're not allowed to wait for deps to be ready if we're failing anyway.
+      @Nullable Object locationPrefix = completor.getLocationIdentifier(value, key, env);
+      Pair<DetailedExitCode, String> codeAndMessage =
+          ActionExecutionFunction.createSourceErrorCodeAndMessage(rootCauses.toList(), key);
+      String message;
+      if (locationPrefix instanceof Location) {
+        message = codeAndMessage.getSecond();
+        env.getListener().handle(Event.error((Location) locationPrefix, message));
+      } else {
+        message = (locationPrefix == null ? "" : locationPrefix + " ") + codeAndMessage.getSecond();
+        env.getListener().handle(Event.error(message));
+      }
+      throw new CompletionFunctionException(
+          new InputFileErrorException(message, codeAndMessage.getFirst()));
+    }
+
+    // Only check for missing values *after* reporting errors: if there are missing files in a build
+    // with --nokeep_going, there may be missing dependencies during error bubbling, we still need
+    // to report the error.
     if (env.valuesMissing()) {
       return null;
     }
 
-    Map<SkyKey, ValueOrException2<MissingInputFileException, ActionExecutionException>> inputDeps =
-        env.getValuesOrThrow(
-            ArtifactValue.mandatoryKeys(
-                completor.getAllArtifactsToBuild(value, topLevelContext).getAllArtifacts()),
-            MissingInputFileException.class,
-            ActionExecutionException.class);
+    ExtendedEventHandler.Postable postable =
+        completor.createSucceeded(key, value, ctx, artifactsToBuild, env);
+    if (postable == null) {
+      return null;
+    }
+    env.getListener().post(postable);
+    topLevelArtifactsMetric.mergeIn(currentConsumer);
+    return completor.getResult();
+  }
 
-    int missingCount = 0;
-    ActionExecutionException firstActionExecutionException = null;
-    MissingInputFileException missingInputException = null;
-    NestedSetBuilder<Label> rootCausesBuilder = NestedSetBuilder.stableOrder();
-    for (Map.Entry<SkyKey, ValueOrException2<MissingInputFileException, ActionExecutionException>>
-        depsEntry : inputDeps.entrySet()) {
-      Artifact input = ArtifactValue.artifact(depsEntry.getKey());
-      try {
-        depsEntry.getValue().get();
-      } catch (MissingInputFileException e) {
-        missingCount++;
-        final Label inputOwner = input.getOwner();
-        if (inputOwner != null) {
-          rootCausesBuilder.add(inputOwner);
-          env.getListener().handle(completor.getRootCauseError(value, inputOwner));
-        }
-      } catch (ActionExecutionException e) {
-        rootCausesBuilder.addTransitive(e.getRootCauses());
-        if (firstActionExecutionException == null) {
-          firstActionExecutionException = e;
-        }
-      }
+  private void handleSourceFileError(
+      Artifact input,
+      DetailedExitCode detailedExitCode,
+      NestedSetBuilder<Cause> rootCausesBuilder,
+      Environment env,
+      ValueT value,
+      KeyT key)
+      throws InterruptedException {
+    LabelCause cause =
+        ActionExecutionFunction.createLabelCause(
+            input, detailedExitCode, key.actionLookupKey().getLabel(), bugReporter);
+    rootCausesBuilder.add(cause);
+    env.getListener().handle(completor.getRootCauseError(value, key, cause, env));
+    skyframeActionExecutor.recordExecutionError();
+  }
+
+  @Nullable
+  static <ValueT extends ConfiguredObjectValue>
+      Pair<ValueT, ArtifactsToBuild> getValueAndArtifactsToBuild(
+          TopLevelActionLookupKey key, Environment env) throws InterruptedException {
+    @SuppressWarnings("unchecked")
+    ValueT value = (ValueT) env.getValue(key.actionLookupKey());
+    if (env.valuesMissing()) {
+      return null;
     }
 
-    if (missingCount > 0) {
-      missingInputException = completor.getMissingFilesException(value, missingCount);
-    }
-
-    NestedSet<Label> rootCauses = rootCausesBuilder.build();
-    if (!rootCauses.isEmpty()) {
-      eventBusRef.get().post(completor.createFailed(value, rootCauses));
-      if (firstActionExecutionException != null) {
-        throw new CompletionFunctionException(firstActionExecutionException);
-      } else {
-        throw new CompletionFunctionException(missingInputException);
-      }
-    }
-
-    return env.valuesMissing() ? null : completor.createResult(value);
+    TopLevelArtifactContext topLevelContext = key.topLevelArtifactContext();
+    ArtifactsToBuild artifactsToBuild =
+        TopLevelArtifactHelper.getAllArtifactsToBuild(value.getConfiguredObject(), topLevelContext);
+    return Pair.of(value, artifactsToBuild);
   }
 
   @Override
   public String extractTag(SkyKey skyKey) {
-    return Label.print(((LabelAndConfiguration) skyKey.argument()).getLabel());
+    return Label.print(((TopLevelActionLookupKey) skyKey).actionLookupKey().getLabel());
   }
 
   private static final class CompletionFunctionException extends SkyFunctionException {
 
     private final ActionExecutionException actionException;
 
-    public CompletionFunctionException(ActionExecutionException e) {
+    CompletionFunctionException(ActionExecutionException e) {
       super(e, Transience.PERSISTENT);
       this.actionException = e;
     }
 
-    public CompletionFunctionException(MissingInputFileException e) {
+    CompletionFunctionException(InputFileErrorException e) {
+      // Not transient from the point of view of this SkyFunction.
+      super(e, Transience.PERSISTENT);
+      this.actionException = null;
+    }
+
+    CompletionFunctionException(IOException e) {
       super(e, Transience.TRANSIENT);
       this.actionException = null;
     }

@@ -14,7 +14,9 @@
 
 package com.google.devtools.build.lib.vfs;
 
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -22,12 +24,15 @@ import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.MetadataConsumer;
+import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
+import com.google.devtools.build.lib.actions.LostInputsActionExecutionException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
+import com.google.devtools.build.lib.actions.cache.MetadataInjector;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.skyframe.SkyFunction;
+import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import java.io.IOException;
+import java.util.Map;
 import java.util.UUID;
 import javax.annotation.Nullable;
 
@@ -40,17 +45,53 @@ import javax.annotation.Nullable;
  */
 public interface OutputService {
 
+  /** Properties of the action file system implementation provided by this output service. */
+  enum ActionFileSystemType {
+
+    /** Action file system is disabled */
+    DISABLED,
+
+    /**
+     * The action file system implementation does not take over the output base but complements the
+     * file system by being able to stage remote outputs accessed as inputs by local actions, as
+     * used by Bazel.
+     */
+    STAGE_REMOTE_FILES,
+
+    /**
+     * The action file system implementation is fully featured in-memory file system implementation
+     * and takes full control of the output base, as used by Blaze.
+     */
+    IN_MEMORY_FILE_SYSTEM;
+
+    public boolean inMemoryFileSystem() {
+      return this == IN_MEMORY_FILE_SYSTEM;
+    }
+
+    public boolean isEnabled() {
+      return this != DISABLED;
+    }
+  }
+
   /**
    * @return the name of filesystem, akin to what you might see in /proc/mounts
    */
   String getFilesSystemName();
 
   /**
+   * Returns true if Bazel should trust (and not verify) build artifacts that were last seen
+   * remotely and do not exist locally.
+   */
+  public default boolean shouldTrustRemoteArtifacts() {
+    return true;
+  }
+
+  /**
    * Start the build.
    *
    * @param buildId the UUID build identifier
-   * @param finalizeActions whether this build is finalizing actions so that the output service
-   *                        can track output tree modifications
+   * @param finalizeActions whether this build is finalizing actions so that the output service can
+   *     track output tree modifications
    * @return a ModifiedFileSet of changed output files.
    * @throws BuildFailedException if build preparation failed
    * @throws InterruptedException
@@ -69,7 +110,7 @@ public interface OutputService {
 
   /** Notify the output service of a completed action. */
   void finalizeAction(Action action, MetadataHandler metadataHandler)
-      throws IOException, EnvironmentalExecException;
+      throws IOException, EnvironmentalExecException, InterruptedException;
 
   /**
    * @return the BatchStat instance or null.
@@ -84,15 +125,13 @@ public interface OutputService {
   /**
    * Creates the symlink tree
    *
-   * @param inputPath the input manifest
-   * @param outputPath the output manifest
-   * @param filesetTree is true iff we're constructing a Fileset
+   * @param symlinks the symlinks to create
    * @param symlinkTreeRoot the symlink tree root, relative to the execRoot
    * @throws ExecException on failure
    * @throws InterruptedException
    */
-  void createSymlinkTree(Path inputPath, Path outputPath, boolean filesetTree,
-      PathFragment symlinkTreeRoot) throws ExecException, InterruptedException;
+  void createSymlinkTree(Map<PathFragment, PathFragment> symlinks, PathFragment symlinkTreeRoot)
+      throws ExecException, InterruptedException;
 
   /**
    * Cleans the entire output tree.
@@ -105,8 +144,8 @@ public interface OutputService {
   /** @return true iff the file actually lives on a remote server */
   boolean isRemoteFile(Artifact file);
 
-  default boolean supportsActionFileSystem() {
-    return false;
+  default ActionFileSystemType actionFileSystemType() {
+    return ActionFileSystemType.DISABLED;
   }
 
   /**
@@ -117,7 +156,8 @@ public interface OutputService {
    *     com.google.devtools.build.lib.pkgcache.PathPackageLocator})
    * @param inputArtifactData information about required inputs to the action
    * @param outputArtifacts required outputs of the action
-   * @return an action-scoped filesystem if {@link #supportsActionFileSystem} is true
+   * @param rewindingEnabled whether to track failed remote reads to enable action rewinding
+   * @return an action-scoped filesystem if {@link #supportsActionFileSystem} is not {@code NONE}
    */
   @Nullable
   default FileSystem createActionFileSystem(
@@ -126,7 +166,8 @@ public interface OutputService {
       String relativeOutputPath,
       ImmutableList<Root> sourceRoots,
       ActionInputMap inputArtifactData,
-      Iterable<Artifact> outputArtifacts) {
+      Iterable<Artifact> outputArtifacts,
+      boolean rewindingEnabled) {
     return null;
   }
 
@@ -136,9 +177,21 @@ public interface OutputService {
    * <p>Should be called as context changes throughout action execution.
    *
    * @param actionFileSystem must be a filesystem returned by {@link #createActionFileSystem}.
+   * @param filesets The Fileset symlinks known for this action.
    */
   default void updateActionFileSystemContext(
-      FileSystem actionFileSystem, SkyFunction.Environment env, MetadataConsumer consumer) {}
+      FileSystem actionFileSystem,
+      Environment env,
+      MetadataInjector injector,
+      ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> filesets)
+      throws IOException {}
+
+  /**
+   * Checks the filesystem returned by {@link #createActionFileSystem} for errors attributable to
+   * lost inputs.
+   */
+  default void checkActionFileSystemForLostInputs(FileSystem actionFileSystem, Action action)
+      throws LostInputsActionExecutionException {}
 
   default boolean supportsPathResolverForArtifactValues() {
     return false;
@@ -146,9 +199,18 @@ public interface OutputService {
 
   default ArtifactPathResolver createPathResolverForArtifactValues(
       PathFragment execRoot,
+      String relativeOutputPath,
       FileSystem fileSystem,
       ImmutableList<Root> pathEntries,
-      ActionInputMap actionInputMap) {
+      ActionInputMap actionInputMap,
+      Map<Artifact, ImmutableCollection<? extends Artifact>> expandedArtifacts,
+      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesets)
+      throws IOException {
     throw new IllegalStateException("Path resolver not supported by this class");
+  }
+
+  @Nullable
+  default BulkDeleter bulkDeleter() {
+    return null;
   }
 }

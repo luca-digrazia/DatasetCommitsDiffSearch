@@ -13,15 +13,16 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.devtools.build.lib.actions.FilesetManifest.RelativeSymlinkBehavior.RESOLVE;
+import static com.google.devtools.build.lib.actions.FilesetManifest.RelativeSymlinkBehavior.RESOLVE_FULLY;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.FilesetManifest.RelativeSymlinkBehaviorWithoutError;
+import com.google.devtools.build.lib.actions.FilesetManifest.RelativeSymlinkBehavior;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -51,8 +52,7 @@ public class CompletionContext {
   private final boolean expandFilesets;
   private final boolean fullyResolveFilesetLinks;
 
-  @VisibleForTesting
-  CompletionContext(
+  private CompletionContext(
       Path execRoot,
       Map<Artifact, ImmutableCollection<? extends Artifact>> expandedArtifacts,
       Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets,
@@ -77,7 +77,8 @@ public class CompletionContext {
       ActionInputMap inputMap,
       PathResolverFactory pathResolverFactory,
       Path execRoot,
-      String workspaceName) {
+      String workspaceName)
+      throws IOException {
     ArtifactPathResolver pathResolver =
         pathResolverFactory.shouldCreatePathResolverForArtifactValues()
             ? pathResolverFactory.createPathResolverForArtifactValues(
@@ -113,28 +114,14 @@ public class CompletionContext {
     for (Artifact artifact : artifacts) {
       if (artifact.isMiddlemanArtifact()) {
         continue;
-      }
-      if (artifact.isFileset()) {
+      } else if (artifact.isFileset()) {
         if (expandFilesets) {
-          visitFileset(
-              artifact,
-              receiver,
-              fullyResolveFilesetLinks
-                  ? RelativeSymlinkBehaviorWithoutError.RESOLVE_FULLY
-                  : RelativeSymlinkBehaviorWithoutError.RESOLVE);
+          visitFileset(artifact, receiver, fullyResolveFilesetLinks ? RESOLVE_FULLY : RESOLVE);
         }
       } else if (artifact.isTreeArtifact()) {
-        if (FileArtifactValue.OMITTED_FILE_MARKER.equals(inputMap.getMetadata(artifact))) {
-          // Expansion can be missing for omitted tree artifacts -- skip the whole tree.
-          continue;
-        }
         ImmutableCollection<? extends Artifact> expandedArtifacts =
-            checkNotNull(
-                this.expandedArtifacts.get(artifact),
-                "Missing expansion for tree artifact: %s",
-                artifact);
-        for (Artifact expandedArtifact :
-            checkNotNull(expandedArtifacts, "Missing expansion for tree artifact: %s", artifact)) {
+            this.expandedArtifacts.get(artifact);
+        for (Artifact expandedArtifact : expandedArtifacts) {
           receiver.accept(expandedArtifact);
         }
       } else {
@@ -146,11 +133,17 @@ public class CompletionContext {
   private void visitFileset(
       Artifact filesetArtifact,
       ArtifactReceiver receiver,
-      RelativeSymlinkBehaviorWithoutError relativeSymlinkBehavior) {
+      RelativeSymlinkBehavior relativeSymlinkBehavior) {
     ImmutableList<FilesetOutputSymlink> links = expandedFilesets.get(filesetArtifact);
-    FilesetManifest filesetManifest =
-        FilesetManifest.constructFilesetManifestWithoutError(
-            links, PathFragment.EMPTY_FRAGMENT, relativeSymlinkBehavior);
+    FilesetManifest filesetManifest;
+    try {
+      filesetManifest =
+          FilesetManifest.constructFilesetManifest(
+              links, PathFragment.EMPTY_FRAGMENT, relativeSymlinkBehavior);
+    } catch (IOException e) {
+      // Unexpected: RelativeSymlinkBehavior.RESOLVE should not throw.
+      throw new IllegalStateException(e);
+    }
 
     for (Map.Entry<PathFragment, String> mapping : filesetManifest.getEntries().entrySet()) {
       String targetFile = mapping.getValue();
@@ -172,7 +165,8 @@ public class CompletionContext {
         ActionInputMap actionInputMap,
         Map<Artifact, ImmutableCollection<? extends Artifact>> expandedArtifacts,
         Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesets,
-        String workspaceName);
+        String workspaceName)
+        throws IOException;
 
     boolean shouldCreatePathResolverForArtifactValues();
   }
