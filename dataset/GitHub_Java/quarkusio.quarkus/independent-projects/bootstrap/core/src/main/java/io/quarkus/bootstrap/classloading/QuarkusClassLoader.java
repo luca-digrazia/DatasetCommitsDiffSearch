@@ -52,7 +52,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
     private final boolean aggregateParentResources;
     private final List<ClassPathElement> bannedElements;
     private final List<ClassPathElement> parentFirstElements;
-    private final List<ClassPathElement> lesserPriorityElements;
 
     /**
      * The element that holds resettable in-memory classses.
@@ -85,7 +84,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         this.bytecodeTransformers = builder.bytecodeTransformers;
         this.bannedElements = builder.bannedElements;
         this.parentFirstElements = builder.parentFirstElements;
-        this.lesserPriorityElements = builder.lesserPriorityElements;
         this.parent = builder.parent;
         this.parentFirst = builder.parentFirst;
         this.resettableElement = builder.resettableElement;
@@ -196,24 +194,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
                     }
                     Map<String, ClassPathElement[]> finalElements = new HashMap<>();
                     for (Map.Entry<String, List<ClassPathElement>> i : elementMap.entrySet()) {
-                        List<ClassPathElement> entryClassPathElements = i.getValue();
-                        if (!lesserPriorityElements.isEmpty() && (entryClassPathElements.size() > 1)) {
-                            List<ClassPathElement> entryNormalPriorityElements = new ArrayList<>(entryClassPathElements.size());
-                            List<ClassPathElement> entryLesserPriorityElements = new ArrayList<>(entryClassPathElements.size());
-                            for (ClassPathElement classPathElement : entryClassPathElements) {
-                                if (lesserPriorityElements.contains(classPathElement)) {
-                                    entryLesserPriorityElements.add(classPathElement);
-                                } else {
-                                    entryNormalPriorityElements.add(classPathElement);
-                                }
-                            }
-                            // ensure the lesser priority elements are added later
-                            entryClassPathElements = new ArrayList<>(entryClassPathElements.size());
-                            entryClassPathElements.addAll(entryNormalPriorityElements);
-                            entryClassPathElements.addAll(entryLesserPriorityElements);
-                        }
-                        finalElements.put(i.getKey(),
-                                entryClassPathElements.toArray(new ClassPathElement[entryClassPathElements.size()]));
+                        finalElements.put(i.getKey(), i.getValue().toArray(new ClassPathElement[i.getValue().size()]));
                     }
                     Set<String> banned = new HashSet<>();
                     for (ClassPathElement i : bannedElements) {
@@ -275,7 +256,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
     /**
      * This method is needed to make packages work correctly on JDK9+, as it will be called
      * to load the package-info class.
-     *
+     * 
      * @param moduleName
      * @param name
      * @return
@@ -434,7 +415,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         final List<ClassPathElement> elements = new ArrayList<>();
         final List<ClassPathElement> bannedElements = new ArrayList<>();
         final List<ClassPathElement> parentFirstElements = new ArrayList<>();
-        final List<ClassPathElement> lesserPriorityElements = new ArrayList<>();
         Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> bytecodeTransformers = Collections.emptyMap();
         final boolean parentFirst;
         MemoryClassPathElement resettableElement;
@@ -511,7 +491,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
          *
          * Banned elements have the highest priority, a banned element will never be loaded,
          * and resources will never appear to be present.
-         *
+         * 
          * @param element The element to add
          * @return This builder
          */
@@ -521,21 +501,8 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         }
 
         /**
-         * Adds an element which will only be used to load a class or resource if no normal
-         * element containing that class or resource exists.
-         * This is used in order control the order of elements when multiple contain the same classes
-         *
-         * @param element The element to add
-         * @return This builder
-         */
-        public Builder addLesserPriorityElement(ClassPathElement element) {
-            lesserPriorityElements.add(element);
-            return this;
-        }
-
-        /**
          * Sets any bytecode transformers that should be applied to this Class Loader
-         *
+         * 
          * @param bytecodeTransformers
          */
         public void setBytecodeTransformers(
@@ -566,7 +533,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
         /**
          * Builds the class loader
-         *
+         * 
          * @return The class loader
          */
         public QuarkusClassLoader build() {

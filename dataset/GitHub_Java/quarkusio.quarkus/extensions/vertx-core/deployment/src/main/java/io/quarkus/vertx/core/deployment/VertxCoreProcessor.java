@@ -2,7 +2,7 @@ package io.quarkus.vertx.core.deployment;
 
 import java.util.function.Supplier;
 
-import javax.inject.Singleton;
+import javax.enterprise.context.ApplicationScoped;
 
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
@@ -73,7 +73,7 @@ class VertxCoreProcessor {
                 launchMode.getLaunchMode(), shutdown);
         syntheticBeanBuildItemBuildProducer.produce(SyntheticBeanBuildItem.configure(Vertx.class)
                 .types(Vertx.class)
-                .scope(Singleton.class)
+                .scope(ApplicationScoped.class)
                 .unremovable()
                 .setRuntimeInit()
                 .supplier(vertx).done());

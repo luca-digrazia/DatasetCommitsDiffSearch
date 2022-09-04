@@ -5,18 +5,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.PostConstruct;
 import javax.enterprise.context.ApplicationScoped;
-import javax.enterprise.event.Event;
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
 import org.jboss.logging.Logger;
 
-import io.quarkus.oidc.OIDCException;
-import io.quarkus.oidc.OidcTenantConfig;
-import io.quarkus.oidc.SecurityEvent;
 import io.quarkus.oidc.TenantConfigResolver;
 import io.quarkus.oidc.TenantResolver;
-import io.quarkus.oidc.TokenStateManager;
 import io.vertx.ext.web.RoutingContext;
 
 @ApplicationScoped
@@ -36,24 +31,15 @@ public class DefaultTenantConfigResolver {
     @Inject
     TenantConfigBean tenantConfigBean;
 
-    @Inject
-    Instance<TokenStateManager> tokenStateManager;
-
-    @Inject
-    Event<SecurityEvent> securityEvent;
-
-    private volatile boolean securityEventObserved;
-
     @PostConstruct
     public void verifyResolvers() {
-        if (tenantConfigResolver.isResolvable() && tenantConfigResolver.isAmbiguous()) {
-            throw new IllegalStateException("Multiple " + TenantConfigResolver.class + " beans registered");
+        if (tenantConfigResolver.isResolvable()) {
+            if (tenantConfigResolver.isAmbiguous()) {
+                throw new IllegalStateException("Multiple " + TenantConfigResolver.class + " beans registered");
+            }
         }
-        if (tenantResolver.isResolvable() && tenantResolver.isAmbiguous()) {
+        if (tenantResolver.isAmbiguous()) {
             throw new IllegalStateException("Multiple " + TenantResolver.class + " beans registered");
-        }
-        if (tokenStateManager.isAmbiguous()) {
-            throw new IllegalStateException("Multiple " + TokenStateManager.class + " beans registered");
         }
     }
 
@@ -71,8 +57,6 @@ public class DefaultTenantConfigResolver {
 
         if (config == null) {
             config = getTenantConfigFromTenantResolver(context);
-        } else if (create && config.auth == null && !config.oidcConfig.getPublicKey().isPresent()) {
-            throw new OIDCException("OIDC IDP connection must be available");
         }
 
         return config;
@@ -97,25 +81,7 @@ public class DefaultTenantConfigResolver {
     }
 
     boolean isBlocking(RoutingContext context) {
-        TenantConfigContext resolver = resolve(context, false);
-        return resolver != null
-                && (resolver.oidcConfig.token.refreshExpired || resolver.oidcConfig.authentication.userInfoRequired);
-    }
-
-    boolean isSecurityEventObserved() {
-        return securityEventObserved;
-    }
-
-    void setSecurityEventObserved(boolean securityEventObserved) {
-        this.securityEventObserved = securityEventObserved;
-    }
-
-    Event<SecurityEvent> getSecurityEvent() {
-        return securityEvent;
-    }
-
-    TokenStateManager getTokenStateManager() {
-        return tokenStateManager.get();
+        return getTenantConfigFromConfigResolver(context, false) == null;
     }
 
     private TenantConfigContext getTenantConfigFromConfigResolver(RoutingContext context, boolean create) {
@@ -125,25 +91,23 @@ public class DefaultTenantConfigResolver {
             if (context.get(CURRENT_TENANT_CONFIG) != null) {
                 tenantConfig = context.get(CURRENT_TENANT_CONFIG);
             } else {
-                tenantConfig = this.tenantConfigResolver.get().resolve(context);
-                if (tenantConfig != null) {
-                    context.put(CURRENT_TENANT_CONFIG, tenantConfig);
+                OidcTenantConfig newTenantConfig = this.tenantConfigResolver.get().resolve(context);
+                if (newTenantConfig != null && !newTenantConfig.tenantEnabled) {
+                    newTenantConfig = null;
                 }
+                tenantConfig = newTenantConfig;
+                context.put(CURRENT_TENANT_CONFIG, tenantConfig);
             }
 
             if (tenantConfig != null) {
                 String tenantId = tenantConfig.getTenantId()
-                        .orElseThrow(() -> new OIDCException("Tenant configuration must have tenant id"));
+                        .orElseThrow(() -> new IllegalStateException("You must provide a tenant id"));
                 TenantConfigContext tenantContext = dynamicTenantsConfig.get(tenantId);
 
-                if (tenantContext == null) {
-                    if (create) {
-                        synchronized (dynamicTenantsConfig) {
-                            tenantContext = dynamicTenantsConfig.computeIfAbsent(tenantId,
-                                    clientId -> tenantConfigBean.getTenantConfigContextFactory().apply(tenantConfig));
-                        }
-                    } else {
-                        tenantContext = new TenantConfigContext(null, tenantConfig);
+                if (tenantContext == null && create) {
+                    synchronized (dynamicTenantsConfig) {
+                        return dynamicTenantsConfig.computeIfAbsent(tenantId,
+                                clientId -> tenantConfigBean.getTenantConfigContextFactory().apply(tenantConfig));
                     }
                 }
 

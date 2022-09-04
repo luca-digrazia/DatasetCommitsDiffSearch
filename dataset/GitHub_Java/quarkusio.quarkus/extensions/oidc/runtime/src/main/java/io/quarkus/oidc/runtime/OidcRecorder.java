@@ -11,11 +11,9 @@ import java.util.function.Supplier;
 import org.jboss.logging.Logger;
 
 import io.quarkus.oidc.OIDCException;
-import io.quarkus.oidc.OidcTenantConfig;
-import io.quarkus.oidc.OidcTenantConfig.ApplicationType;
-import io.quarkus.oidc.OidcTenantConfig.Credentials;
-import io.quarkus.oidc.OidcTenantConfig.Credentials.Secret;
-import io.quarkus.oidc.OidcTenantConfig.Tls.Verification;
+import io.quarkus.oidc.runtime.OidcTenantConfig.ApplicationType;
+import io.quarkus.oidc.runtime.OidcTenantConfig.Credentials;
+import io.quarkus.oidc.runtime.OidcTenantConfig.Credentials.Secret;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.ConfigurationException;
 import io.vertx.core.AsyncResult;
@@ -73,10 +71,6 @@ public class OidcRecorder {
             return null;
         }
 
-        if (!oidcConfig.tenantId.isPresent()) {
-            oidcConfig.tenantId = Optional.of(tenantId);
-        }
-
         OAuth2ClientOptions options = new OAuth2ClientOptions();
 
         if (oidcConfig.getClientId().isPresent()) {
@@ -87,14 +81,23 @@ public class OidcRecorder {
             options.setValidateIssuer(false);
         }
 
-        if (oidcConfig.getToken().getLifespanGrace().isPresent()) {
+        if (oidcConfig.getToken().getExpirationGrace().isPresent()) {
             JWTOptions jwtOptions = new JWTOptions();
-            jwtOptions.setLeeway(oidcConfig.getToken().getLifespanGrace().getAsInt());
+            jwtOptions.setLeeway(oidcConfig.getToken().getExpirationGrace().get());
             options.setJWTOptions(jwtOptions);
         }
 
         if (oidcConfig.getPublicKey().isPresent()) {
-            return createdTenantContextFromPublicKey(options, oidcConfig);
+            if (oidcConfig.applicationType == ApplicationType.WEB_APP) {
+                throw new ConfigurationException("'public-key' property can only be used with the 'service' applications");
+            }
+            LOG.info("'public-key' property for the local token verification is set,"
+                    + " no connection to the OIDC server will be created");
+            options.addPubSecKey(new PubSecKeyOptions()
+                    .setAlgorithm("RS256")
+                    .setPublicKey(oidcConfig.getPublicKey().get()));
+
+            return new TenantConfigContext(new OAuth2AuthProviderImpl(vertx, options), oidcConfig);
         }
 
         if (!oidcConfig.getAuthServerUrl().isPresent() || !oidcConfig.getClientId().isPresent()) {
@@ -104,11 +107,7 @@ public class OidcRecorder {
         }
 
         // Base IDP server URL
-        String authServerUrl = oidcConfig.getAuthServerUrl().get();
-        if (authServerUrl.endsWith("/")) {
-            authServerUrl = authServerUrl.substring(0, authServerUrl.length() - 1);
-        }
-        options.setSite(authServerUrl);
+        options.setSite(oidcConfig.getAuthServerUrl().get());
         // RFC7662 introspection service address
         if (oidcConfig.getIntrospectionPath().isPresent()) {
             options.setIntrospectionPath(oidcConfig.getIntrospectionPath().get());
@@ -120,34 +119,26 @@ public class OidcRecorder {
         }
 
         Credentials creds = oidcConfig.getCredentials();
-        if (creds.secret.isPresent() && creds.clientSecret.value.isPresent()) {
+        if (creds.secret.isPresent() && (creds.clientSecret.value.isPresent() || creds.clientSecret.method.isPresent())) {
             throw new ConfigurationException(
                     "'credentials.secret' and 'credentials.client-secret' properties are mutually exclusive");
         }
-        if ((creds.secret.isPresent() || creds.clientSecret.value.isPresent()) && creds.jwt.secret.isPresent()) {
-            throw new ConfigurationException(
-                    "Use only 'credentials.secret' or 'credentials.client-secret' or 'credentials.jwt.secret' property");
-        }
-
         // TODO: The workaround to support client_secret_post is added below and have to be removed once
         // it is supported again in VertX OAuth2.
-        if (creds.secret.isPresent() || creds.clientSecret.value.isPresent()
-                && creds.clientSecret.method.orElseGet(() -> Secret.Method.BASIC) == Secret.Method.BASIC) {
+        if (creds.secret.isPresent()
+                || creds.clientSecret.value.isPresent()
+                        && creds.clientSecret.method.orElseGet(() -> Secret.Method.BASIC) == Secret.Method.BASIC) {
             // If it is set for client_secret_post as well then VertX OAuth2 will only use client_secret_basic
             options.setClientSecret(creds.secret.orElseGet(() -> creds.clientSecret.value.get()));
         } else {
-            // Avoid VertX OAuth2 setting a null client_secret form parameter if it is client_secret_post or client_secret_jwt
+            // Avoid the client_secret set in CodeAuthenticationMechanism when client_secret_post is enabled
+            // from being reset to null in VertX OAuth2
             options.setClientSecretParameterName(null);
         }
 
         Optional<ProxyOptions> proxyOpt = toProxyOptions(oidcConfig.getProxy());
         if (proxyOpt.isPresent()) {
             options.setProxyOptions(proxyOpt.get());
-        }
-
-        if (oidcConfig.tls.verification == Verification.NONE) {
-            options.setTrustAll(true);
-            options.setVerifyHost(false);
         }
 
         final long connectionDelayInSecs = oidcConfig.getConnectionDelay().isPresent()
@@ -174,29 +165,6 @@ public class OidcRecorder {
                 });
 
                 auth = cf.join();
-
-                if (!ApplicationType.WEB_APP.equals(oidcConfig.applicationType)) {
-                    if (oidcConfig.token.refreshExpired) {
-                        throw new RuntimeException(
-                                "The 'token.refresh-expired' property can only be enabled for " + ApplicationType.WEB_APP
-                                        + " application types");
-                    }
-                    if (oidcConfig.logout.path.isPresent()) {
-                        throw new RuntimeException(
-                                "The 'logout.path' property can only be enabled for " + ApplicationType.WEB_APP
-                                        + " application types");
-                    }
-                }
-
-                String endSessionEndpoint = OAuth2AuthProviderImpl.class.cast(auth).getConfig().getLogoutPath();
-
-                if (oidcConfig.logout.path.isPresent()) {
-                    if (!oidcConfig.endSessionPath.isPresent() && endSessionEndpoint == null) {
-                        throw new RuntimeException(
-                                "The application supports RP-Initiated Logout but the OpenID Provider does not advertise the end_session_endpoint");
-                    }
-                }
-
                 break;
             } catch (Throwable throwable) {
                 while (throwable instanceof CompletionException && throwable.getCause() != null) {
@@ -217,22 +185,8 @@ public class OidcRecorder {
                 }
             }
         }
-        auth.missingKeyHandler(new JwkSetRefreshHandler(auth, oidcConfig.token.forcedJwkRefreshInterval));
+
         return new TenantConfigContext(auth, oidcConfig);
-    }
-
-    @SuppressWarnings("deprecation")
-    private TenantConfigContext createdTenantContextFromPublicKey(OAuth2ClientOptions options, OidcTenantConfig oidcConfig) {
-        if (oidcConfig.applicationType == ApplicationType.WEB_APP) {
-            throw new ConfigurationException("'public-key' property can only be used with the 'service' applications");
-        }
-        LOG.debug("'public-key' property for the local token verification is set,"
-                + " no connection to the OIDC server will be created");
-        options.addPubSecKey(new PubSecKeyOptions()
-                .setAlgorithm("RS256")
-                .setPublicKey(oidcConfig.getPublicKey().get()));
-
-        return new TenantConfigContext(new OAuth2AuthProviderImpl(null, options), oidcConfig);
     }
 
     protected static OIDCException toOidcException(Throwable cause) {
@@ -258,4 +212,5 @@ public class OidcRecorder {
         }
         return Optional.of(new ProxyOptions(jsonOptions));
     }
+
 }
