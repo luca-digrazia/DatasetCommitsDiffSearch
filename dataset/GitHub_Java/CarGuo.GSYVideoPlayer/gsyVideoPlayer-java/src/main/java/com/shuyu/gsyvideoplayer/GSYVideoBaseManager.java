@@ -8,7 +8,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.text.TextUtils;
 import android.view.Surface;
-
 import com.danikula.videocache.CacheListener;
 import com.danikula.videocache.HttpProxyCacheServer;
 import com.danikula.videocache.file.Md5FileNameGenerator;
@@ -35,7 +34,6 @@ import java.util.Map;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkLibLoader;
-
 /**
  * 基类管理器
  * Created by guoshuyu on 2018/1/25.
@@ -159,7 +157,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     /***
      * @param libLoader 是否使用外部动态加载so
      * */
-    protected void init(IjkLibLoader libLoader) {
+    void init(IjkLibLoader libLoader) {
         playerManager = getPlayManager(GSYVideoType.IJKPLAYER);
         IJKPlayerManager.setIjkLibLoader(libLoader);
         HandlerThread mediaHandlerThread = new HandlerThread(TAG);
@@ -584,10 +582,9 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     }
 
     /**
-     * 设置了视频的播放类型
-     * IJKPLAYER = 0; 默认IJK
-     * IJKEXOPLAYER2 = 2;EXOPlayer2 (最好配合GSYVideoType.SUFRACE)
-     * SYSTEMPLAYER = 4;系统播放器 (最好配合GSYVideoType.SUFRACE)
+     * 设置了视频的播放类型,IJKEXOPLAYER和IJKEXOPLAYER2是互斥的
+     * GSYVideoType IJKPLAYER = 0 or IJKEXOPLAYER = 1 or IJKEXOPLAYER2 = 2;
+     * IJKEXOPLAYER2 must be compile com.shuyu:gsyVideoPlayer-exo2:$gsyVideoVersion
      */
     public void setVideoType(Context context, int videoType) {
         this.context = context.getApplicationContext();
