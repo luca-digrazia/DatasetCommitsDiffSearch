@@ -22,7 +22,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.AliasProvider;
-import com.google.devtools.build.lib.analysis.ConfiguredTargetValue;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
@@ -59,6 +58,7 @@ import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.server.FailureDetails.ConfigurableQuery;
 import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.GraphBackedRecursivePackageProvider;
 import com.google.devtools.build.lib.skyframe.IgnoredPackagePrefixesValue;
 import com.google.devtools.build.lib.skyframe.PackageValue;
@@ -68,7 +68,6 @@ import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.supplier.InterruptibleSupplier;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
@@ -100,7 +99,7 @@ import javax.annotation.Nullable;
 public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQueryEnvironment<T> {
   protected final TopLevelConfigurations topLevelConfigurations;
   protected final BuildConfiguration hostConfiguration;
-  private final PathFragment parserPrefix;
+  private final String parserPrefix;
   private final PathPackageLocator pkgPath;
   private final Supplier<WalkableGraph> walkableGraphSupplier;
   protected WalkableGraph graph;
@@ -118,7 +117,7 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
       Iterable<QueryFunction> extraFunctions,
       TopLevelConfigurations topLevelConfigurations,
       BuildConfiguration hostConfiguration,
-      PathFragment parserPrefix,
+      String parserPrefix,
       PathPackageLocator pkgPath,
       Supplier<WalkableGraph> walkableGraphSupplier,
       Set<Setting> settings) {
@@ -138,8 +137,7 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
           SkyframeExecutor skyframeExecutor,
           BuildConfiguration hostConfiguration,
           @Nullable TransitionFactory<Rule> trimmingTransitionFactory,
-          PackageManager packageManager)
-          throws QueryException, InterruptedException;
+          PackageManager packageManager);
 
   public abstract String getOutputFormat();
 
@@ -225,19 +223,15 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
   }
 
   private boolean isAliasConfiguredTarget(ConfiguredTargetKey key) throws InterruptedException {
-    return AliasProvider.isAlias(getConfiguredTargetValue(key).getConfiguredTarget());
+    return getConfiguredTargetValue(key).getConfiguredTarget().getProvider(AliasProvider.class)
+        != null;
   }
 
-  public InterruptibleSupplier<ImmutableSet<PathFragment>>
-      getIgnoredPackagePrefixesPathFragments() {
-    return () -> {
-      IgnoredPackagePrefixesValue ignoredPackagePrefixesValue =
-          (IgnoredPackagePrefixesValue)
-              walkableGraphSupplier.get().getValue(IgnoredPackagePrefixesValue.key());
-      return ignoredPackagePrefixesValue == null
-          ? ImmutableSet.of()
-          : ignoredPackagePrefixesValue.getPatterns();
-    };
+  public ImmutableSet<PathFragment> getIgnoredPackagePrefixesPathFragments()
+      throws InterruptedException {
+    return ((IgnoredPackagePrefixesValue)
+            walkableGraphSupplier.get().getValue(IgnoredPackagePrefixesValue.key()))
+        .getPatterns();
   }
 
   @Nullable
