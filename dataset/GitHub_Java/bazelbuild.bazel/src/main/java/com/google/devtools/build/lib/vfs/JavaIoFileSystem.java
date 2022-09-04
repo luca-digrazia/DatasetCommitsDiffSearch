@@ -56,7 +56,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
     this(new JavaClock());
   }
 
-  public JavaIoFileSystem(DigestHashFunction hashFunction) {
+  public JavaIoFileSystem(HashFunction hashFunction) {
     super(hashFunction);
     this.clock = new JavaClock();
   }
@@ -281,7 +281,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
       throws IOException {
     java.nio.file.Path nioPath = getNioPath(linkPath);
     try {
-      Files.createSymbolicLink(nioPath, Paths.get(targetFragment.getSafePathString()));
+      Files.createSymbolicLink(nioPath, Paths.get(targetFragment.getPathString()));
     } catch (java.nio.file.FileAlreadyExistsException e) {
       throw new IOException(linkPath + ERR_FILE_EXISTS);
     } catch (java.nio.file.AccessDeniedException e) {
@@ -303,7 +303,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
     } catch (java.nio.file.NoSuchFileException e) {
       throw new FileNotFoundException(path + ERR_NO_SUCH_FILE_OR_DIR);
     } finally {
-      profiler.logSimpleTask(startTime, ProfilerTask.VFS_READLINK, path.getPathString());
+      profiler.logSimpleTask(startTime, ProfilerTask.VFS_READLINK, nioPath);
     }
   }
 
@@ -337,7 +337,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
     try {
       return stat(path, followSymlinks).getSize();
     } finally {
-      profiler.logSimpleTask(startTime, ProfilerTask.VFS_STAT, path.getPathString());
+      profiler.logSimpleTask(startTime, ProfilerTask.VFS_STAT, path);
     }
   }
 
@@ -392,7 +392,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected byte[] getDigest(Path path, DigestHashFunction hashFunction) throws IOException {
+  protected byte[] getDigest(Path path, HashFunction hashFunction) throws IOException {
     String name = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
