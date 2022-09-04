@@ -121,7 +121,7 @@ public class ResteasyReactiveProcessor {
 
     @BuildStep
     public FeatureBuildItem buildSetup() {
-        return new FeatureBuildItem(Feature.RESTEASY_REACTIVE);
+        return new FeatureBuildItem(Feature.QUARKUS_REST);
     }
 
     @BuildStep
@@ -223,7 +223,7 @@ public class ResteasyReactiveProcessor {
 
         if (capabilities.isPresent(Capability.RESTEASY)) {
             throw new IllegalStateException(
-                    "The 'quarkus-resteasy-reactive' and 'quarkus-resteasy' extensions cannot be used at the same time.");
+                    "The 'quarkus-rest' and 'quarkus-resteasy' extensions cannot be used at the same time.");
         }
 
         recorderContext.registerNonDefaultConstructor(

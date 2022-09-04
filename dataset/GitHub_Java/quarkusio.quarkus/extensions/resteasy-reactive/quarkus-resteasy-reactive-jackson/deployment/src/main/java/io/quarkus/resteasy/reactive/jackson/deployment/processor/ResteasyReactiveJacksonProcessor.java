@@ -3,7 +3,6 @@ package io.quarkus.resteasy.reactive.jackson.deployment.processor;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -32,7 +31,7 @@ public class ResteasyReactiveJacksonProcessor {
 
     @BuildStep
     void feature(BuildProducer<FeatureBuildItem> feature) {
-        feature.produce(new FeatureBuildItem(Feature.RESTEASY_REACTIVE_JACKSON));
+        feature.produce(new FeatureBuildItem(Feature.QUARKUS_REST_JACKSON));
     }
 
     @BuildStep
@@ -48,12 +47,6 @@ public class ResteasyReactiveJacksonProcessor {
         additionalReaders
                 .produce(new MessageBodyReaderBuildItem(JacksonMessageBodyReader.class.getName(), Object.class.getName(),
                         Collections.singletonList(MediaType.APPLICATION_JSON)));
-        additionalReaders
-                .produce(new MessageBodyReaderBuildItem(JacksonMessageBodyReader.class.getName(), Collection.class.getName(),
-                        Collections.singletonList(MediaType.APPLICATION_JSON)));
-        additionalReaders
-                .produce(new MessageBodyReaderBuildItem(JacksonMessageBodyReader.class.getName(), Map.class.getName(),
-                        Collections.singletonList(MediaType.APPLICATION_JSON)));
         additionalWriters
                 .produce(new MessageBodyWriterBuildItem(JacksonMessageBodyWriter.class.getName(), Object.class.getName(),
                         Collections.singletonList(MediaType.APPLICATION_JSON)));
@@ -65,8 +58,8 @@ public class ResteasyReactiveJacksonProcessor {
         if (!resourceScanningResultBuildItem.isPresent()) {
             return;
         }
-        Collection<ClassInfo> resourceClasses = resourceScanningResultBuildItem.get().getResult().getScannedResources()
-                .values();
+
+        Collection<ClassInfo> resourceClasses = resourceScanningResultBuildItem.get().getScannedResources().values();
         Set<String> classesNeedingReflectionOnMethods = new HashSet<>();
         for (ClassInfo resourceClass : resourceClasses) {
             if (resourceClass.annotations().containsKey(JSON_VIEW)) {
