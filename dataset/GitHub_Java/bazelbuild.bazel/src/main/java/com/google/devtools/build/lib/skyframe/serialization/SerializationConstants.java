@@ -14,16 +14,15 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
+import com.google.devtools.build.lib.util.ResourceUsage;
+
 /**
  * Some static constants for deciding serialization behavior.
  */
 public class SerializationConstants {
 
-  /**
-   * If true, we attempt to to serialize ConfiguredTargetValue in testing.
-   */
-  public static final boolean VALIDATE_CONFIGURED_TARGET_VALUE =
-      System.getenv("DONT_VALIDATE_CONFIGURED_TARGET_VALUE") == null;
+  /** Number of threads in deserialization pools. */
+  public static final int DESERIALIZATION_POOL_SIZE = 2 * ResourceUsage.getAvailableProcessors();
 
   private static final boolean IN_TEST = System.getenv("TEST_TMPDIR") != null;
   private static final boolean CHECK_SERIALIZATION =
@@ -31,6 +30,9 @@ public class SerializationConstants {
 
   private static final boolean TEST_NESTED_SET_SERIALIZATION =
       System.getenv("TEST_NESTED_SET_SERIALIZATION") != null;
+
+  public static final boolean CHECK_FOR_ALL_CODECS =
+      System.getenv("TEST_CHECK_FOR_ALL_CODECS") != null;
 
    /**
    * If true, serialization should include NestedSet. Non-final so tests can opt-in to NestedSet
