@@ -26,7 +26,6 @@ import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -509,7 +508,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     AssignmentStatement assignmentStatement = (AssignmentStatement) statement;
     ImmutableSet<Identifier> boundIdentifiers = assignmentStatement.getLValue().boundIdentifiers();
     for (Identifier ident : boundIdentifiers) {
-      Object lookup = extensionEnv.moduleLookup(ident.getName());
+      Object lookup = extensionEnv.lookup(ident.getName());
       if (lookup instanceof SkylarkExportable) {
         try {
           SkylarkExportable exportable = (SkylarkExportable) lookup;

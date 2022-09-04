@@ -31,7 +31,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -53,22 +52,20 @@ final class TestSuiteExpansionFunction implements SkyFunction {
       return null;
     }
 
-    Set<Label> result = new LinkedHashSet<>();
+    Set<Target> result = new LinkedHashSet<>();
     boolean hasError = targets.hasError();
     for (Target target : targets.getTargets()) {
       if (TargetUtils.isTestRule(target)) {
-        result.add(target.getLabel());
+        result.add(target);
       } else if (TargetUtils.isTestSuiteRule(target)) {
         TestsInSuiteValue value = (TestsInSuiteValue) testsInSuites.get(
             TestsInSuiteValue.key(target, true));
         if (value != null) {
-          result.addAll(value.getTargets().getTargets().stream()
-              .map(Target::getLabel)
-              .collect(Collectors.toList()));
+          result.addAll(value.getTargets().getTargets());
           hasError |= value.getTargets().hasError();
         }
       } else {
-        result.add(target.getLabel());
+        result.add(target);
       }
     }
     if (env.valuesMissing()) {
@@ -76,7 +73,7 @@ final class TestSuiteExpansionFunction implements SkyFunction {
     }
     // We use ResolvedTargets in order to associate an error flag; the result should never contain
     // any filtered targets.
-    return new TestSuiteExpansionValue(new ResolvedTargets<>(result, hasError));
+    return new TestSuiteExpansionValue(new ResolvedTargets<Target>(result, hasError));
   }
 
   static ResolvedTargets<Target> labelsToTargets(

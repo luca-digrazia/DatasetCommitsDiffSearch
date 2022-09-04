@@ -17,7 +17,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
@@ -28,10 +27,8 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
-import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.AlreadyReportedActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
@@ -226,7 +223,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
    * @throws ActionExecutionFunctionException
    */
   @Nullable
-  private AllInputs collectInputs(Action action, Environment env) throws InterruptedException {
+  private AllInputs collectInputs(Action action, Environment env)
+      throws ActionExecutionFunctionException, InterruptedException {
     Iterable<Artifact> allKnownInputs = Iterables.concat(
         action.getInputs(), action.getRunfilesSupplier().getArtifacts());
     if (action.inputsDiscovered()) {
@@ -375,16 +373,10 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
 
     if (state.token == null) {
       // We got a hit from the action cache -- no need to execute.
-      Preconditions.checkState(
-          !(action instanceof SkyframeAwareAction),
-          "Error, we're not re-executing a "
-              + "SkyframeAwareAction which should be re-executed unconditionally. Action: %s",
-          action);
       return new ActionExecutionValue(
           metadataHandler.getOutputArtifactData(),
           metadataHandler.getOutputTreeArtifactData(),
-          metadataHandler.getAdditionalOutputData(),
-          /*outputSymlinks=*/ null);
+          metadataHandler.getAdditionalOutputData());
     }
 
     // Delete the metadataHandler's cache of the action's outputs, since they are being deleted.
@@ -437,35 +429,11 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       metadataHandler.discardOutputMetadata();
     }
 
-    ImmutableMap.Builder<PathFragment, ImmutableList<FilesetOutputSymlink>> filesetMappings =
-        ImmutableMap.builder();
-    for (Artifact actionInput : action.getInputs()) {
-      if (!actionInput.isFileset()) {
-        continue;
-      }
-
-      ActionLookupKey filesetActionLookupKey = (ActionLookupKey) actionInput.getArtifactOwner();
-      // Index 0 for the Fileset ConfiguredTarget indicates the SkyframeFilesetManifestAction where
-      // we compute the fileset's outputSymlinks.
-      SkyKey filesetActionKey = ActionExecutionValue.key(filesetActionLookupKey, 0);
-      ActionExecutionValue filesetValue = (ActionExecutionValue) env.getValue(filesetActionKey);
-      if (filesetValue == null) {
-        // At this point skyframe does not guarantee that the filesetValue will be ready, since
-        // the current action does not directly depend on the outputs of the
-        // SkyframeFilesetManifestAction whose ActionExecutionValue (filesetValue) is needed here.
-        // TODO(kush): Get rid of this hack by making the outputSymlinks available in the Fileset
-        // artifact, which this action depends on, so its value will be guaranteed to be present.
-        return null;
-      }
-      filesetMappings.put(actionInput.getExecPath(), filesetValue.getOutputSymlinks());
-    }
-
     try (ActionExecutionContext actionExecutionContext =
         skyframeActionExecutor.getContext(
             perActionFileCache,
             metadataHandler,
-            Collections.unmodifiableMap(state.expandedArtifacts),
-            filesetMappings.build())) {
+            Collections.unmodifiableMap(state.expandedArtifacts))) {
       if (!state.hasExecutedAction()) {
         state.value =
             skyframeActionExecutor.executeAction(

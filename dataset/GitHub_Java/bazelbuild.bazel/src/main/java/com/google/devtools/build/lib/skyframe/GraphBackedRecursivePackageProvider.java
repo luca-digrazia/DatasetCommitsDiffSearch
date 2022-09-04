@@ -26,6 +26,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -34,12 +35,14 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.pkgcache.AbstractRecursivePackageProvider;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -58,9 +61,10 @@ import java.util.logging.Logger;
  * preloaded in {@code graph}.
  */
 @ThreadSafe
-public final class GraphBackedRecursivePackageProvider extends AbstractRecursivePackageProvider {
+public final class GraphBackedRecursivePackageProvider implements RecursivePackageProvider {
 
   private final WalkableGraph graph;
+  private final PathPackageLocator pkgPath;
   private final ImmutableList<TargetPatternKey> universeTargetPatternKeys;
 
   private static final Logger logger = Logger.getLogger(
@@ -69,7 +73,7 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
   public GraphBackedRecursivePackageProvider(WalkableGraph graph,
       ImmutableList<TargetPatternKey> universeTargetPatternKeys,
       PathPackageLocator pkgPath) {
-    super(pkgPath);
+    this.pkgPath = pkgPath;
     this.graph = Preconditions.checkNotNull(graph);
     this.universeTargetPatternKeys = Preconditions.checkNotNull(universeTargetPatternKeys);
   }
@@ -128,6 +132,15 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
       Throwables.propagate(exception);
     }
     return pkgResults.build();
+  }
+
+  @Override
+  public Path getBuildFileForPackage(PackageIdentifier packageName) {
+    try {
+      return pkgPath.getPackageBuildFile(packageName);
+    } catch (NoSuchPackageException e) {
+      return null;
+    }
   }
 
   @Override
@@ -192,7 +205,7 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
 
     List<Root> roots = new ArrayList<>();
     if (repository.isMain()) {
-      roots.addAll(getPkgPath().getPathEntries());
+      roots.addAll(pkgPath.getPathEntries());
     } else {
       RepositoryDirectoryValue repositoryValue =
           (RepositoryDirectoryValue) graph.getValue(RepositoryDirectoryValue.key(repository));
@@ -282,6 +295,12 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
     if (!subdirTraversals.isEmpty()) {
       collectPackagesUnder(eventHandler, repository, subdirTraversals, builder);
     }
+  }
+
+  @Override
+  public Target getTarget(ExtendedEventHandler eventHandler, Label label)
+      throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
+    return getPackage(eventHandler, label.getPackageIdentifier()).getTarget(label.getName());
   }
 
   private static final class TraversalInfo {

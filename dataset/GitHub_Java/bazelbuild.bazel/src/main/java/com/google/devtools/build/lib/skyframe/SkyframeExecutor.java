@@ -38,6 +38,7 @@ import com.google.common.collect.Range;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
+import com.google.devtools.build.lib.actions.ActionExecutionContextFactory;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
@@ -179,7 +180,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BooleanSupplier;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -342,8 +342,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       boolean shouldUnblockCpuWorkWhenFetchingDeps,
       BuildOptions defaultBuildOptions,
       @Nullable PackageProgressReceiver packageProgress,
-      MutableArtifactFactorySupplier artifactResolverSupplier,
-      BooleanSupplier usesActionFileSystem) {
+      MutableArtifactFactorySupplier artifactResolverSupplier) {
     // Strictly speaking, these arguments are not required for initialization, but all current
     // callsites have them at hand, so we might as well set them during construction.
     this.evaluatorSupplier = evaluatorSupplier;
@@ -355,8 +354,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         new SkyframePackageLoader(), new SkyframeTransitivePackageLoader(),
         syscalls, cyclesReporter, pkgLocator, numPackagesLoaded, this);
     this.resourceManager = ResourceManager.instance();
-    this.skyframeActionExecutor =
-        new SkyframeActionExecutor(actionKeyContext, statusReporterRef, usesActionFileSystem);
+    this.skyframeActionExecutor = new SkyframeActionExecutor(actionKeyContext, statusReporterRef);
     this.fileSystem = fileSystem;
     this.directories = Preconditions.checkNotNull(directories);
     this.actionKeyContext = Preconditions.checkNotNull(actionKeyContext);
@@ -977,6 +975,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   public EventBus getEventBus() {
     return eventBus.get();
+  }
+
+  public ActionExecutionContextFactory getActionExecutionContextFactory() {
+    return skyframeActionExecutor;
   }
 
   @VisibleForTesting
@@ -1812,9 +1814,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return configuredTargetAndData == null ? null : configuredTargetAndData.getConfiguredTarget();
   }
 
-  @VisibleForTesting
   @Nullable
-  public ConfiguredTargetAndData getConfiguredTargetAndDataForTesting(
+  private ConfiguredTargetAndData getConfiguredTargetAndDataForTesting(
       ExtendedEventHandler eventHandler,
       Label label,
       BuildConfiguration configuration,
