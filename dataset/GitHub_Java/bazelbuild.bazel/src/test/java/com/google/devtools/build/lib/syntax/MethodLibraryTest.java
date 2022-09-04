@@ -471,7 +471,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
 
   @Test
   public void testRange() throws Exception {
-    new BothModesTest("--incompatible_range_type=false")
+    new BothModesTest()
         .testStatement("str(range(5))", "[0, 1, 2, 3, 4]")
         .testStatement("str(range(0))", "[]")
         .testStatement("str(range(1))", "[0]")
@@ -564,14 +564,14 @@ public class MethodLibraryTest extends EvaluationTestCase {
    */
   private void runRangeIsListAssertions(String range3expr) throws Exception {
     // Check stringifications.
-    new BothModesTest("--incompatible_range_type=false")
+    new BothModesTest()
         .setUp("a = " + range3expr)
         .testStatement("str(a)", "[0, 1, 2]")
         .testStatement("repr(a)", "[0, 1, 2]")
         .testStatement("type(a)", "list");
 
     // Check comparisons.
-    new BothModesTest("--incompatible_range_type=false")
+    new BothModesTest()
         .setUp("a = " + range3expr)
         .setUp("b = range(0, 3, 1)")
         .setUp("c = range(1, 4)")
@@ -587,10 +587,10 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testIfErrorContains("Cannot compare list with tuple", "a < T");
 
     // Check mutations.
-    new BothModesTest("--incompatible_range_type=false")
+    new BothModesTest()
         .setUp("a = " + range3expr)
         .testStatement("a.append(3); str(a)", "[0, 1, 2, 3]");
-    new SkylarkTest("--incompatible_range_type=false")
+    new SkylarkTest()
         .testStatement(
             "def f():\n"
             + "  a = " + range3expr + "\n"
@@ -601,7 +601,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
             "[0, 1, 2, 3]");
 
     // Check concatenations.
-    new BothModesTest("--incompatible_range_type=false")
+    new BothModesTest()
         .setUp("a = " + range3expr)
         .setUp("b = range(3, 4)")
         .setUp("L = [3]")
@@ -794,46 +794,5 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testStatement("tuple(depset([1, 2])) == (1, 2)", true)
         // Depends on current implementation of dict
         .testStatement("tuple({1: 'foo', 2: 'bar'}) == (1, 2)", true);
-  }
-
-  // Verifies some legacy functionality that should be deprecated and removed via
-  // an incompatible-change flag: parameters in MethodLibrary functions may be specified by
-  // keyword, or may be None, even in places where it does not quite make sense.
-  @Test
-  public void testLegacyNamed() throws Exception {
-    new SkylarkTest()
-        // Parameters which may be specified by keyword but are not explicitly 'named'.
-        .testStatement("all(elements=[True, True])", Boolean.TRUE)
-        .testStatement("any(elements=[True, False])", Boolean.TRUE)
-        .testEval("sorted(self=[3, 0, 2])", "[0, 2, 3]")
-        .testEval("reversed(sequence=[3, 2, 0])", "[0, 2, 3]")
-        .testEval("tuple(x=[1, 2])", "(1, 2)")
-        .testEval("list(x=(1, 2))", "[1, 2]")
-        .testEval("len(x=(1, 2))", "2")
-        .testEval("str(x=(1, 2))", "'(1, 2)'")
-        .testEval("repr(x=(1, 2))", "'(1, 2)'")
-        .testStatement("bool(x=3)", Boolean.TRUE)
-        .testEval("int(x=3)", "3")
-        .testEval("dict(args=[(1, 2)])", "{1 : 2}")
-        .testStatement("bool(x=3)", Boolean.TRUE)
-        .testEval("enumerate(list=[40, 41])", "[(0, 40), (1, 41)]")
-        .testStatement("hash(value='hello')", "hello".hashCode())
-        .testEval("range(start_or_stop=3, stop_or_none=9, step=2)", "range(3, 9, 2)")
-        .testStatement("hasattr(x=depset(), name='union')", Boolean.TRUE)
-        .testStatement("bool(x=3)", Boolean.TRUE)
-        .testStatement("getattr(x='hello', name='count', default='default')", "default")
-        .testEval(
-            "dir(x={})",
-            "[\"clear\", \"get\", \"items\", \"keys\","
-                + " \"pop\", \"popitem\", \"setdefault\", \"update\", \"values\"]")
-        .testEval("type(x=5)", "'int'")
-        .testEval("str(depset(items=[0,1]))", "'depset([0, 1])'")
-        .testIfErrorContains("hello", "fail(msg='hello', attr='someattr')")
-        // Parameters which may be None but are not explicitly 'noneable'
-        .testStatement("hasattr(x=None, name='union')", Boolean.FALSE)
-        .testEval("getattr(x=None, name='count', default=None)", "None")
-        .testEval("dir(None)", "[]")
-        .testIfErrorContains("None", "fail(msg=None)")
-        .testEval("type(None)", "'NoneType'");
   }
 }
