@@ -11,6 +11,8 @@ import org.jboss.jandex.MethodInfo;
  */
 public interface BytecodeCreator {
 
+    <T> T createRecordingProxy(Class<T> proxyType);
+
     /**
      * @return A {@link ResultHandle} that represents the current object
      */

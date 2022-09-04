@@ -16,7 +16,6 @@ import org.jboss.shamrock.runtime.StartupContext;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
-import io.undertow.server.handlers.CanonicalPathHandler;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.DeploymentInfo;
@@ -123,7 +122,7 @@ public class UndertowDeploymentTemplate {
         if (undertow == null) {
             undertow = Undertow.builder()
                     .addHttpListener(Integer.parseInt(port), "localhost")
-                    .setHandler(new CanonicalPathHandler(ROOT_HANDLER))
+                    .setHandler(ROOT_HANDLER)
                     .build();
             undertow.start();
         }
