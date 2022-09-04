@@ -9,13 +9,9 @@ public class IntParam extends AbstractParam<Integer> {
         super(input);
     }
 
-    public IntParam(String input, String parameterName) {
-        super(input, parameterName);
-    }
-
     @Override
     protected String errorMessage(Exception e) {
-        return "%s is not a number.";
+        return "Parameter is not a number.";
     }
 
     @Override

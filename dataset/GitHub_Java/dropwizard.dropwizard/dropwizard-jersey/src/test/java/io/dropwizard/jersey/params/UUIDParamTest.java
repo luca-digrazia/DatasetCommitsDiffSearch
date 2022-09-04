@@ -8,23 +8,12 @@ import javax.ws.rs.core.Response;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 public class UUIDParamTest {
-    private void badUUID(WebApplicationException e) {
-        final Response response = e.getResponse();
-
-        assertThat(response.getStatus())
-            .isEqualTo(400);
-
-        ErrorMessage entity = (ErrorMessage) response.getEntity();
-        assertThat(entity.getCode()).isEqualTo(400);
-        assertThat(entity.getMessage())
-            .isEqualTo("Parameter is not a UUID.");
-    }
 
     @Test
-    public void aUUIDStringReturnsAUUIDObject() {
+    public void aUUIDStringReturnsAUUIDObject() throws Exception {
         final String uuidString = "067e6162-3b6f-4ae2-a171-2470b63dff00";
         final UUID uuid = UUID.fromString(uuidString);
 
@@ -34,20 +23,21 @@ public class UUIDParamTest {
     }
 
     @Test
-    public void noSpaceUUID() {
-        assertThatThrownBy(() -> new UUIDParam("067e61623b6f4ae2a1712470b63dff00"))
-            .isInstanceOfSatisfying(WebApplicationException.class, this::badUUID);
-    }
+    @SuppressWarnings("ResultOfObjectAllocationIgnored")
+    public void aNonUUIDThrowsAnException() throws Exception {
+        try {
+            new UUIDParam("foo");
+            failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
+            final Response response = e.getResponse();
 
-    @Test
-    public void tooLongUUID() {
-        assertThatThrownBy(() -> new UUIDParam("067e6162-3b6f-4ae2-a171-2470b63dff000"))
-            .isInstanceOfSatisfying(WebApplicationException.class, this::badUUID);
-    }
+            assertThat(response.getStatus())
+                    .isEqualTo(400);
 
-    @Test
-    public void aNonUUIDThrowsAnException() {
-        assertThatThrownBy(() -> new UUIDParam("foo"))
-            .isInstanceOfSatisfying(WebApplicationException.class, this::badUUID);
+            ErrorMessage entity = (ErrorMessage) response.getEntity();
+            assertThat(entity.getCode()).isEqualTo(400);
+            assertThat(entity.getMessage())
+                    .isEqualTo("Parameter is not a UUID.");
+        }
     }
 }
