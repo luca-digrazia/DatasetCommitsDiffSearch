@@ -11,7 +11,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -35,12 +34,17 @@ import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.ConfigInstantiator;
 import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
 import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
-import io.quarkus.vertx.http.runtime.filters.Filter;
-import io.quarkus.vertx.http.runtime.filters.Filters;
-import io.vertx.core.*;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Future;
+import io.vertx.core.Handler;
+import io.vertx.core.Verticle;
+import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.impl.Http1xServerConnection;
 import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.impl.VertxInternal;
@@ -102,7 +106,7 @@ public class VertxHttpRecorder {
         }
     }
 
-    public RuntimeValue<Router> initializeRouter(RuntimeValue<Vertx> vertxRuntimeValue) {
+    public RuntimeValue<Router> initializeRouter(RuntimeValue<Vertx> vertxRuntimeValue) throws IOException {
 
         Vertx vertx = vertxRuntimeValue.getValue();
 
@@ -112,6 +116,9 @@ public class VertxHttpRecorder {
                 router.route().handler(hotReplacementHandler);
             }
         }
+        // Make it also possible to register the route handlers programmatically
+        Event<Object> event = Arc.container().beanManager().getEvent();
+        event.select(Router.class).fire(router);
 
         return new RuntimeValue<>(router);
     }
@@ -135,8 +142,8 @@ public class VertxHttpRecorder {
         }
     }
 
-    public void finalizeRouter(BeanContainer container, Consumer<Route> defaultRouteHandler,
-            List<Filter> filterList, LaunchMode launchMode, ShutdownContext shutdown,
+    public void finalizeRouter(BeanContainer container, Handler<HttpServerRequest> defaultRouteHandler,
+            List<Handler<RoutingContext>> orderedFilters, LaunchMode launchMode, ShutdownContext shutdown,
             RuntimeValue<Router> runtimeValue) {
         // install the default route at the end
         Router router = runtimeValue.getValue();
@@ -145,24 +152,23 @@ public class VertxHttpRecorder {
         Event<Object> event = Arc.container().beanManager().getEvent();
         event.select(Router.class).fire(router);
 
-        // First, fire an event with the filter collector
-        Filters filters = new Filters();
-        event.select(Filters.class).fire(filters);
-
-        filterList.addAll(filters.getFilters());
-
-        // Then, fire the router
-        event.select(Router.class).fire(router);
-
-        for (Filter filter : filterList) {
-            if (filter.getHandler() != null) {
-                // Filters with high priority gets called first.
-                router.route().order(-1 * filter.getPriority()).handler(filter.getHandler());
+        // Filters are ordered by priority, highest priority first.
+        // However, because filter must be executed before user route, we need to insert them before the user routes.
+        // We use the `order(-1)` _hack_ to indicate they are inserted before the users route.
+        // For the same "order", filters are executed in the insertion order (to highest priority first).
+        for (Handler<RoutingContext> filter : orderedFilters) {
+            if (filter != null) {
+                router.route().order(-1).handler(filter);
             }
         }
 
         if (defaultRouteHandler != null) {
-            defaultRouteHandler.accept(router.route());
+            router.route().handler(new Handler<RoutingContext>() {
+                @Override
+                public void handle(RoutingContext event) {
+                    defaultRouteHandler.handle(event.request());
+                }
+            });
         }
 
         if (launchMode == LaunchMode.DEVELOPMENT) {
@@ -382,10 +388,16 @@ public class VertxHttpRecorder {
     }
 
     public void addRoute(RuntimeValue<Router> router, Function<Router, Route> route, Handler<RoutingContext> handler,
-            HandlerType blocking) {
+            HandlerType blocking, List<Handler<RoutingContext>> filters) {
 
         Route vr = route.apply(router.getValue());
 
+        // we add the filters to each route
+        for (Handler<RoutingContext> i : filters) {
+            if (i != null) {
+                vr.handler(i);
+            }
+        }
         if (blocking == HandlerType.BLOCKING) {
             vr.blockingHandler(handler);
         } else if (blocking == HandlerType.FAILURE) {
