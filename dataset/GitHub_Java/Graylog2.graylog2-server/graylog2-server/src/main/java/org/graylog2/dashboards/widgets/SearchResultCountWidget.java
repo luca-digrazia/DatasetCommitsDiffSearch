@@ -36,7 +36,8 @@ public class SearchResultCountWidget extends DashboardWidget {
     private final String query;
     private final TimeRange timeRange;
     private final Boolean trend;
-    private final Boolean lowerIsBetter;
+    private final Integer intervalAmount;
+    private final String intervalUnit;
 
     public SearchResultCountWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
         super(metricRegistry, Type.SEARCH_RESULT_COUNT, id, description, cacheTime, config, creatorUserId);
@@ -44,8 +45,9 @@ public class SearchResultCountWidget extends DashboardWidget {
 
         this.query = query;
         this.timeRange = timeRange;
-        this.trend = config.get("trend") != null && Boolean.parseBoolean(String.valueOf(config.get("trend")));
-        this.lowerIsBetter = config.get("lower_is_better") != null && Boolean.parseBoolean(String.valueOf(config.get("lower_is_better")));
+        this.trend = config.get("trend") == null ? false : Boolean.parseBoolean(String.valueOf(config.get("trend")));
+        this.intervalAmount = config.get("interval_amount") == null ? 0 : Integer.parseInt(String.valueOf(config.get("interval_amount")));
+        this.intervalUnit = config.get("interval_unit") == null ? "" : String.valueOf(config.get("interval_unit"));
     }
 
     public String getQuery() {
@@ -62,7 +64,8 @@ public class SearchResultCountWidget extends DashboardWidget {
                 .put("query", query)
                 .put("timerange", timeRange.getPersistedConfig())
                 .put("trend", trend)
-                .put("lower_is_better", lowerIsBetter)
+                .put("interval_amount", intervalAmount)
+                .put("interval_unit", intervalUnit)
                 .build();
     }
 
