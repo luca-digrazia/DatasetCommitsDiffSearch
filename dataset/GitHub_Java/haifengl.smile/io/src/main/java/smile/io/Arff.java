@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.data.measure.NominalScale;
@@ -94,9 +93,14 @@ public class Arff implements AutoCloseable {
     /** The map of field name to its scale of measure. */
     private Map<String, NominalScale> measure;
     /** The lambda to parse fields. */
-    private List<Function<String, Object>> parser;
+    private Parser[] parser;
     /** Attribute name path in case of sub-relations. */
     private String path = "";
+
+    /** Parser lambda interface that allows throw a checked exception. */
+    interface Parser {
+        Object apply(String s) throws ParseException;
+    }
 
     /**
      * Constructor.
@@ -235,7 +239,16 @@ public class Arff implements AutoCloseable {
         
         schema = DataTypes.struct(fields);
         schema.measure().putAll(measure);
-        parser = schema.parser();
+        parser = new Parser[fields.size()];
+        for (int i = 0; i < parser.length; i++) {
+            final StructField field = fields.get(i);
+            NominalScale scale = measure.get(field.name);
+            if (scale == null) {
+                parser[i] = s -> field.type.valueOf(s);
+            } else {
+                parser[i] = s -> scale.valueOf(s);
+            }
+        }
     }
 
     /**
@@ -315,9 +328,15 @@ public class Arff implements AutoCloseable {
                 }
             }
 
-            NominalScale scale = new NominalScale(attributeValues);
-            measure.put(name, scale);
-            attribute = new StructField(name, scale.type());
+            String[] levels = attributeValues.toArray(new String[attributeValues.size()]);
+            if (levels.length <= Byte.MAX_VALUE + 1) {
+                attribute = new StructField(name, DataTypes.ByteType);
+            } else if (levels.length <= Short.MAX_VALUE + 1) {
+                attribute = new StructField(name, DataTypes.ShortType);
+            } else {
+                attribute = new StructField(name, DataTypes.IntegerType);
+            }
+            measure.put(name, new NominalScale(levels));
         }
 
         getLastToken(false);
@@ -398,7 +417,7 @@ public class Arff implements AutoCloseable {
             }
 
             if (tokenizer.ttype != '?') {
-                x[i] = parser.get(i).apply(tokenizer.sval);
+                x[i] = parser[i].apply(tokenizer.sval);
             }
         }
 
@@ -431,7 +450,7 @@ public class Arff implements AutoCloseable {
             getNextToken();
             String val = tokenizer.sval.trim();
             if (!val.equals("?")) {
-                x[i] = parser.get(i).apply(val);
+                x[i] = parser[i].apply(val);
             }
         } while (tokenizer.ttype == StreamTokenizer.TT_WORD);
 

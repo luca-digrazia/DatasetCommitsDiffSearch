@@ -19,8 +19,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileReader;
@@ -30,7 +28,6 @@ import org.apache.avro.io.DatumReader;
 import org.apache.avro.util.Utf8;
 import smile.data.DataFrame;
 import smile.data.Tuple;
-import smile.data.measure.DiscreteMeasure;
 import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
 import smile.data.type.DataType;
@@ -97,25 +94,15 @@ public class Avro {
         try (DataFileReader<GenericRecord> dataFileReader = new DataFileReader<GenericRecord>(path.toFile(), datumReader)) {
             GenericRecord record = null;
             StructType struct = toSmileSchema(schema);
-            DiscreteMeasure[] scale = new DiscreteMeasure[struct.length()];
-            for (Map.Entry<String, Measure> e : struct.measure().entrySet()) {
-                scale[struct.fieldIndex(e.getKey())] = (DiscreteMeasure) e.getValue();
-            }
-
             List<Tuple> rows = new ArrayList<>();
-            while (dataFileReader.hasNext() && rows.size() < limit) {
+            while (dataFileReader.hasNext()) {
                 // Reuse the record to save memory
                 record = dataFileReader.next(record);
                 Object[] row = new Object[struct.length()];
                 for (int i = 0; i < row.length; i++) {
                     row[i] = record.get(struct.field(i).name);
                     if (row[i] instanceof Utf8) {
-                        String str = row[i].toString();
-                        if (scale[i] != null) {
-                            row[i] = scale[i].valueOf(str);
-                        } else {
-                            row[i] = str;
-                        }
+                        row[i] = row[i].toString();
                     }
                 }
                 rows.add(Tuple.of(row, struct));
@@ -131,14 +118,7 @@ public class Avro {
             fields.add(new StructField(field.name(), typeOf(field.schema())));
         }
 
-        StructType struct = DataTypes.struct(fields);
-        for (Schema.Field field : schema.getFields()) {
-            if (field.schema().getType() == Schema.Type.ENUM) {
-                NominalScale scale = new NominalScale(field.schema().getEnumSymbols());
-                struct.measure().put(field.name(), scale);
-            }
-        }
-        return struct;
+        return DataTypes.struct(fields);
     }
 
     /** Converts an avro type to smile type. */
@@ -160,7 +140,7 @@ public class Avro {
             case BYTES:
                 return DataTypes.ByteArrayType;
             case ENUM:
-                return new NominalScale(schema.getEnumSymbols()).type();
+                return DataTypes.StringType;
             case ARRAY:
                 return DataTypes.array(typeOf(schema.getElementType()));
             case MAP:
