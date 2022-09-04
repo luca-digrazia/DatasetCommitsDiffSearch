@@ -8,9 +8,7 @@ import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
 
-import io.restassured.RestAssured;
 import org.eclipse.microprofile.jwt.Claims;
-import io.quarkus.test.QuarkusUnitTest;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
@@ -18,9 +16,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import io.quarkus.test.QuarkusUnitTest;
+import io.restassured.RestAssured;
+
 public class RequiredClaimsUnitTest {
     private static Class[] testClasses = {
-            RequiredClaimsEndpoint.class
+            RequiredClaimsEndpoint.class,
+            TokenUtils.class
     };
 
     /**
@@ -37,12 +39,12 @@ public class RequiredClaimsUnitTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() ->
-                                        ShrinkWrap.create(JavaArchive.class)
-                                                .addClasses(testClasses)
-                                                .addAsManifestResource("microprofile-config.properties")
-            );
-
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+                    .addClasses(testClasses)
+                    .addAsResource("publicKey.pem")
+                    .addAsResource("privateKey.pem")
+                    .addAsResource("RequiredClaims.json")
+                    .addAsResource("application.properties"));
 
     @BeforeEach
     public void generateToken() throws Exception {
@@ -56,10 +58,9 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token issuer claim is as expected
      *
-     * @throws Exception
      */
     @Test()
-    public void verifyIssuerClaim() throws Exception {
+    public void verifyIssuerClaim() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -77,10 +78,9 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token sub claim is as expected
      *
-     * @throws Exception
      */
     @Test()
-    public void verifySubClaim() throws Exception {
+    public void verifySubClaim() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -99,10 +99,9 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token jti claim is as expected
      *
-     * @throws Exception
      */
     @Test()
-    public void verifyJTI() throws Exception {
+    public void verifyJTI() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -115,18 +114,15 @@ public class RequiredClaimsUnitTest {
         String replyString = response.body().asString();
         JsonReader jsonReader = Json.createReader(new StringReader(replyString));
         JsonObject reply = jsonReader.readObject();
-        // TODO add proper assertion
-        //System.out.println(reply.toString());
-
+        Assertions.assertTrue(reply.getBoolean("pass"), reply.getString("msg"));
     }
 
     /**
      * Verify that the token upn claim is as expected
      *
-     * @throws Exception
      */
     @Test()
-    public void verifyUPN() throws Exception {
+    public void verifyUPN() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -139,17 +135,15 @@ public class RequiredClaimsUnitTest {
         String replyString = response.body().asString();
         JsonReader jsonReader = Json.createReader(new StringReader(replyString));
         JsonObject reply = jsonReader.readObject();
-        // TODO add proper assertion
-        //System.out.println(reply.toString());
+        Assertions.assertTrue(reply.getBoolean("pass"), reply.getString("msg"));
     }
 
     /**
      * Verify that the token aud claim is as expected
      *
-     * @throws Exception
      */
     @Test()
-    public void verifyAudience() throws Exception {
+    public void verifyAudience() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -162,17 +156,15 @@ public class RequiredClaimsUnitTest {
         String replyString = response.body().asString();
         JsonReader jsonReader = Json.createReader(new StringReader(replyString));
         JsonObject reply = jsonReader.readObject();
-        // TODO add proper assertion
-        //System.out.println(reply.toString());
+        Assertions.assertTrue(reply.getBoolean("pass"), reply.getString("msg"));
     }
 
     /**
      * Verify that the token aud claim is as expected
      *
-     * @throws Exception
      */
     @Test()
-    public void verifyAudience2() throws Exception {
+    public void verifyAudience2() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -185,17 +177,15 @@ public class RequiredClaimsUnitTest {
         String replyString = response.body().asString();
         JsonReader jsonReader = Json.createReader(new StringReader(replyString));
         JsonObject reply = jsonReader.readObject();
-        // TODO add proper assertion
-        //System.out.println(reply.toString());
+        Assertions.assertTrue(reply.getBoolean("pass"), reply.getString("msg"));
     }
 
     /**
      * Verify that the token iat claim is as expected
      *
-     * @throws Exception
      */
     @Test()
-    public void verifyIssuedAt() throws Exception {
+    public void verifyIssuedAt() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -208,17 +198,15 @@ public class RequiredClaimsUnitTest {
         String replyString = response.body().asString();
         JsonReader jsonReader = Json.createReader(new StringReader(replyString));
         JsonObject reply = jsonReader.readObject();
-        // TODO add proper assertion
-        //System.out.println(reply.toString());
+        Assertions.assertTrue(reply.getBoolean("pass"), reply.getString("msg"));
     }
 
     /**
      * Verify that the token exp claim is as expected
      *
-     * @throws Exception
      */
     @Test()
-    public void verifyExpiration() throws Exception {
+    public void verifyExpiration() {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -231,7 +219,6 @@ public class RequiredClaimsUnitTest {
         String replyString = response.body().asString();
         JsonReader jsonReader = Json.createReader(new StringReader(replyString));
         JsonObject reply = jsonReader.readObject();
-        // TODO add proper assertion
-        //System.out.println(reply.toString());
+        Assertions.assertTrue(reply.getBoolean("pass"), reply.getString("msg"));
     }
 }
