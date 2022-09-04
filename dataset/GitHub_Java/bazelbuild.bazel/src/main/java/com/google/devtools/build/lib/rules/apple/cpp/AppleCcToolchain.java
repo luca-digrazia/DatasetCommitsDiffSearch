@@ -63,7 +63,7 @@ public class AppleCcToolchain extends CcToolchain {
 
     Platform platform = appleConfiguration.getSingleArchPlatform();
 
-    Map<String, String> appleEnv = getEnvironmentBuildVariables(ruleContext);
+    Map<String, String> appleEnv = getEnvironment(ruleContext);
 
     return ImmutableMap.<String, String>builder()
         .put(
@@ -114,7 +114,8 @@ public class AppleCcToolchain extends CcToolchain {
         .build();
   }
 
-  private ImmutableMap<String, String> getEnvironmentBuildVariables(RuleContext ruleContext) {
+  @Override
+  public ImmutableMap<String, String> getEnvironment(RuleContext ruleContext) {
     Map<String, String> builder = new LinkedHashMap<>();
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
