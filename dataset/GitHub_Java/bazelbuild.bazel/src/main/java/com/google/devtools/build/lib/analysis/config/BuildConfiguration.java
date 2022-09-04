@@ -1150,8 +1150,6 @@ public final class BuildConfiguration implements BuildEvent {
       host.compilationMode = CompilationMode.OPT;
       host.isHost = true;
       host.useDynamicConfigurations = useDynamicConfigurations;
-      host.enableRunfiles = enableRunfiles;
-      host.buildPythonZip = buildPythonZip;
       host.commandLineBuildVariables = commandLineBuildVariables;
       host.enforceConstraints = enforceConstraints;
       host.separateGenfilesDirectory = separateGenfilesDirectory;
