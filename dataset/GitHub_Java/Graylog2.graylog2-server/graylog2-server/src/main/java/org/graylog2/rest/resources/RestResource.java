@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.rest.resources;
@@ -28,8 +29,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
-import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.fasterxml.jackson.jaxrs.cfg.EndpointConfigBase;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterInjector;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterModifier;
@@ -38,7 +37,6 @@ import org.apache.shiro.subject.Subject;
 import org.bson.types.ObjectId;
 import org.graylog2.Core;
 import org.graylog2.security.ShiroSecurityContext;
-import org.graylog2.shared.ServerStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,9 +61,6 @@ public abstract class RestResource {
     @Inject
     protected Core core;
 
-    @Inject
-    protected ServerStatus serverStatus;
-
     private boolean prettyPrint;
 
     @Context
@@ -75,13 +70,9 @@ public abstract class RestResource {
         /*
           * Jackson is serializing java.util.Date (coming out of MongoDB for example) as UNIX epoch by default.
           * Make it write ISO8601 instead.
-          * TODO THIS IS EXTREMELY WRONG AND WILL LEAD TO BUGS. NEED TO HAVE IT INJECTED ONCE, AND THEN REUSED (see ObjectMapperProvider)
-          * but everyone and their grandmother are using this directly in resource objects instead of relying on Jackson :(
           */
-        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         objectMapper.setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES);
-        objectMapper.registerModule(new JodaModule());
-        objectMapper.registerModule(new GuavaModule());
     }
 
     @QueryParam("pretty")
@@ -276,7 +267,7 @@ public abstract class RestResource {
     }
 
     protected void restrictToMaster() {
-        if(!serverStatus.hasCapability(ServerStatus.Capability.MASTER)) {
+        if(!core.isMaster()) {
             LOG.warn("Rejected request that is only allowed against master nodes. Returning HTTP 403.");
             throw new WebApplicationException(403);
         }
