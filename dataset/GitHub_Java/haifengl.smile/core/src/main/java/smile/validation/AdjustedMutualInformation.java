@@ -32,7 +32,7 @@ import static smile.math.MathEx.lfactorial;
  * randomness to adjust for chance. The AMI takes a value of 1 when the
  * two partitions are identical and 0 when the MI between two partitions
  * equals the value expected due to chance alone.
- *
+ * <p>
  * WARNING: The computation of adjustment is is really really slow.
  *
  * <h2>References</h2>
@@ -43,6 +43,16 @@ import static smile.math.MathEx.lfactorial;
  * @author Haifeng Li
  */
 public class AdjustedMutualInformation implements ClusterMeasure {
+    private static final long serialVersionUID = 2L;
+    /** Default instance with max normalization. */
+    public final static AdjustedMutualInformation MAX = new AdjustedMutualInformation(Method.MAX);
+    /** Default instance with min normalization. */
+    public final static AdjustedMutualInformation MIN = new AdjustedMutualInformation(Method.MIN);
+    /** Default instance with sum normalization. */
+    public final static AdjustedMutualInformation SUM = new AdjustedMutualInformation(Method.SUM);
+    /** Default instance with sqrt normalization. */
+    public final static AdjustedMutualInformation SQRT = new AdjustedMutualInformation(Method.SQRT);
+
     /** The normalization method. */
     private final Method method;
 

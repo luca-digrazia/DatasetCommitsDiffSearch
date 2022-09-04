@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ ******************************************************************************/
 
 package smile.validation;
 
@@ -21,14 +21,24 @@ package smile.validation;
  * The false discovery rate (FDR) is ratio of false positives
  * to combined true and false positives, which is actually 1 - precision.
  * <p>
- * FDR = FP / (TP + FP)
+ * <pre>
+ *     FDR = FP / (TP + FP)
+ * </pre>
  *
  * @author Haifeng Li
  */
 public class FDR implements ClassificationMeasure {
+    private static final long serialVersionUID = 2L;
+    /** Default instance. */
+    public final static FDR instance = new FDR();
 
     @Override
     public double measure(int[] truth, int[] prediction) {
+        return of(truth, prediction);
+    }
+
+    /** Calculates the false discovery rate. */
+    public static double of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));
         }

@@ -17,18 +17,20 @@
 
 package smile.validation;
 
+import smile.math.MathEx;
+
 /**
  * Residual sum of squares.
  *
  * @author Haifeng Li
  */
-public class RSS implements RegressionMetric {
+public class RSS implements RegressionMeasure {
     private static final long serialVersionUID = 2L;
     /** Default instance. */
     public final static RSS instance = new RSS();
 
     @Override
-    public double score(double[] truth, double[] prediction) {
+    public double measure(double[] truth, double[] prediction) {
         return of(truth, prediction);
     }
 
@@ -41,8 +43,7 @@ public class RSS implements RegressionMetric {
         int n = truth.length;
         double rss = 0.0;
         for (int i = 0; i < n; i++) {
-            double r = truth[i] - prediction[i];
-            rss += r * r;
+            rss += MathEx.sqr(truth[i] - prediction[i]);
         }
 
         return rss;

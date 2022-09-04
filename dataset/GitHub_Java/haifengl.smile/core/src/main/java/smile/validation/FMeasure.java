@@ -1,67 +1,85 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ ******************************************************************************/
 
 package smile.validation;
 
 /**
- * The F-measure (also F1 score or F-score) considers both the precision p and
- * the recall r of the test to compute the score. The F-measure is the harmonic
- * mean of precision and recall,
+ * The F-score (or F-measure) considers both the precision and the recall of the test
+ * to compute the score. The precision p is the number of correct positive results
+ * divided by the number of all positive results, and the recall r is the number of
+ * correct positive results divided by the number of positive results that should
+ * have been returned.
  * <p>
- * F-measure = 2 * precision * recall / (precision + recall)
+ * The traditional or balanced F-score (F1 score) is the harmonic mean of
+ * precision and recall, where an F1 score reaches its best value at 1 and worst at 0.
  * <p>
- * where an F-measure reaches its best value at 1 and worst score at 0.:
-
-
+ * The general formula involves a positive real &beta; so that F-score measures
+ * the effectiveness of retrieval with respect to a user who attaches &beta; times
+ * as much importance to recall as precision.
  *
  * @author Haifeng Li
  */
 public class FMeasure implements ClassificationMeasure {
+    private static final long serialVersionUID = 2L;
 
     @Override
     public double measure(int[] truth, int[] prediction) {
-        if (truth.length != prediction.length) {
-            throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));
-        }
-
-        int tp = 0;
-        int p = 0;
-        int pp = 0;
-        for (int i = 0; i < truth.length; i++) {
-            if (truth[i] == 1) {
-                pp++;
-            }
-
-            if (prediction[i] == 1) {
-                p++;
-
-                if (truth[i] == 1) {
-                    tp++;
-                }
-            }
-        }
-
-        double precision = (double) tp / p;
-        double recall = (double) tp / pp;
-
-        return 2 * precision * recall / (precision + recall);
+        return of(beta, truth, prediction);
     }
 
-    @Override
-    public String toString() {
-        return "F-Measure";
+    /**
+     * A positive value such that F-score measures the effectiveness of
+     * retrieval with respect to a user who attaches &beta; times
+     * as much importance to recall as precision. The default value 1.0
+     * corresponds to F1-score.
+     */
+    private double beta = 1.0;
+
+    /** Constructor of F1 score. */
+    public FMeasure() {
+        this(1.0);
+    }
+
+    /** Constructor of general F-score.
+     *
+     * @param beta a positive value such that F-score measures
+     *             the effectiveness of retrieval with respect
+     *             to a user who attaches &beta; times as much
+     *             importance to recall as precision.
+     */
+    public FMeasure(double beta) {
+        if (beta <= 0.0) {
+            throw new IllegalArgumentException("Negative beta");
+        }
+
+        this.beta = beta;
+    }
+
+    /**
+     * Calculates the F1 score.
+     * @param beta a positive value such that F-score measures
+     *             the effectiveness of retrieval with respect
+     *             to a user who attaches &beta; times as much
+     *             importance to recall as precision.
+     */
+    public static double of(double beta, int[] truth, int[] prediction) {
+        double beta2 = beta * beta;
+        double p = new Precision().measure(truth, prediction);
+        double r = new Recall().measure(truth, prediction);
+        return (1 + beta2) * (p * r) / (beta2 * p + r);
     }
 }

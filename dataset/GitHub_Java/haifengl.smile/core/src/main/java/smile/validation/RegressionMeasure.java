@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,21 +13,22 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ ******************************************************************************/
 
 package smile.validation;
+
+import java.io.Serializable;
 
 /**
  * An abstract interface to measure the regression performance.
  *
  * @author Haifeng Li
  */
-public interface RegressionMeasure {
-
+public interface RegressionMeasure extends Serializable {
     /**
      * Returns an index to measure the quality of regression.
      * @param truth the true response values.
      * @param prediction the predicted response values.
      */
-    public double measure(double[] truth, double[] prediction);
+    double measure(double[] truth, double[] prediction);
 }

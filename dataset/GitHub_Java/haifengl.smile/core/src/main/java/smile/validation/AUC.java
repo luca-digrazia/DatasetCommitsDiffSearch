@@ -1,18 +1,19 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ ******************************************************************************/
 
 package smile.validation;
 
@@ -32,30 +33,42 @@ import smile.sort.QuickSort;
  * <p>
  * AUC is quite noisy as a classification measure and has some other
  * significant problems in model comparison.
- *<p>
- * We calculate AUC based on Mann–Whitney U test
- * (https://en.wikipedia.org/wiki/Mann–Whitney_U_test).
+ * <p>
+ * We calculate AUC based on Mann-Whitney U test
+ * (https://en.wikipedia.org/wiki/Mann-Whitney_U_test).
  *
  * @author Haifeng Li
  */
-public class AUC {
+public class AUC implements BinaryClassificationMeasure {
+    private static final long serialVersionUID = 2L;
+    /** Default instance. */
+    public final static AUC instance = new AUC();
 
-    public AUC() {
+    @Override
+    public double measure(int[] truth, int[] prediction) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public double measure(int[] truth, double[] probability) {
+        return of(truth, probability);
     }
 
     /**
-     * Caulculate AUC for binary classifier.
+     * Calculates AUC for binary classifier.
      * @param truth The sample labels
      * @param probability The posterior probability of positive class.
      * @return AUC
      */
-    public static double measure(int[] truth, double[] probability) {
+    public static double of(int[] truth, double[] probability) {
         if (truth.length != probability.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, probability.length));
         }
 
-        int pos = 0;
-        int neg = 0;
+        // for large sample size, overflow may happen for pos * neg.
+        // switch to double to prevent it.
+        double pos = 0;
+        double neg = 0;
 
         for (int i = 0; i < truth.length; i++) {
             if (truth[i] == 0) {
@@ -68,19 +81,19 @@ public class AUC {
         }
 
         int[] label = truth.clone();
-        double[] predicition = probability.clone();
+        double[] prediction = probability.clone();
 
-        QuickSort.sort(predicition, label);
+        QuickSort.sort(prediction, label);
 
         double[] rank = new double[label.length];
-        for (int i = 0; i < predicition.length; i++) {
-            if (i == predicition.length - 1 || predicition[i] != predicition[i+1]) {
+        for (int i = 0; i < prediction.length; i++) {
+            if (i == prediction.length - 1 || prediction[i] != prediction[i+1]) {
                 rank[i] = i + 1;
             } else {
                 int j = i + 1;
-                for (; j < predicition.length && predicition[j] == predicition[i]; j++);
+                for (; j < prediction.length && prediction[j] == prediction[i]; j++);
                 double r = (i + 1 + j) / 2.0;
-                for (int k = i; k < j && k < predicition.length; k++) rank[k] = r;
+                for (int k = i; k < j; k++) rank[k] = r;
                 i = j - 1;
             }
         }
@@ -91,7 +104,12 @@ public class AUC {
                 auc += rank[i];
         }
 
-        auc = (auc - (pos * (pos+1) / 2)) / (pos * neg);
+        auc = (auc - (pos * (pos+1) / 2.0)) / (pos * neg);
         return auc;
+    }
+
+    @Override
+    public String toString() {
+        return "AUC";
     }
 }

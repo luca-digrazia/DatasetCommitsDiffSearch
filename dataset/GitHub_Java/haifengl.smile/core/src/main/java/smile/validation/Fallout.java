@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,24 +13,33 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ ******************************************************************************/
 
 package smile.validation;
 
 /**
  * Fall-out, false alarm rate, or false positive rate (FPR)
  * <p>
- * FPR = FP / N = FP / (FP + TN)
- * <p>
+ * <pre>
+ *     FPR = FP / N = FP / (FP + TN)
+ * </pre>
  * Fall-out is actually Type I error and closely related to specificity
  * (1 - specificity).
  *
  * @author Haifeng Li
  */
 public class Fallout implements ClassificationMeasure {
+    private static final long serialVersionUID = 2L;
+    /** Default instance. */
+    public final static Fallout instance = new Fallout();
 
     @Override
     public double measure(int[] truth, int[] prediction) {
+        return of(truth, prediction);
+    }
+
+    /** Calculates the false alarm rate. */
+    public static double of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));
         }

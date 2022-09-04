@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,22 +13,22 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ ******************************************************************************/
 
 package smile.validation;
+
+import java.io.Serializable;
 
 /**
  * An abstract interface to measure the clustering performance.
  *
  * @author Haifeng Li
  */
-public interface ClusterMeasure {
-
+public interface ClusterMeasure extends Serializable {
     /**
      * Returns an index to measure the quality of clustering.
      * @param y1 the cluster labels.
      * @param y2 the alternative cluster labels.
      */
-    public double measure(int[] y1, int[] y2);
-
+    double measure(int[] y1, int[] y2);
 }

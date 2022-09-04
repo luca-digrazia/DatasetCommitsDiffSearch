@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ ******************************************************************************/
 
 package smile.validation;
 
@@ -23,8 +23,9 @@ package smile.validation;
  * Sensitivity is the proportion of actual positives which are correctly
  * identified as such.
  * <p>
- * TPR = TP / P = TP / (TP + FN)
- * <p>
+ * <pre>
+ *     TPR = TP / P = TP / (TP + FN)
+ * </pre>
  * Sensitivity and specificity are closely related to the concepts of type
  * I and type II errors. For any test, there is usually a trade-off between
  * the measures. This trade-off can be represented graphically using an ROC curve.
@@ -35,9 +36,17 @@ package smile.validation;
  * @author Haifeng Li
  */
 public class Sensitivity implements ClassificationMeasure {
+    private static final long serialVersionUID = 2L;
+    /** Default instance. */
+    public final static Sensitivity instance = new Sensitivity();
 
     @Override
     public double measure(int[] truth, int[] prediction) {
+        return of(truth, prediction);
+    }
+
+    /** Calculates the sensitivity. */
+    public static double of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));
         }
