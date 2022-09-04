@@ -30,7 +30,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 
@@ -102,7 +102,7 @@ public class SimpleServerFactoryTest {
         connection.setRequestMethod(requestMethod);
         connection.connect();
         try (InputStream inputStream = connection.getInputStream()) {
-            return CharStreams.toString(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+            return CharStreams.toString(new InputStreamReader(inputStream));
         }
     }
 
@@ -123,7 +123,7 @@ public class SimpleServerFactoryTest {
         }
 
         @Override
-        public void execute(ImmutableMultimap<String, String> parameters, String body, PrintWriter output) throws Exception {
+        public void execute(ImmutableMultimap<String, String> parameters, PrintWriter output) throws Exception {
             final String name = parameters.get("name").iterator().next();
             output.print("Hello, " + name + "!");
             output.flush();
