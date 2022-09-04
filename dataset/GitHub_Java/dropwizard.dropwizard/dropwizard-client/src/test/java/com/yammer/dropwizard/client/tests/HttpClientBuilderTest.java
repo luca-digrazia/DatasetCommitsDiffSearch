@@ -38,6 +38,29 @@ public class HttpClientBuilderTest {
     private final SchemeRegistry registry = new SchemeRegistry();
 
     @Test
+    public void setsTheMaximumConnectionPoolSize() throws Exception {
+        configuration.setMaxConnections(412);
+
+        final AbstractHttpClient client = (AbstractHttpClient) builder.using(configuration).build();
+        final PoolingClientConnectionManager connectionManager = (PoolingClientConnectionManager) client.getConnectionManager();
+
+        assertThat(connectionManager.getMaxTotal())
+                .isEqualTo(412);
+    }
+
+    @Test
+    public void setsTheMaximumRoutePoolSize() throws Exception {
+        configuration.setMaxConnectionsPerRoute(413);
+
+        final AbstractHttpClient client = (AbstractHttpClient) builder.using(configuration).build();
+        final PoolingClientConnectionManager connectionManager = (PoolingClientConnectionManager) client
+                .getConnectionManager();
+
+        assertThat(connectionManager.getDefaultMaxPerRoute())
+                .isEqualTo(413);
+    }
+
+    @Test
     public void canUseACustomDnsResolver() throws Exception {
         // Yes, this is gross. Thanks, Apache!
         final AbstractHttpClient client = (AbstractHttpClient) builder.using(resolver).build();
@@ -179,7 +202,7 @@ public class HttpClientBuilderTest {
         final AbstractHttpClient client = (AbstractHttpClient) builder.using(configuration).build();
 
         assertThat(client.getConnectionManager().getSchemeRegistry().getSchemeNames())
-                .isEqualTo(SchemeRegistryFactory.createDefault().getSchemeNames());
+                .isEqualTo(SchemeRegistryFactory.createSystemDefault().getSchemeNames());
     }
 
     @Test
