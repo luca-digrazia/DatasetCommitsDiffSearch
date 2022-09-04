@@ -31,7 +31,6 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -86,9 +85,7 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
             "META-INF/README",
             "META-INF/quarkus-config-roots.list",
             "META-INF/DEPENDENCIES",
-            "META-INF/beans.xml",
-            "META-INF/quarkus-javadoc.properties",
-            "LICENSE")));
+            "META-INF/beans.xml")));
 
     private Path outputDir;
     private Path libDir;
@@ -197,12 +194,6 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
             buildRunner(zipFs, appState, ctx.resolveOutcome(AugmentOutcome.class));
         } catch (Exception e) {
             throw new AppCreatorException("Failed to build a runner jar", e);
-        }
-
-        try {
-            runnerJar.toFile().setReadable(true, false);
-        } catch (Exception e) {
-            log.warn("Unable to set proper permissions on " + runnerJar);
         }
 
         // when using uberJar, we rename the standard jar to include the .original suffix
