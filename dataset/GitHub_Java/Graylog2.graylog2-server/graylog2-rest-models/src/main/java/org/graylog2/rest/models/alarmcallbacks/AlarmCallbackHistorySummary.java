@@ -25,38 +25,31 @@ import org.joda.time.DateTime;
 @AutoValue
 @JsonAutoDetect
 public abstract class AlarmCallbackHistorySummary {
-    static final String FIELD_ID = "_id";
-    static final String FIELD_ALARMCALLBACKCONFIGURATION = "alarmcallbackconfiguration";
-    static final String FIELD_ALERT_ID = "alert_id";
-    static final String FIELD_ALERTCONDITION_ID = "alertcondition_id";
-    static final String FIELD_RESULT = "result";
-    static final String FIELD_CREATED_AT = "created_at";
-
-    @JsonProperty(FIELD_ID)
+    @JsonProperty("_id")
     public abstract String id();
 
-    @JsonProperty(FIELD_ALARMCALLBACKCONFIGURATION)
+    @JsonProperty("alarmcallbackconfiguration")
     public abstract AlarmCallbackSummary alarmcallbackConfiguration();
 
-    @JsonProperty(FIELD_ALERT_ID)
+    @JsonProperty("alert_id")
     public abstract String alertId();
 
-    @JsonProperty(FIELD_ALERTCONDITION_ID)
+    @JsonProperty("alertcondition_id")
     public abstract String alertConditionId();
 
-    @JsonProperty(FIELD_RESULT)
+    @JsonProperty("result")
     public abstract AlarmCallbackResult result();
 
-    @JsonProperty(FIELD_CREATED_AT)
+    @JsonProperty("created_at")
     public abstract DateTime createdAt();
 
     @JsonCreator
-    public static AlarmCallbackHistorySummary create(@JsonProperty(FIELD_ID) String id,
-                                                  @JsonProperty(FIELD_ALARMCALLBACKCONFIGURATION) AlarmCallbackSummary alarmcallbackConfiguration,
-                                                  @JsonProperty(FIELD_ALERT_ID) String alertId,
-                                                  @JsonProperty(FIELD_ALERTCONDITION_ID) String alertConditionId,
-                                                  @JsonProperty(FIELD_RESULT) AlarmCallbackResult result,
-                                                  @JsonProperty(FIELD_CREATED_AT) DateTime createdAt) {
+    public static AlarmCallbackHistorySummary create(@JsonProperty("_id") String id,
+                                                  @JsonProperty("alarmcallbackconfiguration") AlarmCallbackSummary alarmcallbackConfiguration,
+                                                  @JsonProperty("alert_id") String alertId,
+                                                  @JsonProperty("alertcondition_id") String alertConditionId,
+                                                  @JsonProperty("result") AlarmCallbackResult result,
+                                                  @JsonProperty("created_at") DateTime createdAt) {
         return new AutoValue_AlarmCallbackHistorySummary(id, alarmcallbackConfiguration, alertId, alertConditionId, result, createdAt);
     }
 }

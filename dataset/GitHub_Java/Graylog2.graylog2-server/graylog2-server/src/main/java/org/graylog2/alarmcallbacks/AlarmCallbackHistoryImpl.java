@@ -33,45 +33,40 @@ import org.mongojack.ObjectId;
 @JsonAutoDetect
 @CollectionName("alarmcallbackhistory")
 public abstract class AlarmCallbackHistoryImpl implements AlarmCallbackHistory {
-    static final String FIELD_ID = "_id";
-    static final String FIELD_ALARMCALLBACKCONFIGURATION = "alarmcallbackconfiguration";
-    static final String FIELD_ALERTID = "alert_id";
-    static final String FIELD_ALERTCONDITIONID = "alertcondition_id";
-    static final String FIELD_RESULT = "result";
-    static final String FIELD_CREATED_AT = "created_at";
+    public static final String FIELD_ALARMCALLBACKCONFIGURATIONID = "alarmcallbackconfiguration";
 
-    @JsonProperty(FIELD_ID)
+    @JsonProperty("_id")
     @ObjectId
     @Override
     public abstract String id();
 
-    @JsonProperty(FIELD_ALARMCALLBACKCONFIGURATION)
+    @JsonProperty(FIELD_ALARMCALLBACKCONFIGURATIONID)
     @Override
     public abstract AlarmCallbackSummary alarmcallbackConfiguration();
 
-    @JsonProperty(FIELD_ALERTID)
+    @JsonProperty("alert_id")
     @Override
     public abstract String alertId();
 
-    @JsonProperty(FIELD_ALERTCONDITIONID)
+    @JsonProperty("alertcondition_id")
     @Override
     public abstract String alertConditionId();
 
-    @JsonProperty(FIELD_RESULT)
+    @JsonProperty("result")
     @Override
     public abstract AlarmCallbackResult result();
 
-    @JsonProperty(FIELD_CREATED_AT)
+    @JsonProperty("created_at")
     @Override
     public abstract DateTime createdAt();
 
     @JsonCreator
-    public static AlarmCallbackHistoryImpl create(@JsonProperty(FIELD_ID) String id,
-                                              @JsonProperty(FIELD_ALARMCALLBACKCONFIGURATION) AlarmCallbackSummary alarmcallbackConfiguration,
-                                              @JsonProperty(FIELD_ALERTID) String alertId,
-                                              @JsonProperty(FIELD_ALERTCONDITIONID) String alertConditionId,
-                                              @JsonProperty(FIELD_RESULT) AlarmCallbackResult result,
-                                              @JsonProperty(FIELD_CREATED_AT) DateTime createdAt) {
+    public static AlarmCallbackHistoryImpl create(@JsonProperty("_id") String id,
+                                              @JsonProperty("alarmcallbackconfiguration") AlarmCallbackSummary alarmcallbackConfiguration,
+                                              @JsonProperty("alert_id") String alertId,
+                                              @JsonProperty("alertcondition_id") String alertConditionId,
+                                              @JsonProperty("result") AlarmCallbackResult result,
+                                              @JsonProperty("created_at") DateTime createdAt) {
         return new AutoValue_AlarmCallbackHistoryImpl(id, alarmcallbackConfiguration, alertId, alertConditionId, result, createdAt);
     }
 
