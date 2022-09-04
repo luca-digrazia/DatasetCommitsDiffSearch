@@ -29,6 +29,8 @@ import javax.inject.Named;
 import java.util.Collections;
 import java.util.Map;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
+
 public class ProvisionerService {
     private static final Logger LOG = LoggerFactory.getLogger(ProvisionerService.class);
 
@@ -105,15 +107,12 @@ public class ProvisionerService {
     }
 
     private User provisionUser(UserDetails userDetails) {
-        // Find or create a user. We search for the auth service UID first to make sure we can handle username changes.
-        final User user = userService.loadByAuthServiceUidOrUsername(userDetails.base64AuthServiceUid(), userDetails.username())
-                .orElse(createUser(userDetails));
+        final User user = firstNonNull(userService.load(userDetails.username()), createUser(userDetails));
 
         // Only set fields that are okay to override by the authentication service here!
         user.setExternal(true);
-        user.setAccountStatus(userDetails.accountIsEnabled() ? User.AccountStatus.ENABLED : User.AccountStatus.DISABLED);
         user.setAuthServiceId(userDetails.authServiceId());
-        user.setAuthServiceUid(userDetails.base64AuthServiceUid());
+        user.setAuthServiceUid(userDetails.authServiceUid());
         user.setName(userDetails.username());
         user.setFullName(userDetails.fullName());
         user.setEmail(userDetails.email());
