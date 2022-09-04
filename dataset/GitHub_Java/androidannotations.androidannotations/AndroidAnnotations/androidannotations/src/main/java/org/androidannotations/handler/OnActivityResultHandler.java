@@ -15,16 +15,8 @@
  */
 package org.androidannotations.handler;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JVar;
-import org.androidannotations.annotations.OnActivityResult;
-import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.holder.HasOnActivityResult;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.IsValid;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -32,20 +24,31 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import java.util.List;
+
+import android.content.Intent;
+import org.androidannotations.annotations.OnActivityResult;
+import org.androidannotations.annotations.Result;
+import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.helper.AnnotationHelper;
+import org.androidannotations.helper.BundleHelper;
+import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.holder.HasOnActivityResult;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.IsValid;
+
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JVar;
 
 public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivityResult> {
 
-	private ExtraHandler extraHandler;
+	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public OnActivityResultHandler(ProcessingEnvironment processingEnvironment) {
 		super(OnActivityResult.class, processingEnvironment);
-		extraHandler = new ExtraHandler(processingEnvironment);
-	}
-
-	public void register(AnnotationHandlers annotationHandlers) {
-		annotationHandlers.add(this);
-		annotationHandlers.add(extraHandler);
 	}
 
 	@Override
@@ -62,7 +65,7 @@ public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivity
 		ExecutableElement executableElement = (ExecutableElement) element;
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
-		validatorHelper.param.hasNoOtherParameterThanIntentOrIntOrOnActivityResultExtraAnnotated(executableElement, valid);
+		validatorHelper.hasOnResultMethodParameters(executableElement, valid);
 	}
 
 	@Override
@@ -75,39 +78,28 @@ public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivity
 		int requestCode = executableElement.getAnnotation(OnActivityResult.class).value();
 		JBlock onResultBlock = holder.getOnActivityResultCaseBlock(requestCode).block();
 
-		JExpression activityRef = holder.getGeneratedClass().staticRef("this");
-		JInvocation onResultInvocation = JExpr.invoke(activityRef, methodName);
-
+		List<JExpression> onResultArgs = new ArrayList<JExpression>();
 		for (VariableElement parameter : parameters) {
 			TypeMirror parameterType = parameter.asType();
-			if (parameter.getAnnotation(OnActivityResult.Extra.class) != null) {
-				JExpression extraParameter = extraHandler.getExtraValue(parameter, onResultBlock, holder);
-				onResultInvocation.arg(extraParameter);
+
+			Result resultAnnotation = parameter.getAnnotation(Result.class);
+			if (resultAnnotation != null) {
+				JExpression extraParameter = ResultHandler.getExtraValue(holder, onResultBlock, parameter);
+				onResultArgs.add(extraParameter);
 			} else if (CanonicalNameConstants.INTENT.equals(parameterType.toString())) {
 				JVar intentParameter = holder.getOnActivityResultDataParam();
-				onResultInvocation.arg(intentParameter);
+				onResultArgs.add(intentParameter);
 			} else if (parameterType.getKind().equals(TypeKind.INT) //
 			        || CanonicalNameConstants.INTEGER.equals(parameterType.toString())) {
 				JVar resultCodeParameter = holder.getOnActivityResultResultCodeParam();
-				onResultInvocation.arg(resultCodeParameter);
+				onResultArgs.add(resultCodeParameter);
 			}
 		}
-		onResultBlock.add(onResultInvocation);
-	}
 
-	private static class ExtraHandler extends ExtraParameterHandler {
-
-		public ExtraHandler(ProcessingEnvironment processingEnvironment) {
-			super(OnActivityResult.Extra.class, OnActivityResult.class, processingEnvironment);
-		}
-
-		@Override
-		public String getAnnotationValue(VariableElement parameter) {
-			return parameter.getAnnotation(OnActivityResult.Extra.class).value();
-		}
-
-		public JExpression getExtraValue(VariableElement parameter, JBlock block, HasOnActivityResult holder) {
-			return super.getExtraValue(parameter, holder.getOnActivityResultDataParam(), holder.getOnActivityResultExtras(), block, holder.getOnActivityResultMethod(), holder);
+		JExpression activityRef = holder.getGeneratedClass().staticRef("this");
+		JInvocation onResultInvocation = onResultBlock.invoke(activityRef, methodName);
+		for (JExpression onResultArg : onResultArgs) {
+			onResultInvocation.arg(onResultArg);
 		}
 	}
 
