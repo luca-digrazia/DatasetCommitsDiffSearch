@@ -24,7 +24,7 @@ import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.DottedVersionApi;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -130,7 +130,7 @@ public final class DottedVersion implements DottedVersionApi<DottedVersion> {
   private static final Pattern COMPONENT_PATTERN =
       Pattern.compile("(\\d+)([a-z0-9]*?)?(\\d+)?", Pattern.CASE_INSENSITIVE);
   private static final String ILLEGAL_VERSION =
-      "Dotted version components must all be of the form \\d+([a-z0-9]*?)?(\\d+)? but got '%s'";
+      "Dotted version components must all be of the form \\d+([a-z0-9]*?)?(\\d+)? but got %s";
   private static final String NO_ALPHA_SEQUENCE = null;
   private static final Component ZERO_COMPONENT = new Component(0, NO_ALPHA_SEQUENCE, 0, "0");
 
@@ -233,11 +233,6 @@ public final class DottedVersion implements DottedVersionApi<DottedVersion> {
   }
 
   @Override
-  public boolean isImmutable() {
-    return true; // immutable and Starlark-hashable
-  }
-
-  @Override
   public int compareTo(DottedVersion other) {
     int maxComponents = Math.max(components.size(), other.components.size());
     for (int componentIndex = 0; componentIndex < maxComponents; componentIndex++) {
@@ -252,7 +247,7 @@ public final class DottedVersion implements DottedVersionApi<DottedVersion> {
   }
 
   @Override
-  public int compareTo_starlark(DottedVersion other) {
+  public int compareTo_skylark(DottedVersion other) {
     return compareTo(other);
   }
 
@@ -350,7 +345,7 @@ public final class DottedVersion implements DottedVersionApi<DottedVersion> {
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append(stringRepresentation);
   }
 
