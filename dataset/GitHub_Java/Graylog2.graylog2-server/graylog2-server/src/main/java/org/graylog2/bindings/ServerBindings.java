@@ -63,7 +63,7 @@ import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapSettingsImpl;
 import org.graylog2.security.realm.LdapUserAuthenticator;
-import org.graylog2.shared.bindings.providers.AsyncHttpClientProvider;
+import org.graylog2.shared.bindings.AsyncHttpClientProvider;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.metrics.jersey2.MetricsDynamicBinding;
 import org.graylog2.streams.StreamRouter;
@@ -131,7 +131,7 @@ public class ServerBindings extends AbstractModule {
         bind(OutputBufferWatermark.class).toInstance(new OutputBufferWatermark());
         bind(Indexer.class).toProvider(IndexerProvider.class);
         bind(SystemJobManager.class).toProvider(SystemJobManagerProvider.class);
-        bind(InputRegistry.class).toProvider(ServerInputRegistryProvider.class).asEagerSingleton();
+        bind(InputRegistry.class).toProvider(ServerInputRegistryProvider.class);
         bind(RulesEngine.class).toProvider(RulesEngineProvider.class);
         bind(LdapConnector.class).toProvider(LdapConnectorProvider.class);
         bind(LdapUserAuthenticator.class).toProvider(LdapUserAuthenticatorProvider.class);
