@@ -245,25 +245,19 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     return path;
   }
 
-  private static TraversalRequest fileLikeRoot(Artifact file, PackageBoundaryMode pkgBoundaryMode,
-      boolean strictOutput) {
+  private static TraversalRequest fileLikeRoot(Artifact file, PackageBoundaryMode pkgBoundaryMode) {
     return TraversalRequest.create(
         DirectTraversalRoot.forFileOrDirectory(file),
         !file.isSourceArtifact(),
         pkgBoundaryMode,
-        strictOutput, false,
+        false,
         null);
-  }
-
-  private static TraversalRequest fileLikeRoot(Artifact file, PackageBoundaryMode pkgBoundaryMode) {
-    return fileLikeRoot(file, pkgBoundaryMode, false);
   }
 
   private static TraversalRequest pkgRoot(
       RootedPath pkgDirectory, PackageBoundaryMode pkgBoundaryMode) {
     return TraversalRequest.create(
-        DirectTraversalRoot.forRootedPath(pkgDirectory), false, pkgBoundaryMode,
-        false, true, null);
+        DirectTraversalRoot.forRootedPath(pkgDirectory), false, pkgBoundaryMode, true, null);
   }
 
   private <T extends SkyValue> EvaluationResult<T> eval(SkyKey key) throws Exception {
@@ -422,8 +416,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     assertTraversalRootHashesAre(false, a, b);
   }
 
-  private void assertTraversalOfFile(Artifact rootArtifact, boolean strictOutput) throws Exception {
-    TraversalRequest traversalRoot = fileLikeRoot(rootArtifact, DONT_CROSS, strictOutput);
+  private void assertTraversalOfFile(Artifact rootArtifact) throws Exception {
+    TraversalRequest traversalRoot = fileLikeRoot(rootArtifact, DONT_CROSS);
     RootedPath rootedPath = createFile(rootedPath(rootArtifact), "foo");
 
     // Assert that the SkyValue is built and looks right.
@@ -446,19 +440,13 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
 
   @Test
   public void testTraversalOfSourceFile() throws Exception {
-    assertTraversalOfFile(sourceArtifact("foo/bar.txt"), false);
+    assertTraversalOfFile(sourceArtifact("foo/bar.txt"));
   }
 
   @Test
   public void testTraversalOfGeneratedFile() throws Exception {
-    assertTraversalOfFile(derivedArtifact("foo/bar.txt"), false);
+    assertTraversalOfFile(derivedArtifact("foo/bar.txt"));
   }
-
-  @Test
-  public void testTraversalOfGeneratedFileWithStrictOutput() throws Exception {
-    assertTraversalOfFile(derivedArtifact("foo/bar.txt"), true);
-  }
-
 
   @Test
   public void testTraversalOfSymlinkToFile() throws Exception {
@@ -950,9 +938,10 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     @Override
     public SkyValue compute(SkyKey skyKey, Environment env)
         throws SkyFunctionException, InterruptedException {
+      ArtifactSkyKey artifactKey = (ArtifactSkyKey) skyKey.argument();
+      Artifact artifact = artifactKey.getArtifact();
       try {
-        return FileArtifactValue.create(
-            ArtifactSkyKey.artifact((SkyKey) skyKey.argument()).getPath());
+        return FileArtifactValue.create(artifact.getPath());
       } catch (IOException e) {
         throw new SkyFunctionException(e, Transience.PERSISTENT){};
       }
@@ -970,7 +959,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     @Override
     public SkyValue compute(SkyKey skyKey, Environment env)
         throws SkyFunctionException, InterruptedException {
-      return env.getValue(new NonHermeticArtifactSkyKey(skyKey));
+      return env.getValue(new NonHermeticArtifactSkyKey((ArtifactSkyKey) skyKey));
     }
 
     @Nullable
@@ -980,8 +969,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     }
   }
 
-  private static class NonHermeticArtifactSkyKey extends AbstractSkyKey<SkyKey> {
-    private NonHermeticArtifactSkyKey(SkyKey arg) {
+  private static class NonHermeticArtifactSkyKey extends AbstractSkyKey<ArtifactSkyKey> {
+    private NonHermeticArtifactSkyKey(ArtifactSkyKey arg) {
       super(arg);
     }
 
