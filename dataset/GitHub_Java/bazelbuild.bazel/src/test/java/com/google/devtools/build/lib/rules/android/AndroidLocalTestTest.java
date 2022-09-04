@@ -169,6 +169,8 @@ public abstract class AndroidLocalTestTest extends AbstractAndroidLocalTestTestB
    */
   @Test
   public void testInferredJavaPackageFromPackageName() throws Exception {
+    useConfiguration("--android_decouple_data_processing");
+
     ConfiguredTarget target =
         scratchConfiguredTarget(
             "java-src/test",
