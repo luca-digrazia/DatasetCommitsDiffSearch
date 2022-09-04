@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,17 +15,26 @@
  */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JFieldRef;
+import com.helger.jcodemodel.AbstractJClass;
+import com.helger.jcodemodel.IJAssignmentTarget;
+import com.helger.jcodemodel.JBlock;
+import com.helger.jcodemodel.JFieldRef;
 
 public interface HasPreferences extends GeneratedClassHolder {
 
 	JBlock getPreferenceScreenInitializationBlock();
 
-	JBlock getAddPreferencesFromResourceBlock();
+	JBlock getAddPreferencesFromResourceInjectionBlock();
 
-	void assignFindPreferenceByKey(JFieldRef idRef, JClass preferenceClass, JFieldRef fieldRef);
+	JBlock getAddPreferencesFromResourceAfterInjectionBlock();
 
-	FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, JClass preferenceClass);
+	FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass);
+
+	FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass, IJAssignmentTarget fieldRef);
+
+	boolean usingSupportV7Preference();
+
+	boolean usingAndroidxPreference();
+
+	AbstractJClass getBasePreferenceClass();
 }
