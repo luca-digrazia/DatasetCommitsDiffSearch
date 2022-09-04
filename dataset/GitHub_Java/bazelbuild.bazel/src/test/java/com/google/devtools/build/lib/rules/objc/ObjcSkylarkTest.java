@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkInfo;
 import com.google.devtools.build.lib.packages.SkylarkProvider;
@@ -175,7 +174,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     StructImpl myInfo = getMyInfoFromTarget(skylarkTarget);
     Depset defineSet = (Depset) myInfo.getValue("define");
 
-    assertThat(defineSet.getSet(String.class).toList()).containsExactly("mock_define");
+    assertThat(defineSet.getSet(String.class)).containsExactly("mock_define");
   }
 
   @Test
@@ -304,7 +303,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
 
     assertThat(Artifact.toRootRelativePaths(objcProvider.get(ObjcProvider.LIBRARY)))
         .contains("examples/apple_skylark/liblib.a");
-    assertThat(objcProvider.get(ObjcProvider.DEFINE).toList()).contains("mock_define");
+    assertThat(objcProvider.get(ObjcProvider.DEFINE)).contains("mock_define");
   }
 
   @Test
@@ -342,7 +341,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         binaryTarget.get(AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR);
     ObjcProvider objcProvider = executableProvider.getDepsObjcProvider();
 
-    assertThat(objcProvider.get(ObjcProvider.DEFINE).toList()).contains("mock_define");
+    assertThat(objcProvider.get(ObjcProvider.DEFINE)).contains("mock_define");
   }
 
   @Test
@@ -922,9 +921,9 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
             "   return [created_provider]");
 
     Iterable<String> foundLinkopts =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.LINKOPT).toList();
+        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.LINKOPT);
     Iterable<String> foundDefines =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.DEFINE).toList();
+        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.DEFINE);
     boolean usesSwift =
         skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).is(ObjcProvider.Flag.USES_SWIFT);
 
@@ -944,7 +943,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
             "(link_inputs=link_inputs)",
             "   return [created_provider]");
 
-    NestedSet<Artifact> foundLinkInputs =
+    Iterable<Artifact> foundLinkInputs =
         skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.LINK_INPUTS);
     assertThat(ActionsTestUtil.baseArtifactNames(foundLinkInputs)).contains("foo.ast");
   }
@@ -972,7 +971,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
             "   return [created_provider]");
 
     Iterable<PathFragment> foundIncludes =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.INCLUDE).toList();
+        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.INCLUDE);
 
     assertThat(foundIncludes)
         .containsExactly(
@@ -999,30 +998,12 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     ObjcProvider skylarkProviderIndirectDepender =
         objcProviderBuilder().addTransitiveAndPropagate(skylarkProviderDirectDepender).build();
 
-    assertThat(skylarkProvider.get(ObjcProvider.INCLUDE).toList())
+    assertThat(skylarkProvider.get(ObjcProvider.INCLUDE))
         .containsExactly(PathFragment.create("path1"), PathFragment.create("path2"));
-    assertThat(skylarkProviderDirectDepender.get(ObjcProvider.INCLUDE).toList())
+    assertThat(skylarkProviderDirectDepender.get(ObjcProvider.INCLUDE))
         .containsExactly(PathFragment.create("path1"), PathFragment.create("path2"));
-    assertThat(skylarkProviderIndirectDepender.get(ObjcProvider.INCLUDE).toList())
+    assertThat(skylarkProviderIndirectDepender.get(ObjcProvider.INCLUDE))
         .containsExactly(PathFragment.create("path2"));
-  }
-
-  @Test
-  public void testSkylarkStrictDepsWhitelist() throws Exception {
-    AssertionError e =
-        assertThrows(
-            AssertionError.class,
-            () ->
-                createObjcProviderSkylarkTarget(
-                    "   strict_defines = depset(['def1'])",
-                    "   strict_provider = apple_common.new_objc_provider\\",
-                    "(define=strict_defines)",
-                    "   created_provider = apple_common.new_objc_provider\\",
-                    "(direct_dep_providers=[strict_provider])",
-                    "   return [created_provider]"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(String.format(AppleSkylarkCommon.BAD_DIRECT_DEPENDENCY_KEY_ERROR, "define"));
   }
 
   @Test
@@ -1036,7 +1017,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
             "   return [created_provider]");
 
     Iterable<String> foundStrings =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.DEFINE).toList();
+        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.DEFINE);
 
     assertThat(foundStrings).containsExactly("define_from_dep", "define_from_impl");
   }
@@ -1478,8 +1459,8 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     ObjcProvider objc = framework.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
     assertThat(Artifact.toRootRelativePaths(objc.staticFrameworkFile()))
         .containsExactly("fx/fx1.framework/fx1", "fx/fx2.framework/fx2");
-    assertThat(objc.staticFrameworkNames().toList()).containsExactly("fx1", "fx2");
-    assertThat(objc.staticFrameworkPaths().toList()).containsExactly("fx");
+    assertThat(objc.staticFrameworkNames()).containsExactly("fx1", "fx2");
+    assertThat(objc.staticFrameworkPaths()).containsExactly("fx");
   }
 
   @Test
@@ -1507,7 +1488,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     ObjcProvider objc = framework.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
     assertThat(Artifact.toRootRelativePaths(objc.dynamicFrameworkFile()))
         .containsExactly("fx/fx1.framework/fx1", "fx/fx2.framework/fx2");
-    assertThat(objc.dynamicFrameworkNames().toList()).containsExactly("fx1", "fx2");
-    assertThat(objc.dynamicFrameworkPaths().toList()).containsExactly("fx");
+    assertThat(objc.dynamicFrameworkNames()).containsExactly("fx1", "fx2");
+    assertThat(objc.dynamicFrameworkPaths()).containsExactly("fx");
   }
 }
