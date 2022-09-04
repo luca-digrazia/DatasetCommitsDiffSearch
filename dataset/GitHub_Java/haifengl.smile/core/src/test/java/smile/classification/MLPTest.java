@@ -65,13 +65,14 @@ public class MLPTest {
     @Test
     public void testPenDigits() {
         System.out.println("Pen Digits");
-        MathEx.setSeed(19650218); // to get repeatable results.
 
         WinsorScaler scaler = WinsorScaler.fit(PenDigits.x, 0.01, 0.99);
         double[][] x = scaler.transform(PenDigits.x);
+
         int p = x[0].length;
         int k = MathEx.max(PenDigits.y) + 1;
 
+        MathEx.setSeed(19650218); // to get repeatable results.
         ClassificationValidations<MLP> result = CrossValidation.classification(10, x, PenDigits.y, (xi, yi) -> {
             MLP model = new MLP(Layer.input(p),
                     Layer.sigmoid(50),
@@ -98,12 +99,13 @@ public class MLPTest {
     @Test
     public void testBreastCancer() {
         System.out.println("Breast Cancer");
-        MathEx.setSeed(19650218); // to get repeatable results.
 
         WinsorScaler scaler = WinsorScaler.fit(BreastCancer.x, 0.01, 0.99);
         double[][] x = scaler.transform(BreastCancer.x);
+
         int p = x[0].length;
 
+        MathEx.setSeed(19650218); // to get repeatable results.
         ClassificationValidations<MLP> result = CrossValidation.classification(10, x, BreastCancer.y, (xi, yi) -> {
             MLP model = new MLP(Layer.input(p),
                     Layer.sigmoid(60),
@@ -129,7 +131,8 @@ public class MLPTest {
 
     @Test
     public void testSegment() {
-        System.out.println("Segment SGD");
+        System.out.println("Segment");
+
         MathEx.setSeed(19650218); // to get repeatable results.
 
         WinsorScaler scaler = WinsorScaler.fit(Segment.x, 0.01, 0.99);
@@ -138,6 +141,7 @@ public class MLPTest {
         int p = x[0].length;
         int k = MathEx.max(Segment.y) + 1;
 
+        System.out.format("----- Online Learning -----%n");
         MLP model = new MLP(Layer.input(p),
                 Layer.sigmoid(50),
                 Layer.mle(k, OutputFunction.SOFTMAX)
@@ -158,32 +162,20 @@ public class MLPTest {
             System.out.println("Test Error = " + error);
         }
         assertEquals(30, error);
-    }
 
-    @Test
-    public void testSegmentMiniBatch() {
-        System.out.println("Segment Mini-Batch");
-        MathEx.setSeed(19650218); // to get repeatable results.
-
-        WinsorScaler scaler = WinsorScaler.fit(Segment.x, 0.01, 0.99);
-        double[][] x = scaler.transform(Segment.x);
-        double[][] testx = scaler.transform(Segment.testx);
-        int p = x[0].length;
-        int k = MathEx.max(Segment.y) + 1;
-
-        MLP model = new MLP(Layer.input(p),
+        System.out.format("----- Mini-Batch Learning -----%n");
+        model = new MLP(Layer.input(p),
                 Layer.sigmoid(50),
                 Layer.mle(k, OutputFunction.SOFTMAX)
         );
 
-        model.setLearningRate(TimeFunction.linear(0.1, 10000, 0.01));
+        model.setLearningRate(TimeFunction.constant(0.2));
         model.setRMSProp(0.9, 1E-7);
 
         int batch = 20;
         double[][] batchx = new double[batch][];
         int[] batchy = new int[batch];
-        int error = 0;
-        for (int epoch = 1; epoch <= 13; epoch++) {
+        for (int epoch = 1; epoch <= 14; epoch++) {
             System.out.format("----- epoch %d -----%n", epoch);
             int[] permutation = MathEx.permutate(x.length);
             int i = 0;
@@ -210,6 +202,7 @@ public class MLPTest {
     @Test
     public void testUSPS() throws Exception {
         System.out.println("USPS SGD");
+
         MathEx.setSeed(19650218); // to get repeatable results.
 
         double[][] x = USPS.x;
@@ -248,6 +241,7 @@ public class MLPTest {
     @Test
     public void testUSPSMiniBatch() {
         System.out.println("USPS Mini-Batch");
+
         MathEx.setSeed(19650218); // to get repeatable results.
 
         double[][] x = USPS.x;
