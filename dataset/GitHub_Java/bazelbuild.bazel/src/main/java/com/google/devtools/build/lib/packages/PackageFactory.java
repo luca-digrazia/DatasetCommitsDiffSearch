@@ -1260,43 +1260,43 @@ public final class PackageFactory {
     };
   }
 
-  /**
+  /****************************************************************************
    * Package creation.
    */
 
   /**
-   * Loads, scans parses and evaluates the build file at "buildFile", and creates and returns a
-   * Package builder instance capable of building a package identified by "packageId".
+   * Loads, scans parses and evaluates the build file at "buildFile", and
+   * creates and returns a Package builder instance capable of building a package identified by
+   * "packageId".
    *
    * <p>This method returns a builder to allow the caller to do additional work, if necessary.
    *
-   * <p>This method assumes "packageId" is a valid package name according to the {@link
-   * LabelValidator#validatePackageName} heuristic.
+   * <p>This method assumes "packageId" is a valid package name according to the
+   * {@link LabelValidator#validatePackageName} heuristic.
    *
    * <p>See {@link #evaluateBuildFile} for information on AST retention.
    *
-   * <p>Executes {@code globber.onCompletion()} on completion and executes {@code
-   * globber.onInterrupt()} on an {@link InterruptedException}.
+   * <p>Executes {@code globber.onCompletion()} on completion and executes
+   * {@code globber.onInterrupt()} on an {@link InterruptedException}.
    */
   // Used outside of bazel!
-  public Package.Builder createPackage(
+  public Package.Builder createPackageFromPreprocessingResult(
       String workspaceName,
       PackageIdentifier packageId,
       Path buildFile,
-      ParserInputSource input,
+      Preprocessor.Result preprocessingResult,
       List<Statement> preludeStatements,
       Map<String, Extension> imports,
       ImmutableList<Label> skylarkFileDependencies,
       RuleVisibility defaultVisibility,
-      Globber globber)
-      throws InterruptedException {
+      Globber globber) throws InterruptedException {
     StoredEventHandler localReporterForParsing = new StoredEventHandler();
     // Run the lexer and parser with a local reporter, so that errors from other threads do not
     // show up below.
-    BuildFileAST buildFileAST =
-        parseBuildFile(packageId, input, preludeStatements, localReporterForParsing);
-    AstAfterPreprocessing astAfterPreprocessing =
-        new AstAfterPreprocessing(buildFileAST, localReporterForParsing);
+    BuildFileAST buildFileAST = parseBuildFile(packageId, preprocessingResult.result,
+        preludeStatements, localReporterForParsing);
+    AstAfterPreprocessing astAfterPreprocessing = new AstAfterPreprocessing(preprocessingResult,
+        buildFileAST, localReporterForParsing);
     return createPackageFromPreprocessingAst(
         workspaceName,
         packageId,
@@ -1407,20 +1407,19 @@ public final class PackageFactory {
     }
 
     Globber globber = createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator);
-    ParserInputSource input =
-        ParserInputSource.create(
-            FileSystemUtils.convertFromLatin1(buildFileBytes), buildFile.asFragment());
+    Preprocessor.Result preprocessingResult =
+        Preprocessor.Result.noPreprocessing(buildFile.asFragment(), buildFileBytes);
 
     Package result =
-        createPackage(
+        createPackageFromPreprocessingResult(
                 externalPkg.getWorkspaceName(),
                 packageId,
                 buildFile,
-                input,
-                /*preludeStatements=*/ ImmutableList.<Statement>of(),
-                /*imports=*/ ImmutableMap.<String, Extension>of(),
-                /*skylarkFileDependencies=*/ ImmutableList.<Label>of(),
-                /*defaultVisibility=*/ ConstantRuleVisibility.PUBLIC,
+                preprocessingResult,
+                /*preludeStatements=*/ImmutableList.<Statement>of(),
+                /*imports=*/ImmutableMap.<String, Extension>of(),
+                /*skylarkFileDependencies=*/ImmutableList.<Label>of(),
+                /*defaultVisibility=*/ConstantRuleVisibility.PUBLIC,
                 globber)
             .build();
     Event.replayEventsOn(eventHandler, result.getEvents());

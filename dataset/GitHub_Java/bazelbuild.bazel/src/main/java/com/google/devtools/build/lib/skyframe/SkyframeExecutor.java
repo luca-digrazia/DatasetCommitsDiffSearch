@@ -90,6 +90,7 @@ import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Preprocessor.AstAfterPreprocessing;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
@@ -243,6 +244,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   protected boolean active = true;
   private final SkyframePackageManager packageManager;
 
+  private final Preprocessor.Factory.Supplier preprocessorFactorySupplier;
+  private Preprocessor.Factory preprocessorFactory;
+
   private final ResourceManager resourceManager;
 
   /** Used to lock evaluator on legacy calls to get existing values. */
@@ -297,6 +301,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Predicate<PathFragment> allowedMissingInputs,
+      Preprocessor.Factory.Supplier preprocessorFactorySupplier,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       ExternalFileAction externalFileAction,
@@ -318,6 +323,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.directories = Preconditions.checkNotNull(directories);
     this.buildInfoFactories = buildInfoFactories;
     this.allowedMissingInputs = allowedMissingInputs;
+    this.preprocessorFactorySupplier = preprocessorFactorySupplier;
     this.extraSkyFunctions = extraSkyFunctions;
     this.extraPrecomputedValues = extraPrecomputedValues;
     this.externalFileAction = externalFileAction;
@@ -976,6 +982,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.pkgFactory.setGlobbingThreads(packageCacheOptions.globbingThreads);
     this.pkgFactory.setMaxDirectoriesToEagerlyVisitInGlobbing(
         packageCacheOptions.maxDirectoriesToEagerlyVisitInGlobbing);
+    checkPreprocessorFactory();
     emittedEventState.clear();
 
     // If the PackageFunction was interrupted, there may be stale entries here.
@@ -1004,6 +1011,17 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   protected abstract void onNewPackageLocator(PathPackageLocator oldLocator,
                                               PathPackageLocator pkgLocator);
+
+  private void checkPreprocessorFactory() {
+    if (preprocessorFactory == null) {
+      preprocessorFactory =
+          preprocessorFactorySupplier.getFactory(packageManager, directories.getOutputBase());
+    } else if (!preprocessorFactory.isStillValid()) {
+      preprocessorFactory =
+          preprocessorFactorySupplier.getFactory(packageManager, directories.getOutputBase());
+      invalidate(SkyFunctionName.functionIs(SkyFunctions.PACKAGE));
+    }
+  }
 
   public SkyframeBuildView getSkyframeBuildView() {
     return skyframeBuildView;
