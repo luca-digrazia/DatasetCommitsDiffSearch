@@ -14,21 +14,19 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
-import com.google.common.collect.Interners;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.collect.CompactHashSet;
-
+import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
 import javax.annotation.Nullable;
 
 /**
@@ -46,17 +44,14 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
 
   static final int MAYBE_CHECK_THRESHOLD = 10;
 
-  private static final Interner<KeyToConsolidate> consolidateInterner = Interners.newWeakInterner();
+  private static final Interner<KeyToConsolidate> consolidateInterner =
+      BlazeInterners.newWeakInterner();
 
   abstract void setReverseDepsObject(T container, Object object);
-
-  abstract void setSingleReverseDep(T container, boolean singleObject);
 
   abstract void setDataToConsolidate(T container, @Nullable List<Object> dataToConsolidate);
 
   abstract Object getReverseDepsObject(T container);
-
-  abstract boolean isSingleReverseDep(T container);
 
   abstract List<Object> getDataToConsolidate(T container);
 
@@ -173,6 +168,10 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
     }
   }
 
+  private boolean isSingleReverseDep(T container) {
+    return !(getReverseDepsObject(container) instanceof List);
+  }
+
   /**
    *  We only check if reverse deps is small and there are no delayed data to consolidate, since
    *  then presence or absence would not be known.
@@ -283,6 +282,11 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
     }
   }
 
+  @Override
+  public void consolidateReverseDeps(T container) {
+    consolidateData(container);
+  }
+
   private void consolidateData(T container) {
     List<Object> dataToConsolidate = getDataToConsolidate(container);
     if (dataToConsolidate == null) {
@@ -345,22 +349,39 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
         case CHECK:
           Preconditions.checkState(
               reverseDepsAsSet.contains(key),
-              "%s %s %s",
+              "%s %s %s %s",
               keyToConsolidate,
               reverseDepsAsSet,
+              dataToConsolidate,
               container);
           break;
         case REMOVE:
           Preconditions.checkState(
-              reverseDepsAsSet.remove(key), "%s %s %s", keyToConsolidate, reverseDeps, container);
+              reverseDepsAsSet.remove(key),
+              "%s %s %s %s",
+              keyToConsolidate,
+              reverseDeps,
+              dataToConsolidate,
+              container);
           break;
         case ADD:
           Preconditions.checkState(
-              reverseDepsAsSet.add(key), "%s %s %s", keyToConsolidate, reverseDeps, container);
+              reverseDepsAsSet.add(key),
+              "%s %s %s %s",
+              keyToConsolidate,
+              reverseDeps,
+              dataToConsolidate,
+              container);
           break;
         default:
           throw new IllegalStateException(
-              keyToConsolidate + ", " + reverseDepsAsSet + ", " + container);
+              keyToConsolidate
+                  + ", "
+                  + reverseDepsAsSet
+                  + ", "
+                  + dataToConsolidate
+                  + ", "
+                  + container);
       }
     }
 
@@ -384,11 +405,9 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
 
   private void overwriteReverseDepsWithObject(T container, SkyKey newObject) {
     setReverseDepsObject(container, newObject);
-    setSingleReverseDep(container, true);
   }
 
   private void overwriteReverseDepsList(T container, List<SkyKey> list) {
     setReverseDepsObject(container, list);
-    setSingleReverseDep(container, false);
   }
 }
