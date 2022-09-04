@@ -399,7 +399,7 @@ class CoreLibrarySupport {
           emulationInterface,
           method.name(),
           method.descriptor(),
-          /*isInterface=*/ true);
+          /*itf=*/ true);
       dispatchMethod.visitInsn(methodType.getReturnType().getOpcode(Opcodes.IRETURN));
 
       dispatchMethod.visitLabel(fallthrough);
@@ -428,7 +428,7 @@ class CoreLibrarySupport {
           target,
           method.name(),
           InterfaceDesugaring.companionDefaultMethodDescriptor(testedName, method.descriptor()),
-          /*isInterface=*/ false);
+          /*itf=*/ false);
       dispatchMethod.visitInsn(methodType.getReturnType().getOpcode(Opcodes.IRETURN));
 
       dispatchMethod.visitLabel(fallthrough);
@@ -444,7 +444,7 @@ class CoreLibrarySupport {
         InterfaceDesugaring.getCompanionClassName(owner),
         method.name(),
         companionDesc,
-        /*isInterface=*/ false);
+        /*itf=*/ false);
     dispatchMethod.visitInsn(methodType.getReturnType().getOpcode(Opcodes.IRETURN));
 
     dispatchMethod.visitMaxs(0, 0);
