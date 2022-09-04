@@ -42,7 +42,7 @@ public class PluginAssets {
 
     @Inject
     public PluginAssets(Set<Plugin> plugins,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper) throws IOException {
         this.objectMapper = objectMapper;
         this.jsFiles = new ArrayList<>();
         this.cssFiles = new ArrayList<>();
@@ -57,16 +57,11 @@ public class PluginAssets {
         });
         final InputStream packageManifest = this.getClass().getResourceAsStream("/" + pathPrefix + "/" + manifestFilename);
         if (packageManifest != null) {
-            final ModuleManifest manifest;
-            try {
-                manifest = objectMapper.readValue(packageManifest, ModuleManifest.class);
-            } catch (IOException e) {
-                throw new RuntimeException("Unable to read web interface manifest: ", e);
-            }
+            final ModuleManifest manifest = objectMapper.readValue(packageManifest, ModuleManifest.class);
             jsFiles.addAll(manifest.files().jsFiles());
             cssFiles.addAll(manifest.files().cssFiles());
         } else {
-            throw new IllegalStateException("Unable to find web interface assets. Maybe the web interface was not built into server?");
+            LOG.warn("Unable to find web interface assets. Maybe the web interface was not built into server?");
         }
     }
 
@@ -83,17 +78,17 @@ public class PluginAssets {
     }
 
     private ModuleManifest manifestForPlugin(Plugin plugin) {
-        final InputStream manifestStream = plugin.metadata().getClass().getResourceAsStream("/" + plugin.getClass().getCanonicalName() + "." + manifestFilename);
+        final InputStream manifestStream = plugin.metadata().getClass().getResourceAsStream("/" + manifestFilename);
         if (manifestStream != null) {
             try {
                 final ModuleManifest manifest = objectMapper.readValue(manifestStream, ModuleManifest.class);
                 return manifest;
             } catch (IOException e) {
-                LOG.warn("Unable to read web manifest from plugin " + plugin + ": ", e);
+                LOG.warn("Unable to read manifest from plugin " + plugin + ": ", e);
             }
         }
 
-        LOG.debug("No valid web manifest found for plugin " + plugin);
+        LOG.debug("No valid manifest found for plugin " + plugin);
 
         return null;
     }
