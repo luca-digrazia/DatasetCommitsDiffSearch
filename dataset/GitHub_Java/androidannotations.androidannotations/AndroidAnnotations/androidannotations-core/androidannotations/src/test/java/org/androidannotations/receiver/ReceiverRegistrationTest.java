@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,8 +17,8 @@ package org.androidannotations.receiver;
 
 import java.io.IOException;
 
-import org.androidannotations.AndroidAnnotationProcessor;
-import org.androidannotations.utils.AAProcessorTestHelper;
+import org.androidannotations.internal.AndroidAnnotationProcessor;
+import org.androidannotations.testutils.AAProcessorTestHelper;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -65,6 +65,19 @@ public class ReceiverRegistrationTest extends AAProcessorTestHelper {
 		CompileResult result = compileFiles(ServiceWithInvalidReceiver.class);
 		assertCompilationErrorOn(ServiceWithInvalidReceiver.class, "@Receiver", result);
 		assertCompilationErrorCount(3, result);
+	}
+
+	@Test
+	public void viewWithValidReceiverAnnotationCompiles() throws IOException {
+		CompileResult result = compileFiles(ViewWithValidReceiver.class);
+		assertCompilationSuccessful(result);
+	}
+
+	@Test
+	public void viewWithInvalidRegisterAtDoesNotCompile() throws IOException {
+		CompileResult result = compileFiles(ViewWithInvalidReceiver.class);
+		assertCompilationErrorOn(ViewWithInvalidReceiver.class, "@Receiver", result);
+		assertCompilationErrorCount(2, result);
 	}
 
 }
