@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,7 +24,6 @@ import java.lang.annotation.Annotation;
 import java.lang.annotation.Inherited;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -52,9 +51,7 @@ import org.androidannotations.holder.EComponentHolder;
 import org.androidannotations.holder.GeneratedClassHolder;
 
 import com.sun.codemodel.JAnnotatable;
-import com.sun.codemodel.JAnnotationArrayMember;
 import com.sun.codemodel.JAnnotationUse;
-import com.sun.codemodel.JAnnotationValue;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -230,8 +227,6 @@ public class APTCodeModelHelper {
 		JDefinedClass definedClass = holder.getGeneratedClass();
 		String methodName = executableElement.getSimpleName().toString();
 		List<? extends VariableElement> parameters = executableElement.getParameters();
-		// CHECKSTYLE:OFF
-		// TODO: refactor the nasty label jump
 		method: for (JMethod method : definedClass.methods()) {
 			if (method.name().equals(methodName) && method.params().size() == parameters.size()) {
 				int i = 0;
@@ -245,7 +240,6 @@ public class APTCodeModelHelper {
 				return method;
 			}
 		}
-		// CHECKSTYLE:ON
 		return null;
 	}
 
@@ -529,29 +523,5 @@ public class APTCodeModelHelper {
 
 		TypeMirror type = actualTypes.get(element.asType().toString());
 		return type == null ? element.asType() : type;
-	}
-
-	public void addSuppressWarnings(JAnnotatable generatedElement, String annotationValue) {
-		Collection<JAnnotationUse> annotations = generatedElement.annotations();
-		for (JAnnotationUse annotationUse : annotations) {
-			if (annotationUse.getAnnotationClass().fullName().equals(SuppressWarnings.class.getCanonicalName())) {
-				JAnnotationValue value = annotationUse.getAnnotationMembers().values().iterator().next();
-				StringWriter code = new StringWriter();
-				JFormatter formatter = new JFormatter(code);
-				formatter.g(value);
-				if (!code.toString().contains(annotationValue)) {
-					if (value instanceof JAnnotationArrayMember) {
-						((JAnnotationArrayMember) value).param(annotationValue);
-					} else {
-						String foundValue = code.toString().substring(1, code.toString().length() - 1);
-						JAnnotationArrayMember newParamArray = annotationUse.paramArray("value");
-						newParamArray.param(foundValue).param(annotationValue);
-					}
-				}
-				return;
-			}
-		}
-
-		generatedElement.annotate(SuppressWarnings.class).param("value", annotationValue);
 	}
 }
