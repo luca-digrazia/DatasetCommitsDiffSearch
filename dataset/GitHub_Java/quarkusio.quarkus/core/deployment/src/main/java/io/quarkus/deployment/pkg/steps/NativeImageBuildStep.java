@@ -183,10 +183,8 @@ public class NativeImageBuildStep {
             throw new RuntimeException("Failed to get GraalVM version", e);
         }
 
-        boolean isMandrel = false;
         if (graalVMVersion.isPresent()) {
             checkGraalVMVersion(graalVMVersion.get());
-            isMandrel = graalVMVersion.get().contains("Mandrel");
         } else {
             log.error("Unable to get GraalVM version from the native-image binary.");
         }
@@ -214,6 +212,8 @@ public class NativeImageBuildStep {
                     nativeConfig.enableAllSecurityServices |= Boolean.parseBoolean(prop.getValue());
                 } else if (prop.getKey().equals("quarkus.native.enable-all-charsets") && prop.getValue() != null) {
                     nativeConfig.addAllCharsets |= Boolean.parseBoolean(prop.getValue());
+                } else if (prop.getKey().equals("quarkus.native.enable-all-timezones") && prop.getValue() != null) {
+                    nativeConfig.includeAllTimeZones |= Boolean.parseBoolean(prop.getValue());
                 } else {
                     // todo maybe just -D is better than -J-D in this case
                     if (prop.getValue() == null) {
@@ -291,6 +291,11 @@ public class NativeImageBuildStep {
             } else {
                 command.add("-H:-AddAllCharsets");
             }
+            //if 'includeAllTimeZones' is set, don't request it explicitly as native-image will log a warning about this being now the default.
+            //(But still disable it when necessary)
+            if (!nativeConfig.includeAllTimeZones) {
+                command.add("-H:-IncludeAllTimeZones");
+            }
             if (!protocols.isEmpty()) {
                 command.add("-H:EnableURLProtocols=" + String.join(",", protocols));
             }
@@ -309,7 +314,7 @@ public class NativeImageBuildStep {
                         + " Please consider removing this configuration key as it is ignored (JNI is always enabled) and it"
                         + " will be removed in a future Quarkus version.");
             }
-            if (!nativeConfig.enableServer && !SystemUtils.IS_OS_WINDOWS && !isMandrel) {
+            if (!nativeConfig.enableServer && !SystemUtils.IS_OS_WINDOWS) {
                 command.add("--no-server");
             }
             if (nativeConfig.enableVmInspection) {
@@ -419,11 +424,11 @@ public class NativeImageBuildStep {
 
     private void checkGraalVMVersion(String version) {
         log.info("Running Quarkus native-image plugin on " + version);
-        final List<String> obsoleteGraalVmVersions = Arrays.asList("1.0.0", "19.0.", "19.1.", "19.2.", "19.3.", "20.0.");
+        final List<String> obsoleteGraalVmVersions = Arrays.asList("1.0.0", "19.0.", "19.1.", "19.2.", "19.3.0", "20.0.");
         final boolean vmVersionIsObsolete = obsoleteGraalVmVersions.stream().anyMatch(v -> version.contains(" " + v));
         if (vmVersionIsObsolete) {
             throw new IllegalStateException("Out of date version of GraalVM detected: " + version + "."
-                    + " Quarkus currently supports 20.1.0. Please upgrade GraalVM to this version.");
+                    + " Quarkus currently supports GraalVM 19.3.2 and 20.1.0. Please upgrade GraalVM to one of these versions.");
         }
     }
 
