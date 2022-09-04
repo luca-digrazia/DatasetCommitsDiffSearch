@@ -142,7 +142,11 @@ public class VertxOutputStream extends AsyncOutputStream {
         if (pooledBuffer != null) {
             ByteBuf sentBuffer = pooledBuffer;
             pooledBuffer = null;
-            return response.writeNonBlocking(sentBuffer, isLast);
+            CompletionStage<Void> ret = response.writeNonBlocking(sentBuffer, isLast);
+            return ret.whenComplete((v, t) -> {
+                if (t != null)
+                    sentBuffer.release();
+            });
         }
         return CompletableFuture.completedFuture(null);
     }
