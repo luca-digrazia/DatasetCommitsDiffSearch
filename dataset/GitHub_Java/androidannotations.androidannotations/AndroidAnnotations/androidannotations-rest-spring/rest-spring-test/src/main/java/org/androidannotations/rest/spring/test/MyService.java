@@ -60,77 +60,77 @@ public interface MyService {
 	@RequiresCookie("xt")
 	@Get("/events/{year}/{location}")
 	@Accept(MediaType.APPLICATION_JSON)
-	EventList getEvents(@Path String location, @Path int year);
+	EventList getEvents(String location, int year);
 
 	@Get("/events/{year}/{location}")
 	@Accept("application/json")
-	Event[] getEventsArray(@Path String location, @Path int year);
+	Event[] getEventsArray(String location, int year);
 
 	@Get("/events/{year}/{year}")
 	@Accept(MediaType.APPLICATION_JSON)
-	Event[][] urlWithAParameterDeclaredTwice(@Path int year);
+	Event[][] urlWithAParameterDeclaredTwice(int year);
 
 	@Get("/events/{year}/{location}")
 	@Accept(MediaType.APPLICATION_JSON)
-	Event[][] getEventsArrayOfArrays(@Path String location, @Path int year);
+	Event[][] getEventsArrayOfArrays(String location, int year);
 
 	// The response can be a ResponseEntity<T>
 	@Get("/events/{year}/{location}")
 	/*
 	 * You may (or may not) declare throwing RestClientException (as a reminder, since it's a RuntimeException), but nothing else.
 	 */
-	ResponseEntity<EventList> getEvents2(@Path String location, @Path int year) throws RestClientException;
+	ResponseEntity<EventList> getEvents2(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	ResponseEntity<Event[]> getEventsArray2(@Path String location, @Path int year) throws RestClientException;
+	ResponseEntity<Event[]> getEventsArray2(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	ResponseEntity<Event[][]> getEventsArrayOfArrays2(@Path String location, @Path int year) throws RestClientException;
+	ResponseEntity<Event[][]> getEventsArrayOfArrays2(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	List<Event> getEventsGenericsList(@Path String location, @Path int year) throws RestClientException;
+	List<Event> getEventsGenericsList(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	List<Event>[] getEventsGenericsArrayList(@Path String location, @Path int year) throws RestClientException;
+	List<Event>[] getEventsGenericsArrayList(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	List<Event>[][] getEventsGenericsArrayList2(@Path String location, @Path int year) throws RestClientException;
+	List<Event>[][] getEventsGenericsArrayList2(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	List<List<Event>> getEventsGenericsListListEvent(@Path String location, @Path int year) throws RestClientException;
+	List<List<Event>> getEventsGenericsListListEvent(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	List<List<Event[]>> getEventsGenericsListListEvents(@Path String location, @Path int year) throws RestClientException;
+	List<List<Event[]>> getEventsGenericsListListEvents(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	List<Event[]> getEventsGenericsListArray(@Path String location, @Path int year) throws RestClientException;
+	List<Event[]> getEventsGenericsListArray(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	List<Event[][]> getEventsGenericsListArrayArray(@Path String location, @Path int year) throws RestClientException;
+	List<Event[][]> getEventsGenericsListArrayArray(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	Set<Event> getEventsGenericsSet(@Path String location, @Path int year) throws RestClientException;
+	Set<Event> getEventsGenericsSet(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	GenericEvent<String> getEventsGenericString(@Path String location, @Path int year) throws RestClientException;
+	GenericEvent<String> getEventsGenericString(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	GenericEvent<Integer> getEventsGenericInteger(@Path String location, @Path int year) throws RestClientException;
+	GenericEvent<Integer> getEventsGenericInteger(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	GenericEvent<List<Event>> getEventsGenericListEvent(@Path String location, @Path int year) throws RestClientException;
+	GenericEvent<List<Event>> getEventsGenericListEvent(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	GenericEvent<GenericEvent<GenericEvent<String>>> getEventsGenericsInception(@Path String location, @Path int year) throws RestClientException;
+	GenericEvent<GenericEvent<GenericEvent<String>>> getEventsGenericsInception(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
 	@SetsCookie({ "xt", "sjsaid" })
-	Map<String, Event> getEventsGenericsMap(@Path String location, @Path int year) throws RestClientException;
+	Map<String, Event> getEventsGenericsMap(String location, int year) throws RestClientException;
 
 	@RequiresCookie("sjsaid")
 	@RequiresCookieInUrl("xt")
 	@Get("/events/{year}/{location}?xt={xt}")
-	void getEventsVoid(@Path String location, @Path int year) throws RestClientException;
+	void getEventsVoid(String location, int year) throws RestClientException;
 
 	// *** POST ***
 	@RequiresHeader("SomeFancyHeader")
@@ -147,10 +147,10 @@ public interface MyService {
 	Event addEvent(@Body String event);
 
 	@Post("/events/{year}/")
-	Event addEvent(@Body Event event, @Path int year);
+	Event addEvent(@Body Event event, int year);
 
 	@Post("/events/{year}/")
-	Event addEvent(@Path int year);
+	Event addEvent(int year);
 
 	@Post("/events/")
 	ResponseEntity<Event> addEvent2(@Body Event event);
@@ -159,13 +159,13 @@ public interface MyService {
 	@RequiresHeader("SomeFancyHeader")
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
-	void addEventWithParameters(@Path String date, @Field String parameter, @Field String otherParameter);
+	void addEventWithParameters(String date, @Field String parameter, @Field String otherParameter);
 
 	@Post("/events/{date}?myCookieInUrl={myCookieInUrl}")
 	@RequiresHeader("SomeFancyHeader")
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
-	void addEventWithParts(@Path String date, @Part String parameter, @Part String otherParameter);
+	void addEventWithParts(String date, @Part String parameter, @Part String otherParameter);
 
 	@Post("/events/{date}?myCookieInUrl={myCookieInUrl}")
 	@RequiresHeader("SomeFancyHeader")
@@ -178,13 +178,13 @@ public interface MyService {
 	@Header(name = "SomeFancyHeader", value = "fancy")
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
-	void addEventWithHeaders(@Path String date, @Body String parameter);
+	void addEventWithHeaders(String date, @Body String parameter);
 
 	@Post("/events/{date}?myCookieInUrl={myCookieInUrl}")
 	@Headers(@Header(name = "SomeFancyHeader", value = "fancy"))
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
-	void addEventWithHeadersHeadersAnnotation(@Path String date, @Body String parameter);
+	void addEventWithHeadersHeadersAnnotation(String date, @Body String parameter);
 
 	/**
 	 * Output different then input
@@ -222,78 +222,78 @@ public interface MyService {
 
 	@Post("/events/{year}/")
 	@Accept(MediaType.APPLICATION_JSON)
-	ResponseEntity<Event> addEvent2(@Body Event event, @Path int year);
+	ResponseEntity<Event> addEvent2(@Body Event event, int year);
 
 	// *** PUT ***
 
 	@Put("/events/{id}")
-	void updateEvent(@Body Event event, @Path int id);
+	void updateEvent(@Body Event event, int id);
 
 	@Put("/events/{date}")
-	void updateEvent(@Path long date);
+	void updateEvent(long date);
 
 	@Put("/events/{date}")
-	Event updateEventWithResponse(@Path long date);
+	Event updateEventWithResponse(long date);
 
 	@Put("/events/{date}?myCookieInUrl={myCookieInUrl}")
 	@RequiresHeader("SomeFancyHeader")
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
-	Event updateEventWithRequires(@Path long date);
+	Event updateEventWithRequires(long date);
 
 	// *** DELETE ***
 
 	@Delete("/events/{id}")
-	void removeEvent(@Path long id);
+	void removeEvent(long id);
 
 	@Delete("/events/{id}")
-	Event removeEventWithResponse(@Path long id);
+	Event removeEventWithResponse(long id);
 
 	@Delete("/events/{id}?myCookieInUrl={myCookieInUrl}")
 	@RequiresHeader("SomeFancyHeader")
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
-	void removeEventWithRequires(@Path long id);
+	void removeEventWithRequires(long id);
 
 	@Delete("/events/{id}")
 	@RequiresAuthentication
-	void removeEventWithAuthentication(@Path long id);
+	void removeEventWithAuthentication(long id);
 
 	// *** HEAD ***
 
 	@Head("/events/{year}/{location}")
-	HttpHeaders getEventHeaders(@Path String location, @Path int year);
+	HttpHeaders getEventHeaders(String location, int year);
 
 	@Head("/events/{date}")
-	HttpHeaders getEventheaders(@Path long date);
+	HttpHeaders getEventheaders(long date);
 
 	@Head("/events/{date}?myCookieInUrl={myCookieInUrl}")
 	@RequiresHeader("SomeFancyHeader")
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
-	HttpHeaders getEventheadersWithRequires(@Path long date);
+	HttpHeaders getEventheadersWithRequires(long date);
 
 	@Head("/events/{date}")
 	@RequiresAuthentication
-	HttpHeaders getEventheadersWithAuthentication(@Path long date);
+	HttpHeaders getEventheadersWithAuthentication(long date);
 
 	// *** OPTIONS ***
 
 	@Options("/events/{year}/{location}")
-	Set<HttpMethod> getEventOptions(@Path String location, @Path int year);
+	Set<HttpMethod> getEventOptions(String location, int year);
 
 	@Options("/events/{date}")
-	Set<HttpMethod> getEventOptions(@Path long date);
+	Set<HttpMethod> getEventOptions(long date);
 
 	@Options("/events/{date}?myCookieInUrl={myCookieInUrl}")
 	@RequiresHeader("SomeFancyHeader")
 	@RequiresCookie("myCookie")
 	@RequiresCookieInUrl("myCookieInUrl")
-	Set<HttpMethod> getEventOptionsWithRequires(@Path long date);
+	Set<HttpMethod> getEventOptionsWithRequires(long date);
 
 	@Options("/events/{date}")
 	@RequiresAuthentication
-	Set<HttpMethod> getEventOptionsWithAuthentication(@Path long date);
+	Set<HttpMethod> getEventOptionsWithAuthentication(long date);
 
 	// if you need to add some configuration to the Spring RestTemplate.
 	RestTemplate getRestTemplate();

@@ -13,25 +13,25 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.androidannotations.rest.spring.test;
+package org.androidannotations.rest.spring;
 
 import org.androidannotations.rest.spring.annotations.Body;
-import org.androidannotations.rest.spring.annotations.Field;
-import org.androidannotations.rest.spring.annotations.Part;
+import org.androidannotations.rest.spring.annotations.Delete;
 import org.androidannotations.rest.spring.annotations.Post;
+import org.androidannotations.rest.spring.annotations.Put;
 import org.androidannotations.rest.spring.annotations.Rest;
-import org.androidannotations.rest.spring.api.RestClientSupport;
-import org.springframework.http.converter.FormHttpMessageConverter;
+import org.springframework.http.converter.json.MappingJacksonHttpMessageConverter;
 
-@Rest(converters = { FormHttpMessageConverter.class })
-public interface PostRestService extends RestClientSupport {
+@Rest(converters = MappingJacksonHttpMessageConverter.class)
+public interface ClientWithBodyParameters {
 
-	@Post("/")
-	void post(@Field("otherParam") String postParam, @Field("postParam") String otherParam, @Field String thirdParam);
+	@Delete("/test/")
+	void deleteWithBody(@Body Entity entity);
 
-	@Post("/")
-	void multipart(@Part("otherParam") String postParam, @Part("postParam") String otherParam, @Part String thirdParam);
+	@Post("/test/")
+	void postWithBody(@Body Entity entity);
 
-	@Post("/")
-	void postRequests(@Body String postParam);
+	@Put("/test/")
+	void putWithBody(@Body Entity entity);
+
 }
