@@ -152,7 +152,6 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
     }
 
     final CcCommon common = new CcCommon(ruleContext);
-    common.reportInvalidOptions(ruleContext);
     CompilationInfo compilationInfo =
         new CcCompilationHelper(
                 ruleContext,
