@@ -146,8 +146,7 @@ public class AmqpTransport extends ThrottleableTransport {
         if (configuration.intIsSet(CK_HEARTBEAT_TIMEOUT)) {
             heartbeatTimeout = configuration.getInt(CK_HEARTBEAT_TIMEOUT);
             if (heartbeatTimeout < 0) {
-                LOG.warn("AMQP heartbeat interval must not be negative ({}), using default timeout ({}).",
-                         heartbeatTimeout, ConnectionFactory.DEFAULT_HEARTBEAT);
+                LOG.warn("AMQP heartbeat timeout {} should not be negative, disabling timeout.", heartbeatTimeout);
                 heartbeatTimeout = ConnectionFactory.DEFAULT_HEARTBEAT;
             }
         }
@@ -316,7 +315,7 @@ public class AmqpTransport extends ThrottleableTransport {
                             CK_HEARTBEAT_TIMEOUT,
                             "Heartbeat timeout",
                             ConnectionFactory.DEFAULT_HEARTBEAT,
-                            "Heartbeat interval in seconds (use 0 to disable heartbeat)",
+                            "Heartbeat timeout interval in seconds (use 0 for no heartbeat)",
                             ConfigurationField.Optional.NOT_OPTIONAL
                     )
             );
