@@ -1020,9 +1020,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
                 if (node == null) {
                     break;
                 }
-                if(!node.split(nextSplits)) { // Split the parent node into two children nodes
-                    leaves--;
-                }
+                node.split(nextSplits); // Split the parent node into two children nodes
             }
         }
 
