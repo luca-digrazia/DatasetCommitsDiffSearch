@@ -9,7 +9,6 @@ import java.util.List;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -121,11 +120,4 @@ public class BuildMojo extends QuarkusBootstrapMojo {
             }
         }
     }
-
-    @Override
-    public void setLog(Log log) {
-        super.setLog(log);
-        MojoLogger.delegate = log;
-    }
-
 }
