@@ -88,11 +88,9 @@ public class ShadowedApiAdapterHelper {
    * @param verbatimInvocationSite The invocation site parsed directly from the desugar input jar.
    *     No in-process label, such as "__desugar__/", is attached to this invocation site.
    */
-  static boolean shouldUseApiTypeAdapter(
-      MethodInvocationSite verbatimInvocationSite, BootClassPathDigest bootClassPathDigest) {
+  static boolean shouldUseApiTypeAdapter(MethodInvocationSite verbatimInvocationSite) {
     return verbatimInvocationSite.invocationKind() != MemberUseKind.INVOKESPECIAL
-        && verbatimInvocationSite.owner().isAndroidDomainType()
-        && bootClassPathDigest.containsType(verbatimInvocationSite.owner())
+        && verbatimInvocationSite.owner().isInPackageEligibleForTypeAdapter()
         && verbatimInvocationSite.method().getHeaderTypeNameSet().stream()
             .anyMatch(ClassName::isDesugarShadowedType);
   }

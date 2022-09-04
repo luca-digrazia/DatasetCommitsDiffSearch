@@ -79,7 +79,7 @@ public final class ShadowedApiInvocationSite extends ClassVisitor {
       InvocationSiteTransformationRecordBuilder invocationSiteRecord,
       BootClassPathDigest bootClassPathDigest,
       TypeHierarchy typeHierarchy) {
-    super(Opcodes.ASM8, classVisitor);
+    super(Opcodes.ASM7, classVisitor);
     this.invocationSiteRecord = invocationSiteRecord;
     this.bootClassPathDigest = bootClassPathDigest;
     this.typeHierarchy = typeHierarchy;
