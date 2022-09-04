@@ -16,70 +16,103 @@
  */
 package org.graylog.security.rest;
 
-import com.google.common.collect.ImmutableMap;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.graylog.grn.GRN;
+import org.graylog.grn.GRNRegistry;
 import org.graylog.security.DBGrantService;
-import org.graylog.security.GrantDTO;
-import org.graylog.security.shares.EntitySharePrepareRequest;
-import org.graylog.security.shares.EntitySharePrepareResponse;
+import org.graylog.security.entities.EntityDescriptor;
 import org.graylog.security.shares.EntityShareRequest;
+import org.graylog.security.shares.EntityShareResponse;
 import org.graylog.security.shares.EntitySharesService;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog.security.shares.GranteeSharesService;
 import org.graylog2.audit.jersey.NoAuditEvent;
-import org.graylog2.utilities.GRN;
-import org.graylog2.utilities.GRNRegistry;
+import org.graylog2.plugin.database.users.User;
+import org.graylog2.rest.PaginationParameters;
+import org.graylog2.rest.models.PaginatedResponse;
+import org.graylog2.shared.users.UserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.ws.rs.BeanParam;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.GET;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.List;
+import java.util.Collections;
 
 import static java.util.Objects.requireNonNull;
+import static org.graylog2.shared.security.RestPermissions.USERS_EDIT;
 
-@Path("shares")
+@Path("/authz/shares")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
-@Api(value = "Permissions/Sharing", description = "Manage share permissions on entities")
+@Api(value = "Authorization/Shares", description = "Manage share permissions on entities")
 @RequiresAuthentication
 public class EntitySharesResource extends RestResourceWithOwnerCheck {
+    private static final Logger LOG = LoggerFactory.getLogger(EntitySharesResource.class);
+
     private final GRNRegistry grnRegistry;
     private final DBGrantService grantService;
+    private final UserService userService;
+    private final GranteeSharesService granteeSharesService;
     private final EntitySharesService entitySharesService;
 
     @Inject
     public EntitySharesResource(GRNRegistry grnRegistry,
                                 DBGrantService grantService,
+                                UserService userService,
+                                GranteeSharesService granteeSharesService,
                                 EntitySharesService entitySharesService) {
         this.grnRegistry = grnRegistry;
         this.grantService = grantService;
+        this.userService = userService;
+        this.granteeSharesService = granteeSharesService;
         this.entitySharesService = entitySharesService;
     }
 
     @GET
-    @Path("my")
-    public Response get() {
-        return Response.ok().build();
+    @ApiOperation(value = "Return shares for a user")
+    @Path("user/{userId}")
+    public PaginatedResponse<EntityDescriptor> get(@ApiParam(name = "pagination parameters") @BeanParam PaginationParameters paginationParameters,
+                                                   @ApiParam(name = "userId", required = true) @PathParam("userId") @NotBlank String userId,
+                                                   @ApiParam(name = "capability") @QueryParam("capability") @DefaultValue("") String capabilityFilter,
+                                                   @ApiParam(name = "entity_type") @QueryParam("entity_type") @DefaultValue("") String entityTypeFilter) {
+
+        final User user = userService.loadById(userId);
+        if (user == null) {
+            throw new NotFoundException("Couldn't find user <" + userId + ">");
+        }
+
+        if (!isPermitted(USERS_EDIT, user.getName())) {
+            throw new ForbiddenException("Couldn't access user <" + userId + ">");
+        }
+
+        final GranteeSharesService.SharesResponse response = granteeSharesService.getPaginatedSharesFor(grnRegistry.ofUser(user), paginationParameters, capabilityFilter, entityTypeFilter);
+
+        return PaginatedResponse.create("entities", response.paginatedEntities(), Collections.singletonMap("grantee_capabilities", response.capabilities()));
     }
 
     @POST
     @ApiOperation(value = "Prepare shares for an entity or collection")
     @Path("entities/{entityGRN}/prepare")
     @NoAuditEvent("This does not change any data")
-    public EntitySharePrepareResponse prepareShare(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
-                                                   @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntitySharePrepareRequest request) {
+    public EntityShareResponse prepareShare(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
+                                            @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntityShareRequest request) {
         final GRN grn = grnRegistry.parse(entityGRN);
         checkOwnership(grn);
 
@@ -93,27 +126,17 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
     @POST
     @ApiOperation(value = "Create / update shares for an entity or collection")
     @Path("entities/{entityGRN}")
-    // TODO add description to GraylogServerEventFormatter
-    @AuditEvent(type = AuditEventTypes.GRANTS_UPDATE)
-    public EntitySharePrepareResponse updateEntityShares(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
-                                                         @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntityShareRequest request) {
+    @NoAuditEvent("Audit events are created within EntitySharesService")
+    public Response updateEntityShares(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
+                                                  @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntityShareRequest request) {
         final GRN entity = grnRegistry.parse(entityGRN);
         checkOwnership(entity);
 
-        return entitySharesService.updateEntityShares(entity, request, requireNonNull(getCurrentUser()));
-    }
-
-    @GET
-    @Path("entities/{entityGRN}")
-    public Response entityShares(@PathParam("entityGRN") @NotBlank String entityGRN) {
-        final GRN grn = grnRegistry.parse(entityGRN);
-
-        checkOwnership(grn);
-
-        // TODO: We need to make the return value of this resource more useful to the frontend
-        //       (e.g. returning a list of entities with title, etc.)
-        final List<GrantDTO> grants = grantService.getForTarget(grn);
-
-        return Response.ok(ImmutableMap.of("grants", grants)).build();
+        final EntityShareResponse entityShareResponse = entitySharesService.updateEntityShares(entity, request, requireNonNull(getCurrentUser()));
+        if (entityShareResponse.validationResult().failed()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(entityShareResponse).build();
+        } else {
+            return Response.ok(entityShareResponse).build();
+        }
     }
 }
