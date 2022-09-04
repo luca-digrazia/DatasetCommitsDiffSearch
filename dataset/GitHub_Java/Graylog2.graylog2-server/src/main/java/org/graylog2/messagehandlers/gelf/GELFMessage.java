@@ -20,11 +20,6 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import org.apache.log4j.Logger;
 import org.bson.types.ObjectId;
 import org.graylog2.Tools;
@@ -36,6 +31,7 @@ import org.graylog2.streams.StreamRule;
 import org.graylog2.streams.matchers.StreamRuleMatcherIF;
 import org.json.simple.JSONValue;
 
+import java.util.*;
 import java.util.regex.Pattern;
 import java.util.zip.Deflater;
 
@@ -465,38 +461,6 @@ public class GELFMessage {
      */
     public void setCreatedAt(double createdAt) {
         this.createdAt = createdAt;
-    }
-
-    public Map<String, Object> toElasticSearchObject() {
-        Map<String, Object> obj = new HashMap<String, Object>();
-        obj.put("message", this.getShortMessage());
-        obj.put("full_message", this.getFullMessage());
-        obj.put("file", this.getFile());
-        obj.put("line", this.getLine());
-        obj.put("host", this.getHost());
-        obj.put("facility", this.getFacility());
-        obj.put("level", this.getLevel());
-
-        // Add additional fields. XXX PERFORMANCE
-        for(Map.Entry<String, Object> entry : this.getAdditionalData().entrySet()) {
-            obj.put(entry.getKey(), entry.getValue());
-        }
-
-        if (this.getCreatedAt() <= 0) {
-            // This should have already been set at receiving, but to make sure...
-            obj.put("created_at", Tools.getUTCTimestampWithMilliseconds());
-        } else {
-            obj.put("created_at", this.getCreatedAt());
-        }
-
-        // Manually converting stream ID to string - caused strange problems without it.
-        List<String> streamIds = new ArrayList<String>();
-        for (ObjectId id : this.getStreamIds()) {
-            streamIds.add(id.toString());
-        }
-        obj.put("streams", streamIds);
-
-        return obj;
     }
 
 }
