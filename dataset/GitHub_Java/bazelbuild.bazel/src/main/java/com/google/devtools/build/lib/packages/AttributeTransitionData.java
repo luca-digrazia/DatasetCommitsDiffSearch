@@ -23,7 +23,7 @@ import javax.annotation.Nullable;
  * attributes.
  */
 @AutoValue
-public abstract class AttributeTransitionData implements TransitionFactory.Data {
+public abstract class AttributeTransitionData {
   /** Returns the {@link AttributeMap} which can be used to create a transition. */
   public abstract AttributeMap attributes();
 

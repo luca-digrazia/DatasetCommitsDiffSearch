@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.analysis.AliasProvider.TargetMode;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.PrerequisiteValidator;
@@ -498,7 +499,7 @@ public final class RuleContext extends TargetContext
   }
 
   @Override
-  public ActionLookupValue.ActionLookupKey getOwner() {
+  public ArtifactOwner getOwner() {
     return getAnalysisEnvironment().getOwner();
   }
 
@@ -656,6 +657,22 @@ public final class RuleContext extends TargetContext
    * Creates an artifact in a directory that is unique to the package that contains the rule, thus
    * guaranteeing that it never clashes with artifacts created by rules in other packages.
    */
+  public Artifact getPackageRelativeArtifact(String relative, ArtifactRoot root) {
+    return getPackageRelativeArtifact(PathFragment.create(relative), root);
+  }
+
+  /**
+   * Creates an artifact in a directory that is unique to the package that contains the rule, thus
+   * guaranteeing that it never clashes with artifacts created by rules in other packages.
+   */
+  public Artifact getPackageRelativeTreeArtifact(String relative, ArtifactRoot root) {
+    return getPackageRelativeTreeArtifact(PathFragment.create(relative), root);
+  }
+
+  /**
+   * Creates an artifact in a directory that is unique to the package that contains the rule, thus
+   * guaranteeing that it never clashes with artifacts created by rules in other packages.
+   */
   public Artifact getBinArtifact(String relative) {
     return getBinArtifact(PathFragment.create(relative));
   }
@@ -684,17 +701,8 @@ public final class RuleContext extends TargetContext
   }
 
   @Override
-  public Artifact.DerivedArtifact getPackageRelativeArtifact(
-      PathFragment relative, ArtifactRoot root) {
+  public Artifact getPackageRelativeArtifact(PathFragment relative, ArtifactRoot root) {
     return getDerivedArtifact(getPackageDirectory().getRelative(relative), root);
-  }
-
-  /**
-   * Creates an artifact in a directory that is unique to the package that contains the rule, thus
-   * guaranteeing that it never clashes with artifacts created by rules in other packages.
-   */
-  public Artifact getPackageRelativeArtifact(String relative, ArtifactRoot root) {
-    return getPackageRelativeArtifact(PathFragment.create(relative), root);
   }
 
   @Override
@@ -710,8 +718,7 @@ public final class RuleContext extends TargetContext
    * method.
    */
   @Override
-  public Artifact.DerivedArtifact getDerivedArtifact(
-      PathFragment rootRelativePath, ArtifactRoot root) {
+  public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
     Preconditions.checkState(rootRelativePath.startsWith(getPackageDirectory()),
         "Output artifact '%s' not under package directory '%s' for target '%s'",
         rootRelativePath, getPackageDirectory(), getLabel());
@@ -1414,8 +1421,7 @@ public final class RuleContext extends TargetContext
   }
 
   @Override
-  public final Artifact.DerivedArtifact getRelatedArtifact(
-      PathFragment pathFragment, String extension) {
+  public final Artifact getRelatedArtifact(PathFragment pathFragment, String extension) {
     PathFragment file = FileSystemUtils.replaceExtension(pathFragment, extension);
     return getDerivedArtifact(file, getConfiguration().getBinDirectory(rule.getRepository()));
   }
