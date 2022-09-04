@@ -149,11 +149,11 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
     if (javaBase.getPackageIdentifier().getRepository().isDefault()) {
       return javaBase.getPackageFragment();
     }
-    return javaBase.getPackageIdentifier().getSourceRoot();
+    return javaBase.getPackageIdentifier().getPathUnderExecRoot();
   }
 
   private static Jvm createLegacy(String javaHome) throws InvalidConfigurationException {
-    PathFragment javaHomePathFrag = PathFragment.create(javaHome);
+    PathFragment javaHomePathFrag = new PathFragment(javaHome);
     if (!javaHomePathFrag.isAbsolute()) {
       throw new InvalidConfigurationException(
           "Illegal javabase value '" + javaHome + "', javabase must be an absolute path or label");
