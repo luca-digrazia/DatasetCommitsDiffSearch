@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
@@ -52,9 +53,13 @@ final class SandboxActionContextProvider extends ActionContextProvider {
     ImmutableList.Builder<ActionContext> contexts = ImmutableList.builder();
 
     OptionsProvider options = cmdEnv.getOptions();
-    Duration timeoutKillDelay =
-        Duration.ofSeconds(
-            options.getOptions(LocalExecutionOptions.class).localSigkillGraceSeconds);
+    int timeoutKillDelaySeconds =
+        options.getOptions(LocalExecutionOptions.class).localSigkillGraceSeconds;
+    Optional<Duration> timeoutKillDelay = Optional.empty();
+    if (timeoutKillDelaySeconds >= 0) {
+      timeoutKillDelay = Optional.of(Duration.ofSeconds(timeoutKillDelaySeconds));
+    }
+    String productName = cmdEnv.getRuntime().getProductName();
 
     // This works on most platforms, but isn't the best choice, so we put it first and let later
     // platform-specific sandboxing strategies become the default.
@@ -63,16 +68,17 @@ final class SandboxActionContextProvider extends ActionContextProvider {
           withFallback(
               cmdEnv,
               new ProcessWrapperSandboxedSpawnRunner(
-                  cmdEnv, sandboxBase, cmdEnv.getRuntime().getProductName(), timeoutKillDelay));
+                  cmdEnv, sandboxBase, productName, timeoutKillDelay));
       contexts.add(new ProcessWrapperSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
     }
 
     // This is the preferred sandboxing strategy on Linux.
     if (LinuxSandboxedSpawnRunner.isSupported(cmdEnv)) {
+      // TODO(jmmv): Inject process into spawn runner.
       SpawnRunner spawnRunner =
           withFallback(
               cmdEnv,
-              LinuxSandboxedStrategy.create(cmdEnv, sandboxBase, timeoutKillDelay, process));
+              LinuxSandboxedStrategy.create(cmdEnv, sandboxBase, productName, timeoutKillDelay));
       contexts.add(new LinuxSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
     }
 
@@ -81,7 +87,8 @@ final class SandboxActionContextProvider extends ActionContextProvider {
       SpawnRunner spawnRunner =
           withFallback(
               cmdEnv,
-              new DarwinSandboxedSpawnRunner(cmdEnv, sandboxBase, timeoutKillDelay, process));
+              new DarwinSandboxedSpawnRunner(cmdEnv, sandboxBase, productName, timeoutKillDelay,
+                  process));
       contexts.add(new DarwinSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
     }
 
