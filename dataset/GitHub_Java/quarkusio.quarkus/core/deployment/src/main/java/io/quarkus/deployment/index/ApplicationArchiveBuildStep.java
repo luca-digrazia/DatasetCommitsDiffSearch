@@ -100,8 +100,7 @@ public class ApplicationArchiveBuildStep {
 
         List<ApplicationArchive> applicationArchives = scanForOtherIndexes(Thread.currentThread().getContextClassLoader(),
                 markerFiles, root.getPath(), additionalApplicationArchiveBuildItem, indexCache);
-        return new ApplicationArchivesBuildItem(
-                new ApplicationArchiveImpl(appindex.getIndex(), root.getPath(), null, false, root.getPath()),
+        return new ApplicationArchivesBuildItem(new ApplicationArchiveImpl(appindex.getIndex(), root.getPath(), null),
                 applicationArchives);
     }
 
@@ -156,11 +155,11 @@ public class ApplicationArchiveBuildStep {
             LOGGER.debugf("Indexing dependency: %s", dep);
             if (Files.isDirectory(dep)) {
                 IndexView indexView = handleFilePath(dep);
-                ret.add(new ApplicationArchiveImpl(indexView, dep, null, false, dep));
+                ret.add(new ApplicationArchiveImpl(indexView, dep, null));
             } else {
                 IndexView index = handleJarPath(dep, indexCache);
                 FileSystem fs = FileSystems.newFileSystem(dep, classLoader);
-                ret.add(new ApplicationArchiveImpl(index, fs.getRootDirectories().iterator().next(), fs, true, dep));
+                ret.add(new ApplicationArchiveImpl(index, fs.getRootDirectories().iterator().next(), fs));
             }
         }
 
