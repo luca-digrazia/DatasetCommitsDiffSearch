@@ -1,20 +1,34 @@
 package com.yammer.dropwizard.client;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.yammer.dropwizard.validation.ValidationMethod;
+
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 
+/**
+ * The configuration class used by {@link JerseyClientBuilder}. Extends
+ * {@link HttpClientConfiguration}.
+ *
+ * @see HttpClientConfiguration
+ * @see <a href="http://dropwizard.codahale.com/manual/client/#man-client-jersey-config">Jersey Client Configuration</a>
+ */
 public class JerseyClientConfiguration extends HttpClientConfiguration {
-    // TODO: 11/16/11 <coda> -- validate minThreads <= maxThreads
-
-    @Max(16 * 1024)
     @Min(1)
+    @Max(16 * 1024)
+    @JsonProperty
     private int minThreads = 1;
 
-    @Max(16 * 1024)
     @Min(1)
+    @Max(16 * 1024)
+    @JsonProperty
     private int maxThreads = 128;
 
+    @JsonProperty
     private boolean gzipEnabled = true;
+
+    @JsonProperty
+    private boolean gzipEnabledForRequests = true;
 
     public int getMinThreads() {
         return minThreads;
@@ -36,7 +50,25 @@ public class JerseyClientConfiguration extends HttpClientConfiguration {
         return gzipEnabled;
     }
 
-    public void setGzipEnabled(boolean enable) {
-        this.gzipEnabled = enable;
+    public void setGzipEnabled(boolean enabled) {
+        this.gzipEnabled = enabled;
+    }
+
+    public boolean isGzipEnabledForRequests() {
+        return gzipEnabledForRequests;
+    }
+
+    public void setGzipEnabledForRequests(boolean enabled) {
+        this.gzipEnabledForRequests = enabled;
+    }
+
+    @ValidationMethod(message = ".minThreads must be less than or equal to maxThreads")
+    public boolean isThreadPoolSizedCorrectly() {
+        return minThreads <= maxThreads;
+    }
+
+    @ValidationMethod(message = ".gzipEnabledForRequests requires gzipEnabled set to true")
+    public boolean isCompressionConfigurationValid() {
+        return !gzipEnabledForRequests || gzipEnabled;
     }
 }
