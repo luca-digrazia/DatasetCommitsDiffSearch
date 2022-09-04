@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,21 +15,29 @@
  */
 package org.androidannotations.processing;
 
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+
+import java.lang.annotation.Annotation;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.Touch;
-import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.helper.IdAnnotationHelper;
+import org.androidannotations.processing.EBeansHolder.Classes;
 import org.androidannotations.rclass.IRClass;
-
+import org.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
+import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
@@ -37,20 +45,44 @@ import com.sun.codemodel.JVar;
 
 /**
  */
-public class TouchProcessor extends AbstractListenerProcessor {
+public class TouchProcessor implements DecoratingElementProcessor {
+
+	private IdAnnotationHelper helper;
 
 	public TouchProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
-		super(processingEnv, rClass);
+		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
 	}
 
 	@Override
-	public String getTarget() {
-		return Touch.class.getName();
+	public Class<? extends Annotation> getTarget() {
+		return Touch.class;
 	}
 
 	@Override
-	protected void makeCall(JBlock listenerMethodBody, JInvocation call, TypeMirror returnType) {
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+		Classes classes = holder.classes();
+
+		String methodName = element.getSimpleName().toString();
+
+		ExecutableElement executableElement = (ExecutableElement) element;
+		List<? extends VariableElement> parameters = executableElement.getParameters();
+		TypeMirror returnType = executableElement.getReturnType();
 		boolean returnMethodResult = returnType.getKind() != TypeKind.VOID;
+
+		boolean hasItemParameter = parameters.size() == 2;
+
+		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, Res.ID, true);
+
+		JDefinedClass listenerClass = codeModel.anonymousClass(classes.ON_TOUCH_LISTENER);
+		JMethod listenerMethod = listenerClass.method(JMod.PUBLIC, codeModel.BOOLEAN, "onTouch");
+		listenerMethod.annotate(Override.class);
+
+		JVar viewParam = listenerMethod.param(classes.VIEW, "view");
+		JVar eventParam = listenerMethod.param(classes.MOTION_EVENT, "event");
+
+		JBlock listenerMethodBody = listenerMethod.body();
+
+		JInvocation call = JExpr.invoke(methodName);
 
 		if (returnMethodResult) {
 			listenerMethodBody._return(call);
@@ -58,45 +90,20 @@ public class TouchProcessor extends AbstractListenerProcessor {
 			listenerMethodBody.add(call);
 			listenerMethodBody._return(JExpr.TRUE);
 		}
-	}
 
-	@Override
-	protected void processParameters(JMethod listenerMethod, JInvocation call, List<? extends VariableElement> parameters) {
-		JVar viewParam = listenerMethod.param(classes.VIEW, "view");
-		JVar eventParam = listenerMethod.param(classes.MOTION_EVENT, "event");
-		boolean hasItemParameter = parameters.size() == 2;
+		call.arg(eventParam);
 
-		VariableElement first = parameters.get(0);
-		String firstType = first.asType().toString();
-		if (firstType.equals(CanonicalNameConstants.MOTION_EVENT)) {
-			call.arg(eventParam);
-		} else { // if (first.equals(CanonicalNameConstants.VIEW))
+		if (hasItemParameter) {
 			call.arg(viewParam);
 		}
-		if (hasItemParameter) {
-			VariableElement second = parameters.get(1);
-			String secondType = second.asType().toString();
-			if (secondType.equals(CanonicalNameConstants.MOTION_EVENT)) {
-				call.arg(eventParam);
-			} else { // if (first.equals(CanonicalNameConstants.MOTION_EVENT))
-				call.arg(viewParam);
-			}
+
+		for (JFieldRef idRef : idsRefs) {
+			JBlock block = holder.afterSetContentView.body().block();
+			JInvocation findViewById = JExpr.invoke("findViewById");
+
+			JVar view = block.decl(classes.VIEW, "view", findViewById.arg(idRef));
+			block._if(view.ne(_null()))._then().invoke(view, "setOnTouchListener").arg(_new(listenerClass));
 		}
-	}
-
-	@Override
-	protected JMethod createListenerMethod(JDefinedClass listenerAnonymousClass) {
-		return listenerAnonymousClass.method(JMod.PUBLIC, codeModel.BOOLEAN, "onTouch");
-	}
-
-	@Override
-	protected String getSetterName() {
-		return "setOnTouchListener";
-	}
-
-	@Override
-	protected JClass getListenerClass() {
-		return classes.VIEW_ON_TOUCH_LISTENER;
 	}
 
 }

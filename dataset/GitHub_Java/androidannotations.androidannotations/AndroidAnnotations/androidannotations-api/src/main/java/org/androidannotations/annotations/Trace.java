@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,36 +23,15 @@ import java.lang.annotation.Target;
 import android.util.Log;
 
 /**
- * This annotation is intended to be used on methods to log at runtime the
- * execution time.
- * <p/>
- * All annotation values are optional :
- * <ul>
- * <li><i>tag</i>: the tag used for the log message. (default: enclosing class
- * name)</li>
- * <li><i>level</i>: the log level used for the log message. (default :
- * LOG.INFO).</li>
- * </ul>
- * <p/>
- * <blockquote>
+ * Use this annotation to log at runtime the execution time of the targeted
+ * method.
  * 
- * Example :
+ * <i>tag</i> (optional) : the tag used for the log message. (default: enclosing
+ * class name)
  * 
- * <pre>
- * &#064;Trace
- * void doWork() {
- * 	// ... Do Work ...
- * }
- * </pre>
+ * <i>level</i> (optional) : the log level used for the log message. (default :
+ * LOG.INFO).
  * 
- * This will log these lines :
- * 
- * <pre>
- * I/TracedMethodActivity(  302): Entering [void doWork() ]
- * I/TracedMethodActivity(  302): Exiting [void doWork() ], duration in ms: 1002
- * </pre>
- * 
- * </blockquote>
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)

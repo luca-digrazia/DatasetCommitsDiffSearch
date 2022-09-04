@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,51 +21,18 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * This annotation is intended to be used on methods to receive events defined
- * by
- * {@link android.view.View.OnLongClickListener#onLongClick(android.view.View)}
- * when the view has been long clicked by the user.
- * <p/>
+ * Should be used on long click listener methods in activity classes
+ * 
+ * The method may have zero or one parameter, that MUST be of type
+ * android.view.View .
+ * 
  * The annotation value should be one of R.id.* fields. If not set, the method
  * name will be used as the R.id.* field name.
- * <p/>
- * The method may return a <code>boolean</code>, void, or a
- * {@link java.lang.Boolean}. If returning void, it will be considered as
- * returning true (ie: the method has handled the event).
- * <p/>
- * The method MAY have one parameter:
- * <ul>
- * <li>A {@link android.view.View} parameter to know which view has been long
- * clicked
- * </ul>
- * <p/>
- * <blockquote>
  * 
- * Example :
+ * The method may return a boolean, void, or a java.lang.Boolean. If returning
+ * void, it will be considered as returning true (ie the method has handled the
+ * event).
  * 
- * <pre>
- * &#064;LongClick(<b>R.id.myButton</b>)
- * void longClickOnMyButton() {
- * 	// Something Here
- * }
- * 
- * &#064;LongClick
- * void <b>myButton</b>LongClicked(View view) {
- * 	// Something Here
- * }
- * 
- * &#064;LongClick(<b>R.id.myButton</b>)
- * boolean longClick<b>Consumed</b>OnMyButton(View view) {
- * 	return true;
- * }
- * </pre>
- * 
- * </blockquote>
- * 
- * @see Click
- * @see ItemClick
- * @see ItemLongClick
- * @see ItemSelect
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)

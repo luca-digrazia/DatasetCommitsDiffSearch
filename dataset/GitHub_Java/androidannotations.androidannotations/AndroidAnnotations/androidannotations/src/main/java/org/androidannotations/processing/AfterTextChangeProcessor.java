@@ -26,9 +26,11 @@ import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.AfterTextChange;
 import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.TextWatcherHelper;
 import org.androidannotations.rclass.IRClass;
 import org.androidannotations.rclass.IRClass.Res;
+
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpression;
@@ -38,7 +40,6 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
 /**
- * @author Mathieu Boniface
  */
 public class AfterTextChangeProcessor implements DecoratingElementProcessor {
 
@@ -72,10 +73,10 @@ public class AfterTextChangeProcessor implements DecoratingElementProcessor {
 			VariableElement parameter = parameters.get(i);
 			TypeMirror parameterType = parameter.asType();
 
-			if ("android.text.Editable".equals(parameterType.toString())) {
+			if (CanonicalNameConstants.EDITABLE.equals(parameterType.toString())) {
 				editableParameterPosition = i;
 			} else {
-				TypeMirror textViewType = helper.typeElementFromQualifiedName("android.widget.TextView").asType();
+				TypeMirror textViewType = helper.typeElementFromQualifiedName(CanonicalNameConstants.TEXT_VIEW).asType();
 				if (helper.isSubtype(parameterType, textViewType)) {
 					viewParameterPosition = i;
 					viewParameterType = parameterType;

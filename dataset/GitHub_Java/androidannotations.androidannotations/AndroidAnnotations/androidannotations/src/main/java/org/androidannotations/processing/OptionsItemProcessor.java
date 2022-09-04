@@ -32,10 +32,11 @@ import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.OptionsItem;
 import org.androidannotations.helper.IdAnnotationHelper;
-import org.androidannotations.helper.SherlockHelper;
+import org.androidannotations.helper.ThirdPartyLibHelper;
 import org.androidannotations.processing.EBeansHolder.Classes;
 import org.androidannotations.rclass.IRClass;
 import org.androidannotations.rclass.IRClass.Res;
+
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -47,17 +48,16 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
 /**
- * @author Pierre-Yves Ricau
  */
 public class OptionsItemProcessor implements DecoratingElementProcessor {
 
 	private final IdAnnotationHelper helper;
 
-	private final SherlockHelper sherlockHelper;
+	private final ThirdPartyLibHelper libHelper;
 
 	public OptionsItemProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
 		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
-		sherlockHelper = new SherlockHelper(helper);
+		libHelper = new ThirdPartyLibHelper(helper);
 	}
 
 	@Override
@@ -72,7 +72,7 @@ public class OptionsItemProcessor implements DecoratingElementProcessor {
 		String methodName = element.getSimpleName().toString();
 
 		JClass menuItemClass;
-		if (sherlockHelper.usesSherlock(holder)) {
+		if (libHelper.usesActionBarSherlock(holder)) {
 			menuItemClass = classes.SHERLOCK_MENU_ITEM;
 		} else {
 			menuItemClass = classes.MENU_ITEM;

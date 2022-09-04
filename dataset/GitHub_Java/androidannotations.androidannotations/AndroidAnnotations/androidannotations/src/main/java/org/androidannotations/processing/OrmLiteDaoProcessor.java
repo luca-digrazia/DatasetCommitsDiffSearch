@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,6 +17,8 @@ package org.androidannotations.processing;
 
 import static com.sun.codemodel.JExpr.ref;
 import static com.sun.codemodel.JMod.PRIVATE;
+
+import java.lang.annotation.Annotation;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -39,7 +41,7 @@ import com.sun.codemodel.JVar;
  */
 public class OrmLiteDaoProcessor implements DecoratingElementProcessor {
 
-	private static final String DATABASE_HELPER_FIELD_NAME = "helper_";
+	private static final String CONNECTION_SOURCE_FIELD_NAME = "connectionSource_";
 	private TargetAnnotationHelper helper;
 
 	public OrmLiteDaoProcessor(ProcessingEnvironment processingEnv) {
@@ -47,8 +49,8 @@ public class OrmLiteDaoProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public String getTarget() {
-		return OrmLiteDao.class.getName();
+	public Class<? extends Annotation> getTarget() {
+		return OrmLiteDao.class;
 	}
 
 	@Override
@@ -61,34 +63,37 @@ public class OrmLiteDaoProcessor implements DecoratingElementProcessor {
 
 		TypeMirror databaseHelperTypeMirror = helper.extractAnnotationParameter(element, "helper");
 
-		// database helper field
-		boolean databaseHelperInjected = holder.generatedClass.fields().containsKey(DATABASE_HELPER_FIELD_NAME);
+		// connection source field
+		boolean connectionSourceInjected = holder.generatedClass.fields().containsKey(CONNECTION_SOURCE_FIELD_NAME);
 
-		JBlock initBody = holder.initBody;
+		JBlock initBody = holder.init.body();
 
-		JFieldVar databaseHelperRef;
-		if (databaseHelperInjected) {
-			databaseHelperRef = holder.generatedClass.fields().get(DATABASE_HELPER_FIELD_NAME);
+		JFieldVar connectionSourceRef;
+		if (connectionSourceInjected) {
+			connectionSourceRef = holder.generatedClass.fields().get(CONNECTION_SOURCE_FIELD_NAME);
 		} else {
-			databaseHelperRef = holder.generatedClass.field(PRIVATE, holder.refClass(databaseHelperTypeMirror.toString()), DATABASE_HELPER_FIELD_NAME);
+			connectionSourceRef = holder.generatedClass.field(PRIVATE, classes.CONNECTION_SOURCE, CONNECTION_SOURCE_FIELD_NAME);
 
-			// get database helper instance
+			// get connection source
 			JExpression dbHelperClass = holder.refClass(databaseHelperTypeMirror.toString()).dotclass();
 
-			initBody.assign(databaseHelperRef, //
+			initBody.assign(connectionSourceRef, //
 					classes.OPEN_HELPER_MANAGER //
 							.staticInvoke("getHelper") //
 							.arg(holder.contextRef) //
-							.arg(dbHelperClass));
+							.arg(dbHelperClass) //
+							.invoke("getConnectionSource"));
 		}
 
-		// create dao from database helper
+		// create dao from dao manager
 		JTryBlock tryBlock = initBody._try();
 
 		JExpression modelClass = holder.refClass(modelObjectTypeMirror.toString()).dotclass();
 		tryBlock.body().assign(ref(fieldName), //
-				databaseHelperRef.invoke("getDao"). //
-						arg(modelClass));
+				classes.DAO_MANAGER //
+						.staticInvoke("createDao") //
+						.arg(connectionSourceRef) //
+						.arg(modelClass));
 
 		JCatchBlock catchBlock = tryBlock._catch(classes.SQL_EXCEPTION);
 		JVar exception = catchBlock.param("e");
@@ -96,7 +101,7 @@ public class OrmLiteDaoProcessor implements DecoratingElementProcessor {
 		catchBlock.body() //
 				.staticInvoke(classes.LOG, "e") //
 				.arg(holder.generatedClass.name()) //
-				.arg("Could not create DAO " + fieldName) //
+				.arg("Could not create DAO") //
 				.arg(exception);
 	}
 }
