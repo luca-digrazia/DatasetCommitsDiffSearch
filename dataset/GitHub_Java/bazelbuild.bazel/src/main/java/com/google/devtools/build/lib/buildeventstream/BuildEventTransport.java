@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.buildeventstream;
 
-import com.google.common.util.concurrent.ListenableFuture;
+import java.util.concurrent.Future;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -28,11 +28,6 @@ import javax.annotation.concurrent.ThreadSafe;
 public interface BuildEventTransport {
 
   /**
-   * The name of this transport as can be displayed to a user.
-   */
-  String name();
-
-  /**
    * Writes a build event to an endpoint. This method will always return quickly and will not
    * wait for the write to complete.
    *
@@ -43,7 +38,7 @@ public interface BuildEventTransport {
    *
    * @param event the event to sendBuildEvent.
    */
-  void sendBuildEvent(BuildEvent event, ArtifactGroupNamer namer);
+  void sendBuildEvent(BuildEvent event);
 
   /**
    * Initiates a close. Callers may listen to the returned future to be notified when the close
@@ -54,5 +49,5 @@ public interface BuildEventTransport {
    *
    * <p>This method should not throw any exceptions.
    */
-  ListenableFuture<Void> close();
+  Future<Void> close();
 }

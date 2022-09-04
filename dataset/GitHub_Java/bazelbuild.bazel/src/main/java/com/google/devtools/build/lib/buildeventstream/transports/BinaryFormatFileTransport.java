@@ -16,9 +16,7 @@ package com.google.devtools.build.lib.buildeventstream.transports;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
@@ -36,31 +34,13 @@ public final class BinaryFormatFileTransport extends FileTransport {
   private static final Logger log = Logger.getLogger(BinaryFormatFileTransport.class.getName());
 
   private static final int MAX_VARINT_BYTES = 9;
-  private final PathConverter pathConverter;
 
   BinaryFormatFileTransport(String path, PathConverter pathConverter) {
-    super(path);
-    this.pathConverter = pathConverter;
+    super(path, pathConverter);
   }
 
   @Override
-  public String name() {
-    return this.getClass().getSimpleName();
-  }
-  
-  @Override
-  public synchronized void sendBuildEvent(BuildEvent event, final ArtifactGroupNamer namer) {
-    BuildEventConverters converters =
-        new BuildEventConverters() {
-          @Override
-          public PathConverter pathConverter() {
-            return pathConverter;
-          }
-          @Override
-          public ArtifactGroupNamer artifactGroupNamer() {
-            return namer;
-          }
-        };
+  public void sendBuildEvent(BuildEvent event) {
     checkNotNull(event);
     BuildEventStreamProtos.BuildEvent protoEvent = event.asStreamProto(converters);
 

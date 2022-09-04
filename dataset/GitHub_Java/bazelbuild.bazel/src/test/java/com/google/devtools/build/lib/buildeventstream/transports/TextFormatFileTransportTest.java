@@ -19,17 +19,13 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.base.Joiner;
 import com.google.common.io.Files;
-import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildStarted;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Progress;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.TargetComplete;
-import com.google.devtools.build.lib.buildeventstream.LocalFilesArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
-import com.google.devtools.common.options.Options;
 import com.google.protobuf.TextFormat;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -48,15 +44,12 @@ import org.mockito.MockitoAnnotations;
 /** Tests {@link TextFormatFileTransport}. **/
 @RunWith(JUnit4.class)
 public class TextFormatFileTransportTest {
-  private final BuildEventProtocolOptions defaultOpts =
-      Options.getDefaults(BuildEventProtocolOptions.class);
 
   @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
   @Mock public BuildEvent buildEvent;
 
   @Mock public PathConverter pathConverter;
-  @Mock public ArtifactGroupNamer artifactGroupNamer;
 
   @Before
   public void initMocks() {
@@ -76,23 +69,22 @@ public class TextFormatFileTransportTest {
         BuildEventStreamProtos.BuildEvent.newBuilder()
             .setStarted(BuildStarted.newBuilder().setCommand("build"))
             .build();
-    when(buildEvent.asStreamProto(Matchers.<BuildEventContext>any())).thenReturn(started);
+    when(buildEvent.asStreamProto(Matchers.<BuildEventConverters>any())).thenReturn(started);
     TextFormatFileTransport transport =
-        new TextFormatFileTransport(
-            output.getAbsolutePath(), defaultOpts, new LocalFilesArtifactUploader(), (e) -> {});
-    transport.sendBuildEvent(buildEvent, artifactGroupNamer);
+        new TextFormatFileTransport(output.getAbsolutePath(), pathConverter);
+    transport.sendBuildEvent(buildEvent);
 
     BuildEventStreamProtos.BuildEvent progress =
         BuildEventStreamProtos.BuildEvent.newBuilder().setProgress(Progress.newBuilder()).build();
-    when(buildEvent.asStreamProto(Matchers.<BuildEventContext>any())).thenReturn(progress);
-    transport.sendBuildEvent(buildEvent, artifactGroupNamer);
+    when(buildEvent.asStreamProto(Matchers.<BuildEventConverters>any())).thenReturn(progress);
+    transport.sendBuildEvent(buildEvent);
 
     BuildEventStreamProtos.BuildEvent completed =
         BuildEventStreamProtos.BuildEvent.newBuilder()
             .setCompleted(TargetComplete.newBuilder().setSuccess(true))
             .build();
-    when(buildEvent.asStreamProto(Matchers.<BuildEventContext>any())).thenReturn(completed);
-    transport.sendBuildEvent(buildEvent, artifactGroupNamer);
+    when(buildEvent.asStreamProto(Matchers.<BuildEventConverters>any())).thenReturn(completed);
+    transport.sendBuildEvent(buildEvent);
 
     transport.close().get();
     String contents =
