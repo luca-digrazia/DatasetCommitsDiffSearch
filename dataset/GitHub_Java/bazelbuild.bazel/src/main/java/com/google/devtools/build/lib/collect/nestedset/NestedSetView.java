@@ -13,10 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect.nestedset;
 
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
-
 import com.google.common.collect.ImmutableSet;
-import java.util.Arrays;
 import java.util.Set;
 
 /**
@@ -69,12 +66,16 @@ public class NestedSetView<E> {
    */
   public Set<NestedSetView<E>> transitives() {
     if (!(set instanceof Object[])) {
-      return ImmutableSet.of();
+      return ImmutableSet.<NestedSetView<E>>of();
     }
-    return Arrays.stream((Object[]) set)
-        .filter(c -> c instanceof Object[])
-        .map(c -> new NestedSetView<E>(c))
-        .collect(toImmutableSet());
+    ImmutableSet.Builder<NestedSetView<E>> transitives =
+        new ImmutableSet.Builder<NestedSetView<E>>();
+    for (Object c : (Object[]) set) {
+      if (c instanceof Object[]) {
+        transitives.add(new NestedSetView(c));
+      }
+    }
+    return transitives.build();
   }
 
   /**
@@ -83,14 +84,16 @@ public class NestedSetView<E> {
    * <p>This refers to the direct members after any inlining that might have happened at
    * construction of the nested set.
    */
-  @SuppressWarnings("unchecked")
   public Set<E> directs() {
     if (!(set instanceof Object[])) {
-      return ImmutableSet.of((E) set);
+      return ImmutableSet.<E>of((E) set);
     }
-    return Arrays.stream((Object[]) set)
-        .filter(c -> !(c instanceof Object[]))
-        .map(c -> (E) c)
-        .collect(toImmutableSet());
+    ImmutableSet.Builder<E> children = new ImmutableSet.Builder<E>();
+    for (Object c : (Object[]) set) {
+      if (!(c instanceof Object[])) {
+        children.add((E) c);
+      }
+    }
+    return children.build();
   }
 }

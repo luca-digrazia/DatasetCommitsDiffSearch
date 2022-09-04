@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect.nestedset;
 
-import static java.util.stream.Collectors.joining;
-
 import com.google.common.base.Function;
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.CompactHashSet;
 import java.util.AbstractCollection;
 import java.util.Arrays;
@@ -26,7 +26,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
 /**
@@ -143,7 +142,7 @@ public final class NestedSet<E> implements Iterable<E> {
   }
 
   /**
-   * Returns the internal item or array. For use by NestedSetVisitor and NestedSetView. Those two
+   * Returns the internal item or array. For use by NestedSetVisitor and NestedSetView. Those to
    * classes also have knowledge of the internal implementation of NestedSet.
    */
   Object rawChildren() {
@@ -246,9 +245,8 @@ public final class NestedSet<E> implements Iterable<E> {
   // TODO:  this leaves LINK_ORDER backwards
   private static String childrenToString(Object children) {
     if (children instanceof Object[]) {
-      return "{"
-          + Stream.of((Object[]) children).map(Stringer.INSTANCE).collect(joining(", "))
-          + "}";
+      return "{" + Joiner.on(", ").join(Iterables.transform(
+          Arrays.asList((Object[]) children), Stringer.INSTANCE)) + "}";
     } else {
       return children.toString();
     }

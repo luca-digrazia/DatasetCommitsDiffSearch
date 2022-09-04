@@ -104,6 +104,6 @@ public class GotOptionsEvent implements BuildEventWithOrderConstraint {
 
   @Override
   public Collection<BuildEventId> postedAfter() {
-    return ImmutableList.of(BuildEventId.buildStartedId(), BuildEventId.commandlineId());
+    return ImmutableList.of(BuildEventId.buildStartedId());
   }
 }

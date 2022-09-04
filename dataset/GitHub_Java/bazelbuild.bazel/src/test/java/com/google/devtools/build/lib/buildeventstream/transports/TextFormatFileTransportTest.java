@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Tar
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.protobuf.TextFormat;
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.junit.After;
 import org.junit.Before;
@@ -62,7 +63,7 @@ public class TextFormatFileTransportTest {
   }
 
   @Test
-  public void testCreatesFileAndWritesProtoTextFormat() throws Exception {
+  public void testCreatesFileAndWritesProtoTextFormat() throws IOException {
     File output = tmp.newFile();
 
     BuildEventStreamProtos.BuildEvent started =
@@ -86,7 +87,7 @@ public class TextFormatFileTransportTest {
     when(buildEvent.asStreamProto(Matchers.<BuildEventConverters>any())).thenReturn(completed);
     transport.sendBuildEvent(buildEvent);
 
-    transport.close().get();
+    transport.close();
     String contents =
         trimLines(
             Joiner.on(System.lineSeparator())

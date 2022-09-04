@@ -18,7 +18,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.Futures;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
@@ -32,7 +31,6 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.Future;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -54,9 +52,7 @@ public class BuildEventStreamerTest {
     }
 
     @Override
-    public Future<Void> close() {
-      return Futures.immediateFuture(null);
-    }
+    public void close() {}
 
     List<BuildEvent> getEvents() {
       return events;

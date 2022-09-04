@@ -15,19 +15,18 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
-import com.google.devtools.build.lib.analysis.AliasProvider;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.AnsiTerminalPrinter.Mode;
 import com.google.devtools.build.lib.vfs.Path;
@@ -335,10 +334,6 @@ public class TestSummary implements Comparable<TestSummary>, BuildEvent {
     return builder;
   }
 
-  public Label getLabel() {
-    return AliasProvider.getDependencyLabel(target);
-  }
-
   public ConfiguredTarget getTarget() {
     return target;
   }
@@ -421,20 +416,22 @@ public class TestSummary implements Comparable<TestSummary>, BuildEvent {
   }
 
   private static int getSortKey(BlazeTestStatus status) {
-    return status == BlazeTestStatus.PASSED ? -1 : status.getNumber();
+    return status == BlazeTestStatus.PASSED ? -1 : status.ordinal();
   }
 
   @Override
   public int compareTo(TestSummary that) {
-    return ComparisonChain.start()
-        .compareTrueFirst(this.isCached(), that.isCached())
-        .compare(this.numUncached(), that.numUncached())
-        .compare(getSortKey(this.status), getSortKey(that.status))
-        .compare(this.getLabel(), that.getLabel())
-        .compare(
-            this.getTarget().getConfiguration().checksum(),
-            that.getTarget().getConfiguration().checksum())
-        .result();
+    if (this.isCached() != that.isCached()) {
+      return this.isCached() ? -1 : 1;
+    } else if ((this.isCached() && that.isCached()) && (this.numUncached() != that.numUncached())) {
+      return this.numUncached() - that.numUncached();
+    } else if (this.status != that.status) {
+      return getSortKey(this.status) - getSortKey(that.status);
+    } else {
+      Artifact thisExecutable = this.target.getProvider(FilesToRunProvider.class).getExecutable();
+      Artifact thatExecutable = that.target.getProvider(FilesToRunProvider.class).getExecutable();
+      return thisExecutable.getPath().compareTo(thatExecutable.getPath());
+    }
   }
 
   public List<Long> getTestTimes() {
@@ -458,8 +455,7 @@ public class TestSummary implements Comparable<TestSummary>, BuildEvent {
 
   @Override
   public BuildEventId getEventId() {
-    return BuildEventId.testSummary(
-        AliasProvider.getDependencyLabel(target), target.getConfiguration().getEventId());
+    return BuildEventId.testSummary(target.getTarget().getLabel());
   }
 
   @Override
@@ -473,7 +469,6 @@ public class TestSummary implements Comparable<TestSummary>, BuildEvent {
     BuildEventStreamProtos.TestSummary.Builder summaryBuilder =
         BuildEventStreamProtos.TestSummary.newBuilder()
             .setOverallStatus(BuildEventStreamerUtils.bepStatus(status))
-            .setTotalNumCached(getNumCached())
             .setTotalRunCount(totalRuns());
     for (Path path : getFailedLogs()) {
       summaryBuilder.addFailed(

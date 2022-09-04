@@ -34,7 +34,7 @@ public final class ProgressEvent extends GenericBuildEvent {
   }
 
   @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto() {
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
     return GenericBuildEvent.protoChaining(this)
         .setProgress(BuildEventStreamProtos.Progress.newBuilder().build())
         .build();
@@ -60,6 +60,6 @@ public final class ProgressEvent extends GenericBuildEvent {
    */
   public static BuildEvent finalProgressUpdate(int number) {
     BuildEventId id = BuildEventId.progressId(number);
-    return new ProgressEvent(id, ImmutableList.of());
+    return new ProgressEvent(id, ImmutableList.<BuildEventId>of());
   }
 }

@@ -35,14 +35,6 @@ public final class PatternExpandingError implements BuildEvent {
     this.skipped = skipped;
   }
 
-  public List<String> getPattern() {
-    return pattern;
-  }
-
-  public boolean getSkipped() {
-    return skipped;
-  }
-
   public static PatternExpandingError failed(List<String> pattern, String message) {
     return new PatternExpandingError(pattern, message, false);
   }
@@ -67,11 +59,8 @@ public final class PatternExpandingError implements BuildEvent {
 
   @Override
   public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
-    BuildEventStreamProtos.Aborted failure =
-        BuildEventStreamProtos.Aborted.newBuilder()
-            .setReason(BuildEventStreamProtos.Aborted.AbortReason.LOADING_FAILURE)
-            .setDescription(message)
-            .build();
-    return GenericBuildEvent.protoChaining(this).setAborted(failure).build();
+    BuildEventStreamProtos.LoadingFailure failure =
+        BuildEventStreamProtos.LoadingFailure.newBuilder().setDetails(message).build();
+    return GenericBuildEvent.protoChaining(this).setLoadingFailed(failure).build();
   }
 }

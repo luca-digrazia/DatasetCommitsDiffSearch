@@ -14,45 +14,46 @@
 
 package com.google.devtools.build.lib.buildeventstream.transports;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
-import java.io.ByteArrayOutputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
- * A simple {@link BuildEventTransport} that writes a varint delimited binary representation of
- * {@link BuildEvent} protocol buffers to a file.
+ * A simple {@link BuildEventTransport} that writes varint delimited binary representation of event
+ * {@link BuildEvent} protocol-buffers to a file. Files written by this Transport can be read by
+ * successive calls of {code BuildEvent.Builder#mergeDelimitedFrom(InputStream)} (or the static
+ * method {@code BuildEvent.parseDelimitedFrom(InputStream)}).
  */
-public final class BinaryFormatFileTransport extends FileTransport {
+public final class BinaryFormatFileTransport implements BuildEventTransport {
+  private final BufferedOutputStream out;
+  private final PathConverter pathConverter;
 
-  private static final Logger log = Logger.getLogger(BinaryFormatFileTransport.class.getName());
-
-  private static final int MAX_VARINT_BYTES = 9;
-
-  BinaryFormatFileTransport(String path, PathConverter pathConverter) {
-    super(path, pathConverter);
+  public BinaryFormatFileTransport(String path, PathConverter pathConverter)
+      throws IOException {
+    this.out = new BufferedOutputStream(new FileOutputStream(new File(path)));
+    this.pathConverter = pathConverter;
   }
 
   @Override
-  public void sendBuildEvent(BuildEvent event) {
-    checkNotNull(event);
-    BuildEventStreamProtos.BuildEvent protoEvent = event.asStreamProto(converters);
+  public synchronized void sendBuildEvent(BuildEvent event) throws IOException {
+    BuildEventConverters converters =
+        new BuildEventConverters() {
+          @Override
+          public PathConverter pathConverter() {
+            return pathConverter;
+          }
+        };
+    event.asStreamProto(converters).writeDelimitedTo(out);
+    out.flush();
+  }
 
-    int maxSerializedSize = MAX_VARINT_BYTES + protoEvent.getSerializedSize();
-    ByteArrayOutputStream out = new ByteArrayOutputStream(maxSerializedSize);
-
-    try {
-      protoEvent.writeDelimitedTo(out);
-      writeData(out.toByteArray());
-    } catch (IOException e) {
-      log.log(Level.SEVERE, e.getMessage(), e);
-      close();
-    }
+  @Override
+  public void close() throws IOException {
+    out.close();
   }
 }

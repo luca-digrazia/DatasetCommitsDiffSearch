@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -77,7 +78,12 @@ public class TargetParsingCompleteEvent implements BuildEvent {
   }
 
   public Iterable<Label> getLabels() {
-    return Iterables.transform(targets, Target::getLabel);
+    return Iterables.transform(targets, new Function<Target, Label>() {
+      @Override
+      public Label apply(Target input) {
+        return input.getLabel();
+      }
+    });
   }
 
   /**
@@ -105,12 +111,12 @@ public class TargetParsingCompleteEvent implements BuildEvent {
 
   @Override
   public Collection<BuildEventId> getChildrenEvents() {
-    ImmutableList.Builder<BuildEventId> childrenBuilder = ImmutableList.builder();
+    ImmutableList.Builder childrenBuilder = ImmutableList.builder();
     for (Target target : expandedTargets) {
-      // Test suits won't produce target configuration and  target-complete events, so do not
-      // announce here completion as children.
+      // Test suits won't produce a target-complete event, so do not anounce their
+      // completion as children.
       if (!TargetUtils.isTestSuiteRule(target)) {
-        childrenBuilder.add(BuildEventId.targetConfigured(target.getLabel()));
+        childrenBuilder.add(BuildEventId.targetCompleted(target.getLabel()));
       }
     }
     return childrenBuilder.build();
