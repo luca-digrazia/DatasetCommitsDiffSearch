@@ -1,8 +1,15 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 
 package com.facebook.stetho.inspector.database;
 
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import javax.annotation.concurrent.ThreadSafe;
@@ -11,22 +18,27 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
+import android.database.sqlite.SQLiteStatement;
 
 import com.facebook.stetho.common.Util;
 import com.facebook.stetho.inspector.helper.ChromePeerManager;
 import com.facebook.stetho.inspector.helper.PeerRegistrationListener;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
 import com.facebook.stetho.inspector.protocol.module.Database;
+import com.facebook.stetho.inspector.protocol.module.DatabaseConstants;
 
 @ThreadSafe
 public class DatabasePeerManager extends ChromePeerManager {
   private static final String[] UNINTERESTING_FILENAME_SUFFIXES = new String[]{
       "-journal",
-      "-uid"
+      "-shm",
+      "-uid",
+      "-wal"
   };
 
   private final Context mContext;
@@ -58,6 +70,7 @@ public class DatabasePeerManager extends ChromePeerManager {
 
   private void bootstrapNewPeer(JsonRpcPeer peer) {
     List<File> potentialDatabaseFiles = mDatabaseFilesProvider.getDatabaseFiles();
+    Collections.sort(potentialDatabaseFiles);
     Iterable<File> tidiedList = tidyDatabaseList(potentialDatabaseFiles);
     for (File database : tidiedList) {
       Database.DatabaseObject databaseParams = new Database.DatabaseObject();
@@ -107,8 +120,8 @@ public class DatabasePeerManager extends ChromePeerManager {
       throws SQLiteException {
     SQLiteDatabase database = openDatabase(databaseName);
     try {
-      Cursor cursor = database.rawQuery("SELECT name FROM sqlite_master WHERE type=?",
-          new String[] { "table" });
+      Cursor cursor = database.rawQuery("SELECT name FROM sqlite_master WHERE type IN (?, ?)",
+          new String[] { "table", "view" });
       try {
         List<String> tableNames = new ArrayList<String>();
         while (cursor.moveToNext()) {
@@ -129,15 +142,68 @@ public class DatabasePeerManager extends ChromePeerManager {
     Util.throwIfNull(handler);
     SQLiteDatabase database = openDatabase(databaseName);
     try {
-      Cursor cursor = database.rawQuery(query, null);
-      try {
-        return handler.handleResult(cursor);
-      } finally {
-        cursor.close();
+      String firstWordUpperCase = getFirstWord(query).toUpperCase();
+      switch (firstWordUpperCase) {
+        case "UPDATE":
+        case "DELETE":
+          return executeUpdateDelete(database, query, handler);
+        case "INSERT":
+          return executeInsert(database, query, handler);
+        case "SELECT":
+        case "PRAGMA":
+        case "EXPLAIN":
+          return executeSelect(database, query, handler);
+        default:
+          return executeRawQuery(database, query, handler);
       }
     } finally {
       database.close();
     }
+  }
+
+  private static String getFirstWord(String s) {
+    s = s.trim();
+    int firstSpace = s.indexOf(' ');
+    return firstSpace >= 0 ? s.substring(0, firstSpace) : s;
+  }
+
+  @TargetApi(DatabaseConstants.MIN_API_LEVEL)
+  private <T> T executeUpdateDelete(
+      SQLiteDatabase database,
+      String query,
+      ExecuteResultHandler<T> handler) {
+    SQLiteStatement statement = database.compileStatement(query);
+    int count = statement.executeUpdateDelete();
+    return handler.handleUpdateDelete(count);
+  }
+
+  private <T> T executeInsert(
+      SQLiteDatabase database,
+      String query,
+      ExecuteResultHandler<T> handler) {
+    SQLiteStatement statement = database.compileStatement(query);
+    long count = statement.executeInsert();
+    return handler.handleInsert(count);
+  }
+
+  private <T> T executeSelect(
+      SQLiteDatabase database,
+      String query,
+      ExecuteResultHandler<T> handler) {
+    Cursor cursor = database.rawQuery(query, null);
+    try {
+      return handler.handleSelect(cursor);
+    } finally {
+      cursor.close();
+    }
+  }
+
+  private <T> T executeRawQuery(
+      SQLiteDatabase database,
+      String query,
+      ExecuteResultHandler<T> handler) {
+    database.execSQL(query);
+    return handler.handleRawQuery();
   }
 
   private SQLiteDatabase openDatabase(String databaseName) throws SQLiteException {
@@ -151,7 +217,13 @@ public class DatabasePeerManager extends ChromePeerManager {
   }
 
   public interface ExecuteResultHandler<T> {
-    public T handleResult(Cursor result) throws SQLiteException;
+    public T handleRawQuery() throws SQLiteException;
+
+    public T handleSelect(Cursor result) throws SQLiteException;
+
+    public T handleInsert(long insertedId) throws SQLiteException;
+
+    public T handleUpdateDelete(int count) throws SQLiteException;
   }
 
   private final PeerRegistrationListener mPeerRegistrationListener =
