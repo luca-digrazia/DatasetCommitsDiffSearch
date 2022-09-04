@@ -4,56 +4,47 @@ import java.lang.reflect.Type;
 
 import javax.ws.rs.core.MediaType;
 
-import io.quarkus.qrs.runtime.core.LazyMethod;
 import io.quarkus.qrs.runtime.handlers.RestHandler;
+import io.quarkus.qrs.runtime.model.ResourceWriter;
 import io.quarkus.qrs.runtime.spi.BeanFactory;
 import io.quarkus.qrs.runtime.spi.EndpointInvoker;
-import io.quarkus.qrs.runtime.util.ServerMediaType;
 
 public class RuntimeResource {
 
     private final String httpMethod;
     private final URITemplate path;
-    private final URITemplate classPath;
-    private final ServerMediaType produces;
+    private final MediaType produces;
     private final MediaType consumes;
     private final EndpointInvoker invoker;
     private final BeanFactory<Object> endpointFactory;
     private final RestHandler[] handlerChain;
-    private final String javaMethodName;
+    private final String method;
     private final Class<?>[] parameterTypes;
     private final Type returnType;
-    private final boolean blocking;
-    private final Class<?> resourceClass;
-    private final LazyMethod lazyMethod;
+    private final ResourceWriter<Object> buildTimeWriter;
 
-    public RuntimeResource(String httpMethod, URITemplate path, URITemplate classPath, ServerMediaType produces,
-            MediaType consumes,
-            EndpointInvoker invoker,
-            BeanFactory<Object> endpointFactory, RestHandler[] handlerChain, String javaMethodName, Class<?>[] parameterTypes,
-            Type returnType, boolean blocking, Class<?> resourceClass, LazyMethod lazyMethod) {
+    public RuntimeResource(String httpMethod, URITemplate path, MediaType produces, MediaType consumes, EndpointInvoker invoker,
+            BeanFactory<Object> endpointFactory, RestHandler[] handlerChain, String method, Class<?>[] parameterTypes,
+            Type returnType, ResourceWriter<Object> buildTimeWriter) {
         this.httpMethod = httpMethod;
         this.path = path;
-        this.classPath = classPath;
         this.produces = produces;
         this.consumes = consumes;
         this.invoker = invoker;
         this.endpointFactory = endpointFactory;
         this.handlerChain = handlerChain;
-        this.javaMethodName = javaMethodName;
+        this.method = method;
         this.parameterTypes = parameterTypes;
         this.returnType = returnType;
-        this.blocking = blocking;
-        this.resourceClass = resourceClass;
-        this.lazyMethod = lazyMethod;
+        this.buildTimeWriter = buildTimeWriter;
     }
 
     public RestHandler[] getHandlerChain() {
         return handlerChain;
     }
 
-    public String getJavaMethodName() {
-        return javaMethodName;
+    public String getMethod() {
+        return method;
     }
 
     public Class<?>[] getParameterTypes() {
@@ -72,7 +63,7 @@ public class RuntimeResource {
         return path;
     }
 
-    public ServerMediaType getProduces() {
+    public MediaType getProduces() {
         return produces;
     }
 
@@ -84,33 +75,16 @@ public class RuntimeResource {
         return invoker;
     }
 
-    public boolean isBlocking() {
-        return blocking;
-    }
-
-    public Class<?> getResourceClass() {
-        return resourceClass;
-    }
-
     public BeanFactory<Object> getEndpointFactory() {
         return endpointFactory;
     }
 
-    public LazyMethod getLazyMethod() {
-        return lazyMethod;
-    }
-
-    /**
-     * The @Path that is present on the class itself
-     * 
-     * @return
-     */
-    public URITemplate getClassPath() {
-        return classPath;
+    public ResourceWriter<Object> getBuildTimeWriter() {
+        return buildTimeWriter;
     }
 
     @Override
     public String toString() {
-        return "RuntimeResource{ method: " + javaMethodName + ", path: " + path + "}";
+        return "RuntimeResource{ method: " + method + ", path: " + path + "}";
     }
 }

@@ -4,7 +4,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import javax.inject.Inject;
-import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
@@ -99,14 +98,6 @@ public class SimpleQrsResource {
         Person person = new Person();
         person.setFirst("Bob");
         person.setLast("Builder");
-        return person;
-    }
-
-    @POST
-    @Path("/person")
-    @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Person getPerson(Person person) {
         return person;
     }
 
