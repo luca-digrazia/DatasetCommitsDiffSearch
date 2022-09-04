@@ -308,8 +308,9 @@ public abstract class Matrix implements Serializable {
      */
     public String toString(boolean full) {
         StringBuilder sb = new StringBuilder();
-        int m = full ? nrows() : Math.min(7, nrows());
-        int n = full ? ncols() : Math.min(7, ncols());
+        final int fields = 7;
+        int m = Math.min(fields, nrows());
+        int n = Math.min(fields, ncols());
 
         String newline = n < ncols() ? "...\n" : "\n";
 
