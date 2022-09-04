@@ -423,14 +423,11 @@ public final class SkyframeActionExecutor {
   }
 
   void executionOver() {
-    // These may transitively holds a bunch of heavy objects, so it's important to clear it at the
-    // end of a build.
     this.reporter = null;
-    this.options = null;
+    // This transitively holds a bunch of heavy objects, so it's important to clear it at the
+    // end of a build.
     this.executorEngine = null;
     this.outputService = null;
-    this.buildActionMap = null;
-    this.actionCacheChecker = null;
   }
 
   boolean probeActionExecution(Action action) {

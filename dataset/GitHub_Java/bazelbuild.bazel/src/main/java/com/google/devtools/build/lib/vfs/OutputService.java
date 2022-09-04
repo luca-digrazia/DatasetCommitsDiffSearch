@@ -159,12 +159,10 @@ public interface OutputService {
 
   default ArtifactPathResolver createPathResolverForArtifactValues(
       PathFragment execRoot,
-      String relativeOutputPath,
       FileSystem fileSystem,
       ImmutableList<Root> pathEntries,
       ActionInputMap actionInputMap,
-      Map<Artifact, Collection<Artifact>> expandedArtifacts,
-      Iterable<Artifact> filesets) {
+      Map<Artifact, Collection<Artifact>> expandedArtifacts) {
     throw new IllegalStateException("Path resolver not supported by this class");
   }
 }
