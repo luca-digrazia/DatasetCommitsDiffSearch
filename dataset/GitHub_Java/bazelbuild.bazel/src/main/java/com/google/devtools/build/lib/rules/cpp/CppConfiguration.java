@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader.CppConfigurationParameters;
-import com.google.devtools.build.lib.rules.cpp.CrosstoolConfigurationLoader.CrosstoolFile;
 import com.google.devtools.build.lib.rules.cpp.transitions.ContextCollectorOwnerTransition;
 import com.google.devtools.build.lib.rules.cpp.transitions.DisableLipoTransition;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -56,7 +55,6 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CTool
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LinkingModeFlags;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
-import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.TextFormat;
 import com.google.protobuf.TextFormat.ParseException;
 import java.io.Serializable;
@@ -226,7 +224,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   private final Label crosstoolTop;
-  private final CrosstoolFile crosstoolFile;
   private final String hostSystemName;
   private final String compiler;
   // TODO(lberki): desiredCpu *should* be always the same as targetCpu, except that we don't check
@@ -338,7 +335,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     this.targetLibc = toolchain.getTargetLibc();
     this.targetOS = toolchain.getCcTargetOs();
     this.crosstoolTop = params.crosstoolTop;
-    this.crosstoolFile = params.crosstoolFile;
     this.ccToolchainLabel = params.ccToolchainLabel;
     this.stlLabel = params.stlLabel;
     this.compilationMode = params.commonOptions.compilationMode;
@@ -635,13 +631,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       }
     }
 
-    ImmutableSet<String> featureNames =
-        toolchain
-            .getFeatureList()
-            .stream()
-            .map(feature -> feature.getName())
-            .collect(ImmutableSet.toImmutableSet());
-    if (!featureNames.contains(CppRuleClasses.NO_LEGACY_FEATURES)) {
+    ImmutableSet.Builder<String> featuresBuilder = ImmutableSet.builder();
+    for (CToolchain.Feature feature : toolchain.getFeatureList()) {
+      featuresBuilder.add(feature.getName());
+    }
+    Set<String> features = featuresBuilder.build();
+    if (!features.contains(CppRuleClasses.NO_LEGACY_FEATURES)) {
       try {
         String gccToolPath = "DUMMY_GCC_TOOL";
         String linkerToolPath = "DUMMY_LINKER_TOOL";
@@ -662,28 +657,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             stripToolPath = tool.getPath();
           }
         }
-
-        // TODO(b/30109612): Remove fragile legacyCompileFlags shuffle once there are no legacy
-        // crosstools.
-        // Existing projects depend on flags from legacy toolchain fields appearing first on the
-        // compile command line. 'legacy_compile_flags' feature contains all these flags, and so it
-        // needs to appear before other features from {@link CppActionConfigs}.
-        CToolchain.Feature legacyCompileFlagsFeature =
-            toolchain
-                .getFeatureList()
-                .stream()
-                .filter(feature -> feature.getName().equals(CppRuleClasses.LEGACY_COMPILE_FLAGS))
-                .findFirst()
-                .orElse(null);
-        if (legacyCompileFlagsFeature != null) {
-          toolchainBuilder.addFeature(legacyCompileFlagsFeature);
-          toolchain = removeLegacyCompileFlagsFeatureFromToolchain(toolchain);
-        }
-
         TextFormat.merge(
             CppActionConfigs.getCppActionConfigs(
                 getTargetLibc().equals("macosx") ? CppPlatform.MAC : CppPlatform.LINUX,
-                featureNames,
+                features,
                 gccToolPath,
                 linkerToolPath,
                 arToolPath,
@@ -699,32 +676,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     }
 
     toolchainBuilder.mergeFrom(toolchain);
-
-    if (!featureNames.contains(CppRuleClasses.NO_LEGACY_FEATURES)) {
-      try {
-        TextFormat.merge(
-            CppActionConfigs.getFeaturesToAppearLastInToolchain(featureNames), toolchainBuilder);
-      } catch (ParseException e) {
-        // Can only happen if we change the proto definition without changing our
-        // configuration above.
-        throw new RuntimeException(e);
-      }
-    }
     return toolchainBuilder.build();
-  }
-
-  private CToolchain removeLegacyCompileFlagsFeatureFromToolchain(CToolchain toolchain) {
-    FieldDescriptor featuresFieldDescriptor = CToolchain.getDescriptor().findFieldByName("feature");
-    return toolchain
-        .toBuilder()
-        .setField(
-            featuresFieldDescriptor,
-            toolchain
-                .getFeatureList()
-                .stream()
-                .filter(feature -> !feature.getName().equals(CppRuleClasses.LEGACY_COMPILE_FLAGS))
-                .collect(ImmutableList.toImmutableList()))
-        .build();
   }
 
   @VisibleForTesting
@@ -835,11 +787,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    */
   public String getToolchainIdentifier() {
     return toolchainIdentifier;
-  }
-
-  /** Returns the contents of the CROSSTOOL for this configuration. */
-  public CrosstoolFile getCrosstoolFile() {
-    return crosstoolFile;
   }
 
   /**
@@ -1147,40 +1094,31 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   /**
    * Returns the default list of options which cannot be filtered by BUILD rules. These should be
    * appended to the command line after filtering.
-   *
-   * @deprecated since it uses nonconfigured sysroot. Use
-   * {@link CcToolchainProvider#getUnfilteredCompilerOptionsWithSysroot(Iterable)} if you *really*
-   * need to.
    */
-  // TODO(b/65401585): Migrate existing uses to cc_toolchain and cleanup here.
-  @Deprecated
   @SkylarkCallable(
     name = "unfiltered_compiler_options",
     doc =
         "Returns the default list of options which cannot be filtered by BUILD "
             + "rules. These should be appended to the command line after filtering."
   )
-  public ImmutableList<String> getUnfilteredCompilerOptionsWithLegacySysroot(
-      Iterable<String> features) {
-    return getUnfilteredCompilerOptionsDoNotUse(features, nonConfiguredSysroot);
+  public ImmutableList<String> getUnfilteredCompilerOptions(Iterable<String> features) {
+    return getUnfilteredCompilerOptions(features, nonConfiguredSysroot);
   }
 
-  /**
-   * @deprecated since it hardcodes --sysroot flag. Use
-   * {@link com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration}
-   * instead.
-   */
-  // TODO(b/65401585): Migrate existing uses to cc_toolchain and cleanup here.
-  @Deprecated
-  ImmutableList<String> getUnfilteredCompilerOptionsDoNotUse(
-      Iterable<String> features, @Nullable PathFragment sysroot) {
+  public ImmutableList<String> getUnfilteredCompilerOptions(
+      Iterable<String> features, PathFragment sysroot) {
     if (sysroot == null) {
       return unfilteredCompilerFlags.evaluate(features);
+    } else {
+      return ImmutableList.<String>builder()
+          .add(getSysrootCompilerOption(sysroot))
+          .addAll(unfilteredCompilerFlags.evaluate(features))
+          .build();
     }
-    return ImmutableList.<String>builder()
-        .add("--sysroot=" + sysroot)
-        .addAll(unfilteredCompilerFlags.evaluate(features))
-        .build();
+  }
+
+  public String getSysrootCompilerOption(PathFragment sysroot) {
+    return "--sysroot=" + sysroot;
   }
 
   /**
@@ -1188,11 +1126,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * command-line options.
    *
    * @see Link
-   * @deprecated since it uses nonconfigured sysroot. Use
-   * {@link CcToolchainProvider#getLinkOptionsWithSysroot()} if you *really* need to.
    */
-  // TODO(b/65401585): Migrate existing uses to cc_toolchain and cleanup here.
-  @Deprecated
+  // TODO(bazel-team): Clean up the linker options computation!
   @SkylarkCallable(
     name = "link_options",
     structField = true,
@@ -1200,18 +1135,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
         "Returns the set of command-line linker options, including any flags "
             + "inferred from the command-line options."
   )
-  public ImmutableList<String> getLinkOptionsWithLegacySysroot() {
-    return getLinkOptionsDoNotUse(nonConfiguredSysroot);
+  public ImmutableList<String> getLinkOptions() {
+    return getLinkOptions(nonConfiguredSysroot);
   }
 
-  /**
-   * @deprecated since it hardcodes --sysroot flag. Use
-   * {@link com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration}
-   * instead.
-   */
-  // TODO(b/65401585): Migrate existing uses to cc_toolchain and cleanup here.
-  @Deprecated
-  ImmutableList<String> getLinkOptionsDoNotUse(@Nullable PathFragment sysroot) {
+  public ImmutableList<String> getLinkOptions(PathFragment sysroot) {
     if (sysroot == null) {
       return linkOptions;
     } else {
@@ -2033,22 +1961,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       requestedFeatures.add(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
     }
     return requestedFeatures.build();
-  }
-
-  public ImmutableList<String> collectLegacyCompileFlags(
-      String sourceFilename, ImmutableSet<String> features) {
-    ImmutableList.Builder<String> legacyCompileFlags = ImmutableList.builder();
-    legacyCompileFlags.addAll(getCompilerOptions(features));
-    if (CppFileTypes.C_SOURCE.matches(sourceFilename)) {
-      legacyCompileFlags.addAll(getCOptions());
-    }
-    if (CppFileTypes.CPP_SOURCE.matches(sourceFilename)
-        || CppFileTypes.CPP_HEADER.matches(sourceFilename)
-        || CppFileTypes.CPP_MODULE_MAP.matches(sourceFilename)
-        || CppFileTypes.CLIF_INPUT_PROTO.matches(sourceFilename)) {
-      legacyCompileFlags.addAll(getCxxOptions(features));
-    }
-    return legacyCompileFlags.build();
   }
 
   public static PathFragment computeDefaultSysroot(CToolchain toolchain) {
