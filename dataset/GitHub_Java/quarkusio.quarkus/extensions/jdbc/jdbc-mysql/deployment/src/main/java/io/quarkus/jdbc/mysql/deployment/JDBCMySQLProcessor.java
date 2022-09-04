@@ -19,12 +19,11 @@ import com.mysql.cj.jdbc.ha.ReplicationConnection;
 import com.mysql.cj.jdbc.result.ResultSetInternalMethods;
 import com.mysql.cj.protocol.Resultset;
 
+import io.quarkus.agroal.spi.DefaultDataSourceDbKindBuildItem;
 import io.quarkus.agroal.spi.JdbcDriverBuildItem;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
-import io.quarkus.datasource.deployment.spi.DefaultDataSourceDbKindBuildItem;
-import io.quarkus.datasource.deployment.spi.DevServicesDatasourceConfigurationHandlerBuildItem;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
@@ -32,6 +31,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.NativeImageEnableAllCharsetsBuildItem;
+import io.quarkus.deployment.builditem.NativeImageEnableAllTimeZonesBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
@@ -57,11 +57,6 @@ public class JDBCMySQLProcessor {
     }
 
     @BuildStep
-    DevServicesDatasourceConfigurationHandlerBuildItem devDbHandler() {
-        return DevServicesDatasourceConfigurationHandlerBuildItem.jdbc(DatabaseKind.MYSQL);
-    }
-
-    @BuildStep
     void configureAgroalConnection(BuildProducer<AdditionalBeanBuildItem> additionalBeans,
             Capabilities capabilities) {
         if (capabilities.isPresent(Capability.AGROAL)) {
@@ -80,6 +75,11 @@ public class JDBCMySQLProcessor {
     @BuildStep
     NativeImageEnableAllCharsetsBuildItem enableAllCharsets() {
         return new NativeImageEnableAllCharsetsBuildItem();
+    }
+
+    @BuildStep
+    NativeImageEnableAllTimeZonesBuildItem enableAllTimeZones() {
+        return new NativeImageEnableAllTimeZonesBuildItem();
     }
 
     @BuildStep
@@ -126,7 +126,7 @@ public class JDBCMySQLProcessor {
             serviceProvider.produce(
                     new ServiceProviderBuildItem("io.quarkus.kubernetes.service.binding.runtime.ServiceBindingConverter",
                             MySQLServiceBindingConverter.class.getName()));
+            dbKind.produce(new DefaultDataSourceDbKindBuildItem(DatabaseKind.MYSQL));
         }
-        dbKind.produce(new DefaultDataSourceDbKindBuildItem(DatabaseKind.MYSQL));
     }
 }

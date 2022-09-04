@@ -128,8 +128,6 @@ import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
 import io.quarkus.hibernate.orm.runtime.tenant.DataSourceTenantConnectionResolver;
 import io.quarkus.hibernate.orm.runtime.tenant.TenantConnectionResolver;
 import io.quarkus.hibernate.orm.runtime.tenant.TenantResolver;
-import io.quarkus.panache.common.deployment.HibernateEnhancersRegisteredBuildItem;
-import io.quarkus.panache.common.deployment.HibernateModelClassCandidatesForFieldAccessBuildItem;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.ConfigurationException;
 import net.bytebuddy.description.type.TypeDescription;
@@ -498,12 +496,6 @@ public final class HibernateOrmProcessor {
         enhanceEntities(domainObjects, transformers, additionalJpaModelBuildItems, additionalClasses);
         // this allows others to register their enhancers after Hibernate, so they run before ours
         return new HibernateEnhancersRegisteredBuildItem();
-    }
-
-    @BuildStep
-    public HibernateModelClassCandidatesForFieldAccessBuildItem candidatesForFieldAccess(JpaEntitiesBuildItem domainObjects) {
-        // Ask Panache to replace direct access to public fields with calls to accessors for all model classes.
-        return new HibernateModelClassCandidatesForFieldAccessBuildItem(domainObjects.getAllModelClassNames());
     }
 
     @BuildStep
@@ -1221,7 +1213,7 @@ public final class HibernateOrmProcessor {
         }
         scanner.setPackageDescriptors(packageDescriptors);
         Set<ClassDescriptor> classDescriptors = new HashSet<>();
-        for (String className : domainObjects.getEntityClassNames()) {
+        for (String className : domainObjects.getAllModelClassNames()) {
             QuarkusScanner.ClassDescriptorImpl desc = new QuarkusScanner.ClassDescriptorImpl(className,
                     ClassDescriptor.Categorization.MODEL);
             classDescriptors.add(desc);

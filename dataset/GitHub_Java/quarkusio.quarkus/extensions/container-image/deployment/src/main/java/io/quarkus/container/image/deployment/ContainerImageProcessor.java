@@ -11,7 +11,6 @@ import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
-import io.quarkus.deployment.builditem.SuppressNonRuntimeConfigChangedWarningBuildItem;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.steps.NativeSourcesBuild;
 
@@ -23,13 +22,7 @@ public class ContainerImageProcessor {
     @BuildStep(onlyIf = NativeSourcesBuild.class)
     void failForNativeSources(BuildProducer<ArtifactResultBuildItem> artifactResultProducer) {
         throw new IllegalArgumentException(
-                "The Container Image extensions are incompatible with the 'native-sources' package type.");
-    }
-
-    @BuildStep
-    public void ignoreCredentialsChange(BuildProducer<SuppressNonRuntimeConfigChangedWarningBuildItem> producer) {
-        producer.produce(new SuppressNonRuntimeConfigChangedWarningBuildItem("quarkus.container-image.username"));
-        producer.produce(new SuppressNonRuntimeConfigChangedWarningBuildItem("quarkus.container-image.password"));
+                "The Container Imagee extensions are incompatible with the 'native-sources' package type.");
     }
 
     @BuildStep
