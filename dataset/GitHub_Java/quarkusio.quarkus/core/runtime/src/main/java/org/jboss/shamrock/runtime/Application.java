@@ -147,14 +147,15 @@ public abstract class Application {
         } finally {
             stateLock.unlock();
         }
-        Timing.staticInitStopped();
+        final long mark = System.nanoTime();
         try {
             doStop();
         } finally {
             stateLock.lock();
             try {
                 state = ST_STOPPED;
-                Timing.printStopTime();
+                final long time = System.nanoTime() - mark;
+                Logger.getLogger("org.jboss.shamrock").infof("Shamrock stopped in %d.%03dms", Long.valueOf(time / 1_000_000), Long.valueOf(time % 1_000_000 / 1_000));
                 stateCond.signalAll();
             } finally {
                 stateLock.unlock();
