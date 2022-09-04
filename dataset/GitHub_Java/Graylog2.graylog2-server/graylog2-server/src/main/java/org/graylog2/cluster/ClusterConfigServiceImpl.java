@@ -18,7 +18,6 @@ package org.graylog2.cluster;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
 import com.mongodb.DBCollection;
 import com.mongodb.WriteConcern;
@@ -27,11 +26,9 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.utilities.AutoValueUtils;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.mongojack.DBCursor;
 import org.mongojack.DBQuery;
 import org.mongojack.DBSort;
 import org.mongojack.JacksonDBCollection;
@@ -40,7 +37,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -54,7 +50,6 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
     private final JacksonDBCollection<ClusterConfig, String> dbCollection;
     private final NodeId nodeId;
     private final ObjectMapper objectMapper;
-    private final ChainingClassLoader chainingClassLoader;
     private final EventBus clusterEventBus;
 
     @Inject
@@ -62,21 +57,18 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
                                     final MongoConnection mongoConnection,
                                     final NodeId nodeId,
                                     final ObjectMapper objectMapper,
-                                    final ChainingClassLoader chainingClassLoader,
                                     @ClusterEventBus final EventBus clusterEventBus) {
         this(JacksonDBCollection.wrap(prepareCollection(mongoConnection), ClusterConfig.class, String.class, mapperProvider.get()),
-                nodeId, objectMapper, chainingClassLoader, clusterEventBus);
+                nodeId, objectMapper, clusterEventBus);
     }
 
     ClusterConfigServiceImpl(final JacksonDBCollection<ClusterConfig, String> dbCollection,
                              final NodeId nodeId,
                              final ObjectMapper objectMapper,
-                             final ChainingClassLoader chainingClassLoader,
                              final EventBus clusterEventBus) {
         this.nodeId = checkNotNull(nodeId);
         this.dbCollection = checkNotNull(dbCollection);
         this.objectMapper = checkNotNull(objectMapper);
-        this.chainingClassLoader = chainingClassLoader;
         this.clusterEventBus = checkNotNull(clusterEventBus);
     }
 
@@ -142,23 +134,5 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
         final String canonicalName = type.getCanonicalName();
         final WriteResult<ClusterConfig, String> result = dbCollection.remove(DBQuery.is("type", canonicalName));
         return result.getN();
-    }
-
-    @Override
-    public Set<Class<?>> list() {
-        final DBCursor<ClusterConfig> clusterConfigs = dbCollection.find();
-        final ImmutableSet.Builder<Class<?>> classes = ImmutableSet.builder();
-
-        for (ClusterConfig clusterConfig : clusterConfigs) {
-            final String type = clusterConfig.type();
-            try {
-                final Class<?> cls = chainingClassLoader.loadClass(type);
-                classes.add(cls);
-            } catch (ClassNotFoundException e) {
-                LOG.debug("Couldn't find configuration class \"{}\"", type, e);
-            }
-        }
-
-        return classes.build();
     }
 }

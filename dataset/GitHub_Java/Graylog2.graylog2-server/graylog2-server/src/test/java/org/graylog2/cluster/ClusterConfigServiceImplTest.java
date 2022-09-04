@@ -39,7 +39,6 @@ import org.graylog2.database.ObjectIdSerializer;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.jackson.SizeSerializer;
-import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.rest.RangeJsonSerializer;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
@@ -102,7 +101,6 @@ public class ClusterConfigServiceImplTest {
                 mongoRule.getMongoConnection(),
                 nodeId,
                 objectMapper,
-                new ChainingClassLoader(getClass().getClassLoader()),
                 clusterEventBus
         );
     }
@@ -339,52 +337,6 @@ public class ClusterConfigServiceImplTest {
         assertThat(collection.count()).isEqualTo(1L);
         assertThat(clusterConfigService.remove(CustomConfig.class)).isEqualTo(1);
         assertThat(collection.count()).isEqualTo(0L);
-    }
-
-    @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
-    public void listReturnsAllClasses() throws Exception {
-        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
-        collection.save(new BasicDBObjectBuilder()
-                .add("type", CustomConfig.class.getCanonicalName())
-                .add("payload", Collections.singletonMap("text", "TEST"))
-                .add("last_updated", TIME.toString())
-                .add("last_updated_by", "ID")
-                .get());
-        collection.save(new BasicDBObjectBuilder()
-                .add("type", AnotherCustomConfig.class.getCanonicalName())
-                .add("payload", Collections.singletonMap("text", "TEST"))
-                .add("last_updated", TIME.toString())
-                .add("last_updated_by", "ID")
-                .get());
-
-        assertThat(collection.count()).isEqualTo(2L);
-        assertThat(clusterConfigService.list())
-                .hasSize(2)
-                .containsOnly(CustomConfig.class, AnotherCustomConfig.class);
-    }
-
-    @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
-    public void listIgnoresInvalidClasses() throws Exception {
-        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
-        collection.save(new BasicDBObjectBuilder()
-                .add("type", CustomConfig.class.getCanonicalName())
-                .add("payload", Collections.singletonMap("text", "TEST"))
-                .add("last_updated", TIME.toString())
-                .add("last_updated_by", "ID")
-                .get());
-        collection.save(new BasicDBObjectBuilder()
-                .add("type", "invalid.ClassName")
-                .add("payload", Collections.emptyMap())
-                .add("last_updated", TIME.toString())
-                .add("last_updated_by", "ID")
-                .get());
-
-        assertThat(collection.count()).isEqualTo(2L);
-        assertThat(clusterConfigService.list())
-                .hasSize(1)
-                .containsOnly(CustomConfig.class);
     }
 
     public static class ClusterConfigChangedEventHandler {
