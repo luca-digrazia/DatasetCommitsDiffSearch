@@ -216,6 +216,8 @@ public class WindowsProcesses {
 
   private static native int nativeGetpid();
 
+  // TODO(laszlocsomor): Replace this method with ShellUtils.windowsEscapeArg in order to fix
+  // https://github.com/bazelbuild/bazel/issues/7122
   public static String quoteCommandLine(List<String> argv) {
     StringBuilder result = new StringBuilder();
     for (int iArg = 0; iArg < argv.size(); iArg++) {
@@ -223,6 +225,10 @@ public class WindowsProcesses {
         result.append(" ");
       }
       String arg = argv.get(iArg);
+      if (arg.isEmpty()) {
+        result.append("\"\"");
+        continue;
+      }
       boolean hasSpace = arg.contains(" ");
       if (!arg.contains("\"") && !arg.contains("\\") && !hasSpace) {
         // fast path. Just append the input string.
