@@ -5,48 +5,26 @@ import io.quarkus.builder.item.MultiBuildItem;
 
 public final class KubernetesEnvBuildItem extends MultiBuildItem {
 
-    private final String name;
-    private final String value;
-    private final String secret;
-    private final String configmap;
-    private final String field;
     private final String target;
 
-    public KubernetesEnvBuildItem(String name, String value, String target) {
-        this(name, value, null, null, null, target);
-    }
+    private final String key;
+    private final String value;
 
-    public KubernetesEnvBuildItem(String name, String value, String secret, String configmap, String field, String target) {
-        this.name = name;
-        this.value = value;
-        this.secret = secret;
-        this.configmap = configmap;
-        this.field = field;
+    public KubernetesEnvBuildItem(String target, String key, String value) {
         this.target = target;
+        this.key = key;
+        this.value = value;
     }
 
-    public String getName() {
-        return name;
+    public String getTarget() {
+        return this.target;
+    }
+
+    public String getKey() {
+        return key;
     }
 
     public String getValue() {
         return value;
     }
-
-    public String getSecret() {
-        return secret;
-    }
-
-    public String getConfigmap() {
-        return configmap;
-    }
-
-    public String getField() {
-        return field;
-    }
-
-    public String getTarget() {
-        return target;
-    }
-
 }
