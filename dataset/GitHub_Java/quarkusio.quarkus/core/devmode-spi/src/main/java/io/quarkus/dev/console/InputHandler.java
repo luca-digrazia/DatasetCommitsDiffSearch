@@ -14,9 +14,5 @@ public interface InputHandler {
         void setResults(String results);
 
         void setCompileError(String compileError);
-
-        default void doReadLine() {
-
-        }
     }
 }

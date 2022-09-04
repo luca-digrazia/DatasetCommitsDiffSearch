@@ -20,7 +20,6 @@ public class BasicConsole extends QuarkusConsole {
     final PrintStream printStream;
     final boolean inputSupport;
     final boolean noColor;
-    volatile boolean readingLine;
 
     public BasicConsole(boolean noColor, boolean inputSupport, PrintStream printStream) {
         this.noColor = noColor;
@@ -35,14 +34,6 @@ public class BasicConsole extends QuarkusConsole {
                             int val = System.in.read();
                             if (val == -1) {
                                 return;
-                            }
-                            if (readingLine) {
-                                //when doing a read line we want to discard the first \n
-                                //as this was the one that was needed to activate this mode
-                                if (val == '\n') {
-                                    readingLine = false;
-                                    continue;
-                                }
                             }
                             InputHolder handler = inputHandlers.peek();
                             if (handler != null) {
@@ -65,12 +56,6 @@ public class BasicConsole extends QuarkusConsole {
     public InputHolder createHolder(InputHandler inputHandler) {
         return new InputHolder(inputHandler) {
             @Override
-            public void doReadLine() {
-                readingLine = true;
-                System.out.print(">");
-            }
-
-            @Override
             protected void setPromptMessage(String prompt) {
                 if (!inputSupport) {
                     return;
@@ -80,7 +65,7 @@ public class BasicConsole extends QuarkusConsole {
                 }
                 DISABLE_FILTER.set(true);
                 try {
-                    System.out.println(prompt);
+                    statusLogger.info(prompt);
                 } finally {
                     DISABLE_FILTER.set(false);
                 }
@@ -88,12 +73,9 @@ public class BasicConsole extends QuarkusConsole {
 
             @Override
             protected void setResultsMessage(String results) {
-                if (results == null) {
-                    return;
-                }
                 DISABLE_FILTER.set(true);
                 try {
-                    System.out.println(results);
+                    statusLogger.info(results);
                 } finally {
                     DISABLE_FILTER.set(false);
                 }
@@ -101,12 +83,9 @@ public class BasicConsole extends QuarkusConsole {
 
             @Override
             protected void setCompileErrorMessage(String results) {
-                if (results == null) {
-                    return;
-                }
                 DISABLE_FILTER.set(true);
                 try {
-                    System.out.println(results);
+                    statusLogger.info(results);
                 } finally {
                     DISABLE_FILTER.set(false);
                 }
@@ -119,7 +98,7 @@ public class BasicConsole extends QuarkusConsole {
                 }
                 DISABLE_FILTER.set(true);
                 try {
-                    System.out.println(status);
+                    statusLogger.info(status);
                 } finally {
                     DISABLE_FILTER.set(false);
                 }
