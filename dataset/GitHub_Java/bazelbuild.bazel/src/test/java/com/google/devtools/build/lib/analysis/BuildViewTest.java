@@ -73,11 +73,10 @@ import org.junit.runners.JUnit4;
 @TestSpec(size = Suite.SMALL_TESTS)
 @RunWith(JUnit4.class)
 public class BuildViewTest extends BuildViewTestBase {
-  private static final Function<LegacyAnalysisFailureEvent, Pair<String, String>>
-      ANALYSIS_EVENT_TO_STRING_PAIR =
-          new Function<LegacyAnalysisFailureEvent, Pair<String, String>>() {
+  private static final Function<AnalysisFailureEvent, Pair<String, String>>
+      ANALYSIS_EVENT_TO_STRING_PAIR = new Function<AnalysisFailureEvent, Pair<String, String>>() {
     @Override
-    public Pair<String, String> apply(LegacyAnalysisFailureEvent event) {
+    public Pair<String, String> apply(AnalysisFailureEvent event) {
       return Pair.of(
           event.getFailedTarget().getLabel().toString(), event.getFailureReason().toString());
     }
@@ -219,7 +218,7 @@ public class BuildViewTest extends BuildViewTestBase {
     AnalysisResult result = update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//foo");
     assertThat(result.hasError()).isTrue();
     assertThat(recorder.events).hasSize(1);
-    LegacyAnalysisFailureEvent event = recorder.events.get(0);
+    AnalysisFailureEvent event = recorder.events.get(0);
     assertThat(event.getFailureReason().toString()).isEqualTo("//foo:bar");
     assertThat(event.getFailedTarget().getLabel().toString()).isEqualTo("//foo:foo");
   }

@@ -1263,7 +1263,6 @@ public class BuildView {
         .setConfigConditions(ImmutableMap.<Label, ConfigMatchingProvider>of())
         .setUniversalFragments(ruleClassProvider.getUniversalFragments())
         .setToolchainContext(toolchainContext)
-        .setConstraintSemantics(ruleClassProvider.getConstraintSemantics())
         .build();
   }
 
