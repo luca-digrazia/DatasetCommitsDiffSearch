@@ -208,7 +208,7 @@ public class CriticalPathComputer {
 
   /**
    * Record an action that has started to run. If the CriticalPathComponent has not been created,
-   * initialize it and then start running.
+   * initialize it.
    *
    * @param event information about the started action
    */
@@ -216,7 +216,7 @@ public class CriticalPathComputer {
   @AllowConcurrentEvents
   public void actionStarted(ActionStartedEvent event) {
     Action action = event.getAction();
-    tryAddComponent(createComponent(action, event.getNanoTimeStart())).startRunning();
+    tryAddComponent(createComponent(action, event.getNanoTimeStart()));
   }
 
   /**
@@ -352,25 +352,24 @@ public class CriticalPathComputer {
     }
   }
 
-  private void checkCriticalPathInconsistency(
-      Artifact.DerivedArtifact input, Action dependencyAction, CriticalPathComponent actionStats) {
+  protected void checkCriticalPathInconsistency(
+      Artifact.DerivedArtifact input, Action action, CriticalPathComponent actionStats) {
     if (!checkCriticalPathInconsistencies) {
       return;
     }
     // Rare case that an action depending on a previously-cached shared action sees a different
     // shared action that is in the midst of being an action cache hit.
-    for (Artifact actionOutput : dependencyAction.getOutputs()) {
+    for (Artifact actionOutput : action.getOutputs()) {
       if (input.equals(actionOutput)
           && input
               .getGeneratingActionKey()
               .equals(((Artifact.DerivedArtifact) actionOutput).getGeneratingActionKey())) {
-        // This (currently running) dependency action is the same action that produced the input for
-        // the finished actionStats CriticalPathComponent. This should be impossible.
+        // As far as we can tell, this (currently running) action is the same action that
+        // produced input, not another shared action. This should be impossible.
         throw new IllegalStateException(
             String.format(
-                "Cannot add critical path stats when the dependency action is not finished. "
-                    + "%s. %s. %s.",
-                input, actionStats.prettyPrintAction(), dependencyAction));
+                "Cannot add critical path stats when the action is not finished. %s. %s. %s",
+                input, actionStats.prettyPrintAction(), action));
       }
     }
   }

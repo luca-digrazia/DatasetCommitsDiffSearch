@@ -57,7 +57,7 @@ public class CriticalPathComponent {
   // These two fields are values of BlazeClock.nanoTime() at the relevant points in time.
   private long startNanos;
   private long finishNanos = 0;
-  private volatile boolean isRunning = false;
+  private volatile boolean isRunning = true;
 
   /** We keep here the critical path time for the most expensive child. */
   private long childAggregatedElapsedTime = 0;
@@ -136,20 +136,6 @@ public class CriticalPathComponent {
   /** The action for which we are storing the stat. */
   public final Action getAction() {
     return action;
-  }
-
-  /**
-   * This is called by {@link CriticalPathComputer#actionStarted} to start running the action. The
-   * three scenarios where this would occur is:
-   *
-   * <ol>
-   *   <li>A new CriticalPathComponent is created and should start running.
-   *   <li>A CriticalPathComponent has been created with discover inputs and beginning to execute.
-   *   <li>An action was rewound and starts again.
-   * </ol>
-   */
-  void startRunning() {
-    isRunning = true;
   }
 
   public boolean isRunning() {
