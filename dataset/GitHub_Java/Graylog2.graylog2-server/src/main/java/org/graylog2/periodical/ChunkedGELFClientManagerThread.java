@@ -44,21 +44,19 @@ public class ChunkedGELFClientManagerThread extends Thread {
         // Run forever.
         while (true) {
             try {
+                ////////// DEBUG ONLY
                 Map<String, ChunkedGELFMessage> messageMap = ChunkedGELFClientManager.getInstance().getMessageMap();
-                Set<String> set = messageMap.keySet();
-                Iterator<String> iter = set.iterator();
+                Set set = messageMap.keySet();
+                Iterator iter = set.iterator();
                 int i = 0;
                 while(iter.hasNext()) {
-                    String messageId = iter.next();
-                    ChunkedGELFMessage message = messageMap.get(messageId);
-
-                    int fiveSecondsAgo = (int) (System.currentTimeMillis()/1000)-5;
-                    if (message.getFirstChunkArrival() < fiveSecondsAgo) {
-                        Log.info("Dropping incomplete chunked GELF message <" + message.getHash() + ">");
-                        ChunkedGELFClientManager.getInstance().dropMessage(messageId);
-                    }
+                    String messageId = (String) iter.next();
+                    System.out.println("MESSAGE " + i + ": " + messageId);
                     i++;
                 }
+                ////////////////////
+
+                ////////Set invalidMesssage = ChunkedGELFClientManager.getInstance().getInvalidMessages();
                 
             } catch (Exception e) {
                 Log.warn("Error in ChunkedGELFClientManagerThread: " + e.toString());
