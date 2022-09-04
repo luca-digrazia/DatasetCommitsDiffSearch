@@ -62,8 +62,8 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
    * Constructs an ArtifactRoot given the output prefixes. (eg, "bin"), and (eg, "testlogs")
    * relative to the execRoot.
    *
-   * <p>Be careful with this method - all derived roots must be within the derived artifacts tree,
-   * defined in ArtifactFactory (see {@link ArtifactFactory#isDerivedArtifact(PathFragment)}).
+   * <p>Be careful with this method - all derived roots must be registered with the artifact factory
+   * before the analysis phase.
    */
   public static ArtifactRoot asDerivedRoot(Path execRoot, String... prefixes) {
     Path root = execRoot;
@@ -113,11 +113,6 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
     this.root = Preconditions.checkNotNull(root);
     this.execPath = execPath;
     this.rootType = rootType;
-  }
-
-  @Override
-  public boolean isImmutable() {
-    return true; // immutable and Starlark-hashable
   }
 
   public Root getRoot() {
