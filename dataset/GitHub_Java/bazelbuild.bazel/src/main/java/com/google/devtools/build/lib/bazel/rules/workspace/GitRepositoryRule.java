@@ -21,6 +21,8 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
+import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
 
 /**
  * Rule definition for the git_repository rule.
@@ -33,32 +35,39 @@ public class GitRepositoryRule implements RuleDefinition {
     return builder
         /* <!-- #BLAZE_RULE(git_repository).ATTRIBUTE(remote) -->
         The URI of the remote Git repository.
-        ${SYNOPSIS}
 
         <p>This must be a HTTP URL. There is currently no support for authentication.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("remote", STRING).mandatory())
         /* <!-- #BLAZE_RULE(git_repository).ATTRIBUTE(commit) -->
         The commit hash to check out in the repository.
-        ${SYNOPSIS}
 
         <p>Note that one of either <code>commit</code> or <code>tag</code> must be defined.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("commit", STRING))
         /* <!-- #BLAZE_RULE(git_repository).ATTRIBUTE(tag) -->
         The Git tag to check out in the repository.
-        ${SYNOPSIS}
 
         <p>Note that one of either <code>commit</code> or <code>tag</code> must be defined.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("tag", STRING))
         /* <!-- #BLAZE_RULE(git_repository).ATTRIBUTE(init_submodules) -->
         Whether to clone submodules in the repository.
-        ${SYNOPSIS}
 
         <p>Currently, only cloning the top-level submodules is supported</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("init_submodules", BOOLEAN).value(false))
+        /* <!-- #BLAZE_RULE(git_repository).ATTRIBUTE(sha256) -->
+         The expected SHA-256 hash of the file downloaded. Specifying this forces the repository to
+         be downloaded as a tarball. Currently, this is only supported for public GitHub
+         repositories.
+
+         <p>This must match the SHA-256 hash of the file downloaded. <em>It is a security risk to
+         omit the SHA-256 as remote files can change.</em> At best omitting this field will make
+         your build non-hermetic. It is optional to make development easier but should be set
+         before shipping.</p>
+         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("sha256", STRING))
         .setWorkspaceOnly()
         .build();
   }
@@ -76,12 +85,12 @@ public class GitRepositoryRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = git_repository, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
 
-${ATTRIBUTE_SIGNATURE}
+<p><strong>Deprecated.
+<code>load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")</code>
+for a drop-in replacement.</strong></p>
 
 <p>Clones a Git repository, checks out the specified tag, or commit, and makes its targets
 available for binding.</p>
-
-${ATTRIBUTE_DEFINITION}
 
 <h4 id="git_repository_examples">Examples</h4>
 
@@ -115,12 +124,12 @@ cc_library(
 
 <pre class="code">
 git_repository(
-    name = "my-ssl",
+    name = "my_ssl",
     remote = "http://example.com/openssl/openssl.git",
     tag = "v1.0.2",
 )
 </pre>
 
-<p>Then targets would specify <code>@my-ssl//src:openssl-lib</code> as a dependency.</p>
+<p>Then targets would specify <code>@my_ssl//src:openssl-lib</code> as a dependency.</p>
 
 <!-- #END_BLAZE_RULE -->*/
