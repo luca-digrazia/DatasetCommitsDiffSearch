@@ -378,8 +378,8 @@ public class AndroidCommon {
       JavaCompilationArtifacts.Builder artifactsBuilder,
       JavaTargetAttributes.Builder attributes,
       NestedSetBuilder<Artifact> filesBuilder,
-      boolean useRClassGenerator)
-      throws InterruptedException {
+      NestedSetBuilder<Artifact> jarsProducedForRuntime,
+      boolean useRClassGenerator) throws InterruptedException {
     compileResourceJar(javaSemantics, resourceApk, resourcesJar, useRClassGenerator);
     // Add the compiled resource jar to the classpath of the main compilation.
     attributes.addDirectJars(NestedSetBuilder.create(Order.STABLE_ORDER, resourceClassJar));
@@ -388,7 +388,10 @@ public class AndroidCommon {
     // except for <clinit>, but it takes time to build and waiting for that to build would
     // just delay building the rest of the library.
     artifactsBuilder.addCompileTimeJar(resourceClassJar);
-
+    // Combined resource constants needs to come even before our own classes that may contain
+    // local resource constants.
+    artifactsBuilder.addRuntimeJar(resourceClassJar);
+    jarsProducedForRuntime.add(resourceClassJar);
     // Add the compiled resource jar as a declared output of the rule.
     filesBuilder.add(resourceSourceJar);
     filesBuilder.add(resourceClassJar);
@@ -500,8 +503,7 @@ public class AndroidCommon {
       ResourceApk resourceApk,
       boolean addCoverageSupport,
       boolean collectJavaCompilationArgs,
-      boolean isBinary,
-      boolean includeLibraryResourceJars)
+      boolean isBinary)
       throws InterruptedException {
 
     classJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR);
@@ -542,17 +544,7 @@ public class AndroidCommon {
       // (the legacy srcjar requires the createJarJar step below).
       boolean useRClassGenerator = isBinary && !resourceApk.isLegacy();
       compileResources(javaSemantics, resourceApk, resourcesJar, artifactsBuilder, attributes,
-          filesBuilder, useRClassGenerator);
-
-      // In binary targets, add the resource jar as a runtime dependency. In libraries, the resource
-      // jar from the appropriate binary will be used, but add this jar anyway if requested.
-      if (isBinary || includeLibraryResourceJars) {
-        // Combined resource constants needs to come even before our own classes that may contain
-        // local resource constants.
-        artifactsBuilder.addRuntimeJar(resourceClassJar);
-        jarsProducedForRuntime.add(resourceClassJar);
-      }
-
+          filesBuilder, jarsProducedForRuntime, useRClassGenerator);
       if (resourceApk.isLegacy()) {
         // Repackages the R.java for each dependency package and places the resultant jars before
         // the dependency libraries to ensure that the generated resource ids are correct.
