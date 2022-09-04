@@ -28,8 +28,10 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.name.Names;
 import models.ModelFactoryModule;
-import models.Node;
-import models.api.responses.cluster.NodeSummaryResponse;
+import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.lib.ServerNodes;
+import org.graylog2.restclient.models.Node;
+import org.graylog2.restclient.models.api.responses.cluster.NodeSummaryResponse;
 
 import javax.annotation.Nullable;
 import java.net.URI;
@@ -37,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 public class BaseApiTest {
     protected ApiClient api;
@@ -51,6 +54,7 @@ public class BaseApiTest {
             @Override
             protected void configure() {
                 bind(URI[].class).annotatedWith(Names.named("Initial Nodes")).toInstance(initialNodes.toArray(new URI[initialNodes.size()]));
+                bind(Long.class).annotatedWith(Names.named("Default Timeout")).toInstance(TimeUnit.SECONDS.toMillis(5));
             }
         });
         return Guice.createInjector(modules);

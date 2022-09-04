@@ -1,20 +1,20 @@
 /*
- * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ * Copyright 2013 TORCH UG
  *
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package lib;
 
@@ -100,13 +100,13 @@ public class ServerNodesTest extends BaseApiTest {
         final Node.Factory nodeFactory = injector.getInstance(Node.Factory.class);
         final NodeSummaryResponse r1 = new NodeSummaryResponse();
         r1.transportAddress = "http://localhost:65534";
-        r1.nodeId = UUID.randomUUID().toString();
+        r1.id = UUID.randomUUID().toString();
 
         final Node newNode = nodeFactory.fromSummaryResponse(r1);
         newNode.touch();
         final NodeSummaryResponse r2 = new NodeSummaryResponse();
         r2.transportAddress = firstNode.getTransportAddress();
-        r2.nodeId = firstNode.getNodeId();
+        r2.id = firstNode.getNodeId();
         final Node sameAsInitialNode = nodeFactory.fromSummaryResponse(r2);
         sameAsInitialNode.touch();
         serverNodes.put(ImmutableList.of(newNode, sameAsInitialNode));
@@ -122,7 +122,7 @@ public class ServerNodesTest extends BaseApiTest {
     @Before
     public void setUp() throws Exception {
         AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
-        builder.setAllowPoolingConnections(false);
+        builder.setAllowPoolingConnection(false);
         client = new AsyncHttpClient(builder.build());
     }
 

@@ -22,16 +22,16 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.Maps;
 import com.google.common.net.HostAndPort;
 import com.google.gson.Gson;
-import lib.APIException;
-import lib.ApiClient;
-import models.api.requests.InputLaunchRequest;
-import models.api.responses.cluster.NodeSummaryResponse;
-import models.api.responses.system.InputSummaryResponse;
-import models.api.responses.system.InputsResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.node.NodeBuilder;
 import org.fluentlenium.adapter.FluentTest;
 import org.fluentlenium.adapter.util.SharedDriver;
+import org.graylog2.restclient.lib.APIException;
+import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
+import org.graylog2.restclient.models.api.responses.cluster.NodeSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.InputStateSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.InputsResponse;
 import org.jboss.netty.bootstrap.ClientBootstrap;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
@@ -40,6 +40,7 @@ import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.jboss.netty.handler.codec.frame.Delimiters;
+import org.junit.Assume;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.remote.DesiredCapabilities;
@@ -65,6 +66,10 @@ public class BaseSeleniumTest extends FluentTest {
 
     private static Client client;
     private ApiClient api;
+
+    protected static void skipOnTravis() {
+        Assume.assumeTrue("Skipping on Travis CI because of race condition on build machines", System.getenv("TRAVIS") == null);
+    }
 
     @Override
     public String getDefaultBaseUrl() {
@@ -137,13 +142,13 @@ public class BaseSeleniumTest extends FluentTest {
             final HostAndPort nodeAddr = HostAndPort.fromParts(uri.getHost(), 12201);
             final InputsResponse ir = api().get(InputsResponse.class).path("/system/inputs").execute();
             if (ir.total > 0) {
-                for (InputSummaryResponse input : ir.inputs) {
-                    if (!input.type.equals("org.graylog2.inputs.gelf.tcp.GELFTCPInput")) {
+                for (InputStateSummaryResponse input : ir.inputs) {
+                    if (!input.messageinput.type.equals("org.graylog2.inputs.gelf.tcp.GELFTCPInput")) {
                         continue;
                     }
                     gelfTcpAddr = HostAndPort.fromParts(
-                            input.attributes.get("bind_address").toString(),
-                            Double.valueOf(input.attributes.get("port").toString()).intValue() // Sad, very sad.
+                            input.messageinput.attributes.get("bind_address").toString(),
+                            Double.valueOf(input.messageinput.attributes.get("port").toString()).intValue() // Sad, very sad.
                     );
                 }
             }
