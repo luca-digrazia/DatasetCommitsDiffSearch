@@ -24,12 +24,12 @@ import java.util.List;
 import org.junit.Test;
 
 /**
- * Base class for tests of {@link NestedSet} iteration behavior.
+ * Base class for tests of {@link NestedSetExpander} implementations.
  *
- * <p>This class provides test cases for representative nested set structures; the expected results
- * must be provided by overriding the corresponding methods.
+ * <p>This class provides test cases for representative nested set structures; the expected
+ * results must be provided by overriding the corresponding methods.
  */
-public abstract class ExpanderTestBase {
+public abstract class ExpanderTestBase  {
 
   /**
    * Returns the type of the expander under test.
@@ -69,7 +69,7 @@ public abstract class ExpanderTestBase {
     assertSetContents(ImmutableList.of("b"), builder.build());
 
     builder.addAll(ImmutableList.of("d"));
-    List<String> expected = prepareBuilder("b", "d").build().toList();
+    Collection<String> expected = ImmutableList.copyOf(prepareBuilder("b", "d").build());
     assertSetContents(expected, builder.build());
 
     NestedSet<String> child = prepareBuilder("c", "a", "e").build();
@@ -90,6 +90,7 @@ public abstract class ExpanderTestBase {
     NestedSet<String> s2 = prepareBuilder().addAll(ImmutableList.of("a", "c", "b")).build();
 
     assertCollectionsEqual(s1.toList(), s2.toList());
+    assertCollectionsEqual(Lists.newArrayList(s1), Lists.newArrayList(s2));
   }
 
   @Test
@@ -99,6 +100,7 @@ public abstract class ExpanderTestBase {
         .build();
 
     assertCollectionsEqual(s1.toList(), s2.toList());
+    assertCollectionsEqual(Lists.newArrayList(s1), Lists.newArrayList(s2));
   }
 
   @Test
@@ -219,7 +221,8 @@ public abstract class ExpanderTestBase {
     return builder;
   }
 
-  protected final void assertSetContents(List<String> expected, NestedSet<String> set) {
+  protected final void assertSetContents(Collection<String> expected, NestedSet<String> set) {
+    assertThat(Lists.newArrayList(set)).isEqualTo(expected);
     assertThat(Lists.newArrayList(set.toList())).isEqualTo(expected);
     assertThat(Lists.newArrayList(set.toSet())).isEqualTo(expected);
   }
@@ -230,69 +233,69 @@ public abstract class ExpanderTestBase {
   }
 
   /**
-   * Returns the enumeration of the nested set {"c", "a", "b"} in the implementation's enumeration
-   * order.
+   * Returns the enumeration of the nested set {"c", "a", "b"} in the
+   * implementation's enumeration order.
    *
-   * @see #simple()
-   * @see #simpleNoDuplicates()
+   * @see #testSimple()
+   * @see #testSimpleNoDuplicates()
    */
   protected List<String> simpleResult() {
     return ImmutableList.of("c", "a", "b");
   }
 
   /**
-   * Returns the enumeration of the nested set {"b", "d", {"c", "a", "e"}} in the implementation's
-   * enumeration order.
+   * Returns the enumeration of the nested set {"b", "d", {"c", "a", "e"}} in
+   * the implementation's enumeration order.
    *
-   * @see #nesting()
+   * @see #testNesting()
    */
   protected abstract List<String> nestedResult();
 
   /**
-   * Returns the enumeration of the nested set {"b", "d", "e", {"c", "a", "e"}} in the
-   * implementation's enumeration order.
+   * Returns the enumeration of the nested set {"b", "d", "e", {"c", "a", "e"}} in
+   * the implementation's enumeration order.
    *
-   * @see #nestingNoDuplicates()
+   * @see #testNestingNoDuplicates()
    */
   protected abstract List<String> nestedDuplicatesResult();
 
   /**
-   * Returns the enumeration of nested set {"a", {"b", {"c"}}} in the implementation's enumeration
-   * order.
+   * Returns the enumeration of nested set {"a", {"b", {"c"}}} in the
+   * implementation's enumeration order.
    *
-   * @see #chain()
+   * @see #testChain()
    */
   protected abstract List<String> chainResult();
 
   /**
-   * Returns the enumeration of the nested set {"a", {"b", D}, {"c", D}}, where D is {"d"}, in the
-   * implementation's enumeration order.
+   * Returns the enumeration of the nested set {"a", {"b", D}, {"c", D}}, where
+   * D is {"d"}, in the implementation's enumeration order.
    *
-   * @see #diamond()
+   * @see #testDiamond()
    */
   protected abstract List<String> diamondResult();
 
   /**
-   * Returns the enumeration of the nested set {"a", {"b", E, D}, {"c", D, E}}, where D is {"d"} and
-   * E is {"e"}, in the implementation's enumeration order.
+   * Returns the enumeration of the nested set {"a", {"b", E, D}, {"c", D, E}}, where
+   * D is {"d"} and E is {"e"}, in the implementation's enumeration order.
    *
-   * @see #extendedDiamond()
+   * @see #testExtendedDiamond()
    */
   protected abstract List<String> extendedDiamondResult();
 
   /**
-   * Returns the enumeration of the nested set {"a", {"b", E, D}, {"c", C2}}, where D is {"d"}, E is
-   * {"e"} and C2 is {"c2", D, E}, in the implementation's enumeration order.
+   * Returns the enumeration of the nested set {"a", {"b", E, D}, {"c", C2}}, where
+   * D is {"d"}, E is {"e"} and C2 is {"c2", D, E}, in the implementation's enumeration order.
    *
-   * @see #extendedDiamondRightArm()
+   * @see #testExtendedDiamondRightArm()
    */
   protected abstract List<String> extendedDiamondRightArmResult();
 
   /**
    * Returns the enumeration of the nested set {{"a", "b"}, {"b", "a"}}.
    *
-   * @see #orderConflict()
-   * @see #orderConflictNested()
+   * @see #testOrderConflict()
+   * @see #testOrderConflictNested()
    */
   protected List<String> orderConflictResult() {
     return ImmutableList.of("a", "b");

@@ -79,6 +79,7 @@ import javax.annotation.Nullable;
 @Immutable
 public class JavaCompileAction extends AbstractAction
     implements ExecutionInfoSpecifier, CommandAction {
+  private static final String MNEMONIC = "Javac";
   private static final ResourceSet LOCAL_RESOURCES =
       ResourceSet.createWithRamCpu(/* memoryMb= */ 750, /* cpuUsage= */ 1);
   private static final UUID GUID = UUID.fromString("e423747c-2827-49e6-b961-f6c08c10bb51");
@@ -89,7 +90,6 @@ public class JavaCompileAction extends AbstractAction
           .setUseAlways(true)
           .build();
 
-  private final String mnemonic;
   private final ImmutableMap<String, String> executionInfo;
   private final CommandLine executableLine;
   private final CommandLine flagLine;
@@ -109,7 +109,6 @@ public class JavaCompileAction extends AbstractAction
   private final JavaCompileExtraActionInfoSupplier extraActionInfoSupplier;
 
   public JavaCompileAction(
-      String mnemonic,
       ActionOwner owner,
       ActionEnvironment env,
       NestedSet<Artifact> tools,
@@ -136,10 +135,9 @@ public class JavaCompileAction extends AbstractAction
         runfilesSupplier,
         outputs,
         env);
-    this.mnemonic = mnemonic;
     // TODO(djasper): The only thing that is conveyed through the executionInfo is whether worker
     // mode is enabled or not. Investigate whether we can store just that.
-    this.executionInfo = configuration.modifiedExecutionInfo(executionInfo, mnemonic);
+    this.executionInfo = configuration.modifiedExecutionInfo(executionInfo, MNEMONIC);
     this.executableLine = executableLine;
     this.flagLine = flagLine;
     this.configuration = configuration;
@@ -157,7 +155,7 @@ public class JavaCompileAction extends AbstractAction
 
   @Override
   public String getMnemonic() {
-    return mnemonic;
+    return MNEMONIC;
   }
 
   @Override

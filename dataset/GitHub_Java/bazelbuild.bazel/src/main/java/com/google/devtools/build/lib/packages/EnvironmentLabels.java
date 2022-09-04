@@ -19,8 +19,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.util.Collection;
 import java.util.Collections;
@@ -47,7 +45,7 @@ public class EnvironmentLabels {
    * can't set this map until all Target instances for member environments have been initialized,
    * which occurs after group instantiation (this makes the class mutable).
    */
-  private Map<Label, NestedSet<Label>> fulfillersMap;
+  private Map<Label, NestedSet<Label>> fulfillersMap = null;
 
   EnvironmentLabels(Label label, Collection<Label> environments, Collection<Label> defaults) {
     this(label, environments, defaults, null);
@@ -112,10 +110,9 @@ public class EnvironmentLabels {
    *
    * <p>If no environments fulfill the input, returns an empty set.
    */
-  public NestedSet<Label> getFulfillers(Label environment) {
+  public Iterable<Label> getFulfillers(Label environment) {
     checkInitialized();
-    NestedSet<Label> ans = fulfillersMap.get(environment);
-    return ans == null ? NestedSetBuilder.emptySet(Order.STABLE_ORDER) : ans;
+    return fulfillersMap.get(environment);
   }
 
   public Label getLabel() {

@@ -44,7 +44,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -251,22 +250,17 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     return headerInfo.textualHeaders;
   }
 
-  public ImmutableList<HeaderInfo> getTransitiveHeaderInfos() {
-    return transitiveHeaderInfos.toList();
-  }
-
   public IncludeScanningHeaderData.Builder createIncludeScanningHeaderData(
-      boolean usePic, boolean createModularHeaders, List<HeaderInfo> transitiveHeaderInfoList) {
+      boolean usePic, boolean createModularHeaders) {
     // We'd prefer for these types to use ImmutableSet/ImmutableMap. However, constructing these is
     // substantially more costly in a way that shows up in profiles.
     Map<PathFragment, Artifact> pathToLegalOutputArtifact = new HashMap<>();
-    Set<Artifact> modularHeaders =
-        CompactHashSet.createWithExpectedSize(transitiveHeaderInfoList.size());
-    // Not using range-based for loops here and below as the additional overhead of the
-    // ImmutableList iterators has shown up in profiles.
-    for (int c = 0; c < transitiveHeaderInfoList.size(); c++) {
-      HeaderInfo transitiveHeaderInfo = transitiveHeaderInfoList.get(c);
+    ImmutableList<HeaderInfo> infos = transitiveHeaderInfos.toList();
+    Set<Artifact> modularHeaders = CompactHashSet.createWithExpectedSize(infos.size());
+    for (HeaderInfo transitiveHeaderInfo : infos) {
       boolean isModule = createModularHeaders && transitiveHeaderInfo.getModule(usePic) != null;
+      // Not using range-based for loops here as often there is exactly one element in this list
+      // and the amount of garbage created by SingletonImmutableList.iterator() is significant.
       for (int i = 0; i < transitiveHeaderInfo.modularHeaders.size(); i++) {
         Artifact a = transitiveHeaderInfo.modularHeaders.get(i);
         if (!a.isSourceArtifact()) {
@@ -296,8 +290,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     public final Collection<Artifact> modules;
 
     HeadersAndModules(int expectedHeaderCount) {
-      headers = CompactHashSet.createWithExpectedSize(expectedHeaderCount);
-      modules = CompactHashSet.create();
+      headers = new HashSet<>(expectedHeaderCount);
+      modules = new LinkedHashSet<>();
     }
   }
 
@@ -306,10 +300,9 @@ public final class CcCompilationContext implements CcCompilationContextApi {
    * the modules that they are in.
    */
   public HeadersAndModules computeDeclaredHeadersAndUsedModules(
-      boolean usePic, Set<Artifact> includes, List<HeaderInfo> transitiveHeaderInfoList) {
+      boolean usePic, Set<Artifact> includes) {
     HeadersAndModules result = new HeadersAndModules(includes.size());
-    for (int c = 0; c < transitiveHeaderInfoList.size(); c++) {
-      HeaderInfo transitiveHeaderInfo = transitiveHeaderInfoList.get(c);
+    for (HeaderInfo transitiveHeaderInfo : transitiveHeaderInfos) {
       Artifact module = transitiveHeaderInfo.getModule(usePic);
       // Not using range-based for loops here as often there is exactly one element in this list
       // and the amount of garbage created by SingletonImmutableList.iterator() is significant.

@@ -144,10 +144,7 @@ public final class LtoBackendAction extends SpawnAction {
       }
     } catch (IOException e) {
       throw new ActionExecutionException(
-          "error iterating imports file "
-              + actionExecutionContext.getInputPath(imports)
-              + ": "
-              + e.getMessage(),
+          "error iterating imports file " + actionExecutionContext.getInputPath(imports),
           e,
           this,
           false);

@@ -26,8 +26,6 @@ import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraver
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFunction.DanglingSymlinkException;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFunction.RecursiveFilesystemTraversalException;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFile;
-import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.TraversalRequest;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -49,21 +47,15 @@ public final class FilesetEntryFunction implements SkyFunction {
     }
   }
 
-  private final Function<String, Path> getExecRoot;
+  private final PathFragment execRoot;
 
-  public FilesetEntryFunction(Function<String, Path> getExecRoot) {
-    this.getExecRoot = getExecRoot;
+  public FilesetEntryFunction(PathFragment execRoot) {
+    this.execRoot = execRoot;
   }
 
   @Override
   public SkyValue compute(SkyKey key, Environment env)
       throws FilesetEntryFunctionException, InterruptedException {
-    WorkspaceNameValue workspaceNameValue =
-        (WorkspaceNameValue) env.getValue(WorkspaceNameValue.key());
-    if (workspaceNameValue == null) {
-      return null;
-    }
-
     FilesetTraversalParams t = (FilesetTraversalParams) key.argument();
     Preconditions.checkState(
         t.getDirectTraversal().isPresent() && t.getNestedArtifact() == null,
@@ -187,8 +179,7 @@ public final class FilesetEntryFunction implements SkyFunction {
           f.getMetadata(),
           t.getDestPath(),
           direct.isGenerated(),
-          outputSymlinks,
-          getExecRoot.apply(workspaceNameValue.getName()));
+          outputSymlinks);
     }
 
     return FilesetEntryValue.of(ImmutableSet.copyOf(outputSymlinks.values()));
@@ -201,14 +192,12 @@ public final class FilesetEntryFunction implements SkyFunction {
       Object metadata,
       PathFragment destPath,
       boolean isGenerated,
-      Map<PathFragment, FilesetOutputSymlink> result,
-      Path execRoot) {
+      Map<PathFragment, FilesetOutputSymlink> result) {
     linkName = destPath.getRelative(linkName);
     if (!result.containsKey(linkName)) {
       result.put(
           linkName,
-          FilesetOutputSymlink.create(
-              linkName, linkTarget, metadata, isGenerated, execRoot.asFragment()));
+          FilesetOutputSymlink.create(linkName, linkTarget, metadata, isGenerated, execRoot));
     }
   }
 
@@ -218,11 +207,12 @@ public final class FilesetEntryFunction implements SkyFunction {
   }
 
   /**
-   * Returns the {@link TraversalRequest} node used to compute the Skyframe value for {@code
-   * filesetEntryKey}. Should only be called to determine which nodes need to be rewound, and only
-   * when {@code filesetEntryKey.isGenerated()}.
+   * Returns the {@link RecursiveFilesystemTraversalValue.TraversalRequest} node used to compute the
+   * Skyframe value for {@code filesetEntryKey}. Should only be called to determine which nodes need
+   * to be rewound, and only when {@code filesetEntryKey.isGenerated()}.
    */
-  public static TraversalRequest getDependencyForRewinding(FilesetEntryKey filesetEntryKey) {
+  public static RecursiveFilesystemTraversalValue.TraversalRequest getDependencyForRewinding(
+      FilesetEntryKey filesetEntryKey) {
     FilesetTraversalParams t = filesetEntryKey.argument();
     Preconditions.checkState(
         t.getDirectTraversal().isPresent() && t.getNestedArtifact() == null,
@@ -237,9 +227,9 @@ public final class FilesetEntryFunction implements SkyFunction {
     return createTraversalRequestKey(createErrorInfo(t), t.getDirectTraversal().get());
   }
 
-  private static TraversalRequest createTraversalRequestKey(
+  private static RecursiveFilesystemTraversalValue.TraversalRequest createTraversalRequestKey(
       String errorInfo, DirectTraversal traversal) {
-    return TraversalRequest.create(
+    return RecursiveFilesystemTraversalValue.TraversalRequest.create(
         traversal.getRoot(),
         traversal.isGenerated(),
         traversal.getPackageBoundaryMode(),

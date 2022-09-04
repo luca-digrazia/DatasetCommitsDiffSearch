@@ -557,13 +557,6 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testAttrNonEmpty() throws Exception {
-    ev =
-        createEvaluationTestCase(
-            StarlarkSemantics.DEFAULT_SEMANTICS.toBuilder()
-                .incompatibleDisableDeprecatedAttrParams(false)
-                .build());
-    ev.initialize();
-
     Attribute attr = buildAttribute("a1", "attr.string_list(non_empty=True)");
     assertThat(attr.isNonEmpty()).isTrue();
     assertThat(attr.isMandatory()).isFalse();

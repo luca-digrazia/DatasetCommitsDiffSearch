@@ -130,9 +130,8 @@ public class TransitiveTargetFunction
   }
 
   @Override
-  @SuppressWarnings("unchecked")
-  public SkyValue computeSkyValue(
-      TargetAndErrorIfAny targetAndErrorIfAny, TransitiveTargetValueBuilder builder) {
+  public SkyValue computeSkyValue(TargetAndErrorIfAny targetAndErrorIfAny,
+      TransitiveTargetValueBuilder builder) {
     Target target = targetAndErrorIfAny.getTarget();
     NoSuchTargetException errorLoadingTarget = targetAndErrorIfAny.getErrorLoadingTarget();
 
@@ -160,7 +159,7 @@ public class TransitiveTargetFunction
                 attr.getLateBoundDefault().getFragmentClass())) {
           addFragmentIfNew(
               builder,
-              (Class<? extends BuildConfiguration.Fragment>) // unchecked cast
+              (Class<? extends BuildConfiguration.Fragment>)
                   attr.getLateBoundDefault().getFragmentClass());
         }
       }
@@ -248,6 +247,14 @@ public class TransitiveTargetFunction
       return null;
     }
     return ((Rule) toTarget).getRuleClassObject().getAdvertisedProviders();
+  }
+
+  @Override
+  TargetMarkerValue getTargetMarkerValue(SkyKey targetMarkerKey, Environment env)
+      throws NoSuchTargetException, NoSuchPackageException, InterruptedException {
+    return (TargetMarkerValue)
+        env.getValueOrThrow(
+            targetMarkerKey, NoSuchTargetException.class, NoSuchPackageException.class);
   }
 
   private static void maybeReportErrorAboutMissingEdge(
