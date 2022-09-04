@@ -1,123 +1,79 @@
 package io.quarkus.amazon.lambda.runtime;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Method;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.List;
+import java.util.Map;
 
 import org.jboss.logging.Logger;
 
-import com.amazonaws.services.lambda.runtime.ClientContext;
-import com.amazonaws.services.lambda.runtime.CognitoIdentity;
+import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
-import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.amazonaws.services.lambda.runtime.RequestStreamHandler;
+import com.amazonaws.services.lambda.runtime.events.S3Event;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
 
+import io.quarkus.amazon.lambda.runtime.handlers.S3EventInputReader;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.runtime.Application;
-import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 
+/**
+ * Used for Amazon Lambda java runtime
+ *
+ */
 @Recorder
 public class AmazonLambdaRecorder {
 
     private static final Logger log = Logger.getLogger(AmazonLambdaRecorder.class);
 
-    @SuppressWarnings("rawtypes")
-    public void start(Class<? extends RequestHandler<?, ?>> handlerClass,
-            ShutdownContext context,
-            RuntimeValue<Class<?>> handlerType,
-            BeanContainer beanContainer) {
+    private static Class<? extends RequestHandler<?, ?>> handlerClass;
+    private static Class<? extends RequestStreamHandler> streamHandlerClass;
+    private static BeanContainer beanContainer;
+    private static LambdaInputReader objectReader;
+    private static LambdaOutputWriter objectWriter;
 
-        RequestHandler handler = beanContainer.instance(handlerClass);
-
-        final ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        AtomicBoolean running = new AtomicBoolean(true);
-        ObjectReader objectReader = mapper.readerFor(handlerType.getValue());
-        ObjectReader cognitoIdReader = mapper.readerFor(CognitoIdentity.class);
-        ObjectReader clientCtxReader = mapper.readerFor(ClientContext.class);
-
-        context.addShutdownTask(new Runnable() {
-            @Override
-            public void run() {
-                running.set(false);
-            }
-        });
-
-        Thread t = new Thread(new Runnable() {
-            @SuppressWarnings("unchecked")
-            @Override
-            public void run() {
-
-                try {
-                    URL requestUrl = AmazonLambdaApi.invocationNext();
-                    while (running.get()) {
-
-                        HttpURLConnection requestConnection = (HttpURLConnection) requestUrl.openConnection();
-                        try {
-                            String requestId = requestConnection.getHeaderField(AmazonLambdaApi.LAMBDA_RUNTIME_AWS_REQUEST_ID);
-                            Object response;
-                            try {
-                                Object val = objectReader.readValue(requestConnection.getInputStream());
-                                response = handler.handleRequest(val,
-                                        new AmazonLambdaContext(requestConnection, cognitoIdReader, clientCtxReader));
-                            } catch (Exception e) {
-                                log.error("Failed to run lambda", e);
-
-                                postResponse(AmazonLambdaApi.invocationError(requestId),
-                                        new FunctionError(e.getClass().getName(), e.getMessage()), mapper);
-                                continue;
-                            }
-
-                            postResponse(AmazonLambdaApi.invocationResponse(requestId), response, mapper);
-                        } catch (Exception e) {
-                            log.error("Error running lambda", e);
-                            Application app = Application.currentApplication();
-                            if (app != null) {
-                                app.stop();
-                            }
-                            return;
-                        } finally {
-                            requestConnection.getInputStream().close();
-                        }
-
-                    }
-
-                } catch (Exception e) {
-                    try {
-                        log.error("Lambda init error", e);
-                        postResponse(AmazonLambdaApi.initError(), new FunctionError(e.getClass().getName(), e.getMessage()),
-                                mapper);
-                    } catch (Exception ex) {
-                        log.error("Failed to report init error", ex);
-                    } finally {
-                        //our main loop is done, time to shutdown
-                        Application app = Application.currentApplication();
-                        if (app != null) {
-                            app.stop();
-                        }
-                    }
-                }
-            }
-        }, "Lambda Thread");
-        t.start();
-
+    public void setStreamHandlerClass(Class<? extends RequestStreamHandler> handler, BeanContainer container) {
+        streamHandlerClass = handler;
+        beanContainer = container;
     }
 
-    private void postResponse(URL url, Object response, ObjectMapper mapper) throws IOException {
-        HttpURLConnection responseConnection = (HttpURLConnection) url.openConnection();
-        responseConnection.setDoOutput(true);
-        responseConnection.setRequestMethod("POST");
-        mapper.writeValue(responseConnection.getOutputStream(), response);
-        while (responseConnection.getInputStream().read() != -1) {
-            // Read data
+    public void setHandlerClass(Class<? extends RequestHandler<?, ?>> handler, BeanContainer container) {
+        handlerClass = handler;
+        beanContainer = container;
+        ObjectMapper objectMapper = AmazonLambdaMapperRecorder.objectMapper;
+        Method handlerMethod = discoverHandlerMethod(handlerClass);
+        if (handlerMethod.getParameterTypes()[0].equals(S3Event.class)) {
+            objectReader = new S3EventInputReader(objectMapper);
+        } else {
+            objectReader = new JacksonInputReader(objectMapper.readerFor(handlerMethod.getParameterTypes()[0]));
+        }
+        objectWriter = new JacksonOutputWriter(objectMapper.writerFor(handlerMethod.getReturnType()));
+    }
+
+    /**
+     * Called by JVM handler wrapper
+     *
+     * @param inputStream
+     * @param outputStream
+     * @param context
+     * @throws IOException
+     */
+    public static void handle(InputStream inputStream, OutputStream outputStream, Context context) throws IOException {
+        if (streamHandlerClass != null) {
+            RequestStreamHandler handler = beanContainer.instance(streamHandlerClass);
+            handler.handleRequest(inputStream, outputStream, context);
+        } else {
+            Object request = objectReader.readValue(inputStream);
+            RequestHandler handler = beanContainer.instance(handlerClass);
+            Object response = handler.handleRequest(request, context);
+            objectWriter.writeValue(outputStream, response);
         }
     }
 
-    public RuntimeValue<Class<?>> discoverParameterTypes(Class<? extends RequestHandler<?, ?>> handlerClass) {
+    private Method discoverHandlerMethod(Class<? extends RequestHandler<?, ?>> handlerClass) {
         final Method[] methods = handlerClass.getMethods();
         Method method = null;
         for (int i = 0; i < methods.length && method == null; i++) {
@@ -128,10 +84,101 @@ public class AmazonLambdaRecorder {
                 }
             }
         }
-        if (method == null) {
+        if (method == null && methods.length > 0) {
             method = methods[0];
         }
-        return new RuntimeValue<>(method.getParameterTypes()[0]);
+        if (method == null) {
+            throw new RuntimeException("Unable to find a method which handles request on handler class " + handlerClass);
+        }
+        return method;
     }
 
+    public void chooseHandlerClass(List<Class<? extends RequestHandler<?, ?>>> unamedHandlerClasses,
+            Map<String, Class<? extends RequestHandler<?, ?>>> namedHandlerClasses,
+            List<Class<? extends RequestStreamHandler>> unamedStreamHandlerClasses,
+            Map<String, Class<? extends RequestStreamHandler>> namedStreamHandlerClasses,
+            BeanContainer container,
+            LambdaConfig config) {
+
+        Class<? extends RequestHandler<?, ?>> handlerClass = null;
+        Class<? extends RequestStreamHandler> handlerStreamClass = null;
+        if (config.handler.isPresent()) {
+            handlerClass = namedHandlerClasses.get(config.handler.get());
+            handlerStreamClass = namedStreamHandlerClasses.get(config.handler.get());
+
+            if (handlerClass == null && handlerStreamClass == null) {
+                String errorMessage = "Unable to find handler class with name " + config.handler.get()
+                        + " make sure there is a handler class in the deployment with the correct @Named annotation";
+                throw new RuntimeException(errorMessage);
+            }
+        } else {
+            int unnamedTotal = unamedHandlerClasses.size() + unamedStreamHandlerClasses.size();
+            int namedTotal = namedHandlerClasses.size() + namedStreamHandlerClasses.size();
+
+            if (unnamedTotal > 1 || namedTotal > 1 || (unnamedTotal > 0 && namedTotal > 0)) {
+                String errorMessage = "Multiple handler classes, either specify the quarkus.lambda.handler property, or make sure there is only a single "
+                        + RequestHandler.class.getName() + " or, " + RequestStreamHandler.class.getName()
+                        + " implementation in the deployment";
+                throw new RuntimeException(errorMessage);
+            } else if (unnamedTotal == 0 && namedTotal == 0) {
+                String errorMessage = "Unable to find handler class, make sure your deployment includes a single "
+                        + RequestHandler.class.getName() + " or, " + RequestStreamHandler.class.getName() + " implementation";
+                throw new RuntimeException(errorMessage);
+            } else if ((unnamedTotal + namedTotal) == 1) {
+                if (!unamedHandlerClasses.isEmpty()) {
+                    handlerClass = unamedHandlerClasses.get(0);
+                } else if (!namedHandlerClasses.isEmpty()) {
+                    handlerClass = namedHandlerClasses.values().iterator().next();
+                } else if (!unamedStreamHandlerClasses.isEmpty()) {
+                    handlerStreamClass = unamedStreamHandlerClasses.get(0);
+                } else if (!namedStreamHandlerClasses.isEmpty()) {
+                    handlerStreamClass = namedStreamHandlerClasses.values().iterator().next();
+                }
+            }
+        }
+
+        if (handlerStreamClass != null) {
+            setStreamHandlerClass(handlerStreamClass, container);
+        } else {
+            setHandlerClass(handlerClass, container);
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    public void startPollLoop(ShutdownContext context) {
+        AbstractLambdaPollLoop loop = new AbstractLambdaPollLoop(AmazonLambdaMapperRecorder.objectMapper,
+                AmazonLambdaMapperRecorder.cognitoIdReader, AmazonLambdaMapperRecorder.clientCtxReader) {
+
+            @Override
+            protected Object processRequest(Object input, AmazonLambdaContext context) throws Exception {
+                RequestHandler handler = beanContainer.instance(handlerClass);
+                return handler.handleRequest(input, context);
+            }
+
+            @Override
+            protected LambdaInputReader getInputReader() {
+                return objectReader;
+            }
+
+            @Override
+            protected LambdaOutputWriter getOutputWriter() {
+                return objectWriter;
+            }
+
+            @Override
+            protected boolean isStream() {
+                return streamHandlerClass != null;
+            }
+
+            @Override
+            protected void processRequest(InputStream input, OutputStream output, AmazonLambdaContext context)
+                    throws Exception {
+                RequestStreamHandler handler = beanContainer.instance(streamHandlerClass);
+                handler.handleRequest(input, output, context);
+
+            }
+        };
+        loop.startPollLoop(context);
+
+    }
 }
