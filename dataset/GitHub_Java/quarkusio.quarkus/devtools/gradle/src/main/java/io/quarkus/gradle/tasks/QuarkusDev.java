@@ -34,7 +34,6 @@ import java.util.zip.ZipOutputStream;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.Optional;
-import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.options.Option;
 
@@ -49,7 +48,7 @@ public class QuarkusDev extends QuarkusTask {
 
     private String debug;
 
-    private File buildDir;
+    private String buildDir;
 
     private String sourceDir;
 
@@ -79,13 +78,16 @@ public class QuarkusDev extends QuarkusTask {
         this.debug = debug;
     }
 
-    @OutputDirectory
     public File getBuildDir() {
-        return buildDir;
+        if (buildDir == null)
+            return extension().buildDir();
+        else
+            return new File(buildDir);
     }
 
+    @Option(description = "Set build directory", option = "build-dir")
     @Optional
-    public void setBuildDir(File buildDir) {
+    public void setBuildDir(String buildDir) {
         this.buildDir = buildDir;
     }
 
