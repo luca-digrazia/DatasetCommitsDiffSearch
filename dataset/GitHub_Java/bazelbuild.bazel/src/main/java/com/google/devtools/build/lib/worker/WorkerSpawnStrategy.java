@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceManager;
@@ -38,9 +37,10 @@ import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.UserExecException;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers;
+import com.google.devtools.build.lib.sandbox.SpawnHelpers;
 import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -85,19 +85,17 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
   private final Path execRoot;
   private final boolean verboseFailures;
   private final Multimap<String, String> extraFlags;
-  private final SpawnInputExpander spawnInputExpander;
 
   public WorkerSpawnStrategy(
-      Path execRoot,
+      BlazeDirectories blazeDirs,
       WorkerPool workers,
       boolean verboseFailures,
       Multimap<String, String> extraFlags) {
     Preconditions.checkNotNull(workers);
     this.workers = Preconditions.checkNotNull(workers);
-    this.execRoot = execRoot;
+    this.execRoot = blazeDirs.getExecRoot();
     this.verboseFailures = verboseFailures;
     this.extraFlags = extraFlags;
-    this.spawnInputExpander = new SpawnInputExpander(false);
   }
 
   @Override
@@ -113,8 +111,8 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
-    if (!spawn.getExecutionInfo().containsKey(ExecutionRequirements.SUPPORTS_WORKERS)
-        || !spawn.getExecutionInfo().get(ExecutionRequirements.SUPPORTS_WORKERS).equals("1")) {
+    if (!spawn.getExecutionInfo().containsKey("supports-workers")
+        || !spawn.getExecutionInfo().get("supports-workers").equals("1")) {
       StandaloneSpawnStrategy standaloneStrategy =
           Preconditions.checkNotNull(executor.getContext(StandaloneSpawnStrategy.class));
       executor.getEventHandler().handle(
@@ -164,7 +162,7 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       HashCode workerFilesHash = WorkerFilesHash.getWorkerFilesHash(
           spawn.getToolFiles(), actionExecutionContext);
       Map<PathFragment, Path> inputFiles =
-          SandboxHelpers.getInputFiles(spawnInputExpander, execRoot, spawn, actionExecutionContext);
+          new SpawnHelpers(execRoot).getMounts(spawn, actionExecutionContext);
       Set<PathFragment> outputFiles = SandboxHelpers.getOutputFiles(spawn);
 
       WorkerKey key =
