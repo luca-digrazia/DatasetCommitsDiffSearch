@@ -1,7 +1,7 @@
 package com.example.gsyvideoplayer.exo;
 
 import android.os.Bundle;
-import android.support.v4.widget.NestedScrollView;
+import androidx.core.widget.NestedScrollView;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -40,20 +40,20 @@ public class DetailExoListPlayer extends GSYBaseActivityDetail<GSYExo2PlayerView
         setContentView(R.layout.activity_deatil_exo_list_player);
         ButterKnife.bind(this);
 
-        //初始化 GSYExoVideoManager context
-        GSYExoVideoManager.instance().initContext(this);
-
         //GSYBaseActivityDetail 的 普通模式初始化
         initVideo();
 
         List<GSYVideoModel> urls = new ArrayList<>();
+
+        urls.add(new GSYVideoModel("http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4", "标题1"));
         urls.add(new GSYVideoModel("https://media6.smartstudy.com/ae/07/3997/2/dest.m3u8", "标题3"));
-        urls.add(new GSYVideoModel("http://7xse1z.com1.z0.glb.clouddn.com/1491813192", "标题1"));
         urls.add(new GSYVideoModel("http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4", "标题2"));
+        //detailPlayer.setUp(urls, 1);
         detailPlayer.setUp(urls, 0);
 
         //使用 exo 的 CacheDataSourceFactory 实现
-        detailPlayer.setExoCache(true);
+        detailPlayer.setExoCache(false);
+        //detailPlayer.setOverrideExtension("m3u8");
 
         //增加封面
         ImageView imageView = new ImageView(this);
@@ -86,10 +86,12 @@ public class DetailExoListPlayer extends GSYBaseActivityDetail<GSYExo2PlayerView
             @Override
             public void onClick(View v) {
                 GSYExoVideoManager.instance().next();
+                ((GSYExo2PlayerView)detailPlayer.getCurrentPlayer()).nextUI();
             }
         });
 
     }
+
 
 
 
@@ -154,4 +156,6 @@ public class DetailExoListPlayer extends GSYBaseActivityDetail<GSYExo2PlayerView
         }
         return detailPlayer;
     }
+
+
 }
