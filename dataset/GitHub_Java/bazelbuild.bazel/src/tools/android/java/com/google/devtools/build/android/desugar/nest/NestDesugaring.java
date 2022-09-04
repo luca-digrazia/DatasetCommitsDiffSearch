@@ -55,7 +55,7 @@ public final class NestDesugaring extends ClassVisitor {
   private boolean isNestHostWithNestCompanion;
 
   public NestDesugaring(ClassVisitor classVisitor, NestDigest nestDigest) {
-    super(Opcodes.ASM8, classVisitor);
+    super(Opcodes.ASM7, classVisitor);
     this.nestDigest = nestDigest;
   }
 

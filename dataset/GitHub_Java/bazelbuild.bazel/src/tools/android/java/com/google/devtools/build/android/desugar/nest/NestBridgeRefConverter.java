@@ -38,7 +38,7 @@ public final class NestBridgeRefConverter extends MethodVisitor {
 
   NestBridgeRefConverter(
       @Nullable MethodVisitor methodVisitor, MethodKey methodKey, NestDigest nestDigest) {
-    super(Opcodes.ASM8, methodVisitor);
+    super(Opcodes.ASM7, methodVisitor);
     this.enclosingMethodKey = methodKey;
     this.nestDigest = nestDigest;
 
@@ -63,16 +63,6 @@ public final class NestBridgeRefConverter extends MethodVisitor {
       int opcode, String owner, String name, String descriptor, boolean isInterface) {
     MethodKey methodKey = MethodKey.create(ClassName.create(owner), name, descriptor);
     MemberUseKind useKind = MemberUseKind.fromValue(opcode);
-
-    // Desugar invokevirtual on private instance methods within the same class.
-    if (!isInterface
-        && useKind == MemberUseKind.INVOKEVIRTUAL
-        && methodKey.owner().equals(enclosingMethodKey.owner())
-        && nestDigest.isPrivateInstanceMethod(methodKey)) {
-      super.visitMethodInsn(Opcodes.INVOKESPECIAL, owner, name, descriptor, isInterface);
-      return;
-    }
-
     if ((isInterface || isCrossMateRefInNest(methodKey, enclosingMethodKey))
         && nestDigest.hasAnyUse(methodKey, useKind)) {
       methodKey.accept(useKind, isInterface, methodToBridgeRedirector, mv);

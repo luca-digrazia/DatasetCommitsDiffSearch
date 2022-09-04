@@ -88,10 +88,6 @@ public abstract class MethodDeclInfo implements TypeMappable<MethodDeclInfo> {
     return methodKey().getReturnType();
   }
 
-  public final ClassName returnTypeName() {
-    return methodKey().getReturnTypeName();
-  }
-
   public final ImmutableList<Type> argumentTypes() {
     return ImmutableList.copyOf(methodKey().getArgumentTypes());
   }
