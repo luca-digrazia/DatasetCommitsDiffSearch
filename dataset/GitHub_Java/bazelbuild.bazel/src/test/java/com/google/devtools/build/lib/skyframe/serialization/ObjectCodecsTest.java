@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skyframe.serialization;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -122,10 +123,12 @@ public class ObjectCodecsTest {
             })
         .when(spyObjectCodec)
         .serialize(any(SerializationContext.class), eq(1), any(CodedOutputStream.class));
-    SerializationException e =
-        assertThrows(
-            SerializationException.class, () -> underTest.deserialize(underTest.serialize(1)));
-    assertThat(e).hasMessageThat().isEqualTo("input stream not exhausted after deserializing 1");
+    try {
+      underTest.deserialize(underTest.serialize(1));
+      fail("Expected exception");
+    } catch (SerializationException e) {
+      assertThat(e).hasMessageThat().isEqualTo("input stream not exhausted after deserializing 1");
+    }
   }
 
   @Test
@@ -136,9 +139,12 @@ public class ObjectCodecsTest {
     doThrow(staged)
         .when(spyObjectCodec)
         .serialize(any(SerializationContext.class), eq(original), any(CodedOutputStream.class));
-    SerializationException e =
-        assertThrows(SerializationException.class, () -> underTest.serialize(original));
-    assertThat(e).isSameInstanceAs(staged);
+    try {
+      underTest.serialize(original);
+      fail("Expected exception");
+    } catch (SerializationException e) {
+      assertThat(e).isSameAs(staged);
+    }
   }
 
   @Test
@@ -150,9 +156,12 @@ public class ObjectCodecsTest {
     doThrow(staged)
         .when(spyObjectCodec)
         .serialize(any(SerializationContext.class), eq(original), any(CodedOutputStream.class));
-    SerializationException e =
-        assertThrows(SerializationException.class, () -> underTest.serialize(original));
-    assertThat(e).hasCauseThat().isSameInstanceAs(staged);
+    try {
+      underTest.serialize(original);
+      fail("Expected exception");
+    } catch (SerializationException e) {
+      assertThat(e).hasCauseThat().isSameAs(staged);
+    }
   }
 
   @Test
@@ -164,7 +173,7 @@ public class ObjectCodecsTest {
     SerializationException thrown =
         assertThrows(
             SerializationException.class, () -> underTest.deserialize(underTest.serialize(1)));
-    assertThat(thrown).isSameInstanceAs(staged);
+    assertThat(thrown).isSameAs(staged);
   }
 
   @Test
@@ -174,10 +183,12 @@ public class ObjectCodecsTest {
     doThrow(staged)
         .when(spyObjectCodec)
         .deserialize(any(DeserializationContext.class), any(CodedInputStream.class));
-    SerializationException e =
-        assertThrows(
-            SerializationException.class, () -> underTest.deserialize(underTest.serialize(1)));
-    assertThat(e).hasCauseThat().isSameInstanceAs(staged);
+    try {
+      underTest.deserialize(underTest.serialize(1));
+      fail("Expected exception");
+    } catch (SerializationException e) {
+      assertThat(e).hasCauseThat().isSameAs(staged);
+    }
   }
 
   @Test
