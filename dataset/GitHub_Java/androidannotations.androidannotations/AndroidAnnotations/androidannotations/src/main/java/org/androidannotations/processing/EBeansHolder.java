@@ -64,9 +64,6 @@ public class EBeansHolder {
 		public final JClass TEXT_VIEW = refClass(CanonicalNameConstants.TEXT_VIEW);
 		public final JClass VIEW = refClass(CanonicalNameConstants.VIEW);
 		public final JClass VIEW_ON_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_CLICK_LISTENER);
-		public final JClass VIEW_ON_TOUCH_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_TOUCH_LISTENER);
-		public final JClass VIEW_ON_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_LONG_CLICK_LISTENER);
-		public final JClass VIEW_ON_FOCUS_CHANGE_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_FOCUS_CHANGE_LISTENER);
 		public final JClass VIEW_GROUP_LAYOUT_PARAMS = refClass(CanonicalNameConstants.VIEW_GROUP_LAYOUT_PARAMS);
 		public final JClass KEY_EVENT = refClass(CanonicalNameConstants.KEY_EVENT);
 		public final JClass CONTEXT = refClass(CanonicalNameConstants.CONTEXT);
@@ -82,6 +79,7 @@ public class EBeansHolder {
 		public final JClass ON_ITEM_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_LONG_CLICK_LISTENER);
 		public final JClass ON_ITEM_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_CLICK_LISTENER);
 		public final JClass ON_ITEM_SELECTED_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_SELECTED_LISTENER);
+		public final JClass ON_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_LONG_CLICK_LISTENER);
 		public final JClass WINDOW = refClass(CanonicalNameConstants.WINDOW);
 		public final JClass MENU_ITEM = refClass(CanonicalNameConstants.MENU_ITEM);
 		public final JClass MENU_INFLATER = refClass(CanonicalNameConstants.MENU_INFLATER);
@@ -90,6 +88,7 @@ public class EBeansHolder {
 		public final JClass RESOURCES = refClass(CanonicalNameConstants.RESOURCES);
 		public final JClass CONFIGURATION = refClass(CanonicalNameConstants.CONFIGURATION);
 		public final JClass MOTION_EVENT = refClass(CanonicalNameConstants.MOTION_EVENT);
+		public final JClass ON_TOUCH_LISTENER = refClass(CanonicalNameConstants.ON_TOUCH_LISTENER);
 		public final JClass HANDLER = refClass(CanonicalNameConstants.HANDLER);
 		public final JClass KEY_STORE = refClass(CanonicalNameConstants.KEY_STORE);
 
@@ -99,6 +98,11 @@ public class EBeansHolder {
 		public final JClass SHERLOCK_MENU = refClass(CanonicalNameConstants.SHERLOCK_MENU);
 		public final JClass SHERLOCK_MENU_ITEM = refClass(CanonicalNameConstants.SHERLOCK_MENU_ITEM);
 		public final JClass SHERLOCK_MENU_INFLATER = refClass(CanonicalNameConstants.SHERLOCK_MENU_INFLATER);
+
+		/*
+		 * HoloEverywhre
+		 */
+		public final JClass HOLO_EVERYWHERE_LAYOUT_INFLATER = refClass(CanonicalNameConstants.HOLO_EVERYWHERE_LAYOUT_INFLATER);
 
 		/*
 		 * RoboGuice

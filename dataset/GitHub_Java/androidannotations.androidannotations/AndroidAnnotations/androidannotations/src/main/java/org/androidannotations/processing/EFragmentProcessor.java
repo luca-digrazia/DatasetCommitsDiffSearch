@@ -15,7 +15,6 @@
  */
 package org.androidannotations.processing;
 
-import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 import static com.sun.codemodel.JExpr.FALSE;
 import static com.sun.codemodel.JExpr._new;
 import static com.sun.codemodel.JExpr._null;
@@ -25,6 +24,7 @@ import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
+import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 
 import java.lang.annotation.Annotation;
 
@@ -33,10 +33,12 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.annotations.EFragment;
+import org.androidannotations.helper.HoloEverywhereHelper;
 import org.androidannotations.helper.IdAnnotationHelper;
 import org.androidannotations.processing.EBeansHolder.Classes;
 import org.androidannotations.rclass.IRClass;
 import org.androidannotations.rclass.IRClass.Res;
+
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -51,9 +53,12 @@ import com.sun.codemodel.JVar;
 public class EFragmentProcessor implements GeneratingElementProcessor {
 
 	private final IdAnnotationHelper helper;
+	private HoloEverywhereHelper holoEverywhereHelper;
 
 	public EFragmentProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
 		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
+		holoEverywhereHelper = new HoloEverywhereHelper(helper);
+
 	}
 
 	@Override
@@ -113,7 +118,13 @@ public class EFragmentProcessor implements GeneratingElementProcessor {
 			// onCreateView()
 			JMethod onCreateView = holder.generatedClass.method(PUBLIC, classes.VIEW, "onCreateView");
 			onCreateView.annotate(Override.class);
-			JVar inflater = onCreateView.param(classes.LAYOUT_INFLATER, "inflater");
+			JClass inflaterClass = classes.LAYOUT_INFLATER;
+
+			if (holoEverywhereHelper.usesHoloEverywhere(holder)) {
+				inflaterClass = classes.HOLO_EVERYWHERE_LAYOUT_INFLATER;
+			}
+			JVar inflater = onCreateView.param(inflaterClass, "inflater");
+
 			JVar container = onCreateView.param(classes.VIEW_GROUP, "container");
 			JVar savedInstanceState = onCreateView.param(classes.BUNDLE, "savedInstanceState");
 
@@ -128,24 +139,10 @@ public class EFragmentProcessor implements GeneratingElementProcessor {
 						.assign(contentView, inflater.invoke("inflate").arg(contentViewId).arg(container).arg(FALSE));
 			}
 
+			body.invoke(holder.afterSetContentView);
+
 			body._return(contentView);
 		}
-
-		{
-			// onViewCreated
-
-			JMethod onViewCreated = holder.generatedClass.method(PUBLIC, classes.VIEW, "onViewCreated");
-			onViewCreated.annotate(Override.class);
-			JVar view = onViewCreated.param(classes.VIEW, "view");
-			JVar savedInstanceState = onViewCreated.param(classes.BUNDLE, "savedInstanceState");
-
-			JBlock body = onViewCreated.body();
-
-			body.invoke(_super(), onViewCreated).arg(view).arg(savedInstanceState);
-			
-			body.invoke(holder.afterSetContentView);
-		}
-
 
 		{
 			// findViewById
