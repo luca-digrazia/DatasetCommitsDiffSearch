@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.runtime;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.base.Verify;
 import com.google.common.cache.CacheBuilder;
@@ -38,6 +37,7 @@ import com.google.devtools.build.lib.util.AnsiStrippingOutputStream;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.DelegatingOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.OpaqueOptionsData;
@@ -260,11 +260,12 @@ public class BlazeCommandDispatcher {
 
     StoredEventHandler storedEventHandler = new StoredEventHandler();
     BlazeOptionHandler optionHandler =
-        BlazeOptionHandler.getHandler(
+        new BlazeOptionHandler(
             runtime,
             workspace,
             command,
             commandAnnotation,
+            commandName,
             // Provide the options parser so that we can cache OptionsData here.
             createOptionsParser(command),
             invocationPolicy);
@@ -278,7 +279,8 @@ public class BlazeCommandDispatcher {
         new CommandLineEvent.CanonicalCommandLineEvent(runtime, commandName, options);
 
     // The initCommand call also records the start time for the timestamp granularity monitor.
-    CommandEnvironment env = workspace.initCommand(commandAnnotation, options);
+    List<String> commandEnvWarnings = new ArrayList<>();
+    CommandEnvironment env = workspace.initCommand(commandAnnotation, options, commandEnvWarnings);
     // Record the command's starting time for use by the commands themselves.
     env.recordCommandStartTime(firstContactTime);
 
@@ -420,6 +422,9 @@ public class BlazeCommandDispatcher {
         module.checkEnvironment(env);
       }
 
+      for (String warning : commandEnvWarnings) {
+        reporter.handle(Event.warn(warning));
+      }
       if (commonOptions.announceRcOptions) {
         if (startupOptionsTaggedWithBazelRc.isPresent()) {
           String lastBlazerc = "";
@@ -587,7 +592,8 @@ public class BlazeCommandDispatcher {
    * classes.
    *
    * <p>An overriding method should first call this method and can then override default values
-   * directly or by calling {@link BlazeOptionHandler#parseOptions} for command-specific options.
+   * directly or by calling {@link BlazeOptionHandler#parseOptionsForCommand} for command-specific
+   * options.
    */
   private OptionsParser createOptionsParser(BlazeCommand command)
       throws OptionsParser.ConstructionException {

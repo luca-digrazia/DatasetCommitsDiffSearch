@@ -151,17 +151,10 @@ public final class CommandEnvironment {
 
     workspace.getSkyframeExecutor().setEventBus(eventBus);
 
-    CommonCommandOptions commandOptions =
-        Preconditions.checkNotNull(
-            options.getOptions(CommonCommandOptions.class),
-            "CommandEnvironment needs its options provider to have CommonCommandOptions loaded.");
-    ClientOptions clientOptions =
-        Preconditions.checkNotNull(
-            options.getOptions(ClientOptions.class),
-            "CommandEnvironment needs its options provider to have ClientOptions loaded.");
+    CommonCommandOptions commandOptions = options.getOptions(CommonCommandOptions.class);
     this.commandId = commandOptions.invocationId;
     this.buildRequestId = commandOptions.buildRequestId;
-    updateClientEnv(clientOptions.clientEnv, warnings);
+    updateClientEnv(commandOptions.clientEnv, warnings);
 
     // actionClientEnv contains the environment where values from actionEnvironment are overridden.
     actionClientEnv.putAll(clientEnv);
