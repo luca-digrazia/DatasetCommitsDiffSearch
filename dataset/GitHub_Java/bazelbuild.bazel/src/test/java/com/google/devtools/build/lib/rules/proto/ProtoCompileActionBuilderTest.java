@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.rules.proto;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
 import static com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.createCommandLineFromToolchains;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.collect.ImmutableList;
@@ -54,7 +54,7 @@ public class ProtoCompileActionBuilderTest {
   private final ArtifactRoot root =
       ArtifactRoot.asSourceRoot(Root.fromPath(FILE_SYSTEM.getPath("/")));
   private final ArtifactRoot derivedRoot =
-      ArtifactRoot.asDerivedRoot(FILE_SYSTEM.getPath("/"), "out");
+      ArtifactRoot.asDerivedRoot(FILE_SYSTEM.getPath("/"), FILE_SYSTEM.getPath("/out"));
 
   private ProtoInfo protoInfo(
       ImmutableList<Artifact> directProtos,
@@ -126,8 +126,7 @@ public class ProtoCompileActionBuilderTest {
             Deps.NON_STRICT,
             Exports.DO_NOT_USE,
             Services.ALLOW,
-            /* protocOpts= */ ImmutableList.of(),
-            false);
+            /* protocOpts= */ ImmutableList.of());
 
     assertThat(cmdLine.arguments())
         .containsExactly(
@@ -159,8 +158,7 @@ public class ProtoCompileActionBuilderTest {
             Deps.NON_STRICT,
             Exports.DO_NOT_USE,
             Services.ALLOW,
-            /* protocOpts= */ ImmutableList.of(),
-            false);
+            /* protocOpts= */ ImmutableList.of());
 
     assertThat(cmdLine.arguments()).containsExactly("out/source_file.proto");
   }
@@ -195,8 +193,7 @@ public class ProtoCompileActionBuilderTest {
             Deps.STRICT,
             Exports.DO_NOT_USE,
             Services.ALLOW,
-            /* protocOpts= */ ImmutableList.of(),
-            false);
+            /* protocOpts= */ ImmutableList.of());
 
     assertThat(cmdLine.arguments())
         .containsExactly(
@@ -240,8 +237,7 @@ public class ProtoCompileActionBuilderTest {
             Deps.NON_STRICT,
             Exports.USE,
             Services.ALLOW,
-            /* protocOpts= */ ImmutableList.of(),
-            false);
+            /* protocOpts= */ ImmutableList.of());
 
     assertThat(cmdLine.arguments())
         .containsExactly(
@@ -271,8 +267,7 @@ public class ProtoCompileActionBuilderTest {
             Deps.STRICT,
             Exports.DO_NOT_USE,
             Services.DISALLOW,
-            /* protocOpts= */ ImmutableList.of("--foo", "--bar"),
-            false);
+            /* protocOpts= */ ImmutableList.of("--foo", "--bar"));
 
     assertThat(cmdLine.arguments()).containsAtLeast("--disallow_services", "--foo", "--bar");
   }
@@ -313,8 +308,7 @@ public class ProtoCompileActionBuilderTest {
             Deps.STRICT,
             Exports.DO_NOT_USE,
             Services.ALLOW,
-            /* protocOpts= */ ImmutableList.of(),
-            false);
+            /* protocOpts= */ ImmutableList.of());
 
     assertThat(hasBeenCalled[0]).isFalse();
     cmdLine.arguments();
@@ -362,8 +356,7 @@ public class ProtoCompileActionBuilderTest {
                     Deps.STRICT,
                     Exports.DO_NOT_USE,
                     Services.ALLOW,
-                    /* protocOpts= */ ImmutableList.of(),
-                    false));
+                    /* protocOpts= */ ImmutableList.of()));
     assertThat(e)
         .hasMessageThat()
         .isEqualTo(
@@ -467,8 +460,7 @@ public class ProtoCompileActionBuilderTest {
         commandLine,
         protosInDirectDependenciesBuilder,
         NestedSetBuilder.wrap(Order.STABLE_ORDER, protoSourceRoots),
-        transitiveImportsNestedSet,
-        false);
+        transitiveImportsNestedSet);
     return commandLine.build().arguments();
   }
 }

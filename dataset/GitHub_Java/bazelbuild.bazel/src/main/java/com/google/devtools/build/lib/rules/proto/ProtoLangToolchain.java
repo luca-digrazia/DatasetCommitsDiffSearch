@@ -14,8 +14,8 @@
 
 package com.google.devtools.build.lib.rules.proto;
 
-import static com.google.devtools.build.lib.analysis.TransitionMode.HOST;
-import static com.google.devtools.build.lib.analysis.TransitionMode.TARGET;
+import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode.HOST;
+import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
 
 import com.google.devtools.build.lib.actions.Artifact;
@@ -42,13 +42,7 @@ public class ProtoLangToolchain implements RuleConfiguredTargetFactory {
     for (TransitiveInfoCollection protos :
         ruleContext.getPrerequisites("blacklisted_protos", TARGET)) {
       ProtoInfo protoInfo = protos.get(ProtoInfo.PROVIDER);
-      if (protoInfo == null
-          && ruleContext
-              .getFragment(ProtoConfiguration.class)
-              .blacklistedProtosRequiresProtoInfo()) {
-        ruleContext.ruleError(
-            "'" + ruleContext.getLabel() + "' does not have mandatory provider 'ProtoInfo'.");
-      }
+      // TODO(cushon): it would be nice to make this mandatory and stop adding files to build too
       if (protoInfo != null) {
         blacklistedProtos.addTransitive(protoInfo.getOriginalTransitiveProtoSources());
       } else {
