@@ -18,29 +18,33 @@ import com.google.common.base.Function;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.cpp.AbstractCcLinkParamsStore;
-import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore.CcLinkParamsStoreImpl;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
 /** A target that provides C++ libraries to be linked into Java targets. */
 @Immutable
 @AutoCodec
 public final class JavaCcLinkParamsProvider implements TransitiveInfoProvider {
-  private final CcLinkingInfo ccLinkingInfo;
+  private final CcLinkParamsStoreImpl store;
+
+  public JavaCcLinkParamsProvider(CcLinkParamsStore store) {
+    this(new CcLinkParamsStoreImpl(store));
+  }
 
   @AutoCodec.VisibleForSerialization
   @AutoCodec.Instantiator
-  public JavaCcLinkParamsProvider(CcLinkingInfo ccLinkingInfo) {
-    this.ccLinkingInfo = ccLinkingInfo;
+  JavaCcLinkParamsProvider(CcLinkParamsStoreImpl store) {
+    this.store = store;
   }
 
-  public CcLinkingInfo getCcLinkingInfo() {
-    return ccLinkingInfo;
+  public CcLinkParamsStore getLinkParams() {
+    return store;
   }
 
-  public static final Function<TransitiveInfoCollection, AbstractCcLinkParamsStore> TO_LINK_PARAMS =
+  public static final Function<TransitiveInfoCollection, CcLinkParamsStore> TO_LINK_PARAMS =
       input -> {
         JavaCcLinkParamsProvider provider = input.getProvider(JavaCcLinkParamsProvider.class);
-        return provider == null ? null : provider.getCcLinkingInfo().getCcLinkParamsStore();
+        return provider == null ? null : provider.getLinkParams();
       };
 }
