@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -117,8 +116,6 @@ public final class CppLinkAction extends AbstractAction
 
   /** True for cc_fake_binary targets. */
   private final boolean fake;
-
-  private final Iterable<Artifact> fakeLinkerInputArtifacts;
   private final boolean isLtoIndexing;
 
   private final PathFragment ldExecutable;
@@ -160,7 +157,6 @@ public final class CppLinkAction extends AbstractAction
       Artifact linkOutput,
       LibraryToLink interfaceOutputLibrary,
       boolean fake,
-      Iterable<Artifact> fakeLinkerInputArtifacts,
       boolean isLtoIndexing,
       ImmutableList<Artifact> linkstampObjects,
       LinkCommandLine linkCommandLine,
@@ -182,7 +178,6 @@ public final class CppLinkAction extends AbstractAction
     this.linkOutput = linkOutput;
     this.interfaceOutputLibrary = interfaceOutputLibrary;
     this.fake = fake;
-    this.fakeLinkerInputArtifacts = CollectionUtils.makeImmutable(fakeLinkerInputArtifacts);
     this.isLtoIndexing = isLtoIndexing;
     this.linkstampObjects = linkstampObjects;
     this.linkCommandLine = linkCommandLine;
@@ -356,9 +351,11 @@ public final class CppLinkAction extends AbstractAction
 
     try {
       // Concatenate all the (fake) .o files into the result.
-      for (Artifact objectFile : fakeLinkerInputArtifacts) {
-        if (CppFileTypes.OBJECT_FILE.matches(objectFile.getFilename())
-            || CppFileTypes.PIC_OBJECT_FILE.matches(objectFile.getFilename())) {
+      for (LinkerInput linkerInput : getLinkCommandLine().getLinkerInputs()) {
+        Artifact objectFile = linkerInput.getArtifact();
+        if ((CppFileTypes.OBJECT_FILE.matches(objectFile.getFilename())
+                || CppFileTypes.PIC_OBJECT_FILE.matches(objectFile.getFilename()))
+            && linkerInput.isFake()) {
           s.append(
               FileSystemUtils.readContentAsLatin1(
                   actionExecutionContext.getInputPath(objectFile))); // (IOException)
@@ -417,7 +414,8 @@ public final class CppLinkAction extends AbstractAction
     // The uses of getLinkConfiguration in this method may not be consistent with the computed key.
     // I.e., this may be incrementally incorrect.
     CppLinkInfo.Builder info = CppLinkInfo.newBuilder();
-    info.addAllInputFile(Artifact.toExecPaths(getLinkCommandLine().getLinkerInputArtifacts()));
+    info.addAllInputFile(Artifact.toExecPaths(
+        LinkerInputs.toLibraryArtifacts(getLinkCommandLine().getLinkerInputs())));
     info.setOutputFile(getPrimaryOutput().getExecPathString());
     if (interfaceOutputLibrary != null) {
       info.setInterfaceOutputFile(interfaceOutputLibrary.getArtifact().getExecPathString());
@@ -503,7 +501,7 @@ public final class CppLinkAction extends AbstractAction
         ? MIN_DYNAMIC_LINK_RESOURCES
         : MIN_STATIC_LINK_RESOURCES;
 
-    final int inputSize = Iterables.size(getLinkCommandLine().getLinkerInputArtifacts());
+    final int inputSize = Iterables.size(getLinkCommandLine().getLinkerInputs());
 
     return ResourceSet.createWithRamCpuIo(
         Math.max(inputSize * LINK_RESOURCES_PER_INPUT.getMemoryMb(),

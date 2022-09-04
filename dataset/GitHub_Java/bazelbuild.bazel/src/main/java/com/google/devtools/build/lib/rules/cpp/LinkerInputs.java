@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkApi;
 
 /**
  * Factory for creating new {@link LinkerInput} objects.
@@ -153,7 +152,7 @@ public abstract class LinkerInputs {
    * A library the user can link to. This is different from a simple linker input in that it also
    * has a library identifier.
    */
-  public interface LibraryToLink extends LinkerInput, LibraryToLinkApi {
+  public interface LibraryToLink extends LinkerInput {
     ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles();
 
     /**
@@ -506,8 +505,17 @@ public abstract class LinkerInputs {
         /* objectFiles= */ null,
         /* ltoBitcodeFiles= */ null,
         /* sharedNonLtoBackends= */ null,
-        /* allowArchiveTypeInAlwayslink= */ category.equals(
-            ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY),
+        /* allowArchiveTypeInAlwayslink= */ false,
+        /* mustKeepDebug= */ false);
+  }
+
+  public static LibraryToLink opaqueLibraryToLink(
+      Artifact artifact,
+      ArtifactCategory category,
+      String libraryIdentifier,
+      boolean allowArchiveTypeInAlwayslink) {
+    return new CompoundLibraryToLink(
+        artifact, category, libraryIdentifier, null, null, null, allowArchiveTypeInAlwayslink,
         /* mustKeepDebug= */ false);
   }
 
@@ -532,17 +540,11 @@ public abstract class LinkerInputs {
       String libraryIdentifier,
       Iterable<Artifact> objectFiles,
       ImmutableMap<Artifact, Artifact> ltoBitcodeFiles,
-      ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends,
-      boolean mustKeepDebug) {
+      ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends) {
     return new CompoundLibraryToLink(
-        library,
-        category,
-        libraryIdentifier,
-        objectFiles,
-        ltoBitcodeFiles,
-        sharedNonLtoBackends,
+        library, category, libraryIdentifier, objectFiles, ltoBitcodeFiles, sharedNonLtoBackends,
         /* allowArchiveTypeInAlwayslink= */ false,
-        mustKeepDebug);
+        /* mustKeepDebug= */ false);
   }
 
   public static Iterable<Artifact> toNonSolibArtifacts(Iterable<LibraryToLink> libraries) {
