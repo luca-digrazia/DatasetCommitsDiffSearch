@@ -105,7 +105,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
       MergedAndroidAssets mergedAssets =
           AndroidAssets.forAarImport(assets).process(ruleContext, neverlink);
 
-      resourceApk = ResourceApk.of(validatedResources, mergedAssets, null, null);
+      resourceApk = ResourceApk.of(validatedResources, mergedAssets);
     } else {
       ApplicationManifest androidManifest =
           ApplicationManifest.fromExplicitManifest(ruleContext, androidManifestArtifact);
