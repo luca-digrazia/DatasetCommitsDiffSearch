@@ -72,27 +72,10 @@ public class ServerNodes {
             nodeIterator = skipInactive(serverNodes);
         }
         final ImmutableList<Node> nodes = ImmutableList.copyOf(nodeIterator);
-        if (!allowInactive && nodes.isEmpty()) {
+        if (nodes.isEmpty()) {
             throw new Graylog2ServerUnavailableException();
         }
         return nodes;
-    }
-
-    public Node master() {
-        final List<Node> all = all(false);
-
-        if (all.isEmpty()) {
-            throw new Graylog2ServerUnavailableException();
-        }
-
-        for (Node node : all) {
-            if (node.isMaster()) {
-                return node;
-            }
-        }
-
-        // No active master node was found.
-        throw new Graylog2ServerUnavailableException();
     }
 
     /**
@@ -106,9 +89,6 @@ public class ServerNodes {
 
     public Node any(boolean allowInactive) {
         final List<Node> all = all(allowInactive);
-        if (all.isEmpty()) {
-            throw new Graylog2ServerUnavailableException();
-        }
         final int i = random.nextInt(all.size());
         return all.get(i);
     }
@@ -168,7 +148,7 @@ public class ServerNodes {
 
     public Map<String, Node> asMap() {
         Map<String, Node> map = Maps.newHashMap();
-        for (Node serverNode : ImmutableList.copyOf(skipInactive(serverNodes))) {
+        for (Node serverNode : serverNodes) {
             map.put(serverNode.getNodeId(), serverNode);
         }
 
@@ -191,29 +171,12 @@ public class ServerNodes {
         };
     }
 
-    public List<Node> getConfiguredNodes() {
-        return ImmutableList.copyOf(configuredNodes.keySet());
+    public Collection<Node> getConfiguredNodes() {
+        return configuredNodes.keySet();
     }
 
     public void linkConfiguredNode(Node configuredNode, Node resolvedNode) {
         configuredNodes.put(configuredNode, resolvedNode);
-    }
-
-    public Node getDiscoveredNodeVia(Node configuredNode) {
-        final Node node = configuredNodes.get(configuredNode);
-        return node;
-    }
-
-    public Node getConfigNodeOf(Node serverNode) {
-        return configuredNodes.inverse().get(serverNode);
-    }
-
-    public int connectedNodesCount() {
-        return Iterators.size(skipInactive(serverNodes));
-    }
-
-    public int totalNodesCount() {
-        return serverNodes.size();
     }
 
     public boolean isConnected() {
