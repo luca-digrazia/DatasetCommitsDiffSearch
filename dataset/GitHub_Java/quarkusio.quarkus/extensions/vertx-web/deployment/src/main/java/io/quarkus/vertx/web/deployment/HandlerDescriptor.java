@@ -1,76 +1,121 @@
 package io.quarkus.vertx.web.deployment;
 
-import org.jboss.jandex.DotName;
+import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
+import org.jboss.jandex.Type.Kind;
 
-import io.smallrye.mutiny.Uni;
-import io.vertx.core.buffer.Buffer;
+import io.quarkus.hibernate.validator.spi.BeanValidationAnnotationsBuildItem;
+import io.quarkus.vertx.http.runtime.HandlerType;
 
 /**
  * Describe a request handler.
  */
-public class HandlerDescriptor {
+class HandlerDescriptor {
 
     private final MethodInfo method;
+    private final BeanValidationAnnotationsBuildItem validationAnnotations;
+    private final HandlerType handlerType;
+    private final Type contentType;
 
-    public HandlerDescriptor(MethodInfo method) {
+    HandlerDescriptor(MethodInfo method, BeanValidationAnnotationsBuildItem bvAnnotations, HandlerType handlerType) {
         this.method = method;
+        this.validationAnnotations = bvAnnotations;
+        this.handlerType = handlerType;
+        Type returnType = method.returnType();
+        if (returnType.kind() == Kind.VOID) {
+            contentType = null;
+        } else {
+            if (returnType.name().equals(DotNames.UNI) || returnType.name().equals(DotNames.MULTI)
+                    || returnType.name().equals(DotNames.COMPLETION_STAGE)) {
+                contentType = returnType.asParameterizedType().arguments().get(0);
+            } else {
+                contentType = returnType;
+            }
+        }
     }
 
-    public Type getReturnType() {
+    Type getReturnType() {
         return method.returnType();
     }
 
-    public boolean isReturningVoid() {
+    boolean isReturningVoid() {
         return method.returnType().kind().equals(Type.Kind.VOID);
     }
 
-    public boolean isReturningUni() {
-        return method.returnType().name().equals(DotName.createSimple(Uni.class.getName()));
+    boolean isReturningUni() {
+        return method.returnType().name().equals(DotNames.UNI);
     }
 
-    public Type getContentType() {
-        if (isReturningVoid()) {
-            return null;
-        }
-        if (isReturningUni()) {
-            return getReturnType().asParameterizedType().arguments().get(0);
-        }
-        return getReturnType();
+    boolean isReturningMulti() {
+        return method.returnType().name().equals(DotNames.MULTI);
     }
 
-    public boolean isContentTypeString() {
+    boolean isReturningCompletionStage() {
+        return method.returnType().name().equals(DotNames.COMPLETION_STAGE);
+    }
+
+    /**
+     * @return {@code true} if the method is annotated with a constraint or {@code @Valid} or any parameter has such kind of
+     *         annotation.
+     */
+    boolean requireValidation() {
+        if (validationAnnotations == null) {
+            return false;
+        }
+        for (AnnotationInstance annotation : method.annotations()) {
+            if (validationAnnotations.getAllAnnotations().contains(annotation.name())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @return {@code true} if the method is annotated with {@code @Valid}.
+     */
+    boolean isProducedResponseValidated() {
+        if (validationAnnotations == null) {
+            return false;
+        }
+        for (AnnotationInstance annotation : method.annotations()) {
+            if (validationAnnotations.getValidAnnotation().equals(annotation.name())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    Type getContentType() {
+        return contentType;
+    }
+
+    boolean isContentTypeString() {
         Type type = getContentType();
         if (type == null) {
             return false;
         }
-        return type.name().equals(DotName.createSimple(String.class.getName()));
+        return type.name().equals(io.quarkus.arc.processor.DotNames.STRING);
     }
 
-    public boolean isContentTypeBuffer() {
+    boolean isContentTypeBuffer() {
         Type type = getContentType();
         if (type == null) {
             return false;
         }
-        return type.name().equals(DotName.createSimple(Buffer.class.getName()));
+        return type.name().equals(DotNames.BUFFER);
     }
 
-    public boolean isContentTypeRxBuffer() {
+    boolean isContentTypeMutinyBuffer() {
         Type type = getContentType();
         if (type == null) {
             return false;
         }
-        return type.name()
-                .equals(DotName.createSimple(io.vertx.reactivex.core.buffer.Buffer.class.getName()));
+        return type.name().equals(DotNames.MUTINY_BUFFER);
     }
 
-    public boolean isContentTypeMutinyBuffer() {
-        Type type = getContentType();
-        if (type == null) {
-            return false;
-        }
-        return type.name().equals(DotName.createSimple(io.vertx.mutiny.core.buffer.Buffer.class.getName()));
+    HandlerType getHandlerType() {
+        return handlerType;
     }
 
 }
