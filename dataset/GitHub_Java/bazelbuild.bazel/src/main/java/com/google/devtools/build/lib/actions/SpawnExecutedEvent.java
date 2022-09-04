@@ -14,10 +14,8 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-
 /** This event is fired during the build, when a subprocess is executed. */
-public class SpawnExecutedEvent implements ExtendedEventHandler.ProgressLike {
+public class SpawnExecutedEvent {
   private final Spawn spawn;
   private final SpawnResult result;
 
