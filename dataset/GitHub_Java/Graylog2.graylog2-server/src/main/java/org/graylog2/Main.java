@@ -161,7 +161,7 @@ public final class Main {
         initializeMessageQueue(scheduler, configuration);
 
         // Write initial ServerValue information.
-        writeInitialServerValues(configuration);
+        writeInitialServerValues();
 
         // Start GELF threads
         if (configuration.isUseGELF()) {
@@ -321,15 +321,13 @@ public final class Main {
         }
     }
 
-    public static void writeInitialServerValues(Configuration configuration) {
+    public static void writeInitialServerValues() {
         ServerValue.setStartupTime(Tools.getUTCTimestamp());
         ServerValue.setPID(Integer.parseInt(Tools.getPID()));
         ServerValue.setJREInfo(Tools.getSystemInformation());
         ServerValue.setGraylog2Version(GRAYLOG2_VERSION);
         ServerValue.setAvailableProcessors(HostSystem.getAvailableProcessors());
         ServerValue.setLocalHostname(Tools.getLocalHostname());
-        ServerValue.writeMessageQueueMaximumSize(configuration.getMessageQueueMaximumSize());
-        ServerValue.writeMessageQueueBatchSize(configuration.getMessageQueueBatchSize());
-        ServerValue.writeMessageQueuePollFrequency(configuration.getMessageQueuePollFrequency());
+        ServerValue.setLocalHostname(Tools.getLocalHostname());
     }
 }

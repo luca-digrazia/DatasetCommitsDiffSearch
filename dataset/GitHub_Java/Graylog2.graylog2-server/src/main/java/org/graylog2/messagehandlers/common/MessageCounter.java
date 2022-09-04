@@ -24,7 +24,6 @@ import org.bson.types.ObjectId;
 
 import java.util.HashMap;
 import java.util.Map;
-import org.graylog2.Tools;
 
 /**
  * MessageCounter.java: Sep 20, 2011 6:47:42 PM
@@ -38,7 +37,7 @@ public final class MessageCounter {
     private static MessageCounter instance;
 
     private int total;
-    private Map<String, Integer> streams;
+    private Map<ObjectId, Integer> streams;
     private Map<String, Integer> hosts;
 
     private int fiveSecondThroughput = 0;
@@ -64,7 +63,7 @@ public final class MessageCounter {
         return this.total;
     }
 
-    public Map<String, Integer> getStreamCounts() {
+    public Map<ObjectId, Integer> getStreamCounts() {
         return this.streams;
     }
 
@@ -91,7 +90,7 @@ public final class MessageCounter {
     }
 
     public void resetStreamCounts() {
-        this.streams = new HashMap<String, Integer>();
+        this.streams = new HashMap<ObjectId, Integer>();
     }
 
     public void resetTotal() {
@@ -155,13 +154,13 @@ public final class MessageCounter {
      * @param x The value to add on top of the current stream count.
      */
     public void countUpStream(ObjectId streamId, int x) {
-        if (this.streams.containsKey(streamId.toString())) {
+        if (this.streams.containsKey(streamId)) {
             // There already is an entry. Increment.
-            int oldCount = this.streams.get(streamId.toString());
-            this.streams.put(streamId.toString(), oldCount+x); // Overwrites old entry.
+            int oldCount = this.streams.get(streamId);
+            this.streams.put(streamId, oldCount+x); // Overwrites old entry.
         } else {
             // First entry for this stream.
-            this.streams.put(streamId.toString(), x);
+            this.streams.put(streamId, x);
         }
     }
 
@@ -181,7 +180,6 @@ public final class MessageCounter {
      * @param x The value to add on top of the current host count.
      */
     public void countUpHost(String hostname, int x) {
-        hostname = Tools.encodeBase64(hostname);
         if (this.hosts.containsKey(hostname)) {
             // There already is an entry. Increment.
             int oldCount = this.hosts.get(hostname);

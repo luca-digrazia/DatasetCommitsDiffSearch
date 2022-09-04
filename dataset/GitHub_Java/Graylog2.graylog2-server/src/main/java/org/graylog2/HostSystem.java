@@ -21,6 +21,8 @@
 package org.graylog2;
 
 /**
+ * HostSystem.java: Jan 16, 2011 2:11:09 PM
+ *
  * Utility class that provides access to host system information.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
