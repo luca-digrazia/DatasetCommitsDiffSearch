@@ -1,8 +1,11 @@
 package io.dropwizard.jersey.filter;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.Logger;
 
 import javax.ws.rs.container.ContainerRequestContext;
@@ -13,21 +16,26 @@ import javax.ws.rs.core.UriInfo;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class RequestIdFilterTest {
 
-    private ContainerRequestContext request = mock(ContainerRequestContext.class);
-    private ContainerResponseContext response = mock(ContainerResponseContext.class);
-    private Logger logger = mock(Logger.class);
+    @Mock
+    private ContainerRequestContext request;
+
+    @Mock
+    private ContainerResponseContext response;
+
+    @Mock
+    private Logger logger;
 
     private RequestIdFilter requestIdFilter = new RequestIdFilter();
     private MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         requestIdFilter.setLogger(logger);
 
         when(request.getMethod()).thenReturn("GET");
@@ -41,7 +49,7 @@ public class RequestIdFilterTest {
     }
 
     @Test
-    void addsRandomRequestIdHeader() throws Exception {
+    public void addsRandomRequestIdHeader() throws Exception {
 
         requestIdFilter.filter(request, response);
 
@@ -53,7 +61,7 @@ public class RequestIdFilterTest {
     }
 
     @Test
-    void doesNotAddRandomRequestIdHeaderIfItExists() throws Exception {
+    public void doesNotAddRandomRequestIdHeaderIfItExists() throws Exception {
         String existedRequestId = "e286b503-aa36-43fe-8312-95ee8773e348";
         headers.add("X-Request-Id", existedRequestId);
         when(request.getHeaderString("X-Request-Id")).thenReturn(existedRequestId);

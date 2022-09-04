@@ -1,8 +1,11 @@
 package io.dropwizard.servlets;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -11,34 +14,38 @@ import javax.servlet.http.HttpServletResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class ThreadNameFilterTest {
 
-    private HttpServletRequest request = mock(HttpServletRequest.class);
+    @Mock
+    private HttpServletRequest request;
 
-    private HttpServletResponse response = mock(HttpServletResponse.class);
+    @Mock
+    private HttpServletResponse response;
 
-    private FilterChain chain = mock(FilterChain.class);
+    @Mock
+    private FilterChain chain;
 
-    private FilterConfig filterConfig = mock(FilterConfig.class);
+    @Mock
+    private FilterConfig filterConfig;
 
     private ThreadNameFilter threadNameFilter = new ThreadNameFilter();
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         threadNameFilter.init(filterConfig);
     }
 
-    @AfterEach
-    void tearDown() throws Exception {
+    @After
+    public void tearDown() throws Exception {
         threadNameFilter.destroy();
     }
 
     @Test
-    void setsThreadNameInChain() throws Exception {
+    public void setsThreadNameInChain() throws Exception {
         when(request.getMethod()).thenReturn("GET");
         when(request.getRequestURI()).thenReturn("/some/path");
 

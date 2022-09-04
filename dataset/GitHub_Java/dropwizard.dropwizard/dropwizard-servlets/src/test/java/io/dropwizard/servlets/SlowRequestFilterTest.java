@@ -1,9 +1,12 @@
 package io.dropwizard.servlets;
 
 import io.dropwizard.util.Duration;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.Logger;
 
 import javax.servlet.FilterChain;
@@ -12,23 +15,32 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class SlowRequestFilterTest {
 
-    private HttpServletRequest request = mock(HttpServletRequest.class);
-    private HttpServletResponse response = mock(HttpServletResponse.class);
-    private FilterChain chain = mock(FilterChain.class);
-    private FilterConfig filterConfig = mock(FilterConfig.class);
-    private Logger logger = mock(Logger.class);
+    @Mock
+    private HttpServletRequest request;
+
+    @Mock
+    private HttpServletResponse response;
+
+    @Mock
+    private FilterChain chain;
+
+    @Mock
+    private FilterConfig filterConfig;
+
+    @Mock
+    private Logger logger;
 
     private SlowRequestFilter slowRequestFilter = new SlowRequestFilter(Duration.milliseconds(500));
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         slowRequestFilter.init(filterConfig);
         slowRequestFilter.setLogger(logger);
         slowRequestFilter.setCurrentTimeProvider(() -> 1510330244000000L);
@@ -37,13 +49,13 @@ public class SlowRequestFilterTest {
         when(request.getRequestURI()).thenReturn("/some/path");
     }
 
-    @AfterEach
-    void tearDown() throws Exception {
+    @After
+    public void tearDown() throws Exception {
         slowRequestFilter.destroy();
     }
 
     @Test
-    void logsSlowRequests() throws Exception {
+    public void logsSlowRequests() throws Exception {
         doAnswer(invocationOnMock -> {
             slowRequestFilter.setCurrentTimeProvider(() -> 1510330745000000L);
             return null;
@@ -55,7 +67,7 @@ public class SlowRequestFilterTest {
     }
 
     @Test
-    void doesNotLogFastRequests() throws Exception {
+    public void doesNotLogFastRequests() throws Exception {
         doAnswer(invocationOnMock -> {
             slowRequestFilter.setCurrentTimeProvider(() -> 1510330743000000L);
             return null;
