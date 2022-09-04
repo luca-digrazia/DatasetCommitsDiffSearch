@@ -25,7 +25,6 @@ import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.joda.time.DateTime;
 
 import java.util.Map;
 
@@ -38,7 +37,6 @@ public abstract class MessageInput {
     protected String creatorUserId;
     protected String inputId;
     protected String persistId;
-    protected DateTime createdAt;
 
     public abstract void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException;
 
@@ -82,13 +80,4 @@ public abstract class MessageInput {
     public void setCreatorUserId(String creatorUserId) {
         this.creatorUserId = creatorUserId;
     }
-
-    public void setCreatedAt(DateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public DateTime getCreatedAt() {
-        return createdAt;
-    }
-
 }
