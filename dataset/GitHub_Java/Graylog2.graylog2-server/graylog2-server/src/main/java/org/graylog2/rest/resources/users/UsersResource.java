@@ -168,8 +168,7 @@ public class UsersResource extends RestResource {
             @ApiResponse(code = 400, message = "Attempted to modify a read only user account (e.g. built-in or LDAP users)."),
             @ApiResponse(code = 400, message = "Missing or invalid user details.")
     })
-    public Response changeUser(@ApiParam(title = "username", description = "The name of the user to modify.", required = true) @PathParam("username") String username,
-                               @ApiParam(title = "JSON body", description = "Updated user information.", required = true) String body) {
+    public Response changeUser(@ApiParam(title = "username", description = "The name of the user to modify.", required = true) @PathParam("username") String username, String body) {
         if (body == null || body.isEmpty()) {
             throw new BadRequestException("Missing request body.");
         }
