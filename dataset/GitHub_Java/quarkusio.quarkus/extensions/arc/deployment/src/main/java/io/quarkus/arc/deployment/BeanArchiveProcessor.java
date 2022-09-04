@@ -47,11 +47,13 @@ public class BeanArchiveProcessor {
     @Inject
     List<GeneratedBeanBuildItem> generatedBeans;
 
+    @Inject
+    BuildProducer<GeneratedClassBuildItem> generatedClass;
+
     ArcConfig config;
 
     @BuildStep
-    public BeanArchiveIndexBuildItem build(LiveReloadBuildItem liveReloadBuildItem,
-            BuildProducer<GeneratedClassBuildItem> generatedClass) throws Exception {
+    public BeanArchiveIndexBuildItem build(LiveReloadBuildItem liveReloadBuildItem) throws Exception {
 
         // First build an index from application archives
         IndexView applicationIndex = buildApplicationIndex();
