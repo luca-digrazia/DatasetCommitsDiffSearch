@@ -19,7 +19,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -94,7 +93,7 @@ public class ResourceJarActionBuilder {
           .setJarExecutable(
               ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
               singleJar,
-              javaToolchain.getJvmOptions())
+              JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .addTransitiveInputs(javabase);
     } else {
       builder.setExecutable(singleJar);
@@ -146,7 +145,7 @@ public class ResourceJarActionBuilder {
   }
 
   boolean sizeGreaterThanOrEqual(Iterable<?> elements, int size) {
-    return Streams.stream(elements).limit(size).count() == size;
+    return Iterables.size(Iterables.limit(elements, size)) == size;
   }
 
   private static void addAsResourcePrefixedExecPath(
