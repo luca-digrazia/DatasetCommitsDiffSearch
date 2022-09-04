@@ -1,7 +1,5 @@
 package io.quarkus.hibernate.reactive.runtime.boot.registry;
 
-import static org.hibernate.internal.HEMLogging.messageLogger;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -45,6 +43,8 @@ import io.quarkus.hibernate.orm.runtime.service.DisabledJMXInitiator;
 import io.quarkus.hibernate.orm.runtime.service.FlatClassLoaderService;
 import io.quarkus.hibernate.orm.runtime.service.QuarkusRegionFactoryInitiator;
 import io.quarkus.hibernate.reactive.runtime.customized.QuarkusNoJdbcEnvironmentInitiator;
+
+import static org.hibernate.internal.HEMLogging.messageLogger;
 
 /**
  * Helps to instantiate a ServiceRegistryBuilder from a previous state. This
