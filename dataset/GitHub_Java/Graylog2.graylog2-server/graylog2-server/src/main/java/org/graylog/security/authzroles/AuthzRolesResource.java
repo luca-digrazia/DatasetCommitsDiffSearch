@@ -18,7 +18,6 @@ package org.graylog.security.authzroles;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -38,8 +37,6 @@ import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.shared.users.UserService;
 import org.graylog2.users.PaginatedUserService;
 import org.graylog2.users.UserOverviewDTO;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.validation.constraints.NotBlank;
@@ -56,23 +53,16 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
-import static org.graylog2.shared.security.RestPermissions.USERS_ROLESEDIT;
+import static org.graylog2.shared.security.RestPermissions.USERS_EDIT;
 
 @RequiresAuthentication
-@Api(value = "Authorization/Roles", description = "Manage roles")
-@Path("/authz/roles")
+@Api(value = "AuthzRoles", description = "Read Roles")
+@Path("/authzRoles")
 @Produces(MediaType.APPLICATION_JSON)
 public class AuthzRolesResource extends RestResource {
-    private static final Logger LOG = LoggerFactory.getLogger(RestResource.class);
-
     protected static final ImmutableMap<String, SearchQueryField> SEARCH_FIELD_MAPPING = ImmutableMap.<String, SearchQueryField>builder()
             .put(AuthzRoleDTO.FIELD_NAME, SearchQueryField.create(AuthzRoleDTO.FIELD_NAME))
             .put(AuthzRoleDTO.FIELD_DESCRIPTION, SearchQueryField.create(AuthzRoleDTO.FIELD_DESCRIPTION))
@@ -125,9 +115,7 @@ public class AuthzRolesResource extends RestResource {
 
         final PaginatedList<AuthzRoleDTO> result = authzRolesService.findPaginated(
                 searchQuery, page, perPage,sort, order);
-        final Map<String, Set<Map<String, String>>> userRoleMap = userRoleContext(result);
-
-        return PaginatedResponse.create("roles", result, query, ImmutableMap.of("users", userRoleMap));
+        return PaginatedResponse.create("roles", result, query);
     }
 
     @GET
@@ -156,19 +144,8 @@ public class AuthzRolesResource extends RestResource {
         }
 
         final PaginatedList<UserOverviewDTO> result = paginatedUserService.findPaginatedByRole(
-                searchQuery, page, perPage,sort, order, ImmutableSet.of(roleId));
-        final Set<String> roleIds = result.stream().flatMap(u -> u.roles().stream()).collect(Collectors.toSet());
-        final Map<String, String> rolesMap = authzRolesService.findPaginatedByIds(
-                new SearchQuery(""), 0, 0, AuthzRoleDTO.FIELD_NAME, "asc", roleIds)
-                .stream().collect(Collectors.toMap(AuthzRoleDTO::id, AuthzRoleDTO::name));
-        final List<UserOverviewDTO> users = result.stream().map(u -> {
-            final Set<String> roleNames = u.roles().stream().map(rolesMap::get).collect(Collectors.toSet());
-            return u.toBuilder().roles(roleNames).build();
-        }).collect(Collectors.toList());
-
-        final PaginatedList<UserOverviewDTO> enrichedResult = new PaginatedList<>(users, result.pagination().total(),
-                result.pagination().page(), result.pagination().perPage());
-        return PaginatedResponse.create("users", enrichedResult, query);
+                searchQuery, page, perPage,sort, order, roleId);
+        return PaginatedResponse.create("users", result, query);
     }
 
     @GET
@@ -183,7 +160,7 @@ public class AuthzRolesResource extends RestResource {
 
     @GET
     @ApiOperation(value = "Get a paginated list roles for a user")
-    @Path("/user/{username}")
+    @Path("/rolesForUser/{username}")
     @RequiresPermissions(RestPermissions.ROLES_READ)
     public PaginatedResponse<AuthzRoleDTO> getListForUser(
         @ApiParam(name = "username") @PathParam("username") @NotEmpty String username,
@@ -217,11 +194,11 @@ public class AuthzRolesResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Add user to role")
     @AuditEvent(type = AuditEventTypes.ROLE_MEMBERSHIP_UPDATE)
-    @Path("{roleId}/assignees")
+    @Path("{roleId}/assignee/{username}")
     public void addUser(
             @ApiParam(name = "roleId") @PathParam("roleId") @NotBlank String roleId,
-            @ApiParam(name = "usernames") Set<String> usernames) throws ValidationException {
-        updateUserRole(roleId, usernames, Set::add);
+            @ApiParam(name = "username") @PathParam("username") @NotBlank String username) throws ValidationException {
+        updateUserRole(roleId, username, Set::add);
     }
 
     @DELETE
@@ -231,31 +208,25 @@ public class AuthzRolesResource extends RestResource {
     public void removeUser(
             @ApiParam(name = "roleId") @PathParam("roleId") @NotBlank String roleId,
             @ApiParam(name = "username") @PathParam("username") @NotBlank String username) throws ValidationException {
-        updateUserRole(roleId, ImmutableSet.of(username), Set::remove);
+        updateUserRole(roleId, username, Set::remove);
     }
 
     interface UpdateRoles {
         boolean update(Set<String> roles, String roleId);
     }
 
-    private void updateUserRole(String roleId, Set<String> usernames, UpdateRoles rolesUpdater) throws ValidationException {
-        usernames.forEach(username -> {
-            checkPermission(USERS_ROLESEDIT, username);
+    private void updateUserRole(String roleId, String username, UpdateRoles rolesUpdater) throws ValidationException {
+        checkPermission(USERS_EDIT, username);
 
-            final User user = userService.load(username);
-            if (user == null) {
-                throw new NotFoundException("Cannot find user with name: " + username);
-            }
-            authzRolesService.get(roleId).orElseThrow(() -> new NotFoundException("Cannot find role with id: " + roleId));
-            Set<String> roles = user.getRoleIds();
-            rolesUpdater.update(roles, roleId);
-            user.setRoleIds(roles);
-            try {
-                userService.save(user);
-            } catch (ValidationException e) {
-                LOG.warn("Could not update user: {}", username);
-            }
-        });
+        final User user = userService.load(username);
+        if (user == null) {
+            throw new NotFoundException("Cannot find user with name: " + username);
+        }
+        authzRolesService.get(roleId).orElseThrow(() -> new NotFoundException("Cannot find role with id: " + roleId));
+        Set<String> roles = user.getRoleIds();
+        rolesUpdater.update(roles, roleId);
+        user.setRoleIds(roles);
+        userService.save(user);
     }
 
     @DELETE
@@ -271,20 +242,5 @@ public class AuthzRolesResource extends RestResource {
             throw new NotAllowedException("Cannot delete read only role with id: " + roleId);
         }
         authzRolesService.delete(roleId);
-    }
-
-
-    private Map<String, Set<Map<String, String>>> userRoleContext(PaginatedList<AuthzRoleDTO> roles) {
-        final PaginatedList<UserOverviewDTO> users = paginatedUserService.findPaginatedByRole(new SearchQuery(""),
-                1,0, UserOverviewDTO.FIELD_USERNAME, "asc",
-                roles.stream().map(AuthzRoleDTO::id).collect(Collectors.toSet()));
-        final Map<String, Set<Map<String, String>>> userRoleMap = new HashMap<>(roles.size());
-        roles.forEach(authzRoleDTO -> {
-            final Set<Map<String, String>> userMap = users.stream().filter(u -> u.roles().contains(authzRoleDTO.id()))
-                    .map(u -> ImmutableMap.of(UserOverviewDTO.FIELD_ID, Objects.requireNonNull(u.id()),
-                            UserOverviewDTO.FIELD_USERNAME, u.username())).collect(Collectors.toSet());
-            userRoleMap.put(authzRoleDTO.id(), userMap);
-        });
-        return userRoleMap;
     }
 }
