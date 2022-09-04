@@ -24,7 +24,6 @@ import org.graylog2.gelfclient.GelfMessageLevel;
 import org.graylog2.gelfclient.GelfTransports;
 import org.graylog2.gelfclient.transport.GelfTransport;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
@@ -119,7 +118,7 @@ public class GelfOutput implements MessageOutput {
         if (message.getField("timestamp") != null || message.getField("timestamp") instanceof DateTime) {
             timestamp = (DateTime) message.getField("timestamp");
         } else {
-            timestamp = Tools.iso8601();
+            timestamp = DateTime.now();
         }
 
         final Integer level = (Integer) message.getField("level");
