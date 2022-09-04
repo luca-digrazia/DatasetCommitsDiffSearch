@@ -34,16 +34,17 @@ public class AndroidResourceMergingActionBuilder {
       AndroidDataConverter.MERGABLE_DATA_CONVERTER;
 
   @AutoCodec @AutoCodec.VisibleForSerialization
-  static final AndroidDataConverter<ParsedAndroidResources> RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED =
-      AndroidDataConverter.<ParsedAndroidResources>builder(JoinerType.SEMICOLON_AMPERSAND)
-          .withRoots(ParsedAndroidResources::getResourceRoots)
-          .withRoots(ParsedAndroidResources::getAssetRoots)
-          .withLabel(ParsedAndroidResources::getLabel)
-          .withArtifact(ParsedAndroidResources::getCompiledSymbols)
-          .build();
+  static final AndroidDataConverter<CompiledMergableAndroidData>
+      RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED =
+          AndroidDataConverter.<CompiledMergableAndroidData>builder(JoinerType.SEMICOLON_AMPERSAND)
+              .withRoots(CompiledMergableAndroidData::getResourceRoots)
+              .withRoots(CompiledMergableAndroidData::getAssetRoots)
+              .withLabel(CompiledMergableAndroidData::getLabel)
+              .withArtifact(CompiledMergableAndroidData::getCompiledSymbols)
+              .build();
 
   // Inputs
-  private ParsedAndroidResources primary;
+  private CompiledMergableAndroidData primary;
   private ResourceDependencies dependencies;
 
   // Outputs
@@ -61,7 +62,7 @@ public class AndroidResourceMergingActionBuilder {
    * The primary resource for merging. This resource will overwrite any resource or data value in
    * the transitive closure.
    */
-  private AndroidResourceMergingActionBuilder withPrimary(ParsedAndroidResources primary) {
+  private AndroidResourceMergingActionBuilder withPrimary(CompiledMergableAndroidData primary) {
     this.primary = primary;
     return this;
   }
@@ -198,6 +199,24 @@ public class AndroidResourceMergingActionBuilder {
     // Always make an action for merging parsed resources - the merged resources are still created
     // this way.
     buildParsedResourceMergingAction(parsedMergeBuilder);
+  }
+
+  public ResourceContainer build(
+      AndroidDataContext dataContext, ResourceContainer resourceContainer) {
+    withPrimary(resourceContainer).build(dataContext);
+
+    // Return the full set of processed transitive dependencies.
+    ResourceContainer.Builder result = resourceContainer.toBuilder();
+
+    result.setJavaClassJar(classJarOut);
+
+    if (manifestOut != null) {
+      result.setManifest(manifestOut);
+    }
+    if (mergedResourcesOut != null) {
+      result.setMergedResources(mergedResourcesOut);
+    }
+    return result.build();
   }
 
   public MergedAndroidResources build(

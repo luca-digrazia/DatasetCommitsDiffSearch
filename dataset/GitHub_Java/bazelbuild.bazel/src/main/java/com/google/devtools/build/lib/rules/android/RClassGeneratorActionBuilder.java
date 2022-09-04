@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidA
 import com.google.devtools.build.lib.rules.android.AndroidDataConverter.JoinerType;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import java.io.Serializable;
 import java.util.function.Function;
 
 /** Builds up the spawn action for $android_rclass_generator. */
@@ -98,13 +97,12 @@ public class RClassGeneratorActionBuilder {
 
   private static Function<ValidatedAndroidData, String> chooseDepsToArg(
       final AndroidAaptVersion version) {
-    return (Function<ValidatedAndroidData, String> & Serializable)
-        container -> {
-          Artifact rTxt =
-              version == AndroidAaptVersion.AAPT2 ? container.getAapt2RTxt() : container.getRTxt();
-          return (rTxt != null ? rTxt.getExecPath() : "")
-              + ","
-              + (container.getManifest() != null ? container.getManifest().getExecPath() : "");
-        };
+    return container -> {
+      Artifact rTxt =
+          version == AndroidAaptVersion.AAPT2 ? container.getAapt2RTxt() : container.getRTxt();
+      return (rTxt != null ? rTxt.getExecPath() : "")
+          + ","
+          + (container.getManifest() != null ? container.getManifest().getExecPath() : "");
+    };
   }
 }
