@@ -140,10 +140,6 @@ public final class Expressions {
         return parts.build();
     }
 
-    public static String typeInfoFrom(String typeName) {
-        return TYPE_INFO_SEPARATOR + typeName + TYPE_INFO_SEPARATOR;
-    }
-
     /**
      * 
      * @param buffer
