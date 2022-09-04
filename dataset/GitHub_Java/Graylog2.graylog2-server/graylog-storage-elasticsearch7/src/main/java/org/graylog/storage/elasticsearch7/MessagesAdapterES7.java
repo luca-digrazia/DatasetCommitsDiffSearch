@@ -1,7 +1,25 @@
+/*
+ * Copyright (C) 2020 Graylog, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
+ *
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
+ */
 package org.graylog.storage.elasticsearch7;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Iterables;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.ElasticsearchException;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.action.bulk.BulkItemResponse;
@@ -12,14 +30,15 @@ import org.graylog.shaded.elasticsearch7.org.elasticsearch.action.get.GetRespons
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.action.index.IndexRequest;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.indices.AnalyzeRequest;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.indices.AnalyzeResponse;
+import org.graylog.shaded.elasticsearch7.org.elasticsearch.common.xcontent.XContentType;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.rest.RestStatus;
 import org.graylog2.indexer.messages.ChunkedBulkIndexer;
 import org.graylog2.indexer.messages.DocumentNotFoundException;
+import org.graylog2.indexer.messages.Indexable;
 import org.graylog2.indexer.messages.IndexingRequest;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.messages.MessagesAdapter;
 import org.graylog2.indexer.results.ResultMessage;
-import org.graylog2.plugin.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,16 +60,24 @@ public class MessagesAdapterES7 implements MessagesAdapter {
     static final String INDEX_BLOCK_ERROR = "cluster_block_exception";
     static final String MAPPER_PARSING_EXCEPTION = "mapper_parsing_exception";
     static final String INDEX_BLOCK_REASON = "blocked by: [TOO_MANY_REQUESTS/12/index read-only / allow delete (api)";
+    static final String FLOOD_STAGE_WATERMARK = "blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded flood-stage watermark";
+    static final String UNAVAILABLE_SHARDS_EXCEPTION = "unavailable_shards_exception";
+    static final String PRIMARY_SHARD_NOT_ACTIVE_REASON = "primary shard is not active";
+
+    static final String ILLEGAL_ARGUMENT_EXCEPTION = "illegal_argument_exception";
+    static final String NO_WRITE_INDEX_DEFINED_FOR_ALIAS = "no write index is defined for alias";
 
     private final ElasticsearchClient client;
     private final Meter invalidTimestampMeter;
     private final ChunkedBulkIndexer chunkedBulkIndexer;
+    private final ObjectMapper objectMapper;
 
     @Inject
-    public MessagesAdapterES7(ElasticsearchClient elasticsearchClient, MetricRegistry metricRegistry, ChunkedBulkIndexer chunkedBulkIndexer) {
+    public MessagesAdapterES7(ElasticsearchClient elasticsearchClient, MetricRegistry metricRegistry, ChunkedBulkIndexer chunkedBulkIndexer, ObjectMapper objectMapper) {
         this.client = elasticsearchClient;
         this.invalidTimestampMeter = metricRegistry.meter(name(Messages.class, "invalid-timestamps"));
         this.chunkedBulkIndexer = chunkedBulkIndexer;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -179,21 +206,21 @@ public class MessagesAdapterES7 implements MessagesAdapter {
             return Collections.emptyList();
         }
 
-        final Map<String, Message> messageMap = messageList.stream()
+        final Map<String, Indexable> messageMap = messageList.stream()
                 .map(IndexingRequest::message)
                 .distinct()
-                .collect(Collectors.toMap(Message::getId, Function.identity()));
+                .collect(Collectors.toMap(Indexable::getId, Function.identity()));
 
         return failedItems.stream()
                 .map(item -> {
-                    final Message message = messageMap.get(item.getId());
+                    final Indexable message = messageMap.get(item.getId());
 
                     return indexingErrorFromResponse(item, message);
                 })
                 .collect(Collectors.toList());
     }
 
-    private Messages.IndexingError indexingErrorFromResponse(BulkItemResponse item, Message message) {
+    private Messages.IndexingError indexingErrorFromResponse(BulkItemResponse item, Indexable message) {
         return Messages.IndexingError.create(message, item.getIndex(), errorTypeFromResponse(item), item.getFailureMessage());
     }
 
@@ -201,14 +228,28 @@ public class MessagesAdapterES7 implements MessagesAdapter {
         final ParsedElasticsearchException exception = ParsedElasticsearchException.from(item.getFailureMessage());
         switch (exception.type()) {
             case MAPPER_PARSING_EXCEPTION: return Messages.IndexingError.ErrorType.MappingError;
-            case INDEX_BLOCK_ERROR: if (exception.reason().contains(INDEX_BLOCK_REASON)) return Messages.IndexingError.ErrorType.IndexBlocked;
+            case INDEX_BLOCK_ERROR:
+                if (exception.reason().contains(INDEX_BLOCK_REASON) || exception.reason().contains(FLOOD_STAGE_WATERMARK))
+                    return Messages.IndexingError.ErrorType.IndexBlocked;
+            case UNAVAILABLE_SHARDS_EXCEPTION:
+                if (exception.reason().contains(PRIMARY_SHARD_NOT_ACTIVE_REASON))
+                    return Messages.IndexingError.ErrorType.IndexBlocked;
+            case ILLEGAL_ARGUMENT_EXCEPTION:
+                if (exception.reason().contains(NO_WRITE_INDEX_DEFINED_FOR_ALIAS))
+                    return Messages.IndexingError.ErrorType.IndexBlocked;
             default: return Messages.IndexingError.ErrorType.Unknown;
         }
     }
 
     private IndexRequest indexRequestFrom(IndexingRequest request) {
+        final byte[] body;
+        try {
+            body = this.objectMapper.writeValueAsBytes(request.message().toElasticSearchObject(objectMapper, this.invalidTimestampMeter));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
         return new IndexRequest(request.indexSet().getWriteIndexAlias())
                 .id(request.message().getId())
-                .source(request.message().toElasticSearchObject(this.invalidTimestampMeter));
+                .source(body, XContentType.JSON);
     }
 }
