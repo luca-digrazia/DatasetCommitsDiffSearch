@@ -9,8 +9,10 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 /**
- * This annotation is used to mark a target type for which a value resolver should be automatically generated. Note that
- * non-public members, constructors, static initializers, static, synthetic and void methods are always ignored.
+ * A value resolver is automatically generated for a target type.
+ * <p>
+ * Note that non-public members, constructors, static initializers, static, synthetic and void methods are always ignored.
+ * </p>
  * 
  * @see ValueResolver
  */
@@ -25,7 +27,7 @@ public @interface TemplateData {
     Class<?> target() default TemplateData.class;
 
     /**
-     * The regular expressions that are used to match the members that should be ignored.
+     * The regular expressions that are used to match the members that should be ignored
      */
     String[] ignore() default {};
 
