@@ -1,8 +1,6 @@
 package io.dropwizard.setup;
 
-import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.UniformReservoir;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
 import io.dropwizard.configuration.DefaultConfigurationFactoryFactory;
@@ -58,33 +56,28 @@ public class BootstrapTest {
 
     @Test
     public void comesWithJvmInstrumentation() throws Exception {
-        bootstrap.registerMetrics();
         assertThat(bootstrap.getMetricRegistry().getNames())
-                .contains("jvm.buffers.mapped.capacity", "jvm.threads.count", "jvm.memory.heap.usage",
-                        "jvm.attribute.vendor", "jvm.classloader.loaded", "jvm.filedescriptor");
+                .contains("jvm.buffers.mapped.capacity", "jvm.threads.count", "jvm.memory.heap.usage", "jvm.attribute.vendor", "jvm.classloader.loaded", "jvm.filedescriptor");
     }
-
+    
     @Test
     public void defaultsToDefaultConfigurationFactoryFactory() throws Exception {
         assertThat(bootstrap.getConfigurationFactoryFactory())
                 .isInstanceOf(DefaultConfigurationFactoryFactory.class);
     }
-
+    
     @Test
-    public void bringsYourOwnMetricRegistry() {
-        final MetricRegistry newRegistry = new MetricRegistry() {
+    public void testBYOMetrics() {
+        final MetricRegistry newRegistry = new MetricRegistry();
+        Bootstrap<Configuration> newBootstrap = new Bootstrap<Configuration>(application) {
             @Override
-            public Histogram histogram(String name) {
-                Histogram existed = (Histogram) getMetrics().get(name);
-                return existed != null ? existed : new Histogram(new UniformReservoir());
+            public MetricRegistry getMetricRegistry() {
+                return super.getMetricRegistry();
             }
         };
-        bootstrap.setMetricRegistry(newRegistry);
-        bootstrap.registerMetrics();
-
-        assertThat(newRegistry.getNames())
-                .contains("jvm.buffers.mapped.capacity", "jvm.threads.count", "jvm.memory.heap.usage",
-                        "jvm.attribute.vendor", "jvm.classloader.loaded", "jvm.filedescriptor");
+        
+        assertThat(newBootstrap.getMetricRegistry().getNames())
+                .contains("jvm.buffers.mapped.capacity", "jvm.threads.count", "jvm.memory.heap.usage", "jvm.attribute.vendor", "jvm.classloader.loaded", "jvm.filedescriptor");
     }
 
     @Test

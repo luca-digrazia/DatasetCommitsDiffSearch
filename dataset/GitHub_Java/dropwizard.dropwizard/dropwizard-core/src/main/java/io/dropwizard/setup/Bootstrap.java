@@ -47,14 +47,12 @@ public class Bootstrap<T extends Configuration> {
     private final List<Bundle> bundles;
     private final List<ConfiguredBundle<? super T>> configuredBundles;
     private final List<Command> commands;
+    private final MetricRegistry metricRegistry;
 
-    private MetricRegistry metricRegistry;
     private ConfigurationSourceProvider configurationSourceProvider;
     private ClassLoader classLoader;
     private ConfigurationFactoryFactory<T> configurationFactoryFactory;
     private ValidatorFactory validatorFactory;
-
-    private boolean metricsAreRegistered;
 
     /**
      * Creates a new {@link Bootstrap} for the given application.
@@ -67,26 +65,13 @@ public class Bootstrap<T extends Configuration> {
         this.bundles = Lists.newArrayList();
         this.configuredBundles = Lists.newArrayList();
         this.commands = Lists.newArrayList();
+        this.metricRegistry = new MetricRegistry();
         this.validatorFactory = Validation
                 .byProvider(HibernateValidator.class)
                 .configure()
                 .addValidatedValueHandler(new OptionalValidatedValueUnwrapper())
                 .buildValidatorFactory();
 
-        this.metricRegistry = new MetricRegistry();
-        this.configurationSourceProvider = new FileConfigurationSourceProvider();
-        this.classLoader = Thread.currentThread().getContextClassLoader();
-        this.configurationFactoryFactory = new DefaultConfigurationFactoryFactory<T>();
-    }
-
-    /**
-     * Registers the JVM metrics to the metric registry and start to report
-     * the registry metrics via JMX.
-     */
-    public void registerMetrics() {
-        if (metricsAreRegistered) {
-            return;
-        }
         getMetricRegistry().register("jvm.attribute", new JvmAttributeGaugeSet());
         getMetricRegistry().register("jvm.buffers", new BufferPoolMetricSet(ManagementFactory
                                                                                .getPlatformMBeanServer()));
@@ -97,7 +82,10 @@ public class Bootstrap<T extends Configuration> {
         getMetricRegistry().register("jvm.threads", new ThreadStatesGaugeSet());
 
         JmxReporter.forRegistry(metricRegistry).build().start();
-        metricsAreRegistered = true;
+
+        this.configurationSourceProvider = new FileConfigurationSourceProvider();
+        this.classLoader = Thread.currentThread().getContextClassLoader();
+        this.configurationFactoryFactory = new DefaultConfigurationFactoryFactory<T>();
     }
 
     /**
@@ -204,19 +192,10 @@ public class Bootstrap<T extends Configuration> {
     }
 
     /**
-     * Returns the application metrics.
+     * Returns the application's metrics.
      */
     public MetricRegistry getMetricRegistry() {
         return metricRegistry;
-    }
-
-    /**
-     * Sets a custom registry for the application metrics.
-     *
-     * @param metricRegistry a custom metric registry
-     */
-    public void setMetricRegistry(MetricRegistry metricRegistry) {
-        this.metricRegistry = metricRegistry;
     }
 
     /**
@@ -236,5 +215,5 @@ public class Bootstrap<T extends Configuration> {
 
     public void setConfigurationFactoryFactory(ConfigurationFactoryFactory<T> configurationFactoryFactory) {
         this.configurationFactoryFactory = configurationFactoryFactory;
-    }
+    }   
 }
