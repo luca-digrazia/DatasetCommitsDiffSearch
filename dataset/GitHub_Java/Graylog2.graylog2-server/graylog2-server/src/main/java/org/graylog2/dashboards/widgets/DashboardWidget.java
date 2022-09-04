@@ -48,8 +48,7 @@ public abstract class DashboardWidget implements EmbeddedPersistable {
         SEARCH_RESULT_COUNT,
         STREAM_SEARCH_RESULT_COUNT,
         FIELD_CHART,
-        QUICKVALUES,
-        SEARCH_RESULT_CHART
+        QUICKVALUES
     }
 
     private static final String RESULT_CACHE_KEY = "result";
@@ -128,8 +127,6 @@ public abstract class DashboardWidget implements EmbeddedPersistable {
                 return new FieldChartWidget(core, id, awr.description, 0, awr.config, (String) awr.config.get("query"), timeRange, awr.creatorUserId);
             case QUICKVALUES:
                 return new QuickvaluesWidget(core, id, awr.description, 0, awr.config, (String) awr.config.get("query"), timeRange, awr.creatorUserId);
-            case SEARCH_RESULT_CHART:
-                return new SearchResultChartWidget(core, id, awr.description, 0, awr.config, (String) awr.config.get("query"), timeRange, awr.creatorUserId);
             default:
                 throw new NoSuchWidgetTypeException();
         }
@@ -191,8 +188,6 @@ public abstract class DashboardWidget implements EmbeddedPersistable {
                 return new FieldChartWidget(core, (String) fields.get("id"), description, cacheTime, config, (String) config.get("query"), timeRange, (String) fields.get("creator_user_id"));
             case QUICKVALUES:
                 return new QuickvaluesWidget(core, (String) fields.get("id"), description, cacheTime, config, (String) config.get("query"), timeRange, (String) fields.get("creator_user_id"));
-            case SEARCH_RESULT_CHART:
-                return new SearchResultChartWidget(core, (String) fields.get("id"), description, cacheTime, config, (String) config.get("query"), timeRange, (String) fields.get("creator_user_id"));
             default:
                 throw new NoSuchWidgetTypeException();
         }
