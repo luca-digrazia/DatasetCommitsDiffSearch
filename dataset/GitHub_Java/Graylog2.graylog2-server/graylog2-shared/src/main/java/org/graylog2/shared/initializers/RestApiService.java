@@ -16,6 +16,7 @@
  */
 package org.graylog2.shared.initializers;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.internal.util.$Nullable;
@@ -87,7 +88,8 @@ public class RestApiService extends AbstractIdleService {
                           Set<Class<? extends DynamicFeature>> dynamicFeatures,
                           Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
                           Set<Class<? extends ExceptionMapper>> exceptionMappers,
-                          Map<String, Set<PluginRestResource>> pluginRestResources) {
+                          Map<String, Set<PluginRestResource>> pluginRestResources,
+                          ObjectMapper objectMapper) {
         this(configuration, securityContextFactory, dynamicFeatures, containerResponseFilters,
                 exceptionMappers, pluginRestResources,
                 Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("restapi-boss-%d").build()),
@@ -194,7 +196,6 @@ public class RestApiService extends AbstractIdleService {
         LOG.info("Started REST API at <{}>", configuration.getRestListenUri());
     }
 
-    @SuppressWarnings("unchecked")
     private ResourceConfig buildResourceConfig(final boolean enableGzip,
                                                final boolean enableCors,
                                                final Set<Resource> additionalResources) {
