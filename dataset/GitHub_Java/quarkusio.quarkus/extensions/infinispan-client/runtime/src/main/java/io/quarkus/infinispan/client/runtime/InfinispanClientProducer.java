@@ -245,27 +245,15 @@ public class InfinispanClientProducer {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @io.quarkus.infinispan.client.Remote
-    @io.quarkus.infinispan.client.runtime.Remote
+    @Remote
     @Produces
     public <K, V> RemoteCache<K, V> getRemoteCache(InjectionPoint injectionPoint, RemoteCacheManager cacheManager) {
         Set<Annotation> annotationSet = injectionPoint.getQualifiers();
-
-        // Deal with the regular annotation first
-        final io.quarkus.infinispan.client.Remote remote = getRemoteAnnotation(annotationSet);
+        final Remote remote = getRemoteAnnotation(annotationSet);
 
         if (remote != null && !remote.value().isEmpty()) {
             return cacheManager.getCache(remote.value());
         }
-
-        // Then deal with the deprecated one
-        final io.quarkus.infinispan.client.runtime.Remote deprecatedRemote = getDeprecatedRemoteAnnotation(annotationSet);
-
-        if (deprecatedRemote != null && !deprecatedRemote.value().isEmpty()) {
-            return cacheManager.getCache(deprecatedRemote.value());
-        }
-
         return cacheManager.getCache();
     }
 
@@ -288,30 +276,15 @@ public class InfinispanClientProducer {
     }
 
     /**
-     * Retrieves the deprecated {@link Remote} annotation instance from the set
+     * Retrieves the {@link Remote} annotation instance from the set
      *
      * @param annotationSet the annotation set.
      * @return the {@link Remote} annotation instance or {@code null} if not found.
      */
-    private io.quarkus.infinispan.client.Remote getRemoteAnnotation(Set<Annotation> annotationSet) {
+    private Remote getRemoteAnnotation(Set<Annotation> annotationSet) {
         for (Annotation annotation : annotationSet) {
-            if (annotation instanceof io.quarkus.infinispan.client.Remote) {
-                return (io.quarkus.infinispan.client.Remote) annotation;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Retrieves the deprecated {@link Remote} annotation instance from the set
-     *
-     * @param annotationSet the annotation set.
-     * @return the {@link Remote} annotation instance or {@code null} if not found.
-     */
-    private io.quarkus.infinispan.client.runtime.Remote getDeprecatedRemoteAnnotation(Set<Annotation> annotationSet) {
-        for (Annotation annotation : annotationSet) {
-            if (annotation instanceof io.quarkus.infinispan.client.runtime.Remote) {
-                return (io.quarkus.infinispan.client.runtime.Remote) annotation;
+            if (annotation instanceof Remote) {
+                return (Remote) annotation;
             }
         }
         return null;
