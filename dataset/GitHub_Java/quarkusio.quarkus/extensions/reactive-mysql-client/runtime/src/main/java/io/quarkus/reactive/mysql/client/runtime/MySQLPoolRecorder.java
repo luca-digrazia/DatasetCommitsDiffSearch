@@ -10,7 +10,6 @@ import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxKeyCertO
 import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxTrustOptions;
 
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import org.jboss.logging.Logger;
 
@@ -152,15 +151,6 @@ public class MySQLPoolRecorder {
         configurePemKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem);
         configureJksKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks);
         configurePfxKeyCertOptions(mysqlConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx);
-
-        mysqlConnectOptions.setReconnectAttempts(dataSourceReactiveRuntimeConfig.reconnectAttempts);
-
-        mysqlConnectOptions.setReconnectInterval(dataSourceReactiveRuntimeConfig.reconnectInterval.toMillis());
-
-        if (dataSourceReactiveRuntimeConfig.idleTimeout.isPresent()) {
-            int idleTimeout = Math.toIntExact(dataSourceReactiveRuntimeConfig.idleTimeout.get().toMillis());
-            mysqlConnectOptions.setIdleTimeout(idleTimeout).setIdleTimeoutUnit(TimeUnit.MILLISECONDS);
-        }
 
         return mysqlConnectOptions;
     }

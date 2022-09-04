@@ -28,7 +28,6 @@ import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
 import io.vertx.mysqlclient.MySQLPool;
-import io.vertx.sqlclient.Pool;
 
 @SuppressWarnings("deprecation")
 class ReactiveMySQLClientProcessor {
@@ -75,8 +74,7 @@ class ReactiveMySQLClientProcessor {
         mysqlPool.produce(new MySQLPoolBuildItem(mySqlPool));
 
         // Synthetic bean for MySQLPool
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(MySQLPool.class).addType(Pool.class).scope(Singleton.class)
-                .runtimeValue(mySqlPool)
+        syntheticBeans.produce(SyntheticBeanBuildItem.configure(MySQLPool.class).scope(Singleton.class).runtimeValue(mySqlPool)
                 .setRuntimeInit().done());
 
         boolean isDefault = true; // assume always the default pool for now
