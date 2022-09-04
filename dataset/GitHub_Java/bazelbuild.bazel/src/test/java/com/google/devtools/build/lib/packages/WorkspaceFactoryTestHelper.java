@@ -77,14 +77,15 @@ class WorkspaceFactoryTestHelper {
             allowOverride,
             root.asPath(),
             root.asPath(),
-            /* defaultSystemJavabaseDir= */ null,
-            starlarkSemantics);
+            /* defaultSystemJavabaseDir= */ null);
     Exception exception = null;
     try {
       byte[] bytes =
           FileSystemUtils.readWithKnownFileSize(workspaceFilePath, workspaceFilePath.getFileSize());
       factory.parseForTesting(
-          ParserInput.create(bytes, workspaceFilePath.toString()), eventHandler);
+          ParserInput.create(bytes, workspaceFilePath.asFragment()),
+          starlarkSemantics,
+          eventHandler);
     } catch (BuildFileContainsErrorsException e) {
       exception = e;
     } catch (IOException | InterruptedException e) {

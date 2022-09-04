@@ -92,6 +92,16 @@ public class Package {
    */
   private final PackageIdentifier packageIdentifier;
 
+  /**
+   * The name of the package, e.g. "foo/bar".
+   */
+  private final String name;
+
+  /**
+   * Like name, but in the form of a PathFragment.
+   */
+  private final PathFragment nameFragment;
+
   /** The filename of this package's BUILD file. */
   private RootedPath filename;
 
@@ -191,6 +201,14 @@ public class Package {
    */
   private ImmutableMap<RepositoryName, RepositoryName> repositoryMapping;
 
+  /**
+   * The names of the package() attributes that declare default values for rule
+   * {@link RuleClass#COMPATIBLE_ENVIRONMENT_ATTR} and {@link RuleClass#RESTRICTED_ENVIRONMENT_ATTR}
+   * values when not explicitly specified.
+   */
+  public static final String DEFAULT_COMPATIBLE_WITH_ATTRIBUTE = "default_compatible_with";
+  public static final String DEFAULT_RESTRICTED_TO_ATTRIBUTE = "default_restricted_to";
+
   private Set<Label> defaultCompatibleWith = ImmutableSet.of();
   private Set<Label> defaultRestrictedTo = ImmutableSet.of();
 
@@ -217,6 +235,8 @@ public class Package {
   protected Package(PackageIdentifier packageId, String runfilesPrefix) {
     this.packageIdentifier = packageId;
     this.workspaceName = runfilesPrefix;
+    this.nameFragment = packageId.getPackageFragment();
+    this.name = nameFragment.getPathString();
   }
 
   /** Returns this packages' identifier. */
@@ -361,11 +381,9 @@ public class Package {
     this.packageDirectory = filename.asPath().getParentDirectory();
 
     this.sourceRoot = getSourceRoot(filename, packageIdentifier.getSourceRoot());
-    String baseName = filename.getRootRelativePath().getBaseName();
     if ((sourceRoot.asPath() == null
             || !sourceRoot.getRelative(packageIdentifier.getSourceRoot()).equals(packageDirectory))
-        && !(baseName.equals(LabelConstants.WORKSPACE_DOT_BAZEL_FILE_NAME.getPathString())
-            || baseName.equals(LabelConstants.WORKSPACE_FILE_NAME.getPathString()))) {
+        && !filename.getRootRelativePath().getBaseName().equals("WORKSPACE")) {
       throw new IllegalArgumentException(
           "Invalid BUILD file name for package '"
               + packageIdentifier
@@ -442,14 +460,14 @@ public class Package {
    * may not be unique!
    */
   public String getName() {
-    return packageIdentifier.getPackageFragment().getPathString();
+    return name;
   }
 
   /**
    * Like {@link #getName}, but has type {@code PathFragment}.
    */
   public PathFragment getNameFragment() {
-    return packageIdentifier.getPackageFragment();
+    return nameFragment;
   }
 
   /**
@@ -583,22 +601,12 @@ public class Package {
       // it's invalid on Windows.
       suffix = "";
     } else if (filename.isDirectory()) {
-      suffix =
-          "; however, a source directory of this name exists.  (Perhaps add "
-              + "'exports_files([\""
-              + targetName
-              + "\"])' to "
-              + getName()
-              + "/BUILD, or define a "
-              + "filegroup?)";
+      suffix = "; however, a source directory of this name exists.  (Perhaps add "
+          + "'exports_files([\"" + targetName + "\"])' to " + name + "/BUILD, or define a "
+          + "filegroup?)";
     } else if (filename.exists()) {
-      suffix =
-          "; however, a source file of this name exists.  (Perhaps add "
-              + "'exports_files([\""
-              + targetName
-              + "\"])' to "
-              + getName()
-              + "/BUILD?)";
+      suffix = "; however, a source file of this name exists.  (Perhaps add "
+          + "'exports_files([\"" + targetName + "\"])' to " + name + "/BUILD?)";
     } else {
       suffix = SpellChecker.didYouMean(targetName, targets.keySet());
     }
@@ -616,7 +624,7 @@ public class Package {
     String msg =
         String.format(
             "target '%s' not declared in package '%s'%s defined by %s",
-            targetName, getName(), suffix, filename.asPath().getPathString());
+            targetName, name, suffix, filename.asPath().getPathString());
     return new NoSuchTargetException(label, msg);
   }
 
@@ -708,9 +716,7 @@ public class Package {
 
   @Override
   public String toString() {
-    return "Package("
-        + getName()
-        + ")="
+    return "Package(" + name + ")="
         + (targets != null ? getTargets(Rule.class) : "initializing...");
   }
 

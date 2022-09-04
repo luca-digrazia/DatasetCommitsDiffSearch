@@ -37,10 +37,8 @@ import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -51,7 +49,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
@@ -88,11 +85,7 @@ public class SkylarkRepositoryContextTest {
       ruleClassBuilder.addOrOverrideAttribute(attr);
     }
     ruleClassBuilder.setWorkspaceOnly();
-    ruleClassBuilder.setConfiguredTargetFunction(
-        new BuiltinFunction("test", FunctionSignature.ANY) {
-          public void invoke(
-              List<Object> args, Map<String, Object> kwargs, StarlarkThread thread) {}
-        });
+    ruleClassBuilder.setConfiguredTargetFunction(new BuiltinFunction("test") {});
     return ruleClassBuilder.build();
   }
 

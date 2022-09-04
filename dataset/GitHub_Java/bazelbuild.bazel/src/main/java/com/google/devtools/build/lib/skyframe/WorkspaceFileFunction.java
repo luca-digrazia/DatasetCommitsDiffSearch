@@ -101,7 +101,7 @@ public class WorkspaceFileFunction implements SkyFunction {
     }
     WorkspaceFactory parser;
     WorkspaceFileValue prevValue = null;
-    try (Mutability mutability = Mutability.create("workspace", repoWorkspace)) {
+    try (Mutability mutability = Mutability.create("workspace %s", repoWorkspace)) {
       parser =
           new WorkspaceFactory(
               builder,

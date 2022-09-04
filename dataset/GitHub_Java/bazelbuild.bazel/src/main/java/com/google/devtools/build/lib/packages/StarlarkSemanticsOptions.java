@@ -169,19 +169,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean experimentalStarlarkUnusedInputsList;
 
   @Option(
-      name = "experimental_cc_shared_library",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.EXPERIMENTAL,
-      },
-      help =
-          "If set to true, rule attributes and Starlark API methods needed for the rule "
-              + "cc_shared_library will be available")
-  public boolean experimentalCcSharedLibrary;
-
-  @Option(
       name = "incompatible_bzl_disallow_load_after_statement",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -342,6 +329,18 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       },
       help = "If set to true, the default value of the `allow_empty` argument of glob() is False.")
   public boolean incompatibleDisallowEmptyGlob;
+
+  @Option(
+      name = "incompatible_disallow_hashing_frozen_mutables",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set to true, freezing a mutable object will not make it hashable.")
+  public boolean incompatibleDisallowHashingFrozenMutables;
 
   @Option(
       name = "incompatible_disallow_legacy_javainfo",
@@ -690,7 +689,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .experimentalPlatformsApi(experimentalPlatformsApi)
             .experimentalStarlarkConfigTransitions(experimentalStarlarkConfigTransitions)
             .experimentalStarlarkUnusedInputsList(experimentalStarlarkUnusedInputsList)
-            .experimentalCcSharedLibrary(experimentalCcSharedLibrary)
             .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
             .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
             .incompatibleDepsetUnion(incompatibleDepsetUnion)
@@ -729,6 +727,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleRestrictStringEscapes(incompatibleRestrictStringEscapes)
             .incompatibleDisallowDictLookupUnhashableKeys(
                 incompatibleDisallowDictLookupUnhashableKeys)
+            .incompatibleDisallowHashingFrozenMutables(incompatibleDisallowHashingFrozenMutables)
             .build();
     return INTERNER.intern(semantics);
   }
