@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.sandbox;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
@@ -26,7 +25,6 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -40,7 +38,6 @@ import java.util.concurrent.atomic.AtomicReference;
   contextType = SpawnActionContext.class
 )
 public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
-
   public static boolean isSupported(CommandEnvironment env) {
     return ProcessWrapperRunner.isSupported(env);
   }
@@ -48,14 +45,12 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
   private final SandboxOptions sandboxOptions;
   private final Path execRoot;
   private final boolean verboseFailures;
-  private final String productName;
 
   ProcessWrapperSandboxedStrategy(
       BuildRequest buildRequest,
       BlazeDirectories blazeDirs,
       Path sandboxBase,
-      boolean verboseFailures,
-      String productName) {
+      boolean verboseFailures) {
     super(
         buildRequest,
         blazeDirs,
@@ -65,7 +60,6 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
     this.sandboxOptions = buildRequest.getOptions(SandboxOptions.class);
     this.execRoot = blazeDirs.getExecRoot();
     this.verboseFailures = verboseFailures;
-    this.productName = productName;
   }
 
   @Override
@@ -86,9 +80,6 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
     Path sandboxPath = getSandboxRoot();
     Path sandboxExecRoot = sandboxPath.getRelative("execroot").getRelative(execRoot.getBaseName());
 
-    ImmutableMap<String, String> spawnEnvironment =
-        StandaloneSpawnStrategy.locallyDeterminedEnv(execRoot, productName, spawn.getEnvironment());
-
     Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
     SymlinkedExecRoot symlinkedExecRoot = new SymlinkedExecRoot(sandboxExecRoot);
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
@@ -100,7 +91,7 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
       runSpawn(
           spawn,
           actionExecutionContext,
-          spawnEnvironment,
+          spawn.getEnvironment(),
           symlinkedExecRoot,
           outputs,
           runner,

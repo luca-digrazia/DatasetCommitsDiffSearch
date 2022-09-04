@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,14 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.util;
 
+import java.util.EnumSet;
+
 /**
  * Detects the running operating system and returns a describing enum value.
  */
 public enum OS {
   DARWIN("osx", "Mac OS X"),
+  FREEBSD("freebsd", "FreeBSD"),
   LINUX("linux", "Linux"),
   WINDOWS("windows", "Windows"),
-  UNKNOWN("", "");
+  UNKNOWN("unknown", "");
+
+  private static final EnumSet<OS> POSIX_COMPATIBLE = EnumSet.of(DARWIN, FREEBSD, LINUX);
 
   private final String canonicalName;
   private final String detectionName;
@@ -37,8 +42,21 @@ public enum OS {
     return HOST_SYSTEM;
   }
 
+  public static boolean isPosixCompatible() {
+    return POSIX_COMPATIBLE.contains(getCurrent());
+  }
+
   public String getCanonicalName() {
     return canonicalName;
+  }
+
+  public static String getVersion() {
+    return System.getProperty("os.version");
+  }
+
+  @Override
+  public String toString() {
+    return getCanonicalName();
   }
 
   // We inject a the OS name through blaze.os, so we can have
@@ -49,8 +67,13 @@ public enum OS {
       osName = System.getProperty("os.name");
     }
 
+    if (osName == null) {
+      return OS.UNKNOWN;
+    }
+
     for (OS os : OS.values()) {
-      if (os.detectionName.equals(osName)) {
+      // Windows have many names, all starting with "Windows".
+      if (osName.startsWith(os.detectionName)) {
         return os;
       }
     }

@@ -44,8 +44,8 @@ import java.util.concurrent.atomic.AtomicReference;
   contextType = SpawnActionContext.class
 )
 public class LinuxSandboxedStrategy extends SandboxStrategy {
-  public static boolean isSupported(CommandEnvironment cmdEnv) {
-    return LinuxSandboxRunner.isSupported(cmdEnv);
+  public static boolean isSupported(CommandEnvironment env) {
+    return LinuxSandboxRunner.isSupported(env);
   }
 
   private final SandboxOptions sandboxOptions;
@@ -54,18 +54,18 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
   private final boolean verboseFailures;
 
   LinuxSandboxedStrategy(
-      CommandEnvironment cmdEnv,
       BuildRequest buildRequest,
+      BlazeDirectories blazeDirs,
       Path sandboxBase,
       boolean verboseFailures) {
     super(
-        cmdEnv,
         buildRequest,
+        blazeDirs,
         sandboxBase,
         verboseFailures,
         buildRequest.getOptions(SandboxOptions.class));
     this.sandboxOptions = buildRequest.getOptions(SandboxOptions.class);
-    this.blazeDirs = cmdEnv.getDirectories();
+    this.blazeDirs = blazeDirs;
     this.execRoot = blazeDirs.getExecRoot();
     this.verboseFailures = verboseFailures;
   }
