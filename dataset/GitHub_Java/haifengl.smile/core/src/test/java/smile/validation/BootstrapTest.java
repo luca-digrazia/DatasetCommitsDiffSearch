@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.validation;
@@ -23,12 +22,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
-
-import smile.classification.DecisionTree;
-import smile.data.CPU;
-import smile.data.Iris;
-import smile.math.MathEx;
-import smile.regression.RegressionTree;
+import smile.math.Math;
 
 /**
  *
@@ -55,6 +49,10 @@ public class BootstrapTest {
     public void tearDown() {
     }
 
+
+    /**
+     * Test if the train and test dataset are complete, of class CrossValidation.
+     */
     @Test
     public void testComplete() {
         System.out.println("Complete");
@@ -107,8 +105,8 @@ public class BootstrapTest {
             }
         }
 
-        System.out.format("Train coverage: %d\t%d\t%d%n", MathEx.min(trainhit), MathEx.median(trainhit), MathEx.max(trainhit));
-        System.out.format("Test coverage: %d\t%d\t%d%n", MathEx.min(testhit), MathEx.median(testhit), MathEx.max(testhit));
+        System.out.format("Train coverage: %d\t%d\t%d%n", Math.min(trainhit), Math.median(trainhit), Math.max(trainhit));
+        System.out.format("Test coverage: %d\t%d\t%d%n", Math.min(testhit), Math.median(testhit), Math.max(testhit));
 
         for (int j = 0; j < n; j++) {
             assertTrue(trainhit[j] > 60);
@@ -116,23 +114,4 @@ public class BootstrapTest {
         }
     }
 
-    @Test
-    public void testIris() {
-        System.out.println("Iris");
-
-        double[] error = Bootstrap.classification(100, Iris.formula, Iris.data, (f, x) -> DecisionTree.fit(f, x));
-
-        System.out.println("100-fold bootstrap error rate average = " + MathEx.mean(error));
-        System.out.println("100-fold bootstrap error rate std.dev = " + MathEx.sd(error));
-    }
-
-    @Test
-    public void testCPU() {
-        System.out.println("CPU");
-
-        double[] rmse = Bootstrap.regression(100, CPU.formula, CPU.data, (f, x) -> RegressionTree.fit(f, x));
-
-        System.out.println("100-fold bootstrap RMSE average = " + MathEx.mean(rmse));
-        System.out.println("100-fold bootstrap RMSE std.dev = " + MathEx.sd(rmse));
-    }
 }

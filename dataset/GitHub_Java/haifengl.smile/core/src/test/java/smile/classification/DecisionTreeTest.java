@@ -1,35 +1,33 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.classification;
 
-import smile.base.cart.SplitRule;
-import smile.data.*;
-import smile.math.MathEx;
-import smile.validation.CrossValidation;
-import smile.validation.Error;
+import smile.sort.QuickSort;
+import smile.data.Attribute;
+import smile.data.NominalAttribute;
+import smile.data.parser.DelimitedTextParser;
 import smile.validation.LOOCV;
+import smile.data.AttributeDataset;
+import smile.data.parser.ArffParser;
+import smile.math.Math;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.validation.Validation;
-
 import static org.junit.Assert.*;
 
 /**
@@ -56,146 +54,163 @@ public class DecisionTreeTest {
     @After
     public void tearDown() {
     }
-
+    
+    /**
+     * Test of learn method, of class DecisionTree.
+     */
     @Test
     public void testWeather() {
         System.out.println("Weather");
+        ArffParser arffParser = new ArffParser();
+        arffParser.setResponseIndex(4);
+        try {
+            AttributeDataset weather = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/weather.nominal.arff"));
+            double[][] x = weather.toArray(new double[weather.size()][]);
+            int[] y = weather.toArray(new int[weather.size()]);
 
-        DecisionTree model = DecisionTree.fit(WeatherNominal.formula, WeatherNominal.data);
-        System.out.println(model);
-
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            int n = x.length;
+            LOOCV loocv = new LOOCV(n);
+            int error = 0;
+            for (int i = 0; i < n; i++) {
+                double[][] trainx = Math.slice(x, loocv.train[i]);
+                int[] trainy = Math.slice(y, loocv.train[i]);
+                
+                DecisionTree tree = new DecisionTree(weather.attributes(), trainx, trainy, 3);
+                if (y[loocv.test[i]] != tree.predict(x[loocv.test[i]]))
+                    error++;
+            }
+            
+            System.out.println("Decision Tree error = " + error);
+            assertEquals(5, error);
+        } catch (Exception ex) {
+            System.err.println(ex);
         }
-
-        int[] prediction = LOOCV.classification(WeatherNominal.data, x -> DecisionTree.fit(WeatherNominal.formula, x));
-        int error = Error.apply(WeatherNominal.y, prediction);
-        System.out.println("Error = " + error);
-        assertEquals(5, error);
     }
 
+    /**
+     * Test of learn method, of class DecisionTree.
+     */
     @Test
     public void testIris() {
         System.out.println("Iris");
+        ArffParser arffParser = new ArffParser();
+        arffParser.setResponseIndex(4);
+        try {
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            double[][] x = iris.toArray(new double[iris.size()][]);
+            int[] y = iris.toArray(new int[iris.size()]);
 
-        DecisionTree model = DecisionTree.fit(Iris.formula, Iris.data);
-        System.out.println(model);
-
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            int n = x.length;
+            LOOCV loocv = new LOOCV(n);
+            int error = 0;
+            for (int i = 0; i < n; i++) {
+                double[][] trainx = Math.slice(x, loocv.train[i]);
+                int[] trainy = Math.slice(y, loocv.train[i]);
+                
+                DecisionTree tree = new DecisionTree(iris.attributes(), trainx, trainy, 4);
+                if (y[loocv.test[i]] != tree.predict(x[loocv.test[i]]))
+                    error++;
+            }
+            
+            System.out.println("Decision Tree error = " + error);
+            assertEquals(7, error);
+        } catch (Exception ex) {
+            System.err.println(ex);
         }
-
-        int[] prediction = LOOCV.classification(Iris.data, x -> DecisionTree.fit(Iris.formula, x));
-        int error = Error.apply(Iris.y, prediction);
-        System.out.println("Error = " + error);
-        assertEquals(9, error);
     }
 
-    @Test
-    public void testPenDigits() {
-        System.out.println("Pen Digits");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, PenDigits.data, x -> DecisionTree.fit(PenDigits.formula, x, SplitRule.GINI, 100, 5));
-        int error = Error.apply(PenDigits.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(351, error);
-    }
-
-    @Test
-    public void testBreastCancer() {
-        System.out.println("Breast Cancer");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, BreastCancer.data, x -> DecisionTree.fit(BreastCancer.formula, x, SplitRule.GINI, 100, 5));
-        int error = Error.apply(BreastCancer.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(42, error);
-    }
-
-    @Test
-    public void testSegment() {
-        System.out.println("Segment");
-
-        DecisionTree model = DecisionTree.fit(Segment.formula, Segment.train, SplitRule.ENTROPY, 100, 5);
-        System.out.println(model);
-
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
-        }
-
-        int[] prediction = Validation.test(model, Segment.test);
-        int error = Error.apply(Segment.testy, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(43, error);
-    }
-
+    /**
+     * Test of learn method, of class DecisionTree.
+     */
     @Test
     public void testUSPS() {
         System.out.println("USPS");
+        DelimitedTextParser parser = new DelimitedTextParser();
+        parser.setResponseIndex(new NominalAttribute("class"), 0);
+        try {
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
 
-        DecisionTree model = DecisionTree.fit(USPS.formula, USPS.train, SplitRule.ENTROPY, 500, 5);
-        System.out.println(model);
+            double[][] x = train.toArray(new double[train.size()][]);
+            int[] y = train.toArray(new int[train.size()]);
+            double[][] testx = test.toArray(new double[test.size()][]);
+            int[] testy = test.toArray(new int[test.size()]);
+            
+            DecisionTree tree = new DecisionTree(x, y, 350, DecisionTree.SplitRule.ENTROPY);
+            
+            int error = 0;
+            for (int i = 0; i < testx.length; i++) {
+                if (tree.predict(testx[i]) != testy[i]) {
+                    error++;
+                }
+            }
 
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+            assertEquals(328, error);
+        } catch (Exception ex) {
+            System.err.println(ex);
         }
-
-        int[] prediction = Validation.test(model, USPS.test);
-        int error = Error.apply(USPS.testy, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(331, error);
     }
 
+    /**
+     * Test of learn method, of class DecisionTree.
+     */
     @Test
-    public void testPrune() {
-        System.out.println("USPS");
+    public void testUSPSNominal() {
+        System.out.println("USPS nominal");
+        DelimitedTextParser parser = new DelimitedTextParser();
+        parser.setResponseIndex(new NominalAttribute("class"), 0);
+        try {
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
 
-        // Overfitting with very large maxNodes and small nodeSize
-        DecisionTree model = DecisionTree.fit(USPS.formula, USPS.train, SplitRule.ENTROPY, 3000, 1);
-        System.out.println(model);
+            double[][] x = train.toArray(new double[train.size()][]);
+            int[] y = train.toArray(new int[train.size()]);
+            double[][] testx = test.toArray(new double[test.size()][]);
+            int[] testy = test.toArray(new int[test.size()]);
+            
+            for (double[] xi : x) {
+                for (int i = 0; i < xi.length; i++) {
+                    xi[i] = Math.round(255*(xi[i]+1)/2);
+                }
+            }
+            
+            for (double[] xi : testx) {
+                for (int i = 0; i < xi.length; i++) {
+                    xi[i] = Math.round(127 + 127*xi[i]);
+                }
+            }
+            
+            Attribute[] attributes = new Attribute[256];
+            String[] values = new String[attributes.length];
+            for (int i = 0; i < attributes.length; i++) {
+                values[i] = String.valueOf(i);
+            }
+            
+            for (int i = 0; i < attributes.length; i++) {
+                attributes[i] = new NominalAttribute("V"+i, values);
+            }
+            
+            DecisionTree tree = new DecisionTree(attributes, x, y, 350, 2, DecisionTree.SplitRule.ENTROPY);
+            
+            int error = 0;
+            for (int i = 0; i < testx.length; i++) {
+                if (tree.predict(testx[i]) != testy[i]) {
+                    error++;
+                }
+            }
 
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+            
+            double[] importance = tree.importance();
+            int[] index = QuickSort.sort(importance);
+            for (int i = importance.length; i-- > 0; ) {
+                System.out.format("%s importance is %.4f%n", train.attributes()[index[i]], importance[i]);
+            }
+            
+            assertEquals(324, error);
+        } catch (Exception ex) {
+            System.err.println(ex);
         }
-
-        int[] prediction = Validation.test(model, USPS.test);
-        int error = Error.apply(USPS.testy, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(897, model.size());
-        assertEquals(324, error);
-
-        DecisionTree lean = model.prune(USPS.test);
-        System.out.println(lean);
-
-        importance = lean.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", lean.schema().fieldName(i), importance[i]);
-        }
-
-        // The old model should not be modified.
-        prediction = Validation.test(model, USPS.test);
-        error = Error.apply(USPS.testy, prediction);
-
-        System.out.println("Error of old model after pruning = " + error);
-        assertEquals(897, model.size());
-        assertEquals(324, error);
-
-        prediction = Validation.test(lean, USPS.test);
-        error = Error.apply(USPS.testy, prediction);
-
-        System.out.println("Error of pruned model after pruning = " + error);
-        assertEquals(743, lean.size());
-        assertEquals(273, error);
     }
 }

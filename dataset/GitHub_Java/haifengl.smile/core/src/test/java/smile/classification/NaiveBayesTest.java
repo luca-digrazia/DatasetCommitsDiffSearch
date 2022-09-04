@@ -73,7 +73,7 @@ public class NaiveBayesTest {
 
         moviex = new double[x.length][];
         moviey = new int[y.length];
-        Bag<String> bag = new Bag<>(feature);
+        Bag<String> bag = new Bag<String>(feature);
         for (int i = 0; i < x.length; i++) {
             moviex[i] = bag.feature(x[i]);
             moviey[i] = y[i];
@@ -124,7 +124,7 @@ public class NaiveBayesTest {
                 for (int i = 0; i < k; i++) {
                     priori[i] = 1.0 / k;
                     for (int j = 0; j < p; j++) {
-                        ArrayList<Double> axi = new ArrayList<>();
+                        ArrayList<Double> axi = new ArrayList<Double>();
                         for (int m = 0; m < trainx.length; m++) {
                             if (trainy[m] == i) {
                                 axi.add(trainx[m][j]);

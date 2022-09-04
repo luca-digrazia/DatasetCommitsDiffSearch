@@ -1,34 +1,32 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.classification;
 
+import smile.data.NominalAttribute;
+import java.text.ParseException;
+import smile.data.parser.DelimitedTextParser;
+import smile.data.AttributeDataset;
+import smile.data.parser.ArffParser;
+import java.io.IOException;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.*;
-import smile.math.MathEx;
-import smile.validation.CrossValidation;
-import smile.validation.Error;
-import smile.validation.LOOCV;
-import smile.validation.Validation;
-
 import static org.junit.Assert.*;
 
 /**
@@ -56,107 +54,166 @@ public class KNNTest {
     public void tearDown() {
     }
 
-
+    /**
+     * Test of learn method, of class KNN.
+     */
     @Test
-    public void testWeather() {
-        System.out.println("Weather");
+    public void testLearn_3args() {
+        System.out.println("learn");
+        ArffParser arffParser = new ArffParser();
+        arffParser.setResponseIndex(4);
+        try {
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            double[][] x = iris.toArray(new double[0][]);
+            int[] y = iris.toArray(new int[0]);
 
-        int[] prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> KNN.fit(x, y));
-        int error = Error.of(WeatherNominal.y, prediction);
-        System.out.println("1-NN Error = " + error);
-        assertEquals(7, error);
+            KNN<double[]> knn = KNN.learn(x, y, 1);
+            int error = 0;
+            for (int i = 0; i < x.length; i++) {
+                if (knn.predict(x[i]) != y[i]) {
+                    error++;
+                }
+            }
+            System.out.println("1-nn error = " + error);
+            assertEquals(6, error);
 
-        prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> KNN.fit(x, y, 3));
-        error = Error.of(WeatherNominal.y, prediction);
-        System.out.println("3-NN Error = " + error);
-        assertEquals(4, error);
+            knn = KNN.learn(x, y, 3);
+            error = 0;
+            for (int i = 0; i < x.length; i++) {
+                if (knn.predict(x[i]) != y[i]) {
+                    error++;
+                }
+            }
+            System.out.println("3-nn error = " + error);
+            assertEquals(6, error);
 
-        prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> KNN.fit(x, y, 5));
-        error = Error.of(WeatherNominal.y, prediction);
-        System.out.println("5-NN Error = " + error);
-        assertEquals(5, error);
+            knn = KNN.learn(x, y, 5);
+            error = 0;
+            for (int i = 0; i < x.length; i++) {
+                if (knn.predict(x[i]) != y[i]) {
+                    error++;
+                }
+            }
+            System.out.println("5-nn error = " + error);
+            assertEquals(5, error);
 
-        prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> KNN.fit(x, y,7));
-        error = Error.of(WeatherNominal.y, prediction);
-        System.out.println("7-NN Error = " + error);
-        assertEquals(5, error);
+            knn = KNN.learn(x, y, 7);
+            error = 0;
+            for (int i = 0; i < x.length; i++) {
+                if (knn.predict(x[i]) != y[i]) {
+                    error++;
+                }
+            }
+            System.out.println("7-nn error = " + error);
+            assertEquals(5, error);
+
+            knn = KNN.learn(x, y, 9);
+            error = 0;
+            for (int i = 0; i < x.length; i++) {
+                if (knn.predict(x[i]) != y[i]) {
+                    error++;
+                }
+            }
+            System.out.println("9-nn error = " + error);
+            assertEquals(5, error);
+
+            knn = KNN.learn(x, y, 11);
+            error = 0;
+            for (int i = 0; i < x.length; i++) {
+                if (knn.predict(x[i]) != y[i]) {
+                    error++;
+                }
+            }
+            System.out.println("11-nn error = " + error);
+            assertEquals(4, error);
+
+            knn = KNN.learn(x, y, 13);
+            error = 0;
+            for (int i = 0; i < x.length; i++) {
+                if (knn.predict(x[i]) != y[i]) {
+                    error++;
+                }
+            }
+            System.out.println("13-nn error = " + error);
+            assertEquals(5, error);
+
+            knn = KNN.learn(x, y, 15);
+            error = 0;
+            for (int i = 0; i < x.length; i++) {
+                if (knn.predict(x[i]) != y[i]) {
+                    error++;
+                }
+            }
+            System.out.println("15-nn error = " + error);
+            assertEquals(4, error);
+        } catch (Exception ex) {
+            System.err.println(ex);
+        }
     }
 
+    /**
+     * Test of learn method, of class KNN.
+     */
     @Test
-    public void testIris() {
-        System.out.println("Iris");
-
-        int[] prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> KNN.fit(x, y,1));
-        int error = Error.of(Iris.y, prediction);
-        System.out.println("1-NN Error = " + error);
-        assertEquals(6, error);
-
-        prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> KNN.fit(x, y,3));
-        error = Error.of(Iris.y, prediction);
-        System.out.println("3-NN Error = " + error);
-        assertEquals(6, error);
-
-        prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> KNN.fit(x, y,5));
-        error = Error.of(Iris.y, prediction);
-        System.out.println("5-NN Error = " + error);
-        assertEquals(5, error);
-
-        prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> KNN.fit(x, y,7));
-        error = Error.of(Iris.y, prediction);
-        System.out.println("7-NN Error = " + error);
-        assertEquals(5, error);
-    }
-
-    @Test
-    public void testPenDigits() {
-        System.out.println("Pen Digits");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, PenDigits.x, PenDigits.y, (x, y) -> KNN.fit(x, y, 3));
-        int error = Error.of(PenDigits.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(40, error);
-    }
-
-    @Test
-    public void testBreastCancer() {
-        System.out.println("Breast Cancer");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y, (x, y) -> KNN.fit(x, y, 3));
-        int error = Error.of(BreastCancer.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(44, error);
-    }
-
-    @Test
-    public void testSegment() {
+    public void testSegment() throws ParseException {
         System.out.println("Segment");
+        ArffParser parser = new ArffParser();
+        parser.setResponseIndex(19);
+        try {
+            AttributeDataset train = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/segment-challenge.arff"));
+            AttributeDataset test = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/segment-test.arff"));
 
-        KNN<double[]> model = KNN.fit(Segment.x, Segment.y, 1);
+            double[][] x = train.toArray(new double[0][]);
+            int[] y = train.toArray(new int[0]);
+            double[][] testx = test.toArray(new double[0][]);
+            int[] testy = test.toArray(new int[0]);
+            
+            KNN<double[]> knn = KNN.learn(x, y);
 
-        int[] prediction = Validation.test(model, Segment.testx);
-        int error = Error.of(Segment.testy, prediction);
+            int error = 0;
+            for (int i = 0; i < testx.length; i++) {
+                if (knn.predict(testx[i]) != testy[i]) {
+                    error++;
+                }
+            }
 
-        System.out.println("Error = " + error);
-        assertEquals(39, error);
+            System.out.format("Segment error rate = %.2f%%%n", 100.0 * error / testx.length);
+            assertEquals(39, error);
+        } catch (IOException ex) {
+            System.err.println(ex);
+        }
     }
 
-    @Test(expected = Test.None.class)
-    public void testUSPS() throws Exception {
+    /**
+     * Test of learn method, of class KNN.
+     */
+    @Test
+    public void testUSPS() {
         System.out.println("USPS");
+        DelimitedTextParser parser = new DelimitedTextParser();
+        parser.setResponseIndex(new NominalAttribute("class"), 0);
+        try {
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
 
-        KNN<double[]> model = KNN.fit(USPS.x, USPS.y);
+            double[][] x = train.toArray(new double[train.size()][]);
+            int[] y = train.toArray(new int[train.size()]);
+            double[][] testx = test.toArray(new double[test.size()][]);
+            int[] testy = test.toArray(new int[test.size()]);
+            
+            KNN<double[]> knn = KNN.learn(x, y);
+            
+            int error = 0;
+            for (int i = 0; i < testx.length; i++) {
+                if (knn.predict(testx[i]) != testy[i]) {
+                    error++;
+                }
+            }
 
-        int[] prediction = Validation.test(model, USPS.testx);
-        int error = Error.of(USPS.testy, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(113, error);
-
-        java.nio.file.Path temp = smile.data.Serialize.write(model);
-        smile.data.Serialize.read(temp);
+            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+            assertEquals(113, error);
+        } catch (Exception ex) {
+            System.err.println(ex);
+        }
     }
 }

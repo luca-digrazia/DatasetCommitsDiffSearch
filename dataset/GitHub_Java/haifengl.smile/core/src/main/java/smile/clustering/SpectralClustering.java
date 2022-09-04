@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.clustering;
 
-import java.io.Serializable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import smile.math.Math;
@@ -41,8 +40,7 @@ import smile.math.matrix.EigenValueDecomposition;
  * 
  * @author Haifeng Li
  */
-public class SpectralClustering implements Serializable {
-    private static final long serialVersionUID = 1L;
+public class SpectralClustering {
     private static final Logger logger = LoggerFactory.getLogger(SpectralClustering.class);
 
     /**

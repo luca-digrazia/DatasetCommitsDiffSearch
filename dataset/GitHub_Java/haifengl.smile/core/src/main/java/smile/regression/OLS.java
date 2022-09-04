@@ -177,10 +177,6 @@ public class OLS implements Regression<double[]> {
 
         int n = x.length;
         p = x[0].length;
-        
-        if (n <= p) {
-            throw new IllegalArgumentException(String.format("The input matrix is not over determined: %d rows, %d columns", n, p));
-        }
 
         // weights and intercept
         double[] w1 = new double[p+1];

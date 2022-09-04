@@ -143,7 +143,7 @@ public class CLARANS <T> extends PartitionClustering<T> {
         this.numLocal = numLocal;
         this.maxNeighbor = maxNeighbor;
         
-        List<CLARANSTask> tasks = new ArrayList<>();
+        List<CLARANSTask> tasks = new ArrayList<CLARANSTask>();
         for (int i = 0; i < numLocal; i++) {
             tasks.add(new CLARANSTask(data));
         }

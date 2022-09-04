@@ -1,32 +1,33 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.classification;
 
-import smile.data.*;
-import smile.math.MathEx;
-import smile.validation.*;
+import smile.data.Attribute;
+import smile.math.Math;
+import smile.validation.LOOCV;
+import smile.data.parser.ArffParser;
+import smile.data.NominalAttribute;
+import smile.data.parser.DelimitedTextParser;
+import smile.data.AttributeDataset;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.validation.Error;
-
+import smile.sort.QuickSort;
 import static org.junit.Assert.*;
 
 /**
@@ -54,114 +55,221 @@ public class AdaBoostTest {
     public void tearDown() {
     }
 
+    /**
+     * Test of learn method, of class AdaBoost.
+     */
     @Test
     public void testWeather() {
         System.out.println("Weather");
+        ArffParser arffParser = new ArffParser();
+        arffParser.setResponseIndex(4);
+        try {
+            AttributeDataset weather = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/weather.nominal.arff"));
+            double[][] x = weather.toArray(new double[weather.size()][]);
+            int[] y = weather.toArray(new int[weather.size()]);
 
-        MathEx.setSeed(19650218); // to get repeatable results.
-        AdaBoost model = AdaBoost.fit(WeatherNominal.formula, WeatherNominal.data, 200, 20, 4, 1);
+            int n = x.length;
+            LOOCV loocv = new LOOCV(n);
+            int error = 0;
+            for (int i = 0; i < n; i++) {
+                double[][] trainx = Math.slice(x, loocv.train[i]);
+                int[] trainy = Math.slice(y, loocv.train[i]);
+                
+                AdaBoost forest = new AdaBoost(weather.attributes(), trainx, trainy, 200, 4);
+                if (y[loocv.test[i]] != forest.predict(x[loocv.test[i]]))
+                    error++;
+            }
 
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            System.out.println("AdaBoost error = " + error);
+            assertEquals(3, error);
+        } catch (Exception ex) {
+            System.err.println(ex);
         }
-
-        int[] prediction = LOOCV.classification(WeatherNominal.formula, WeatherNominal.data, (f, x) -> AdaBoost.fit(f, x, 200, 20, 4, 1));
-        int error = Error.of(WeatherNominal.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(6, error);
     }
 
+    /**
+     * Test of learn method, of class AdaBoost.
+     */
     @Test
     public void testIris() {
         System.out.println("Iris");
+        ArffParser arffParser = new ArffParser();
+        arffParser.setResponseIndex(4);
+        try {
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            double[][] x = iris.toArray(new double[iris.size()][]);
+            int[] y = iris.toArray(new int[iris.size()]);
+            for (int i = 0; i < y.length; i++) {
+                if (y[i] != 0) y[i] = 1;
+            }
 
-        MathEx.setSeed(19650218); // to get repeatable results.
-        AdaBoost model = AdaBoost.fit(Iris.formula, Iris.data, 200, 20, 4, 5);
+            int n = x.length;
+            LOOCV loocv = new LOOCV(n);
+            int error = 0;
+            for (int i = 0; i < n; i++) {
+                double[][] trainx = Math.slice(x, loocv.train[i]);
+                int[] trainy = Math.slice(y, loocv.train[i]);
+                
+                AdaBoost forest = new AdaBoost(iris.attributes(), trainx, trainy, 200);
+                if (y[loocv.test[i]] != forest.predict(x[loocv.test[i]]))
+                    error++;
+            }
 
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
-        }
-
-        int[] prediction = LOOCV.classification(Iris.formula, Iris.data, (f, x) -> AdaBoost.fit(f, x, 200, 20, 4, 1));
-        int error = Error.of(Iris.y, prediction);
-        System.out.println("Error = " + error);
-        assertEquals(7, error);
-    }
-
-    @Test
-    public void testPenDigits() {
-        System.out.println("Pen Digits");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, PenDigits.formula, PenDigits.data, (f, x) -> AdaBoost.fit(f, x, 200, 20, 4, 1));
-        int error = Error.of(PenDigits.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(356, error);
-    }
-
-    @Test
-    public void testBreastCancer() {
-        System.out.println("Breast Cancer");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, BreastCancer.formula, BreastCancer.data, (f, x) -> AdaBoost.fit(f, x, 200, 20, 4, 1));
-        int error = Error.of(BreastCancer.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(19, error);
-    }
-
-    @Test
-    public void testSegment() {
-        System.out.println("Segment");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        AdaBoost model = AdaBoost.fit(Segment.formula, Segment.train, 200, 20, 6, 1);
-
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
-        }
-
-        int[] prediction = Validation.test(model, Segment.test);
-        int error = Error.of(Segment.testy, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(30, error);
-
-        System.out.println("----- Progressive Accuracy -----");
-        int[][] test = model.test(Segment.test);
-        for (int i = 0; i < test.length; i++) {
-            System.out.format("Accuracy with %3d trees: %.4f%n", i + 1, Accuracy.of(Segment.testy, test[i]));
+            System.out.println("AdaBoost error = " + error);
+            assertEquals(0, error);
+        } catch (Exception ex) {
+            System.err.println(ex);
         }
     }
 
+    /**
+     * Test of learn method, of class AdaBoost.
+     */
     @Test
     public void testUSPS() {
         System.out.println("USPS");
+        DelimitedTextParser parser = new DelimitedTextParser();
+        parser.setResponseIndex(new NominalAttribute("class"), 0);
+        try {
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
 
-        MathEx.setSeed(19650218); // to get repeatable results.
-        AdaBoost model = AdaBoost.fit(USPS.formula, USPS.train, 200, 20, 64, 1);
+            double[][] x = train.toArray(new double[train.size()][]);
+            int[] y = train.toArray(new int[train.size()]);
+            double[][] testx = test.toArray(new double[test.size()][]);
+            int[] testy = test.toArray(new int[test.size()]);
 
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            for (int i = 0; i < y.length; i++) {
+                if (y[i] != 0) y[i] = 1;
+            }
+            for (int i = 0; i < testy.length; i++) {
+                if (testy[i] != 0) testy[i] = 1;
+            }
+            
+            AdaBoost forest = new AdaBoost(x, y, 100, 6);
+            
+            int error = 0;
+            for (int i = 0; i < testx.length; i++) {
+                if (forest.predict(testx[i]) != testy[i]) {
+                    error++;
+                }
+            }
+
+            System.out.println("AdaBoost error = " + error);
+            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+            assertTrue(error <= 25);
+        } catch (Exception ex) {
+            System.err.println(ex);
         }
+    }
 
-        int[] prediction = Validation.test(model, USPS.test);
-        int error = Error.of(USPS.testy, prediction);
+    /**
+     * Test of learn method, of class AdaBoost.
+     */
+    @Test
+    public void testUSPSNominal() {
+        System.out.println("USPS nominal");
+        DelimitedTextParser parser = new DelimitedTextParser();
+        parser.setResponseIndex(new NominalAttribute("class"), 0);
+        try {
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
 
-        System.out.println("Error = " + error);
-        assertEquals(152, error);
+            double[][] x = train.toArray(new double[train.size()][]);
+            int[] y = train.toArray(new int[train.size()]);
+            double[][] testx = test.toArray(new double[test.size()][]);
+            int[] testy = test.toArray(new int[test.size()]);
 
-        System.out.println("----- Progressive Accuracy -----");
-        int[][] test = model.test(USPS.test);
-        for (int i = 0; i < test.length; i++) {
-            System.out.format("Accuracy with %3d trees: %.4f%n", i+1, Accuracy.of(USPS.testy, test[i]));
+            for (double[] xi : x) {
+                for (int i = 0; i < xi.length; i++) {
+                    xi[i] = Math.round(255*(xi[i]+1)/2);
+                }
+            }
+            
+            for (double[] xi : testx) {
+                for (int i = 0; i < xi.length; i++) {
+                    xi[i] = Math.round(255*(xi[i]+1)/2);
+                }
+            }
+            
+            Attribute[] attributes = new Attribute[256];
+            String[] values = new String[attributes.length];
+            for (int i = 0; i < attributes.length; i++) {
+                values[i] = String.valueOf(i);
+            }
+            
+            for (int i = 0; i < attributes.length; i++) {
+                attributes[i] = new NominalAttribute("V"+i, values);
+            }
+            
+            for (int i = 0; i < y.length; i++) {
+                if (y[i] != 0) y[i] = 1;
+            }
+            
+            for (int i = 0; i < testy.length; i++) {
+                if (testy[i] != 0) testy[i] = 1;
+            }
+            
+            AdaBoost forest = new AdaBoost(attributes, x, y, 100, 6);
+            
+            int error = 0;
+            for (int i = 0; i < testx.length; i++) {
+                if (forest.predict(testx[i]) != testy[i]) {
+                    error++;
+                }
+            }
+
+            System.out.println("AdaBoost error = " + error);
+            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+            assertTrue(error <= 25);
+        } catch (Exception ex) {
+            System.err.println(ex);
+        }
+    }
+    
+    /**
+     * Test of learn method, of class AdaBoost.
+     */
+    @Test
+    public void testUSPS10() {
+        System.out.println("USPS 10 classes");
+        DelimitedTextParser parser = new DelimitedTextParser();
+        parser.setResponseIndex(new NominalAttribute("class"), 0);
+        try {
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+
+            double[][] x = train.toArray(new double[train.size()][]);
+            int[] y = train.toArray(new int[train.size()]);
+            double[][] testx = test.toArray(new double[test.size()][]);
+            int[] testy = test.toArray(new int[test.size()]);
+
+            AdaBoost forest = new AdaBoost(x, y, 100, 64);
+            
+            int error = 0;
+            for (int i = 0; i < testx.length; i++) {
+                if (forest.predict(testx[i]) != testy[i]) {
+                    error++;
+                }
+            }
+
+            System.out.println("AdaBoost error = " + error);
+            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+
+            double[] accuracy = forest.test(testx, testy);
+            for (int i = 1; i <= accuracy.length; i++) {
+                System.out.format("%d trees accuracy = %.2f%%%n", i, 100.0 * accuracy[i-1]);
+            }
+            
+            double[] importance = forest.importance();
+            int[] index = QuickSort.sort(importance);
+            for (int i = importance.length; i-- > 0; ) {
+                System.out.format("%s importance is %.4f%n", train.attributes()[index[i]], importance[i]);
+            }
+
+            assertTrue(error <= 170);
+        } catch (Exception ex) {
+            System.err.println(ex);
         }
     }
 }

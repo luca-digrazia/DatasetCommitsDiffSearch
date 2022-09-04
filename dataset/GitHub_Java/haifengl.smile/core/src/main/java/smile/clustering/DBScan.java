@@ -115,7 +115,7 @@ public class DBScan <T> extends PartitionClustering<T> {
      * @param radius the neighborhood radius.
      */
     public DBScan(T[] data, Distance<T> distance, int minPts, double radius) {
-        this(data, new LinearSearch<>(data, distance), minPts, radius);
+        this(data, new LinearSearch<T>(data, distance), minPts, radius);
     }
 
     /**
@@ -127,7 +127,7 @@ public class DBScan <T> extends PartitionClustering<T> {
      * @param radius the neighborhood radius.
      */
     public DBScan(T[] data, Metric<T> distance, int minPts, double radius) {
-        this(data, new CoverTree<>(data, distance), minPts, radius);
+        this(data, new CoverTree<T>(data, distance), minPts, radius);
     }
 
     /**
@@ -158,7 +158,7 @@ public class DBScan <T> extends PartitionClustering<T> {
 
         for (int i = 0; i < data.length; i++) {
             if (y[i] == UNCLASSIFIED) {
-                List<Neighbor<T,T>> neighbors = new ArrayList<>();
+                List<Neighbor<T,T>> neighbors = new ArrayList<Neighbor<T,T>>();
                 nns.range(data[i], radius, neighbors);
                 if (neighbors.size() < minPts) {
                     y[i] = OUTLIER;
@@ -168,7 +168,7 @@ public class DBScan <T> extends PartitionClustering<T> {
                         if (y[neighbors.get(j).index] == UNCLASSIFIED) {
                             y[neighbors.get(j).index] = k;
                             Neighbor<T,T> neighbor = neighbors.get(j);
-                            List<Neighbor<T,T>> secondaryNeighbors = new ArrayList<>();
+                            List<Neighbor<T,T>> secondaryNeighbors = new ArrayList<Neighbor<T,T>>();
                             nns.range(neighbor.key, radius, secondaryNeighbors);
 
                             if (secondaryNeighbors.size() >= minPts) {
@@ -216,7 +216,7 @@ public class DBScan <T> extends PartitionClustering<T> {
      */
     @Override
     public int predict(T x) {
-        List<Neighbor<T,T>> neighbors = new ArrayList<>();
+        List<Neighbor<T,T>> neighbors = new ArrayList<Neighbor<T,T>>();
         nns.range(x, radius, neighbors);
         
         if (neighbors.size() < minPts) {
