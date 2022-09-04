@@ -217,14 +217,10 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
    *
    * <p>Can be used for usage help and controlling whether the "no" prefix is allowed.
    */
-  boolean isBooleanField(Field field) {
-    return isBooleanField(field, getConverter(field));
-  }
-
-  private static boolean isBooleanField(Field field, Converter<?> converter) {
+  static boolean isBooleanField(Field field) {
     return field.getType().equals(boolean.class)
         || field.getType().equals(TriState.class)
-        || converter instanceof BoolOrEnumConverter;
+        || findConverter(field) instanceof BoolOrEnumConverter;
   }
 
   /** Returns whether a field has Void type. */
@@ -249,7 +245,7 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
    * Given an {@code @Option}-annotated field, retrieves the {@link Converter} that will be used,
    * taking into account the default converters if an explicit one is not specified.
    */
-  private static Converter<?> findConverter(Field optionField) {
+  static Converter<?> findConverter(Field optionField) {
     Option annotation = optionField.getAnnotation(Option.class);
     if (annotation.converter() == Converter.class) {
       // No converter provided, use the default one.
@@ -364,52 +360,6 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
     booleanAliasMap.put("no" + optionName, optionName);
   }
 
-  private static void checkEffectTagRationality(String optionName, OptionEffectTag[] effectTags) {
-    // Check that there is at least one OptionEffectTag listed.
-    if (effectTags.length < 1) {
-      throw new ConstructionException(
-          "Option "
-              + optionName
-              + " does not list at least one OptionEffectTag. If the option has no effect, "
-              + "please add NO_OP, otherwise, add a tag representing its effect.");
-    } else if (effectTags.length > 1) {
-      // If there are more than 1 tag, make sure that NO_OP and UNKNOWN is not one of them.
-      // These don't make sense if other effects are listed.
-      ImmutableList<OptionEffectTag> tags = ImmutableList.copyOf(effectTags);
-      if (tags.contains(OptionEffectTag.UNKNOWN)) {
-        throw new ConstructionException(
-            "Option "
-                + optionName
-                + " includes UNKNOWN with other, known, effects. Please remove UNKNOWN from "
-                + "the list.");
-      }
-      if (tags.contains(OptionEffectTag.NO_OP)) {
-        throw new ConstructionException(
-            "Option "
-                + optionName
-                + " includes NO_OP with other effects. This doesn't make much sense. Please "
-                + "remove NO_OP or the actual effects from the list, whichever is correct.");
-      }
-    }
-  }
-
-  private static void checkMetadataTagAndCategoryRationality(
-      String optionName, OptionMetadataTag[] metadataTags, OptionDocumentationCategory category) {
-    for (OptionMetadataTag tag : metadataTags) {
-      if (tag == OptionMetadataTag.HIDDEN || tag == OptionMetadataTag.INTERNAL) {
-        if (category != OptionDocumentationCategory.UNDOCUMENTED) {
-          throw new ConstructionException(
-              "Option "
-                  + optionName
-                  + " has metadata tag "
-                  + tag
-                  + " but does not have category UNDOCUMENTED. "
-                  + "Please fix.");
-        }
-      }
-    }
-  }
-
   /**
    * Constructs an {@link IsolatedOptionsData} object for a parser that knows about the given
    * {@link OptionsBase} classes. No inter-option analysis is done. Performs basic sanity checking
@@ -457,10 +407,6 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
                   + annotation.category() + "\" in option \"" + optionName + "\" is disallowed.");
         }
 
-        checkEffectTagRationality(optionName, annotation.effectTags());
-        checkMetadataTagAndCategoryRationality(
-            optionName, annotation.metadataTags(), annotation.documentationCategory());
-
         Type fieldType = getFieldSingularType(field, annotation);
         // For simple, static expansions, don't accept non-Void types.
         if (annotation.expansion().length != 0 && !isVoidField(field)) {
@@ -472,31 +418,28 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
 
         // Get the converter return type.
         @SuppressWarnings("rawtypes")
-        Class<? extends Converter> converterClass = annotation.converter();
-        if (converterClass == Converter.class) {
+        Class<? extends Converter> converter = annotation.converter();
+        if (converter == Converter.class) {
           Converter<?> actualConverter = Converters.DEFAULT_CONVERTERS.get(fieldType);
           if (actualConverter == null) {
             throw new ConstructionException("Cannot find converter for field of type "
                 + field.getType() + " named " + field.getName()
                 + " in class " + field.getDeclaringClass().getName());
           }
-          converterClass = actualConverter.getClass();
+          converter = actualConverter.getClass();
         }
-        if (Modifier.isAbstract(converterClass.getModifiers())) {
-          throw new ConstructionException(
-              "The converter type " + converterClass + " must be a concrete type");
+        if (Modifier.isAbstract(converter.getModifiers())) {
+          throw new ConstructionException("The converter type " + converter
+              + " must be a concrete type");
         }
         Type converterResultType;
         try {
-          Method convertMethod = converterClass.getMethod("convert", String.class);
-          converterResultType =
-              GenericTypeHelper.getActualReturnType(converterClass, convertMethod);
+          Method convertMethod = converter.getMethod("convert", String.class);
+          converterResultType = GenericTypeHelper.getActualReturnType(converter, convertMethod);
         } catch (NoSuchMethodException e) {
           throw new ConstructionException(
               "A known converter object doesn't implement the convert method");
         }
-        Converter<?> converter = findConverter(field);
-        convertersBuilder.put(field, converter);
 
         if (annotation.allowMultiple()) {
           if (GenericTypeHelper.getRawType(converterResultType) == List.class) {
@@ -533,7 +476,7 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
           }
         }
 
-        if (isBooleanField(field, converter)) {
+        if (isBooleanField(field)) {
           checkAndUpdateBooleanAliases(nameToFieldBuilder, booleanAliasMap, optionName);
         }
 
@@ -548,7 +491,7 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
           nameToFieldBuilder.put(annotation.oldName(), field);
 
           // If boolean, repeat the alias dance for the old name.
-          if (isBooleanField(field, converter)) {
+          if (isBooleanField(field)) {
             checkAndUpdateBooleanAliases(nameToFieldBuilder, booleanAliasMap, oldName);
           }
         }
@@ -558,6 +501,8 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
         }
 
         optionDefaultsBuilder.put(field, retrieveDefaultFromAnnotation(field));
+
+        convertersBuilder.put(field, findConverter(field));
 
         allowMultipleBuilder.put(field, annotation.allowMultiple());
 
