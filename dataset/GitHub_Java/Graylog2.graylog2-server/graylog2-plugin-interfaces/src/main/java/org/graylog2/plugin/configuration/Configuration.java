@@ -38,7 +38,6 @@ import java.util.Map;
 public class Configuration {
     private static final Logger LOG = LoggerFactory.getLogger(Configuration.class);
     private static final ObjectMapper objectMapper;
-    public static final Configuration EMPTY_CONFIGURATION = new Configuration(null);
 
     static {
         objectMapper = new ObjectMapper();
@@ -137,14 +136,11 @@ public class Configuration {
     }
 
     public static Configuration deserializeFromJson(String json) {
-        if (json == null) {
-            return EMPTY_CONFIGURATION;
-        }
         try {
             return objectMapper.readValue(json, Configuration.class);
         } catch (IOException e) {
             LOG.error("Deserializing configuration failed.", e);
-            return EMPTY_CONFIGURATION;
+            return null;
         }
     }
 }

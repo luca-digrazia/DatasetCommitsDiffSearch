@@ -23,7 +23,9 @@ import org.testng.annotations.Test;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 public class ConfigurationTest {
 
@@ -48,9 +50,5 @@ public class ConfigurationTest {
 
         assertTrue(config.intIsSet("a"));
         assertTrue(config.intIsSet("b"));
-
-        final Configuration emptyConfigFromNull = Configuration.deserializeFromJson(null);
-
-        assertNotNull(emptyConfigFromNull);
     }
 }
