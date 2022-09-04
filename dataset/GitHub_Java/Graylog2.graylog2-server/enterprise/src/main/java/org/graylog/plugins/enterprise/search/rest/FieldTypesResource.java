@@ -1,19 +1,13 @@
 package org.graylog.plugins.enterprise.search.rest;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import io.swagger.annotations.Api;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.fieldtypes.FieldTypeDTO;
-import org.graylog2.indexer.fieldtypes.FieldTypeMapper;
-import org.graylog2.indexer.fieldtypes.FieldTypes;
 import org.graylog2.indexer.fieldtypes.IndexFieldTypesDTO;
 import org.graylog2.indexer.fieldtypes.IndexFieldTypesService;
 import org.graylog2.plugin.rest.PluginRestResource;
-import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.streams.StreamService;
 
 import javax.inject.Inject;
@@ -26,9 +20,7 @@ import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static com.google.common.collect.ImmutableSet.of;
-import static org.graylog2.indexer.fieldtypes.FieldTypes.Type.createType;
+import java.util.stream.Stream;
 
 @Api(value = "Enterprise/Field Types", description = "Field Types")
 @Path("/fields")
@@ -37,90 +29,53 @@ import static org.graylog2.indexer.fieldtypes.FieldTypes.Type.createType;
 public class FieldTypesResource extends RestResource implements PluginRestResource {
     private final IndexFieldTypesService indexFieldTypesService;
     private final StreamService streamService;
-    private final FieldTypeMapper fieldTypeMapper;
-    private static final FieldTypes.Type UNKNOWN_TYPE = createType("unknown", of());
 
     @Inject
-    public FieldTypesResource(IndexFieldTypesService indexFieldTypesService, StreamService streamService, FieldTypeMapper fieldTypeMapper) {
+    public FieldTypesResource(IndexFieldTypesService indexFieldTypesService, StreamService streamService) {
         this.indexFieldTypesService = indexFieldTypesService;
         this.streamService = streamService;
-        this.fieldTypeMapper = fieldTypeMapper;
     }
 
-    private Set<MappedFieldTypeDTO> mergeCompoundFieldTypes(java.util.stream.Stream<MappedFieldTypeDTO> stream) {
-        return stream.collect(Collectors.groupingBy(MappedFieldTypeDTO::name, Collectors.toSet()))
+    private Set<FieldTypeDTO> mergeCompoundFieldTypes(Stream<FieldTypeDTO> stream) {
+        return stream.collect(Collectors.groupingBy(FieldTypeDTO::fieldName, Collectors.toSet()))
                 .entrySet()
                 .stream()
                 .map(entry -> {
-                    final Set<MappedFieldTypeDTO> fieldTypes = entry.getValue();
+                    final Set<FieldTypeDTO> fieldTypes = entry.getValue();
                     final String fieldName = entry.getKey();
                     if (fieldTypes.size() == 1) {
                         return fieldTypes.iterator().next();
                     }
-                    final String compoundFieldType = "compound(" + fieldTypes.stream()
-                            .map(mappedFieldTypeDTO -> mappedFieldTypeDTO.type().type())
-                            .collect(Collectors.joining(",")) + ")";
-                    final ImmutableSet<String> commonProperties = fieldTypes.stream()
-                            .map(mappedFieldTypeDTO -> mappedFieldTypeDTO.type().properties())
-                            .reduce((s1, s2) -> Sets.intersection(s1, s2).immutableCopy())
-                            .orElse(ImmutableSet.of());
-                    return MappedFieldTypeDTO.create(fieldName, createType(compoundFieldType, commonProperties));
+                    final String compoundFieldType = "compound(" + fieldTypes.stream().map(FieldTypeDTO::physicalType).collect(Collectors.joining(",")) + ")";
+                    return FieldTypeDTO.create(fieldName, compoundFieldType);
                 })
                 .collect(Collectors.toSet());
 
     }
 
-    private MappedFieldTypeDTO mapPhysicalFieldType(FieldTypeDTO fieldType) {
-        final FieldTypes.Type mappedFieldType = fieldTypeMapper.mapType(fieldType.physicalType()).orElse(UNKNOWN_TYPE);
-        return MappedFieldTypeDTO.create(fieldType.fieldName(), mappedFieldType);
-    }
-
     @GET
-    public Set<MappedFieldTypeDTO> allFieldTypes() {
-        if (allowedToReadStream("*")) {
-            return mergeCompoundFieldTypes(indexFieldTypesService.findAll()
-                    .stream()
-                    .map(IndexFieldTypesDTO::fields)
-                    .flatMap(Collection::stream)
-                    .map(this::mapPhysicalFieldType));
-        }
-        final Set<String> allowedStreams = streamService.loadAll()
+    public Set<FieldTypeDTO> allFieldTypes() {
+        return mergeCompoundFieldTypes(indexFieldTypesService.findAll()
                 .stream()
-                .map(Stream::getId)
-                .filter(this::allowedToReadStream)
-                .collect(Collectors.toSet());
-
-        return fieldTypesByStreamIds(allowedStreams);
-    }
-
-    private boolean allowedToReadStream(String streamId) {
-        return isPermitted(RestPermissions.STREAMS_READ, streamId);
+                .map(IndexFieldTypesDTO::fields)
+                .flatMap(Collection::stream));
     }
 
     @POST
-    public Set<MappedFieldTypeDTO> byStreams(FieldTypesForStreamsRequest request) {
-        request.streams().forEach(s -> checkPermission(RestPermissions.STREAMS_READ, s));
-
-        return fieldTypesByStreamIds(request.streams());
-    }
-
-    private Set<MappedFieldTypeDTO> fieldTypesByStreamIds(Set<String> streamIds) {
-        return mergeCompoundFieldTypes(
-                streamIds
-                        .stream()
-                        .map(streamId -> {
-                            try {
-                                return streamService.load(streamId);
-                            } catch (NotFoundException e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
-                        .filter(Objects::nonNull)
-                        .map(indexSet -> indexSet.getIndexSet().getConfig().id())
-                        .flatMap(indexSetId -> this.indexFieldTypesService.findForIndexSet(indexSetId).stream())
-                        .map(IndexFieldTypesDTO::fields)
-                        .flatMap(Collection::stream)
-                        .map(this::mapPhysicalFieldType)
-        );
+    public Set<FieldTypeDTO> byStreams(FieldTypesForStreamsRequest request) {
+        return mergeCompoundFieldTypes(request.streams()
+                .stream()
+                .map(streamId -> {
+                    try {
+                        return streamService.load(streamId);
+                    } catch (NotFoundException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .filter(Objects::nonNull)
+                .map(indexSet -> indexSet.getIndexSet().getConfig().id())
+                .flatMap(indexSetId -> this.indexFieldTypesService.findForIndexSet(indexSetId).stream())
+                .map(IndexFieldTypesDTO::fields)
+                .flatMap(Collection::stream));
     }
 }
