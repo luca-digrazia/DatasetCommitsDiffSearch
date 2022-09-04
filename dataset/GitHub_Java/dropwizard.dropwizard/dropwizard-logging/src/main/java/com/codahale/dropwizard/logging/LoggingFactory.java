@@ -12,7 +12,8 @@ import com.codahale.metrics.logback.InstrumentedAppender;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 
-import javax.management.*;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.Map;
 import java.util.TimeZone;
@@ -82,8 +83,7 @@ public class LoggingFactory {
                                                          objectName),
                                      objectName);
             }
-        } catch (MalformedObjectNameException | InstanceAlreadyExistsException |
-                 NotCompliantMBeanException | MBeanRegistrationException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
 
