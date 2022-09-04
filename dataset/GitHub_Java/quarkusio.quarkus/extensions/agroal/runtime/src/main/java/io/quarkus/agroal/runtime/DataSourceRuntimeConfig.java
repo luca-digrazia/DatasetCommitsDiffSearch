@@ -124,10 +124,4 @@ public class DataSourceRuntimeConfig {
      */
     @ConfigItem
     public Optional<String> newConnectionSql;
-
-    /**
-     * Query executed to validate a connection.
-     */
-    @ConfigItem
-    public Optional<String> validationQuerySql;
 }
