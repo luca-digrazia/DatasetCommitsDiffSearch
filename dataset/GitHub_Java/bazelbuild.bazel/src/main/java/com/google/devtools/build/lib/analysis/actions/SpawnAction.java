@@ -58,6 +58,7 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
+import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -626,11 +627,13 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
      */
     @CheckReturnValue
     public Action[] build(ActionConstructionContext context) {
-      return build(context.getActionOwner(), context.getConfiguration());
+      return build(context.getActionOwner(), context.getAnalysisEnvironment(),
+          context.getConfiguration());
     }
 
     @VisibleForTesting @CheckReturnValue
-    public Action[] build(ActionOwner owner, BuildConfiguration configuration) {
+    public Action[] build(ActionOwner owner, AnalysisEnvironment analysisEnvironment,
+        BuildConfiguration configuration) {
       ImmutableList<String> executableArgs = buildExecutableArgs();
       Action[] actions = new Action[1];
       CommandLines.Builder result = CommandLines.builder();
