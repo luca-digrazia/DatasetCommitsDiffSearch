@@ -19,7 +19,6 @@ package io.quarkus.creator.phase.runnerjar;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -38,7 +37,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -47,9 +45,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import org.jboss.logging.Logger;
 
@@ -270,13 +265,10 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
         Set<String> finalIgnoredEntries = new HashSet<>(IGNORED_ENTRIES);
         finalIgnoredEntries.addAll(this.userConfiguredIgnoredEntries);
 
-        Map<Path, Set<String>> transformedClasses = augmentOutcome.getTransformedClassesByJar();
-
         final List<AppDependency> appDeps = curateOutcome.getEffectiveModel().getUserDependencies();
         for (AppDependency appDep : appDeps) {
             final AppArtifact depArtifact = appDep.getArtifact();
             final Path resolvedDep = depResolver.resolve(depArtifact);
-            Set<String> transformedFromThisArchive = transformedClasses.get(resolvedDep);
             if (uberJar) {
                 try (FileSystem artifactFs = ZipUtils.newFileSystem(resolvedDep)) {
                     for (final Path root : artifactFs.getRootDirectories()) {
@@ -296,27 +288,20 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
                                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
                                             throws IOException {
                                         final String relativePath = toUri(root.relativize(file));
-                                        //if this has been transfomed we do not copy it
-                                        boolean transformed = transformedFromThisArchive != null
-                                                && transformedFromThisArchive.contains(relativePath);
-                                        if (!transformed) {
-                                            if (relativePath.startsWith("META-INF/services/") && relativePath.length() > 18) {
-                                                services.computeIfAbsent(relativePath, (u) -> new ArrayList<>())
-                                                        .add(read(file));
-                                                return FileVisitResult.CONTINUE;
-                                            } else if (!finalIgnoredEntries.contains(relativePath)) {
-                                                duplicateCatcher.computeIfAbsent(relativePath, (a) -> new HashSet<>())
-                                                        .add(appDep);
-                                                if (!seen.containsKey(relativePath)) {
-                                                    seen.put(relativePath, appDep.toString());
-                                                    Files.copy(file, runnerZipFs.getPath(relativePath),
-                                                            StandardCopyOption.REPLACE_EXISTING);
-                                                } else if (!relativePath.endsWith(".class")) {
-                                                    //for .class entries we warn as a group
-                                                    log.warn("Duplicate entry " + relativePath + " entry from " + appDep
-                                                            + " will be ignored. Existing file was provided by "
-                                                            + seen.get(relativePath));
-                                                }
+                                        if (relativePath.startsWith("META-INF/services/") && relativePath.length() > 18) {
+                                            services.computeIfAbsent(relativePath, (u) -> new ArrayList<>()).add(read(file));
+                                            return FileVisitResult.CONTINUE;
+                                        } else if (!finalIgnoredEntries.contains(relativePath)) {
+                                            duplicateCatcher.computeIfAbsent(relativePath, (a) -> new HashSet<>()).add(appDep);
+                                            if (!seen.containsKey(relativePath)) {
+                                                seen.put(relativePath, appDep.toString());
+                                                Files.copy(file, runnerZipFs.getPath(relativePath),
+                                                        StandardCopyOption.REPLACE_EXISTING);
+                                            } else if (!relativePath.endsWith(".class")) {
+                                                //for .class entries we warn as a group
+                                                log.warn("Duplicate entry " + relativePath + " entry from " + appDep
+                                                        + " will be ignored. Existing file was provided by "
+                                                        + seen.get(relativePath));
                                             }
                                         }
                                         return FileVisitResult.CONTINUE;
@@ -326,18 +311,10 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
 
                 }
             } else {
-                if (transformedFromThisArchive == null || transformedFromThisArchive.isEmpty()) {
-                    final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
-                    final Path targetPath = libDir.resolve(fileName);
-                    Files.copy(resolvedDep, targetPath, StandardCopyOption.REPLACE_EXISTING);
-                    classPath.append(" lib/" + fileName);
-                } else {
-                    //we have transformed classes, we need to handle them correctly
-                    final String fileName = "modified-" + depArtifact.getGroupId() + "." + resolvedDep.getFileName();
-                    final Path targetPath = libDir.resolve(fileName);
-                    classPath.append(" lib/" + fileName);
-                    filterZipFile(resolvedDep, targetPath, transformedFromThisArchive);
-                }
+                final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
+                final Path targetPath = libDir.resolve(fileName);
+                Files.copy(resolvedDep, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                classPath.append(" lib/" + fileName);
             }
         }
         Set<Set<AppDependency>> explained = new HashSet<>();
@@ -394,30 +371,6 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
                     os.write('\n');
                 }
             }
-        }
-    }
-
-    private void filterZipFile(Path resolvedDep, Path targetPath, Set<String> transformedFromThisArchive) {
-        try {
-            byte[] buffer = new byte[10000];
-            try (ZipFile in = new ZipFile(resolvedDep.toFile())) {
-                try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(targetPath.toFile()))) {
-                    Enumeration<? extends ZipEntry> entries = in.entries();
-                    while (entries.hasMoreElements()) {
-                        ZipEntry entry = entries.nextElement();
-                        if (!transformedFromThisArchive.contains(entry.getName())) {
-                            out.putNextEntry(entry);
-                            InputStream instream = in.getInputStream(entry);
-                            int r = 0;
-                            while ((r = instream.read(buffer)) > 0) {
-                                out.write(buffer, 0, r);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 
