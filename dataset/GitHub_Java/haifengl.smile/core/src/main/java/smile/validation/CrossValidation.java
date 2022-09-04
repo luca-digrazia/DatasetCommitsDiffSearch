@@ -52,16 +52,6 @@ public class CrossValidation {
      * @param k the number of rounds of cross validation.
      */
     public CrossValidation(int n, int k) {
-        this(n, k, true);
-    }
-    
-    /**
-     * Constructor.
-     * @param n the number of samples.
-     * @param k the number of rounds of cross validation.
-     * @param permutate determiner of index permutation
-     */
-    public CrossValidation(int n, int k, boolean permutate) {
         if (n < 0) {
             throw new IllegalArgumentException("Invalid sample size: " + n);
         }
@@ -72,16 +62,7 @@ public class CrossValidation {
 
         this.k = k;
 
-        int[] index;
-        if (permutate){
-            index = Math.permutate(n);
-        }
-        else{
-            index = new int[n];
-            for (int i = 0; i < n; i++) {
-                index[i] = i;
-            }
-        }
+        int[] index = Math.permutate(n);
 
         train = new int[k][];
         test = new int[k][];
