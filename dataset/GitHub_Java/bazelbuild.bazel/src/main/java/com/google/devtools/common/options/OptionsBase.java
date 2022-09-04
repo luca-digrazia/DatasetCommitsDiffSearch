@@ -71,8 +71,7 @@ public abstract class OptionsBase {
     return map;
   }
 
-  /** Returns the value of the option described by {@code definition}. */
-  public final Object getValueFromDefinition(OptionDefinition definition) {
+  private Object getValueFromDefinition(OptionDefinition definition) {
     try {
       return definition.getField().get(this);
     } catch (IllegalAccessException e) {
