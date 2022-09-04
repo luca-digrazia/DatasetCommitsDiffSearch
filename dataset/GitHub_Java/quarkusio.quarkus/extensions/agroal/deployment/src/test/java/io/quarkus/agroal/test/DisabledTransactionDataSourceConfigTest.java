@@ -8,6 +8,8 @@ import java.sql.SQLException;
 
 import javax.inject.Inject;
 
+import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -23,8 +25,10 @@ public class DisabledTransactionDataSourceConfigTest {
     AgroalDataSource defaultDataSource;
 
     @RegisterExtension
-    static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .withConfigurationResource("application-disabledjta-datasource.properties");
+    static final QuarkusUnitTest config = new QuarkusUnitTest().setArchiveProducer(
+            () -> ShrinkWrap.create(JavaArchive.class)
+                    .addAsResource("application-disabledjta-datasource.properties",
+                            "application.properties"));
 
     @Test
     public void testNonTransactionalDataSourceInjection() throws SQLException {

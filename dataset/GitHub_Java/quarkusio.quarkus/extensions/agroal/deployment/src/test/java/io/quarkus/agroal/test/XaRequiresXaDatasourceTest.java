@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javax.enterprise.inject.spi.DeploymentException;
 
+import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -14,7 +16,8 @@ public class XaRequiresXaDatasourceTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .withConfigurationResource("application-wrongdriverkind-datasource.properties")
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+                    .addAsResource("application-wrongdriverkind-datasource.properties", "application.properties"))
             .assertException(t -> {
                 assertEquals(DeploymentException.class, t.getClass());
             });
