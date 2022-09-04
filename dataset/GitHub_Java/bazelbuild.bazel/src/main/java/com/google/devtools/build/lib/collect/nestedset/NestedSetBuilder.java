@@ -100,11 +100,7 @@ public final class NestedSetBuilder<E> {
       throw new IllegalArgumentException("NestedSet should be added as a transitive member");
     }
     if (items == null) {
-      int n = Iterables.size(elements);
-      if (n == 0) {
-        return this; // avoid allocating an empty set
-      }
-      items = CompactHashSet.createWithExpectedSize(n);
+      items = CompactHashSet.createWithExpectedSize(Iterables.size(elements));
     }
     Iterables.addAll(items, elements);
     return this;
