@@ -50,7 +50,7 @@ public class SkydocOptions extends OptionsBase {
   @Option(
       name = "symbols",
       allowMultiple = true,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = OptionEffectTag.UNKNOWN,
       help =
@@ -63,7 +63,7 @@ public class SkydocOptions extends OptionsBase {
   @Option(
       name = "dep_roots",
       allowMultiple = true,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = OptionEffectTag.UNKNOWN,
       help = "File path roots to search when resolving transitive bzl dependencies")

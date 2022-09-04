@@ -67,8 +67,6 @@ import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkImport;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.Statement;
-import com.google.devtools.build.lib.syntax.StringLiteral;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeActionsInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeBuildApiGlobals;
@@ -81,7 +79,6 @@ import com.google.devtools.build.skydoc.fakebuildapi.FakeSkylarkNativeModuleApi;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeSkylarkRuleFunctionsApi;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeStructApi;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeStructApi.FakeStructProviderApi;
-import com.google.devtools.build.skydoc.fakebuildapi.android.FakeAndroidApplicationResourceInfo.FakeAndroidApplicationResourceInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.android.FakeAndroidDeviceBrokerInfo.FakeAndroidDeviceBrokerInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.android.FakeAndroidInstrumentationInfo.FakeAndroidInstrumentationInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.android.FakeAndroidNativeLibsInfo.FakeAndroidNativeLibsInfoProvider;
@@ -121,7 +118,6 @@ import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.Aspe
 import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.ProviderInfo;
 import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.RuleInfo;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.skylark.common.DocstringUtils;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -212,7 +208,6 @@ public class SkydocMain {
     ImmutableMap.Builder<String, ProviderInfo> providerInfoMap = ImmutableMap.builder();
     ImmutableMap.Builder<String, UserDefinedFunction> userDefinedFunctions = ImmutableMap.builder();
     ImmutableMap.Builder<String, AspectInfo> aspectInfoMap = ImmutableMap.builder();
-    ImmutableMap.Builder<Label, String> moduleDocMap = ImmutableMap.builder();
 
     try {
       new SkydocMain(new FilesystemFileAccessor(), skydocOptions.workspaceName, depRoots)
@@ -222,8 +217,7 @@ public class SkydocMain {
               ruleInfoMap,
               providerInfoMap,
               userDefinedFunctions,
-              aspectInfoMap,
-              moduleDocMap);
+              aspectInfoMap);
     } catch (StarlarkEvaluationException exception) {
       System.err.println("Stardoc documentation generation failed: " + exception.getMessage());
       System.exit(1);
@@ -247,13 +241,12 @@ public class SkydocMain {
             .collect(ImmutableMap.toImmutableMap(Entry::getKey, Entry::getValue));
 
       try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(outputPath))) {
-      new ProtoRenderer()
-          .appendRuleInfos(filteredRuleInfos.values())
-          .appendProviderInfos(filteredProviderInfos.values())
-          .appendUserDefinedFunctionInfos(filteredUserDefinedFunctions)
-          .appendAspectInfos(filteredAspectInfos.values())
-          .setModuleDocstring(moduleDocMap.build().get(targetFileLabel))
-          .writeModuleInfo(out);
+        new ProtoRenderer()
+            .appendRuleInfos(filteredRuleInfos.values())
+            .appendProviderInfos(filteredProviderInfos.values())
+            .appendUserDefinedFunctionInfos(filteredUserDefinedFunctions)
+            .appendAspectInfos(filteredAspectInfos.values())
+            .writeModuleInfo(out);
       }
   }
 
@@ -269,7 +262,6 @@ public class SkydocMain {
     }
     return false;
   }
-
   /**
    * Evaluates/interprets the skylark file at a given path and its transitive skylark dependencies
    * using a fake build API and collects information about all rule definitions made in the root
@@ -289,9 +281,6 @@ public class SkydocMain {
    * @param aspectInfoMap a map builder to be populated with aspect definition information for named
    *     aspects. Keys are exported names of aspects, and values are the {@link AspectInfo} asepct
    *     descriptions. For example, 'my_aspect = aspect(...)' has key 'my_aspect'
-   * @param moduleDocMap a map builder to be populated with module docstrings for skylark file. Keys
-   *     are labels of skylark files and values are their module docstrings. If the module has no
-   *     docstring, an empty string will be printed.
    * @throws InterruptedException if evaluation is interrupted
    */
   public Environment eval(
@@ -300,8 +289,7 @@ public class SkydocMain {
       ImmutableMap.Builder<String, RuleInfo> ruleInfoMap,
       ImmutableMap.Builder<String, ProviderInfo> providerInfoMap,
       ImmutableMap.Builder<String, UserDefinedFunction> userDefinedFunctionMap,
-      ImmutableMap.Builder<String, AspectInfo> aspectInfoMap,
-      ImmutableMap.Builder<Label, String> moduleDocMap)
+      ImmutableMap.Builder<String, AspectInfo> aspectInfoMap)
       throws InterruptedException, IOException, LabelSyntaxException, EvalException,
           StarlarkEvaluationException {
 
@@ -312,8 +300,7 @@ public class SkydocMain {
     List<AspectInfoWrapper> aspectInfoList = new ArrayList<>();
 
     Environment env =
-        recursiveEval(
-            semantics, label, ruleInfoList, providerInfoList, aspectInfoList, moduleDocMap);
+        recursiveEval(semantics, label, ruleInfoList, providerInfoList, aspectInfoList);
 
     Map<BaseFunction, RuleInfoWrapper> ruleFunctions =
         ruleInfoList.stream()
@@ -389,18 +376,6 @@ public class SkydocMain {
     }
   }
 
-  private static String getModuleDoc(BuildFileAST buildFileAST) {
-    ImmutableList<Statement> fileStatements = buildFileAST.getStatements();
-    if (!fileStatements.isEmpty()) {
-      Statement moduleComment = fileStatements.get(0);
-      StringLiteral moduleDocLiteral = DocstringUtils.getStringLiteral(moduleComment);
-      if (moduleDocLiteral != null) {
-        return moduleDocLiteral.getValue();
-      }
-    }
-    return "";
-  }
-
   /**
    * Recursively evaluates/interprets the skylark file at a given path and its transitive skylark
    * dependencies using a fake build API and collects information about all rule definitions made in
@@ -416,8 +391,7 @@ public class SkydocMain {
       Label label,
       List<RuleInfoWrapper> ruleInfoList,
       List<ProviderInfoWrapper> providerInfoList,
-      List<AspectInfoWrapper> aspectInfoList,
-      ImmutableMap.Builder<Label, String> moduleDocMap)
+      List<AspectInfoWrapper> aspectInfoList)
       throws InterruptedException, IOException, LabelSyntaxException, StarlarkEvaluationException {
     Path path = pathOfLabel(label);
 
@@ -431,8 +405,6 @@ public class SkydocMain {
     ParserInputSource parserInputSource = getInputSource(path.toString());
     BuildFileAST buildFileAST = BuildFileAST.parseSkylarkFile(parserInputSource, eventHandler);
 
-    moduleDocMap.put(label, getModuleDoc(buildFileAST));
-
     Map<String, Extension> imports = new HashMap<>();
     for (SkylarkImport anImport : buildFileAST.getImports()) {
       BazelStarlarkContext context =
@@ -442,13 +414,7 @@ public class SkydocMain {
 
       try {
         Environment importEnv =
-            recursiveEval(
-                semantics,
-                relativeLabel,
-                ruleInfoList,
-                providerInfoList,
-                aspectInfoList,
-                moduleDocMap);
+            recursiveEval(semantics, relativeLabel, ruleInfoList, providerInfoList, aspectInfoList);
         imports.put(anImport.getImportString(), new Extension(importEnv));
       } catch (NoSuchFileException noSuchFileException) {
         throw new StarlarkEvaluationException(
@@ -544,8 +510,7 @@ public class SkydocMain {
             new FakeAndroidInstrumentationInfoProvider(),
             new FakeAndroidDeviceBrokerInfoProvider(),
             new FakeAndroidResourcesInfoProvider(),
-            new FakeAndroidNativeLibsInfoProvider(),
-            new FakeAndroidApplicationResourceInfoProvider());
+            new FakeAndroidNativeLibsInfoProvider());
     AppleBootstrap appleBootstrap = new AppleBootstrap(new FakeAppleCommon());
     ConfigBootstrap configBootstrap =
         new ConfigBootstrap(
