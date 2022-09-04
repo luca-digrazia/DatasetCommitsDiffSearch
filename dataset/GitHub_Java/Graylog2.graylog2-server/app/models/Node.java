@@ -24,8 +24,7 @@ import com.google.common.collect.Maps;
 import lib.APIException;
 import lib.Api;
 import lib.Configuration;
-import models.api.responses.NodeResponse;
-import models.api.responses.NodeSummaryResponse;
+import models.api.responses.*;
 import models.api.responses.system.InputSummaryResponse;
 import models.api.responses.system.InputsResponse;
 import org.joda.time.DateTime;
@@ -50,15 +49,6 @@ public class Node {
     private final String hostname;
     private final boolean isMaster;
 
-    private static final Node INITIAL_NODE;
-    static {
-        final NodeSummaryResponse r = new NodeSummaryResponse();
-        r.transportAddress = Configuration.getServerRestUris().get(0);
-        INITIAL_NODE = new Node(r);
-    }
-
-    private static final List<Node> nodes = Lists.newArrayList();
-
     public Node(NodeSummaryResponse r) {
         transportAddress = r.transportAddress;
         lastSeen = new DateTime(r.lastSeen);
@@ -69,10 +59,10 @@ public class Node {
     }
 
     public static Node fromId(String id) {
-        NodeSummaryResponse response;
+        NodeSummaryResponse response = null;
         try {
             response = Api.get(
-                    INITIAL_NODE,
+                    Configuration.getServerRestUris().get(0),
                     "/cluster/nodes/" + id,
                     NodeSummaryResponse.class);
         } catch (IOException e) {
@@ -85,13 +75,13 @@ public class Node {
     }
 
     public static List<Node> all() throws IOException, APIException {
-        // TODO don't just get the node list once
-        if (nodes.size() == 0) {
-            NodeResponse response = Api.getUnauthenticated(INITIAL_NODE, "/cluster/nodes/", NodeResponse.class);
-            for (NodeSummaryResponse nsr : response.nodes) {
-                nodes.add(new Node(nsr));
-            }
+        List<Node> nodes = Lists.newArrayList();
+
+        NodeResponse response = Api.get(Configuration.getServerRestUris().get(0), "/cluster/nodes/", NodeResponse.class);
+        for (NodeSummaryResponse nsr : response.nodes) {
+            nodes.add(new Node(nsr));
         }
+
         return nodes;
     }
 
