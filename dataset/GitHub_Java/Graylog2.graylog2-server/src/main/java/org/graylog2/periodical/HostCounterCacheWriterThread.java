@@ -20,7 +20,7 @@
 
 package org.graylog2.periodical;
 
-import org.apache.log4j.Logger;
+import org.graylog2.Log;
 import org.graylog2.database.HostCounterCache;
 import org.graylog2.database.MongoBridge;
 
@@ -30,11 +30,9 @@ import org.graylog2.database.MongoBridge;
  *
  * Periodically writes host counter cache to hosts collection.
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class HostCounterCacheWriterThread extends Thread {
-
-    private static final Logger LOG = Logger.getLogger(HostCounterCacheWriterThread.class);
 
     /**
      * Start the thread. Runs forever.
@@ -49,7 +47,7 @@ public class HostCounterCacheWriterThread extends Thread {
                     HostCounterCache.getInstance().reset(host);
                 }
             } catch (Exception e) {
-                LOG.warn("Error in HostCounterCacheWriterThread: " + e.getMessage(), e);
+                Log.warn("Error in HostCounterCacheWriterThread: " + e.toString());
             }
             
            // Run every 5 seconds.
