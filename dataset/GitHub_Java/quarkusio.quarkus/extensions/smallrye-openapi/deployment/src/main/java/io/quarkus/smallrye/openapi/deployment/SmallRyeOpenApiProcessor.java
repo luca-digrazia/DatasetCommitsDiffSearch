@@ -51,7 +51,6 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
-import io.quarkus.resteasy.server.common.spi.AllowedJaxRsAnnotationPrefixBuildItem;
 import io.quarkus.resteasy.server.common.spi.ResteasyJaxrsConfigBuildItem;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.smallrye.openapi.common.deployment.SmallRyeOpenApiConfig;
@@ -72,11 +71,9 @@ import io.smallrye.openapi.runtime.io.OpenApiSerializer;
 import io.smallrye.openapi.runtime.scanner.AnnotationScannerExtension;
 import io.smallrye.openapi.runtime.scanner.FilteredIndexView;
 import io.smallrye.openapi.runtime.scanner.OpenApiAnnotationScanner;
-import io.smallrye.openapi.vertx.VertxConstants;
 
 /**
- * The main OpenAPI Processor. This will scan for JAX-RS, Spring and Vert.x Annotations, and, if any, add supplied schemas.
- * The result is added to the deployable unit to be loaded at runtime.
+ * @author Ken Finnigan
  */
 public class SmallRyeOpenApiProcessor {
 
@@ -161,21 +158,13 @@ public class SmallRyeOpenApiProcessor {
     }
 
     @BuildStep
-    public List<AllowedJaxRsAnnotationPrefixBuildItem> registerJaxRsSupportedAnnotation() {
-        List<AllowedJaxRsAnnotationPrefixBuildItem> prefixes = new ArrayList<>();
-        prefixes.add(new AllowedJaxRsAnnotationPrefixBuildItem("org.eclipse.microprofile.openapi.annotations"));
-        return prefixes;
-    }
-
-    @BuildStep
     public void registerOpenApiSchemaClassesForReflection(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             OpenApiFilteredIndexViewBuildItem openApiFilteredIndexViewBuildItem,
             Capabilities capabilities) {
 
-        FilteredIndexView index = openApiFilteredIndexViewBuildItem.getIndex();
-
-        if (shouldScanAnnotations(capabilities, index)) {
+        if (shouldScanAnnotations(capabilities)) {
+            FilteredIndexView index = openApiFilteredIndexViewBuildItem.getIndex();
             // Generate reflection declaration from MP OpenAPI Schema definition
             // They are needed for serialization.
             Collection<AnnotationInstance> schemaAnnotationInstances = index.getAnnotations(OPENAPI_SCHEMA);
@@ -279,7 +268,7 @@ public class SmallRyeOpenApiProcessor {
 
         OpenAPI annotationModel;
 
-        if (shouldScanAnnotations(capabilities, index)) {
+        if (shouldScanAnnotations(capabilities)) {
             annotationModel = generateAnnotationModel(index, capabilities, httpRootPathBuildItem, resteasyJaxrsConfig);
         } else {
             annotationModel = null;
@@ -299,7 +288,7 @@ public class SmallRyeOpenApiProcessor {
                 "OpenAPI document initialized:");
     }
 
-    private boolean shouldScanAnnotations(Capabilities capabilities, IndexView index) {
+    private boolean shouldScanAnnotations(Capabilities capabilities) {
         // Disabled via config
         Config config = ConfigProvider.getConfig();
         boolean scanDisable = config.getOptionalValue(OASConfig.SCAN_DISABLE, Boolean.class).orElse(false);
@@ -307,19 +296,10 @@ public class SmallRyeOpenApiProcessor {
             return false;
         }
 
-        // Only scan if either JaxRS, Spring Web or Vert.x Web (with @Route) is used
+        // Only scan if either JaxRS or Spring is used
         boolean isJaxrs = capabilities.isPresent(Capability.RESTEASY);
         boolean isSpring = capabilities.isPresent(Capability.SPRING_WEB);
-        boolean isVertx = isUsingVertxRoute(index);
-        return isJaxrs || isSpring || isVertx;
-    }
-
-    private boolean isUsingVertxRoute(IndexView index) {
-        if (!index.getAnnotations(VertxConstants.ROUTE).isEmpty()
-                || !index.getAnnotations(VertxConstants.ROUTE_BASE).isEmpty()) {
-            return true;
-        }
-        return false;
+        return isJaxrs || isSpring;
     }
 
     private OpenAPI generateStaticModel(ApplicationArchivesBuildItem archivesBuildItem) throws IOException {
