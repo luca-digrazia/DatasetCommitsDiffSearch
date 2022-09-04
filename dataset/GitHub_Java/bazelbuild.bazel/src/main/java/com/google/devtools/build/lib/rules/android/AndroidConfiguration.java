@@ -707,18 +707,19 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     public ManifestMergerOrder manifestMergerOrder;
 
     @Option(
-        name = "android_aapt",
-        defaultValue = "aapt2",
-        documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-        effectTags = {
-          OptionEffectTag.AFFECTS_OUTPUTS,
-          OptionEffectTag.LOADING_AND_ANALYSIS,
-          OptionEffectTag.LOSES_INCREMENTAL_STATE,
-        },
-        converter = AndroidAaptConverter.class,
-        help =
-            "Selects the version of androidAaptVersion to use for android_binary rules."
-                + "Flag to help the test and transition to aapt2.")
+      name = "android_aapt",
+      defaultValue = "auto",
+      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+      effectTags = {
+        OptionEffectTag.AFFECTS_OUTPUTS,
+        OptionEffectTag.LOADING_AND_ANALYSIS,
+        OptionEffectTag.LOSES_INCREMENTAL_STATE,
+      },
+      converter = AndroidAaptConverter.class,
+      help =
+          "Selects the version of androidAaptVersion to use for android_binary rules."
+              + "Flag to help the test and transition to aapt2."
+    )
     public AndroidAaptVersion androidAaptVersion;
 
     @Option(
@@ -968,7 +969,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
           OptionMetadataTag.INCOMPATIBLE_CHANGE,
           OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
         },
-        defaultValue = "true",
+        defaultValue = "false",
         help =
             "Switch the Android rules to use aapt2 by default for resource processing. "
                 + "To resolve issues when migrating your app to build with aapt2, see "
@@ -1091,6 +1092,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   private final boolean exportsManifestDefault;
   private final AndroidAaptVersion androidAaptVersion;
   private final boolean useAapt2ForRobolectric;
+  private final boolean throwOnResourceConflict;
   private final boolean useParallelDex2Oat;
   private final boolean breakBuildOnParallelDex2OatFailure;
   private final boolean omitResourcesInfoProviderFromAndroidBinary;
@@ -1140,6 +1142,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.compressJavaResources = options.compressJavaResources;
     this.exportsManifestDefault = options.exportsManifestDefault;
     this.useAapt2ForRobolectric = options.useAapt2ForRobolectric;
+    this.throwOnResourceConflict = options.throwOnResourceConflict;
     this.useParallelDex2Oat = options.useParallelDex2Oat;
     this.breakBuildOnParallelDex2OatFailure = options.breakBuildOnParallelDex2OatFailure;
     this.omitResourcesInfoProviderFromAndroidBinary =
@@ -1360,6 +1363,11 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   @Override
   public boolean useAapt2ForRobolectric() {
     return useAapt2ForRobolectric;
+  }
+
+  @Override
+  public boolean throwOnResourceConflict() {
+    return throwOnResourceConflict;
   }
 
   @Override
