@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
@@ -210,7 +209,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ActionResult execute(ActionExecutionContext actionExecutionContext)
+    public void execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
       try {
         FileSystemUtils.writeContent(stableStatus.getPath(), new byte[] {});
@@ -218,7 +217,6 @@ public final class AnalysisTestUtil {
       } catch (IOException e) {
         throw new ActionExecutionException(e, this, true);
       }
-      return ActionResult.EMPTY;
     }
 
     @Override

@@ -112,7 +112,6 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
@@ -133,6 +132,7 @@ import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -474,7 +474,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
     String defaultsPackageContent = ruleClassProvider.getDefaultsPackageContent(optionsParser);
     skyframeExecutor.setupDefaultPackage(defaultsPackageContent);
-    skyframeExecutor.handleConfiguredTargetChange();
+    skyframeExecutor.dropConfiguredTargets();
 
     view = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
     view.setConfigurationsForTesting(masterConfig);

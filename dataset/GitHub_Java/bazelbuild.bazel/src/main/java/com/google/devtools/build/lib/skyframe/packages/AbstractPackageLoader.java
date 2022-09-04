@@ -252,10 +252,11 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   @Override
   public ImmutableMap<PackageIdentifier, PackageLoader.PackageOrException> loadPackages(
       Iterable<? extends PackageIdentifier> pkgIds) throws InterruptedException {
-    ArrayList<SkyKey> keys = new ArrayList<>();
-    for (PackageIdentifier pkgId : ImmutableSet.copyOf(pkgIds)) {
-      keys.add(PackageValue.key(pkgId));
+    ImmutableList.Builder<SkyKey> keysBuilder = ImmutableList.builder();
+    for (PackageIdentifier pkgId : pkgIds) {
+      keysBuilder.add(PackageValue.key(pkgId));
     }
+    ImmutableList<SkyKey> keys = keysBuilder.build();
 
     EvaluationResult<PackageValue> evalResult =
         makeFreshDriver().evaluate(keys, /*keepGoing=*/ true, skyframeThreads, reporter);

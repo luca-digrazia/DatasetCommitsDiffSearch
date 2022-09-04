@@ -612,10 +612,7 @@ public final class Environment implements Freezable {
   }
 
   /**
-   * A Builder class for Environment.
-   *
-   * <p>The caller must explicitly set the semantics by calling either {@link #setSemantics} or
-   * {@link #useDefaultSemantics}.
+   * A Builder class for Environment
    */
   public static class Builder {
     private final Mutability mutability;
@@ -655,11 +652,6 @@ public final class Environment implements Freezable {
 
     public Builder setSemantics(SkylarkSemantics semantics) {
       this.semantics = semantics;
-      return this;
-    }
-
-    public Builder useDefaultSemantics() {
-      this.semantics = SkylarkSemantics.DEFAULT_SEMANTICS;
       return this;
     }
 

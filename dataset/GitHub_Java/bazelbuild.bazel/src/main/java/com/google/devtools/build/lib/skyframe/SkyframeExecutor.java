@@ -94,7 +94,6 @@ import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
-import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingCallback;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
@@ -120,6 +119,7 @@ import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompl
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.skyframe.ToolchainUtil.ToolchainContextException;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ResourceUsage;
@@ -677,8 +677,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.set(injectable(), defaultsPackageContents);
   }
 
-  public void maybeInvalidateWorkspaceStatusValue(String workspaceName)
-      throws InterruptedException {
+  public void maybeInvalidateWorkspaceStatusValue(String workspaceName) {
     WorkspaceStatusAction newWorkspaceStatusAction = makeWorkspaceStatusAction(workspaceName);
     WorkspaceStatusAction oldWorkspaceStatusAction = getLastWorkspaceStatusAction();
     if (oldWorkspaceStatusAction != null
@@ -697,7 +696,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   @VisibleForTesting
   @Nullable
-  public WorkspaceStatusAction getLastWorkspaceStatusAction() throws InterruptedException {
+  public WorkspaceStatusAction getLastWorkspaceStatusAction() {
     WorkspaceStatusValue workspaceStatusValue =
         (WorkspaceStatusValue) memoizingEvaluator.getExistingValue(WorkspaceStatusValue.SKY_KEY);
     return workspaceStatusValue == null

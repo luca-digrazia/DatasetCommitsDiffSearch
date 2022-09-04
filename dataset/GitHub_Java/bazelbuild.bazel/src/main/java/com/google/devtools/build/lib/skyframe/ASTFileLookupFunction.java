@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -84,12 +83,16 @@ public class ASTFileLookupFunction implements SkyFunction {
     SkyKey fileSkyKey = FileValue.key(rootedPath);
     FileValue fileValue = null;
     try {
-      fileValue = (FileValue) env.getValueOrThrow(fileSkyKey, IOException.class);
+      fileValue = (FileValue) env.getValueOrThrow(fileSkyKey, IOException.class,
+          FileSymlinkException.class, InconsistentFilesystemException.class);
+    } catch (IOException e) {
+      throw new ASTLookupFunctionException(new ErrorReadingSkylarkExtensionException(e),
+          Transience.PERSISTENT);
+    } catch (FileSymlinkException e) {
+      throw new ASTLookupFunctionException(new ErrorReadingSkylarkExtensionException(e),
+          Transience.PERSISTENT);
     } catch (InconsistentFilesystemException e) {
       throw new ASTLookupFunctionException(e, Transience.PERSISTENT);
-    } catch (IOException e) {
-      throw new ASTLookupFunctionException(
-          new ErrorReadingSkylarkExtensionException(e), Transience.PERSISTENT);
     }
     if (fileValue == null) {
       return null;
@@ -122,10 +125,7 @@ public class ASTFileLookupFunction implements SkyFunction {
                     /*importMap=*/ null)
                 .setupDynamic(Runtime.PKG_NAME, Runtime.NONE)
                 .setupDynamic(Runtime.REPOSITORY_NAME, Runtime.NONE);
-        byte[] bytes = FileSystemUtils.readWithKnownFileSize(path, astFileSize);
-        ast =
-            BuildFileAST.parseSkylarkFile(
-                bytes, path.getDigest(), path.asFragment(), env.getListener());
+          ast = BuildFileAST.parseSkylarkFile(path, astFileSize, env.getListener());
           ast = ast.validate(validationEnv, env.getListener());
         }
     } catch (IOException e) {

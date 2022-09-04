@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.GlobCache;
+import com.google.devtools.build.lib.packages.MakeEnvironment;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Package.Builder;
@@ -37,7 +38,6 @@ import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 
@@ -57,6 +57,7 @@ public class PackageFactoryApparatus {
     factory =
         new PackageFactory(
             ruleClassProvider,
+            null,
             AttributeContainer::new,
             ImmutableList.copyOf(environmentExtensions),
             "test",
@@ -108,8 +109,7 @@ public class PackageFactoryApparatus {
    * Parses the {@code buildFile} into a {@link BuildFileAST}.
    */
   public BuildFileAST ast(Path buildFile) throws IOException {
-    byte[] bytes = FileSystemUtils.readWithKnownFileSize(buildFile, buildFile.getFileSize());
-    ParserInputSource inputSource = ParserInputSource.create(bytes, buildFile.asFragment());
+    ParserInputSource inputSource = ParserInputSource.create(buildFile);
     return BuildFileAST.parseBuildFile(inputSource, eventHandler);
   }
 
@@ -142,6 +142,8 @@ public class PackageFactoryApparatus {
             ImmutableList.<Postable>of(),
             ConstantRuleVisibility.PUBLIC,
             SkylarkSemantics.DEFAULT_SEMANTICS,
+            false,
+            new MakeEnvironment.Builder(),
             ImmutableMap.<String, Extension>of(),
             ImmutableList.<Label>of());
     Package result;
