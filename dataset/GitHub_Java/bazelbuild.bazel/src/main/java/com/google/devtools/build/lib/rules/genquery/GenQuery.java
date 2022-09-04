@@ -92,7 +92,6 @@ import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-import com.google.devtools.common.options.TriState;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -164,11 +163,11 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     }
     if (ruleContext.getConfiguration().getOptions().get(CoreOptions.class).useGraphlessQuery) {
       queryOptions.orderOutput = OrderOutput.NO;
-      queryOptions.useGraphlessQuery = TriState.YES;
+      queryOptions.useGraphlessQuery = true;
     } else {
       // Force results to be deterministic.
       queryOptions.orderOutput = OrderOutput.FULL;
-      queryOptions.useGraphlessQuery = TriState.NO;
+      queryOptions.useGraphlessQuery = false;
     }
 
     // force relative_locations to true so it has a deterministic output across machines.
@@ -363,7 +362,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
               /*extraFunctions=*/ ImmutableList.of(),
               /*packagePath=*/ null,
               /*blockUniverseEvaluationErrors=*/ false,
-              /*useGraphlessQuery=*/ queryOptions.useGraphlessQuery == TriState.YES);
+              /*useGraphlessQuery=*/ queryOptions.useGraphlessQuery);
       QueryExpression expr = QueryExpression.parse(query, queryEnvironment);
       formatter.verifyCompatible(queryEnvironment, expr);
       targets = QueryUtil.newOrderedAggregateAllOutputFormatterCallback(queryEnvironment);

@@ -432,7 +432,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
 
         List<Label> extensions = new ArrayList<>();
         if (loads) {
-          extensions.addAll(pkg.getStarlarkFileDependencies());
+          extensions.addAll(pkg.getSkylarkFileDependencies());
         }
 
         for (Label extension : extensions) {

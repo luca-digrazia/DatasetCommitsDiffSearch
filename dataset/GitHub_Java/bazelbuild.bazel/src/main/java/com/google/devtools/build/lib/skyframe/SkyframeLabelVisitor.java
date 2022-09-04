@@ -73,8 +73,9 @@ public final class SkyframeLabelVisitor implements TransitivePackageLoader {
     Set<Map.Entry<SkyKey, ErrorInfo>> errors = result.errorMap().entrySet();
     if (!errorOnCycles) {
       errors =
-          errors.stream()
-              .filter(error -> error.getValue().getCycleInfo().isEmpty())
+          errors
+              .stream()
+              .filter(error -> Iterables.isEmpty(error.getValue().getCycleInfo()))
               .collect(Collectors.toSet());
       if (errors.isEmpty()) {
         return true;
@@ -123,7 +124,7 @@ public final class SkyframeLabelVisitor implements TransitivePackageLoader {
       ErrorInfo errorInfo = errorEntry.getValue();
       Preconditions.checkState(key.functionName().equals(SkyFunctions.TRANSITIVE_TARGET), errorEntry);
       Label topLevelLabel = ((TransitiveTargetKey) key).getLabel();
-      if (!errorInfo.getCycleInfo().isEmpty()) {
+      if (!Iterables.isEmpty(errorInfo.getCycleInfo())) {
         skyframeCyclesReporter.get().reportCycles(errorInfo.getCycleInfo(), key, eventHandler);
       }
       if (isDirectErrorFromTopLevelLabel(topLevelLabel, labelsToVisit, errorInfo)) {

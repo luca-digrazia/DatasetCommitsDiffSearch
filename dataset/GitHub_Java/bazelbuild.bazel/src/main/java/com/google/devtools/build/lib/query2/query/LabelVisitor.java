@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.query2.query;
 
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -165,14 +166,14 @@ final class LabelVisitor {
       boolean keepGoing,
       int parallelThreads,
       int maxDepth,
-      TargetEdgeObserver observer)
+      TargetEdgeObserver... observers)
       throws InterruptedException {
     VisitationAttributes nextVisitation = new VisitationAttributes(targetsToVisit, maxDepth);
     if (!lastVisitation.success || !nextVisitation.current(lastVisitation)) {
       lastVisitation = nextVisitation;
       lastVisitation.success =
           redoVisitation(
-              eventHandler, targetsToVisit, keepGoing, parallelThreads, maxDepth, observer);
+              eventHandler, targetsToVisit, keepGoing, parallelThreads, maxDepth, observers);
     }
   }
 
@@ -186,10 +187,10 @@ final class LabelVisitor {
       boolean keepGoing,
       int parallelThreads,
       int maxDepth,
-      TargetEdgeObserver observer)
+      TargetEdgeObserver... observers)
       throws InterruptedException {
     lastVisitation = NONE;
-    redoVisitation(eventHandler, targetsToVisit, keepGoing, parallelThreads, maxDepth, observer);
+    redoVisitation(eventHandler, targetsToVisit, keepGoing, parallelThreads, maxDepth, observers);
   }
 
   // Does a bounded transitive visitation starting at the given top-level targets.
@@ -199,11 +200,11 @@ final class LabelVisitor {
       boolean keepGoing,
       int parallelThreads,
       int maxDepth,
-      TargetEdgeObserver observer)
+      TargetEdgeObserver... observers)
       throws InterruptedException {
     visitedTargets.clear();
 
-    Visitor visitor = new Visitor(eventHandler, keepGoing, parallelThreads, maxDepth, observer);
+    Visitor visitor = new Visitor(eventHandler, keepGoing, parallelThreads, maxDepth, observers);
 
     Throwable uncaught = null;
     boolean result;
@@ -231,17 +232,15 @@ final class LabelVisitor {
     private final QuiescingExecutor executor;
     private final ExtendedEventHandler eventHandler;
     private final int maxDepth;
-
-    // Observers are stored individually instead of in a list to reduce iteration cost.
-    private final TargetEdgeObserver observer;
-    private final TargetEdgeErrorObserver errorObserver = new TargetEdgeErrorObserver();
+    private final Iterable<TargetEdgeObserver> observers;
+    private final TargetEdgeErrorObserver errorObserver;
 
     Visitor(
         ExtendedEventHandler eventHandler,
         boolean keepGoing,
         int parallelThreads,
         int maxDepth,
-        TargetEdgeObserver observer) {
+        TargetEdgeObserver... observers) {
       if (parallelThreads > 1) {
         this.executorService = NamedForkJoinPool.newNamedPool(THREAD_NAME, parallelThreads);
       } else {
@@ -256,7 +255,11 @@ final class LabelVisitor {
               executorService, /*failFastOnException=*/ !keepGoing, ErrorClassifier.DEFAULT);
       this.eventHandler = eventHandler;
       this.maxDepth = maxDepth;
-      this.observer = observer;
+      this.errorObserver = new TargetEdgeErrorObserver();
+      ImmutableList.Builder<TargetEdgeObserver> builder = ImmutableList.builder();
+      builder.add(observers);
+      builder.add(errorObserver);
+      this.observers = builder.build();
     }
 
     /**
@@ -311,9 +314,11 @@ final class LabelVisitor {
         final int count) {
       return () -> {
         try {
-          visit(from, attr, targetProvider.getTarget(eventHandler, label), depth + 1, count);
-        } catch (NoSuchThingException e) {
-          observeError(from, label, e);
+          try {
+            visit(from, attr, targetProvider.getTarget(eventHandler, label), depth + 1, count);
+          } catch (NoSuchThingException e) {
+            observeError(from, label, e);
+          }
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
@@ -414,18 +419,22 @@ final class LabelVisitor {
     }
 
     private void observeEdge(Target from, Attribute attribute, Target to) {
-      observer.edge(from, attribute, to);
-      errorObserver.edge(from, attribute, to);
+      for (TargetEdgeObserver observer : observers) {
+        observer.edge(from, attribute, to);
+      }
     }
 
     private void observeNode(Target target) {
-      observer.node(target);
-      errorObserver.node(target);
+      for (TargetEdgeObserver observer : observers) {
+        observer.node(target);
+      }
     }
 
-    private void observeError(Target from, Label label, NoSuchThingException e) {
-      observer.missingEdge(from, label, e);
-      errorObserver.missingEdge(from, label, e);
+    private void observeError(Target from, Label label, NoSuchThingException e)
+        throws InterruptedException {
+      for (TargetEdgeObserver observer : observers) {
+        observer.missingEdge(from, label, e);
+      }
     }
   }
 }

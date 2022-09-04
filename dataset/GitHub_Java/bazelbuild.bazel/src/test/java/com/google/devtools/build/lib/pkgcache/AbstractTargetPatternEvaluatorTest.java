@@ -15,29 +15,29 @@ package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.base.Predicates;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.DelegatingEventHandler;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
-import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
-import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.Pair;
-
-import org.junit.Before;
-
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
+import org.junit.Before;
 
 /**
  * Abstract framework for target pattern evaluation tests. The {@link TargetPatternEvaluatorTest}
@@ -45,23 +45,49 @@ import java.util.TreeSet;
  * be extracted here if they are needed by other classes.
  */
 public abstract class AbstractTargetPatternEvaluatorTest extends PackageLoadingTestCase {
-  protected SkyframeExecutor skyframeExecutor;
-  protected TargetPatternEvaluator parser;
+  protected TargetPatternPreloader parser;
   protected RecordingParsingListener parsingListener;
 
   protected static ResolvedTargets<Target> parseTargetPatternList(
-      TargetPatternEvaluator parser, EventHandler eventHandler,
-      List<String> targetPatterns, boolean keepGoing)
-          throws TargetParsingException, InterruptedException {
+      TargetPatternPreloader parser,
+      ExtendedEventHandler eventHandler,
+      List<String> targetPatterns,
+      boolean keepGoing)
+      throws TargetParsingException, InterruptedException {
     return parseTargetPatternList(
-        parser, eventHandler, targetPatterns, FilteringPolicies.NO_FILTER, keepGoing);
+        PathFragment.EMPTY_FRAGMENT,
+        parser,
+        eventHandler,
+        targetPatterns,
+        keepGoing);
   }
 
   protected static ResolvedTargets<Target> parseTargetPatternList(
-      TargetPatternEvaluator parser, EventHandler eventHandler,
-      List<String> targetPatterns, FilteringPolicy policy,
-      boolean keepGoing) throws TargetParsingException, InterruptedException {
-    return parser.parseTargetPatternList(eventHandler, targetPatterns, policy, keepGoing);
+      PathFragment relativeWorkingDirectory,
+      TargetPatternPreloader parser,
+      ExtendedEventHandler eventHandler,
+      List<String> targetPatterns,
+      boolean keepGoing)
+      throws TargetParsingException, InterruptedException {
+    List<String> positivePatterns =
+        targetPatterns.stream()
+            .map((s) -> s.startsWith("-") ? s.substring(1) : s)
+            .collect(Collectors.toList());
+    Map<String, Collection<Target>> resolvedTargetsMap =
+        parser.preloadTargetPatterns(
+            eventHandler, relativeWorkingDirectory, positivePatterns, keepGoing);
+    ResolvedTargets.Builder<Target> result = ResolvedTargets.builder();
+    for (String pattern : targetPatterns) {
+      if (pattern.startsWith("-")) {
+        String positivePattern = pattern.substring(1);
+        Collection<Target> resolvedTargets = resolvedTargetsMap.get(positivePattern);
+        result.filter(Predicates.not(Predicates.in(resolvedTargets)));
+      } else {
+        Collection<Target> resolvedTargets = resolvedTargetsMap.get(pattern);
+        result.addAll(resolvedTargets);
+      }
+    }
+    return result.build();
   }
 
   /**
@@ -78,41 +104,41 @@ public abstract class AbstractTargetPatternEvaluatorTest extends PackageLoadingT
 
   @Before
   public final void initializeParser() throws Exception {
-    skyframeExecutor =
-        super.createSkyframeExecutor(ImmutableList.<PackageFactory.EnvironmentExtension>of(),
-            Preprocessor.Factory.Supplier.NullSupplier.INSTANCE, ConstantRuleVisibility.PRIVATE,
-            ruleClassProvider.getDefaultsPackageContent());
-    parser = skyframeExecutor.getPackageManager().newTargetPatternEvaluator();
+    setUpSkyframe(ConstantRuleVisibility.PRIVATE);
+    parser = skyframeExecutor.newTargetPatternPreloader();
     parsingListener = new RecordingParsingListener(reporter);
   }
 
   protected static Set<Label> labels(String... labelStrings) throws LabelSyntaxException {
     Set<Label> labels = new HashSet<>();
     for (String labelString : labelStrings) {
-      labels.add(Label.parseAbsolute(labelString));
+      labels.add(Label.parseAbsolute(labelString, ImmutableMap.of()));
     }
     return labels;
   }
 
   protected Pair<Set<Label>, Boolean> parseListKeepGoing(String... patterns)
       throws TargetParsingException, InterruptedException {
-    ResolvedTargets<Target> result = parseTargetPatternList(parser, parsingListener,
-            Arrays.asList(patterns), true);
+    ResolvedTargets<Target> result =
+        parseTargetPatternList(parser, parsingListener, Arrays.asList(patterns), true);
     return Pair.of(targetsToLabels(result.getTargets()), result.hasError());
   }
 
   /** Event handler that records all parsing errors. */
-  protected static final class RecordingParsingListener extends DelegatingEventHandler
-      implements ParseFailureListener {
+  protected static final class RecordingParsingListener extends DelegatingEventHandler {
     protected final List<Pair<String, String>> events = new ArrayList<>();
 
-    private RecordingParsingListener(EventHandler delegate) {
+    private RecordingParsingListener(ExtendedEventHandler delegate) {
       super(delegate);
     }
 
     @Override
-    public void parsingError(String targetPattern, String message) {
-      events.add(Pair.of(targetPattern, message));
+    public void post(Postable post) {
+      super.post(post);
+      if (post instanceof ParsingFailedEvent) {
+        ParsingFailedEvent e = (ParsingFailedEvent) post;
+        events.add(Pair.of(e.getPattern(), e.getMessage()));
+      }
     }
 
     protected void assertEmpty() {

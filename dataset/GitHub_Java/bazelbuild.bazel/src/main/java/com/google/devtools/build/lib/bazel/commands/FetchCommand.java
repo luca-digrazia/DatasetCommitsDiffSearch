@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
 import com.google.devtools.build.lib.runtime.commands.QueryCommand;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.IOException;
 import java.util.EnumSet;
@@ -54,6 +55,9 @@ public final class FetchCommand implements BlazeCommand {
   //                  transitive closure for local repositories.
 
   public static final String NAME = "fetch";
+
+  @Override
+  public void editOptions(OptionsParser optionsParser) { }
 
   @Override
   public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
