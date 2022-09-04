@@ -1,7 +1,6 @@
 package io.quarkus.jaeger.runtime;
 
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.function.Function;
 
 import org.jboss.logging.Logger;
@@ -77,12 +76,6 @@ public class JaegerDeploymentRecorder {
     private <T> void initTracerProperty(String property, Optional<T> value, Function<T, String> accessor) {
         if (value.isPresent()) {
             System.setProperty(property, accessor.apply(value.get()));
-        }
-    }
-
-    private void initTracerProperty(String property, OptionalInt value, Function<Integer, String> accessor) {
-        if (value.isPresent()) {
-            System.setProperty(property, accessor.apply(Integer.valueOf(value.getAsInt())));
         }
     }
 }
