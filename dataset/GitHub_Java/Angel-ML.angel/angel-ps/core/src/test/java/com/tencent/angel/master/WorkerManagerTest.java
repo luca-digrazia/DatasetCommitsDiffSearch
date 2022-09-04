@@ -105,6 +105,7 @@ public class WorkerManagerTest {
     conf.set(AngelConfiguration.ANGEL_INPUTFORMAT_CLASS, CombineTextInputFormat.class.getName());
     conf.set(AngelConfiguration.ANGEL_SAVE_MODEL_PATH, LOCAL_FS + TMP_PATH + "/out");
     conf.set(AngelConfiguration.ANGEL_TRAIN_DATA_PATH, LOCAL_FS + TMP_PATH + "/in");
+    conf.set(AngelConfiguration.ANGEL_LOG_PATH, LOCAL_FS + TMP_PATH + "/log");
 
     conf.setInt(AngelConfiguration.ANGEL_WORKERGROUP_NUMBER, 1);
     conf.setInt(AngelConfiguration.ANGEL_PS_NUMBER, 1);
@@ -153,7 +154,7 @@ public class WorkerManagerTest {
 
   @Test
   public void testWorkerManager() {
-    LOG.info("===========================testWorkerManager===============================");
+    LOG.info("===========================testWorkerManager start===============================");
     AngelApplicationMaster angelAppMaster = LocalClusterContext.get().getMaster().getAppMaster();
     assertTrue(angelAppMaster != null);
 
@@ -192,11 +193,12 @@ public class WorkerManagerTest {
     AMTask task1 = taskMap.get(task1Id);
     assertTrue(task0 != null);
     assertTrue(task1 != null);
+    LOG.info("===========================testWorkerManager end===============================");
   }
 
   @Test
   public void testWorkerDone() throws IOException, ServiceException, InterruptedException {
-    LOG.info("===========================testWorkerDone===============================");
+    LOG.info("===========================testWorkerDone start===============================");
     Worker worker = LocalClusterContext.get().getWorker(worker0Attempt0Id).getWorker();
     Location masterLoc =
         LocalClusterContext.get().getMaster().getAppMaster().getAppContext().getMasterService()
@@ -234,12 +236,13 @@ public class WorkerManagerTest {
             .setWorkerAttemptId(ProtobufUtil.convertToIdProto(worker1Attempt0Id)).build();
     response = master.workerDone(null, registeRequest);
     assertEquals(response.getCommand(), WorkerCommandProto.W_SHUTDOWN);
+    LOG.info("===========================testWorkerDone end===============================");
   }
 
 
   @Test
   public void testWorkerError() throws IOException, ServiceException, InterruptedException {
-    LOG.info("===========================testWorkerError===============================");
+    LOG.info("===========================testWorkerError start===============================");
 
     AngelApplicationMaster angelAppMaster = LocalClusterContext.get().getMaster().getAppMaster();
     WorkerManager workerManager = angelAppMaster.getAppContext().getWorkerManager();
@@ -458,7 +461,7 @@ public class WorkerManagerTest {
     response = master.workerError(null, request);
     assertEquals(response.getCommand(), WorkerCommandProto.W_SUCCESS);
 
-    Thread.sleep(1000);
+    Thread.sleep(5000);
 
     assertEquals(worker0Attempt3.getState(), WorkerAttemptState.FAILED);
     List<String> attempt3Diagnostics = worker0Attempt3.getDiagnostics();
@@ -485,6 +488,7 @@ public class WorkerManagerTest {
         "WorkerAttempt_0_0_3 failed due to: task0 failed:disk write failed.");
     assertEquals(worker0Group.getState(), AMWorkerGroupState.FAILED);
     assertEquals(angelAppMaster.getAppContext().getApp().getInternalState(), AppState.FAILED);
+    LOG.info("===========================testWorkerError end===============================");
   }
 
   @After
