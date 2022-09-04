@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -31,7 +31,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  *
@@ -154,29 +153,5 @@ public class GradientTreeBoostTest {
         test(Loss.huber(0.9), "cal_housing", CalHousing.formula, CalHousing.data, 62115.9896);
         test(Loss.huber(0.9), "puma8nh", Puma8NH.formula, Puma8NH.data, 3.2435);
         test(Loss.huber(0.9), "kin8nm", Kin8nm.formula, Kin8nm.data, 0.1795);
-    }
-
-    @Test
-    public void testShap() {
-        MathEx.setSeed(19650218); // to get repeatable results.
-        GradientTreeBoost model = GradientTreeBoost.fit(BostonHousing.formula, BostonHousing.data, Loss.ls(), 100, 3, 10, 5, 0.01, 0.7);
-        double[] shap = model.shap(BostonHousing.data.stream().parallel());
-
-        String[] fields = java.util.Arrays.stream(model.schema().fields()).map(field -> field.name).toArray(String[]::new);
-        smile.sort.QuickSort.sort(shap, fields);
-
-        System.out.println("----- SHAP importance -----");
-        for (int i = shap.length - 1; i >= 0; i--) {
-            System.out.format("%-15s %.4f%n", fields[i], shap[i]);
-        }
-
-        assertTrue(fields[shap.length - 1].equals("LSTAT"));
-        assertEquals(2.3696, shap[shap.length - 1], 1E-4);
-        assertTrue(fields[shap.length - 2].equals("RM"));
-        assertEquals(1.4839, shap[shap.length - 2], 1E-4);
-        assertTrue(fields[shap.length - 3].equals("CRIM"));
-        assertEquals(0.1999, shap[shap.length - 3], 1E-4);
-        assertTrue(fields[shap.length - 4].equals("NOX"));
-        assertEquals(0.1617, shap[shap.length - 4], 1E-4);
     }
 }
