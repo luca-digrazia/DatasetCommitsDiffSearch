@@ -45,7 +45,6 @@ import com.google.devtools.build.android.desugar.nest.NestAnalyzer;
 import com.google.devtools.build.android.desugar.nest.NestDesugaring;
 import com.google.devtools.build.android.desugar.nest.NestDigest;
 import com.google.devtools.build.android.desugar.strconcat.IndyStringConcatDesugaring;
-import com.google.devtools.build.android.desugar.typeannotation.LocalTypeAnnotationUse;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import com.google.devtools.common.options.Option;
@@ -91,7 +90,7 @@ public class Desugar {
     @Option(
         name = "input",
         allowMultiple = true,
-        defaultValue = "null",
+        defaultValue = "",
         category = "input",
         documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -105,7 +104,7 @@ public class Desugar {
     @Option(
         name = "classpath_entry",
         allowMultiple = true,
-        defaultValue = "null",
+        defaultValue = "",
         category = "input",
         documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -118,7 +117,7 @@ public class Desugar {
     @Option(
         name = "bootclasspath_entry",
         allowMultiple = true,
-        defaultValue = "null",
+        defaultValue = "",
         category = "input",
         documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -159,7 +158,7 @@ public class Desugar {
     @Option(
         name = "output",
         allowMultiple = true,
-        defaultValue = "null",
+        defaultValue = "",
         category = "output",
         documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -279,7 +278,7 @@ public class Desugar {
     /** Type prefixes that we'll move to a custom package. */
     @Option(
         name = "rewrite_core_library_prefix",
-        defaultValue = "null",
+        defaultValue = "", // ignored
         allowMultiple = true,
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -289,7 +288,7 @@ public class Desugar {
     /** Interfaces whose default and static interface methods we'll emulate. */
     @Option(
         name = "emulate_core_library_interface",
-        defaultValue = "null",
+        defaultValue = "", // ignored
         allowMultiple = true,
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -299,7 +298,7 @@ public class Desugar {
     /** Members that we will retarget to the given new owner. */
     @Option(
         name = "retarget_core_library_member",
-        defaultValue = "null",
+        defaultValue = "", // ignored
         allowMultiple = true,
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -311,7 +310,7 @@ public class Desugar {
     /** Members not to rewrite. */
     @Option(
         name = "dont_rewrite_core_library_invocation",
-        defaultValue = "null",
+        defaultValue = "", // ignored
         allowMultiple = true,
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -321,7 +320,7 @@ public class Desugar {
     /** Converter functions from undesugared to desugared core library types. */
     @Option(
         name = "from_core_library_conversion",
-        defaultValue = "null",
+        defaultValue = "", // ignored
         allowMultiple = true,
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -333,7 +332,7 @@ public class Desugar {
 
     @Option(
         name = "preserve_core_library_override",
-        defaultValue = "null",
+        defaultValue = "", // ignored
         allowMultiple = true,
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.UNKNOWN},
@@ -1067,8 +1066,6 @@ public class Desugar {
     }
 
     visitor = NioBufferRefConverter.create(visitor, rewriter.getPrefixer());
-
-    visitor = new LocalTypeAnnotationUse(visitor);
 
     return visitor;
   }

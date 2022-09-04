@@ -33,37 +33,24 @@ public abstract class ClassAttributeRecord implements TypeMappable<ClassAttribut
     return new AutoValue_ClassAttributeRecord.Builder();
   }
 
-  public final boolean hasAttributeRecordFor(ClassName className) {
-    return record().containsKey(className);
-  }
-
-  public final int getMajorVersion(ClassName className) {
-    return requireClassAttributes(className).majorVersion();
-  }
-
   public final Optional<ClassName> getNestHost(ClassName className) {
-    return requireClassAttributes(className).nestHost();
+    ClassAttributes classAttributes = record().get(className);
+    checkNotNull(
+        classAttributes,
+        "Expected recorded ClassAttributes for (%s). Available record: %s",
+        className,
+        record().keySet());
+    return classAttributes.nestHost();
   }
 
   public final ImmutableSet<ClassName> getNestMembers(ClassName className) {
-    return requireClassAttributes(className).nestMembers();
-  }
-
-  public final ImmutableSet<MethodKey> getPrivateInstanceMethods(ClassName className) {
-    return requireClassAttributes(className).privateInstanceMethods();
-  }
-
-  public final ImmutableSet<MethodKey> getDesugarIgnoredMethods(ClassName className) {
-    return requireClassAttributes(className).desugarIgnoredMethods();
-  }
-
-  /** Gets the non-null class attributes record for the specified className. */
-  private ClassAttributes requireClassAttributes(ClassName className) {
-    return checkNotNull(
-        record().get(className),
-        "Expected recorded ClassAttributes for (%s). Available in record: (%s)",
+    ClassAttributes classAttributes = record().get(className);
+    checkNotNull(
+        classAttributes,
+        "Expected recorded ClassAttributes for (%s). Available record: %s",
         className,
         record().keySet());
+    return classAttributes.nestMembers();
   }
 
   @Override

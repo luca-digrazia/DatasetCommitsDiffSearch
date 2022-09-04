@@ -53,7 +53,7 @@ final class CrossMateMainCollector extends ClassVisitor {
 
   public CrossMateMainCollector(
       ClassMemberRecordBuilder memberRecord, ClassAttributeRecordBuilder classAttributeRecord) {
-    super(Opcodes.ASM8);
+    super(Opcodes.ASM7);
     this.memberRecord = memberRecord;
     this.classAttributeRecord = classAttributeRecord;
   }
@@ -92,9 +92,6 @@ final class CrossMateMainCollector extends ClassVisitor {
   public MethodVisitor visitMethod(
       int access, String name, String descriptor, String signature, String[] exceptions) {
     MethodKey methodKey = MethodKey.create(className, name, descriptor);
-    if ((access & Opcodes.ACC_PRIVATE) != 0 && (access & Opcodes.ACC_STATIC) == 0) {
-      classAttributesBuilder.addPrivateInstanceMethod(methodKey);
-    }
     if ((access & Opcodes.ACC_PRIVATE) != 0 && !isInDeclOmissionList(methodKey)) {
       stagingMemberRecord.logMemberDecl(methodKey, classAccessCode, access);
     }
@@ -160,7 +157,7 @@ final class CrossMateMainCollector extends ClassVisitor {
         MethodVisitor methodVisitor,
         MethodKey enclosingMethodKey,
         ClassMemberRecordBuilder memberRecord) {
-      super(Opcodes.ASM8, methodVisitor);
+      super(Opcodes.ASM7, methodVisitor);
       this.enclosingMethodKey = enclosingMethodKey;
       this.memberRecord = memberRecord;
     }
