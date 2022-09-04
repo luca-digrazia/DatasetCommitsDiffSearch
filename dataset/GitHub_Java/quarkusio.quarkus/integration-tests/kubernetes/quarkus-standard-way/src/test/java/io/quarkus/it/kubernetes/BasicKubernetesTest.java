@@ -55,8 +55,7 @@ public class BasicKubernetesTest {
         final Path kubernetesDir = prodModeTestResults.getBuildDir().resolve("kubernetes");
         assertThat(kubernetesDir)
                 .isDirectoryContaining(p -> p.getFileName().endsWith("kubernetes.json"))
-                .isDirectoryContaining(p -> p.getFileName().endsWith("kubernetes.yml"))
-                .satisfies(p -> assertThat(p.toFile().listFiles()).hasSize(2));
+                .isDirectoryContaining(p -> p.getFileName().endsWith("kubernetes.yml"));
         List<HasMetadata> kubernetesList = DeserializationUtil
                 .deserializeAsList(kubernetesDir.resolve("kubernetes.yml"));
 
@@ -65,15 +64,14 @@ public class BasicKubernetesTest {
         assertThat(kubernetesList.get(0)).isInstanceOfSatisfying(Deployment.class, d -> {
             assertThat(d.getMetadata()).satisfies(m -> {
                 assertThat(m.getName()).isEqualTo("basic");
-                assertThat(m.getNamespace()).isNull();
             });
 
             assertThat(d.getSpec()).satisfies(deploymentSpec -> {
                 assertThat(deploymentSpec.getTemplate()).satisfies(t -> {
                     assertThat(t.getSpec()).satisfies(podSpec -> {
-                        assertThat(podSpec.getContainers()).singleElement().satisfies(container -> {
+                        assertThat(podSpec.getContainers()).hasOnlyOneElementSatisfying(container -> {
                             assertThat(container.getImagePullPolicy()).isEqualTo("Always"); // expect the default value
-                            assertThat(container.getPorts()).singleElement().satisfies(p -> {
+                            assertThat(container.getPorts()).hasOnlyOneElementSatisfying(p -> {
                                 assertThat(p.getContainerPort()).isEqualTo(8080);
                             });
                         });
@@ -83,20 +81,13 @@ public class BasicKubernetesTest {
         });
 
         assertThat(kubernetesList.get(1)).isInstanceOfSatisfying(Service.class, s -> {
-            assertThat(s.getMetadata()).satisfies(m -> {
-                assertThat(m.getNamespace()).isNull();
-            });
             assertThat(s.getSpec()).satisfies(spec -> {
-                assertThat(spec.getPorts()).hasSize(1).singleElement().satisfies(p -> {
+                assertThat(spec.getPorts()).hasSize(1).hasOnlyOneElementSatisfying(p -> {
                     assertThat(p.getPort()).isEqualTo(8080);
                 });
             });
         });
 
-        assertThat(kubernetesList.get(2)).isInstanceOfSatisfying(ServiceAccount.class, sa -> {
-            assertThat(sa.getMetadata()).satisfies(m -> {
-                assertThat(m.getNamespace()).isNull();
-            });
-        });
+        assertThat(kubernetesList.get(2)).isInstanceOf(ServiceAccount.class);
     }
 }
