@@ -7,8 +7,11 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.FieldDescriptor;
@@ -31,13 +34,21 @@ public class ProxyFactory<T> {
 
     private boolean classDefined = false;
     private final Object lock = new Object();
+    private Constructor<?> constructor;
 
     public ProxyFactory(ProxyConfiguration<T> configuration) {
-        this.proxyName = Objects.requireNonNull(configuration.getProxyName(), "proxyName must be set");
+        Objects.requireNonNull(configuration.getAnchorClass(), "anchorClass must be set");
+        Objects.requireNonNull(configuration.getProxyNameSuffix(), "proxyNameSuffix must be set");
+        this.proxyName = configuration.getProxyName();
 
         Class<T> superClass = configuration.getSuperClass() != null ? configuration.getSuperClass() : (Class<T>) Object.class;
         this.superClassName = superClass.getName();
-        if (!hasNoArgsConstructor(superClass)) {
+
+        if (!configuration.isAllowPackagePrivate() && !Modifier.isPublic(superClass.getModifiers())) {
+            throw new IllegalArgumentException(
+                    "A proxy cannot be created for class " + this.superClassName + " because the it is not public");
+        }
+        if (!hasNoArgsConstructor(superClass, configuration.isAllowPackagePrivate())) {
             throw new IllegalArgumentException(
                     "A proxy cannot be created for class " + this.superClassName
                             + " because it does contain a no-arg constructor");
@@ -45,10 +56,6 @@ public class ProxyFactory<T> {
         if (Modifier.isFinal(superClass.getModifiers())) {
             throw new IllegalArgumentException(
                     "A proxy cannot be created for class " + this.superClassName + " because it is a final class");
-        }
-        if (!Modifier.isPublic(superClass.getModifiers())) {
-            throw new IllegalArgumentException(
-                    "A proxy cannot be created for class " + this.superClassName + " because the it is not public");
         }
 
         Objects.requireNonNull(configuration.getClassLoader(), "classLoader must be set");
@@ -61,29 +68,49 @@ public class ProxyFactory<T> {
         }
 
         this.classBuilder = ClassCreator.builder()
-                .classOutput(new InjectIntoClassloaderClassOutput(configuration.getClassLoader())).className(this.proxyName)
+                .classOutput(configuration.getClassOutput() != null ? configuration.getClassOutput()
+                        : new InjectIntoClassloaderClassOutput(configuration.getClassLoader()))
+                .className(this.proxyName)
                 .superClass(this.superClassName);
         if (!configuration.getAdditionalInterfaces().isEmpty()) {
             this.classBuilder.interfaces(configuration.getAdditionalInterfaces().toArray(new Class[0]));
         }
     }
 
-    private boolean hasNoArgsConstructor(Class<?> clazz) {
-        for (Constructor<?> constructor : clazz.getConstructors()) {
+    private boolean hasNoArgsConstructor(Class<?> clazz, boolean allowPackagePrivate) {
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
             if (constructor.getParameterCount() == 0) {
-                return true;
+                if (allowPackagePrivate) {
+                    return !Modifier.isPrivate(constructor.getModifiers());
+                }
+                return Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers());
             }
         }
         return false;
     }
 
     private void addMethodsOfClass(Class<?> clazz) {
-        for (Method methodInfo : clazz.getMethods()) {
+        addMethodsOfClass(clazz, new HashSet<>());
+    }
+
+    private void addMethodsOfClass(Class<?> clazz, Set<MethodKey> seen) {
+        for (Method methodInfo : clazz.getDeclaredMethods()) {
+            MethodKey key = new MethodKey(methodInfo.getReturnType(), methodInfo.getName(), methodInfo.getParameterTypes());
+            if (seen.contains(key)) {
+                continue;
+            }
+            seen.add(key);
+            if (methodInfo.getName().equals("finalize") && methodInfo.getParameterCount() == 0) {
+                continue;
+            }
             if (!Modifier.isStatic(methodInfo.getModifiers()) &&
                     !Modifier.isFinal(methodInfo.getModifiers()) &&
                     !methodInfo.getName().equals("<init>")) {
                 methods.add(methodInfo);
             }
+        }
+        if (clazz.getSuperclass() != null) {
+            addMethodsOfClass(clazz.getSuperclass(), seen);
         }
     }
 
@@ -91,6 +118,11 @@ public class ProxyFactory<T> {
         synchronized (lock) {
             if (!classDefined) {
                 doDefineClass();
+                try {
+                    constructor = loadClass().getConstructor(InvocationHandler.class);
+                } catch (NoSuchMethodException e) {
+                    throw new RuntimeException(e);
+                }
                 classDefined = true;
             }
         }
@@ -122,7 +154,7 @@ public class ProxyFactory<T> {
                     // method = clazz.getDeclaredMethod(...)
 
                     ResultHandle getDeclaredMethodParamsArray = mc.newArray(Class.class,
-                            mc.load(methodInfo.getParameterCount()));
+                            methodInfo.getParameterCount());
                     for (int i = 0; i < methodInfo.getParameterCount(); i++) {
                         ResultHandle paramClass = mc.loadClass(methodInfo.getParameters()[i].getType());
                         mc.writeArrayValue(getDeclaredMethodParamsArray, i, paramClass);
@@ -135,7 +167,7 @@ public class ProxyFactory<T> {
 
                     // result = invocationHandler.invoke(...)
 
-                    ResultHandle invokeParamsArray = mc.newArray(Object.class, mc.load(methodInfo.getParameterCount()));
+                    ResultHandle invokeParamsArray = mc.newArray(Object.class, methodInfo.getParameterCount());
                     for (int i = 0; i < methodInfo.getParameterCount(); i++) {
                         mc.writeArrayValue(invokeParamsArray, i, mc.getMethodParam(i));
                     }
@@ -169,8 +201,9 @@ public class ProxyFactory<T> {
     public T newInstance(InvocationHandler handler) throws IllegalAccessException, InstantiationException {
         synchronized (lock) {
             try {
-                return defineClass().getConstructor(InvocationHandler.class).newInstance(handler);
-            } catch (NoSuchMethodException | InvocationTargetException e) {
+                defineClass();
+                return (T) constructor.newInstance(handler);
+            } catch (InvocationTargetException e) {
                 // if this happens, we have not created the proxy correctly
                 throw new IllegalStateException(e);
             }
@@ -187,4 +220,34 @@ public class ProxyFactory<T> {
         }
     }
 
+    static class MethodKey {
+        final Class<?> returnType;
+        final String name;
+        final Class<?>[] params;
+
+        MethodKey(Class<?> returnType, String name, Class<?>[] params) {
+            this.returnType = returnType;
+            this.name = name;
+            this.params = params;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            MethodKey methodKey = (MethodKey) o;
+            return Objects.equals(returnType, methodKey.returnType) &&
+                    Objects.equals(name, methodKey.name) &&
+                    Arrays.equals(params, methodKey.params);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = Objects.hash(returnType, name);
+            result = 31 * result + Arrays.hashCode(params);
+            return result;
+        }
+    }
 }
