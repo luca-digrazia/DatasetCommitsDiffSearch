@@ -25,8 +25,9 @@ import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import java.util.Set;
-import java.util.UUID;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.bson.types.ObjectId;
 import org.graylog2.Core;
 
 /**
@@ -34,14 +35,15 @@ import org.graylog2.Core;
  */
 public class AMQPQueueConfiguration {
     
-    private static final Logger LOG = Logger.getLogger(AMQPQueueConfiguration.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AMQPQueueConfiguration.class);
     
     public enum InputType { GELF, SYSLOG, UNKNOWN }
     
+    private ObjectId id;
     private String exchange;
     private String routingKey;
+    private int ttl;
     private InputType inputType;
-    private String gl2NodeId;
     
     private String queueName;
     
@@ -49,17 +51,17 @@ public class AMQPQueueConfiguration {
         Set<AMQPQueueConfiguration> configs = Sets.newHashSet();
 
         DBCollection coll = server.getMongoConnection().getDatabase().getCollection("amqp_configurations");
-        DBObject query = new BasicDBObject();
-        query.put("disabled", new BasicDBObject("$ne", true));
-        DBCursor cur = coll.find(query);
+        DBCursor cur = coll.find(new BasicDBObject());
 
         while (cur.hasNext()) {
             try {
                 DBObject config = cur.next();
 
                 configs.add(new AMQPQueueConfiguration(
+                            (ObjectId) config.get("_id"),
                             (String) config.get("exchange"),
                             (String) config.get("routing_key"),
+                            (Integer) config.get("ttl"),
                             inputTypeFromString((String) config.get("input_type")),
                             server.getServerId()
                         ));
@@ -71,13 +73,28 @@ public class AMQPQueueConfiguration {
         return configs;
     }
     
-    public AMQPQueueConfiguration(String exchange, String routingKey, InputType inputType, String gl2NodeId) {
+    public static Set<String> fetchAllIds(Core server) {
+        Set<String> configIDs = Sets.newHashSet();
+        
+        for (AMQPQueueConfiguration config : fetchAll(server)) {
+            configIDs.add(config.getId());
+        }
+                
+        return configIDs;
+    }
+    
+    public AMQPQueueConfiguration(ObjectId id, String exchange, String routingKey, int ttl, InputType inputType, String gl2NodeId) {
+        this.id = id;
         this.exchange = exchange;
         this.routingKey = routingKey;
+        this.ttl = ttl;
         this.inputType = inputType;
-        this.gl2NodeId = gl2NodeId;
         
         queueName = generateQueueName();
+    }
+    
+    public String getId() {
+        return id.toString();
     }
     
     public String getExchange() {
@@ -86,6 +103,10 @@ public class AMQPQueueConfiguration {
     
     public String getRoutingKey() {
         return routingKey;
+    }
+    
+    public int getTtl() {
+        return ttl;
     }
     
     public InputType getInputType() {
@@ -111,7 +132,7 @@ public class AMQPQueueConfiguration {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("<").append(exchange).append(":")
+        sb.append(exchange).append(":")
                 .append(routingKey).append(":")
                 .append(inputType);
 
@@ -120,9 +141,9 @@ public class AMQPQueueConfiguration {
     
     private String generateQueueName() {
         StringBuilder sb = new StringBuilder();
-        sb.append("gl2-").append(gl2NodeId).append("-q-")
-                .append(inputType.toString().toLowerCase())
-                .append("-").append(UUID.randomUUID().toString());
+        sb.append("gl2-").append(inputType.toString().toLowerCase())
+                .append("-").append(exchange).append("-")
+                .append(id.toString());
 
         return sb.toString();
     }
