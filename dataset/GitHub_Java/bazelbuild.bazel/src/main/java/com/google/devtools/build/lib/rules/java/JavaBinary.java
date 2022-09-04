@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -40,6 +39,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnfo
 import com.google.devtools.build.lib.rules.java.ProguardHelper.ProguardOutput;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -155,14 +154,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     Artifact executableForRunfiles = null;
     if (createExecutable) {
       // This artifact is named as the rule itself, e.g. //foo:bar_bin -> bazel-bin/foo/bar_bin
-      // On Windows, it's going to be bazel-bin/foo/bar_bin.exe
-      if (OS.getCurrent() == OS.WINDOWS
-          && ruleContext.getConfiguration().enableWindowsExeLauncher()) {
-        executableForRunfiles =
-            ruleContext.getImplicitOutputArtifact(ruleContext.getTarget().getName() + ".exe");
-      } else {
-        executableForRunfiles = ruleContext.createOutputArtifact();
-      }
+      executableForRunfiles = ruleContext.createOutputArtifact();
       filesBuilder.add(classJar).add(executableForRunfiles);
 
       if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
@@ -246,12 +238,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     Artifact executableToRun = executableForRunfiles;
     if (createExecutable) {
-      String javaExecutable;
-      if (semantics.isJavaExecutableSubstitution()) {
-        javaExecutable = JavaCommon.getJavaBinSubstitution(ruleContext, launcher);
-      } else {
-        javaExecutable = JavaCommon.getJavaExecutableForStub(ruleContext, launcher);
-      }
       // Create a shell stub for a Java application
       executableToRun =
           semantics.createStubAction(
@@ -260,7 +246,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
               jvmFlags,
               executableForRunfiles,
               mainClass,
-              javaExecutable);
+              JavaCommon.getJavaBinSubstitution(ruleContext, launcher));
       if (!executableToRun.equals(executableForRunfiles)) {
         filesBuilder.add(executableToRun);
         runfilesBuilder.addArtifact(executableToRun);
@@ -278,7 +264,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     // TODO(bazel-team): if (getOptions().sourceJars) then make this a dummy prerequisite for the
     // DeployArchiveAction ? Needs a few changes there as we can't pass inputs
     SingleJarActionBuilder.createSourceJarAction(ruleContext,
-        ImmutableMap.<PathFragment, Artifact>of(), transitiveSourceJars,
+        ImmutableMap.<PathFragment, Artifact>of(), transitiveSourceJars.toCollection(),
         ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_DEPLOY_SOURCE_JAR));
 
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
@@ -322,7 +308,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     Runfiles defaultRunfiles = runfilesBuilder.build();
 
     RunfilesSupport runfilesSupport = null;
-    NestedSetBuilder<Artifact> extraFilesToRunBuilder = NestedSetBuilder.stableOrder();
     if (createExecutable) {
       List<String> extraArgs =
           new ArrayList<>(semantics.getExtraArguments(ruleContext, common.getSrcsArtifacts()));
@@ -349,7 +334,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       runfilesSupport =
           RunfilesSupport.withExecutable(
               ruleContext, defaultRunfiles, executableForRunfiles, extraArgs);
-      extraFilesToRunBuilder.add(runfilesSupport.getRunfilesMiddleman());
     }
 
     RunfilesProvider runfilesProvider = RunfilesProvider.withData(
@@ -424,7 +408,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         // shell script), on Windows they are different (the executable to run is a batch file, the
         // executable for runfiles is the shell script).
         .setRunfilesSupport(runfilesSupport, executableToRun)
-        .addFilesToRun(extraFilesToRunBuilder.build())
         .add(
             JavaRuntimeClasspathProvider.class,
             new JavaRuntimeClasspathProvider(common.getRuntimeClasspath()))
@@ -519,9 +502,9 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     // Add the JDK files if it comes from the source repository (see java_stub_template.txt).
     TransitiveInfoCollection javabaseTarget = ruleContext.getPrerequisite(":jvm", Mode.TARGET);
-    JavaRuntimeInfo javaRuntime = null;
+    JavaRuntimeProvider javaRuntime = null;
     if (javabaseTarget != null) {
-      javaRuntime = javabaseTarget.get(JavaRuntimeInfo.PROVIDER);
+      javaRuntime = javabaseTarget.get(JavaRuntimeProvider.SKYLARK_CONSTRUCTOR);
       builder.addTransitiveArtifacts(javaRuntime.javaBaseInputs());
 
       // Add symlinks to the C++ runtime libraries under a path that can be built
