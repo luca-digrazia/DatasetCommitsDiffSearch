@@ -341,8 +341,8 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   public Label appleSdk;
 
   @Override
-  public FragmentOptions getHost() {
-    ObjcCommandLineOptions host = (ObjcCommandLineOptions) super.getHost();
+  public FragmentOptions getHost(boolean fallback) {
+    ObjcCommandLineOptions host = (ObjcCommandLineOptions) super.getHost(fallback);
     // This should have the same value in both target and host configurations
     host.objcHeaderScannerTool = this.objcHeaderScannerTool;
     return host;

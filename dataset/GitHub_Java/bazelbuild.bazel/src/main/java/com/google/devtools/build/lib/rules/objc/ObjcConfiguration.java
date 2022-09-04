@@ -15,8 +15,8 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -24,15 +24,14 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.util.Preconditions;
 import javax.annotation.Nullable;
 
 /** A compiler configuration containing flags required for Objective-C compilation. */
-@AutoCodec
 @SkylarkModule(
   name = "objc",
   category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT,
@@ -40,8 +39,6 @@ import javax.annotation.Nullable;
 )
 @Immutable
 public class ObjcConfiguration extends BuildConfiguration.Fragment {
-  public static final ObjectCodec<ObjcConfiguration> CODEC = new ObjcConfiguration_AutoCodec();
-
   @VisibleForTesting
   static final ImmutableList<String> DBG_COPTS =
       ImmutableList.of("-O0", "-DDEBUG=1", "-fstack-protector", "-fstack-protector-all", "-g");
@@ -74,6 +71,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final boolean debugWithGlibcxx;
   @Nullable private final Label extraEntitlements;
   private final boolean deviceDebugEntitlements;
+  private final ObjcCrosstoolMode objcCrosstoolMode;
   private final boolean enableAppleBinaryNativeProtos;
   private final HeaderDiscovery.DotdPruningMode dotdPruningPlan;
   private final boolean experimentalHeaderThinning;
@@ -81,7 +79,8 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final Label objcHeaderScannerTool;
   private final Label appleSdk;
 
-  ObjcConfiguration(ObjcCommandLineOptions objcOptions, BuildConfiguration.Options options) {
+  ObjcConfiguration(ObjcCommandLineOptions objcOptions, BuildConfiguration.Options options,
+      @Nullable BlazeDirectories directories) {
     this.iosSimulatorDevice =
         Preconditions.checkNotNull(objcOptions.iosSimulatorDevice, "iosSimulatorDevice");
     this.iosSimulatorVersion =
@@ -106,6 +105,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.debugWithGlibcxx = objcOptions.debugWithGlibcxx;
     this.extraEntitlements = objcOptions.extraEntitlements;
     this.deviceDebugEntitlements = objcOptions.deviceDebugEntitlements;
+    this.objcCrosstoolMode = objcOptions.objcCrosstoolMode;
     this.enableAppleBinaryNativeProtos = objcOptions.enableAppleBinaryNativeProtos;
     this.dotdPruningPlan =
         objcOptions.useDotdPruning
@@ -115,58 +115,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.objcHeaderThinningPartitionSize = objcOptions.objcHeaderThinningPartitionSize;
     this.objcHeaderScannerTool = objcOptions.objcHeaderScannerTool;
     this.appleSdk = objcOptions.appleSdk;
-  }
-
-  @AutoCodec.Constructor
-  ObjcConfiguration(
-      DottedVersion iosSimulatorVersion,
-      String iosSimulatorDevice,
-      DottedVersion watchosSimulatorVersion,
-      String watchosSimulatorDevice,
-      DottedVersion tvosSimulatorVersion,
-      String tvosSimulatorDevice,
-      boolean generateDsym,
-      boolean generateLinkmap,
-      boolean runMemleaks,
-      ImmutableList<String> copts,
-      CompilationMode compilationMode,
-      ImmutableList<String> fastbuildOptions,
-      boolean enableBinaryStripping,
-      boolean moduleMapsEnabled,
-      String signingCertName,
-      boolean debugWithGlibcxx,
-      Label extraEntitlements,
-      boolean deviceDebugEntitlements,
-      boolean enableAppleBinaryNativeProtos,
-      HeaderDiscovery.DotdPruningMode dotdPruningPlan,
-      boolean experimentalHeaderThinning,
-      int objcHeaderThinningPartitionSize,
-      Label objcHeaderScannerTool,
-      Label appleSdk) {
-    this.iosSimulatorVersion = iosSimulatorVersion;
-    this.iosSimulatorDevice = iosSimulatorDevice;
-    this.watchosSimulatorVersion = watchosSimulatorVersion;
-    this.watchosSimulatorDevice = watchosSimulatorDevice;
-    this.tvosSimulatorVersion = tvosSimulatorVersion;
-    this.tvosSimulatorDevice = tvosSimulatorDevice;
-    this.generateDsym = generateDsym;
-    this.generateLinkmap = generateLinkmap;
-    this.runMemleaks = runMemleaks;
-    this.copts = copts;
-    this.compilationMode = compilationMode;
-    this.fastbuildOptions = fastbuildOptions;
-    this.enableBinaryStripping = enableBinaryStripping;
-    this.moduleMapsEnabled = moduleMapsEnabled;
-    this.signingCertName = signingCertName;
-    this.debugWithGlibcxx = debugWithGlibcxx;
-    this.extraEntitlements = extraEntitlements;
-    this.deviceDebugEntitlements = deviceDebugEntitlements;
-    this.enableAppleBinaryNativeProtos = enableAppleBinaryNativeProtos;
-    this.dotdPruningPlan = dotdPruningPlan;
-    this.experimentalHeaderThinning = experimentalHeaderThinning;
-    this.objcHeaderThinningPartitionSize = objcHeaderThinningPartitionSize;
-    this.objcHeaderScannerTool = objcHeaderScannerTool;
-    this.appleSdk = appleSdk;
   }
 
   /**
@@ -342,6 +290,14 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
       + "application.")
   public boolean useDeviceDebugEntitlements() {
     return deviceDebugEntitlements && compilationMode != CompilationMode.OPT;
+  }
+
+  /**
+   * Returns an {@link ObjcCrosstoolMode} that specifies the circumstances under which a
+   * CROSSTOOL is used for objc in this configuration.
+   */
+  public ObjcCrosstoolMode getObjcCrosstoolMode() {
+    return objcCrosstoolMode;
   }
 
   /** Returns true if apple_binary targets should generate and link Objc protos. */
