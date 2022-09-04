@@ -17,20 +17,21 @@ package com.google.devtools.build.lib.rules.config;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_KEYED_STRING_DICT;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_DICT;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 
 /**
  * Definitions for rule classes that specify or manipulate configuration settings.
@@ -109,14 +110,12 @@ public class ConfigRuleClasses {
    *
    * instance matches all its flag values in the configurable attribute owner's configuration.
    *
-   * <p>This rule isn't accessed through the standard {@link
-   * com.google.devtools.build.lib.analysis.RuleContext#getPrerequisites} interface. This is because
-   * Bazel constructs a rule's configured attribute map *before* its {@link
-   * com.google.devtools.build.lib.analysis.RuleContext} is created (in fact, the map is an input to
-   * the context's constructor). And the config_settings referenced by the rule's configurable
-   * attributes are themselves inputs to that map. So Bazel has special logic to read and properly
-   * apply config_setting instances. See {@link
-   * com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction#getConfigConditions} for
+   * <p>This rule isn't accessed through the standard {@link RuleContext#getPrerequisites}
+   * interface. This is because Bazel constructs a rule's configured attribute map *before* its
+   * {@link RuleContext} is created (in fact, the map is an input to the context's constructor). And
+   * the config_settings referenced by the rule's configurable attributes are themselves inputs to
+   * that map. So Bazel has special logic to read and properly apply config_setting instances. See
+   * {@link com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction#getConfigConditions} for
    * details.
    */
   public static final class ConfigSettingRule implements RuleDefinition {
@@ -372,7 +371,7 @@ public class ConfigRuleClasses {
       <a href="https://docs.bazel.build/versions/master/skylark/config.html#user-defined-build-settings">
       Starlark-defined flags</a>. You can also use <code>--define</code>, but this offers weaker
       support and is not recommended. See
-      <a href="${link common-definitions#configurable-attributes}">here</a> for more discussion.
+      <a href="${link common-definitions#configurable-attributes}"> for more discussion.
     </li>
 
     <li>Avoid repeating identical <code>config_setting</code> definitions in different packages.
