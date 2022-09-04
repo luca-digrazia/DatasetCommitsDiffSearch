@@ -38,7 +38,6 @@ class DynamicExecutor {
 	 *            The parameter types.
 	 * @return Returns the result of dynamically invoking method.
 	 * @throws SecurityException
-	 * @throws NoSuchMethodException
 	 * @throws IllegalArgumentException
 	 * @throws IllegalAccessException
 	 * @throws InvocationTargetException
@@ -76,16 +75,15 @@ class DynamicExecutor {
 	 * @param objectClass
 	 *            The class of object.
 	 * @throws SecurityException
-	 * @throws NoSuchFieldException
 	 * @throws IllegalArgumentException
 	 * @throws IllegalAccessException
 	 */
 	static void setField(Object object, String fieldName, Object value, Class<?> objectClass)
 			throws SecurityException, IllegalArgumentException, IllegalAccessException {
 		try {
-			Field baseObjIdField = objectClass.getDeclaredField(fieldName);
-			baseObjIdField.setAccessible(true);
-			baseObjIdField.set(object, value);
+			Field objectField = objectClass.getDeclaredField(fieldName);
+			objectField.setAccessible(true);
+			objectField.set(object, value);
 		} catch (NoSuchFieldException e) {
 			throw new DataSupportException(DataSupportException.noSuchFieldExceptioin(
 					objectClass.getSimpleName(), fieldName));
@@ -111,9 +109,9 @@ class DynamicExecutor {
 	static Object getField(Object object, String fieldName, Class<?> objectClass)
 			throws IllegalArgumentException, IllegalAccessException {
 		try {
-			Field baseObjIdField = objectClass.getDeclaredField(fieldName);
-			baseObjIdField.setAccessible(true);
-			return baseObjIdField.get(object);
+			Field objectField = objectClass.getDeclaredField(fieldName);
+			objectField.setAccessible(true);
+			return objectField.get(object);
 		} catch (NoSuchFieldException e) {
 			throw new DataSupportException(DataSupportException.noSuchFieldExceptioin(
 					objectClass.getSimpleName(), fieldName));
