@@ -119,7 +119,6 @@ public class SkylarkSemanticsConsistencyTest {
   private static SkylarkSemanticsOptions buildRandomOptions(Random rand) throws Exception {
     return parseOptions(
         // <== Add new options here in alphabetic order ==>
-        "--experimental_enable_repo_mapping=" + rand.nextBoolean(),
         "--incompatible_bzl_disallow_load_after_statement=" + rand.nextBoolean(),
         "--incompatible_depset_is_not_iterable=" + rand.nextBoolean(),
         "--incompatible_depset_union=" + rand.nextBoolean(),
@@ -130,7 +129,6 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_disallow_old_style_args_add=" + rand.nextBoolean(),
         "--incompatible_disallow_slash_operator=" + rand.nextBoolean(),
         "--incompatible_new_actions_api=" + rand.nextBoolean(),
-        "--incompatible_no_support_tools_in_action_inputs=" + rand.nextBoolean(),
         "--incompatible_package_name_is_a_function=" + rand.nextBoolean(),
         "--incompatible_remove_native_git_repository=" + rand.nextBoolean(),
         "--incompatible_remove_native_http_archive=" + rand.nextBoolean(),
@@ -145,7 +143,6 @@ public class SkylarkSemanticsConsistencyTest {
   private static SkylarkSemantics buildRandomSemantics(Random rand) {
     return SkylarkSemantics.builder()
         // <== Add new options here in alphabetic order ==>
-        .experimentalEnableRepoMapping(rand.nextBoolean())
         .incompatibleBzlDisallowLoadAfterStatement(rand.nextBoolean())
         .incompatibleDepsetIsNotIterable(rand.nextBoolean())
         .incompatibleDepsetUnion(rand.nextBoolean())
@@ -156,7 +153,6 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleDisallowOldStyleArgsAdd(rand.nextBoolean())
         .incompatibleDisallowSlashOperator(rand.nextBoolean())
         .incompatibleNewActionsApi(rand.nextBoolean())
-        .incompatibleNoSupportToolsInActionInputs(rand.nextBoolean())
         .incompatiblePackageNameIsAFunction(rand.nextBoolean())
         .incompatibleRemoveNativeGitRepository(rand.nextBoolean())
         .incompatibleRemoveNativeHttpArchive(rand.nextBoolean())
