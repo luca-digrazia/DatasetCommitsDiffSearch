@@ -16,7 +16,6 @@
 package org.androidannotations.test15.menu;
 
 import android.app.Activity;
-import android.os.Bundle;
 import android.view.MenuItem;
 
 import org.androidannotations.annotations.EActivity;
@@ -41,11 +40,6 @@ public class OptionsMenuActivity extends Activity {
 	boolean menuRefreshSelected;
 	boolean multipleMenuItems;
 	boolean menu_add;
-
-	@Override
-	public void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-	}
 
 	@OptionsItem
 	void menuRefreshSelected() {
