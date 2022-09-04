@@ -24,7 +24,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
-import java.util.List;
+import java.util.Iterator;
 
 /**
  * Provides methods to measure the current resource usage of the current process. Also provides some
@@ -142,12 +142,14 @@ public final class ResourceUsage {
       if (file.isDirectory()) {
         return new long[2];
       }
-      List<String> stat =
-          WHITESPACE_SPLITTER.splitToList(Files.asCharSource(file, US_ASCII).read());
-      if (stat.size() < 15) {
-        return new long[2]; // Tolerate malformed input.
+      Iterator<String> stat =
+          WHITESPACE_SPLITTER.split(Files.asCharSource(file, US_ASCII).read()).iterator();
+      for (int i = 0; i < 13; ++i) {
+        stat.next();
       }
-      return new long[] {Long.parseLong(stat.get(13)), Long.parseLong(stat.get(14))};
+      long token13 = Long.parseLong(stat.next());
+      long token14 = Long.parseLong(stat.next());
+      return new long[] {token13, token14};
     } catch (NumberFormatException | IOException e) {
       return new long[2];
     }
