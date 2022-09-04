@@ -390,9 +390,6 @@ public class CppCompileAction extends AbstractAction
     // anyway. Not having to look at them here saves us from requiring and ArtifactExpander, which
     // actionExecutionContext doesn't have at this point. This only works as long as mandatory
     // inputs do not contain headers that are built into a module.
-    for (Artifact source : getIncludeScannerSources()) {
-      undeclaredHeaders.remove(source);
-    }
     for (Artifact header : ccCompilationContext.getDeclaredIncludeSrcs()) {
       undeclaredHeaders.remove(header);
     }
@@ -1221,7 +1218,8 @@ public class CppCompileAction extends AbstractAction
         ImmutableSet.<Artifact>copyOf(getInputs()));
   }
 
-  static String actionNameToMnemonic(String actionName) {
+  @Override
+  public String getMnemonic() {
     switch (actionName) {
       case CppActionNames.OBJC_COMPILE:
       case CppActionNames.OBJCPP_COMPILE:
@@ -1240,11 +1238,6 @@ public class CppCompileAction extends AbstractAction
       default:
         return "CppCompile";
     }
-  }
-
-  @Override
-  public String getMnemonic() {
-    return actionNameToMnemonic(actionName);
   }
 
   @Override
