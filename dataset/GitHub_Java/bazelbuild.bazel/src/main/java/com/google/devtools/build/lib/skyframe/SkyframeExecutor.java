@@ -184,7 +184,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -241,8 +240,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private ActionLogBufferPathGenerator actionLogBufferPathGenerator;
 
   protected BuildDriver buildDriver;
-
-  private final Consumer<SkyframeExecutor> skyframeExecutorConsumerOnInit;
 
   // AtomicReferences are used here as mutable boxes shared with value builders.
   private final AtomicBoolean showLoadingProgress = new AtomicBoolean();
@@ -354,7 +351,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   protected SkyframeExecutor(
-      Consumer<SkyframeExecutor> skyframeExecutorConsumerOnInit,
       EvaluatorSupplier evaluatorSupplier,
       PackageFactory pkgFactory,
       FileSystem fileSystem,
@@ -378,7 +374,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       @Nullable NonexistentFileReceiver nonexistentFileReceiver) {
     // Strictly speaking, these arguments are not required for initialization, but all current
     // callsites have them at hand, so we might as well set them during construction.
-    this.skyframeExecutorConsumerOnInit = skyframeExecutorConsumerOnInit;
     this.evaluatorSupplier = evaluatorSupplier;
     this.pkgFactory = pkgFactory;
     this.shouldUnblockCpuWorkWhenFetchingDeps = shouldUnblockCpuWorkWhenFetchingDeps;
@@ -721,7 +716,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             emittedEventState,
             tracksStateForIncrementality());
     buildDriver = getBuildDriver();
-    skyframeExecutorConsumerOnInit.accept(this);
   }
 
   /**
@@ -2283,7 +2277,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         tsgm);
   }
 
-  public void syncPackageLoading(
+  protected void syncPackageLoading(
       PackageCacheOptions packageCacheOptions,
       PathPackageLocator pathPackageLocator,
       SkylarkSemanticsOptions skylarkSemanticsOptions,
@@ -2571,4 +2565,3 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return buildDriver.evaluate(roots, evaluationContext);
   }
 }
-
