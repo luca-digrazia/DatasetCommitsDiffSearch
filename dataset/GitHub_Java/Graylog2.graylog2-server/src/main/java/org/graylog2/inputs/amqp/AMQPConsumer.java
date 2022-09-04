@@ -62,8 +62,7 @@ public class AMQPConsumer implements Runnable {
     private final Meter handledMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPMessages", "messages", TimeUnit.SECONDS);
     private final Meter handledSyslogMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPSyslogMessages", "messages", TimeUnit.SECONDS);
     private final Meter handledGELFMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPGELFMessages", "messages", TimeUnit.SECONDS);
-    private final Meter reQueuedMessages = Metrics.newMeter(AMQPConsumer.class, "ReQueuedAMQPMessages", "messages", TimeUnit.SECONDS);
-    
+
     public AMQPConsumer(Core server, AMQPQueueConfiguration queueConfig) {
         this.server = server;
         this.queueConfig = queueConfig;
@@ -172,30 +171,35 @@ public class AMQPConsumer implements Runnable {
     	 return new DefaultConsumer(channel) {
              @Override
              public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                try {
-                    // The duplication here is a bit unfortunate. Improve by having a Processor Interface.
-                    switch (queueConfig.getInputType()) {
-                        case GELF:
-                            GELFMessage gelf = new GELFMessage(body);
-                            try {
-                               gelfProcessor.messageReceived(gelf);
-                            } catch (BufferOutOfCapacityException e) {
-                                LOG.warn("ProcessBufferProcessor is out of capacity. Requeuing message!");
-                                channel.basicReject(envelope.getDeliveryTag(), true);
-                                reQueuedMessages.mark();
-                                return;
-                            }
+                 try {
+                     switch (queueConfig.getInputType()) {
+                         case GELF:
+                             GELFMessage gelf = new GELFMessage(body);
                              
-                            handledGELFMessages.mark();
-                            break;
+                             while (true) {
+                                try {
+                                   gelfProcessor.messageReceived(gelf);
+                                   break;
+                                } catch (BufferOutOfCapacityException e) {
+                                    LOG.debug("Buffer out of capacity. Trying again in 250ms.");
+                                    Thread.sleep(250);
+                                    continue;
+                                }
+                             }
+                             
+                             handledGELFMessages.mark();
+                             break;
                          case SYSLOG:
-                            try {
-                                syslogProcessor.messageReceived(new String(body), connection.getAddress());
-                             } catch (BufferOutOfCapacityException e) {
-                                LOG.warn("ProcessBufferProcessor is out of capacity. Requeuing message!");
-                                channel.basicReject(envelope.getDeliveryTag(), true);
-                                reQueuedMessages.mark();
-                                return;
+                             
+                             while (true) {
+                                try {
+                                   syslogProcessor.messageReceived(new String(body), connection.getAddress());
+                                   break;
+                                } catch (BufferOutOfCapacityException e) {
+                                    LOG.debug("Buffer out of capacity. Trying again in 250ms.");
+                                    Thread.sleep(250);
+                                    continue;
+                                }
                              }
 
                              handledSyslogMessages.mark();

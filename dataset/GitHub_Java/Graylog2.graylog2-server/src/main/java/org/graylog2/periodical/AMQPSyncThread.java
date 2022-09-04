@@ -22,8 +22,10 @@ package org.graylog2.periodical;
 import com.google.common.collect.Sets;
 import java.util.Map;
 import java.util.Set;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.graylog2.Core;
+import org.graylog2.activities.Activity;
 import org.graylog2.inputs.amqp.AMQPConsumer;
 import org.graylog2.inputs.amqp.AMQPInput;
 import org.graylog2.inputs.amqp.AMQPQueueConfiguration;
@@ -36,7 +38,7 @@ import org.graylog2.inputs.amqp.AMQPQueueConfiguration;
  */
 public class AMQPSyncThread implements Runnable {
     
-    private static final Logger LOG = Logger.getLogger(AMQPSyncThread.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AMQPSyncThread.class);
     
     public static final int INITIAL_DELAY = 5;
     public static final int PERIOD = 5;
@@ -55,7 +57,10 @@ public class AMQPSyncThread implements Runnable {
         for (AMQPQueueConfiguration config : configs) {
             if (!AMQPInput.getConsumers().containsKey(config.getId())) {
                 // This queue config has no consumers yet. Start one.
-                LOG.info("Spawning AMQP consumer for new AMQP queue config <" + config + ">");
+                String msg = "Spawning AMQP consumer for new AMQP queue config <" + config + ">";
+                LOG.info(msg);
+                graylogServer.getActivityWriter().write(new Activity(msg, AMQPSyncThread.class));
+
                 AMQPConsumer consumer = new AMQPConsumer(graylogServer, config);
                 AMQPInput.getThreadPool().submit(consumer);
                 AMQPInput.getConsumers().put(config.getId(), consumer);
@@ -68,8 +73,15 @@ public class AMQPSyncThread implements Runnable {
             
             for (Map.Entry<String, AMQPConsumer> consumer : AMQPInput.getConsumers().entrySet()) {
                 if (!AMQPQueueConfiguration.fetchAllIds(graylogServer).contains(consumer.getKey())) {
-                    LOG.info("Consumer <" + consumer + "> is not in the configuratio anymore. Stopping it.");
-                    consumer.getValue().disconnect();
+                    String msg = "Consumer <" + consumer.getKey() + "> is not in the configuration anymore. Stopping it.";
+                    LOG.info(msg);
+                    graylogServer.getActivityWriter().write(new Activity(msg, AMQPSyncThread.class));
+
+                    if (graylogServer.isMaster()) {
+                        consumer.getValue().deleteQueueAndDisconnect();
+                    } else {
+                        consumer.getValue().disconnect();
+                    }
                 }
             } 
         }
