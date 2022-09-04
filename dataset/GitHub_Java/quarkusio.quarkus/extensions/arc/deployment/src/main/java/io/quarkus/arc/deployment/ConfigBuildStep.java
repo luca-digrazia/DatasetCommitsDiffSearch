@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.enterprise.context.Dependent;
-import javax.enterprise.inject.CreationException;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.jandex.AnnotationInstance;
@@ -37,7 +36,6 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ConfigurationBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.configuration.definition.RootDefinition;
-import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.smallrye.config.inject.ConfigProducer;
 
@@ -153,17 +151,10 @@ public class ConfigBuildStep {
                 for (RootDefinition rootDefinition : configItem.getReadResult().getAllRoots()) {
                     if (rootDefinition.getConfigPhase() == ConfigPhase.BUILD_AND_RUN_TIME_FIXED
                             || rootDefinition.getConfigPhase() == ConfigPhase.RUN_TIME) {
-                        Class<?> configRootClass = rootDefinition.getConfigurationClass();
-                        context.configure(configRootClass).types(configRootClass)
+                        context.configure(rootDefinition.getConfigurationClass()).types(rootDefinition.getConfigurationClass())
                                 .scope(Dependent.class).creator(mc -> {
                                     // e.g. return Config.ApplicationConfig
-                                    ResultHandle configRoot = mc.readStaticField(rootDefinition.getDescriptor());
-                                    // BUILD_AND_RUN_TIME_FIXED roots are always set before the container is started (in the static initializer of the generated Config class)
-                                    // However, RUN_TIME roots may be not be set when the bean instance is created 
-                                    mc.ifNull(configRoot).trueBranch().throwException(CreationException.class,
-                                            String.format("Config root [%s] with config phase [%s] not initialized yet.",
-                                                    configRootClass.getName(), rootDefinition.getConfigPhase().name()));
-                                    mc.returnValue(configRoot);
+                                    mc.returnValue(mc.readStaticField(rootDefinition.getDescriptor()));
                                 }).done();
                     }
                 }
