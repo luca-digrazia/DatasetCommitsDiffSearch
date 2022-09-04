@@ -11,31 +11,12 @@ import java.util.Map;
  * An aspect providing operations around a method with the {@link UnitOfWork} annotation.
  * It opens a Hibernate session and optionally a transaction.
  * <p>It should be created for every invocation of the method.</p>
- * <p>Usage :</p>
- * <pre>
- * {@code
- *   UnitOfWorkProxyFactory unitOfWorkProxyFactory = ...
- *   UnitOfWork unitOfWork = ...         // get annotation from method.
- *
- *   UnitOfWorkAspect aspect = unitOfWorkProxyFactory.newAspect();
- *   try {
- *     aspect.beforeStart(unitOfWork);
- *     ...                               // perform business logic.
- *     aspect.afterEnd();
- *   } catch (Exception e) {
- *     aspect.onError();
- *     throw e;
- *   } finally {
- *     aspect.onFinish();
- *   }
- * }
- * </pre>
  */
-public class UnitOfWorkAspect {
+class UnitOfWorkAspect {
 
     private final Map<String, SessionFactory> sessionFactories;
 
-    UnitOfWorkAspect(Map<String, SessionFactory> sessionFactories) {
+    public UnitOfWorkAspect(Map<String, SessionFactory> sessionFactories) {
         this.sessionFactories = sessionFactories;
     }
 
@@ -83,9 +64,12 @@ public class UnitOfWorkAspect {
         } catch (Exception e) {
             rollbackTransaction();
             throw e;
+        } finally {
+            session.close();
+            session = null;
+            ManagedSessionContext.unbind(sessionFactory);
         }
-        // We should not close the session to let the lazy loading work during serializing a response to the client.
-        // If the response successfully serialized, then the session will be closed by the `onFinish` method
+
     }
 
     public void onError() {
@@ -96,16 +80,7 @@ public class UnitOfWorkAspect {
         try {
             rollbackTransaction();
         } finally {
-            onFinish();
-        }
-    }
-
-    public void onFinish() {
-        try {
-            if (session != null) {
-                session.close();
-            }
-        } finally {
+            session.close();
             session = null;
             ManagedSessionContext.unbind(sessionFactory);
         }
