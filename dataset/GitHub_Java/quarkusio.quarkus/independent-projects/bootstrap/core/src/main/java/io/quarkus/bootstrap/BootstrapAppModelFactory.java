@@ -193,12 +193,8 @@ public class BootstrapAppModelFactory {
             config.setOffline(offline);
         }
         if (currentProject != null) {
-            config.setCurrentProject(currentProject);
+            config.setWorkspace(currentProject.getWorkspace());
         } else {
-            // Currently projectRoot may be an app location which is not exactly a Maven project dir
-            //if (projectRoot != null && Files.isDirectory(projectRoot)) {
-            //    config.setCurrentProject(projectRoot.toString());
-            //}
             config.setWorkspaceDiscovery(isWorkspaceDiscoveryEnabled());
         }
         return new BootstrapMavenContext(config);
