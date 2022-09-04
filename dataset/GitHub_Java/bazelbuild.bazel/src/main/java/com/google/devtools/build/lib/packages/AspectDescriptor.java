@@ -16,9 +16,10 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableMultimap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.protobuf.TextFormat;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 /**
@@ -29,6 +30,8 @@ import java.util.Objects;
 @Immutable
 @AutoCodec
 public final class AspectDescriptor {
+  public static final ObjectCodec<AspectDescriptor> CODEC = new AspectDescriptor_AutoCodec();
+
   private final AspectClass aspectClass;
   private final AspectParameters aspectParameters;
 
@@ -91,7 +94,7 @@ public final class AspectDescriptor {
     builder.append('[');
     ImmutableMultimap<String, String> attributes = aspectParameters.getAttributes();
     boolean first = true;
-    for (Map.Entry<String, String> attribute : attributes.entries()) {
+    for (Entry<String, String> attribute : attributes.entries()) {
       if (!first) {
         builder.append(',');
       } else {
