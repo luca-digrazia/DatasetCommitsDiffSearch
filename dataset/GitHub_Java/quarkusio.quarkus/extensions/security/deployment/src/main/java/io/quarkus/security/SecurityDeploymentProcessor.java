@@ -235,26 +235,23 @@ class SecurityDeploymentProcessor {
     void addIdentityManager(SecurityTemplate template, BuildProducer<ServletExtensionBuildItem> extension,
             SecurityDomainBuildItem securityDomain, List<IdentityManagerBuildItem> identityManagers,
             List<AuthConfigBuildItem> authConfigs) {
-        // If there are no identityManagers, exit
-        if (identityManagers.size() == 0) {
-            return;
-        }
-
-        // Validate that at most one IdentityManagerBuildItem was created
+        // Validate the at most one IdentityManagerBuildItem was created
         if (identityManagers.size() > 1) {
             throw new IllegalStateException("Multiple IdentityManagerBuildItem seen: " + identityManagers);
         }
-        // Create the configured identity manager
-        IdentityManagerBuildItem identityManager = identityManagers.get(0);
-        // Collect all of the authentication mechanisms and create a ServletExtension to register the Undertow identity manager
-        ArrayList<AuthConfig> allAuthConfigs = new ArrayList<>();
-        for (AuthConfigBuildItem authConfigExt : authConfigs) {
-            AuthConfig ac = authConfigExt.getAuthConfig();
-            allAuthConfigs.add(ac);
+        // Only create an identityManager if one was configured
+        if (identityManagers.size() > 0) {
+            IdentityManagerBuildItem identityManager = identityManagers.get(0);
+            // Collect all of the authentication mechanisms and create a ServletExtension to register the Undertow identity manager
+            ArrayList<AuthConfig> allAuthConfigs = new ArrayList<>();
+            for (AuthConfigBuildItem authConfigExt : authConfigs) {
+                AuthConfig ac = authConfigExt.getAuthConfig();
+                allAuthConfigs.add(ac);
+            }
+            ServletExtension idmExt = template.configureUndertowIdentityManager(securityDomain.getSecurityDomain(),
+                    identityManager.getIdentityManager(), allAuthConfigs);
+            extension.produce(new ServletExtensionBuildItem(idmExt));
         }
-        ServletExtension idmExt = template.configureUndertowIdentityManager(securityDomain.getSecurityDomain(),
-                identityManager.getIdentityManager(), allAuthConfigs);
-        extension.produce(new ServletExtensionBuildItem(idmExt));
     }
 
     /**
