@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.StarlarkImplicitOutputsFunction;
@@ -230,11 +229,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
       StarlarkAttributesCollection.Builder aspectBuilder =
           StarlarkAttributesCollection.builder(this);
       for (Attribute attribute : attributes) {
-        Object defaultValue = attribute.getDefaultValue(ruleContext.getRule());
-        if (defaultValue instanceof ComputedDefault) {
-          defaultValue = ((ComputedDefault) defaultValue).getDefault(ruleContext.attributes());
-        }
-        aspectBuilder.addAttribute(attribute, defaultValue);
+        aspectBuilder.addAttribute(attribute, attribute.getDefaultValue(ruleContext.getRule()));
       }
       this.attributesCollection = aspectBuilder.build();
 
@@ -251,11 +246,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
           continue;
         }
         for (Attribute attribute : aspect.getDefinition().getAttributes().values()) {
-          Object defaultValue = attribute.getDefaultValue(ruleContext.getRule());
-          if (defaultValue instanceof ComputedDefault) {
-            defaultValue = ((ComputedDefault) defaultValue).getDefault(ruleContext.attributes());
-          }
-          ruleBuilder.addAttribute(attribute, defaultValue);
+          ruleBuilder.addAttribute(attribute, attribute.getDefaultValue(ruleContext.getRule()));
         }
       }
 
