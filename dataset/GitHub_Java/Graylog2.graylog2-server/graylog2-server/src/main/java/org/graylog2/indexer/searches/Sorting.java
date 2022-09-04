@@ -1,32 +1,29 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.searches;
 
 import org.elasticsearch.search.sort.SortOrder;
+import org.graylog2.plugin.Message;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
+import java.util.Locale;
+
 public class Sorting {
 
-    public static final Sorting DEFAULT = new Sorting("timestamp", Direction.DESC);
+    public static final Sorting DEFAULT = new Sorting(Message.FIELD_TIMESTAMP, Direction.DESC);
 
     public enum Direction {
         ASC,
@@ -46,8 +43,10 @@ public class Sorting {
     }
 
     public SortOrder asElastic() {
-        return SortOrder.valueOf(direction.toString().toUpperCase());
+        return SortOrder.valueOf(direction.toString().toUpperCase(Locale.ENGLISH));
     }
+
+    public Direction getDirection() { return this.direction; }
 
     public static Sorting fromApiParam(String param) {
         if (param == null || !param.contains(":")) {
@@ -56,7 +55,7 @@ public class Sorting {
 
         String[] parts = param.split(":");
 
-        return new Sorting(parts[0], Direction.valueOf(parts[1].toUpperCase()));
+        return new Sorting(parts[0], Direction.valueOf(parts[1].toUpperCase(Locale.ENGLISH)));
     }
 
 }
