@@ -39,13 +39,16 @@ public class StreamMatcherFilter implements MessageFilter {
     private static final StreamRouter ROUTER = new StreamRouter();
 
     @Override
-    public boolean filter(LogMessage msg, GraylogServer server) {
+    public void filter(LogMessage msg, GraylogServer server) {
         List<Stream> streams = ROUTER.route(msg);
         msg.setStreams(streams);
 
         LOG.debug("Routed message <" + msg.getId() + "> to " + streams.size() + " streams.");
+    }
 
-        // Do not discard message.
+    @Override
+    public boolean discardMessage() {
+        // We are never discarding messages in this filter.
         return false;
     }
 
