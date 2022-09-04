@@ -39,6 +39,7 @@ import org.graylog2.blacklists.BlacklistCache;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.ProcessBuffer;
 import org.graylog2.dashboards.DashboardRegistry;
+import org.graylog2.database.HostCounterCacheImpl;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.indexer.Deflector;
@@ -51,10 +52,9 @@ import org.graylog2.inputs.InputRegistry;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.metrics.jersey2.MetricsDynamicBinding;
-import org.graylog2.periodical.Periodicals;
 import org.graylog2.rest.RestAccessLogFilter;
 import org.graylog2.outputs.OutputRegistry;
-import org.graylog2.metrics.MongoDbMetricsReporter;
+import org.graylog2.periodical.MongoDbMetricsReporter;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Tools;
@@ -124,12 +124,13 @@ public class Core implements GraylogServer, InputHost {
 
     private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
     private ScheduledExecutorService scheduler;
-    private ScheduledExecutorService daemonScheduler;
 
     public static final Version GRAYLOG2_VERSION = ServerVersion.VERSION;
     public static final String GRAYLOG2_CODENAME = "Moose";
 
     private Indexer indexer;
+
+    private HostCounterCacheImpl hostCounterCache;
 
     private Counter benchmarkCounter = new Counter();
     private Counter throughputCounter = new Counter();
@@ -144,7 +145,6 @@ public class Core implements GraylogServer, InputHost {
     private Initializers initializers;
     private InputRegistry inputs;
     private OutputRegistry outputs;
-    private Periodicals periodicals;
 
     private DashboardRegistry dashboards;
     
@@ -224,7 +224,6 @@ public class Core implements GraylogServer, InputHost {
         initializers = new Initializers(this);
         inputs = new InputRegistry(this);
         outputs = new OutputRegistry(this);
-        periodicals = new Periodicals(this);
 
         if (isMaster()) {
             dashboards = new DashboardRegistry(this);
@@ -235,6 +234,8 @@ public class Core implements GraylogServer, InputHost {
 
         systemJobManager = new SystemJobManager(this);
 
+        hostCounterCache = new HostCounterCacheImpl();
+        
         inputCache = new BasicCache();
         outputCache = new BasicCache();
     
@@ -295,13 +296,6 @@ public class Core implements GraylogServer, InputHost {
         deflector.setUp();
 
         scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
-                new ThreadFactoryBuilder()
-                        .setNameFormat("scheduled-%d")
-                        .setDaemon(false)
-                        .build()
-        );
-
-        daemonScheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
                 new ThreadFactoryBuilder()
                         .setNameFormat("scheduled-%d")
                         .setDaemon(true)
@@ -438,10 +432,7 @@ public class Core implements GraylogServer, InputHost {
         bootstrap.setOption("child.tcpNoDelay", true);
         bootstrap.setOption("child.keepAlive", true);
 
-        bootstrap.bind(new InetSocketAddress(
-                configuration.getRestListenUri().getHost(),
-                configuration.getRestListenUri().getPort()
-        ));
+        bootstrap.bind(new InetSocketAddress(configuration.getRestListenUri().getPort()));
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
@@ -485,10 +476,6 @@ public class Core implements GraylogServer, InputHost {
 
     public ScheduledExecutorService getScheduler() {
         return scheduler;
-    }
-
-    public ScheduledExecutorService getDaemonScheduler() {
-        return daemonScheduler;
     }
     
     public void setConfiguration(Configuration configuration) {
@@ -545,6 +532,10 @@ public class Core implements GraylogServer, InputHost {
         return this.alarmCallbacks;
     }
 
+    public HostCounterCacheImpl getHostCounterCache() {
+        return this.hostCounterCache;
+    }
+    
     public Deflector getDeflector() {
         return this.deflector;
     }
@@ -703,10 +694,6 @@ public class Core implements GraylogServer, InputHost {
 
     public OutputRegistry outputs() {
         return outputs;
-    }
-
-    public Periodicals periodicals() {
-        return periodicals;
     }
 
     public DashboardRegistry dashboards() {
