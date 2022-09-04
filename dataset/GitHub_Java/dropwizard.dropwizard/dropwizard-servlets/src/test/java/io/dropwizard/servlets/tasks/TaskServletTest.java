@@ -1,17 +1,31 @@
 package io.dropwizard.servlets.tasks;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMultimap;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import com.codahale.metrics.annotation.ExceptionMetered;
+import com.codahale.metrics.annotation.Metered;
+import com.codahale.metrics.annotation.Timed;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
+import javax.servlet.ReadListener;
+import javax.servlet.ServletException;
+import javax.servlet.ServletInputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
+import static com.codahale.metrics.MetricRegistry.name;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -20,21 +34,19 @@ import static org.mockito.Mockito.when;
 
 public class TaskServletTest {
     private final Task gc = mock(Task.class);
-    private final Task clearCache = mock(Task.class);
+    private final PostBodyTask printJSON = mock(PostBodyTask.class);
 
-    {
-        when(gc.getName()).thenReturn("gc");
-        when(clearCache.getName()).thenReturn("clear-cache");
-    }
-
-    private final TaskServlet servlet = new TaskServlet(new MetricRegistry());
+    private final MetricRegistry metricRegistry = new MetricRegistry();
+    private final TaskServlet servlet = new TaskServlet(metricRegistry);
     private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final HttpServletResponse response = mock(HttpServletResponse.class);
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
+        when(gc.getName()).thenReturn("gc");
+        when(printJSON.getName()).thenReturn("print-json");
         servlet.add(gc);
-        servlet.add(clearCache);
+        servlet.add(printJSON);
     }
 
     @Test
@@ -50,45 +62,109 @@ public class TaskServletTest {
     @Test
     public void runsATaskWhenFound() throws Exception {
         final PrintWriter output = mock(PrintWriter.class);
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
 
         when(request.getMethod()).thenReturn("POST");
         when(request.getPathInfo()).thenReturn("/gc");
-        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of()));
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(Collections.emptyList()));
         when(response.getWriter()).thenReturn(output);
+        when(request.getInputStream()).thenReturn(bodyStream);
 
         servlet.service(request, response);
 
-        verify(gc).execute(ImmutableMultimap.of(), output);
+        verify(gc).execute(Collections.emptyMap(), output);
+    }
+
+    @Test
+    public void responseHasSpecifiedContentType() throws Exception {
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
+
+        when(request.getInputStream()).thenReturn(bodyStream);
+        when(request.getParameterNames()).thenReturn(Collections.emptyEnumeration());
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getPathInfo()).thenReturn("/gc");
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(Collections.emptyList()));
+        when(response.getWriter()).thenReturn(mock(PrintWriter.class));
+
+        when(gc.getResponseContentType()).thenReturn(Optional.of("application/json"));
+
+        servlet.service(request, response);
+
+        verify(response).setContentType("application/json");
+    }
+
+    @Test
+    public void responseHasDefaultContentTypeWhenNoneSpecified() throws Exception {
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
+
+        when(request.getInputStream()).thenReturn(bodyStream);
+        when(request.getParameterNames()).thenReturn(Collections.emptyEnumeration());
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getPathInfo()).thenReturn("/gc");
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(Collections.emptyList()));
+        when(response.getWriter()).thenReturn(mock(PrintWriter.class));
+
+        servlet.service(request, response);
+
+        verify(response).setContentType("text/plain;charset=UTF-8");
     }
 
     @Test
     public void passesQueryStringParamsAlong() throws Exception {
         final PrintWriter output = mock(PrintWriter.class);
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
 
         when(request.getMethod()).thenReturn("POST");
         when(request.getPathInfo()).thenReturn("/gc");
-        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of("runs")));
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(Collections.singletonList("runs")));
         when(request.getParameterValues("runs")).thenReturn(new String[]{"1"});
+        when(request.getInputStream()).thenReturn(bodyStream);
         when(response.getWriter()).thenReturn(output);
 
         servlet.service(request, response);
 
-        verify(gc).execute(ImmutableMultimap.of("runs", "1"), output);
+        verify(gc).execute(Collections.singletonMap("runs", Collections.singletonList("1")), output);
+    }
+
+    @Test
+    public void passesPostBodyAlongToPostBodyTasks() throws Exception {
+        String body = "{\"json\": true}";
+        final PrintWriter output = mock(PrintWriter.class);
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getPathInfo()).thenReturn("/print-json");
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(Collections.emptyList()));
+        when(request.getInputStream()).thenReturn(bodyStream);
+        when(response.getWriter()).thenReturn(output);
+
+        servlet.service(request, response);
+
+        verify(printJSON).execute(Collections.emptyMap(), body, output);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void returnsA500OnExceptions() throws Exception {
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
+
         when(request.getMethod()).thenReturn("POST");
         when(request.getPathInfo()).thenReturn("/gc");
-        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of()));
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(Collections.emptyList()));
+        when(request.getInputStream()).thenReturn(bodyStream);
 
         final PrintWriter output = mock(PrintWriter.class);
         when(response.getWriter()).thenReturn(output);
 
         final RuntimeException ex = new RuntimeException("whoops");
 
-        doThrow(ex).when(gc).execute(any(ImmutableMultimap.class), any(PrintWriter.class));
+        doThrow(ex).when(gc).execute(any(Map.class), any(PrintWriter.class));
 
         servlet.service(request, response);
 
@@ -101,10 +177,161 @@ public class TaskServletTest {
      */
     @Test
     public void verifyTaskExecuteMethod() {
-        try {
-            Task.class.getMethod("execute", ImmutableMultimap.class, PrintWriter.class);
-        } catch (NoSuchMethodException e) {
-            Assert.fail("Execute method for " + Task.class.getName() + " not found");
+        assertThatCode(() -> Task.class.getMethod("execute", Map.class, PrintWriter.class))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    public void verifyPostBodyTaskExecuteMethod() {
+        assertThatCode(() -> PostBodyTask.class.getMethod("execute", Map.class, String.class, PrintWriter.class))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    public void returnAllTaskNamesLexicallyOnGet() throws Exception {
+        try (StringWriter sw = new StringWriter();
+             PrintWriter pw = new PrintWriter(sw)) {
+            when(request.getMethod()).thenReturn("GET");
+            when(request.getPathInfo()).thenReturn(null);
+            when(response.getWriter()).thenReturn(pw);
+            servlet.service(request, response);
+
+            final String newLine = System.lineSeparator();
+            assertThat(sw.toString())
+                .isEqualTo(gc.getName() + newLine + printJSON.getName() + newLine);
+        }
+    }
+
+    @Test
+    public void returnsA404WhenGettingUnknownTask() throws Exception {
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getPathInfo()).thenReturn("/absent");
+        servlet.service(request, response);
+
+        verify(response).sendError(404);
+    }
+
+    @Test
+    public void returnsA405WhenGettingTaskByName() throws Exception {
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getPathInfo()).thenReturn("/gc");
+        servlet.service(request, response);
+
+        verify(response).sendError(405);
+    }
+
+    @Test
+    public void testRunsTimedTask() throws Exception {
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
+
+        final Task timedTask = new Task("timed-task") {
+            @Override
+            @Timed(name = "vacuum-cleaning")
+            public void execute(Map<String, List<String>> parameters, PrintWriter output) {
+                output.println("Vacuum cleaning");
+            }
+        };
+        servlet.add(timedTask);
+
+        when(request.getInputStream()).thenReturn(bodyStream);
+        when(request.getParameterNames()).thenReturn(Collections.emptyEnumeration());
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getPathInfo()).thenReturn("/timed-task");
+        when(response.getWriter()).thenReturn(mock(PrintWriter.class));
+
+        servlet.service(request, response);
+
+        assertThat(metricRegistry.getTimers()).containsKey(name(timedTask.getClass(), "vacuum-cleaning"));
+    }
+
+    @Test
+    public void testRunsMeteredTask() throws Exception {
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
+
+        final Task meteredTask = new Task("metered-task") {
+            @Override
+            @Metered(name = "vacuum-cleaning")
+            public void execute(Map<String, List<String>> parameters, PrintWriter output) throws Exception {
+                output.println("Vacuum cleaning");
+            }
+        };
+        servlet.add(meteredTask);
+
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getInputStream()).thenReturn(bodyStream);
+        when(request.getParameterNames()).thenReturn(Collections.emptyEnumeration());
+        when(request.getPathInfo()).thenReturn("/metered-task");
+        when(response.getWriter()).thenReturn(mock(PrintWriter.class));
+
+        servlet.service(request, response);
+
+        assertThat(metricRegistry.getMeters()).containsKey(name(meteredTask.getClass(), "vacuum-cleaning"));
+    }
+
+    @Test
+    public void testRunsExceptionMeteredTask() throws Exception {
+        final ServletInputStream bodyStream = new TestServletInputStream(
+            new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
+
+        final Task exceptionMeteredTask = new Task("exception-metered-task") {
+            @Override
+            @ExceptionMetered(name = "vacuum-cleaning-exceptions")
+            public void execute(Map<String, List<String>> parameters, PrintWriter output) {
+                throw new RuntimeException("The engine has died");
+            }
+        };
+        servlet.add(exceptionMeteredTask);
+
+        when(request.getInputStream()).thenReturn(bodyStream);
+        when(request.getParameterNames()).thenReturn(Collections.emptyEnumeration());
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getPathInfo()).thenReturn("/exception-metered-task");
+        when(response.getWriter()).thenReturn(mock(PrintWriter.class));
+
+        servlet.service(request, response);
+
+        assertThat(metricRegistry.getMeters()).containsKey(name(exceptionMeteredTask.getClass(),
+            "vacuum-cleaning-exceptions"));
+    }
+
+    @Test
+    public void testReturnsA404ForTaskRoot() throws ServletException, IOException {
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getPathInfo()).thenReturn(null);
+
+        servlet.service(request, response);
+
+        verify(response).sendError(404);
+    }
+
+    @SuppressWarnings("InputStreamSlowMultibyteRead")
+    private static class TestServletInputStream extends ServletInputStream {
+        private InputStream delegate;
+
+        public TestServletInputStream(InputStream delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public boolean isFinished() {
+            return false;
+        }
+
+        @Override
+        public boolean isReady() {
+            return false;
+        }
+
+        @Override
+        public void setReadListener(ReadListener readListener) {
+
+        }
+
+        @Override
+        public int read() throws IOException {
+            return delegate.read();
         }
     }
 }
