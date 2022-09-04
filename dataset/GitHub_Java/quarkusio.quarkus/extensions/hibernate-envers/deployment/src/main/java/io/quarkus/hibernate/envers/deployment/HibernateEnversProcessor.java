@@ -10,7 +10,6 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.hibernate.envers.HibernateEnversBuildTimeConfig;
 import io.quarkus.hibernate.envers.HibernateEnversRecorder;
 import io.quarkus.hibernate.orm.deployment.AdditionalJpaModelBuildItem;
@@ -45,11 +44,5 @@ public final class HibernateEnversProcessor {
     public void applyConfig(HibernateEnversRecorder recorder,
             HibernateEnversBuildTimeConfig buildTimeConfig) {
         recorder.registerHibernateEnversIntegration(buildTimeConfig);
-    }
-
-    @BuildStep
-    void setupLogFilters(BuildProducer<LogCleanupFilterBuildItem> filters) {
-        filters.produce(new LogCleanupFilterBuildItem("org.hibernate.envers.boot.internal.EnversServiceImpl",
-                "Envers integration enabled"));
     }
 }
