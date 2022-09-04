@@ -26,7 +26,6 @@ import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.models.api.requests.CreateExtractorRequest;
 import org.graylog2.restclient.models.api.responses.system.ExtractorSummaryResponse;
-import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
@@ -185,7 +184,8 @@ public class Extractor {
         request.conditionValue = conditionValue;
         request.order = order;
 
-        final Map response = api.path(routes.ExtractorsResource().list(input.getId()), Map.class)
+        final Map response = api.post(Map.class)
+                .path("/system/inputs/{0}/extractors", input.getId())
                 .node(node)
                 .expect(Http.Status.CREATED)
                 .body(request)
