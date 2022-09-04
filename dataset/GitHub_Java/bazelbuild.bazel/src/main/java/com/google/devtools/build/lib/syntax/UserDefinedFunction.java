@@ -18,13 +18,12 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.Environment.LexicalFrame;
 
 /**
- * The actual function registered in the environment. This function is defined in the parsed code
- * using {@link FunctionDefStatement}.
+ * The actual function registered in the environment. This function is defined in the
+ * parsed code using {@link FunctionDefStatement}.
  */
 public class UserDefinedFunction extends BaseFunction {
 
@@ -35,11 +34,11 @@ public class UserDefinedFunction extends BaseFunction {
 
   public UserDefinedFunction(
       String name,
-      Location location,
+      Location loc,
       FunctionSignature.WithValues<Object, SkylarkType> signature,
       ImmutableList<Statement> statements,
       Environment.GlobalFrame definitionGlobals) {
-    super(name, signature, location);
+    super(name, signature, loc);
     this.statements = statements;
     this.definitionGlobals = definitionGlobals;
   }
@@ -67,16 +66,17 @@ public class UserDefinedFunction extends BaseFunction {
     ImmutableList<String> names = signature.getSignature().getNames();
     LexicalFrame lexicalFrame =
         LexicalFrame.createForUserDefinedFunctionCall(env.mutability(), /*numArgs=*/ names.size());
-    try (SilentCloseable c = Profiler.instance().profile(ProfilerTask.SKYLARK_USER_FN, getName())) {
+    try {
+      Profiler.instance().startTask(ProfilerTask.SKYLARK_USER_FN, getName());
       env.enterScope(this, lexicalFrame, ast, definitionGlobals);
 
       // Registering the functions's arguments as variables in the local Environment
-      // foreach loop is not used to avoid iterator overhead
-      for (int i = 0; i < names.size(); ++i) {
-        env.update(names.get(i), arguments[i]);
+      int i = 0;
+      for (String name : names) {
+        env.update(name, arguments[i++]);
       }
 
-      Eval eval = Eval.fromEnvironment(env);
+      Eval eval = new Eval(env);
       try {
         for (Statement stmt : statements) {
           if (stmt instanceof ReturnStatement) {
@@ -96,6 +96,7 @@ public class UserDefinedFunction extends BaseFunction {
       }
       return Runtime.NONE;
     } finally {
+      Profiler.instance().completeTask(ProfilerTask.SKYLARK_USER_FN);
       env.exitScope();
     }
   }

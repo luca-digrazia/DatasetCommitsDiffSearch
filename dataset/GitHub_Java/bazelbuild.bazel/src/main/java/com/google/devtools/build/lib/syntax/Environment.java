@@ -24,8 +24,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Memoization;
 import com.google.devtools.build.lib.syntax.Mutability.Freezable;
 import com.google.devtools.build.lib.syntax.Mutability.MutabilityException;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -475,9 +473,6 @@ public final class Environment implements Freezable {
 
   /** An Extension to be imported with load() into a BUILD or .bzl file. */
   @Immutable
-  // TODO(janakr,brandjon): Do Extensions actually have to start their own memoization? Or can we
-  // have a node higher up in the hierarchy inject the mutability?
-  @AutoCodec(memoization = Memoization.START_MEMOIZING)
   public static final class Extension {
 
     private final ImmutableMap<String, Object> bindings;
@@ -490,7 +485,6 @@ public final class Environment implements Freezable {
     private final String transitiveContentHashCode;
 
     /** Constructs with the given hash code and bindings. */
-    @AutoCodec.Instantiator
     public Extension(ImmutableMap<String, Object> bindings, String transitiveContentHashCode) {
       this.bindings = bindings;
       this.transitiveContentHashCode = transitiveContentHashCode;
@@ -557,24 +551,15 @@ public final class Environment implements Freezable {
       for (String name : names) {
         Object value = bindings.get(name);
         Object otherValue = otherBindings.get(name);
-        if (value.equals(otherValue)) {
-          continue;
+        if (!value.equals(otherValue)) {
+          badEntries.add(String.format(
+              "%s: this one has %s (class %s), but given one has %s (class %s)",
+              name,
+              Printer.repr(value),
+              value.getClass().getName(),
+              Printer.repr(otherValue),
+              otherValue.getClass().getName()));
         }
-        if (value instanceof SkylarkNestedSet
-            && otherValue instanceof SkylarkNestedSet
-            && (((SkylarkNestedSet) value)
-                .toCollection()
-                .equals(((SkylarkNestedSet) otherValue).toCollection()))) {
-          continue;
-        }
-        badEntries.add(
-            String.format(
-                "%s: this one has %s (class %s), but given one has %s (class %s)",
-                name,
-                Printer.repr(value),
-                value.getClass().getName(),
-                Printer.repr(otherValue),
-                otherValue.getClass().getName()));
       }
       if (!badEntries.isEmpty()) {
         throw new IllegalStateException(
