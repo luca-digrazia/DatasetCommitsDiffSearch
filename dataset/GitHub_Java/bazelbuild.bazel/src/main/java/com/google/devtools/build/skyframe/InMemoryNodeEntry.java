@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -140,7 +141,7 @@ public class InMemoryNodeEntry implements NodeEntry {
    * Object encapsulating dirty state of the object between when it is marked dirty and
    * re-evaluated.
    */
-  @Nullable protected volatile DirtyBuildingState dirtyBuildingState = null;
+  @VisibleForTesting @Nullable protected volatile DirtyBuildingState dirtyBuildingState = null;
 
   private static final int NOT_EVALUATING_SENTINEL = -1;
 
