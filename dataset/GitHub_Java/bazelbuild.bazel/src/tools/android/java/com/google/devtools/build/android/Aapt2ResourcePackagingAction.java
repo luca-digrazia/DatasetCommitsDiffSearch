@@ -104,7 +104,7 @@ public class Aapt2ResourcePackagingAction {
                   null /* cruncher. Aapt2 automatically chooses to crunch or not. */,
                   options.packageType,
                   options.symbolsOut,
-                  /* rclassWriter= */ null,
+                  null /* rclassWriter */,
                   dataDeserializer,
                   options.throwOnResourceConflict,
                   executorService)
@@ -185,13 +185,13 @@ public class Aapt2ResourcePackagingAction {
         profiler.recordEndOf("link");
         if (options.resourcesOutput != null) {
           profiler.startTask("package");
-        // The compiled resources and the merged resources should be the same.
-        // TODO(corysmith): Decompile or otherwise provide the exact resources in the apk.
-        ResourcesZip.fromApk(
-                mergedAndroidData.getResourceDir(),
-                packagedResources.getApk(),
-                packagedResources.getResourceIds())
-            .writeTo(options.resourcesOutput, /* compress= */ false);
+          // The compiled resources and the merged resources should be the same.
+          // TODO(corysmith): Decompile or otherwise provide the exact resources in the apk.
+          ResourcesZip.fromApk(
+                  mergedAndroidData.getResourceDir(),
+                  packagedResources.getApk(),
+                  packagedResources.getResourceIds())
+              .writeTo(options.resourcesOutput, false /* compress */);
           profiler.recordEndOf("package");
         }
       }
