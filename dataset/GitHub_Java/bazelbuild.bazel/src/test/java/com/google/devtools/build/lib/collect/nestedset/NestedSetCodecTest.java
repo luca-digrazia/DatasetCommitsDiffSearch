@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.collect.nestedset;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
-import static com.google.common.util.concurrent.Futures.immediateVoidFuture;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -77,7 +76,7 @@ public final class NestedSetCodecTest {
     AtomicInteger reads = new AtomicInteger();
     NestedSetStorageEndpoint endpoint =
         new NestedSetStorageEndpoint() {
-          final InMemoryNestedSetStorageEndpoint delegate = new InMemoryNestedSetStorageEndpoint();
+          InMemoryNestedSetStorageEndpoint delegate = new InMemoryNestedSetStorageEndpoint();
 
           @Override
           public ListenableFuture<Void> put(ByteString fingerprint, byte[] serializedBytes) {
@@ -115,7 +114,7 @@ public final class NestedSetCodecTest {
         new NestedSetStorageEndpoint() {
           @Override
           public ListenableFuture<Void> put(ByteString fingerprint, byte[] serializedBytes) {
-            return immediateVoidFuture();
+            return immediateFuture(null);
           }
 
           @Override
@@ -142,7 +141,7 @@ public final class NestedSetCodecTest {
         new NestedSetStorageEndpoint() {
           @Override
           public ListenableFuture<Void> put(ByteString fingerprint, byte[] serializedBytes) {
-            return immediateVoidFuture();
+            return immediateFuture(null);
           }
 
           @Override
@@ -203,11 +202,11 @@ public final class NestedSetCodecTest {
         // The write of the shared inner NestedSet {"a", "b"}
         .thenReturn(sharedInnerWrite)
         // The write of the inner NestedSet {"c", "d"}
-        .thenReturn(immediateVoidFuture())
+        .thenReturn(immediateFuture(null))
         // The write of the outer NestedSet {{"a", "b"}, {"c", "d"}}
         .thenReturn(outerWrite)
         // The write of the inner NestedSet {"e", "f"}
-        .thenReturn(immediateVoidFuture());
+        .thenReturn(immediateFuture(null));
     ObjectCodecs objectCodecs = createCodecs(new NestedSetStore(mockStorage));
 
     NestedSet<String> sharedInnerNestedSet = NestedSetBuilder.create(Order.STABLE_ORDER, "a", "b");
@@ -252,7 +251,7 @@ public final class NestedSetCodecTest {
     Object[] contents = new Object[0];
     ByteString fingerprint = ByteString.copyFrom(new byte[2]);
     cache.put(
-        NestedSetStore.FingerprintComputationResult.create(fingerprint, immediateVoidFuture()),
+        NestedSetStore.FingerprintComputationResult.create(fingerprint, immediateFuture(null)),
         contents);
     GcFinalization.awaitFullGc();
     assertThat(cache.putIfAbsent(fingerprint, immediateFuture(null))).isEqualTo(contents);
@@ -413,56 +412,6 @@ public final class NestedSetCodecTest {
     Mockito.verify(nestedSetStorageEndpoint, times(2)).put(any(), any());
     // TODO(janakr): These should be the same element.
     assertThat(result).isNotEqualTo(asyncResult.get());
-  }
-
-  @Test
-  public void writeFuturesWaitForTransitiveWrites() throws Exception {
-    NestedSetStorageEndpoint mockWriter = mock(NestedSetStorageEndpoint.class);
-    NestedSetStore store = new NestedSetStore(mockWriter);
-    SerializationContext mockSerializationContext = mock(SerializationContext.class);
-    when(mockSerializationContext.getNewMemoizingContext()).thenReturn(mockSerializationContext);
-
-    SettableFuture<Void> bottomReadFuture = SettableFuture.create();
-    SettableFuture<Void> middleReadFuture = SettableFuture.create();
-    SettableFuture<Void> topReadFuture = SettableFuture.create();
-    when(mockWriter.put(any(), any()))
-        .thenReturn(bottomReadFuture, middleReadFuture, topReadFuture);
-
-    NestedSet<String> bottom =
-        NestedSetBuilder.<String>stableOrder().add("bottom1").add("bottom2").build();
-    NestedSet<String> middle =
-        NestedSetBuilder.<String>stableOrder()
-            .add("middle1")
-            .add("middle2")
-            .addTransitive(bottom)
-            .build();
-    NestedSet<String> top =
-        NestedSetBuilder.<String>stableOrder()
-            .add("top1")
-            .add("top2")
-            .addTransitive(middle)
-            .build();
-
-    ListenableFuture<Void> bottomWriteFuture =
-        NestedSetCodecTestUtils.writeToStoreFuture(store, bottom, mockSerializationContext);
-    ListenableFuture<Void> middleWriteFuture =
-        NestedSetCodecTestUtils.writeToStoreFuture(store, middle, mockSerializationContext);
-    ListenableFuture<Void> topWriteFuture =
-        NestedSetCodecTestUtils.writeToStoreFuture(store, top, mockSerializationContext);
-    assertThat(bottomWriteFuture.isDone()).isFalse();
-    assertThat(middleWriteFuture.isDone()).isFalse();
-    assertThat(topWriteFuture.isDone()).isFalse();
-
-    topReadFuture.set(null);
-    middleReadFuture.set(null);
-    assertThat(bottomWriteFuture.isDone()).isFalse();
-    assertThat(middleWriteFuture.isDone()).isFalse();
-    assertThat(topWriteFuture.isDone()).isFalse();
-
-    bottomReadFuture.set(null);
-    assertThat(bottomWriteFuture.isDone()).isTrue();
-    assertThat(middleWriteFuture.isDone()).isTrue();
-    assertThat(topWriteFuture.isDone()).isTrue();
   }
 
   private static ObjectCodecs createCodecs(NestedSetStore store) {
