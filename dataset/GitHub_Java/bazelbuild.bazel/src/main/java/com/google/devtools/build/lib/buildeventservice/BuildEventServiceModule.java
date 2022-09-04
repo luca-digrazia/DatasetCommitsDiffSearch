@@ -67,6 +67,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -91,25 +92,18 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   private AuthAndTLSOptions authTlsOptions;
   private BuildEventStreamOptions besStreamOptions;
   private boolean useExperimentalUi;
-  /**
-   * Holds the close futures for the upload of each transport with timeouts attached to them using
-   * {@link #constructCloseFuturesMapWithTimeouts(ImmutableMap)} obtained from {@link
-   * BuildEventTransport#getTimeout()}.
-   */
-  private ImmutableMap<BuildEventTransport, ListenableFuture<Void>> closeFuturesWithTimeoutsMap =
+  /** Holds the close futures for the upload of each transport */
+  private ImmutableMap<BuildEventTransport, ListenableFuture<Void>> closeFuturesMap =
       ImmutableMap.of();
 
   /**
-   * Holds the half-close futures for the upload of each transport with timeouts attached to them
-   * using {@link #constructCloseFuturesMapWithTimeouts(ImmutableMap)} obtained from {@link
-   * BuildEventTransport#getTimeout()}.
-   *
-   * <p>The completion of the half-close indicates that the client has sent all of the data to the
-   * server and is just waiting for acknowledgement. The client must still keep the data buffered
-   * locally in case acknowledgement fails.
+   * Holds the half-close futures for the upload of each transport. The completion of the half-close
+   * indicates that the client has sent all of the data to the server and is just waiting for
+   * acknowledgement. The client must still keep the data buffered locally in case acknowledgement
+   * fails.
    */
-  private ImmutableMap<BuildEventTransport, ListenableFuture<Void>>
-      halfCloseFuturesWithTimeoutsMap = ImmutableMap.of();
+  private ImmutableMap<BuildEventTransport, ListenableFuture<Void>> halfCloseFuturesMap =
+      ImmutableMap.of();
 
   // TODO(lpino): Use Optional instead of @Nullable for the members below.
   @Nullable private OutErr outErr;
@@ -158,11 +152,11 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   }
 
   private void cancelPendingUploads() {
-    closeFuturesWithTimeoutsMap
+    closeFuturesMap
         .values()
         .forEach(closeFuture -> closeFuture.cancel(/* mayInterruptIfRunning= */ true));
-    closeFuturesWithTimeoutsMap = ImmutableMap.of();
-    halfCloseFuturesWithTimeoutsMap = ImmutableMap.of();
+    closeFuturesMap = ImmutableMap.of();
+    halfCloseFuturesMap = ImmutableMap.of();
   }
 
   private static boolean isTimeoutException(ExecutionException e) {
@@ -170,7 +164,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   }
 
   private void waitForPreviousInvocation() {
-    if (closeFuturesWithTimeoutsMap.isEmpty()) {
+    if (closeFuturesMap.isEmpty()) {
       return;
     }
 
@@ -179,12 +173,19 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       // infrastructure doesn't allow printing messages in the terminal in beforeCommand.
       ImmutableMap<BuildEventTransport, ListenableFuture<Void>> futureMap =
           besOptions.besUploadMode == BesUploadMode.FULLY_ASYNC
-              ? halfCloseFuturesWithTimeoutsMap
-              : closeFuturesWithTimeoutsMap;
+              ? halfCloseFuturesMap
+              : closeFuturesMap;
       Uninterruptibles.getUninterruptibly(
           Futures.allAsList(futureMap.values()),
           getMaxWaitForPreviousInvocation().getSeconds(),
           TimeUnit.SECONDS);
+    } catch (CancellationException e) {
+      String msg =
+          "Previous invocation failed to finish Build Event Protocol upload. "
+              + "The upload was cancelled. "
+              + "Ignoring the failure and starting a new invocation...";
+      cmdLineReporter.handle(Event.warn(msg));
+      googleLogger.atWarning().withCause(e).log(msg);
     } catch (TimeoutException exception) {
       String msg =
           String.format(
@@ -302,12 +303,13 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   private void forceShutdownBuildEventStreamer() {
     streamer.close(AbortReason.INTERNAL);
-    closeFuturesWithTimeoutsMap =
-        constructCloseFuturesMapWithTimeouts(streamer.getCloseFuturesMap());
+    closeFuturesMap = constructCloseFuturesMapWithTimeouts(streamer.getCloseFuturesMap());
     try {
+      // TODO(b/130148250): Uninterruptibles.getUninterruptibly waits forever if no timeout is
+      //  passed. We should fix this by waiting at most the value set by bes_timeout.
       googleLogger.atInfo().log("Closing pending build event transports");
-      Uninterruptibles.getUninterruptibly(Futures.allAsList(closeFuturesWithTimeoutsMap.values()));
-    } catch (ExecutionException e) {
+      Uninterruptibles.getUninterruptibly(Futures.allAsList(closeFuturesMap.values()));
+    } catch (CancellationException | ExecutionException e) {
       googleLogger.atSevere().withCause(e).log("Failed to close a build event transport");
       LoggingUtil.logToRemote(Level.SEVERE, "Failed to close a build event transport", e);
     } finally {
@@ -325,16 +327,16 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   @Override
   public void blazeShutdown() {
-    if (closeFuturesWithTimeoutsMap.isEmpty()) {
+    if (closeFuturesMap.isEmpty()) {
       return;
     }
 
     try {
       Uninterruptibles.getUninterruptibly(
-          Futures.allAsList(closeFuturesWithTimeoutsMap.values()),
+          Futures.allAsList(closeFuturesMap.values()),
           getMaxWaitForPreviousInvocation().getSeconds(),
           TimeUnit.SECONDS);
-    } catch (TimeoutException | ExecutionException exception) {
+    } catch (CancellationException | TimeoutException | ExecutionException exception) {
       googleLogger.atWarning().withCause(exception).log(
           "Encountered Exception when closing BEP transports in Blaze's shutting down sequence");
     } finally {
@@ -361,7 +363,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     try {
       if (useExperimentalUi) {
         // Notify the UI handler when a transport finished closing.
-        closeFuturesWithTimeoutsMap.forEach(
+        closeFuturesMap.forEach(
             (bepTransport, closeFuture) ->
                 closeFuture.addListener(
                     () -> {
@@ -380,9 +382,15 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       }
 
       try (AutoProfiler p = AutoProfiler.logged("waiting for BES close", logger)) {
-        Uninterruptibles.getUninterruptibly(
-            Futures.allAsList(closeFuturesWithTimeoutsMap.values()));
+        // TODO(b/130148250): Uninterruptibles.getUninterruptibly waits forever if no timeout is
+        //  passed. We should fix this by waiting at most the value set by bes_timeout.
+        Uninterruptibles.getUninterruptibly(Futures.allAsList(closeFuturesMap.values()));
       }
+    } catch (CancellationException e) {
+      throw new AbruptExitException(
+          "The Build Event Protocol upload was cancelled",
+          ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
+          e);
     } catch (ExecutionException e) {
       // Futures.withTimeout wraps the TimeoutException in an ExecutionException when the future
       // times out.
@@ -425,16 +433,9 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
                         .setNameFormat("bes-close-" + bepTransport.name() + "-%d")
                         .build());
 
-            // Make sure to avoid propagating the cancellation to the enclosing future since
-            // we handle cancellation ourselves in this class.
-            // Futures.withTimeout may cancel the enclosing future when the timeout is
-            // reached.
-            final ListenableFuture<Void> enclosingFuture =
-                Futures.nonCancellationPropagating(closeFuture);
-
             closeFutureWithTimeout =
                 Futures.withTimeout(
-                    enclosingFuture,
+                    closeFuture,
                     bepTransport.getTimeout().toMillis(),
                     TimeUnit.MILLISECONDS,
                     timeoutExecutor);
@@ -448,10 +449,8 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   }
 
   private void closeBepTransports() throws AbruptExitException {
-    closeFuturesWithTimeoutsMap =
-        constructCloseFuturesMapWithTimeouts(streamer.getCloseFuturesMap());
-    halfCloseFuturesWithTimeoutsMap =
-        constructCloseFuturesMapWithTimeouts(streamer.getHalfClosedMap());
+    closeFuturesMap = constructCloseFuturesMapWithTimeouts(streamer.getCloseFuturesMap());
+    halfCloseFuturesMap = constructCloseFuturesMapWithTimeouts(streamer.getHalfClosedMap());
     switch (besOptions.besUploadMode) {
       case WAIT_FOR_UPLOAD_COMPLETE:
         waitForBuildEventTransportsToClose();
