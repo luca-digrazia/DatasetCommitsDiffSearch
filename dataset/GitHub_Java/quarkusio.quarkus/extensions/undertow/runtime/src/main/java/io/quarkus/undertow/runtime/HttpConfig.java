@@ -53,7 +53,7 @@ public class HttpConfig {
     /**
      * The HTTP host
      */
-    @ConfigItem(defaultValue = "0.0.0.0")
+    @ConfigItem(defaultValue = "localhost")
     public String host;
 
     /**
