@@ -154,17 +154,6 @@ public final class CcCompilationContext implements CcCompilationContextApi {
   }
 
   @Override
-  public SkylarkNestedSet getSkylarkFrameworkIncludeDirs() {
-    return SkylarkNestedSet.of(
-        String.class,
-        NestedSetBuilder.wrap(
-            Order.STABLE_ORDER,
-            getFrameworkIncludeDirs().stream()
-                .map(PathFragment::getSafePathString)
-                .collect(ImmutableList.toImmutableList())));
-  }
-
-  @Override
   public SkylarkNestedSet getSkylarkIncludeDirs() {
     return SkylarkNestedSet.of(
         String.class,
@@ -239,16 +228,6 @@ public final class CcCompilationContext implements CcCompilationContextApi {
    */
   public ImmutableList<PathFragment> getSystemIncludeDirs() {
     return commandLineCcCompilationContext.systemIncludeDirs;
-  }
-
-  /**
-   * Returns the immutable list of include directories to be added with "-F" (possibly empty but
-   * never null). This includes the include dirs from the transitive deps closure of the target.
-   * This list does not contain duplicates. All fragments are either absolute or relative to the
-   * exec root (see {@link com.google.devtools.build.lib.analysis.BlazeDirectories#getExecRoot}).
-   */
-  public ImmutableList<PathFragment> getFrameworkIncludeDirs() {
-    return commandLineCcCompilationContext.frameworkIncludeDirs;
   }
 
   /**
@@ -479,19 +458,16 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     private final ImmutableList<PathFragment> includeDirs;
     private final ImmutableList<PathFragment> quoteIncludeDirs;
     private final ImmutableList<PathFragment> systemIncludeDirs;
-    private final ImmutableList<PathFragment> frameworkIncludeDirs;
     private final ImmutableList<String> defines;
 
     CommandLineCcCompilationContext(
         ImmutableList<PathFragment> includeDirs,
         ImmutableList<PathFragment> quoteIncludeDirs,
         ImmutableList<PathFragment> systemIncludeDirs,
-        ImmutableList<PathFragment> frameworkIncludeDirs,
         ImmutableList<String> defines) {
       this.includeDirs = includeDirs;
       this.quoteIncludeDirs = quoteIncludeDirs;
       this.systemIncludeDirs = systemIncludeDirs;
-      this.frameworkIncludeDirs = frameworkIncludeDirs;
       this.defines = defines;
     }
   }
@@ -511,7 +487,6 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     private final Set<PathFragment> includeDirs = new LinkedHashSet<>();
     private final Set<PathFragment> quoteIncludeDirs = new LinkedHashSet<>();
     private final Set<PathFragment> systemIncludeDirs = new LinkedHashSet<>();
-    private final Set<PathFragment> frameworkIncludeDirs = new LinkedHashSet<>();
     private final NestedSetBuilder<PathFragment> declaredIncludeDirs =
         NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> declaredIncludeSrcs =
@@ -579,7 +554,6 @@ public final class CcCompilationContext implements CcCompilationContextApi {
       includeDirs.addAll(otherCcCompilationContext.getIncludeDirs());
       quoteIncludeDirs.addAll(otherCcCompilationContext.getQuoteIncludeDirs());
       systemIncludeDirs.addAll(otherCcCompilationContext.getSystemIncludeDirs());
-      frameworkIncludeDirs.addAll(otherCcCompilationContext.getFrameworkIncludeDirs());
       declaredIncludeDirs.addTransitive(otherCcCompilationContext.getDeclaredIncludeDirs());
       declaredIncludeSrcs.addTransitive(otherCcCompilationContext.getDeclaredIncludeSrcs());
       transitiveHeaderInfo.addTransitive(otherCcCompilationContext.transitiveHeaderInfos);
@@ -659,12 +633,6 @@ public final class CcCompilationContext implements CcCompilationContextApi {
      */
     public Builder addSystemIncludeDirs(Iterable<PathFragment> systemIncludeDirs) {
       Iterables.addAll(this.systemIncludeDirs, systemIncludeDirs);
-      return this;
-    }
-
-    /** Add framewrok include directories to be added with "-F". */
-    public Builder addFrameworkIncludeDirs(Iterable<PathFragment> frameworkIncludeDirs) {
-      Iterables.addAll(this.frameworkIncludeDirs, frameworkIncludeDirs);
       return this;
     }
 
@@ -805,7 +773,6 @@ public final class CcCompilationContext implements CcCompilationContextApi {
               ImmutableList.copyOf(includeDirs),
               ImmutableList.copyOf(quoteIncludeDirs),
               ImmutableList.copyOf(systemIncludeDirs),
-              ImmutableList.copyOf(frameworkIncludeDirs),
               ImmutableList.copyOf(defines)),
           // TODO(b/110873917): We don't have the middle man compilation prerequisite, therefore, we
           // use the compilation prerequisites as they were passed to the builder, i.e. we use every

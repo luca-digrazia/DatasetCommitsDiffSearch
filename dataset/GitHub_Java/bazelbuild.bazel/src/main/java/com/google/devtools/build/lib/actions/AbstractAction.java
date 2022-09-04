@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
@@ -368,11 +367,11 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
       // Handle a couple of scenarios where the output can still be deleted, but make sure we're not
       // deleting random files on the filesystem.
       if (root == null) {
-        throw new IOException(e);
+        throw e;
       }
       Root outputRoot = root.getRoot();
       if (!outputRoot.contains(path)) {
-        throw new IOException(e);
+        throw e;
       }
 
       Path parentDir = path.getParentDirectory();
@@ -383,7 +382,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
       } else if (path.isDirectory(Symlinks.NOFOLLOW)) {
         path.deleteTree();
       } else {
-        throw new IOException(e);
+        throw e;
       }
     }
   }
@@ -548,11 +547,6 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   @Override
   public SkylarkDict<String, String> getEnv() {
     return SkylarkDict.copyOf(null, env.getFixedEnv().toMap());
-  }
-
-  @Override
-  public ImmutableMap<String, String> getExecProperties() {
-    return getOwner().getExecProperties();
   }
 
   @Override

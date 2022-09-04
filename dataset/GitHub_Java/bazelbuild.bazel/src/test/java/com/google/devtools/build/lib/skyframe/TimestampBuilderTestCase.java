@@ -159,11 +159,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
   protected <T extends ActionAnalysisMetadata> T registerAction(T action) {
     actions.add(action);
-    ActionLookupData actionLookupData =
-        ActionLookupData.create(ACTION_LOOKUP_KEY, actions.size() - 1);
-    for (Artifact output : action.getOutputs()) {
-      ((Artifact.DerivedArtifact) output).setGeneratingActionKey(actionLookupData);
-    }
     return action;
   }
 
@@ -205,7 +200,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     differencer = new SequencedRecordingDifferencer();
 
     ActionExecutionStatusReporter statusReporter =
-        ActionExecutionStatusReporter.create(new StoredEventHandler(), eventBus);
+        ActionExecutionStatusReporter.create(new StoredEventHandler());
     final SkyframeActionExecutor skyframeActionExecutor =
         new SkyframeActionExecutor(
             actionKeyContext,
@@ -276,11 +271,8 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
               ImmutableMap.of(
                   ACTION_LOOKUP_KEY,
                   new BasicActionLookupValue(
-                      Actions.assignOwnersAndFilterSharedActionsAndThrowActionConflict(
-                          actionKeyContext,
-                          ImmutableList.copyOf(actions),
-                          ACTION_LOOKUP_KEY,
-                          /*outputFiles=*/ null),
+                      Actions.filterSharedActionsAndThrowActionConflict(
+                          actionKeyContext, ImmutableList.copyOf(actions)),
                       /*nonceVersion=*/ null)));
         }
       }

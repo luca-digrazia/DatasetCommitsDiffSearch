@@ -18,12 +18,10 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_AC
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
@@ -59,7 +57,6 @@ public class SymlinkActionTest extends BuildViewTestCase {
     FileSystemUtils.createDirectoryAndParents(linkedInput.getParentDirectory());
     linkedInput.createSymbolicLink(input);
     outputArtifact = getBinArtifactWithNoOwner("destination.txt");
-    outputArtifact.setGeneratingActionKey(ActionsTestUtil.NULL_ACTION_LOOKUP_DATA);
     output = outputArtifact.getPath();
     FileSystemUtils.createDirectoryAndParents(output.getParentDirectory());
     action = SymlinkAction.toArtifact(NULL_ACTION_OWNER,
@@ -85,16 +82,15 @@ public class SymlinkActionTest extends BuildViewTestCase {
         action.execute(
             new ActionExecutionContext(
                 executor,
-                /*actionInputFileCache=*/ null,
+                null,
                 ActionInputPrefetcher.NONE,
                 actionKeyContext,
-                /*metadataHandler=*/ null,
-                LostInputsCheck.NONE,
-                /*fileOutErr=*/ null,
+                null,
+                null,
                 new StoredEventHandler(),
-                /*clientEnv=*/ ImmutableMap.of(),
-                /*topLevelFilesets=*/ ImmutableMap.of(),
-                /*artifactExpander=*/ null,
+                ImmutableMap.<String, String>of(),
+                ImmutableMap.of(),
+                null,
                 /*actionFileSystem=*/ null,
                 /*skyframeDepsResult=*/ null));
     assertThat(actionResult.spawnResults()).isEmpty();

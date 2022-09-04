@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_AC
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
@@ -63,15 +62,14 @@ public class ExecutableSymlinkActionTest {
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
         ActionInputPrefetcher.NONE,
         actionKeyContext,
-        /*metadataHandler=*/ null,
-        LostInputsCheck.NONE,
+        null,
         outErr,
         /*eventHandler=*/ null,
-        /*clientEnv=*/ ImmutableMap.of(),
-        /*topLevelFilesets=*/ ImmutableMap.of(),
-        /*artifactExpander=*/ null,
-        /*actionFileSystem=*/ null,
-        /*skyframeDepsResult=*/ null);
+        ImmutableMap.<String, String>of(),
+        ImmutableMap.of(),
+        null,
+        null,
+        null);
   }
 
   @Test
@@ -126,12 +124,10 @@ public class ExecutableSymlinkActionTest {
     file.setExecutable(/*executable=*/ false);
     Artifact.DerivedArtifact input =
         (Artifact.DerivedArtifact) ActionsTestUtil.createArtifact(inputRoot, file);
-    input.setGeneratingActionKey(ActionsTestUtil.NULL_ACTION_LOOKUP_DATA);
     Artifact.DerivedArtifact output =
         (Artifact.DerivedArtifact)
             ActionsTestUtil.createArtifact(
                 outputRoot, outputRoot.getRoot().getRelative("some-output"));
-    output.setGeneratingActionKey(ActionsTestUtil.NULL_ACTION_LOOKUP_DATA);
     SymlinkAction action = SymlinkAction.toExecutable(NULL_ACTION_OWNER, input, output, "progress");
     new SerializationTester(action)
         .addDependency(FileSystem.class, scratch.getFileSystem())

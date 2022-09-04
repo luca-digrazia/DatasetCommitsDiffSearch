@@ -36,9 +36,6 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupData;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
-import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -85,7 +82,6 @@ import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrUntypedException;
@@ -228,13 +224,7 @@ public final class ActionsTestUtil {
   public static Artifact createArtifactWithExecPath(ArtifactRoot root, PathFragment execPath) {
     return root.isSourceRoot()
         ? new Artifact.SourceArtifact(root, execPath, ArtifactOwner.NullArtifactOwner.INSTANCE)
-        : new Artifact.DerivedArtifact(root, execPath, NULL_ARTIFACT_OWNER);
-  }
-
-  public static TreeFileArtifact createTreeFileArtifactWithNoGeneratingAction(
-      SpecialArtifact parent, String relativePath) {
-    return ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
-        parent, PathFragment.create(relativePath), parent.getArtifactOwner());
+        : new Artifact.DerivedArtifact(root, execPath, ArtifactOwner.NullArtifactOwner.INSTANCE);
   }
 
   public static void assertNoArtifactEndingWith(RuleConfiguredTarget target, String path) {
@@ -316,19 +306,7 @@ public final class ActionsTestUtil {
     }
   }
 
-  @AutoCodec
-  public static final ActionLookupKey NULL_ARTIFACT_OWNER =
-      new ActionLookupValue.ActionLookupKey() {
-        @Override
-        public SkyFunctionName functionName() {
-          return null;
-        }
-
-        @Override
-        public Label getLabel() {
-          return NULL_LABEL;
-        }
-      };
+  @AutoCodec public static final ArtifactOwner NULL_ARTIFACT_OWNER = new NullArtifactOwner();
 
   public static final Artifact DUMMY_ARTIFACT =
       new Artifact.SourceArtifact(
@@ -347,10 +325,6 @@ public final class ActionsTestUtil {
           null,
           null,
           null);
-
-  @AutoCodec
-  public static final ActionLookupData NULL_ACTION_LOOKUP_DATA =
-      ActionLookupData.create(NULL_ARTIFACT_OWNER, 0);
 
   /** An unchecked exception class for action conflicts. */
   public static class UncheckedActionConflictException extends RuntimeException {
@@ -754,7 +728,7 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    public Path getPathFromSourceExecPath(Path execRoot, PathFragment execPath) {
+    public Path getPathFromSourceExecPath(PathFragment execPath) {
       throw new UnsupportedOperationException();
     }
   }

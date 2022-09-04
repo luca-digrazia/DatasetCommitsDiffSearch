@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.clock.Clock;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -72,18 +73,11 @@ public class CriticalPathComputer {
   /** Maximum critical path found. */
   private final AtomicReference<CriticalPathComponent> maxCriticalPath;
   private final Clock clock;
-  private final boolean checkCriticalPathInconsistencies;
 
-  protected CriticalPathComputer(
-      ActionKeyContext actionKeyContext, Clock clock, boolean checkCriticalPathInconsistencies) {
+  protected CriticalPathComputer(ActionKeyContext actionKeyContext, Clock clock) {
     this.actionKeyContext = actionKeyContext;
     this.clock = clock;
     maxCriticalPath = new AtomicReference<>();
-    this.checkCriticalPathInconsistencies = checkCriticalPathInconsistencies;
-  }
-
-  protected CriticalPathComputer(ActionKeyContext actionKeyContext, Clock clock) {
-    this(actionKeyContext, clock, /*checkCriticalPathInconsistencies=*/ true);
   }
 
   /**
@@ -363,16 +357,11 @@ public class CriticalPathComputer {
 
   protected void checkCriticalPathInconsistency(
       Artifact.DerivedArtifact input, Action action, CriticalPathComponent actionStats) {
-    if (!checkCriticalPathInconsistencies) {
-      return;
-    }
     // Rare case that an action depending on a previously-cached shared action sees a different
     // shared action that is in the midst of being an action cache hit.
     for (Artifact actionOutput : action.getOutputs()) {
       if (input.equals(actionOutput)
-          && input
-              .getGeneratingActionKey()
-              .equals(((Artifact.DerivedArtifact) actionOutput).getGeneratingActionKey())) {
+          && Objects.equals(input.getArtifactOwner(), actionOutput.getArtifactOwner())) {
         // As far as we can tell, this (currently running) action is the same action that
         // produced input, not another shared action. This should be impossible.
         throw new IllegalStateException(

@@ -44,7 +44,7 @@ final class ExtraActionsVisitor extends ActionGraphVisitor {
     extraArtifacts = Lists.newArrayList();
   }
 
-  void maybeAddExtraAction(ActionAnalysisMetadata original) throws InterruptedException {
+  void maybeAddExtraAction(ActionAnalysisMetadata original) {
     if (original instanceof Action) {
       Action action = (Action) original;
       Collection<ExtraActionSpec> extraActions =
@@ -58,7 +58,7 @@ final class ExtraActionsVisitor extends ActionGraphVisitor {
   }
 
   @Override
-  protected void visitAction(ActionAnalysisMetadata action) throws InterruptedException {
+  protected void visitAction(ActionAnalysisMetadata action) {
     maybeAddExtraAction(action);
   }
 

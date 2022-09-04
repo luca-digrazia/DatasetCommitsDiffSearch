@@ -44,7 +44,7 @@ class ExtraActionUtils {
   static ExtraActionArtifactsProvider createExtraActionProvider(
       Set<ActionAnalysisMetadata> actionsWithoutExtraAction, RuleContext ruleContext) {
     BuildConfiguration configuration = ruleContext.getConfiguration();
-    if (configuration.isToolConfiguration()) {
+    if (configuration.isHostConfiguration()) {
       return ExtraActionArtifactsProvider.EMPTY;
     }
 

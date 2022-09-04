@@ -13,14 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
+import com.google.devtools.build.lib.actions.ActionLookupData;
+import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
+import com.google.devtools.build.lib.analysis.test.TestProvider;
+import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.rules.test.TestProvider;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.util.Map;
 
 /**
  * TestCompletionFunction builds all relevant test artifacts of a {@link
@@ -28,35 +35,67 @@ import com.google.devtools.build.skyframe.SkyValue;
  * runs.
  */
 public final class TestCompletionFunction implements SkyFunction {
-
-  public TestCompletionFunction() {
-  }
-
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env) {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
     TestCompletionValue.TestCompletionKey key =
         (TestCompletionValue.TestCompletionKey) skyKey.argument();
-    LabelAndConfiguration lac = key.getLabelAndConfiguration();
-    if (env.getValue(TargetCompletionValue.key(lac)) == null) {
+    ConfiguredTargetKey ctKey = key.configuredTargetKey();
+    TopLevelArtifactContext ctx = key.topLevelArtifactContext();
+    if (env.getValue(TargetCompletionValue.key(ctKey, ctx, /*willTest=*/ true)) == null) {
       return null;
     }
 
-    ConfiguredTargetValue ctValue = (ConfiguredTargetValue)
-        env.getValue(ConfiguredTargetValue.key(lac.getLabel(), lac.getConfiguration()));
+    ConfiguredTargetValue ctValue = (ConfiguredTargetValue) env.getValue(ctKey);
     if (ctValue == null) {
       return null;
     }
 
     ConfiguredTarget ct = ctValue.getConfiguredTarget();
-    if (key.isExclusiveTesting()) {
-      // Request test artifacts iteratively if testing exclusively.
+    if (key.exclusiveTesting()) {
+      // Request test execution iteratively if testing exclusively.
       for (Artifact testArtifact : TestProvider.getTestStatusArtifacts(ct)) {
-        if (env.getValue(ArtifactValue.key(testArtifact, /*isMandatory=*/true)) == null) {
+        ActionLookupValue.ActionLookupKey actionLookupKey =
+            ArtifactFunction.getActionLookupKey(testArtifact);
+        ActionLookupValue actionLookupValue =
+            ArtifactFunction.getActionLookupValue(actionLookupKey, env, testArtifact);
+        if (actionLookupValue == null) {
+          BugReport.sendBugReport(
+              new IllegalStateException(
+                  "Unexpected absent value for "
+                      + actionLookupKey
+                      + " from "
+                      + testArtifact
+                      + " and "
+                      + ct
+                      + " for "
+                      + skyKey));
+          return null;
+        }
+        env.getValue(getActionLookupData(testArtifact, actionLookupKey, actionLookupValue));
+        if (env.valuesMissing()) {
           return null;
         }
       }
     } else {
-      env.getValues(ArtifactValue.mandatoryKeys(TestProvider.getTestStatusArtifacts(ct)));
+      Multimap<ActionLookupValue.ActionLookupKey, Artifact.DerivedArtifact> keyToArtifactMap =
+          Multimaps.index(
+              TestProvider.getTestStatusArtifacts(ct), ArtifactFunction::getActionLookupKey);
+      Map<SkyKey, SkyValue> actionLookupValues = env.getValues(keyToArtifactMap.keySet());
+      if (env.valuesMissing()) {
+        return null;
+      }
+      env.getValues(
+          keyToArtifactMap
+              .entries()
+              .stream()
+              .map(
+                  entry ->
+                      getActionLookupData(
+                          entry.getValue(),
+                          entry.getKey(),
+                          (ActionLookupValue) actionLookupValues.get(entry.getKey())))
+              .distinct()
+              .collect(ImmutableSet.toImmutableSet()));
       if (env.valuesMissing()) {
         return null;
       }
@@ -64,8 +103,16 @@ public final class TestCompletionFunction implements SkyFunction {
     return TestCompletionValue.TEST_COMPLETION_MARKER;
   }
 
+  private static ActionLookupData getActionLookupData(
+      Artifact artifact,
+      ActionLookupValue.ActionLookupKey actionLookupKey,
+      ActionLookupValue actionLookupValue) {
+    return ActionExecutionValue.key(
+        actionLookupKey, actionLookupValue.getGeneratingActionIndex(artifact));
+  }
+
   @Override
   public String extractTag(SkyKey skyKey) {
-    return Label.print(((LabelAndConfiguration) skyKey.argument()).getLabel());
+    return Label.print(((ConfiguredTargetKey) skyKey.argument()).getLabel());
   }
 }

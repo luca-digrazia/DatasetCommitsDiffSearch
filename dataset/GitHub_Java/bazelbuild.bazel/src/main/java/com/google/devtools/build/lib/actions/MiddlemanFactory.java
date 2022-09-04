@@ -108,8 +108,7 @@ public final class MiddlemanFactory {
   }
 
   /**
-   * Creates a {@link MiddlemanType#SCHEDULING_DEPENDENCY_MIDDLEMAN scheduling dependency}
-   * middleman.
+   * Creates a {@link MiddlemanType#ERROR_PROPAGATING_MIDDLEMAN error-propagating} middleman.
    *
    * @param owner the owner of the action that will be created. May not be null.
    * @param middlemanName a unique file name for the middleman artifact in the {@code middlemanDir};
@@ -124,7 +123,7 @@ public final class MiddlemanFactory {
    *     propagates errors, but is ignored by the dependency checker
    * @throws IllegalArgumentException if {@code inputs} is null or empty
    */
-  public Artifact createSchedulingDependencyMiddleman(
+  public Artifact createErrorPropagatingMiddleman(
       ActionOwner owner,
       String middlemanName,
       String purpose,
@@ -133,14 +132,17 @@ public final class MiddlemanFactory {
     Preconditions.checkArgument(inputs != null);
     Preconditions.checkArgument(!Iterables.isEmpty(inputs));
     // We must always create this middleman even if there is only one input.
-    return createMiddleman(
-            owner,
-            middlemanName,
-            purpose,
-            inputs,
-            middlemanDir,
-            MiddlemanType.SCHEDULING_DEPENDENCY_MIDDLEMAN)
-        .getFirst();
+    return createMiddleman(owner, middlemanName, purpose, inputs, middlemanDir,
+        MiddlemanType.ERROR_PROPAGATING_MIDDLEMAN).getFirst();
+  }
+
+  /**
+   * Returns the same artifact as {@code createErrorPropagatingMiddleman} would return, but doesn't
+   * create any action.
+   */
+  public Artifact getErrorPropagatingMiddlemanArtifact(
+      String middlemanName, String purpose, ArtifactRoot middlemanDir) {
+    return getStampFileArtifact(middlemanName, purpose, middlemanDir);
   }
 
   /**

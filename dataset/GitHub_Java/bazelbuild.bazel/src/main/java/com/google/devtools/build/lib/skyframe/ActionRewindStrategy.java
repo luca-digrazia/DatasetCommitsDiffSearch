@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.LostInputsExecException;
 import com.google.devtools.build.lib.actions.LostInputsExecException.LostInputsActionExecutionException;
 import com.google.devtools.build.lib.bugreport.BugReport;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunction.Restart;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -141,8 +140,7 @@ public class ActionRewindStrategy {
   }
 
   /** Clear the history of failed actions' lost inputs. */
-  void reset(ExtendedEventHandler eventHandler) {
-    eventHandler.post(new ActionRewindingStats(lostInputRecords.size()));
+  void reset() {
     lostInputRecords = ConcurrentHashMultiset.create();
   }
 

@@ -135,7 +135,7 @@ public class RunCommand implements BlazeCommand  {
           OptionMetadataTag.INCOMPATIBLE_CHANGE,
           OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
         },
-        defaultValue = "true",
+        defaultValue = "false",
         help =
             "On Windows: if true, the \"run\" command runs the binary directly instead of running "
                 + "through Bash; when false, then the binary is ran through Bash. On other "
@@ -519,16 +519,9 @@ public class RunCommand implements BlazeCommand  {
         return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
       }
 
-      String shellEscaped = ShellEscaper.escapeJoinAll(cmdLine);
-      if (OS.getCurrent() == OS.WINDOWS) {
-        // On Windows, we run Bash as a subprocess of the client (via CreateProcessW).
-        // Bash uses its own (Bash-style) flag parsing logic, not the default logic for which
-        // ShellUtils.windowsEscapeArg escapes, so we escape the flags once again Bash-style.
-        shellEscaped = "\"" + shellEscaped.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-      }
-
       ImmutableList<String> shellCmdLine =
-          ImmutableList.<String>of(shExecutable.getPathString(), "-c", shellEscaped);
+          ImmutableList.<String>of(
+              shExecutable.getPathString(), "-c", ShellEscaper.escapeJoinAll(cmdLine));
 
       for (String arg : shellCmdLine) {
         execDescription.addArgv(ByteString.copyFrom(arg, StandardCharsets.ISO_8859_1));

@@ -257,9 +257,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
             .setRunnerName("test")
             .build();
     when(spawnActionContext.beginExecution(any(), any()))
-        .thenReturn(
-            SpawnContinuation.failedWithExecException(
-                new SpawnExecException("test failed", failSpawnResult, false)))
+        .thenThrow(new SpawnExecException("test failed", failSpawnResult, false))
         .thenReturn(SpawnContinuation.immediate(passSpawnResult));
 
     ActionExecutionContext actionExecutionContext =
@@ -456,12 +454,11 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
                   stream.write((TestLogHelper.HEADER_DELIMITER + "\n").getBytes(UTF_8));
                   stream.write("This will appear in the test output: foo\n".getBytes(UTF_8));
                 }
-                return SpawnContinuation.failedWithExecException(
-                    new SpawnExecException(
-                        "Failure!!",
-                        expectedSpawnResult,
-                        /*forciblyRunRemotely=*/ false,
-                        /*catastrophe=*/ false));
+                throw new SpawnExecException(
+                    "Failure!!",
+                    expectedSpawnResult,
+                    /*forciblyRunRemotely=*/ false,
+                    /*catastrophe=*/ false);
               } else {
                 return SpawnContinuation.immediate(
                     new SpawnResult.Builder()
@@ -557,12 +554,11 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
                   stream.write((TestLogHelper.HEADER_DELIMITER + "\n").getBytes(UTF_8));
                   stream.write("This will appear in the test output: foo\n".getBytes(UTF_8));
                 }
-                return SpawnContinuation.failedWithExecException(
-                    new SpawnExecException(
-                        "Failure!!",
-                        testSpawnResult,
-                        /*forciblyRunRemotely=*/ false,
-                        /*catastrophe=*/ false));
+                throw new SpawnExecException(
+                    "Failure!!",
+                    testSpawnResult,
+                    /*forciblyRunRemotely=*/ false,
+                    /*catastrophe=*/ false);
               } else {
                 String testName =
                     OS.getCurrent() == OS.WINDOWS

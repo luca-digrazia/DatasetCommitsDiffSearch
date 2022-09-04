@@ -21,11 +21,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -50,16 +47,18 @@ public final class ActionInputHelper {
         // it cannot expand arbitrary middlemen without access to a global action graph.
         // We could check this constraint here too, but it seems unnecessary. This code is
         // going away anyway.
-        Preconditions.checkArgument(mm.isMiddlemanArtifact(), "%s is not a middleman artifact", mm);
+        Preconditions.checkArgument(mm.isMiddlemanArtifact(),
+            "%s is not a middleman artifact", mm);
         ActionAnalysisMetadata middlemanAction = actionGraph.getGeneratingAction(mm);
         Preconditions.checkState(middlemanAction != null, mm);
         // TODO(bazel-team): Consider expanding recursively or throwing an exception here.
         // Most likely, this code will cause silent errors if we ever have a middleman that
         // contains a middleman.
         if (middlemanAction.getActionType() == Action.MiddlemanType.AGGREGATING_MIDDLEMAN) {
-          Artifact.addNonMiddlemanArtifacts(
-              middlemanAction.getInputs().toList(), output, Functions.<Artifact>identity());
+          Artifact.addNonMiddlemanArtifacts(middlemanAction.getInputs(), output,
+              Functions.<Artifact>identity());
         }
+
       }
     };
   }
@@ -75,12 +74,6 @@ public final class ActionInputHelper {
     public BasicActionInput(String path) {
       this.path = Preconditions.checkNotNull(path);
       Preconditions.checkArgument(!path.isEmpty());
-    }
-
-    // TODO(lberki): Plumb this flag from InputTree.build() somehow.
-    @Override
-    public boolean isSymlink() {
-      return false;
     }
 
     @Override
@@ -151,10 +144,19 @@ public final class ActionInputHelper {
    */
   public static TreeFileArtifact treeFileArtifact(
       Artifact.SpecialArtifact parent, PathFragment relativePath) {
-    TreeFileArtifact result =
-        treeFileArtifactWithNoGeneratingActionSet(parent, relativePath, parent.getArtifactOwner());
-    result.setGeneratingActionKey(parent.getGeneratingActionKey());
-    return result;
+    Preconditions.checkState(parent.isTreeArtifact(),
+        "Given parent %s must be a TreeArtifact", parent);
+    return new TreeFileArtifact(parent, relativePath);
+  }
+
+  public static TreeFileArtifact treeFileArtifact(
+      Artifact.SpecialArtifact parent, PathFragment relativePath, ArtifactOwner artifactOwner) {
+    Preconditions.checkState(parent.isTreeArtifact(),
+        "Given parent %s must be a TreeArtifact", parent);
+    return new TreeFileArtifact(
+        parent,
+        relativePath,
+        artifactOwner);
   }
 
   /**
@@ -164,13 +166,6 @@ public final class ActionInputHelper {
   public static TreeFileArtifact treeFileArtifact(
       Artifact.SpecialArtifact parent, String relativePath) {
     return treeFileArtifact(parent, PathFragment.create(relativePath));
-  }
-
-  public static TreeFileArtifact treeFileArtifactWithNoGeneratingActionSet(
-      SpecialArtifact parent, PathFragment relativePath, ActionLookupKey artifactOwner) {
-    Preconditions.checkState(
-        parent.isTreeArtifact(), "Given parent %s must be a TreeArtifact", parent);
-    return new TreeFileArtifact(parent, relativePath, artifactOwner);
   }
 
   /** Returns an Iterable of TreeFileArtifacts with the given parent and parent relative paths. */
@@ -201,11 +196,12 @@ public final class ActionInputHelper {
    *
    * <p>Non-middleman artifacts are returned untouched.
    */
-  public static List<ActionInput> expandArtifacts(
-      NestedSet<? extends ActionInput> inputs, ArtifactExpander artifactExpander) {
+  public static List<ActionInput> expandArtifacts(Iterable<? extends ActionInput> inputs,
+      ArtifactExpander artifactExpander) {
+
     List<ActionInput> result = new ArrayList<>();
     List<Artifact> containedArtifacts = new ArrayList<>();
-    for (ActionInput input : inputs.toList()) {
+    for (ActionInput input : inputs) {
       if (!(input instanceof Artifact)) {
         result.add(input);
         continue;

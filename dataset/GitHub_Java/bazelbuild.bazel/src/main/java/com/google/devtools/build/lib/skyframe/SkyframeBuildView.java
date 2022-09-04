@@ -155,9 +155,7 @@ public final class SkyframeBuildView {
     this.skyframeActionExecutor = skyframeActionExecutor;
     this.factory = new ConfiguredTargetFactory(ruleClassProvider);
     this.artifactFactory =
-        new ArtifactFactory(
-            /* execRootParent= */ directories.getExecRootBase(),
-            directories.getRelativeOutputPath());
+        new ArtifactFactory(directories.getExecRoot(), directories.getRelativeOutputPath());
     this.skyframeExecutor = skyframeExecutor;
     this.ruleClassProvider = ruleClassProvider;
   }
