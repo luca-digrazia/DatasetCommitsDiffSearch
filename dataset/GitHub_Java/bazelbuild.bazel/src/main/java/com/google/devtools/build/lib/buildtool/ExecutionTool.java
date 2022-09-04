@@ -70,7 +70,6 @@ import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
 import com.google.devtools.build.lib.exec.SymlinkTreeStrategy;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
-import com.google.devtools.build.lib.profiler.GoogleAutoProfilerUtils;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -731,7 +730,7 @@ public class ExecutionTool {
                 .setVerboseExplanations(options.verboseExplanations)
                 .build()),
         env.getTopDownActionCache(),
-        request.getPackageOptions().checkOutputFiles
+        request.getPackageCacheOptions().checkOutputFiles
             ? modifiedOutputFiles
             : ModifiedFileSet.NOTHING_MODIFIED,
         env.getFileCache(),
@@ -782,7 +781,7 @@ public class ExecutionTool {
     actionCache.mergeIntoActionCacheStatistics(builder);
 
     AutoProfiler p =
-        GoogleAutoProfilerUtils.profiledAndLogged("Saving action cache", ProfilerTask.INFO);
+        AutoProfiler.profiledAndLogged("Saving action cache", ProfilerTask.INFO, logger);
     try {
       builder.setSizeInBytes(actionCache.save());
     } catch (IOException e) {
