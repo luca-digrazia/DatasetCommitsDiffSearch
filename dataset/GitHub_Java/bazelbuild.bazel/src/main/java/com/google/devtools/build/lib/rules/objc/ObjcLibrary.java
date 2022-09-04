@@ -22,14 +22,16 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.cpp.ArtifactCategory;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext.LinkOptions;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
+import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
+import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -95,8 +97,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
       .addTransitive(ruleContext.getPrerequisites("deps", Mode.TARGET,
           J2ObjcEntryClassProvider.class)).build();
     CcCompilationContext ccCompilationContext =
-        new CcCompilationContext.Builder(
-                ruleContext, ruleContext.getConfiguration(), ruleContext.getLabel())
+        new CcCompilationContext.Builder(ruleContext)
             .addDeclaredIncludeSrcs(
                 CompilationAttributes.Builder.fromRuleContext(ruleContext)
                     .build()
@@ -106,53 +107,51 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
             .addDeclaredIncludeSrcs(common.getTextualHdrs())
             .build();
 
-    CcLinkingContext ccLinkingContext =
-        buildCcLinkingContext(common, ruleContext.getSymbolGenerator());
+    CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
+    ccCompilationInfoBuilder.setCcCompilationContext(ccCompilationContext);
+
+    CcLinkParams ccLinkParams = buildCcLinkParams(common);
+    CcLinkingInfo ccLinkingInfo =
+        CcLinkingInfo.Builder.create()
+            .setStaticModeParamsForDynamicLibrary(ccLinkParams)
+            .setStaticModeParamsForExecutable(ccLinkParams)
+            .setDynamicModeParamsForDynamicLibrary(ccLinkParams)
+            .setDynamicModeParamsForExecutable(ccLinkParams)
+            .build();
 
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
         .addNativeDeclaredProvider(common.getObjcProvider())
+        .addNativeDeclaredProvider(ccCompilationInfoBuilder.build())
         .addProvider(J2ObjcEntryClassProvider.class, j2ObjcEntryClassProvider)
         .addProvider(J2ObjcMappingFileProvider.class, j2ObjcMappingFileProvider)
-        .addNativeDeclaredProvider(
+        .addProvider(
+            InstrumentedFilesProvider.class,
             compilationSupport.getInstrumentedFilesProvider(objectFilesCollector.build()))
-        .addNativeDeclaredProvider(
-            CcInfo.builder()
-                .setCcCompilationContext(ccCompilationContext)
-                .setCcLinkingContext(ccLinkingContext)
-                .build())
+        .addNativeDeclaredProvider(ccLinkingInfo)
         .addOutputGroups(outputGroupCollector)
         .build();
   }
 
-  private CcLinkingContext buildCcLinkingContext(
-      ObjcCommon common, SymbolGenerator<?> symbolGenerator) {
-    ImmutableSet.Builder<LibraryToLinkWrapper> libraries = new ImmutableSet.Builder<>();
+  public CcLinkParams buildCcLinkParams(ObjcCommon common) {
+    ImmutableSet.Builder<LibraryToLink> libraries = new ImmutableSet.Builder<>();
     ObjcProvider objcProvider = common.getObjcProvider();
     for (Artifact library : objcProvider.get(ObjcProvider.LIBRARY)) {
       libraries.add(
-          LibraryToLinkWrapper.builder()
-              .setStaticLibrary(library)
-              .setLibraryIdentifier(
-                  FileSystemUtils.removeExtension(library.getRootRelativePathString()))
-              .build());
+          LinkerInputs.opaqueLibraryToLink(
+              library,
+              ArtifactCategory.STATIC_LIBRARY,
+              FileSystemUtils.removeExtension(library.getRootRelativePathString())));
     }
     libraries.addAll(objcProvider.get(ObjcProvider.CC_LIBRARY));
 
-    CcLinkingContext.Builder ccLinkingContext =
-        CcLinkingContext.builder()
-            .addLibraries(
-                NestedSetBuilder.<LibraryToLinkWrapper>linkOrder()
-                    .addAll(libraries.build())
-                    .build());
+    CcLinkParams.Builder builder = CcLinkParams.builder();
+    builder.addLibraries(libraries.build());
 
-    NestedSetBuilder<LinkOptions> userLinkFlags = NestedSetBuilder.linkOrder();
     for (SdkFramework sdkFramework : objcProvider.get(ObjcProvider.SDK_FRAMEWORK)) {
-      userLinkFlags.add(
-          LinkOptions.of(ImmutableList.of("-framework", sdkFramework.getName()), symbolGenerator));
+      builder.addLinkOpts(ImmutableList.of("-framework", sdkFramework.getName()));
     }
-    ccLinkingContext.addUserLinkFlags(userLinkFlags.build());
 
-    return ccLinkingContext.build();
+    return builder.build();
   }
 
   /** Throws errors or warnings for bad attribute state. */

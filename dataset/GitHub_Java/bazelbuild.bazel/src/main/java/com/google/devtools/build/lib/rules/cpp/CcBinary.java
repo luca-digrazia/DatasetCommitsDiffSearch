@@ -322,13 +322,11 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           ArtifactCategory.STATIC_LIBRARY,
           ccToolchain.getStaticRuntimeLinkMiddleman(featureConfiguration),
           ccToolchain.getStaticRuntimeLinkInputs(featureConfiguration));
-      if (!cppConfiguration.disableEmittingStaticLibgcc()) {
-        // Only force a static link of libgcc if static runtime linking is enabled (which
-        // can't be true if runtimeInputs is empty).
-        // TODO(bazel-team): Move this to CcToolchain.
-        if (!ccToolchain.getStaticRuntimeLinkInputs(featureConfiguration).isEmpty()) {
-          linkActionBuilder.addLinkopt("-static-libgcc");
-        }
+      // Only force a static link of libgcc if static runtime linking is enabled (which
+      // can't be true if runtimeInputs is empty).
+      // TODO(bazel-team): Move this to CcToolchain.
+      if (!ccToolchain.getStaticRuntimeLinkInputs(featureConfiguration).isEmpty()) {
+        linkActionBuilder.addLinkopt("-static-libgcc");
       }
     }
 
