@@ -101,7 +101,23 @@ public class PathsSubject extends Subject {
                     .map(ZipEntry::getName)
                     .map(n -> n.replaceAll(PATH_NORMALIZER, "$1/$3"))
                     .collect(Collectors.toSet()))
-        .containsAtLeastElementsIn(paths);
+        .containsAtLeastElementsIn(Arrays.asList(paths));
+  }
+
+  @SuppressWarnings("TruthIncompatibleType")
+  void containsExactlyArchivedFilesIn(String... paths) throws IOException {
+    if (actual == null) {
+      failWithoutActual(simpleFact("expected not to be null"));
+    }
+    exists();
+
+    assertThat(
+            new ZipFile(actual.toFile())
+                .stream()
+                    .map(ZipEntry::getName)
+                    .map(n -> n.replaceAll(PATH_NORMALIZER, "$1/$3"))
+                    .collect(Collectors.toSet()))
+        .containsExactly(/* expected: String, actual: List<String> */ Arrays.asList(paths));
   }
 
   void containsNoArchivedFilesIn(String... paths) throws IOException {
