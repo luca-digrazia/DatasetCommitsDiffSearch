@@ -4,18 +4,15 @@ import java.io.Closeable;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
-import javax.ws.rs.ext.MessageBodyWriter;
 
 import org.jboss.logging.Logger;
 
 import io.quarkus.qrs.runtime.handlers.RestHandler;
 import io.quarkus.qrs.runtime.jaxrs.QrsHttpHeaders;
 import io.quarkus.qrs.runtime.mapping.RuntimeResource;
-import io.quarkus.qrs.runtime.model.ResourceWriter;
 import io.quarkus.qrs.runtime.spi.BeanFactory;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
@@ -47,11 +44,8 @@ public class RequestContext implements Runnable, Closeable {
     private int position;
     private Throwable throwable;
     private QrsHttpHeaders httpHeaders;
-    private ExceptionMapping exceptionMapping;
-    private Serialisers serialisers;
 
-    public RequestContext(RoutingContext context, RuntimeResource target, ExceptionMapping exceptionMapping,
-            Serialisers serialisers) {
+    public RequestContext(RoutingContext context, RuntimeResource target) {
         this.context = context;
         this.target = target;
         this.handlers = target.getHandlerChain();
@@ -62,8 +56,6 @@ public class RequestContext implements Runnable, Closeable {
                 close();
             }
         });
-        this.exceptionMapping = exceptionMapping;
-        this.serialisers = serialisers;
     }
 
     public void suspend() {
@@ -238,21 +230,9 @@ public class RequestContext implements Runnable, Closeable {
         return throwable;
     }
 
-    /**
-     * ATM this can only be called by the InvocationHandler
-     */
     public RequestContext setThrowable(Throwable throwable) {
-        invokeExceptionMapper(throwable);
         this.throwable = throwable;
         return this;
-    }
-
-    private void invokeExceptionMapper(Throwable throwable) {
-        if (throwable instanceof WebApplicationException) {
-            this.result = ((WebApplicationException) throwable).getResponse();
-        } else {
-            this.result = exceptionMapping.mapException(throwable, this);
-        }
     }
 
     private void handleException(Throwable throwable) {
@@ -262,7 +242,6 @@ public class RequestContext implements Runnable, Closeable {
 
     @Override
     public void close() {
-        // FIXME: close filter instances somehow?
         if (endpointInstance != null) {
             endpointInstance.close();
         }
@@ -270,15 +249,5 @@ public class RequestContext implements Runnable, Closeable {
 
     public Response getResponse() {
         return (Response) result;
-    }
-
-    public MessageBodyWriter<Object> getMessageBodyWriter() {
-        // for some endpoints (no filter, easy content/return type) we can hardcode this and save the lookup
-        ResourceWriter<Object> buildTimeWriter = target.getBuildTimeWriter();
-        // no build-time writers for exception responses
-        if (throwable == null && buildTimeWriter != null) {
-            return buildTimeWriter.getFactory().createInstance(this).getInstance();
-        }
-        return (MessageBodyWriter<Object>) serialisers.findWriter(getResponse(), this);
     }
 }

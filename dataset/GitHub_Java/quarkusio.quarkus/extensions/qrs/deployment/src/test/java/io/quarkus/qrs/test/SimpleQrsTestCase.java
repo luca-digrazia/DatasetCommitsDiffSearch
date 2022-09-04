@@ -23,9 +23,7 @@ public class SimpleQrsTestCase {
                 public JavaArchive get() {
                     return ShrinkWrap.create(JavaArchive.class)
                             .addClasses(SimpleQrsResource.class, Person.class, TestRequestFilter.class,
-                                    TestResponseFilter.class, HelloService.class, TestException.class,
-                                    TestExceptionMapper.class,
-                                    TestWriter.class, TestClass.class);
+                                    TestResponseFilter.class);
                 }
             });
 
@@ -65,12 +63,6 @@ public class SimpleQrsTestCase {
     }
 
     @Test
-    public void testInjection() {
-        RestAssured.get("/simple/hello")
-                .then().body(Matchers.equalTo("Hello"));
-    }
-
-    @Test
     public void testParams() {
         RestAssured.with()
                 .queryParam("q", "qv")
@@ -100,23 +92,5 @@ public class SimpleQrsTestCase {
         Assertions.assertEquals(2, filters.size());
         Assertions.assertTrue(filters.contains("request"));
         Assertions.assertTrue(filters.contains("response"));
-    }
-
-    @Test
-    public void testException() {
-        RestAssured.get("/simple/mapped-exception")
-                .then().body(Matchers.equalTo("OK"))
-                .statusCode(666);
-        RestAssured.get("/simple/unknown-exception")
-                .then().statusCode(500);
-        RestAssured.get("/simple/web-application-exception")
-                .then().body(Matchers.equalTo("OK"))
-                .statusCode(666);
-    }
-
-    @Test
-    public void testWriter() {
-        RestAssured.get("/simple/writer")
-                .then().body(Matchers.equalTo("WRITER"));
     }
 }
