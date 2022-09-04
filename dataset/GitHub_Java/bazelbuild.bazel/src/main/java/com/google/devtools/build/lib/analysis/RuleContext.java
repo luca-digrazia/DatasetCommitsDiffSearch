@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
@@ -860,7 +859,7 @@ public final class RuleContext extends TargetContext
     for (BuildOptions options : splitOptions) {
       // This method should only be called when the split config is enabled on the command line, in
       // which case this cpu can't be null.
-      cpus.add(options.get(CoreOptions.class).cpu);
+      cpus.add(options.get(BuildConfiguration.Options.class).cpu);
     }
 
     // Use an ImmutableListMultimap.Builder here to preserve ordering.
