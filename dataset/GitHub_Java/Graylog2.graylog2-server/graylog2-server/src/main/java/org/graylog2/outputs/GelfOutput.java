@@ -16,7 +16,6 @@
  */
 package org.graylog2.outputs;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.assistedinject.Assisted;
 import org.graylog2.gelfclient.GelfConfiguration;
@@ -45,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class GelfOutput implements MessageOutput {
@@ -61,14 +59,15 @@ public class GelfOutput implements MessageOutput {
     private final GelfTransport transport;
 
     @Inject
-    public GelfOutput(@Assisted Configuration configuration) throws MessageOutputConfigurationException {
-        this(configuration, buildTransport(configuration));
+    public GelfOutput(@Assisted Stream stream, @Assisted Configuration configuration) throws MessageOutputConfigurationException {
+        this.configuration = configuration;
+        transport = buildTransport(configuration);
+        isRunning.set(true);
     }
 
-    @VisibleForTesting
-    GelfOutput(Configuration configuration, GelfTransport gelfTransport) {
-        this.configuration = checkNotNull(configuration);
-        this.transport = checkNotNull(gelfTransport);
+    public GelfOutput(Configuration configuration, GelfTransport gelfTransport) {
+        this.configuration = configuration;
+        this.transport = gelfTransport;
         isRunning.set(true);
     }
 
@@ -88,27 +87,29 @@ public class GelfOutput implements MessageOutput {
         return isRunning.get();
     }
 
-    protected static GelfTransport buildTransport(final Configuration configuration) throws MessageOutputConfigurationException {
+    protected GelfTransport buildTransport(final Configuration configuration) throws MessageOutputConfigurationException {
         final String protocol = configuration.getString(CK_PROTOCOL);
         final String hostname = configuration.getString(CK_HOSTNAME);
+        if (isNullOrEmpty(protocol) || isNullOrEmpty(hostname) || !configuration.intIsSet(CK_PORT))
+            throw new MessageOutputConfigurationException("Protocol and/or hostname missing!");
         final int port = configuration.getInt(CK_PORT);
 
-        if (isNullOrEmpty(protocol) || isNullOrEmpty(hostname) || !configuration.intIsSet(CK_PORT)) {
-            throw new MessageOutputConfigurationException("Protocol and/or hostname missing!");
-        }
 
         final GelfConfiguration gelfConfiguration = new GelfConfiguration(hostname, port)
                 .transport(GelfTransports.valueOf(protocol.toUpperCase()));
 
         LOG.debug("Initializing GELF sender and connecting to {}://{}:{}", protocol, hostname, port);
 
+        final GelfTransport gelfTransport;
         try {
-            return GelfTransports.create(gelfConfiguration);
+            gelfTransport = GelfTransports.create(gelfConfiguration);
         } catch (Exception e) {
-            final String error = "Error initializing " + GelfOutput.class;
+            final String error = "Error initializing " + this.getClass() + ": " + e.getMessage();
             LOG.error(error, e);
             throw new MessageOutputConfigurationException(error);
         }
+
+        return gelfTransport;
     }
 
     @Override
@@ -124,33 +125,28 @@ public class GelfOutput implements MessageOutput {
     }
 
     private GelfMessageLevel extractLevel(Object rawLevel) {
-        if (rawLevel != null) {
-            if (rawLevel instanceof Number) {
+        if (rawLevel != null)
+            if (rawLevel instanceof Number)
                 return GelfMessageLevel.fromNumericLevel(((Number) rawLevel).intValue());
-            }
-        }
-
-        if (rawLevel instanceof String) {
-            try {
-                return GelfMessageLevel.fromNumericLevel(Integer.getInteger(rawLevel.toString()));
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
-
+            if (rawLevel instanceof String)
+                try {
+                    return GelfMessageLevel.fromNumericLevel(Integer.getInteger(rawLevel.toString()));
+                } catch(NumberFormatException e) {
+                    return null;
+                }
         return null;
     }
 
     protected GelfMessage toGELFMessage(final Message message) {
         final DateTime timestamp;
-        if (message.getField(Message.FIELD_TIMESTAMP) != null || message.getField(Message.FIELD_TIMESTAMP) instanceof DateTime) {
-            timestamp = (DateTime) message.getField(Message.FIELD_TIMESTAMP);
+        if (message.getField("timestamp") != null || message.getField("timestamp") instanceof DateTime) {
+            timestamp = (DateTime) message.getField("timestamp");
         } else {
             timestamp = Tools.iso8601();
         }
 
-        final GelfMessageLevel messageLevel = extractLevel(message.getField(Message.FIELD_LEVEL));
-        final String fullMessage = (String) message.getField(Message.FIELD_FULL_MESSAGE);
+        final GelfMessageLevel messageLevel = extractLevel(message.getField("level"));
+        final String fullMessage = (String) message.getField("message");
         final String facility = (String) message.getField("facility");
         final String forwarder = GelfOutput.class.getCanonicalName();
 
@@ -159,9 +155,8 @@ public class GelfOutput implements MessageOutput {
                 .additionalField("_forwarder", forwarder)
                 .additionalFields(message.getFields());
 
-        if (messageLevel != null) {
+        if (messageLevel != null)
             builder.level(messageLevel);
-        }
 
         if (fullMessage != null) {
             builder.fullMessage(fullMessage);
