@@ -24,12 +24,6 @@ import com.google.devtools.build.lib.analysis.constraints.ConstraintSemantics;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentCollection;
 import com.google.devtools.build.lib.analysis.constraints.SupportedEnvironments;
 import com.google.devtools.build.lib.analysis.constraints.SupportedEnvironmentsProvider;
-import com.google.devtools.build.lib.analysis.test.ExecutionInfo;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
-import com.google.devtools.build.lib.analysis.test.TestActionBuilder;
-import com.google.devtools.build.lib.analysis.test.TestEnvironmentInfo;
-import com.google.devtools.build.lib.analysis.test.TestProvider;
-import com.google.devtools.build.lib.analysis.test.TestProvider.TestParams;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -40,6 +34,12 @@ import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.rules.test.ExecutionInfoProvider;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
+import com.google.devtools.build.lib.rules.test.TestActionBuilder;
+import com.google.devtools.build.lib.rules.test.TestEnvironmentProvider;
+import com.google.devtools.build.lib.rules.test.TestProvider;
+import com.google.devtools.build.lib.rules.test.TestProvider.TestParams;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -190,9 +190,9 @@ public final class RuleConfiguredTargetBuilder {
         new TestActionBuilder(ruleContext)
             .setInstrumentedFiles(providersBuilder.getProvider(InstrumentedFilesProvider.class));
 
-    TestEnvironmentInfo environmentProvider =
-        (TestEnvironmentInfo)
-            providersBuilder.getProvider(TestEnvironmentInfo.PROVIDER.getKey());
+    TestEnvironmentProvider environmentProvider =
+        (TestEnvironmentProvider)
+            providersBuilder.getProvider(TestEnvironmentProvider.SKYLARK_CONSTRUCTOR.getKey());
     if (environmentProvider != null) {
       testActionBuilder.addExtraEnv(environmentProvider.getEnvironment());
     }
@@ -201,8 +201,8 @@ public final class RuleConfiguredTargetBuilder {
         testActionBuilder
             .setFilesToRunProvider(filesToRunProvider)
             .setExecutionRequirements(
-                (ExecutionInfo) providersBuilder
-                    .getProvider(ExecutionInfo.PROVIDER.getKey()))
+                (ExecutionInfoProvider) providersBuilder
+                    .getProvider(ExecutionInfoProvider.SKYLARK_CONSTRUCTOR.getKey()))
             .setShardCount(explicitShardCount)
             .build();
     ImmutableList<String> testTags = ImmutableList.copyOf(ruleContext.getRule().getRuleTags());
@@ -230,14 +230,6 @@ public final class RuleConfiguredTargetBuilder {
     return this;
   }
 
-  /** Adds a group of {@link TransitiveInfoProviderMap} instances. */
-  public <T extends TransitiveInfoProvider> RuleConfiguredTargetBuilder addProviderMaps(
-      Iterable<TransitiveInfoProviderMap> providerMaps) {
-    for (TransitiveInfoProviderMap providerMap : providerMaps) {
-      addProviders(providerMap);
-    }
-    return this;
-  }
 
   /**
    * Add a specific provider with a given value.

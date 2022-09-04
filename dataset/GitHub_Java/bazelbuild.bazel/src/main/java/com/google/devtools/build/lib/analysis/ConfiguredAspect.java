@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.analysis;
 import static com.google.devtools.build.lib.analysis.ExtraActionUtils.createExtraActionProvider;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -33,6 +32,7 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.TreeMap;
@@ -102,8 +102,8 @@ public final class ConfiguredAspect {
   }
 
   public Object get(String legacyKey) {
-    if (OutputGroupInfo.SKYLARK_NAME.equals(legacyKey)) {
-      return get(OutputGroupInfo.SKYLARK_CONSTRUCTOR.getKey());
+    if (OutputGroupProvider.SKYLARK_NAME.equals(legacyKey)) {
+      return get(OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey());
     }
     return providers.getProvider(legacyKey);
   }
@@ -235,11 +235,11 @@ public final class ConfiguredAspect {
           outputGroups.put(entry.getKey(), entry.getValue().build());
         }
 
-        if (providers.contains(OutputGroupInfo.SKYLARK_CONSTRUCTOR.getKey())) {
+        if (providers.contains(OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey())) {
           throw new IllegalStateException(
-              "OutputGroupInfo was provided explicitly; do not use addOutputGroup");
+              "OutputGroupProvider was provided explicitly; do not use addOutputGroup");
         }
-        addDeclaredProvider(new OutputGroupInfo(outputGroups.build()));
+        addDeclaredProvider(new OutputGroupProvider(outputGroups.build()));
       }
 
       addProvider(

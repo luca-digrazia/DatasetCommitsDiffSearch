@@ -14,13 +14,11 @@
 
 package com.google.devtools.build.lib.authandtls;
 
-import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
-import java.util.List;
 
 /**
  * Common options for authentication and TLS.
@@ -39,28 +37,15 @@ public class AuthAndTLSOptions extends OptionsBase {
   )
   public boolean authEnabled;
 
-  /**
-   * Comma-separated list of auth scopes.
-   *
-   * <ul>
-   *   <li><b>https://www.googleapis.com/auth/cloud-source-tools</b> is the auth scope for Build
-   *       Event Service (BES) and Remote Build Execution (RBE).
-   *   <li><b>https://www.googleapis.com/auth/devstorage.read_write</b> is the auth scope for Google
-   *       Cloud Storage (GCS).
-   * </ul>
-   */
   @Option(
     name = "auth_scope",
-    defaultValue =
-        "https://www.googleapis.com/auth/cloud-source-tools,"
-            + "https://www.googleapis.com/auth/devstorage.read_write",
-    converter = CommaSeparatedOptionListConverter.class,
+    defaultValue = "https://www.googleapis.com/auth/cloud-source-tools",
     category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
-    help = "A comma-separated list of authentication scopes."
+    help = "If server authentication requires a scope, provide it here."
   )
-  public List<String> authScope;
+  public String authScope;
 
   @Option(
     name = "auth_credentials",
