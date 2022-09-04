@@ -1,6 +1,5 @@
 package io.quarkus.bootstrap.runner;
 
-import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,18 +35,17 @@ public class QuarkusEntryPoint {
         } else if (Boolean.getBoolean("quarkus.launch.rebuild")) {
             doReaugment(appRoot);
         } else {
-            SerializedApplication app;
-            // the magic number here is close to the smallest possible dat file
-            try (InputStream in = new BufferedInputStream(Files.newInputStream(appRoot.resolve(QUARKUS_APPLICATION_DAT)),
-                    24_576)) {
+            SerializedApplication app = null;
+            try (InputStream in = Files.newInputStream(appRoot.resolve(QUARKUS_APPLICATION_DAT))) {
                 app = SerializedApplication.read(in, appRoot);
-            }
-            try {
                 Thread.currentThread().setContextClassLoader(app.getRunnerClassLoader());
                 Class<?> mainClass = app.getRunnerClassLoader().loadClass(app.getMainClass());
                 mainClass.getMethod("main", String[].class).invoke(null, args);
+
             } finally {
-                app.getRunnerClassLoader().close();
+                if (app != null) {
+                    app.getRunnerClassLoader().close();
+                }
             }
         }
     }
