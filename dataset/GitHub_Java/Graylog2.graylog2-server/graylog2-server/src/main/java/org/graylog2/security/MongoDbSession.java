@@ -26,20 +26,14 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
 
-@CollectionName(MongoDbSession.COLLECTION_NAME)
+@CollectionName("sessions")
 public class MongoDbSession extends PersistedImpl {
     private static final Logger LOG = LoggerFactory.getLogger(MongoDbSession.class);
-    static final String COLLECTION_NAME = "sessions";
-    static final String FIELD_SESSION_ID = "session_id";
 
     protected MongoDbSession(Map<String, Object> fields) {
         super(fields);
@@ -146,6 +140,6 @@ public class MongoDbSession extends PersistedImpl {
     }
 
     public String getSessionId() {
-        return String.valueOf(fields.get(FIELD_SESSION_ID));
+        return String.valueOf(fields.get("session_id"));
     }
 }
