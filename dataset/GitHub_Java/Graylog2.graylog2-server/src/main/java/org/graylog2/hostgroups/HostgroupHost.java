@@ -20,6 +20,9 @@
 
 package org.graylog2.hostgroups;
 
+import com.mongodb.DBObject;
+import org.bson.types.ObjectId;
+
 /**
  * HostgroupHost.java: Apr 15, 2011 12:04:02 AM
  *
@@ -28,5 +31,45 @@ package org.graylog2.hostgroups;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class HostgroupHost {
+
+    public static final int TYPE_SIMPLE = 0;
+    public static final int TYPE_REGEX = 1;
+
+    private ObjectId objectId = null;
+    private ObjectId hostgroupId = null;
+    private int type = -1;
+    private String hostname = null;
+
+    private DBObject mongoObject = null;
+
+    public HostgroupHost(DBObject rule) {
+        this.objectId = (ObjectId) rule.get("_id");
+        this.hostgroupId = (ObjectId) rule.get("hostgroup_id");
+        this.type = (Integer) rule.get("ruletype");
+        this.hostname = (String) rule.get("hostname");
+
+        this.mongoObject = rule;
+    }
+
+    /**
+     * @return the hostgroupId
+     */
+    public ObjectId getHostgroupId() {
+        return hostgroupId;
+    }
+
+    /**
+     * @return the type
+     */
+    public int getType() {
+        return type;
+    }
+
+    /**
+     * @return the hostname
+     */
+    public String getHostname() {
+        return hostname;
+    }
 
 }
