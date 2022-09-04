@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2016 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,14 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package com.google.devtools.build.lib.standalone;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.ActionContextConsumer;
-import com.google.devtools.build.lib.actions.Executor.ActionContext;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-
-import java.util.Map;
+import com.google.devtools.build.lib.exec.ActionContextConsumer;
 
 /**
  * {@link ActionContextConsumer} that requests the action contexts necessary for standalone
@@ -27,15 +28,17 @@ import java.util.Map;
 public class StandaloneActionContextConsumer implements ActionContextConsumer {
 
   @Override
-  public Map<String, String> getSpawnActionContexts() {
-    return ImmutableMap.of();
+  public ImmutableMap<String, String> getSpawnActionContexts() {
+    // This makes the "sandboxed" strategy the default Spawn strategy, unless it is overridden by a
+    // later BlazeModule.
+    return ImmutableMap.of("", "standalone");
   }
 
   @Override
-  public Map<Class<? extends ActionContext>, String> getActionContexts() {
-    return ImmutableMap.<Class<? extends ActionContext>, String>builder()
-        .put(SpawnActionContext.class, "standalone")
-        .build();
+  public Multimap<Class<? extends ActionContext>, String> getActionContexts() {
+    // This makes the "standalone" strategy available via --spawn_strategy=standalone, but it is not
+    // necessarily the default.
+    return ImmutableMultimap.<Class<? extends ActionContext>, String>of(
+        SpawnActionContext.class, "standalone");
   }
-
 }

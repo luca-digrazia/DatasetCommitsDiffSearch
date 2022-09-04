@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 
@@ -40,25 +41,29 @@ final class SandboxActionContextProvider extends ActionContextProvider {
     boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
     String productName = cmdEnv.getRuntime().getProductName();
 
-    // This works on most platforms, but isn't the best choice, so we put it first and let later
-    // platform-specific sandboxing strategies become the default.
-    if (ProcessWrapperSandboxedSpawnRunner.isSupported(cmdEnv)) {
+    // The ProcessWrapperSandboxedStrategy works on all POSIX-compatible operating systems.
+    if (OS.isPosixCompatible()) {
       contexts.add(
           new ProcessWrapperSandboxedStrategy(
               cmdEnv, buildRequest, sandboxBase, verboseFailures, productName));
     }
 
-    // This is the preferred sandboxing strategy on Linux.
-    if (LinuxSandboxedSpawnRunner.isSupported(cmdEnv)) {
-      contexts.add(
-          LinuxSandboxedStrategy.create(cmdEnv, buildRequest, sandboxBase, verboseFailures));
-    }
-
-    // This is the preferred sandboxing strategy on macOS.
-    if (DarwinSandboxedSpawnRunner.isSupported(cmdEnv)) {
-      contexts.add(
-          new DarwinSandboxedStrategy(
-              cmdEnv, buildRequest, sandboxBase, verboseFailures, productName));
+    switch (OS.getCurrent()) {
+      case LINUX:
+        if (LinuxSandboxedStrategy.isSupported(cmdEnv)) {
+          contexts.add(
+              LinuxSandboxedStrategy.create(cmdEnv, buildRequest, sandboxBase, verboseFailures));
+        }
+        break;
+      case DARWIN:
+        if (DarwinSandboxRunner.isSupported(cmdEnv)) {
+          contexts.add(
+              DarwinSandboxedStrategy.create(
+                  cmdEnv, buildRequest, sandboxBase, verboseFailures, productName));
+        }
+        break;
+      default:
+        // No additional platform-specific sandboxing available.
     }
 
     return new SandboxActionContextProvider(contexts.build());

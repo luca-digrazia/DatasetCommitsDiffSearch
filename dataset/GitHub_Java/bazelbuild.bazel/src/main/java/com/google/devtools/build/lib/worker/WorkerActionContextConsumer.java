@@ -14,12 +14,12 @@
 package com.google.devtools.build.lib.worker;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMap.Builder;
-import com.google.devtools.build.lib.actions.ActionContextConsumer;
-import com.google.devtools.build.lib.actions.Executor.ActionContext;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.ImmutableMultimap.Builder;
+import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-
-import java.util.Map;
+import com.google.devtools.build.lib.exec.ActionContextConsumer;
 
 /**
  * {@link ActionContextConsumer} that requests the action contexts necessary for worker process
@@ -28,13 +28,14 @@ import java.util.Map;
 public class WorkerActionContextConsumer implements ActionContextConsumer {
 
   @Override
-  public Map<String, String> getSpawnActionContexts() {
+  public ImmutableMap<String, String> getSpawnActionContexts() {
     return ImmutableMap.of();
   }
 
   @Override
-  public Map<Class<? extends ActionContext>, String> getActionContexts() {
-    Builder<Class<? extends ActionContext>, String> contexts = ImmutableMap.builder();
+  public Multimap<Class<? extends ActionContext>, String> getActionContexts() {
+    Builder<Class<? extends ActionContext>, String> contexts = ImmutableMultimap.builder();
+    contexts.put(SpawnActionContext.class, "standalone");
     contexts.put(SpawnActionContext.class, "worker");
     return contexts.build();
   }

@@ -13,13 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.exec;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionContext;
-import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nullable;
 
 /**
  * Builder class to create an {@link Executor} instance. This class is part of the module API,
@@ -28,6 +29,7 @@ import java.util.List;
 public class ExecutorBuilder {
   private final List<ActionContextProvider> actionContextProviders = new ArrayList<>();
   private final List<ActionContextConsumer> actionContextConsumers = new ArrayList<>();
+  private ActionInputFileCache cache;
   private ActionInputPrefetcher prefetcher;
 
   // These methods shouldn't be public, but they have to be right now as ExecutionTool is in another
@@ -38,6 +40,11 @@ public class ExecutorBuilder {
 
   public ImmutableList<ActionContextConsumer> getActionContextConsumers() {
     return ImmutableList.copyOf(actionContextConsumers);
+  }
+
+  @Nullable
+  public ActionInputFileCache getActionInputFileCache() {
+    return cache;
   }
 
   public ActionInputPrefetcher getActionInputPrefetcher() {
@@ -65,6 +72,16 @@ public class ExecutorBuilder {
    */
   public ExecutorBuilder addActionContextConsumer(ActionContextConsumer consumer) {
     this.actionContextConsumers.add(consumer);
+    return this;
+  }
+
+  /**
+   * Sets the cache for action input files. Only one module may set the cache. If multiple modules
+   * set it, this method will throw an {@link IllegalStateException}.
+   */
+  public ExecutorBuilder setActionInputFileCache(ActionInputFileCache cache) {
+    Preconditions.checkState(this.cache == null);
+    this.cache = Preconditions.checkNotNull(cache);
     return this;
   }
 

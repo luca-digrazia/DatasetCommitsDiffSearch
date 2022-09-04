@@ -19,18 +19,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Annotation that marks strategies that extend the execution phase behavior of Blaze.
+ * Annotation for action contexts. Actions contexts should also implement {@link ActionContext}.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface ExecutionStrategy {
-  /**
-   * The names this strategy is available under on the command line.
-   */
-  String[] name() default {};
-
-  /**
-   * Returns the action context this strategy implements.
-   */
-  Class<? extends ActionContext> contextType();
+public @interface ActionContextMarker {
+  String name();
 }

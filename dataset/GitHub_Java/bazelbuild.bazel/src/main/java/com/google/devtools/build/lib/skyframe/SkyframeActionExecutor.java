@@ -19,7 +19,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.eventbus.EventBus;
-import com.google.common.util.concurrent.Striped;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -56,7 +55,6 @@ import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit.ActionCachedContext;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.TargetOutOfDateException;
-import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
@@ -95,7 +93,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -105,10 +102,6 @@ import javax.annotation.Nullable;
  */
 public final class SkyframeActionExecutor implements ActionExecutionContextFactory {
   private static final Logger logger = Logger.getLogger(SkyframeActionExecutor.class.getName());
-
-  // Used to prevent check-then-act races in #createOutputDirectories. See the comment there for
-  // more detail.
-  private static final Striped<Lock> outputDirectoryDeletionLock = Striped.lock(64);
 
   private Reporter reporter;
   private final AtomicReference<EventBus> eventBus;
@@ -683,52 +676,18 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
             /* Fall through to plan B. */
           }
 
-          // Possibly some direct ancestors are not directories.  In that case, we traverse the
-          // ancestors upward, deleting any non-directories, until we reach a directory, then try
-          // again. This handles the case where a file becomes a directory, either from one build to
-          // another, or within a single build.
+          // Possibly some direct ancestors are not directories.  In that case, we unlink all the
+          // ancestors until we reach a directory, then try again. This handles the case where a
+          // file becomes a directory, either from one build to another, or within a single build.
           //
           // Symlinks should not be followed so in order to clean up symlinks pointing to Fileset
           // outputs from previous builds. See bug [incremental build of Fileset fails if
           // Fileset.out was changed to be a subdirectory of the old value].
           try {
-            Path p = outputDir;
-            while (true) {
-
-              // This lock ensures that the only thread that observes a filesystem transition in
-              // which the path p first exists and then does not is the thread that calls
-              // p.delete() and causes the transition.
-              //
-              // If it were otherwise, then some thread A could test p.exists(), see that it does,
-              // then test p.isDirectory(), see that p isn't a directory (because, say, thread
-              // B deleted it), and then call p.delete(). That could result in two different kinds
-              // of failures:
-              //
-              // 1) In the time between when thread A sees that p is not a directory and when thread
-              // A calls p.delete(), thread B may reach the call to createDirectoryAndParents
-              // and create a directory at p, which thread A then deletes. Thread B would then try
-              // adding outputs to the directory it thought was there, and fail.
-              //
-              // 2) In the time between when thread A sees that p is not a directory and when thread
-              // A calls p.delete(), thread B may create a directory at p, and then either create a
-              // subdirectory beneath it or add outputs to it. Then when thread A tries to delete p,
-              // it would fail.
-              Lock lock = outputDirectoryDeletionLock.get(p);
-              lock.lock();
-              try {
-                if (p.exists(Symlinks.NOFOLLOW)) {
-                  boolean isDirectory = p.isDirectory(Symlinks.NOFOLLOW);
-                  if (isDirectory) {
-                    break;
-                  }
-                  // p may be a file or dangling symlink, or a symlink to an old Fileset output
-                  p.delete(); // throws IOException
-                }
-              } finally {
-                lock.unlock();
-              }
-
-              p = p.getParentDirectory();
+            for (Path p = outputDir; !p.isDirectory(Symlinks.NOFOLLOW);
+                p = p.getParentDirectory()) {
+              // p may be a file or dangling symlink, or a symlink to an old Fileset output
+              p.delete(); // throws IOException
             }
             createDirectoryAndParents(outputDir);
           } catch (IOException e) {
@@ -1141,11 +1100,21 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
 
     @Override
-    public Metadata getMetadata(ActionInput input) throws IOException {
-      Metadata metadata = perActionCache.getMetadata(input);
-      return (metadata != null) && (metadata != FileArtifactValue.MISSING_FILE_MARKER)
-          ? metadata
-          : perBuildFileCache.getMetadata(input);
+    public byte[] getDigest(ActionInput actionInput) throws IOException {
+      byte[] digest = perActionCache.getDigest(actionInput);
+      return digest != null ? digest : perBuildFileCache.getDigest(actionInput);
+    }
+
+    @Override
+    public boolean isFile(Artifact input) {
+      // PerActionCache must have a value for all artifacts.
+      return perActionCache.isFile(input);
+    }
+
+    @Override
+    public long getSizeInBytes(ActionInput actionInput) throws IOException {
+      long size = perActionCache.getSizeInBytes(actionInput);
+      return size > -1 ? size : perBuildFileCache.getSizeInBytes(actionInput);
     }
 
     @Override

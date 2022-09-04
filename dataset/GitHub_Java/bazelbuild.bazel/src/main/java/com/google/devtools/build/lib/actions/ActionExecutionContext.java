@@ -41,7 +41,6 @@ public class ActionExecutionContext implements Closeable {
 
   private final Executor executor;
   private final ActionInputFileCache actionInputFileCache;
-  private final ActionInputPrefetcher actionInputPrefetcher;
   private final MetadataHandler metadataHandler;
   private final FileOutErr fileOutErr;
   private final ImmutableMap<String, String> clientEnv;
@@ -52,14 +51,12 @@ public class ActionExecutionContext implements Closeable {
   private ActionExecutionContext(
       Executor executor,
       ActionInputFileCache actionInputFileCache,
-      ActionInputPrefetcher actionInputPrefetcher,
       MetadataHandler metadataHandler,
       FileOutErr fileOutErr,
       Map<String, String> clientEnv,
       @Nullable ArtifactExpander artifactExpander,
       @Nullable SkyFunction.Environment env) {
     this.actionInputFileCache = actionInputFileCache;
-    this.actionInputPrefetcher = actionInputPrefetcher;
     this.metadataHandler = metadataHandler;
     this.fileOutErr = fileOutErr;
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
@@ -71,7 +68,6 @@ public class ActionExecutionContext implements Closeable {
   public ActionExecutionContext(
       Executor executor,
       ActionInputFileCache actionInputFileCache,
-      ActionInputPrefetcher actionInputPrefetcher,
       MetadataHandler metadataHandler,
       FileOutErr fileOutErr,
       Map<String, String> clientEnv,
@@ -79,7 +75,23 @@ public class ActionExecutionContext implements Closeable {
     this(
         executor,
         actionInputFileCache,
-        actionInputPrefetcher,
+        metadataHandler,
+        fileOutErr,
+        clientEnv,
+        artifactExpander,
+        null);
+  }
+
+  public static ActionExecutionContext normal(
+      Executor executor,
+      ActionInputFileCache actionInputFileCache,
+      MetadataHandler metadataHandler,
+      FileOutErr fileOutErr,
+      Map<String, String> clientEnv,
+      ArtifactExpander artifactExpander) {
+    return new ActionExecutionContext(
+        executor,
+        actionInputFileCache,
         metadataHandler,
         fileOutErr,
         clientEnv,
@@ -90,24 +102,12 @@ public class ActionExecutionContext implements Closeable {
   public static ActionExecutionContext forInputDiscovery(
       Executor executor,
       ActionInputFileCache actionInputFileCache,
-      ActionInputPrefetcher actionInputPrefetcher,
       MetadataHandler metadataHandler,
       FileOutErr fileOutErr,
       Map<String, String> clientEnv,
       Environment env) {
     return new ActionExecutionContext(
-        executor,
-        actionInputFileCache,
-        actionInputPrefetcher,
-        metadataHandler,
-        fileOutErr,
-        clientEnv,
-        null,
-        env);
-  }
-
-  public ActionInputPrefetcher getActionInputPrefetcher() {
-    return actionInputPrefetcher;
+        executor, actionInputFileCache, metadataHandler, fileOutErr, clientEnv, null, env);
   }
 
   public ActionInputFileCache getActionInputFileCache() {
@@ -224,7 +224,6 @@ public class ActionExecutionContext implements Closeable {
     return new ActionExecutionContext(
         executor,
         actionInputFileCache,
-        actionInputPrefetcher,
         metadataHandler,
         fileOutErr,
         clientEnv,

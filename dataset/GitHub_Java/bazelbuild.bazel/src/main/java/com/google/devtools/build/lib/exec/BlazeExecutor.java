@@ -13,12 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.exec;
 
-import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionContext;
+import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
-import com.google.devtools.build.lib.clock.Clock;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -26,10 +27,16 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.util.Clock;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsClassProvider;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -47,7 +54,6 @@ public final class BlazeExecutor implements Executor {
 
   private final boolean verboseFailures;
   private final boolean showSubcommands;
-  private final FileSystem fileSystem;
   private final Path execRoot;
   private final Reporter reporter;
   private final EventBus eventBus;
@@ -55,7 +61,9 @@ public final class BlazeExecutor implements Executor {
   private final OptionsClassProvider options;
   private AtomicBoolean inExecutionPhase;
 
-  private final Map<Class<? extends ActionContext>, ActionContext> contextMap;
+  private final Map<String, SpawnActionContext> spawnActionContextMap;
+  private final Map<Class<? extends ActionContext>, ActionContext> contextMap =
+      new HashMap<>();
 
   /**
    * Constructs an Executor, bound to a specified output base path, and which will use the specified
@@ -69,39 +77,67 @@ public final class BlazeExecutor implements Executor {
    * shutdown() when you're done with this executor.
    */
   public BlazeExecutor(
-      FileSystem fileSystem,
       Path execRoot,
       Reporter reporter,
       EventBus eventBus,
       Clock clock,
       OptionsClassProvider options,
-      SpawnActionContextMaps spawnActionContextMaps,
+      List<ActionContext> contextImplementations,
+      Map<String, SpawnActionContext> spawnActionContextMap,
       Iterable<ActionContextProvider> contextProviders)
       throws ExecutorInitException {
     ExecutionOptions executionOptions = options.getOptions(ExecutionOptions.class);
     this.verboseFailures = executionOptions.verboseFailures;
     this.showSubcommands = executionOptions.showSubcommands;
-    this.fileSystem = fileSystem;
     this.execRoot = execRoot;
     this.reporter = reporter;
     this.eventBus = eventBus;
     this.clock = clock;
     this.options = options;
     this.inExecutionPhase = new AtomicBoolean(false);
-    this.contextMap = spawnActionContextMaps.contextMap();
 
+    // We need to keep only the last occurrences of the entries in contextImplementations
+    // (so we respect insertion order but also instantiate them only once).
+    LinkedHashSet<ActionContext> allContexts = new LinkedHashSet<>();
+    allContexts.addAll(contextImplementations);
+    allContexts.addAll(spawnActionContextMap.values());
+    this.spawnActionContextMap = ImmutableMap.copyOf(spawnActionContextMap);
+    for (ActionContext context : contextImplementations) {
+      ExecutionStrategy annotation = context.getClass().getAnnotation(ExecutionStrategy.class);
+      if (annotation != null) {
+        contextMap.put(annotation.contextType(), context);
+      }
+      contextMap.put(context.getClass(), context);
+    }
+
+    // Print a sorted list of our (Spawn)ActionContext maps.
     if (executionOptions.debugPrintActionContexts) {
-      spawnActionContextMaps.debugPrintSpawnActionContextMaps(reporter);
+      for (Entry<String, SpawnActionContext> entry :
+          new TreeMap<>(spawnActionContextMap).entrySet()) {
+        reporter.handle(
+            Event.info(
+                String.format(
+                    "SpawnActionContextMap: \"%s\" = %s",
+                    entry.getKey(), entry.getValue().getClass().getSimpleName())));
+      }
+
+      TreeMap<String, String> sortedContextMapWithSimpleNames = new TreeMap<>();
+      for (Entry<Class<? extends ActionContext>, ActionContext> entry : contextMap.entrySet()) {
+        sortedContextMapWithSimpleNames.put(
+            entry.getKey().getSimpleName(), entry.getValue().getClass().getSimpleName());
+      }
+      for (Entry<String, String> entry : sortedContextMapWithSimpleNames.entrySet()) {
+        // Skip uninteresting identity mappings of contexts.
+        if (!entry.getKey().equals(entry.getValue())) {
+          reporter.handle(
+              Event.info(String.format("ContextMap: %s = %s", entry.getKey(), entry.getValue())));
+        }
+      }
     }
 
     for (ActionContextProvider factory : contextProviders) {
-      factory.executorCreated(spawnActionContextMaps.allContexts());
+      factory.executorCreated(allContexts);
     }
-  }
-
-  @Override
-  public FileSystem getFileSystem() {
-    return fileSystem;
   }
 
   @Override
@@ -176,8 +212,20 @@ public final class BlazeExecutor implements Executor {
 
   @Override
   public <T extends ActionContext> T getContext(Class<? extends T> type) {
+    Preconditions.checkArgument(type != SpawnActionContext.class, 
+        "should use getSpawnActionContext instead");
     return type.cast(contextMap.get(type));
   }
+
+  /**
+   * Returns the {@link SpawnActionContext} to use for the given mnemonic. If no execution mode is
+   * set, then it returns the default strategy for spawn actions.
+   */
+  @Override
+  public SpawnActionContext getSpawnActionContext(String mnemonic) {
+     SpawnActionContext context = spawnActionContextMap.get(mnemonic);
+     return context == null ? spawnActionContextMap.get("") : context;
+   }
 
   /** Returns true iff the --verbose_failures option was enabled. */
   @Override

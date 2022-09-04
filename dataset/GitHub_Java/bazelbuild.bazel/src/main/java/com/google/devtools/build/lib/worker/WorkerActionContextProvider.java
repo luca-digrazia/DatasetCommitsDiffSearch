@@ -16,18 +16,11 @@ package com.google.devtools.build.lib.worker;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.devtools.build.lib.actions.ActionContext;
-import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.analysis.test.TestActionContext;
+import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
-import com.google.devtools.build.lib.exec.SpawnRunner;
-import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
-import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
-import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
-import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
-import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
-import com.google.devtools.build.lib.exec.local.WindowsLocalEnvProvider;
+import com.google.devtools.build.lib.exec.ExecutionOptions;
+import com.google.devtools.build.lib.rules.test.TestActionContext;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.util.OS;
 
 /**
  * Factory for the Worker-based execution strategy.
@@ -35,40 +28,20 @@ import com.google.devtools.build.lib.util.OS;
 final class WorkerActionContextProvider extends ActionContextProvider {
   private final ImmutableList<ActionContext> strategies;
 
-  public WorkerActionContextProvider(CommandEnvironment env, WorkerPool workers) {
-    ImmutableMultimap<String, String> extraFlags =
-        ImmutableMultimap.copyOf(env.getOptions().getOptions(WorkerOptions.class).workerExtraFlags);
-
-    WorkerSpawnRunner spawnRunner =
-        new WorkerSpawnRunner(
-            env.getExecRoot(),
-            workers,
-            extraFlags,
-            env.getReporter(),
-            createFallbackRunner(env));
+  public WorkerActionContextProvider(
+      CommandEnvironment env, BuildRequest buildRequest, WorkerPool workers) {
+    ImmutableMultimap.Builder<String, String> extraFlags = ImmutableMultimap.builder();
+    extraFlags.putAll(buildRequest.getOptions(WorkerOptions.class).workerExtraFlags);
 
     WorkerSpawnStrategy workerSpawnStrategy =
-        new WorkerSpawnStrategy(env.getExecRoot(), spawnRunner);
+        new WorkerSpawnStrategy(
+            env.getExecRoot(),
+            workers,
+            buildRequest.getOptions(ExecutionOptions.class).verboseFailures,
+            extraFlags.build());
     TestActionContext workerTestStrategy =
-        new WorkerTestStrategy(env, env.getOptions(), workers, extraFlags);
+        new WorkerTestStrategy(env, buildRequest, workers, extraFlags.build());
     this.strategies = ImmutableList.of(workerSpawnStrategy, workerTestStrategy);
-  }
-
-  private static SpawnRunner createFallbackRunner(CommandEnvironment env) {
-    LocalExecutionOptions localExecutionOptions =
-        env.getOptions().getOptions(LocalExecutionOptions.class);
-    LocalEnvProvider localEnvProvider =
-        OS.getCurrent() == OS.DARWIN
-            ? new XCodeLocalEnvProvider()
-            : (OS.getCurrent() == OS.WINDOWS
-                ? WindowsLocalEnvProvider.INSTANCE
-                : PosixLocalEnvProvider.INSTANCE);
-    return new LocalSpawnRunner(
-        env.getExecRoot(),
-        localExecutionOptions,
-        ResourceManager.instance(),
-        env.getRuntime().getProductName(),
-        localEnvProvider);
   }
 
   @Override

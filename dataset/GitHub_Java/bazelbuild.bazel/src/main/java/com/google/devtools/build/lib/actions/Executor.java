@@ -14,9 +14,8 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.clock.Clock;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsClassProvider;
 
@@ -37,10 +36,6 @@ import com.google.devtools.common.options.OptionsClassProvider;
  * they both provide services to actions being executed and are passed to almost the same places.
  */
 public interface Executor {
-
-  /** Returns the file system of blaze. */
-  FileSystem getFileSystem();
-
   /**
    * Returns the execution root. This is the directory underneath which Blaze builds its entire
    * output working tree, including the source symlink forest. All build actions are executed
@@ -77,16 +72,18 @@ public interface Executor {
   boolean reportsSubcommands();
 
   /**
-   * An event listener to report messages to. Errors that signal a action failure should use
-   * ActionExecutionException.
+   * An event listener to report messages to. Errors that signal a action failure should
+   * use ActionExecutionException.
    */
-  ExtendedEventHandler getEventHandler();
+  EventHandler getEventHandler();
 
   /**
    * Looks up and returns an action context implementation of the given interface type.
    */
   <T extends ActionContext> T getContext(Class<? extends T> type);
 
-  /** Returns the action context implementation for the given spawn. */
-  SpawnActionContext getSpawnActionContext(Spawn spawn);
+  /**
+   * Returns the action context implementation for spawn actions with a given mnemonic.
+   */
+  SpawnActionContext getSpawnActionContext(String mnemonic);
 }

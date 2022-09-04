@@ -23,15 +23,13 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.OptionsUtils;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -54,26 +52,33 @@ import java.util.UUID;
  */
 public abstract class WorkspaceStatusAction extends AbstractAction {
 
-  /** Options controlling the workspace status command. */
-  @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
+  /**
+   * Options controlling the workspace status command.
+   */
   public static class Options extends OptionsBase {
     @Option(
       name = "embed_label",
       defaultValue = "",
+      category = "misc",
       valueHelp = "<string>",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Embed source control revision or release label in binary"
     )
     public String embedLabel;
 
     @Option(
+      name = "experimental_embed_timestamp_epoch",
+      defaultValue = "-1",
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+      help = "Alternative timestamp to be used in stamping the binary"
+    )
+    public long embedTimestampEpoch;
+
+    @Option(
       name = "workspace_status_command",
       defaultValue = "",
+      category = "misc",
       converter = OptionsUtils.PathFragmentConverter.class,
       valueHelp = "<path>",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "A command invoked at the beginning of the build to provide status "
               + "information about the workspace in the form of key/value pairs.  "
