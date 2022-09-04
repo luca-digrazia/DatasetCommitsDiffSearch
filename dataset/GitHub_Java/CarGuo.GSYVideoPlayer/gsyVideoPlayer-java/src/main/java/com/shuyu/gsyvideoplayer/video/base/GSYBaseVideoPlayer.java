@@ -15,7 +15,7 @@ import android.widget.FrameLayout;
 
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.R;
-import com.shuyu.gsyvideoplayer.view.SmallVideoTouch;
+import com.shuyu.gsyvideoplayer.SmallVideoTouch;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
@@ -463,7 +463,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
      * @param actionBar 是否有actionBar，有的话需要隐藏
      * @param statusBar 是否有状态bar，有的话需要隐藏
      */
-    @SuppressWarnings("ResourceType, unchecked")
+    @SuppressWarnings("ResourceType")
     public GSYBaseVideoPlayer startWindowFullscreen(final Context context, final boolean actionBar, final boolean statusBar) {
 
         mSystemUiVisibility = ((Activity) context).getWindow().getDecorView().getSystemUiVisibility();
@@ -593,7 +593,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
     /**
      * 显示小窗口
      */
-    @SuppressWarnings("ResourceType, unchecked")
+    @SuppressWarnings("ResourceType")
     public GSYBaseVideoPlayer showSmallVideo(Point size, final boolean actionBar, final boolean statusBar) {
 
         final ViewGroup vp = getViewGroup();
