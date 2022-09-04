@@ -21,6 +21,8 @@
 package org.graylog2.indexer;
 
 import org.apache.log4j.Logger;
+import org.bson.types.ObjectId;
+import org.graylog2.Tools;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.json.simple.JSONValue;
 
@@ -28,8 +30,10 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import org.graylog2.Main;
+import java.util.Map;
 
 /**
  * Indexer.java: Sep 05, 2011 9:13:03 PM
@@ -102,25 +106,20 @@ public class Indexer {
             return true;
         }
         
-        StringBuilder batchFactory = new StringBuilder();
+        String batch = "";
 
         for (GELFMessage message : messages) {
-            batchFactory.append("{\"index\":{\"_index\":\"");
-            batchFactory.append(INDEX);
-            batchFactory.append("\",\"_type\":\"");
-            batchFactory.append(TYPE);
-            batchFactory.append("\"}}\n");
-            batchFactory.append(JSONValue.toJSONString(message.toElasticSearchObject()));
-            batchFactory.append("\n");
+            batch += "{\"index\":{\"_index\":\"" + INDEX + "\",\"_type\":\"" + TYPE + "\"}}\n";
+            batch += JSONValue.toJSONString(message.toElasticSearchObject()) + "\n";
         }
 
         try {
-            URL url = new URL(buildElasticSearchURL() + "_bulk");
+            URL url = new URL("http://localhost:9200/_bulk");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setDoOutput(true);
             conn.setRequestMethod("POST");
             OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream());
-            writer.write(batchFactory.toString());
+            writer.write(batch);
             writer.close();
             if (conn.getResponseCode() == 200) {
                 return true;
@@ -136,12 +135,8 @@ public class Indexer {
         return false;
     }
 
-    private static String buildElasticSearchURL() {
-        return Main.configuration.getElasticSearchUrl();
-    }
-
     private static String buildIndexURL() {
-        return buildElasticSearchURL() + Indexer.INDEX;
+        return "http://localhost:9200/" + Indexer.INDEX;
     }
 
     private static String buildIndexWithTypeUrl() {
