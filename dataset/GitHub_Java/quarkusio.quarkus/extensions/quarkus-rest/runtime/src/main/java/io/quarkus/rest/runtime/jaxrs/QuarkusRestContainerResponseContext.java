@@ -185,16 +185,14 @@ public class QuarkusRestContainerResponseContext implements ContainerResponseCon
 
     @Override
     public OutputStream getEntityStream() {
-        OutputStream existing = context.getOutputStream();
-        if (existing != null) {
-            return existing;
-        }
-        return context.getOrCreateOutputStream();
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
     public void setEntityStream(OutputStream outputStream) {
-        context.setOutputStream(outputStream);
+        // TODO Auto-generated method stub
+
     }
 
 }
