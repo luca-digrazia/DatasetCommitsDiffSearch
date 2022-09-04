@@ -283,9 +283,7 @@ public class ActionExecutionFunction implements SkyFunction {
     try {
       if (previousExecution == null && !state.hasArtifactData()) {
         // Do we actually need to find our metadata?
-        checkedInputs =
-            checkInputs(
-                env, action, inputDeps, allInputs, mandatoryInputs, depKeys, actionLookupData);
+        checkedInputs = checkInputs(env, action, inputDeps, allInputs, mandatoryInputs, depKeys);
       }
     } catch (ActionExecutionException e) {
       // Remove action from state map in case it's there (won't be unless it discovers inputs).
@@ -478,8 +476,7 @@ public class ActionExecutionFunction implements SkyFunction {
     RewindPlan rewindPlan = null;
     try {
       ActionInputDepOwners inputDepOwners =
-          createAugmentedInputDepOwners(
-              e, action, env, inputDeps, allInputs, depKeys, actionLookupData);
+          createAugmentedInputDepOwners(e, action, env, inputDeps, allInputs, depKeys);
 
       // Collect the set of direct deps of this action which may be responsible for the lost inputs,
       // some of which may be discovered.
@@ -565,8 +562,7 @@ public class ActionExecutionFunction implements SkyFunction {
                   ArtifactNestedSetEvalException>>
           inputDeps,
       NestedSet<Artifact> allInputs,
-      Iterable<SkyKey> requestedSkyKeys,
-      ActionLookupData actionLookupDataForError)
+      Iterable<SkyKey> requestedSkyKeys)
       throws InterruptedException {
 
     Set<ActionInput> lostInputsAndOwnersSoFar = new HashSet<>();
@@ -586,8 +582,7 @@ public class ActionExecutionFunction implements SkyFunction {
               allInputs,
               action.discoversInputs() ? action.getMandatoryInputs().toSet() : null,
               requestedSkyKeys,
-              lostInputsAndOwnersSoFar,
-              actionLookupDataForError);
+              lostInputsAndOwnersSoFar);
     } catch (ActionExecutionException unexpected) {
       // getInputDepOwners should not be able to throw, because it does the same work as
       // checkInputs, so if getInputDepOwners throws then checkInputs should have thrown, and if
@@ -968,10 +963,7 @@ public class ActionExecutionFunction implements SkyFunction {
         if (!input.isSourceArtifact()) {
           bugReporter.sendBugReport(
               new IllegalStateException(
-                  String.format(
-                      "Non-source artifact had SourceArtifactException %s %s",
-                      input.toDebugString(), actionForError.prettyPrint()),
-                  e));
+                  "Non-source artifact had SourceArtifactException" + input, e));
         }
 
         skyframeActionExecutor.printError(e.getMessage(), actionForError);
@@ -1107,8 +1099,7 @@ public class ActionExecutionFunction implements SkyFunction {
           inputDeps,
       NestedSet<Artifact> allInputs,
       ImmutableSet<Artifact> mandatoryInputs,
-      Iterable<SkyKey> requestedSkyKeys,
-      ActionLookupData actionLookupDataForError)
+      Iterable<SkyKey> requestedSkyKeys)
       throws ActionExecutionException, InterruptedException {
     return accumulateInputs(
         env,
@@ -1119,8 +1110,7 @@ public class ActionExecutionFunction implements SkyFunction {
         requestedSkyKeys,
         ActionInputMap::new,
         CheckInputResults::new,
-        /*allowValuesMissingEarlyReturn=*/ true,
-        actionLookupDataForError);
+        /*allowValuesMissingEarlyReturn=*/ true);
   }
 
   /**
@@ -1138,8 +1128,7 @@ public class ActionExecutionFunction implements SkyFunction {
       NestedSet<Artifact> allInputs,
       ImmutableSet<Artifact> mandatoryInputs,
       Iterable<SkyKey> requestedSkyKeys,
-      Collection<ActionInput> lostInputs,
-      ActionLookupData actionLookupDataForError)
+      Collection<ActionInput> lostInputs)
       throws ActionExecutionException, InterruptedException {
     // The rewinding strategy should be calculated with whatever information is available, instead
     // of returning null if there are missing dependencies, so this uses false for
@@ -1158,8 +1147,7 @@ public class ActionExecutionFunction implements SkyFunction {
             archivedArtifacts,
             filesetsInsideRunfiles,
             topLevelFilesets) -> actionInputMapSink,
-        /*allowValuesMissingEarlyReturn=*/ false,
-        actionLookupDataForError);
+        /*allowValuesMissingEarlyReturn=*/ false);
   }
 
   /**
@@ -1181,8 +1169,7 @@ public class ActionExecutionFunction implements SkyFunction {
       Iterable<SkyKey> requestedSkyKeys,
       IntFunction<S> actionInputMapSinkFactory,
       AccumulateInputResultsFactory<S, R> accumulateInputResultsFactory,
-      boolean allowValuesMissingEarlyReturn,
-      ActionLookupData actionLookupDataForError)
+      boolean allowValuesMissingEarlyReturn)
       throws ActionExecutionException, InterruptedException {
 
     if (evalInputsAsNestedSet(allInputs)) {
@@ -1195,8 +1182,7 @@ public class ActionExecutionFunction implements SkyFunction {
           requestedSkyKeys,
           actionInputMapSinkFactory,
           accumulateInputResultsFactory,
-          allowValuesMissingEarlyReturn,
-          actionLookupDataForError);
+          allowValuesMissingEarlyReturn);
     }
     // Only populate input data if we have the input values, otherwise they'll just go unused.
     // We still want to loop through the inputs to collect missing deps errors. During the
@@ -1255,10 +1241,7 @@ public class ActionExecutionFunction implements SkyFunction {
         if (!input.isSourceArtifact()) {
           bugReporter.sendBugReport(
               new IllegalStateException(
-                  String.format(
-                      "Non-source artifact had SourceArtifactException %s %s %s",
-                      input.toDebugString(), actionLookupDataForError, action.prettyPrint()),
-                  e));
+                  "Non-source artifact had SourceArtifactException" + input, e));
         }
         if (mandatory) {
           sourceArtifactErrorCauses.add(
@@ -1366,8 +1349,7 @@ public class ActionExecutionFunction implements SkyFunction {
       Iterable<SkyKey> requestedSkyKeys,
       IntFunction<S> actionInputMapSinkFactory,
       AccumulateInputResultsFactory<S, R> accumulateInputResultsFactory,
-      boolean allowValuesMissingEarlyReturn,
-      ActionLookupData actionLookupDataForError)
+      boolean allowValuesMissingEarlyReturn)
       throws ActionExecutionException, InterruptedException {
 
     ActionExecutionFunctionExceptionHandler actionExecutionFunctionExceptionHandler =
@@ -1419,8 +1401,8 @@ public class ActionExecutionFunction implements SkyFunction {
           BugReport.sendBugReport(
               new IllegalStateException(
                   String.format(
-                      "Null value for mandatory %s with no errors or values missing: %s %s",
-                      input.toDebugString(), actionLookupDataForError, action.prettyPrint())));
+                      "Null value for mandatory %s with no errors or values missing: %s",
+                      input, action)));
         }
         continue;
       }
