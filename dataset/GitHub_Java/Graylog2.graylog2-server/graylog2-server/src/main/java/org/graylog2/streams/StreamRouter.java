@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.streams;
 
 import com.codahale.metrics.Meter;
@@ -48,7 +51,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class StreamRouter {
-    private static final Logger LOG = LoggerFactory.getLogger(StreamRouter.class);
+    protected final Logger LOG = LoggerFactory.getLogger(this.getClass());
 
     private final Map<String, Meter> streamIncomingMeters = Maps.newHashMap();
     private final Map<String, Timer> streamExecutionTimers = Maps.newHashMap();
