@@ -64,7 +64,7 @@ public class LocalHostResourceManagerLinux {
   }
 
   private static String readContent(String filename) throws IOException {
-    return Files.asCharSource(new File(filename), Charset.defaultCharset()).read();
+    return Files.toString(new File(filename), Charset.defaultCharset());
   }
 
   /**
