@@ -18,6 +18,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.buildjar.JarOwner;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
@@ -74,6 +75,7 @@ public final class DependencyModule {
   private final StrictJavaDeps strictJavaDeps;
   private final FixTool fixDepsTool;
   private final ImmutableSet<Path> directJars;
+  private final ImmutableMap<Path, JarOwner> jarsToTargets;
   private final boolean strictClasspathMode;
   private final Set<Path> depsArtifacts;
   private final String targetLabel;
@@ -91,6 +93,7 @@ public final class DependencyModule {
       StrictJavaDeps strictJavaDeps,
       FixTool fixDepsTool,
       ImmutableSet<Path> directJars,
+      ImmutableMap<Path, JarOwner> jarsToTargets,
       boolean strictClasspathMode,
       Set<Path> depsArtifacts,
       ImmutableSet<Path> platformJars,
@@ -101,6 +104,7 @@ public final class DependencyModule {
     this.strictJavaDeps = strictJavaDeps;
     this.fixDepsTool = fixDepsTool;
     this.directJars = directJars;
+    this.jarsToTargets = jarsToTargets;
     this.strictClasspathMode = strictClasspathMode;
     this.depsArtifacts = depsArtifacts;
     this.targetLabel = targetLabel;
@@ -173,6 +177,11 @@ public final class DependencyModule {
   /** Returns the paths of direct dependencies. */
   public ImmutableSet<Path> directJars() {
     return directJars;
+  }
+
+  /** Returns the mapping from jar paths to {@link JarOwner}s. */
+  public Map<Path, JarOwner> jarsToTargets() {
+    return jarsToTargets;
   }
 
   /** Returns the strict dependency checking (strictJavaDeps) setting. */
@@ -329,6 +338,7 @@ public final class DependencyModule {
     private StrictJavaDeps strictJavaDeps = StrictJavaDeps.OFF;
     private FixTool fixDepsTool = null;
     private ImmutableSet<Path> directJars = ImmutableSet.of();
+    private ImmutableMap<Path, JarOwner> jarsToTargets = ImmutableMap.of();
     private final Set<Path> depsArtifacts = new HashSet<>();
     private ImmutableSet<Path> platformJars = ImmutableSet.of();
     private String targetLabel;
@@ -365,6 +375,7 @@ public final class DependencyModule {
           strictJavaDeps,
           fixDepsTool,
           directJars,
+          jarsToTargets,
           strictClasspathMode,
           depsArtifacts,
           platformJars,
@@ -410,6 +421,12 @@ public final class DependencyModule {
     /** Sets the paths to jars that are direct dependencies. */
     public Builder setDirectJars(ImmutableSet<Path> directJars) {
       this.directJars = directJars;
+      return this;
+    }
+
+    /** Sets the mapping from jar paths to {@link JarOwners}s. */
+    public Builder setJarsToTargets(ImmutableMap<Path, JarOwner> jarsToTargets) {
+      this.jarsToTargets = jarsToTargets;
       return this;
     }
 

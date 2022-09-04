@@ -16,6 +16,7 @@ package com.google.devtools.build.buildjar;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
 import com.google.common.base.Joiner;
@@ -110,6 +111,12 @@ public final class JavaLibraryBuildRequest {
       throws InvalidCommandLineException, IOException {
     depsBuilder.setDirectJars(
         optionsParser.directJars().stream().map(Paths::get).collect(toImmutableSet()));
+    depsBuilder.setJarsToTargets(
+        optionsParser
+            .jarsToTargets()
+            .entrySet()
+            .stream()
+            .collect(toImmutableMap(e -> Paths.get(e.getKey()), e -> e.getValue())));
     if (optionsParser.getStrictJavaDeps() != null) {
       depsBuilder.setStrictJavaDeps(optionsParser.getStrictJavaDeps());
     }
