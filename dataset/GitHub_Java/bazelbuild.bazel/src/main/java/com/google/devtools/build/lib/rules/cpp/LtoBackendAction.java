@@ -104,7 +104,7 @@ public final class LtoBackendAction extends SpawnAction {
   }
 
   @Override
-  protected boolean mayExecuteAsync() {
+  public boolean mayExecuteAsync() {
     return false;
   }
 

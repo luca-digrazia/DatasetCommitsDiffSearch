@@ -28,10 +28,9 @@ import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-import com.google.devtools.common.options.RegexPatternOption;
 import java.util.List;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
+import java.util.regex.Pattern;
 
 /**
  * Options interface for {@link BuildRequest}: can be used to parse command-line arguments.
@@ -101,14 +100,14 @@ public class BuildRequestOptions extends OptionsBase {
   public boolean verboseExplanations;
 
   @Option(
-      name = "output_filter",
-      converter = Converters.RegexPatternConverter.class,
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "Only shows warnings for rules with a name matching the provided regular expression.")
-  @Nullable
-  public RegexPatternOption outputFilter;
+    name = "output_filter",
+    converter = Converters.RegexPatternConverter.class,
+    defaultValue = "null",
+    documentationCategory = OptionDocumentationCategory.LOGGING,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    help = "Only shows warnings for rules with a name matching the provided regular expression."
+  )
+  public Pattern outputFilter;
 
   @Option(
     name = "analyze",
@@ -151,14 +150,6 @@ public class BuildRequestOptions extends OptionsBase {
   public List<String> outputGroups;
 
   @Option(
-      name = "experimental_run_validations",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.EXECUTION, OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "Whether to run validation actions as part of the build.")
-  public boolean runValidationActions;
-
-  @Option(
     name = "show_result",
     defaultValue = "1",
     documentationCategory = OptionDocumentationCategory.LOGGING,
@@ -198,15 +189,15 @@ public class BuildRequestOptions extends OptionsBase {
   public boolean announce;
 
   @Option(
-      name = "symlink_prefix",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help =
-          "The prefix that is prepended to any of the convenience symlinks that are created "
-              + "after a build. If '/' is passed, then no symlinks are created and no warning is "
-              + "emitted. If omitted, the default value is the name of the build tool.")
-  @Nullable
+    name = "symlink_prefix",
+    defaultValue = "null",
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    help =
+        "The prefix that is prepended to any of the convenience symlinks that are created "
+            + "after a build. If '/' is passed, then no symlinks are created and no warning is "
+            + "emitted. If omitted, the default value is the name of the build tool."
+  )
   public String symlinkPrefix;
 
   @Option(
@@ -338,40 +329,6 @@ public class BuildRequestOptions extends OptionsBase {
               + "number of concurrently running actions otherwise imposed by the --jobs flag. Use "
               + "with caution.")
   public boolean useAsyncExecution;
-
-  @Option(
-      name = "incompatible_skip_genfiles_symlink",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      help =
-          "If set to true, the genfiles symlink will not be created. For more information, see "
-              + "https://github.com/bazelbuild/bazel/issues/8651")
-  public boolean incompatibleSkipGenfilesSymlink;
-
-  @Option(
-      name = "experimental_nested_set_as_skykey_threshold",
-      defaultValue = "0",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      metadataTags = OptionMetadataTag.EXPERIMENTAL,
-      effectTags = {OptionEffectTag.EXECUTION},
-      help =
-          "If this flag is set with a non-zero value, NestedSets whose size exceeds the threshold"
-              + " will be evaluated as a unit on Skyframe.")
-  public int nestedSetAsSkyKeyThreshold;
-
-  @Option(
-      name = "experimental_use_fork_join_pool",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      metadataTags = OptionMetadataTag.EXPERIMENTAL,
-      effectTags = {OptionEffectTag.EXECUTION},
-      help = "If this flag is set, use a fork join pool in the abstract queue visitor.")
-  public boolean useForkJoinPool;
 
   /**
    * Converter for jobs: Takes keyword ({@value #FLAG_SYNTAX}). Values must be between 1 and
