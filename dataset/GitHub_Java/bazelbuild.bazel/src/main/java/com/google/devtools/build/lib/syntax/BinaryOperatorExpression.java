@@ -209,7 +209,7 @@ public final class BinaryOperatorExpression extends Expression {
     }
 
     if ((lval instanceof MutableList) && (rval instanceof MutableList)) {
-      if (isAugmented && env.getSemantics().incompatibleListPlusEqualsInplace) {
+      if (isAugmented && env.getSemantics().incompatibleListPlusEquals) {
         @SuppressWarnings("unchecked")
         MutableList<Object> list = (MutableList) lval;
         list.addAll((MutableList<?>) rval, location, env);
@@ -219,12 +219,12 @@ public final class BinaryOperatorExpression extends Expression {
     }
 
     if (lval instanceof SkylarkDict && rval instanceof SkylarkDict) {
-      if (env.getSemantics().incompatibleDisallowDictPlus) {
+      if (env.getSemantics().incompatibleDictPlus) {
         throw new EvalException(
             location,
             "The `+` operator for dicts is deprecated and no longer supported. Please use the "
                 + "`update` method instead. You can temporarily enable the `+` operator by passing "
-                + "the flag --incompatible_disallow_dict_plus=false");
+                + "the flag --incompatible_dict_plus=false");
       }
       return SkylarkDict.plus((SkylarkDict<?, ?>) lval, (SkylarkDict<?, ?>) rval, env);
     }

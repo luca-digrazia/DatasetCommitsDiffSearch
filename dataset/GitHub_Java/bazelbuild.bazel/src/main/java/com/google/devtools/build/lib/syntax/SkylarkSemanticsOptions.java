@@ -44,36 +44,36 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean skylarkFlagTestCanary;
 
   @Option(
-    name = "incompatible_disallow_set_constructor",
+    name = "incompatible_depset_constructor",
     defaultValue = "false",
     category = "incompatible changes",
     help = "If set to true, disables the deprecated `set` constructor for depsets."
   )
-  public boolean incompatibleDisallowSetConstructor;
+  public boolean incompatibleDepsetConstructor;
 
   @Option(
-    name = "incompatible_disallow_keyword_only_args",
+    name = "incompatible_keyword_only_syntax",
     defaultValue = "false",
     category = "incompatible changes",
     help = "If set to true, disables the keyword-only argument syntax in function definition."
   )
-  public boolean incompatibleDisallowKeywordOnlyArgs;
+  public boolean incompatibleKeywordOnlySyntax;
 
   @Option(
-    name = "incompatible_list_plus_equals_inplace",
+    name = "incompatible_list_plus_equals",
     defaultValue = "false",
     category = "incompatible changes",
     help =
         "If set to true, `+=` on lists works like the `extend` method mutating the original "
             + "list. Otherwise it copies the original list without mutating it."
   )
-  public boolean incompatibleListPlusEqualsInplace;
+  public boolean incompatibleListPlusEquals;
 
   @Option(
-    name = "incompatible_disallow_dict_plus",
+    name = "incompatible_dict_plus",
     defaultValue = "false",
     category = "incompatible changes",
     help = "If set to true, the `+` becomes disabled for dicts."
   )
-  public boolean incompatibleDisallowDictPlus;
+  public boolean incompatibleDictPlus;
 }
