@@ -44,7 +44,7 @@ public class AssetServletTest {
     
     public static class NoCharsetAssetServlet extends AssetServlet {
         public NoCharsetAssetServlet() {
-            super(RESOURCE_PATH, NOCHARSET_SERVLET, null);
+            super(RESOURCE_PATH,DUMMY_SERVLET, NOCHARSET_SERVLET);
             setDefaultCharset(null);
         }
     }
