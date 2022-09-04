@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math.matrix;
 
@@ -106,7 +106,7 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
      * @param inPlace if true, this matrix will be used for matrix decomposition.
      */
     default LU lu(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : clone();
+        DenseMatrix a = inPlace ? this : copy();
         return a.lu();
     }
 
@@ -123,7 +123,7 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
      * @throws IllegalArgumentException if the matrix is not positive definite.
      */
     default Cholesky cholesky(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : clone();
+        DenseMatrix a = inPlace ? this : copy();
         return a.cholesky();
     }
 
@@ -138,7 +138,7 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
      * @param inPlace if true, this matrix will be used for matrix decomposition.
      */
     default QR qr(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : clone();
+        DenseMatrix a = inPlace ? this : copy();
         return a.qr();
     }
 
@@ -153,7 +153,7 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
      * @param inPlace if true, this matrix will hold U on output.
      */
     default SVD svd(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : clone();
+        DenseMatrix a = inPlace ? this : copy();
         return a.svd();
     }
 
@@ -168,7 +168,7 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
      * @param inPlace if true, this matrix will be overwritten U on output.
      */
     default EVD eigen(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : clone();
+        DenseMatrix a = inPlace ? this : copy();
         return a.eigen();
     }
 
@@ -186,7 +186,7 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
      * @param inPlace if true, this matrix will be overwritten U on output.
      */
     default double[] eig(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : clone();
+        DenseMatrix a = inPlace ? this : copy();
         return a.eig();
     }
 
@@ -478,10 +478,10 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
         return x;
     }
 
-    @Override
-    default DenseMatrix clone() {
-        throw new UnsupportedOperationException();
-    }
+    /**
+     * Returns a copy of this matrix.
+     */
+    DenseMatrix copy();
 
     @Override
     DenseMatrix ata();

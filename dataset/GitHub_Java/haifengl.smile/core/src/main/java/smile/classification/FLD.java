@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -26,7 +26,6 @@ import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.EVD;
 import smile.math.matrix.SVD;
 import smile.projection.Projection;
-import smile.util.IntSet;
 
 /**
  * Fisher's linear discriminant. Fisher defined the separation between two
@@ -57,7 +56,7 @@ import smile.util.IntSet;
  *
  * <h2>References</h2>
  * <ol>
- * <li> H. Li, K. Zhang, and T. Jiang. Robust and Accurate Cancer Classification with Gene Expression Profiling. CSB'05, pp 310-321.</li>
+ * <li> Robust and Accurate Cancer Classification with Gene Expression Profiling http://alumni.cs.ucr.edu/~hli/paper/hli05tumor.pdf.</li>
  * </ol>
  *
  * @see LDA
@@ -91,7 +90,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
     /**
      * The class label encoder.
      */
-    private final IntSet labels;
+    private final ClassLabel labels;
 
     /**
      * Constructor.
@@ -100,7 +99,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      * @param scaling the projection matrix.
      */
     public FLD(double[] mean, double[][] mu, DenseMatrix scaling) {
-        this(mean, mu, scaling, IntSet.of(mu.length));
+        this(mean, mu, scaling, ClassLabel.of(mu.length));
     }
 
     /**
@@ -110,7 +109,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      * @param scaling the projection matrix.
      * @param labels class labels
      */
-    public FLD(double[] mean, double[][] mu, DenseMatrix scaling, IntSet labels) {
+    public FLD(double[] mean, double[][] mu, DenseMatrix scaling, ClassLabel labels) {
         this.k = mu.length;
         this.p = mean.length;
         this.scaling = scaling;
@@ -346,7 +345,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        return labels.valueOf(y);
+        return labels.label(y);
     }
 
     @Override

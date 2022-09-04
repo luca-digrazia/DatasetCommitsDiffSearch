@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -23,7 +23,6 @@ import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.QR;
 import smile.math.rbf.RadialBasisFunction;
-import smile.util.IntSet;
 
 /**
  * Radial basis function networks. A radial basis function network is an
@@ -75,6 +74,7 @@ import smile.util.IntSet;
  * network when the training data size is relatively small. On the other hand,
  * RBF network gives better generalization performance than SVM on large
  * training data.
+ * <p>
  * 
  * <h2>References</h2>
  * <ol>
@@ -111,7 +111,7 @@ public class RBFNetwork<T> implements Classifier<T> {
     /**
      * The class label encoder.
      */
-    private IntSet labels;
+    private ClassLabel labels;
 
     /**
      * Constructor.
@@ -121,7 +121,7 @@ public class RBFNetwork<T> implements Classifier<T> {
      * @param normalized True if this is a normalized RBF network.
      */
     public RBFNetwork(int k, RBF<T>[] rbf, DenseMatrix w, boolean normalized) {
-        this(k, rbf, w, normalized, IntSet.of(k));
+        this(k, rbf, w, normalized, ClassLabel.of(k));
     }
 
     /**
@@ -132,7 +132,7 @@ public class RBFNetwork<T> implements Classifier<T> {
      * @param normalized True if this is a normalized RBF network.
      * @param labels class labels
      */
-    public RBFNetwork(int k, RBF<T>[] rbf, DenseMatrix w, boolean normalized, IntSet labels) {
+    public RBFNetwork(int k, RBF<T>[] rbf, DenseMatrix w, boolean normalized, ClassLabel labels) {
         this.k = k;
         this.rbf = rbf;
         this.w = w;
@@ -164,7 +164,7 @@ public class RBFNetwork<T> implements Classifier<T> {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
 
-        ClassLabels codec = ClassLabels.fit(y);
+        ClassLabel.Result codec = ClassLabel.fit(y);
         int k = codec.k;
         int n = x.length;
         int m = rbf.length;
@@ -211,6 +211,6 @@ public class RBFNetwork<T> implements Classifier<T> {
         double[] sumw = new double[k];
         w.atx(f, sumw);
 
-        return labels.valueOf(MathEx.whichMax(sumw));
+        return labels.label(MathEx.whichMax(sumw));
     }
 }
