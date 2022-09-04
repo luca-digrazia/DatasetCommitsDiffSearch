@@ -45,11 +45,4 @@ public class StampedAndroidManifest extends AndroidManifest {
   ProcessedAndroidManifest withProcessedManifest(Artifact processedManifest) {
     return new ProcessedAndroidManifest(processedManifest, getPackage(), isExported());
   }
-
-  /** Creates an empty manifest stamped with the default Java package for this target. */
-  public static StampedAndroidManifest createEmpty(RuleContext ruleContext, boolean exported) {
-    String pkg = AndroidCommon.getJavaPackage(ruleContext);
-    return new StampedAndroidManifest(
-        ApplicationManifest.generateManifest(ruleContext, pkg), pkg, exported);
-  }
 }

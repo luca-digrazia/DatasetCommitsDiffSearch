@@ -41,7 +41,12 @@ import javax.annotation.Nullable;
 public class AndroidResourceMergingActionBuilder {
 
   private static final AndroidDataConverter<MergableAndroidData> RESOURCE_CONTAINER_TO_ARG =
-      AndroidDataConverter.MERGABLE_DATA_CONVERTER;
+      AndroidDataConverter.<MergableAndroidData>builder(JoinerType.SEMICOLON_AMPERSAND)
+          .withRoots(MergableAndroidData::getResourceRoots)
+          .withRoots(MergableAndroidData::getAssetRoots)
+          .withLabel(MergableAndroidData::getLabel)
+          .withArtifact(MergableAndroidData::getSymbols)
+          .build();
 
   private static final AndroidDataConverter<CompiledMergableAndroidData>
       RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED =
@@ -300,9 +305,6 @@ public class AndroidResourceMergingActionBuilder {
     }
     if (manifestOut != null) {
       result.setManifest(manifestOut);
-    }
-    if (mergedResourcesOut != null) {
-      result.setMergedResources(mergedResourcesOut);
     }
     return result.build();
   }
