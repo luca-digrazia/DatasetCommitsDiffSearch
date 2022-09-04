@@ -1,11 +1,9 @@
 package io.quarkus.vault;
 
-import java.util.OptionalInt;
-
 import org.jboss.jandex.DotName;
-import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -13,20 +11,35 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.RunTimeConfigurationSourceBuildItem;
+import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
+import io.quarkus.deployment.builditem.RunTimeConfigurationSourceValueBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vault.runtime.Base64StringDeserializer;
 import io.quarkus.vault.runtime.Base64StringSerializer;
+import io.quarkus.vault.runtime.VaultAuthManager;
+import io.quarkus.vault.runtime.VaultConfigHolder;
+import io.quarkus.vault.runtime.VaultCredentialsProvider;
+import io.quarkus.vault.runtime.VaultDbManager;
+import io.quarkus.vault.runtime.VaultKubernetesAuthManager;
+import io.quarkus.vault.runtime.VaultKvManager;
 import io.quarkus.vault.runtime.VaultRecorder;
-import io.quarkus.vault.runtime.VaultServiceProducer;
+import io.quarkus.vault.runtime.VaultSystemBackendManager;
+import io.quarkus.vault.runtime.VaultTOTPManager;
+import io.quarkus.vault.runtime.VaultTransitManager;
+import io.quarkus.vault.runtime.client.OkHttpVaultClient;
 import io.quarkus.vault.runtime.client.dto.VaultModel;
-import io.quarkus.vault.runtime.config.VaultConfigSource;
-import io.quarkus.vault.runtime.config.VaultRuntimeConfig;
+import io.quarkus.vault.runtime.config.VaultBootstrapConfig;
+import io.quarkus.vault.runtime.config.VaultBuildTimeConfig;
+import io.quarkus.vault.runtime.health.VaultHealthCheck;
 
 public class VaultProcessor {
 
-    private static final Logger log = Logger.getLogger(VaultProcessor.class);
+    @BuildStep
+    void addDependencies(BuildProducer<IndexDependencyBuildItem> indexDependency) {
+        indexDependency.produce(new IndexDependencyBuildItem("io.quarkus", "quarkus-vault-model"));
+    }
 
     @BuildStep
     void build(
@@ -36,7 +49,7 @@ public class VaultProcessor {
             SslNativeConfigBuildItem sslNativeConfig,
             BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport) {
 
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.VAULT));
+        feature.produce(new FeatureBuildItem(Feature.VAULT));
 
         final String[] modelClasses = combinedIndexBuildItem.getIndex()
                 .getAllKnownImplementors(DotName.createSimple(VaultModel.class.getName()))
@@ -47,29 +60,35 @@ public class VaultProcessor {
         reflectiveClasses.produce(
                 new ReflectiveClassBuildItem(false, false, Base64StringDeserializer.class, Base64StringSerializer.class));
 
-        sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.VAULT));
-    }
-
-    @BuildStep
-    void setUpConfigFile(BuildProducer<RunTimeConfigurationSourceBuildItem> configSourceConsumer) {
-        configSourceConsumer.produce(new RunTimeConfigurationSourceBuildItem(
-                VaultConfigSource.class.getName(), OptionalInt.of(150)));
+        sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.VAULT));
     }
 
     @BuildStep
     AdditionalBeanBuildItem registerAdditionalBeans() {
         return new AdditionalBeanBuildItem.Builder()
                 .setUnremovable()
-                .addBeanClass(VaultServiceProducer.class)
-                .addBeanClass(CredentialsProvider.class)
-                .addBeanClass(VaultKVSecretEngine.class)
+                .addBeanClass(VaultCredentialsProvider.class)
+                .addBeanClass(VaultKvManager.class)
+                .addBeanClass(VaultTransitManager.class)
+                .addBeanClass(VaultTOTPManager.class)
+                .addBeanClass(VaultSystemBackendManager.class)
+                .addBeanClass(VaultKubernetesAuthManager.class)
+                .addBeanClass(VaultAuthManager.class)
+                .addBeanClass(VaultDbManager.class)
+                .addBeanClass(OkHttpVaultClient.class)
+                .addBeanClass(VaultConfigHolder.class)
                 .build();
     }
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    void configure(VaultRecorder recorder, VaultRuntimeConfig serverConfig) {
-        recorder.configureRuntimeProperties(serverConfig);
+    RunTimeConfigurationSourceValueBuildItem init(VaultRecorder recorder, VaultBootstrapConfig vaultBootstrapConfig) {
+        return new RunTimeConfigurationSourceValueBuildItem(recorder.configure(vaultBootstrapConfig));
+    }
+
+    @BuildStep
+    HealthBuildItem addHealthCheck(VaultBuildTimeConfig config) {
+        return new HealthBuildItem(VaultHealthCheck.class.getName(), config.health.enabled);
     }
 
 }
