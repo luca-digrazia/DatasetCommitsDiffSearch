@@ -10,10 +10,11 @@ import org.graylog.plugins.enterprise.search.searchtypes.pivot.BucketSpec;
 import org.graylog.plugins.enterprise.search.searchtypes.pivot.TypedBuilder;
 
 @AutoValue
-@JsonTypeName(Time.NAME)
-@JsonDeserialize(builder = Time.Builder.class)
-public abstract class Time implements BucketSpec {
-    public static final String NAME = "time";
+@JsonTypeName(Values.NAME)
+@JsonDeserialize(builder = Values.Builder.class)
+public abstract class Values implements BucketSpec {
+    public static final String NAME = "values";
+    private static final int DEFAULT_LIMIT = 5;
 
     @Override
     public abstract String type();
@@ -22,27 +23,28 @@ public abstract class Time implements BucketSpec {
     public abstract String field();
 
     @JsonProperty
-    public abstract String interval();
+    public abstract int limit();
 
-    public static Time.Builder builder() {
-        return new AutoValue_Time.Builder()
-                .type(NAME);
+    public static Values.Builder builder() {
+        return new AutoValue_Values.Builder()
+                .type(NAME)
+                .limit(DEFAULT_LIMIT);
     }
 
     @AutoValue.Builder
     @JsonPOJOBuilder(withPrefix = "")
-    public abstract static class Builder extends TypedBuilder<Time, Builder> {
+    public abstract static class Builder extends TypedBuilder<Values, Builder> {
 
         @JsonCreator
         public static Builder create() {
-            return Time.builder();
+            return Values.builder();
         }
 
         @JsonProperty
         public abstract Builder field(String field);
 
         @JsonProperty
-        public abstract Builder interval(String interval);
+        public abstract Builder limit(int limit);
 
     }
 

@@ -5,7 +5,6 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import org.graylog.plugins.enterprise.search.SearchType;
 
-import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
 
@@ -94,7 +93,6 @@ public abstract class PivotResult implements SearchType.Result {
         public abstract ImmutableList<String> key();
 
         @JsonProperty
-        @Nullable
         public abstract Object value();
 
         @JsonProperty
@@ -103,7 +101,7 @@ public abstract class PivotResult implements SearchType.Result {
         @JsonProperty
         public abstract String source();
 
-        public static Value create(Collection<String> key, @Nullable Object value, boolean rollup, String source) {
+        public static Value create(Collection<String> key, Object value, boolean rollup, String source) {
             return new AutoValue_PivotResult_Value(ImmutableList.copyOf(key), value, rollup, source);
         }
     }
