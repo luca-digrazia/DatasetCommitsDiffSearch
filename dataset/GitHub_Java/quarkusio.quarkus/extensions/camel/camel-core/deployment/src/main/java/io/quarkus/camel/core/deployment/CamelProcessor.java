@@ -9,8 +9,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javax.inject.Inject;
 
@@ -29,23 +27,19 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 
-import io.quarkus.camel.core.runtime.CamelConfig.BuildTime;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBundleBuildItem;
-import io.quarkus.jaxb.deployment.JaxbEnabledBuildItem;
 import io.quarkus.jaxb.deployment.JaxbFileRootBuildItem;
 
 class CamelProcessor {
-
     private static final List<Class<?>> CAMEL_REFLECTIVE_CLASSES = Arrays.asList(
             Endpoint.class,
             Consumer.class,
@@ -53,7 +47,6 @@ class CamelProcessor {
             TypeConverter.class,
             ExchangeFormatter.class,
             GenericFileProcessStrategy.class);
-
     private static final List<Class<? extends Annotation>> CAMEL_REFLECTIVE_ANNOTATIONS = Arrays.asList(
             Converter.class);
 
@@ -69,17 +62,10 @@ class CamelProcessor {
     ApplicationArchivesBuildItem applicationArchivesBuildItem;
     @Inject
     CombinedIndexBuildItem combinedIndexBuildItem;
-    @Inject
-    BuildTime buildTimeConfig;
 
     @BuildStep
     JaxbFileRootBuildItem fileRoot() {
-        return new JaxbFileRootBuildItem(CamelSupport.CAMEL_ROOT_PACKAGE_DIRECTORY);
-    }
-
-    @BuildStep
-    JaxbEnabledBuildItem enableJaxb() {
-        return buildTimeConfig.disableJaxb ? null : new JaxbEnabledBuildItem();
+        return new JaxbFileRootBuildItem("org/apache/camel");
     }
 
     @BuildStep
@@ -87,24 +73,7 @@ class CamelProcessor {
         return new FeatureBuildItem(FeatureBuildItem.CAMEL_CORE);
     }
 
-    @BuildStep
-    SubstrateConfigBuildItem processSystemProperties() {
-        return SubstrateConfigBuildItem.builder()
-                .addNativeImageSystemProperty("CamelSimpleLRUCacheFactory", "true")
-                .build();
-    }
-
-    @BuildStep
-    List<HotDeploymentConfigFileBuildItem> configFile() {
-        return buildTimeConfig.routesUris.stream()
-                .map(String::trim)
-                .filter(s -> s.startsWith("file:"))
-                .map(s -> s.substring("file:".length()))
-                .map(HotDeploymentConfigFileBuildItem::new)
-                .collect(Collectors.toList());
-    }
-
-    @BuildStep(applicationArchiveMarkers = { CamelSupport.CAMEL_SERVICE_BASE_PATH, CamelSupport.CAMEL_ROOT_PACKAGE_DIRECTORY })
+    @BuildStep(applicationArchiveMarkers = { CamelSupport.CAMEL_SERVICE_BASE_PATH, "org/apache/camel" })
     void process() {
         IndexView view = combinedIndexBuildItem.getIndex();
 
