@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,63 +13,50 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.syntax.SkylarkType.SkylarkFunctionType;
+import javax.annotation.Nullable;
 
-/**
- * A wrapper Statement class for return expressions.
- */
-public class ReturnStatement extends Statement {
+/** A syntax node for return statements. */
+public final class ReturnStatement extends Statement {
+
+  private final int returnOffset;
+  @Nullable private final Expression result;
+
+  ReturnStatement(FileLocations locs, int returnOffset, @Nullable Expression result) {
+    super(locs);
+    this.returnOffset = returnOffset;
+    this.result = result;
+  }
 
   /**
-   * Exception sent by the return statement, to be caught by the function body.
+   * Returns a new return statement that returns expr. It is provided only for use by the evaluator,
+   * and will be removed when it switches to a compiled representation.
    */
-  public class ReturnException extends EvalException {
-    Object value;
-
-    public ReturnException(Location location, Object value) {
-      super(location, "Return statements must be inside a function");
-      this.value = value;
-    }
-
-    public Object getValue() {
-      return value;
-    }
+  static ReturnStatement make(Expression expr) {
+    return new ReturnStatement(expr.locs, expr.getStartOffset(), expr);
   }
 
-  private final Expression returnExpression;
-
-  public ReturnStatement(Expression returnExpression) {
-    this.returnExpression = returnExpression;
+  @Nullable
+  public Expression getResult() {
+    return result;
   }
 
   @Override
-  void exec(Environment env) throws EvalException, InterruptedException {
-    throw new ReturnException(returnExpression.getLocation(), returnExpression.eval(env));
-  }
-
-  Expression getReturnExpression() {
-    return returnExpression;
+  public int getStartOffset() {
+    return returnOffset;
   }
 
   @Override
-  public String toString() {
-    return "return " + returnExpression;
+  public int getEndOffset() {
+    return result != null ? result.getEndOffset() : returnOffset + "return".length();
   }
 
   @Override
-  public void accept(SyntaxTreeVisitor visitor) {
+  public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
-    // TODO(bazel-team): save the return type in the environment, to type-check functions.
-    SkylarkFunctionType fct = env.getCurrentFunction();
-    if (fct == null) {
-      throw new EvalException(getLocation(), "Return statements must be inside a function");
-    }
-    SkylarkType resultType = returnExpression.validate(env);
-    fct.setReturnType(resultType, getLocation());
+  public Kind kind() {
+    return Kind.RETURN;
   }
 }
