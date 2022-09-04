@@ -31,6 +31,8 @@ import com.google.devtools.build.lib.rules.cpp.CppActionNames;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
+import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
+import com.google.devtools.build.lib.rules.cpp.NoProcessing;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
 /** C++ compilation semantics. */
@@ -50,7 +52,10 @@ public class BazelCppSemantics implements AspectLegalCppSemantics {
           Label.parseAbsoluteUnchecked("//examples:experimental_cc_shared_library.bzl"),
           "CcSharedLibraryInfo");
 
+  private final IncludeProcessing includeProcessing;
+
   private BazelCppSemantics() {
+    this.includeProcessing = NoProcessing.INSTANCE;
   }
 
   @Override
@@ -86,8 +91,8 @@ public class BazelCppSemantics implements AspectLegalCppSemantics {
   }
 
   @Override
-  public boolean allowIncludeScanning() {
-    return false;
+  public IncludeProcessing getIncludeProcessing() {
+    return includeProcessing;
   }
 
   @Override
