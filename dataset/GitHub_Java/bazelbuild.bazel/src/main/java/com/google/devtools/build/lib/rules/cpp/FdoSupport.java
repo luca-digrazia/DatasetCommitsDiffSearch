@@ -259,8 +259,7 @@ public class FdoSupport {
       Path fdoProfile,
       LipoMode lipoMode,
       boolean llvmFdo,
-      Path execRoot,
-      String productName)
+      Path execRoot)
       throws IOException, FdoException, InterruptedException {
     FdoMode fdoMode;
     if (fdoProfile != null && isAutoFdo(fdoProfile.getBaseName())) {
@@ -280,7 +279,8 @@ public class FdoSupport {
     Root fdoRoot =
         (fdoProfile == null)
             ? null
-            : Root.asDerivedRoot(execRoot, execRoot.getRelative(productName + "-fdo"), true);
+            : Root.asDerivedRoot(execRoot, execRoot.getRelative(
+                PrecomputedValue.PRODUCT_NAME.get(env) + "-fdo"), true);
 
     PathFragment fdoRootExecPath = fdoProfile == null
         ? null
@@ -309,8 +309,9 @@ public class FdoSupport {
           fdoMode, LipoMode.OFF, fdoRoot, fdoRootExecPath, fdoInstrument, fdoProfile, null);
     }
 
-    FdoZipContents fdoZipContents =
-        extractFdoZip(fdoMode, lipoMode, execRoot, fdoProfile, fdoRootExecPath, productName);
+    FdoZipContents fdoZipContents = extractFdoZip(
+        fdoMode, lipoMode, execRoot, fdoProfile, fdoRootExecPath,
+        PrecomputedValue.PRODUCT_NAME.get(env));
     return new FdoSupport(
         fdoMode, lipoMode, fdoRoot, fdoRootExecPath, fdoInstrument, fdoProfile, fdoZipContents);
   }

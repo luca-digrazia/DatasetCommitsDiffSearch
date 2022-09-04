@@ -252,7 +252,7 @@ public class ProtoCompileActionBuilder {
         .useDefaultShellEnvironment()
         .setExecutable(compilerTarget)
         .setCommandLine(createProtoCompilerCommandLine().build())
-        .setProgressMessage("Generating %s proto_library %s", language, ruleContext.getLabel())
+        .setProgressMessage("Generating " + language + " proto_library " + ruleContext.getLabel())
         .setMnemonic(MNEMONIC);
 
     return result;
@@ -517,7 +517,7 @@ public class ProtoCompileActionBuilder {
                 ruleLabel,
                 allowServices,
                 ruleContext.getFragment(ProtoConfiguration.class).protocOpts()))
-        .setProgressMessage("Generating %s proto_library %s", flavorName, ruleContext.getLabel())
+        .setProgressMessage("Generating " + flavorName + " proto_library " + ruleContext.getLabel())
         .setMnemonic(MNEMONIC);
 
     return result;
