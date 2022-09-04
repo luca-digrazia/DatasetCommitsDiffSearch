@@ -16,30 +16,41 @@
  */
 package org.graylog2.database;
 
-import com.mongodb.CommandFailureException;
+import com.github.zafarkhaja.semver.Version;
+import com.mongodb.BasicDBList;
+import com.mongodb.CommandResult;
 import com.mongodb.DB;
 import com.mongodb.Mongo;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
+import com.mongodb.MongoCommandException;
 import com.mongodb.MongoException;
 import com.mongodb.WriteConcern;
+import com.mongodb.client.MongoDatabase;
 import org.graylog2.configuration.MongoDbConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.net.UnknownHostException;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 /**
  * MongoDB connection singleton
  */
 @Singleton
 public class MongoConnectionImpl implements MongoConnection {
+    private static final Logger LOG = LoggerFactory.getLogger(MongoConnectionImpl.class);
+    private static final Version MINIMUM_MONGODB_VERSION = Version.forIntegers(2, 4);
+
     private final MongoClientURI mongoClientURI;
 
     private MongoClient m = null;
     private DB db = null;
+    private MongoDatabase mongoDatabase = null;
 
     @Inject
     public MongoConnectionImpl(final MongoDbConfiguration configuration) {
@@ -56,26 +67,56 @@ public class MongoConnectionImpl implements MongoConnection {
     @Override
     public synchronized Mongo connect() {
         if (m == null) {
-            try {
-                m = new MongoClient(mongoClientURI);
-                db = m.getDB(mongoClientURI.getDatabase());
-                db.setWriteConcern(WriteConcern.SAFE);
-            } catch (UnknownHostException e) {
-                throw new RuntimeException("Cannot resolve host name for MongoDB", e);
+            final String dbName = mongoClientURI.getDatabase();
+            if (isNullOrEmpty(dbName)) {
+                LOG.error("The MongoDB database name must not be null or empty (mongodb_uri was: {})", mongoClientURI);
+                throw new RuntimeException("MongoDB database name is missing.");
             }
+
+            m = new MongoClient(mongoClientURI);
+            db = m.getDB(dbName);
+            db.setWriteConcern(WriteConcern.ACKNOWLEDGED);
+
+            mongoDatabase = m.getDatabase(dbName).withWriteConcern(WriteConcern.ACKNOWLEDGED);
         }
 
         try {
             db.command("{ ping: 1 }");
-        } catch (CommandFailureException e) {
-            if(e.getCode() == 18) {
+        } catch (MongoCommandException e) {
+            if (e.getCode() == 18) {
                 throw new MongoException("Couldn't connect to MongoDB. Please check the authentication credentials.", e);
             } else {
                 throw new MongoException("Couldn't connect to MongoDB: " + e.getMessage(), e);
             }
         }
 
+        final Version mongoVersion = getMongoVersion(m.getDB("admin"));
+        if (mongoVersion != null && mongoVersion.lessThan(MINIMUM_MONGODB_VERSION)) {
+            LOG.warn("You're running MongoDB {} but Graylog requires at least MongoDB {}. Please upgrade.",
+                    mongoVersion, MINIMUM_MONGODB_VERSION);
+        }
+
         return m;
+    }
+
+    @Nullable
+    private Version getMongoVersion(DB adminDb) {
+        final CommandResult buildInfoResult = adminDb.command("buildInfo");
+        if (buildInfoResult.ok()) {
+            final BasicDBList versionArray = (BasicDBList) buildInfoResult.get("versionArray");
+            if (versionArray == null || versionArray.size() < 3) {
+                LOG.debug("Couldn't retrieve MongoDB version");
+                return null;
+            }
+
+            final int majorVersion = (int) versionArray.get(0);
+            final int minorVersion = (int) versionArray.get(1);
+            final int patchVersion = (int) versionArray.get(2);
+            return Version.forIntegers(majorVersion, minorVersion, patchVersion);
+        } else {
+            LOG.debug("Couldn't retrieve MongoDB buildInfo: {}", buildInfoResult.getErrorMessage());
+            return null;
+        }
     }
 
     /**
@@ -86,5 +127,10 @@ public class MongoConnectionImpl implements MongoConnection {
     @Override
     public DB getDatabase() {
         return db;
+    }
+
+    @Override
+    public MongoDatabase getMongoDatabase() {
+        return mongoDatabase;
     }
 }
