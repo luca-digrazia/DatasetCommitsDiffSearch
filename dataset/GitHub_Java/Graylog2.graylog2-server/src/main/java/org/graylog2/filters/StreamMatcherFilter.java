@@ -39,11 +39,13 @@ public class StreamMatcherFilter implements MessageFilter {
     private static final StreamRouter ROUTER = new StreamRouter();
 
     @Override
-    public void filter(LogMessage msg, GraylogServer server) {
+    public LogMessage filter(LogMessage msg, GraylogServer server) {
         List<Stream> streams = ROUTER.route(msg);
         msg.setStreams(streams);
 
         LOG.debug("Routed message <" + msg.getId() + "> to " + streams.size() + " streams.");
+
+        return msg;
     }
 
     @Override

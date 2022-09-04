@@ -57,7 +57,16 @@ public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
                 String name = filterType.getSimpleName();
                 LOG.debug("Applying filter [" + name +"] on message <" + msg.getId() + ">.");
 
-                filter.filter(msg, server);
+                LogMessage tmpMsg = filter.filter(msg, server);
+
+                // It is not allowed to create new LogMessage objects in a filter. Return the one you got passed.
+                if (!tmpMsg.getId().equals(originalMsgId)) {
+                    LOG.error("Filter [" + name + "] tried to instantiate new LogMessage object of <" + msg.getId() + ">. Skipping filter.");
+                    continue;
+                }
+
+                // Same message instance. Safe to override.
+                msg = tmpMsg;
 
                 if (filter.discardMessage()) {
                     LOG.debug("Filter [" + name + "] marked message <" + msg.getId() + "> to be discarded. Dropping message.");

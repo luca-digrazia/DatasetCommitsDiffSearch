@@ -30,7 +30,7 @@ import org.graylog2.logmessage.LogMessage;
  */
 public interface MessageFilter {
 
-    public void filter(LogMessage msg, GraylogServer server);
+    public LogMessage filter(LogMessage msg, GraylogServer server);
 
     public boolean discardMessage();
 
