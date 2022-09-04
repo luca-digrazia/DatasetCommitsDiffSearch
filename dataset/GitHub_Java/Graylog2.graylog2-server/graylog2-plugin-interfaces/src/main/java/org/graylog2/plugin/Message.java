@@ -65,7 +65,7 @@ public class Message implements Messages {
     public static final String FIELD_LEVEL = "level";
     public static final String FIELD_STREAMS = "streams";
 
-    private static final Pattern VALID_KEY_CHARS = Pattern.compile("^[\\w\\-@]*$");
+    private static final Pattern VALID_KEY_CHARS = Pattern.compile("^[\\w\\.\\-@]*$");
 
     public static final ImmutableSet<String> RESERVED_FIELDS = ImmutableSet.of(
             // ElasticSearch fields.
@@ -255,9 +255,6 @@ public class Message implements Messages {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Ignoring invalid or reserved key {} for message {}", key, getId());
             }
-            if (key != null && key.contains(".")) {
-                LOG.warn("Keys must not contain a \".\" character! Ignoring field \"{}\"=\"{}\" in message [{}].", key, value, getId());
-            }
             return;
         }
 
@@ -360,6 +357,9 @@ public class Message implements Messages {
 
     @SuppressWarnings("unchecked")
     public List<String> getStreamIds() {
+        if (!hasField(FIELD_STREAMS)) {
+            return Collections.emptyList();
+        }
         try {
             return Lists.<String>newArrayList(getFieldAs(List.class, FIELD_STREAMS));
         } catch (ClassCastException e) {
