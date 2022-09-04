@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.DATA;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
@@ -93,7 +94,7 @@ public final class CcImportRule implements RuleDefinition {
         .add(attr("alwayslink", BOOLEAN))
         .add(
             attr("data", LABEL_LIST)
-                .cfg(env.getLipoDataTransition())
+                .cfg(DATA)
                 .allowedFileTypes(FileTypeSet.ANY_FILE)
                 .dontCheckConstraints())
         .build();

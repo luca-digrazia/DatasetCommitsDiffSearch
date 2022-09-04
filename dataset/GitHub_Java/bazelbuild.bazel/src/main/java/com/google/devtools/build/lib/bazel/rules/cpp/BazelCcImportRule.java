@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.rules.cpp;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -38,7 +37,7 @@ public final class BazelCcImportRule implements RuleDefinition {
             attr(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, LABEL)
                 .value(CppRuleClasses.ccToolchainAttribute(env)))
         .add(
-            attr(CcToolchain.CC_TOOLCHAIN_TYPE_ATTRIBUTE_NAME, NODEP_LABEL)
+            attr(CcToolchain.CC_TOOLCHAIN_TYPE_ATTRIBUTE_NAME, LABEL)
                 .value(CppRuleClasses.ccToolchainTypeAttribute(env)))
         .add(attr(":stl", LABEL).value(BazelCppRuleClasses.STL))
         .build();
