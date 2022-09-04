@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import java.io.NotSerializableException;
-import java.util.ArrayList;
 
 /** Exception signaling a failure to Serialize or Deserialize an Object. */
 public class SerializationException extends Exception {
@@ -36,8 +35,6 @@ public class SerializationException extends Exception {
    * or type of object.
    */
   public static class NoCodecException extends SerializationException {
-    ArrayList<String> trail = new ArrayList<>();
-
     NoCodecException(String message) {
       super(message);
     }
@@ -53,20 +50,6 @@ public class SerializationException extends Exception {
     // Needed for wrapping.
     NoCodecException(String message, NoCodecException e) {
       super(message, e);
-    }
-
-    @Override
-    public String getMessage() {
-      return super.getMessage() + (trail.isEmpty() ? "" : " " + trail);
-    }
-
-    /**
-     * Adds extra tracing info for debugging.
-     *
-     * <p>Primarily useful for {@link DynamicCodec}.
-     */
-    public void addTrail(Class<?> type) {
-      trail.add(type.getName());
     }
   }
 
