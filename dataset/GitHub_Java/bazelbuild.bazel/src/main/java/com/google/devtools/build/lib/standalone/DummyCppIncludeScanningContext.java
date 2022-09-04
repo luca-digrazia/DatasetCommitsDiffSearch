@@ -14,25 +14,19 @@
 package com.google.devtools.build.lib.standalone;
 
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppIncludeScanningContext;
-import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
-import javax.annotation.Nullable;
+import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
+import java.util.List;
 
-/** A CppIncludeScanningContext that does nothing. */
-@ExecutionStrategy(contextType = CppIncludeScanningContext.class)
-class DummyCppIncludeScanningContext implements CppIncludeScanningContext {
+/** A {@link CppIncludeScanningContext} that does not expect to be called. */
+final class DummyCppIncludeScanningContext implements CppIncludeScanningContext {
   @Override
-  @Nullable
-  public Iterable<Artifact> findAdditionalInputs(
+  public List<Artifact> findAdditionalInputs(
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
-      IncludeProcessing includeProcessing)
-      throws ExecException, InterruptedException, ActionExecutionException {
-    return null;
+      IncludeScanningHeaderData includeScanningHeaderData) {
+    throw new UnsupportedOperationException("Include scanning unexpected for " + action.describe());
   }
 }

@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import static java.nio.charset.StandardCharsets.ISO_8859_1;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ascii;
 import com.google.common.base.Preconditions;
@@ -49,7 +47,6 @@ import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.LostInputsActionExecutionException;
-import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
@@ -794,23 +791,17 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   @Override
   public Artifact getMainIncludeScannerSource() {
-    // getIncludeScannerSources() needs to return the main file first. This is used for determining
-    // what file command line includes should be interpreted relative to.
-    return getIncludeScannerSources().get(0);
+    return getSourceFile().isFileType(CppFileTypes.CPP_MODULE_MAP)
+        ? Iterables.getFirst(ccCompilationContext.getHeaderModuleSrcs(), null)
+        : getSourceFile();
   }
 
   @Override
-  public ImmutableList<Artifact> getIncludeScannerSources() {
+  public Collection<Artifact> getIncludeScannerSources() {
     if (getSourceFile().isFileType(CppFileTypes.CPP_MODULE_MAP)) {
-      boolean isSeparate = outputFile.equals(ccCompilationContext.getSeparateHeaderModule(usePic));
-      Preconditions.checkState(
-          outputFile.equals(ccCompilationContext.getHeaderModule(usePic)) || isSeparate,
-          "Trying to build unknown module",
-          outputFile);
-
       // If this is an action that compiles the header module itself, the source we build is the
       // module map, and we need to include-scan all headers that are referenced in the module map.
-      return ccCompilationContext.getHeaderModuleSrcs(isSeparate);
+      return ccCompilationContext.getHeaderModuleSrcs();
     }
     ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
     builder.add(getSourceFile());
@@ -871,16 +862,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
             .collect(ImmutableSet.toImmutableSet());
 
     CommandLine commandLine = compileCommandLine.getFilteredFeatureConfigurationCommandLine(this);
-    ParamFileInfo paramFileInfo = null;
-    if (cppConfiguration.useArgsParamsFile()) {
-      paramFileInfo =
-          ParamFileInfo.builder(ParameterFileType.GCC_QUOTED)
-              .setCharset(ISO_8859_1)
-              .setUseAlways(true)
-              .build();
-    }
+
     CommandLineAndParamFileInfo commandLineAndParamFileInfo =
-        new CommandLineAndParamFileInfo(commandLine, paramFileInfo);
+        new CommandLineAndParamFileInfo(commandLine, /* paramFileInfo= */ null);
 
     Args args = Args.forRegisteredAction(commandLineAndParamFileInfo, directoryInputs);
 
@@ -1804,7 +1788,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         dotDContents = getDotDContents(spawnResults.get(0));
       } catch (ExecException e) {
         copyTempOutErrToActionOutErr();
-        throw e.toActionExecutionException(CppCompileAction.this);
+        throw e.toActionExecutionException(
+            CppCompileAction.this);
       } catch (InterruptedException e) {
         copyTempOutErrToActionOutErr();
         throw e;

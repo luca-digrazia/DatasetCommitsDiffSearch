@@ -604,11 +604,12 @@ public class LegacyIncludeScanner implements IncludeScanner {
       pathHints = ImmutableSet.of();
     } else {
       SkyFunction.Environment env = actionExecutionContext.getEnvironmentForDiscoveringInputs();
-      pathHints = parser.getHints().getPathLevelHintedInclusions(quoteIncludePaths, env);
+      Collection<Artifact> artifacts =
+          parser.getHints().getPathLevelHintedInclusions(quoteIncludePaths, env);
       if (env.valuesMissing()) {
         return;
       }
-      Preconditions.checkNotNull(pathHints, "Null path hints for %s", quoteIncludePaths);
+      pathHints = ImmutableSet.copyOf(artifacts);
     }
 
     IncludeVisitor visitor =
