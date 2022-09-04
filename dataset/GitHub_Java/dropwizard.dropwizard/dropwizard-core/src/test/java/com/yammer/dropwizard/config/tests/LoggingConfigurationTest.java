@@ -13,7 +13,8 @@ import java.io.File;
 
 import static com.yammer.dropwizard.config.LoggingConfiguration.ConsoleConfiguration;
 import static com.yammer.dropwizard.config.LoggingConfiguration.FileConfiguration;
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThat;
 
 public class LoggingConfigurationTest {
     private final ConfigurationFactory<LoggingConfiguration> factory =
@@ -22,60 +23,53 @@ public class LoggingConfigurationTest {
 
     @Before
     public void setUp() throws Exception {
-        this.config = factory.build(new File(Resources.getResource("logging.yml").toURI()));
+        this.config = factory.build(new File(Resources.getResource("logging.yml")
+                                                      .getFile()));
     }
 
     @Test
     public void hasADefaultLevel() throws Exception {
-        assertThat(config.getLevel())
-                .isEqualTo(Level.INFO);
+        assertThat(config.getLevel(),
+                   is(Level.INFO));
     }
 
     @Test
     public void hasASetOfOverriddenLevels() throws Exception {
-        assertThat(config.getLoggers())
-                .isEqualTo(ImmutableMap.of("com.example.app", Level.DEBUG));
+        assertThat(config.getLoggers(),
+                   is(ImmutableMap.of("com.example.app", Level.DEBUG)));
     }
 
     @Test
     public void hasConsoleConfiguration() throws Exception {
         final ConsoleConfiguration console = config.getConsoleConfiguration();
-
-        assertThat(console.isEnabled())
-                .isTrue();
-
-        assertThat(console.getThreshold())
-                .isEqualTo(Level.ALL);
+        
+        assertThat(console.isEnabled(),
+                   is(true));
+        
+        assertThat(console.getThreshold(),
+                   is(Level.ALL));
     }
 
     @Test
     public void hasFileConfiguration() throws Exception {
         final FileConfiguration file = config.getFileConfiguration();
 
-        assertThat(file.isEnabled())
-                .isFalse();
+        assertThat(file.isEnabled(),
+                   is(false));
+        
+        assertThat(file.getThreshold(),
+                   is(Level.ALL));
+        
+        assertThat(file.isArchive(),
+                   is(true));
+        
+        assertThat(file.getCurrentLogFilename(),
+                   is("./logs/example.log"));
 
-        assertThat(file.getThreshold())
-                .isEqualTo(Level.ALL);
+        assertThat(file.getArchivedLogFilenamePattern(),
+                   is("./logs/example-%d.log.gz"));
 
-        assertThat(file.isArchive())
-                .isTrue();
-
-        assertThat(file.getCurrentLogFilename())
-                .isEqualTo("./logs/example.log");
-
-        assertThat(file.getArchivedLogFilenamePattern())
-                .isEqualTo("./logs/example-%d.log.gz");
-
-        assertThat(file.getArchivedFileCount())
-                .isEqualTo(5);
-    }
-
-    @Test
-    public void defaultFileConfigurationIsValid() throws Exception {
-        final FileConfiguration file = new FileConfiguration();
-
-        assertThat(file.isValidArchiveConfiguration())
-                .isTrue();
+        assertThat(file.getArchivedFileCount(),
+                   is(5));
     }
 }
