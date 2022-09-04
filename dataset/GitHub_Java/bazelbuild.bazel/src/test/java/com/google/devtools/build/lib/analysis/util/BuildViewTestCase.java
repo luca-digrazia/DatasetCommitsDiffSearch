@@ -530,8 +530,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         /*isSystemEnv=*/ true, /*extendedSanityChecks*/
         false,
         reporter,
-        /* env= */ null,
-        /*sourceDependencyListener=*/ unused -> {});
+        /* env= */ null);
   }
 
   /**
@@ -1737,7 +1736,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             PathFragment.EMPTY_FRAGMENT,
             loadingOptions,
             keepGoing,
-            /*determineTests=*/ false);
+            /*determineTests=*/ false,
+            /*callback=*/ null);
     if (!doAnalysis) {
       // TODO(bazel-team): What's supposed to happen in this case?
       return null;
