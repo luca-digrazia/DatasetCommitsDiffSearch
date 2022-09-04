@@ -47,9 +47,8 @@ import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
 /**
- * Generates value resolvers backed by classes.
  * 
- * @see ValueResolver
+ * 
  */
 public class ValueResolverGenerator {
 
@@ -149,8 +148,7 @@ public class ValueResolverGenerator {
 
         valueResolver.close();
 
-        DotName superName = clazz.superName();
-        if (!ignoreSuperclasses && (superName != null && !superName.equals(OBJECT))) {
+        if (!ignoreSuperclasses && !clazz.superName().equals(OBJECT)) {
             ClassInfo superClass = index.getClassByName(clazz.superClassType().name());
             if (superClass != null) {
                 generate(superClass);

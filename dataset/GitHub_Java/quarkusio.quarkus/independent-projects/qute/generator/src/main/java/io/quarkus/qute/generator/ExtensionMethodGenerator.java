@@ -17,7 +17,6 @@ import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.gizmo.TryBlock;
 import io.quarkus.qute.EvalContext;
-import io.quarkus.qute.EvaluatedParams;
 import io.quarkus.qute.TemplateExtension;
 import io.quarkus.qute.ValueResolver;
 import java.lang.reflect.Modifier;
@@ -39,11 +38,6 @@ import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
 
-/**
- * Generates value resolvers for static extension methods.
- * 
- * @see ValueResolver
- */
 public class ExtensionMethodGenerator {
 
     public static final DotName TEMPLATE_EXTENSION = DotName.createSimple(TemplateExtension.class.getName());
@@ -95,10 +89,9 @@ public class ExtensionMethodGenerator {
         if (matchName == null || matchName.equals(TemplateExtension.METHOD_NAME)) {
             matchName = method.name();
         }
-        List<Type> parameters = method.parameters();
         if (matchName.equals(TemplateExtension.ANY)) {
             // Special constant used - the second parameter must be a string
-            if (parameters.size() < 2 || !parameters.get(1).name().equals(STRING)) {
+            if (method.parameters().size() < 2 || !method.parameters().get(1).name().equals(STRING)) {
                 throw new IllegalStateException(
                         "Template extension method matching multiple names must declare at least two parameters and the second parameter must be string: "
                                 + method);
@@ -125,7 +118,7 @@ public class ExtensionMethodGenerator {
         }
         String targetPackage = packageName(declaringClass.name());
 
-        String suffix = SUFFIX + "_" + method.name() + "_" + sha1(parameters.toString());
+        String suffix = SUFFIX + "_" + method.name() + "_" + sha1(method.parameters().toString());
         String generatedName = generatedNameFromTarget(targetPackage, baseName, suffix);
         generatedTypes.add(generatedName.replace('/', '.'));
 
@@ -152,10 +145,9 @@ public class ExtensionMethodGenerator {
         ResultHandle evalContext = resolve.getMethodParam(0);
         ResultHandle base = resolve.invokeInterfaceMethod(Descriptors.GET_BASE, evalContext);
         boolean matchAny = matchName.equals(TemplateExtension.ANY);
-        List<Type> parameters = method.parameters();
 
         ResultHandle ret;
-        int paramSize = parameters.size();
+        int paramSize = method.parameters().size();
         if (paramSize == 1 || (paramSize == 2 && matchAny)) {
             ResultHandle[] args = new ResultHandle[paramSize];
             args[0] = base;
@@ -165,25 +157,31 @@ public class ExtensionMethodGenerator {
             ret = resolve.invokeStaticMethod(Descriptors.COMPLETED_FUTURE, resolve
                     .invokeStaticMethod(MethodDescriptor.ofMethod(declaringClass.name().toString(), method.name(),
                             method.returnType().name().toString(),
-                            parameters.stream().map(p -> p.name().toString()).collect(Collectors.toList()).toArray()),
+                            method.parameters().stream().map(p -> p.name().toString()).collect(Collectors.toList()).toArray()),
                             args));
         } else {
             ret = resolve
                     .newInstance(MethodDescriptor.ofConstructor(CompletableFuture.class));
-            // The real number of evaluated params, i.e. skip the base object and name if matchAny==true
             int realParamSize = paramSize - (matchAny ? 2 : 1);
 
             // Evaluate params first
             ResultHandle name = resolve.invokeInterfaceMethod(Descriptors.GET_NAME, evalContext);
-            // The CompletionStage upon which we invoke whenComplete()
-            ResultHandle evaluatedParams = resolve.invokeStaticMethod(Descriptors.EVALUATED_PARAMS_EVALUATE,
-                    evalContext);
-            ResultHandle paramsReady = resolve.readInstanceField(Descriptors.EVALUATED_PARAMS_STAGE,
-                    evaluatedParams);
+            ResultHandle params = resolve.invokeInterfaceMethod(Descriptors.GET_PARAMS, evalContext);
+            ResultHandle resultsArray = resolve.newArray(CompletableFuture.class,
+                    resolve.load(realParamSize));
+            for (int i = 0; i < realParamSize; i++) {
+                ResultHandle evalResult = resolve.invokeInterfaceMethod(
+                        Descriptors.EVALUATE, evalContext,
+                        resolve.invokeInterfaceMethod(Descriptors.LIST_GET, params,
+                                resolve.load(i)));
+                resolve.writeArrayValue(resultsArray, i,
+                        resolve.invokeInterfaceMethod(Descriptors.CF_TO_COMPLETABLE_FUTURE, evalResult));
+            }
+            ResultHandle allOf = resolve.invokeStaticMethod(Descriptors.COMPLETABLE_FUTURE_ALL_OF,
+                    resultsArray);
 
-            // Function that is called when params are evaluated
             FunctionCreator whenCompleteFun = resolve.createFunction(BiConsumer.class);
-            resolve.invokeInterfaceMethod(Descriptors.CF_WHEN_COMPLETE, paramsReady, whenCompleteFun.getInstance());
+            resolve.invokeInterfaceMethod(Descriptors.CF_WHEN_COMPLETE, allOf, whenCompleteFun.getInstance());
             BytecodeCreator whenComplete = whenCompleteFun.getBytecode();
             AssignableResultHandle whenBase = whenComplete.createVariable(Object.class);
             whenComplete.assign(whenBase, base);
@@ -194,28 +192,24 @@ public class ExtensionMethodGenerator {
             }
             AssignableResultHandle whenRet = whenComplete.createVariable(CompletableFuture.class);
             whenComplete.assign(whenRet, ret);
-            AssignableResultHandle whenEvaluatedParams = whenComplete.createVariable(EvaluatedParams.class);
-            whenComplete.assign(whenEvaluatedParams, evaluatedParams);
+            AssignableResultHandle whenResults = whenComplete.createVariable(CompletableFuture[].class);
+            whenComplete.assign(whenResults, resultsArray);
 
             BranchResult throwableIsNull = whenComplete.ifNull(whenComplete.getMethodParam(1));
 
             BytecodeCreator success = throwableIsNull.trueBranch();
 
-            // Check type parameters and return NO_RESULT if failed
-            ResultHandle paramTypesHandle = success.newArray(Class.class, realParamSize);
-            int idx = 0;
-            for (Type parameterType : parameters.subList(paramSize - realParamSize, paramSize)) {
-                success.writeArrayValue(paramTypesHandle, idx++,
-                        ValueResolverGenerator.loadParamType(success, parameterType));
+            ResultHandle[] args = new ResultHandle[paramSize];
+            int shift = 1;
+            args[0] = whenBase;
+            if (matchAny) {
+                args[1] = whenName;
+                shift++;
             }
-            boolean isVarArgs = ValueResolverGenerator.isVarArgs(method);
-            BytecodeCreator typeMatchFailed = success
-                    .ifNonZero(success.invokeVirtualMethod(Descriptors.EVALUATED_PARAMS_PARAM_TYPES_MATCH,
-                            whenEvaluatedParams, success.load(isVarArgs), paramTypesHandle))
-                    .falseBranch();
-            typeMatchFailed.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_COMPLETE, whenRet,
-                    typeMatchFailed.readStaticField(Descriptors.RESULT_NOT_FOUND));
-            typeMatchFailed.returnValue(null);
+            for (int i = 0; i < realParamSize; i++) {
+                ResultHandle paramResult = success.readArrayValue(whenResults, i);
+                args[i + shift] = success.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_GET, paramResult);
+            }
 
             // try
             TryBlock tryCatch = success.tryBlock();
@@ -224,39 +218,6 @@ public class ExtensionMethodGenerator {
             // CompletableFuture.completeExceptionally(Throwable)
             exception.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY, whenRet,
                     exception.getCaughtException());
-
-            // Collect the params:
-            // 0 - matched base object
-            // 1 - name, if matching any name
-            // n -1 - adapted arg for varargs methods
-            ResultHandle[] args = new ResultHandle[paramSize];
-            int shift = 1;
-            args[0] = whenBase;
-            if (matchAny) {
-                args[1] = whenName;
-                shift++;
-            }
-            if (isVarArgs) {
-                // For varargs the number of results may be higher than the number of method params
-                // First get the regular params
-                for (int i = 0; i < realParamSize - 1; i++) {
-                    ResultHandle resultHandle = tryCatch.invokeVirtualMethod(Descriptors.EVALUATED_PARAMS_GET_RESULT,
-                            whenEvaluatedParams, tryCatch.load(i));
-                    args[i + shift] = resultHandle;
-                }
-                // Then we need to create an array for the last argument
-                Type varargsParam = parameters.get(paramSize - 1);
-                ResultHandle componentType = tryCatch.loadClass(varargsParam.asArrayType().component().name().toString());
-                ResultHandle varargsResults = tryCatch.invokeVirtualMethod(Descriptors.EVALUATED_PARAMS_GET_VARARGS_RESULTS,
-                        evaluatedParams, tryCatch.load(realParamSize), componentType);
-                args[realParamSize] = varargsResults;
-            } else {
-                for (int i = 0; i < realParamSize; i++) {
-                    args[i + shift] = tryCatch.invokeVirtualMethod(Descriptors.EVALUATED_PARAMS_GET_RESULT,
-                            evaluatedParams,
-                            tryCatch.load(i));
-                }
-            }
 
             ResultHandle invokeRet = tryCatch
                     .invokeStaticMethod(MethodDescriptor.ofMethod(declaringClass.name().toString(), method.name(),
@@ -280,8 +241,6 @@ public class ExtensionMethodGenerator {
 
         List<Type> parameters = method.parameters();
         boolean matchAny = matchName.equals(TemplateExtension.ANY);
-        boolean isVarArgs = ValueResolverGenerator.isVarArgs(method);
-        int realParamSize = parameters.size() - (matchAny ? 2 : 1);
         ResultHandle evalContext = appliesTo.getMethodParam(0);
         ResultHandle base = appliesTo.invokeInterfaceMethod(Descriptors.GET_BASE, evalContext);
         ResultHandle name = appliesTo.invokeInterfaceMethod(Descriptors.GET_NAME, evalContext);
@@ -305,24 +264,13 @@ public class ExtensionMethodGenerator {
         }
 
         // Test number of parameters
-        if (!isVarArgs || realParamSize > 1) {
-            ResultHandle params = appliesTo.invokeInterfaceMethod(Descriptors.GET_PARAMS, evalContext);
-            ResultHandle paramsCount = appliesTo.invokeInterfaceMethod(Descriptors.COLLECTION_SIZE, params);
-            BranchResult paramsTest;
-            if (isVarArgs) {
-                // For varargs methods match the minimal number of params
-                // TODO https://github.com/quarkusio/gizmo/issues/39
-                paramsTest = appliesTo.ifNonZero(appliesTo.invokeStaticMethod(Descriptors.INTEGERS_IS_GT,
-                        appliesTo.load(realParamSize - 1), paramsCount));
-            } else {
-                paramsTest = appliesTo
-                        .ifNonZero(appliesTo.invokeStaticMethod(Descriptors.INTEGER_COMPARE,
-                                appliesTo.load(realParamSize), paramsCount));
-            }
-            BytecodeCreator paramsNotMatching = paramsTest.trueBranch();
-            paramsNotMatching.returnValue(paramsNotMatching.load(false));
-        }
-
+        ResultHandle params = appliesTo.invokeInterfaceMethod(Descriptors.GET_PARAMS, evalContext);
+        ResultHandle paramsCount = appliesTo.invokeInterfaceMethod(Descriptors.COLLECTION_SIZE, params);
+        BranchResult paramsTest = appliesTo
+                .ifNonZero(appliesTo.invokeStaticMethod(Descriptors.INTEGER_COMPARE,
+                        appliesTo.load(parameters.size() - (matchAny ? 2 : 1)), paramsCount));
+        BytecodeCreator paramsNotMatching = paramsTest.trueBranch();
+        paramsNotMatching.returnValue(paramsNotMatching.load(false));
         appliesTo.returnValue(appliesTo.load(true));
     }
 
