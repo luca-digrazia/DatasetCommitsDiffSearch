@@ -70,42 +70,4 @@ public class Configuration {
         return replicaServers;
     }
 
-    public static int getMaximumMongoDBConnections(Properties config) {
-        String val = config.getProperty("mongodb_max_connections");
-        if (val != null) {
-            int res = Integer.parseInt(val);
-            if (res > 0) {
-                return res;
-            }
-        }
-
-        // Default value.
-        return 1000;
-    }
-
-    static List<String> getAMQPSubscribedQueues(Properties config) {
-        List<String> queueList = new ArrayList<String>();
-
-        String rawQueues = config.getProperty("amqp_subscribed_queues");
-
-        if (rawQueues == null || rawQueues.isEmpty()) {
-            return null;
-        }
-
-        // Get every queue.
-        String[] queues = rawQueues.split(",");
-        for (int i = 0; i < queues.length; i++) {
-            String queue = queues[i];
-            // Check if valid.
-            if (queue == null || queue.isEmpty()) {
-                Log.crit("Malformed amqp_subscribed_queues configuration.");
-                return null;
-            }
-
-            queueList.add(queues[i]);
-        }
-
-        return queueList;
-    }
-
 }

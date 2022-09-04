@@ -1,5 +1,5 @@
 /**
- * Copyright 2010, 2011 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2010 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -26,8 +26,6 @@ import com.mongodb.MongoException;
 import com.mongodb.MongoOptions;
 import com.mongodb.ServerAddress;
 import java.util.List;
-import org.graylog2.Configuration;
-import org.graylog2.Main;
 
 /**
  * MongoConnection.java: Jun 6, 2010 1:36:19 PM
@@ -39,8 +37,8 @@ import org.graylog2.Main;
 public final class MongoConnection {
     private static MongoConnection instance;
 
-    private Mongo m = null;
-    private DB db = null;
+    private static Mongo m = null;
+    private static DB db = null;
 
     private MongoConnection() {}
 
@@ -69,17 +67,17 @@ public final class MongoConnection {
     public void connect(String username, String password, String hostname, String database, int port, String useAuth, List<ServerAddress> replicaServers) throws Exception {
         try {
             MongoOptions options = new MongoOptions();
-            options.connectionsPerHost = Configuration.getMaximumMongoDBConnections(Main.masterConfig);
+            options.connectionsPerHost = 500;
 
             // Connect to replica servers if given. Else the standard way to one server.
             if (replicaServers != null && replicaServers.size() > 0) {
-                m = new Mongo(replicaServers, options);
+                MongoConnection.m = new Mongo(replicaServers, options);
             } else {
                 ServerAddress address = new ServerAddress(hostname, port);
-                m = new Mongo(address, options);
+                MongoConnection.m = new Mongo(address, options);
             }
 
-            db = m.getDB(database);
+            MongoConnection.db = m.getDB(database);
 
             // Try to authenticate if configured.
             if (useAuth.equals("true")) {
@@ -97,7 +95,7 @@ public final class MongoConnection {
      * @return connection
      */
     public Mongo getConnection() {
-        return m;
+        return MongoConnection.m;
     }
 
     /**
@@ -105,6 +103,6 @@ public final class MongoConnection {
      * @return database
      */
     public DB getDatabase() {
-        return db;
+        return MongoConnection.db;
     }
 }
