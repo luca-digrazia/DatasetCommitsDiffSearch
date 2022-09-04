@@ -13,9 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -24,6 +24,7 @@ import java.util.Map;
 public final class LoadStatement extends Statement {
 
   private final ImmutableMap<Identifier, String> symbolMap;
+  private final ImmutableList<Identifier> cachedSymbols; // to save time
   private final StringLiteral imp;
 
   /**
@@ -36,6 +37,7 @@ public final class LoadStatement extends Statement {
   public LoadStatement(StringLiteral imp, Map<Identifier, String> symbolMap) {
     this.imp = imp;
     this.symbolMap = ImmutableMap.copyOf(symbolMap);
+    this.cachedSymbols = ImmutableList.copyOf(symbolMap.keySet());
   }
 
   public ImmutableMap<Identifier, String> getSymbolMap() {
@@ -43,7 +45,7 @@ public final class LoadStatement extends Statement {
   }
 
   public ImmutableList<Identifier> getSymbols() {
-    return ImmutableList.copyOf(symbolMap.keySet());
+    return cachedSymbols;
   }
 
   public StringLiteral getImport() {
@@ -51,25 +53,9 @@ public final class LoadStatement extends Statement {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    printIndent(buffer, indentLevel);
-    buffer.append("load(");
-    imp.prettyPrint(buffer);
-    for (Identifier symbol : symbolMap.keySet()) {
-      buffer.append(", ");
-      String origName = symbolMap.get(symbol);
-      if (origName.equals(symbol.getName())) {
-        buffer.append('"');
-        symbol.prettyPrint(buffer);
-        buffer.append('"');
-      } else {
-        symbol.prettyPrint(buffer);
-        buffer.append("=\"");
-        buffer.append(origName);
-        buffer.append('"');
-      }
-    }
-    buffer.append(")\n");
+  public String toString() {
+    return String.format(
+        "load(\"%s\", %s)", imp.getValue(), Joiner.on(", ").join(cachedSymbols));
   }
 
   @Override
@@ -110,7 +96,7 @@ public final class LoadStatement extends Statement {
 
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
-    for (Identifier symbol : symbolMap.keySet()) {
+    for (Identifier symbol : cachedSymbols) {
       env.declare(symbol.getName(), getLocation());
     }
   }
