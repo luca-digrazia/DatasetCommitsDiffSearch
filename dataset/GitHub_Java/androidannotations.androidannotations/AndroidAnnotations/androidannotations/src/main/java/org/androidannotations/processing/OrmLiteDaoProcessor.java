@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,15 +18,17 @@ package org.androidannotations.processing;
 import static com.sun.codemodel.JExpr.ref;
 import static com.sun.codemodel.JMod.PRIVATE;
 
-import java.lang.annotation.Annotation;
-
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.OrmLiteDao;
+import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.TargetAnnotationHelper;
 import org.androidannotations.processing.EBeansHolder.Classes;
+
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JCodeModel;
@@ -37,12 +39,10 @@ import com.sun.codemodel.JVar;
 
 /**
  * This class generates the code that creates DAOs with ORMLite
- * 
- * @author Johan Poirier <johan.poirier@gmail.com>
  */
 public class OrmLiteDaoProcessor implements DecoratingElementProcessor {
 
-	private static final String CONNECTION_SOURCE_FIELD_NAME = "connectionSource_";
+	private static final String DATABASE_HELPER_FIELD_NAME = "helper_";
 	private TargetAnnotationHelper helper;
 
 	public OrmLiteDaoProcessor(ProcessingEnvironment processingEnv) {
@@ -50,8 +50,8 @@ public class OrmLiteDaoProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public Class<? extends Annotation> getTarget() {
-		return OrmLiteDao.class;
+	public String getTarget() {
+		return OrmLiteDao.class.getName();
 	}
 
 	@Override
@@ -64,37 +64,48 @@ public class OrmLiteDaoProcessor implements DecoratingElementProcessor {
 
 		TypeMirror databaseHelperTypeMirror = helper.extractAnnotationParameter(element, "helper");
 
-		// connection source field
-		boolean connectionSourceInjected = holder.generatedClass.fields().containsKey(CONNECTION_SOURCE_FIELD_NAME);
+		// database helper field
+		boolean databaseHelperInjected = holder.generatedClass.fields().containsKey(DATABASE_HELPER_FIELD_NAME);
 
-		JBlock initBody = holder.init.body();
+		JBlock initBody = holder.initBody;
 
-		JFieldVar connectionSourceRef;
-		if (connectionSourceInjected) {
-			connectionSourceRef = holder.generatedClass.fields().get(CONNECTION_SOURCE_FIELD_NAME);
+		JFieldVar databaseHelperRef;
+		if (databaseHelperInjected) {
+			databaseHelperRef = holder.generatedClass.fields().get(DATABASE_HELPER_FIELD_NAME);
 		} else {
-			connectionSourceRef = holder.generatedClass.field(PRIVATE, classes.CONNECTION_SOURCE, CONNECTION_SOURCE_FIELD_NAME);
+			databaseHelperRef = holder.generatedClass.field(PRIVATE, holder.refClass(databaseHelperTypeMirror.toString()), DATABASE_HELPER_FIELD_NAME);
 
-			// get connection source
+			// get database helper instance
 			JExpression dbHelperClass = holder.refClass(databaseHelperTypeMirror.toString()).dotclass();
 
-			initBody.assign(connectionSourceRef, //
+			initBody.assign(databaseHelperRef, //
 					classes.OPEN_HELPER_MANAGER //
 							.staticInvoke("getHelper") //
 							.arg(holder.contextRef) //
-							.arg(dbHelperClass) //
-							.invoke("getConnectionSource"));
+							.arg(dbHelperClass));
 		}
 
-		// create dao from dao manager
-		JTryBlock tryBlock = initBody._try();
 
 		JExpression modelClass = holder.refClass(modelObjectTypeMirror.toString()).dotclass();
-		tryBlock.body().assign(ref(fieldName), //
-				classes.DAO_MANAGER //
-						.staticInvoke("createDao") //
-						.arg(connectionSourceRef) //
-						.arg(modelClass));
+
+		JExpression injectExpr;
+		if (elementExtendsRuntimeExceptionDao(element, modelObjectTypeMirror)) {
+
+			injectExpr = classes.RUNTIME_EXCEPTION_DAO//
+							.staticInvoke("createDao") //
+							.arg(databaseHelperRef.invoke("getConnectionSource")) //
+							.arg(modelClass);
+
+		} else {
+
+			injectExpr = databaseHelperRef.invoke("getDao").arg(modelClass);
+
+		}
+
+		// create dao from database helper
+		JTryBlock tryBlock = initBody._try();
+
+		tryBlock.body().assign(ref(fieldName), injectExpr);
 
 		JCatchBlock catchBlock = tryBlock._catch(classes.SQL_EXCEPTION);
 		JVar exception = catchBlock.param("e");
@@ -102,7 +113,15 @@ public class OrmLiteDaoProcessor implements DecoratingElementProcessor {
 		catchBlock.body() //
 				.staticInvoke(classes.LOG, "e") //
 				.arg(holder.generatedClass.name()) //
-				.arg("Could not create DAO") //
+				.arg("Could not create DAO " + fieldName) //
 				.arg(exception);
+	}
+
+	private boolean elementExtendsRuntimeExceptionDao(Element element, TypeMirror modelObjectTypeMirror) {
+		TypeMirror elementType = element.asType();
+		TypeElement runtimeExceptionDaoTypeElement = helper.typeElementFromQualifiedName(CanonicalNameConstants.RUNTIME_EXCEPTION_DAO);
+		TypeMirror wildcardType = helper.getTypeUtils().getWildcardType(null, null);
+		DeclaredType runtimeExceptionDaoParameterizedType = helper.getTypeUtils().getDeclaredType(runtimeExceptionDaoTypeElement, modelObjectTypeMirror, wildcardType);
+		return helper.isSubtype(elementType, runtimeExceptionDaoParameterizedType);
 	}
 }
