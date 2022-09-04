@@ -225,8 +225,6 @@ public class SubsamplingScaleImageView extends View {
     private ScaleAndTranslate satTemp;
     private Matrix matrix;
     private RectF sRect;
-    private float[] srcArray = new float[8];
-    private float[] dstArray = new float[8];
 
     public SubsamplingScaleImageView(Context context, AttributeSet attr) {
         super(context, attr);
@@ -349,7 +347,7 @@ public class SubsamplingScaleImageView extends View {
         reset(true);
         if (state != null) { restoreState(state); }
 
-        if (previewSource != null) {
+        if (previewSource != null && imageSource.getSWidth() > 0 && imageSource.getSHeight() > 0) {
             if (imageSource.getBitmap() != null) {
                 throw new IllegalArgumentException("Preview image cannot be used when a bitmap is provided for the main image");
             }
@@ -888,20 +886,7 @@ public class SubsamplingScaleImageView extends View {
                             if (tileBgPaint != null) {
                                 canvas.drawRect(tile.vRect, tileBgPaint);
                             }
-                            if (matrix == null) { matrix = new Matrix(); }
-                            matrix.reset();
-                            setMatrixArray(srcArray, 0, 0, tile.bitmap.getWidth(), 0, tile.bitmap.getWidth(), tile.bitmap.getHeight(), 0, tile.bitmap.getHeight());
-                            if (getRequiredRotation() == ORIENTATION_0) {
-                                setMatrixArray(dstArray, tile.vRect.left, tile.vRect.top, tile.vRect.right, tile.vRect.top, tile.vRect.right, tile.vRect.bottom, tile.vRect.left, tile.vRect.bottom);
-                            } else if (getRequiredRotation() == ORIENTATION_90) {
-                                setMatrixArray(dstArray, tile.vRect.right, tile.vRect.top, tile.vRect.right, tile.vRect.bottom, tile.vRect.left, tile.vRect.bottom, tile.vRect.left, tile.vRect.top);
-                            } else if (getRequiredRotation() == ORIENTATION_180) {
-                                setMatrixArray(dstArray, tile.vRect.right, tile.vRect.bottom, tile.vRect.left, tile.vRect.bottom, tile.vRect.left, tile.vRect.top, tile.vRect.right, tile.vRect.top);
-                            } else if (getRequiredRotation() == ORIENTATION_270) {
-                                setMatrixArray(dstArray, tile.vRect.left, tile.vRect.bottom, tile.vRect.left, tile.vRect.top, tile.vRect.right, tile.vRect.top, tile.vRect.right, tile.vRect.bottom);
-                            }
-                            matrix.setPolyToPoly(srcArray, 0, dstArray, 0, 4);
-                            canvas.drawBitmap(tile.bitmap, matrix, bitmapPaint);
+                            canvas.drawBitmap(tile.bitmap, null, tile.vRect, bitmapPaint);
                             if (debug) {
                                 canvas.drawRect(tile.vRect, debugPaint);
                             }
@@ -963,20 +948,6 @@ public class SubsamplingScaleImageView extends View {
             canvas.drawBitmap(bitmap, matrix, bitmapPaint);
 
         }
-    }
-
-    /**
-     * Helper method for setting the values of a tile matrix array.
-     */
-    private void setMatrixArray(float[] array, float f0, float f1, float f2, float f3, float f4, float f5, float f6, float f7) {
-        array[0] = f0;
-        array[1] = f1;
-        array[2] = f2;
-        array[3] = f3;
-        array[4] = f4;
-        array[5] = f5;
-        array[6] = f6;
-        array[7] = f7;
     }
 
     /**
@@ -1430,7 +1401,14 @@ public class SubsamplingScaleImageView extends View {
                         if (view.sRegion != null) {
                             tile.fileSRect.offset(view.sRegion.left, view.sRegion.top);
                         }
-                        return decoder.decodeRegion(tile.fileSRect, tile.sampleSize);
+                        Bitmap bitmap = decoder.decodeRegion(tile.fileSRect, tile.sampleSize);
+                        int rotation = view.getRequiredRotation();
+                        if (rotation != 0) {
+                            Matrix matrix = new Matrix();
+                            matrix.postRotate(rotation);
+                            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+                        }
+                        return bitmap;
                     }
                 } else if (tile != null) {
                     tile.loading = false;
@@ -1506,6 +1484,14 @@ public class SubsamplingScaleImageView extends View {
             } catch (Exception e) {
                 Log.e(TAG, "Failed to load bitmap", e);
                 this.exception = e;
+                final SubsamplingScaleImageView subsamplingScaleImageView = viewRef.get();
+                if (subsamplingScaleImageView != null && subsamplingScaleImageView.onImageEventListener != null) {
+                    if (preview) {
+                        subsamplingScaleImageView.onImageEventListener.onPreviewLoadError(e);
+                    } else {
+                        subsamplingScaleImageView.onImageEventListener.onImageLoadError(e);
+                    }
+                }
             }
             return null;
         }
@@ -1660,7 +1646,7 @@ public class SubsamplingScaleImageView extends View {
             try {
                 int maxWidth = (Integer)Canvas.class.getMethod("getMaximumBitmapWidth").invoke(canvas);
                 int maxHeight = (Integer)Canvas.class.getMethod("getMaximumBitmapHeight").invoke(canvas);
-                return new Point(maxWidth, maxHeight);
+                return new Point(Math.min(2048, maxWidth), Math.min(2048, maxHeight));
             } catch (Exception e) {
                 // Return default
             }
@@ -1959,7 +1945,7 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
-     * Swap the default region decoder implementation for one of your own. You must do this before setting the image file or
+     * Swap the default decoder implementation for one of your own. You must do this before setting the image file or
      * asset, and you cannot use a custom decoder when using layout XML to set an asset name. Your class must have a
      * public default constructor.
      * @param regionDecoderClass The {@link ImageRegionDecoder} implementation to use.
@@ -1969,19 +1955,6 @@ public class SubsamplingScaleImageView extends View {
             throw new IllegalArgumentException("Decoder class cannot be set to null");
         }
         this.regionDecoderClass = regionDecoderClass;
-    }
-
-    /**
-     * Swap the default bitmap decoder implementation for one of your own. You must do this before setting the image file or
-     * asset, and you cannot use a custom decoder when using layout XML to set an asset name. Your class must have a
-     * public default constructor.
-     * @param bitmapDecoderClass The {@link ImageDecoder} implementation to use.
-     */
-    public final void setBitmapDecoderClass(Class<? extends ImageDecoder> bitmapDecoderClass) {
-        if (bitmapDecoderClass == null) {
-            throw new IllegalArgumentException("Decoder class cannot be set to null");
-        }
-        this.bitmapDecoderClass = bitmapDecoderClass;
     }
 
     /**
