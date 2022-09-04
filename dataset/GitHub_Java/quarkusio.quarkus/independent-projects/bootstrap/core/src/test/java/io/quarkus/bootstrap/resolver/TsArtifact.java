@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Supplier;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Profile;
@@ -113,28 +112,16 @@ public class TsArtifact {
         return addDependency(new TsDependency(dep));
     }
 
-    public TsArtifact addDependency(TsArtifact dep, TsArtifact... excludes) {
-        return addDependency(new TsDependency(dep).exclude(excludes));
-    }
-
     public TsArtifact addDependency(TsQuarkusExt dep) {
         return addDependency(dep, false);
     }
 
     public TsArtifact addDependency(TsQuarkusExt dep, boolean optional) {
-        return addDependency(dep, () -> new TsDependency(dep.getRuntime(), optional));
-    }
-
-    public TsArtifact addDependency(TsQuarkusExt dep, TsArtifact... excludes) {
-        return addDependency(dep, () -> new TsDependency(dep.getRuntime(), false).exclude(excludes));
-    }
-
-    private TsArtifact addDependency(TsQuarkusExt dep, Supplier<TsDependency> dependencyFactory) {
         if (extDeps.isEmpty()) {
             extDeps = new ArrayList<>(1);
         }
         extDeps.add(dep);
-        return addDependency(dependencyFactory.get());
+        return addDependency(new TsDependency(dep.getRuntime(), optional));
     }
 
     public TsArtifact addDependency(TsDependency dep) {

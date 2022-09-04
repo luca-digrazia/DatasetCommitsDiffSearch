@@ -221,9 +221,10 @@ public class BootstrapAppModelResolver implements AppModelResolver {
         final List<RemoteRepository> repos = mvn.aggregateRepositories(managedRepos,
                 mvn.newResolutionRepositories(appArtifactDescr.getRepositories()));
 
-        final DeploymentInjectingDependencyVisitor deploymentInjector = new DeploymentInjectingDependencyVisitor(mvn,
-                managedDeps, repos, appBuilder);
+        final DeploymentInjectingDependencyVisitor deploymentInjector;
         try {
+            deploymentInjector = new DeploymentInjectingDependencyVisitor(mvn,
+                    managedDeps, repos, appBuilder);
             deploymentInjector.injectDeploymentDependencies(resolvedDeps);
         } catch (BootstrapDependencyProcessingException e) {
             throw new AppModelResolverException(
@@ -264,7 +265,8 @@ public class BootstrapAppModelResolver implements AppModelResolver {
             }
         }
 
-        List<AppDependency> fullDeploymentDeps = new ArrayList<>(userDeps);
+        List<AppDependency> fullDeploymentDeps = new ArrayList<>(userDeps.size() + deploymentDeps.size());
+        fullDeploymentDeps.addAll(userDeps);
         fullDeploymentDeps.addAll(deploymentDeps);
         //we need these to have a type of 'jar'
         //type is blank when loaded

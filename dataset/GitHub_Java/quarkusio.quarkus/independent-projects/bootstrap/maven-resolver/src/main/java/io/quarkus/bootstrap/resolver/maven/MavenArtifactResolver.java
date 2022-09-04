@@ -107,7 +107,7 @@ public class MavenArtifactResolver {
         if (builder.localRepo != null && builder.reTryFailedResolutionsAgainstDefaultLocalRepo) {
             localRepoManager = new MavenLocalRepositoryManager(
                     repoSystem.newLocalRepositoryManager(session, new LocalRepository(builder.localRepo)),
-                    Paths.get(mvnSettings.getLocalRepo()));
+                    Paths.get(BootstrapMavenContext.resolveLocalRepo(mvnSettings.getEffectiveSettings())));
             this.repoSession = new DefaultRepositorySystemSession(session).setLocalRepositoryManager(localRepoManager);
         } else {
             this.repoSession = session;
