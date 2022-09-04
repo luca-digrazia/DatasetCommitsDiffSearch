@@ -15,7 +15,6 @@ import static io.quarkus.smallrye.metrics.deployment.SmallRyeMetricsDotNames.MET
 import static io.quarkus.smallrye.metrics.deployment.SmallRyeMetricsDotNames.TIMER_INTERFACE;
 
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -50,25 +49,19 @@ import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.smallrye.metrics.deployment.jandex.JandexBeanInfoAdapter;
 import io.quarkus.smallrye.metrics.deployment.jandex.JandexMemberInfoAdapter;
-import io.quarkus.smallrye.metrics.deployment.spi.MetricBuildItem;
-import io.quarkus.smallrye.metrics.runtime.MetadataHolder;
 import io.quarkus.smallrye.metrics.runtime.SmallRyeMetricsRecorder;
-import io.quarkus.smallrye.metrics.runtime.TagHolder;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
@@ -97,22 +90,6 @@ public class SmallRyeMetricsProcessor {
          */
         @ConfigItem(defaultValue = "/metrics")
         String path;
-
-        /**
-         * Whether or not metrics published by Quarkus extensions should be enabled.
-         */
-        @ConfigItem(name = "extensions.enabled", defaultValue = "true")
-        public boolean extensionsEnabled;
-
-        /**
-         * Apply Micrometer compatibility mode, where instead of regular 'base' and 'vendor' metrics,
-         * Quarkus exposes the same 'jvm' metrics that Micrometer does. Application metrics are unaffected by this mode.
-         * The use case is to facilitate migration from Micrometer-based metrics, because original dashboards for JVM metrics
-         * will continue working without having to rewrite them.
-         */
-        @ConfigItem(name = "micrometer.compatibility", defaultValue = "false")
-        public boolean micrometerCompatibility;
-
     }
 
     SmallRyeMetricsConfig metrics;
@@ -229,41 +206,20 @@ public class SmallRyeMetricsProcessor {
         }));
     }
 
-    /**
-     * Methods with a @Gauge annotation need to be registered for reflection because
-     * gauges are registered at runtime and the registering interceptor must be able to see
-     * the annotation.
-     */
-    @BuildStep
-    void reflectiveMethodsWithGauges(BeanArchiveIndexBuildItem beanArchiveIndex,
-            BuildProducer<ReflectiveMethodBuildItem> reflectiveMethods) {
-        for (AnnotationInstance annotation : beanArchiveIndex.getIndex().getAnnotations(GAUGE)) {
-            if (annotation.target().kind().equals(AnnotationTarget.Kind.METHOD)) {
-                reflectiveMethods.produce(new ReflectiveMethodBuildItem(annotation.target().asMethod()));
-            }
-        }
-    }
-
     @BuildStep
     AutoInjectAnnotationBuildItem autoInjectMetric() {
         return new AutoInjectAnnotationBuildItem(SmallRyeMetricsDotNames.METRIC);
     }
 
     @BuildStep
-    public CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capabilities.METRICS);
-    }
-
-    @BuildStep
-    public FeatureBuildItem feature() {
-        return new FeatureBuildItem(FeatureBuildItem.SMALLRYE_METRICS);
-    }
-
-    @BuildStep
     @Record(STATIC_INIT)
     public void build(BeanContainerBuildItem beanContainerBuildItem,
             SmallRyeMetricsRecorder metrics,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
+            BuildProducer<FeatureBuildItem> feature) {
+
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_METRICS));
+
         for (DotName metricsAnnotation : METRICS_ANNOTATIONS) {
             reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, metricsAnnotation.toString()));
         }
@@ -274,15 +230,9 @@ public class SmallRyeMetricsProcessor {
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    void registerBaseAndVendorMetrics(SmallRyeMetricsRecorder metrics,
-            ShutdownContextBuildItem shutdown,
-            SmallRyeMetricsConfig config) {
-        if (config.micrometerCompatibility) {
-            metrics.registerMicrometerJvmMetrics(shutdown);
-        } else {
-            metrics.registerBaseMetrics(shutdown);
-            metrics.registerVendorMetrics(shutdown);
-        }
+    void registerBaseAndVendorMetrics(SmallRyeMetricsRecorder metrics, ShutdownContextBuildItem shutdown) {
+        metrics.registerBaseMetrics(shutdown);
+        metrics.registerVendorMetrics(shutdown);
     }
 
     @BuildStep
@@ -380,68 +330,39 @@ public class SmallRyeMetricsProcessor {
             ValidationPhaseBuildItem validationPhase,
             BeanArchiveIndexBuildItem beanArchiveIndex) {
         IndexView index = beanArchiveIndex.getIndex();
-        for (io.quarkus.arc.processor.BeanInfo bean : validationPhase.getContext().beans().producers()) {
-            MetricType metricType = getMetricType(bean.getImplClazz());
-            if (metricType != null) {
-                AnnotationTarget target = bean.getTarget().get();
-                AnnotationInstance metricAnnotation = null;
-                String memberName = null;
-                if (bean.isProducerField()) {
-                    FieldInfo field = target.asField();
-                    metricAnnotation = field.annotation(METRIC);
-                    memberName = field.name();
-                }
-                if (bean.isProducerMethod()) {
-                    MethodInfo method = target.asMethod();
-                    metricAnnotation = method.annotation(METRIC);
-                    memberName = method.name();
-                }
-                if (metricAnnotation != null) {
-                    String nameValue = metricAnnotation.valueWithDefault(index, "name").asString();
-                    boolean absolute = metricAnnotation.valueWithDefault(index, "absolute").asBoolean();
-                    String metricSimpleName = !nameValue.isEmpty() ? nameValue : memberName;
-                    String declaringClassName = bean.getDeclaringBean().getImplClazz().name().toString();
-                    String metricsFinalName = absolute ? metricSimpleName
-                            : MetricRegistry.name(declaringClassName, metricSimpleName);
-                    recorder.registerMetricFromProducer(
-                            bean.getIdentifier(),
-                            metricType,
-                            metricsFinalName,
-                            metricAnnotation.valueWithDefault(index, "tags").asStringArray(),
-                            metricAnnotation.valueWithDefault(index, "description").asString(),
-                            metricAnnotation.valueWithDefault(index, "displayName").asString(),
-                            metricAnnotation.valueWithDefault(index, "unit").asString());
-                }
-            }
-        }
-    }
-
-    /**
-     * Register metrics required by other Quarkus extensions.
-     */
-    @BuildStep
-    @Record(STATIC_INIT)
-    void extensionMetrics(SmallRyeMetricsRecorder recorder,
-            List<MetricBuildItem> additionalMetrics,
-            ShutdownContextBuildItem shutdown,
-            BuildProducer<UnremovableBeanBuildItem> unremovableBeans) {
-        if (metrics.extensionsEnabled) {
-            if (!additionalMetrics.isEmpty()) {
-                unremovableBeans.produce(new UnremovableBeanBuildItem(
-                        new UnremovableBeanBuildItem.BeanClassNameExclusion(MetricRegistry.class.getName())));
-                unremovableBeans.produce(new UnremovableBeanBuildItem(
-                        new UnremovableBeanBuildItem.BeanClassNameExclusion(MetricRegistries.class.getName())));
-            }
-            for (MetricBuildItem additionalMetric : additionalMetrics) {
-                if (additionalMetric.isEnabled()) {
-                    TagHolder[] tags = Arrays.stream(additionalMetric.getTags())
-                            .map(TagHolder::from)
-                            .toArray(TagHolder[]::new);
-                    recorder.registerMetric(MetricRegistry.Type.VENDOR,
-                            MetadataHolder.from(additionalMetric.getMetadata()),
-                            tags,
-                            additionalMetric.getImplementor(),
-                            shutdown);
+        for (io.quarkus.arc.processor.BeanInfo bean : validationPhase.getContext().get(BuildExtension.Key.BEANS)) {
+            if (bean.isProducerField() || bean.isProducerMethod()) {
+                MetricType metricType = getMetricType(bean.getImplClazz());
+                if (metricType != null) {
+                    AnnotationTarget target = bean.getTarget().get();
+                    AnnotationInstance metricAnnotation = null;
+                    String memberName = null;
+                    if (bean.isProducerField()) {
+                        FieldInfo field = target.asField();
+                        metricAnnotation = field.annotation(METRIC);
+                        memberName = field.name();
+                    }
+                    if (bean.isProducerMethod()) {
+                        MethodInfo method = target.asMethod();
+                        metricAnnotation = method.annotation(METRIC);
+                        memberName = method.name();
+                    }
+                    if (metricAnnotation != null) {
+                        String nameValue = metricAnnotation.valueWithDefault(index, "name").asString();
+                        boolean absolute = metricAnnotation.valueWithDefault(index, "absolute").asBoolean();
+                        String metricSimpleName = !nameValue.isEmpty() ? nameValue : memberName;
+                        String declaringClassName = bean.getDeclaringBean().getImplClazz().name().toString();
+                        String metricsFinalName = absolute ? metricSimpleName
+                                : MetricRegistry.name(declaringClassName, metricSimpleName);
+                        recorder.registerMetricFromProducer(
+                                bean.getIdentifier(),
+                                metricType,
+                                metricsFinalName,
+                                metricAnnotation.valueWithDefault(index, "tags").asStringArray(),
+                                metricAnnotation.valueWithDefault(index, "description").asString(),
+                                metricAnnotation.valueWithDefault(index, "displayName").asString(),
+                                metricAnnotation.valueWithDefault(index, "unit").asString());
+                    }
                 }
             }
         }
