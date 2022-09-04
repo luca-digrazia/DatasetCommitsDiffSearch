@@ -24,8 +24,7 @@ import com.rabbitmq.client.ShutdownSignalException;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Meter;
 import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.graylog2.Core;
 import org.graylog2.activities.Activity;
 
@@ -34,7 +33,7 @@ import org.graylog2.activities.Activity;
  */
 public class AMQPReconnector implements ShutdownListener {
     
-    private static final Logger LOG = LoggerFactory.getLogger(AMQPReconnector.class);
+    private static final Logger LOG = Logger.getLogger(AMQPReconnector.class);
     
     public static final int DELAY_SECONDS = 5;
 
