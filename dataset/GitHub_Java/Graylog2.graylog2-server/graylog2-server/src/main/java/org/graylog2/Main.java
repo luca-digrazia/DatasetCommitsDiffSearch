@@ -46,7 +46,6 @@ import org.graylog2.inputs.raw.tcp.RawTCPInput;
 import org.graylog2.inputs.raw.udp.RawUDPInput;
 import org.graylog2.inputs.syslog.tcp.SyslogTCPInput;
 import org.graylog2.inputs.syslog.udp.SyslogUDPInput;
-import org.graylog2.lifecycles.Lifecycle;
 import org.graylog2.notifications.Notification;
 import org.graylog2.outputs.ElasticSearchOutput;
 import org.graylog2.plugin.Tools;
@@ -173,8 +172,6 @@ public final class Main {
 
         // Le server object. This is where all the magic happens.
         Core server = new Core();
-        server.setLifecycle(Lifecycle.STARTING);
-
         server.initialize(configuration, metrics);
 
         // Register this node.
@@ -225,11 +222,6 @@ public final class Main {
             server.setStatsMode(true);
         }
 
-
-        if (!commandLineArguments.performRetention()) {
-            configuration.setPerformRetention(false);
-        }
-
         // propagate default size to input plugins
         MessageInput.setDefaultRecvBufferSize(configuration.getUdpRecvBufferSizes());
 
@@ -249,7 +241,21 @@ public final class Main {
 
         // Register initializers.
         server.initializers().register(new DroolsInitializer());
-        server.initializers().register(new PeriodicalsInitializer());
+        server.initializers().register(new HostCounterCacheWriterInitializer());
+        server.initializers().register(new ThroughputCounterInitializer());
+        server.initializers().register(new NodePingInitializer());
+        server.initializers().register(new AlarmScannerInitializer());
+        server.initializers().register(new DeflectorThreadsInitializer());
+        server.initializers().register(new AnonymousInformationCollectorInitializer());
+        if (configuration.performRetention() && commandLineArguments.performRetention()) {
+            server.initializers().register(new IndexRetentionInitializer());
+        }
+        if (commandLineArguments.isStats()) { server.initializers().register(new StatisticsPrinterInitializer()); }
+        server.initializers().register(new MasterCacheWorkersInitializer());
+        server.initializers().register(new ClusterHealthCheckInitializer());
+        server.initializers().register(new StreamThroughputCounterInitializer());
+        server.initializers().register(new VersionCheckInitializer());
+        server.initializers().register(new DeadLetterInitializer());
 
         // Register message filters. (Order is important here)
         server.registerFilter(new StaticFieldFilter());
@@ -272,8 +278,6 @@ public final class Main {
             System.exit(1);
         }
 
-        server.setLifecycle(Lifecycle.RUNNING);
-
         server.getActivityWriter().write(new Activity("Started up.", Main.class));
         LOG.info("Graylog2 up and running.");
 
@@ -284,6 +288,8 @@ public final class Main {
             }
         } catch (InterruptedException e) {
             return;
+        } finally {
+            LOG.info("Graylog2 {} exiting.", Core.GRAYLOG2_VERSION);
         }
     }
 

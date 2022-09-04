@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.inputs.gelf.udp;
@@ -24,17 +25,13 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.inputs.gelf.GELFInputBase;
-import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
-import org.graylog2.plugin.buffers.Buffer;
-import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.inputs.MisfireException;
+import org.graylog2.plugin.inputs.*;
 import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
 import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
 import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,28 +44,14 @@ public class GELFUDPInput extends GELFInputBase {
     private static final Logger LOG = LoggerFactory.getLogger(GELFUDPInput.class);
 
     public static final String NAME = "GELF UDP";
-    private final MetricRegistry metricRegistry;
-    private final GELFChunkManager gelfChunkManager;
-
-    @Inject
-    public GELFUDPInput(MetricRegistry metricRegistry,
-                        GELFChunkManager gelfChunkManager) {
-        this.metricRegistry = metricRegistry;
-        this.gelfChunkManager = gelfChunkManager;
-    }
 
     @Override
-    public void initialize(Configuration configuration) {
-        super.initialize(configuration);
-
+    public void launch() throws MisfireException {
         // Register throughput counter gauges.
         for(Map.Entry<String,Gauge<Long>> gauge : throughputCounter.gauges().entrySet()) {
-            metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), gauge.getKey()), gauge.getValue());
+            graylogServer.metrics().register(MetricRegistry.name(getUniqueReadableId(), gauge.getKey()), gauge.getValue());
         }
-    }
 
-    @Override
-    public void launch(Buffer processBuffer) throws MisfireException {
         final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
                         .setNameFormat("input-" + getId() + "-gelfudp-worker-%d")
@@ -76,7 +59,7 @@ public class GELFUDPInput extends GELFInputBase {
 
         bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
         bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(8192));
-        bootstrap.setPipelineFactory(new GELFUDPPipelineFactory(metricRegistry, gelfChunkManager, processBuffer, this, throughputCounter));
+        bootstrap.setPipelineFactory(new GELFUDPPipelineFactory(graylogServer, this, throughputCounter));
         bootstrap.setOption("receiveBufferSize", getRecvBufferSize());
 
         try {

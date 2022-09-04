@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.radio;
 
@@ -26,9 +27,6 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
-import com.google.inject.Guice;
-import com.google.inject.Injector;
-import com.google.inject.Module;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
 import org.graylog2.inputs.gelf.http.GELFHttpInput;
@@ -42,10 +40,6 @@ import org.graylog2.inputs.raw.udp.RawUDPInput;
 import org.graylog2.inputs.syslog.tcp.SyslogTCPInput;
 import org.graylog2.inputs.syslog.udp.SyslogUDPInput;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.lifecycles.Lifecycle;
-import org.graylog2.radio.bindings.RadioBindings;
-import org.graylog2.shared.NodeRunner;
-import org.graylog2.shared.bindings.GuiceInstantiationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
@@ -53,12 +47,11 @@ import org.slf4j.bridge.SLF4JBridgeHandler;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
-import java.util.List;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class Main extends NodeRunner {
+public class Main {
 
     private static final Logger LOG = LoggerFactory.getLogger(Main.class);
 
@@ -106,13 +99,8 @@ public class Main extends NodeRunner {
             logLevel = Level.DEBUG;
         }
 
-        GuiceInstantiationService instantiationService = new GuiceInstantiationService();
-        List<Module> bindingsModules = getBindingsModules(instantiationService, new RadioBindings(configuration));
-        Injector injector = Guice.createInjector(bindingsModules);
-        instantiationService.setInjector(injector);
-
         // This is holding all our metrics.
-        final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
+        final MetricRegistry metrics = new MetricRegistry();
 
         // Report metrics via JMX.
         final JmxReporter reporter = JmxReporter.forRegistry(metrics).build();
@@ -134,9 +122,8 @@ public class Main extends NodeRunner {
             savePidFile(commandLineArguments.getPidFile());
         }
 
-        Radio radio = injector.getInstance(Radio.class);
-        radio.setLifecycle(Lifecycle.STARTING);
-        radio.initialize();
+        Radio radio = new Radio();
+        radio.initialize(configuration, metrics);
 
         // Register in Graylog2 cluster.
         radio.ping();
@@ -151,18 +138,6 @@ public class Main extends NodeRunner {
             LOG.error("Could not start REST API on <{}>. Terminating.", configuration.getRestListenUri(), e);
             System.exit(1);
         }
-
-        // Register inputs. (find an automatic way here (annotations?) and do the same in graylog2-server.Main
-        radio.inputs().register(SyslogUDPInput.class, SyslogUDPInput.NAME);
-        radio.inputs().register(SyslogTCPInput.class, SyslogTCPInput.NAME);
-        radio.inputs().register(RawUDPInput.class, RawUDPInput.NAME);
-        radio.inputs().register(RawTCPInput.class, RawTCPInput.NAME);
-        radio.inputs().register(GELFUDPInput.class, GELFUDPInput.NAME);
-        radio.inputs().register(GELFTCPInput.class, GELFTCPInput.NAME);
-        radio.inputs().register(GELFHttpInput.class, GELFHttpInput.NAME);
-        radio.inputs().register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
-        radio.inputs().register(LocalMetricsInput.class, LocalMetricsInput.NAME);
-        radio.inputs().register(JsonPathInput.class, JsonPathInput.NAME);
 
         // Try loading persisted inputs. Retry until server connection succeeds.
         while(true) {
@@ -179,7 +154,18 @@ public class Main extends NodeRunner {
             }
         }
 
-        radio.setLifecycle(Lifecycle.RUNNING);
+        // Register inputs. (find an automatic way here (annotations?) and do the same in graylog2-server.Main
+        radio.inputs().register(SyslogUDPInput.class, SyslogUDPInput.NAME);
+        radio.inputs().register(SyslogTCPInput.class, SyslogTCPInput.NAME);
+        radio.inputs().register(RawUDPInput.class, RawUDPInput.NAME);
+        radio.inputs().register(RawTCPInput.class, RawTCPInput.NAME);
+        radio.inputs().register(GELFUDPInput.class, GELFUDPInput.NAME);
+        radio.inputs().register(GELFTCPInput.class, GELFTCPInput.NAME);
+        radio.inputs().register(GELFHttpInput.class, GELFHttpInput.NAME);
+        radio.inputs().register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
+        radio.inputs().register(LocalMetricsInput.class, LocalMetricsInput.NAME);
+        radio.inputs().register(JsonPathInput.class, JsonPathInput.NAME);
+
         LOG.info("Graylog2 Radio up and running.");
 
         while (true) {
