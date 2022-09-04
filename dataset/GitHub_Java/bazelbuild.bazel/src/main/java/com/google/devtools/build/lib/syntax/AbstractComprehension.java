@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -57,7 +56,8 @@ public abstract class AbstractComprehension extends Expression {
     /**
      * Returns whether this is a For or If clause.
      *
-     * <p>This avoids having to rely on reflection, or on checking whether {@link #getLHS} is null.
+     * <p>This avoids having to rely on reflection, or on checking whether {@link #getLValue} is
+     * null.
      */
     Kind getKind();
 
@@ -76,9 +76,12 @@ public abstract class AbstractComprehension extends Expression {
     void eval(Environment env, OutputCollector collector, int step)
         throws EvalException, InterruptedException;
 
-    /** The LHS variables defined in a ForClause, or null for an IfClause. */
-    @Nullable
-    Expression getLHS();
+    /**
+     * The LValue defined in Clause, i.e. the loop variables for ForClause and null for
+     * IfClause. This is needed for SyntaxTreeVisitor.
+     */
+    @Nullable  // for the IfClause
+    LValue getLValue();
 
     /**
      * The Expression defined in Clause, i.e. the collection for ForClause and the
@@ -90,10 +93,11 @@ public abstract class AbstractComprehension extends Expression {
     void prettyPrint(Appendable buffer) throws IOException;
   }
 
-  /** A for clause in a comprehension, e.g. "for a in b" in the example above. */
-  @AutoCodec
+  /**
+   * A for clause in a comprehension, e.g. "for a in b" in the example above.
+   */
   public static final class ForClause implements Clause {
-    private final Expression lhs;
+    private final LValue lvalue;
     private final Expression iterable;
 
     @Override
@@ -101,8 +105,8 @@ public abstract class AbstractComprehension extends Expression {
       return Kind.FOR;
     }
 
-    public ForClause(Expression lhs, Expression iterable) {
-      this.lhs = lhs;
+    public ForClause(LValue lvalue, Expression iterable) {
+      this.lvalue = lvalue;
       this.iterable = iterable;
     }
 
@@ -115,7 +119,7 @@ public abstract class AbstractComprehension extends Expression {
       EvalUtils.lock(iterableObject, loc);
       try {
         for (Object listElement : listValue) {
-          Eval.assign(lhs, listElement, env, loc);
+          lvalue.assign(listElement, env, loc);
           evalStep(env, collector, step);
         }
       } finally {
@@ -124,8 +128,8 @@ public abstract class AbstractComprehension extends Expression {
     }
 
     @Override
-    public Expression getLHS() {
-      return lhs;
+    public LValue getLValue() {
+      return lvalue;
     }
 
     @Override
@@ -136,7 +140,7 @@ public abstract class AbstractComprehension extends Expression {
     @Override
     public void prettyPrint(Appendable buffer) throws IOException {
       buffer.append("for ");
-      lhs.prettyPrint(buffer);
+      lvalue.prettyPrint(buffer);
       buffer.append(" in ");
       iterable.prettyPrint(buffer);
     }
@@ -154,8 +158,9 @@ public abstract class AbstractComprehension extends Expression {
     }
   }
 
-  /** A if clause in a comprehension, e.g. "if c" in the example above. */
-  @AutoCodec
+  /**
+   * A if clause in a comprehension, e.g. "if c" in the example above.
+   */
   public static final class IfClause implements Clause {
     private final Expression condition;
 
@@ -177,7 +182,7 @@ public abstract class AbstractComprehension extends Expression {
     }
 
     @Override
-    public Expression getLHS() {
+    public LValue getLValue() {
       return null;
     }
 
@@ -242,8 +247,8 @@ public abstract class AbstractComprehension extends Expression {
 
     protected final List<Clause> clauses = new ArrayList<>();
 
-    public void addFor(Expression lhs, Expression iterable) {
-      Clause forClause = new ForClause(lhs, iterable);
+    public void addFor(LValue lvalue, Expression iterable) {
+      Clause forClause = new ForClause(lvalue, iterable);
       clauses.add(forClause);
     }
 
@@ -274,15 +279,19 @@ public abstract class AbstractComprehension extends Expression {
     evalStep(env, collector, 0);
     Object result = collector.getResult(env);
 
+    if (!env.getSemantics().incompatibleComprehensionVariablesDoNotLeak) {
+      return result;
+    }
+
     // Undefine loop variables (remove them from the environment).
     // This code is useful for the transition, to make sure no one relies on the old behavior
     // (where loop variables were leaking).
     // TODO(laurentlb): Instead of removing variables, we should create them in a nested scope.
     for (Clause clause : clauses) {
       // Check if a loop variable conflicts with another local variable.
-      Expression lhs = clause.getLHS();
-      if (lhs != null) {
-        for (Identifier ident : ValidationEnvironment.boundIdentifiers(lhs)) {
+      LValue lvalue = clause.getLValue();
+      if (lvalue != null) {
+        for (Identifier ident : lvalue.boundIdentifiers()) {
           env.removeLocalBinding(ident.getName());
         }
       }

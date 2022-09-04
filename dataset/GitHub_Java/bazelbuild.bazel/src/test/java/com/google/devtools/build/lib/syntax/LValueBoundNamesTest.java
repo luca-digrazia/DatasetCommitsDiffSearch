@@ -51,7 +51,8 @@ public class LValueBoundNamesTest {
   }
 
   private static void assertBoundNames(String assignment, String... expectedBoundNames) {
-    BuildFileAST buildFileAST = BuildFileAST.parseString(Environment.FAIL_FAST_HANDLER, assignment);
+    BuildFileAST buildFileAST = BuildFileAST
+        .parseSkylarkString(Environment.FAIL_FAST_HANDLER, assignment);
     LValue lValue = ((AssignmentStatement) buildFileAST.getStatements().get(0)).getLValue();
     Set<String> boundNames =
         lValue.boundIdentifiers().stream().map(Identifier::getName).collect(Collectors.toSet());

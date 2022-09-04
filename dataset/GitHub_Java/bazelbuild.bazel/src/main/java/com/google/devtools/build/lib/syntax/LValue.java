@@ -14,10 +14,10 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
 import java.util.Collection;
 
@@ -92,7 +92,7 @@ public final class LValue extends ASTNode {
    */
   private static void assignIdentifier(
       Identifier ident, Object value, Environment env, Location loc)
-      throws EvalException {
+      throws EvalException, InterruptedException {
     Preconditions.checkNotNull(value, "trying to assign null to %s", ident);
 
     if (env.isKnownGlobalVariable(ident.getName())) {
@@ -116,7 +116,7 @@ public final class LValue extends ASTNode {
   @SuppressWarnings("unchecked")
   private static void assignItem(
       Object object, Object key, Object value, Environment env, Location loc)
-      throws EvalException {
+      throws EvalException, InterruptedException {
     if (object instanceof SkylarkDict) {
       SkylarkDict<Object, Object> dict = (SkylarkDict<Object, Object>) object;
       dict.put(key, value, loc, env);
@@ -207,14 +207,9 @@ public final class LValue extends ASTNode {
    * </ul>
    */
   public ImmutableSet<Identifier> boundIdentifiers() {
-    if (expr instanceof Identifier) {
-      // Common case/fast path - skip the builder.
-      return ImmutableSet.of((Identifier) expr);
-    } else {
-      ImmutableSet.Builder<Identifier> result = ImmutableSet.builder();
-      collectBoundIdentifiers(expr, result);
-      return result.build();
-    }
+    ImmutableSet.Builder<Identifier> result = ImmutableSet.builder();
+    collectBoundIdentifiers(expr, result);
+    return result.build();
   }
 
   private static void collectBoundIdentifiers(
