@@ -35,6 +35,8 @@ import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
 import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
 
 /**
+ * GELFUDPInput.java: 11.04.2012 22:29:01
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFUDPInput implements MessageInput {
@@ -60,7 +62,7 @@ public class GELFUDPInput implements MessageInput {
 
         bootstrap.setOption("receiveBufferSize", 1048576);
         bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(8192));
-        bootstrap.setPipelineFactory(new GELFUDPPipelineFactory(graylogServer));
+        bootstrap.setPipelineFactory(new GELFPipelineFactory(graylogServer));
 
         try {
             bootstrap.bind(socketAddress);
