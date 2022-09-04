@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.python.PyCcLinkParamsProvider;
@@ -130,6 +131,7 @@ public class BazelPythonSemantics implements PythonSemantics {
       RuleContext ruleContext,
       PyCommon common,
       CcInfo ccInfo,
+      NestedSet<String> imports,
       Runfiles.Builder runfilesBuilder)
       throws InterruptedException {
     String main = common.determineMainExecutableSource(/*withWorkspaceName=*/ true);
@@ -154,7 +156,7 @@ public class BazelPythonSemantics implements PythonSemantics {
               ImmutableList.of(
                   Substitution.of("%main%", main),
                   Substitution.of("%python_binary%", pythonBinary),
-                  Substitution.of("%imports%", Joiner.on(":").join(common.getImports())),
+                  Substitution.of("%imports%", Joiner.on(":").join(imports)),
                   Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
                   Substitution.of("%is_zipfile%", "False"),
                   Substitution.of(
@@ -172,11 +174,11 @@ public class BazelPythonSemantics implements PythonSemantics {
               ImmutableList.of(
                   Substitution.of("%main%", main),
                   Substitution.of("%python_binary%", pythonBinary),
-                  Substitution.of("%imports%", Joiner.on(":").join(common.getImports())),
+                  Substitution.of("%imports%", Joiner.on(":").join(imports)),
                   Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
                   Substitution.of("%is_zipfile%", "True"),
-                  Substitution.of(
-                      "%import_all%", config.getImportAllRepositories() ? "True" : "False")),
+                  Substitution.of("%import_all%",
+                      config.getImportAllRepositories() ? "True" : "False")),
               true));
 
       if (OS.getCurrent() != OS.WINDOWS) {
@@ -220,8 +222,8 @@ public class BazelPythonSemantics implements PythonSemantics {
   }
 
   @Override
-  public void postInitExecutable(
-      RuleContext ruleContext, RunfilesSupport runfilesSupport, PyCommon common) {
+  public void postInitBinary(RuleContext ruleContext, RunfilesSupport runfilesSupport,
+      PyCommon common) throws InterruptedException {
     if (ruleContext.getFragment(PythonConfiguration.class).buildPythonZip()) {
       FilesToRunProvider zipper = ruleContext.getExecutablePrerequisite("$zipper", Mode.HOST);
       Artifact executable = common.getExecutable();
@@ -367,7 +369,7 @@ public class BazelPythonSemantics implements PythonSemantics {
                     .collect(ImmutableList.toImmutableList()))
             .build();
 
-    // TODO(plf): return empty CcInfo.
+    // TODO(plf): return empty CcLinkingInfo.
     return CcInfo.merge(ccInfos);
   }
 }
