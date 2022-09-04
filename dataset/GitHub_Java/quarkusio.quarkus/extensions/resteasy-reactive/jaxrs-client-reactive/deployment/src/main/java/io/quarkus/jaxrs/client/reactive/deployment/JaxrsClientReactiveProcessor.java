@@ -159,8 +159,7 @@ public class JaxrsClientReactiveProcessor {
             BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer,
             BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformerBuildItemBuildProducer,
             List<RestClientDefaultProducesBuildItem> defaultConsumes,
-            List<RestClientDefaultConsumesBuildItem> defaultProduces,
-            List<RestClientDisableSmartDefaultProduces> disableSmartDefaultProduces) {
+            List<RestClientDefaultConsumesBuildItem> defaultProduces) {
         String defaultConsumesType = defaultMediaType(defaultConsumes, MediaType.APPLICATION_OCTET_STREAM);
         String defaultProducesType = defaultMediaType(defaultProduces, MediaType.TEXT_PLAIN);
 
@@ -195,7 +194,6 @@ public class JaxrsClientReactiveProcessor {
                 .setDefaultBlocking(applicationResultBuildItem.getResult().isBlocking())
                 .setHasRuntimeConverters(false)
                 .setDefaultProduces(defaultProducesType)
-                .setSmartDefaultProduces(disableSmartDefaultProduces.isEmpty())
                 .build();
 
         Map<String, RuntimeValue<Function<WebTarget, ?>>> clientImplementations = new HashMap<>();
@@ -1220,7 +1218,9 @@ public class JaxrsClientReactiveProcessor {
         ResultHandle paramArray;
         if (type.kind() == Type.Kind.ARRAY) {
             paramArray = methodCreator.checkCast(queryParamHandle, Object[].class);
-        } else if (isCollection(type, index)) {
+        } else if (index
+                .getClassByName(type.name()).interfaceNames().stream()
+                .anyMatch(DotName.createSimple(Collection.class.getName())::equals)) {
             paramArray = methodCreator.invokeStaticMethod(
                     MethodDescriptor.ofMethod(ToObjectArray.class, "collection", Object[].class, Collection.class),
                     queryParamHandle);
@@ -1234,17 +1234,6 @@ public class JaxrsClientReactiveProcessor {
                 MethodDescriptor.ofMethod(WebTarget.class, "queryParam", WebTarget.class,
                         String.class, Object[].class),
                 target, methodCreator.load(paramName), paramArray);
-    }
-
-    private boolean isCollection(Type type, IndexView index) {
-        if (type.kind() == Type.Kind.PRIMITIVE) {
-            return false;
-        }
-        ClassInfo classInfo = index.getClassByName(type.name());
-        if (classInfo == null) {
-            return false;
-        }
-        return classInfo.interfaceNames().stream().anyMatch(DotName.createSimple(Collection.class.getName())::equals);
     }
 
     private void addHeaderParam(BytecodeCreator invoBuilderEnricher, AssignableResultHandle invocationBuilder,
