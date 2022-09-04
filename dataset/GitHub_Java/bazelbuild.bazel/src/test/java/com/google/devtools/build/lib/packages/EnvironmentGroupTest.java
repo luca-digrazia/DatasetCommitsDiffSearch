@@ -15,13 +15,10 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
-import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
-import com.google.devtools.build.lib.vfs.Path;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,63 +31,84 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class EnvironmentGroupTest extends PackageLoadingTestCase {
 
-  private Package pkg;
   private EnvironmentGroup group;
 
   @Before
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
-
-    Path buildfile =
-        scratch.file(
-            "pkg/BUILD",
-            "environment(name='foo', fulfills = [':bar', ':baz'])",
-            "environment(name='bar', fulfills = [':baz'])",
-            "environment(name='baz')",
-            "environment(name='not_in_group')",
-            "environment_group(",
-            "    name = 'group',",
-            "    environments = [':foo', ':bar', ':baz'],",
-            "    defaults = [':foo'],",
-            ")");
-    PackageFactory pkgFactory = new PackageFactory(TestRuleClassProvider.getRuleClassProvider());
-    pkg =
-        pkgFactory.createPackageForTesting(
-            PackageIdentifier.createInDefaultRepo("pkg"), buildfile, getPackageManager(), reporter);
-
-    group = (EnvironmentGroup) pkg.getTarget("group");
+  public final void createPackage() throws Exception {
+    scratch.file(
+        "pkg/BUILD",
+        "environment(name='foo', fulfills = [':bar', ':baz'])",
+        "environment(name='bar', fulfills = [':baz'])",
+        "environment(name='baz')",
+        "environment(name='not_in_group')",
+        "environment_group(",
+        "    name = 'group',",
+        "    environments = [':foo', ':bar', ':baz'],",
+        "    defaults = [':foo'],",
+        ")");
+    group = (EnvironmentGroup) getTarget("//pkg:group");
   }
 
   @Test
   public void testGroupMembership() throws Exception {
-    assertEquals(
-        ImmutableSet.of(
-            Label.parseAbsolute("//pkg:foo"),
-            Label.parseAbsolute("//pkg:bar"),
-            Label.parseAbsolute("//pkg:baz")),
-        group.getEnvironments());
+    assertThat(group.getEnvironments())
+        .isEqualTo(
+            ImmutableSet.of(
+                Label.parseAbsolute("//pkg:foo", ImmutableMap.of()),
+                Label.parseAbsolute("//pkg:bar", ImmutableMap.of()),
+                Label.parseAbsolute("//pkg:baz", ImmutableMap.of())));
   }
 
   @Test
-  public void testDefaultsMembership() throws Exception {
-    assertEquals(ImmutableSet.of(Label.parseAbsolute("//pkg:foo")), group.getDefaults());
+  public void defaultsMembership() throws Exception {
+    assertThat(group.getDefaults())
+        .isEqualTo(ImmutableSet.of(Label.parseAbsolute("//pkg:foo", ImmutableMap.of())));
   }
 
   @Test
-  public void testIsDefault() throws Exception {
-    assertTrue(group.isDefault(Label.parseAbsolute("//pkg:foo")));
-    assertFalse(group.isDefault(Label.parseAbsolute("//pkg:bar")));
-    assertFalse(group.isDefault(Label.parseAbsolute("//pkg:baz")));
-    assertFalse(group.isDefault(Label.parseAbsolute("//pkg:not_in_group")));
+  public void isDefault() throws Exception {
+    EnvironmentLabels unpackedGroup = group.getEnvironmentLabels();
+    assertThat(unpackedGroup.isDefault(Label.parseAbsolute("//pkg:foo", ImmutableMap.of())))
+        .isTrue();
+    assertThat(unpackedGroup.isDefault(Label.parseAbsolute("//pkg:bar", ImmutableMap.of())))
+        .isFalse();
+    assertThat(unpackedGroup.isDefault(Label.parseAbsolute("//pkg:baz", ImmutableMap.of())))
+        .isFalse();
+    assertThat(
+            unpackedGroup.isDefault(Label.parseAbsolute("//pkg:not_in_group", ImmutableMap.of())))
+        .isFalse();
   }
 
   @Test
-  public void testFulfillers() throws Exception {
-    assertThat(group.getFulfillers(Label.parseAbsolute("//pkg:baz")))
-        .containsExactly(Label.parseAbsolute("//pkg:foo"), Label.parseAbsolute("//pkg:bar"));
-    assertThat(group.getFulfillers(Label.parseAbsolute("//pkg:bar")))
-        .containsExactly(Label.parseAbsolute("//pkg:foo"));
-    assertThat(group.getFulfillers(Label.parseAbsolute("//pkg:foo"))).isEmpty();
+  public void fulfillers() throws Exception {
+    EnvironmentLabels unpackedGroup = group.getEnvironmentLabels();
+    assertThat(
+            unpackedGroup
+                .getFulfillers(Label.parseAbsolute("//pkg:baz", ImmutableMap.of()))
+                .toList())
+        .containsExactly(
+            Label.parseAbsolute("//pkg:foo", ImmutableMap.of()),
+            Label.parseAbsolute("//pkg:bar", ImmutableMap.of()));
+    assertThat(
+            unpackedGroup
+                .getFulfillers(Label.parseAbsolute("//pkg:bar", ImmutableMap.of()))
+                .toList())
+        .containsExactly(Label.parseAbsolute("//pkg:foo", ImmutableMap.of()));
+    assertThat(
+            unpackedGroup
+                .getFulfillers(Label.parseAbsolute("//pkg:foo", ImmutableMap.of()))
+                .toList())
+        .isEmpty();
+  }
+
+  @Test
+  public void emptyGroupsNotAllowed() throws Exception {
+    scratch.file(
+        "a/BUILD", "environment_group(name = 'empty_group', environments = [], defaults = [])");
+    reporter.removeHandler(failFastHandler);
+    Package pkg = getTarget("//a:BUILD").getPackage();
+    assertThat(pkg.containsErrors()).isTrue();
+    assertContainsEvent(
+        "environment group empty_group must contain at least one environment");
   }
 }

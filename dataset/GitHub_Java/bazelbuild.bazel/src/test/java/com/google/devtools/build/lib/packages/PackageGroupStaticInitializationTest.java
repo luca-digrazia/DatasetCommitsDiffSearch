@@ -45,6 +45,7 @@ public class PackageGroupStaticInitializationTest extends PackageLoadingTestCase
                 try {
                   RepositoryName defaultRepoName =
                       Label.parseAbsoluteUnchecked("//context")
+                          .getPackageIdentifier()
                           .getRepository();
                   groupQueue.put(PackageSpecification.fromString(defaultRepoName, "//fruits/..."));
                 } catch (Exception e) {
