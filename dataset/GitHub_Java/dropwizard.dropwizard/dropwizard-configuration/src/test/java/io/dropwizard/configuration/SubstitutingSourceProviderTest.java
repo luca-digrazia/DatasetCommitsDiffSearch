@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.assertj.core.api.Assertions.fail;
 
 public class SubstitutingSourceProviderTest {
     @Test
@@ -32,7 +32,7 @@ public class SubstitutingSourceProviderTest {
         // ensure that opened streams are closed
         try {
             dummyProvider.lastStream.read();
-            failBecauseExceptionWasNotThrown(IOException.class);
+            fail("IOException expected; stream should be closed");
         } catch (IOException e) {
             assertThat(e).hasMessage("Stream closed");
         }

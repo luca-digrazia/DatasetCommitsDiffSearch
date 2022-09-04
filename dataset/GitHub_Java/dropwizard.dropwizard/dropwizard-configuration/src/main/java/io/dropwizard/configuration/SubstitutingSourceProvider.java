@@ -8,7 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 /**
  * A delegating {@link ConfigurationSourceProvider} which replaces variables in the underlying configuration
@@ -25,8 +25,8 @@ public class SubstitutingSourceProvider implements ConfigurationSourceProvider {
      * @param substitutor The custom {@link org.apache.commons.lang3.text.StrSubstitutor} implementation.
      */
     public SubstitutingSourceProvider(ConfigurationSourceProvider delegate, StrSubstitutor substitutor) {
-        this.delegate = checkNotNull(delegate);
-        this.substitutor = checkNotNull(substitutor);
+        this.delegate = requireNonNull(delegate);
+        this.substitutor = requireNonNull(substitutor);
     }
 
     /**
@@ -34,9 +34,11 @@ public class SubstitutingSourceProvider implements ConfigurationSourceProvider {
      */
     @Override
     public InputStream open(String path) throws IOException {
-        String config = new String(ByteStreams.toByteArray(delegate.open(path)), StandardCharsets.UTF_8);
-        String substituted = substitutor.replace(config);
+        try (final InputStream in = delegate.open(path)) {
+            final String config = new String(ByteStreams.toByteArray(in), StandardCharsets.UTF_8);
+            final String substituted = substitutor.replace(config);
 
-        return new ByteArrayInputStream(substituted.getBytes(StandardCharsets.UTF_8));
+            return new ByteArrayInputStream(substituted.getBytes(StandardCharsets.UTF_8));
+        }
     }
 }
