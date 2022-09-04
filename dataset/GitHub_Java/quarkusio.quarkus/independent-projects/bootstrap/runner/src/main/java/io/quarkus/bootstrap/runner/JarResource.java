@@ -1,7 +1,5 @@
 package io.quarkus.bootstrap.runner;
 
-import io.smallrye.common.io.jar.JarEntries;
-import io.smallrye.common.io.jar.JarFiles;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -12,8 +10,6 @@ import java.nio.file.Path;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.security.cert.Certificate;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -24,7 +20,7 @@ public class JarResource implements ClassLoadingResource {
 
     private final ManifestInfo manifestInfo;
     private final Path jarPath;
-    private volatile JarFile zipFile;
+    private volatile ZipFile zipFile;
 
     public JarResource(ManifestInfo manifestInfo, Path jarPath) {
         this.manifestInfo = manifestInfo;
@@ -58,17 +54,12 @@ public class JarResource implements ClassLoadingResource {
 
     @Override
     public URL getResourceURL(String resource) {
-        JarFile zipFile = file();
-        JarEntry entry = zipFile.getJarEntry(resource);
+        ZipFile zipFile = file();
+        ZipEntry entry = zipFile.getEntry(resource);
         if (entry == null) {
             return null;
         }
         try {
-            String realName = JarEntries.getRealName(entry);
-            // Avoid ending the URL with / to avoid breaking compatibility
-            if (realName.endsWith("/")) {
-                realName = realName.substring(0, realName.length() - 1);
-            }
             URI jarUri = jarPath.toUri();
             return new URL("jar", null, jarUri.getScheme() + ":" + jarUri.getPath() + "!/" + resource);
         } catch (MalformedURLException e) {
@@ -98,24 +89,19 @@ public class JarResource implements ClassLoadingResource {
         return new ProtectionDomain(codesource, null, classLoader, null);
     }
 
-    private JarFile file() {
-        JarFile zipFileLocal = this.zipFile;
-        if (zipFileLocal == null) {
+    private ZipFile file() {
+        if (zipFile == null) {
             synchronized (this) {
-                zipFileLocal = this.zipFile;
-                if (zipFileLocal == null) {
+                if (zipFile == null) {
                     try {
-                        return this.zipFile = JarFiles.create(jarPath.toFile());
+                        return zipFile = new ZipFile(jarPath.toFile());
                     } catch (IOException e) {
                         throw new RuntimeException("Failed to open " + jarPath, e);
                     }
-                } else {
-                    return zipFileLocal;
                 }
             }
-        } else {
-            return zipFileLocal;
         }
+        return zipFile;
     }
 
     @Override

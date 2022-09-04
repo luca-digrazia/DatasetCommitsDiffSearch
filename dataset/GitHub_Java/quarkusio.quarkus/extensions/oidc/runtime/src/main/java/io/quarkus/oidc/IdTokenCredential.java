@@ -1,9 +1,14 @@
 package io.quarkus.oidc;
 
-import io.quarkus.security.credential.TokenCredential;
+import io.vertx.ext.web.RoutingContext;
 
-public class IdTokenCredential extends TokenCredential {
-    public IdTokenCredential(String token) {
-        super(token, "id_token");
+public class IdTokenCredential extends OidcTokenCredential {
+
+    public IdTokenCredential() {
+        this(null, null);
+    }
+
+    public IdTokenCredential(String token, RoutingContext context) {
+        super(token, "id_token", context);
     }
 }
