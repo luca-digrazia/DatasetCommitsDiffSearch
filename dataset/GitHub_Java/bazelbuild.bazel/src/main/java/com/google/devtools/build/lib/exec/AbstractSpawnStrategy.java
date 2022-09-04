@@ -14,155 +14,339 @@
 
 package com.google.devtools.build.lib.exec;
 
-import com.google.common.base.Throwables;
-import com.google.common.eventbus.EventBus;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
-import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
+import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
+import com.google.devtools.build.lib.actions.LostInputsActionExecutionException;
+import com.google.devtools.build.lib.actions.LostInputsExecException;
+import com.google.devtools.build.lib.actions.MetadataProvider;
+import com.google.devtools.build.lib.actions.RunningActionEvent;
+import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy;
+import com.google.devtools.build.lib.actions.SchedulingActionEvent;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnActionContext;
+import com.google.devtools.build.lib.actions.SpawnExecutedEvent;
+import com.google.devtools.build.lib.actions.SpawnResult;
+import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.Spawns;
+import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.exec.SpawnResult.Status;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.exec.SpawnCache.CacheHandle;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
-import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionPolicy;
-import com.google.devtools.build.lib.rules.fileset.FilesetActionContext;
+import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
+import com.google.devtools.build.lib.profiler.Profiler;
+import com.google.devtools.build.lib.profiler.SilentCloseable;
+import com.google.devtools.build.lib.server.FailureDetails;
+import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.SortedMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
 
 /** Abstract common ancestor for spawn strategies implementing the common parts. */
-public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionContext {
-  private final boolean verboseFailures;
+public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
+
+  /**
+   * Last unique identifier assigned to a spawn by this strategy.
+   *
+   * <p>These identifiers must be unique per strategy within the context of a Bazel server instance
+   * to avoid cross-contamination across actions in case we perform asynchronous deletions.
+   */
+  private static final AtomicInteger execCount = new AtomicInteger();
+
   private final SpawnInputExpander spawnInputExpander;
   private final SpawnRunner spawnRunner;
-  private final AtomicInteger execCount = new AtomicInteger();
+  private final boolean verboseFailures;
 
-  public AbstractSpawnStrategy(
-      boolean verboseFailures,
-      SpawnRunner spawnRunner) {
-    this.verboseFailures = verboseFailures;
-    this.spawnInputExpander = new SpawnInputExpander(false);
+  protected AbstractSpawnStrategy(Path execRoot, SpawnRunner spawnRunner, boolean verboseFailures) {
+    this.spawnInputExpander = new SpawnInputExpander(execRoot, false);
     this.spawnRunner = spawnRunner;
+    this.verboseFailures = verboseFailures;
+  }
+
+  /**
+   * Get's the {@link SpawnRunner} that this {@link AbstractSpawnStrategy} uses to actually run
+   * spawns.
+   *
+   * <p>This is considered a stop-gap until we refactor the entire SpawnStrategy / SpawnRunner
+   * mechanism to no longer need Spawn strategies.
+   */
+  public SpawnRunner getSpawnRunner() {
+    return spawnRunner;
   }
 
   @Override
-  public void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
+  public boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
+    return spawnRunner.canExec(spawn);
+  }
+
+  @Override
+  public boolean canExecWithLegacyFallback(
+      Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
+    return spawnRunner.canExecWithLegacyFallback(spawn);
+  }
+
+  @Override
+  public ImmutableList<SpawnResult> exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
-    exec(spawn, actionExecutionContext, null);
+    return exec(spawn, actionExecutionContext, null);
   }
 
   @Override
-  public void exec(
+  public ImmutableList<SpawnResult> exec(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
-      AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
+      @Nullable SandboxedSpawnStrategy.StopConcurrentSpawns stopConcurrentSpawns)
       throws ExecException, InterruptedException {
-    if (actionExecutionContext.reportsSubcommands()) {
-      actionExecutionContext.reportSubcommand(spawn);
+    actionExecutionContext.maybeReportSubcommand(spawn);
+
+    final Duration timeout = Spawns.getTimeout(spawn);
+    SpawnExecutionContext context =
+        new SpawnExecutionContextImpl(spawn, actionExecutionContext, stopConcurrentSpawns, timeout);
+
+    // Avoid caching for runners which handle caching internally e.g. RemoteSpawnRunner.
+    SpawnCache cache =
+        spawnRunner.handlesCaching()
+            ? SpawnCache.NO_CACHE
+            : actionExecutionContext.getContext(SpawnCache.class);
+
+    // In production, the getContext method guarantees that we never get null back. However, our
+    // integration tests don't set it up correctly, so cache may be null in testing.
+    if (cache == null) {
+      cache = SpawnCache.NO_CACHE;
     }
-    final int timeoutSeconds = Spawns.getTimeoutSeconds(spawn);
-    SpawnExecutionPolicy policy = new SpawnExecutionPolicy() {
-      private final int id = execCount.incrementAndGet();
 
-      @Override
-      public int getId() {
-        return id;
-      }
-
-      @Override
-      public void prefetchInputs(Iterable<ActionInput> inputs) throws IOException {
-        actionExecutionContext.getActionInputPrefetcher().prefetchFiles(inputs);
-      }
-
-      @Override
-      public ActionInputFileCache getActionInputFileCache() {
-        return actionExecutionContext.getActionInputFileCache();
-      }
-
-      @Override
-      public ArtifactExpander getArtifactExpander() {
-        return actionExecutionContext.getArtifactExpander();
-      }
-
-      @Override
-      public void lockOutputFiles() throws InterruptedException {
-        Class<? extends SpawnActionContext> token = AbstractSpawnStrategy.this.getClass();
-        if (writeOutputFiles != null
-            && writeOutputFiles.get() != token
-            && !writeOutputFiles.compareAndSet(null, token)) {
-          throw new InterruptedException();
+    // Avoid using the remote cache of a dynamic execution setup for the local runner.
+    if (context.speculating() && !cache.usefulInDynamicExecution()) {
+      cache = SpawnCache.NO_CACHE;
+    }
+    SpawnResult spawnResult;
+    ExecException ex = null;
+    try (CacheHandle cacheHandle = cache.lookup(spawn, context)) {
+      if (cacheHandle.hasResult()) {
+        spawnResult = Preconditions.checkNotNull(cacheHandle.getResult());
+      } else {
+        // Actual execution.
+        spawnResult = spawnRunner.execAsync(spawn, context).get();
+        actionExecutionContext
+            .getEventHandler()
+            .post(new SpawnExecutedEvent(spawn, spawnResult, Instant.now()));
+        if (cacheHandle.willStore()) {
+          cacheHandle.store(spawnResult);
         }
       }
-
-      @Override
-      public long getTimeoutMillis() {
-        return TimeUnit.SECONDS.toMillis(timeoutSeconds);
-      }
-
-      @Override
-      public FileOutErr getFileOutErr() {
-        return actionExecutionContext.getFileOutErr();
-      }
-
-      @Override
-      public SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException {
-        return spawnInputExpander.getInputMapping(
-            spawn,
-            actionExecutionContext.getArtifactExpander(),
-            actionExecutionContext.getActionInputFileCache(),
-            actionExecutionContext.getContext(FilesetActionContext.class));
-      }
-
-      @Override
-      public void report(ProgressStatus state, String name) {
-        // TODO(ulfjack): We should report more details to the UI.
-        EventBus eventBus = actionExecutionContext.getEventBus();
-        switch (state) {
-          case EXECUTING:
-            eventBus.post(ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), name));
-            break;
-          case SCHEDULING:
-            eventBus.post(ActionStatusMessage.schedulingStrategy(spawn.getResourceOwner()));
-            break;
-          default:
-            break;
-        }
-      }
-    };
-    SpawnResult result;
-    try {
-      result = spawnRunner.exec(spawn, policy);
+    } catch (InterruptedIOException e) {
+      throw new InterruptedException(e.getMessage());
     } catch (IOException e) {
-      if (verboseFailures) {
+      throw new EnvironmentalExecException(
+          e,
+          FailureDetail.newBuilder()
+              .setMessage("Exec failed due to IOException")
+              .setSpawn(FailureDetails.Spawn.newBuilder().setCode(Code.EXEC_IO_EXCEPTION))
+              .build());
+    } catch (SpawnExecException e) {
+      ex = e;
+      spawnResult = e.getSpawnResult();
+      // Log the Spawn and re-throw.
+    }
+
+    SpawnLogContext spawnLogContext = actionExecutionContext.getContext(SpawnLogContext.class);
+    if (spawnLogContext != null) {
+      try {
+        spawnLogContext.logSpawn(
+            spawn,
+            actionExecutionContext.getMetadataProvider(),
+            context.getInputMapping(PathFragment.EMPTY_FRAGMENT),
+            context.getTimeout(),
+            spawnResult);
+      } catch (IOException e) {
         actionExecutionContext
             .getEventHandler()
             .handle(
-                Event.warn(
-                    spawn.getMnemonic()
-                        + " remote work failed:\n"
-                        + Throwables.getStackTraceAsString(e)));
+                Event.warn("Exception " + e + " while logging properties of " + spawn.toString()));
       }
-      throw new EnvironmentalExecException("Unexpected IO error.", e);
+    }
+    if (ex != null) {
+      throw ex;
     }
 
-    if ((result.status() != Status.SUCCESS) || (result.exitCode() != 0)) {
+    if (spawnResult.status() != Status.SUCCESS) {
       String cwd = actionExecutionContext.getExecRoot().getPathString();
+      String resultMessage = spawnResult.getFailureMessage();
       String message =
-          CommandFailureUtils.describeCommandFailure(
-              verboseFailures, spawn.getArguments(), spawn.getEnvironment(), cwd);
-      throw new SpawnExecException(
-          message, result, /*forciblyRunRemotely=*/false, /*catastrophe=*/false);
+          !Strings.isNullOrEmpty(resultMessage)
+              ? resultMessage
+              : CommandFailureUtils.describeCommandFailure(
+                  verboseFailures,
+                  spawn.getArguments(),
+                  spawn.getEnvironment(),
+                  cwd,
+                  spawn.getExecutionPlatform());
+      throw new SpawnExecException(message, spawnResult, /*forciblyRunRemotely=*/false);
+    }
+    return ImmutableList.of(spawnResult);
+  }
+
+  private final class SpawnExecutionContextImpl implements SpawnExecutionContext {
+    private final Spawn spawn;
+    private final ActionExecutionContext actionExecutionContext;
+    @Nullable private final SandboxedSpawnStrategy.StopConcurrentSpawns stopConcurrentSpawns;
+    private final Duration timeout;
+
+    private final int id = execCount.incrementAndGet();
+    // Memoize the input mapping so that prefetchInputs can reuse it instead of recomputing it.
+    // TODO(ulfjack): Guard against client modification of this map.
+    private SortedMap<PathFragment, ActionInput> lazyInputMapping;
+    private PathFragment inputMappingBaseDirectory;
+
+    SpawnExecutionContextImpl(
+        Spawn spawn,
+        ActionExecutionContext actionExecutionContext,
+        @Nullable SandboxedSpawnStrategy.StopConcurrentSpawns stopConcurrentSpawns,
+        Duration timeout) {
+      this.spawn = spawn;
+      this.actionExecutionContext = actionExecutionContext;
+      this.stopConcurrentSpawns = stopConcurrentSpawns;
+      this.timeout = timeout;
+    }
+
+    @Override
+    public int getId() {
+      return id;
+    }
+
+    @Override
+    public void prefetchInputs() throws IOException, InterruptedException {
+      if (Spawns.shouldPrefetchInputsForLocalExecution(spawn)) {
+        actionExecutionContext
+            .getActionInputPrefetcher()
+            .prefetchFiles(
+                getInputMapping(PathFragment.EMPTY_FRAGMENT).values(), getMetadataProvider());
+      }
+    }
+
+    @Override
+    public MetadataProvider getMetadataProvider() {
+      return actionExecutionContext.getMetadataProvider();
+    }
+
+    @Override
+    public MetadataHandler getMetadataInjector() {
+      return actionExecutionContext.getMetadataHandler();
+    }
+
+    @Override
+    public <T extends ActionContext> T getContext(Class<T> identifyingType) {
+      return actionExecutionContext.getContext(identifyingType);
+    }
+
+    @Override
+    public ArtifactExpander getArtifactExpander() {
+      return actionExecutionContext.getArtifactExpander();
+    }
+
+    @Override
+    public ArtifactPathResolver getPathResolver() {
+      return actionExecutionContext.getPathResolver();
+    }
+
+    @Override
+    public void lockOutputFiles() throws InterruptedException {
+      if (stopConcurrentSpawns != null) {
+        stopConcurrentSpawns.stop();
+      }
+    }
+
+    @Override
+    public boolean speculating() {
+      return stopConcurrentSpawns != null;
+    }
+
+    @Override
+    public Duration getTimeout() {
+      return timeout;
+    }
+
+    @Override
+    public FileOutErr getFileOutErr() {
+      return actionExecutionContext.getFileOutErr();
+    }
+
+    @Override
+    public SortedMap<PathFragment, ActionInput> getInputMapping(PathFragment baseDirectory)
+        throws IOException {
+      if (lazyInputMapping == null || !inputMappingBaseDirectory.equals(baseDirectory)) {
+        try (SilentCloseable c =
+            Profiler.instance().profile("AbstractSpawnStrategy.getInputMapping")) {
+          inputMappingBaseDirectory = baseDirectory;
+          lazyInputMapping =
+              spawnInputExpander.getInputMapping(
+                  spawn,
+                  actionExecutionContext.getArtifactExpander(),
+                  baseDirectory,
+                  actionExecutionContext.getMetadataProvider());
+        }
+      }
+
+      return lazyInputMapping;
+    }
+
+    @Override
+    public void report(ProgressStatus state, String name) {
+      ActionExecutionMetadata action = spawn.getResourceOwner();
+      if (action.getOwner() == null) {
+        return;
+      }
+
+      // TODO(djasper): This should not happen as per the contract of ActionExecutionMetadata, but
+      // there are implementations that violate the contract. Remove when those are gone.
+      if (action.getPrimaryOutput() == null) {
+        return;
+      }
+
+      // TODO(ulfjack): We should report more details to the UI.
+      ExtendedEventHandler eventHandler = actionExecutionContext.getEventHandler();
+      switch (state) {
+        case EXECUTING:
+        case CHECKING_CACHE:
+          eventHandler.post(new RunningActionEvent(action, name));
+          break;
+        case SCHEDULING:
+          eventHandler.post(new SchedulingActionEvent(action, name));
+          break;
+        default:
+          break;
+      }
+    }
+
+    @Override
+    public boolean isRewindingEnabled() {
+      return actionExecutionContext.isRewindingEnabled();
+    }
+
+    @Override
+    public void checkForLostInputs() throws LostInputsExecException {
+      try {
+        actionExecutionContext.checkForLostInputs();
+      } catch (LostInputsActionExecutionException e) {
+        throw e.toExecException();
+      }
     }
   }
 }

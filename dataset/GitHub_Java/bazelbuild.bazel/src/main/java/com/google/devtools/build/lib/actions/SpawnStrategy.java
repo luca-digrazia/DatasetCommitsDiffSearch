@@ -15,9 +15,17 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.collect.ImmutableList;
 
-/** A context that allows execution of {@link Spawn} instances. */
-@ActionContextMarker(name = "spawn")
-public interface SpawnStrategy extends ActionContext {
+/**
+ * An implementation of how to {@linkplain #exec execute} a {@link Spawn} instance.
+ *
+ * <p>Strategies are used during the execution phase based on how they were {@linkplain
+ * com.google.devtools.build.lib.runtime.BlazeModule#registerSpawnStrategies registered by a module}
+ * and whether they {@linkplain #canExec match a given spawn based on their abilities}.
+ */
+// TODO(blaze-team): If possible, merge this with AbstractSpawnStrategy and SpawnRunner. The former
+//  because (almost?) all implementations of this interface extend it; the latter because it forms
+//  a shadow hierarchy graph that looks like that of the corresponding strategies.
+public interface SpawnStrategy {
 
   /**
    * Executes the given spawn and returns metadata about the execution. Implementations must
@@ -42,6 +50,30 @@ public interface SpawnStrategy extends ActionContext {
     }
   }
 
-  /** Returns whether this SpawnActionContext supports executing the given Spawn. */
+  /**
+   * Returns whether this SpawnActionContext supports executing the given Spawn. This does not allow
+   * using the legacy fallback to local execution controlled by the {@code
+   * --incompatible_legacy_local_fallback} flag.
+   */
   boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry);
+
+  /**
+   * Returns true if this SpawnActionContext supports executing the given Spawn through a legacy
+   * fallback system. This will only be used if no SpawnActionContexts were able to execute it by
+   * normal means.
+   */
+  default boolean canExecWithLegacyFallback(
+      Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
+    return false;
+  }
+
+  /**
+   * Performs any actions conditional on this strategy not only being registered but triggered as
+   * used because its identifier was requested and it was not overridden.
+   *
+   * @param actionContextRegistry a registry containing all available contexts
+   */
+  // TODO(katre): Remove once strategies are only instantiated if used, the callback can then be
+  //  done upon construction.
+  default void usedContext(ActionContext.ActionContextRegistry actionContextRegistry) {}
 }
