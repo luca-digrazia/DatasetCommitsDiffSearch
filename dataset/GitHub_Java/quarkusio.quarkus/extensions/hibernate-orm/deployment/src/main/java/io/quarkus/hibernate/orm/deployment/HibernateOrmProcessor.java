@@ -121,7 +121,7 @@ import io.quarkus.hibernate.orm.runtime.boot.QuarkusPersistenceUnitDefinition;
 import io.quarkus.hibernate.orm.runtime.boot.scan.QuarkusScanner;
 import io.quarkus.hibernate.orm.runtime.dialect.QuarkusH2Dialect;
 import io.quarkus.hibernate.orm.runtime.dialect.QuarkusPostgreSQL10Dialect;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationStaticDescriptor;
+import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationStaticInitListener;
 import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
 import io.quarkus.hibernate.orm.runtime.tenant.DataSourceTenantConnectionResolver;
 import io.quarkus.hibernate.orm.runtime.tenant.TenantConnectionResolver;
@@ -416,13 +416,13 @@ public final class HibernateOrmProcessor {
             integratorClasses.add((Class<? extends Integrator>) recorderContext.classProxy(integratorClassName));
         }
 
-        Map<String, List<HibernateOrmIntegrationStaticDescriptor>> integrationStaticDescriptors = HibernateOrmIntegrationStaticConfiguredBuildItem
-                .collectDescriptors(integrationBuildItems);
+        Map<String, List<HibernateOrmIntegrationStaticInitListener>> integrationStaticInitListeners = HibernateOrmIntegrationStaticConfiguredBuildItem
+                .collectListeners(integrationBuildItems);
 
         List<QuarkusPersistenceUnitDefinition> finalStagePUDescriptors = new ArrayList<>();
         for (PersistenceUnitDescriptorBuildItem pud : persistenceUnitDescriptorBuildItems) {
             finalStagePUDescriptors.add(
-                    pud.asOutputPersistenceUnitDefinition(integrationStaticDescriptors
+                    pud.asOutputPersistenceUnitDefinition(integrationStaticInitListeners
                             .getOrDefault(pud.getPersistenceUnitName(), Collections.emptyList())));
         }
 
@@ -530,7 +530,7 @@ public final class HibernateOrmProcessor {
             List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationBuildItems) {
         if (capabilities.isMissing(Capability.HIBERNATE_REACTIVE)) {
             recorder.setupPersistenceProvider(hibernateOrmRuntimeConfig,
-                    HibernateOrmIntegrationRuntimeConfiguredBuildItem.collectDescriptors(integrationBuildItems));
+                    HibernateOrmIntegrationRuntimeConfiguredBuildItem.collectListeners(integrationBuildItems));
         }
 
         return new PersistenceProviderSetUpBuildItem();
