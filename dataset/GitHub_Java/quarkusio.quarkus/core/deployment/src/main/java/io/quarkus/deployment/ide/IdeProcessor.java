@@ -1,7 +1,6 @@
 package io.quarkus.deployment.ide;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -13,32 +12,75 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
+
+import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
-import io.quarkus.runtime.util.JavaVersionUtil;
+import io.quarkus.dev.spi.DevModeType;
 
 public class IdeProcessor {
 
-    private static Map<String, List<Ide>> IDE_MARKER_FILES = new HashMap<>();
+    private static final Logger log = Logger.getLogger(IdeProcessor.class);
+
+    private final static Map<String, List<Ide>> IDE_MARKER_FILES = Map.of(
+            ".idea", Collections.singletonList(Ide.IDEA),
+            ".project", Arrays.asList(Ide.VSCODE, Ide.ECLIPSE),
+            "nbactions.xml", Collections.singletonList(Ide.NETBEANS),
+            "nb-configuration.xml", Collections.singletonList(Ide.NETBEANS));
     private static Map<Predicate<ProcessInfo>, Ide> IDE_PROCESSES = new HashMap<>();
+    private final static Map<Ide, Function<ProcessInfo, String>> IDE_ARGUMENTS_EXEC_INDICATOR = new HashMap<>();
 
     static {
-        IDE_MARKER_FILES.put(".idea", Collections.singletonList(Ide.IDEA));
-        IDE_MARKER_FILES.put(".project", Arrays.asList(Ide.VSCODE, Ide.ECLIPSE));
-        IDE_MARKER_FILES = Collections.unmodifiableMap(IDE_MARKER_FILES);
 
-        IDE_PROCESSES.put((processInfo -> processInfo.getCommand().contains("idea")), Ide.IDEA);
-        IDE_PROCESSES.put((processInfo -> processInfo.getCommand().contains("code")), Ide.VSCODE);
-        IDE_PROCESSES.put((processInfo -> processInfo.getCommand().contains("eclipse")), Ide.ECLIPSE); // TODO: I have no idea if this is correct
+        IDE_PROCESSES.put(
+                (processInfo -> (processInfo.containInCommand("idea") || processInfo.containInCommand("IDEA"))
+                        && (processInfo.command.endsWith("java") || processInfo.command.endsWith("java.exe"))),
+                Ide.IDEA);
+        IDE_PROCESSES.put((processInfo -> processInfo.containInCommand("code")), Ide.VSCODE);
+        IDE_PROCESSES.put((processInfo -> processInfo.containInCommand("eclipse")), Ide.ECLIPSE);
+        IDE_PROCESSES.put(
+                (processInfo -> processInfo.containInArguments("netbeans")),
+                Ide.NETBEANS);
+
+        IDE_ARGUMENTS_EXEC_INDICATOR.put(Ide.NETBEANS, (ProcessInfo processInfo) -> {
+            String platform = processInfo.getArgumentThatContains("nbexec");
+            if (platform != null && !platform.isEmpty()) {
+                platform = platform.substring(0, platform.indexOf("platform")).concat("bin").concat(File.separator);
+                if (IdeUtil.isWindows()) {
+                    platform = platform.concat("netbeans.exe");
+                } else {
+                    platform = platform.concat("netbeans");
+                }
+                return platform;
+            }
+            return null;
+        });
+        IDE_ARGUMENTS_EXEC_INDICATOR.put(Ide.IDEA, (ProcessInfo processInfo) -> {
+            // converts something like '/home/test/software/idea/ideaIU-x.y.z/idea-IU-x.y.z/jbr/bin/java ....'
+            // into '/home/test/software/idea/ideaIU-203.5981.114/idea-IU-203.5981.114/bin/idea.sh'
+            String command = processInfo.getCommand();
+            int jbrIndex = command.indexOf("jbr");
+            if ((jbrIndex > -1) && (command.endsWith("java") || command.endsWith("java.exe"))) {
+                String ideaHome = command.substring(0, jbrIndex);
+                return (ideaHome + "bin" + File.separator + "idea") + (IdeUtil.isWindows() ? ".bat" : ".sh");
+            }
+            return null;
+        });
+
         IDE_PROCESSES = Collections.unmodifiableMap(IDE_PROCESSES);
     }
 
     @BuildStep
-    public EffectiveIdeBuildItem effectiveIde(IdeConfig ideConfig, IdeFileBuildItem ideFile,
+    public EffectiveIdeBuildItem effectiveIde(LaunchModeBuildItem launchModeBuildItem, IdeConfig ideConfig,
+            IdeFileBuildItem ideFile,
             IdeRunningProcessBuildItem ideRunningProcess) {
+        if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
+            return null;
+        }
         Ide result = null;
         if (ideConfig.target == IdeConfig.Target.auto) {
 
@@ -72,6 +114,8 @@ public class IdeProcessor {
                 result = Ide.ECLIPSE;
             } else if (ideConfig.target == IdeConfig.Target.vscode) {
                 result = Ide.VSCODE;
+            } else if (ideConfig.target == IdeConfig.Target.netbeans) {
+                result = Ide.NETBEANS;
             }
         }
 
@@ -83,25 +127,59 @@ public class IdeProcessor {
     }
 
     @BuildStep
-    public IdeFileBuildItem detectIdeFiles(BuildSystemTargetBuildItem buildSystemTarget) {
+    public IdeFileBuildItem detectIdeFiles(LaunchModeBuildItem launchModeBuildItem,
+            BuildSystemTargetBuildItem buildSystemTarget) {
+        if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
+            return null;
+        }
+
         Set<Ide> result = new HashSet<>(2);
-        Path projectRoot = buildSystemTarget.getOutputDirectory().getParent();
-        IDE_MARKER_FILES.forEach((file, ides) -> {
-            if (Files.exists(projectRoot.resolve(file))) {
-                result.addAll(ides);
+        Path root = buildSystemTarget.getOutputDirectory();
+
+        // hack to try and guess the IDE when using a multi-module project
+        for (int i = 0; i < 3; i++) {
+            root = root.getParent();
+            if (root == null || !result.isEmpty()) {
+                break;
             }
-        });
+
+            for (Map.Entry<String, List<Ide>> entry : IDE_MARKER_FILES.entrySet()) {
+                String file = entry.getKey();
+                List<Ide> ides = entry.getValue();
+                if (Files.exists(root.resolve(file))) {
+                    result.addAll(ides);
+                }
+            }
+        }
+
         return new IdeFileBuildItem(result);
     }
 
     @BuildStep
-    public IdeRunningProcessBuildItem detectRunningIdeProcesses() {
-        Set<Ide> result = new HashSet<>(2);
-        List<ProcessInfo> processInfos = ProcessUtil.runningProcesses();
+    public IdeRunningProcessBuildItem detectRunningIdeProcesses(LaunchModeBuildItem launchModeBuildItem) {
+        if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
+            return null;
+        }
+        Set<Ide> result = new HashSet<>(4);
+        List<ProcessInfo> processInfos = Collections.emptyList();
+        try {
+            processInfos = ProcessUtil.runningProcesses();
+        } catch (Exception e) {
+            // this shouldn't be a terminal failure, so just log it to the console
+            log.warn(e.getMessage());
+        }
         for (ProcessInfo processInfo : processInfos) {
             for (Map.Entry<Predicate<ProcessInfo>, Ide> entry : IDE_PROCESSES.entrySet()) {
                 if (entry.getKey().test(processInfo)) {
-                    result.add(entry.getValue());
+                    Ide ide = entry.getValue();
+                    if (IDE_ARGUMENTS_EXEC_INDICATOR.containsKey(ide)) {
+                        Function<ProcessInfo, String> execIndicator = IDE_ARGUMENTS_EXEC_INDICATOR.get(ide);
+                        String machineSpecificCommand = execIndicator.apply(processInfo);
+                        if (machineSpecificCommand != null) {
+                            ide.setMachineSpecificCommand(machineSpecificCommand);
+                        }
+                    }
+                    result.add(ide);
                     break;
                 }
             }
@@ -114,50 +192,62 @@ public class IdeProcessor {
 
         /**
          * Returns a list of running processes
-         * Only works for Java 11+
          */
-        @SuppressWarnings({ "rawtypes", "unchecked" })
         public static List<ProcessInfo> runningProcesses() {
-            if (!JavaVersionUtil.isJava11OrHigher()) {
-                return Collections.emptyList();
-            }
-            // we can't use ProcessHandle directly as it is Java 9+, so we need to do reflection to the get the info we need
-            try {
-                Class processHandlerClass = Class.forName("java.lang.ProcessHandle");
-                Method allProcessesMethod = processHandlerClass.getMethod("allProcesses");
-                Method processHandleInfoMethod = processHandlerClass.getMethod("info");
-                Class processHandleInfoClass = Class.forName("java.lang.ProcessHandle$Info");
-                Method processHandleInfoCommandMethod = processHandleInfoClass.getMethod("command");
-                Stream<Object> allProcessesResult = (Stream<Object>) allProcessesMethod.invoke(null);
-                List<ProcessInfo> result = new ArrayList<>();
-                allProcessesResult.forEach(o -> {
-                    try {
-                        Object processHandleInfo = processHandleInfoMethod.invoke(o);
-                        Optional<String> command = (Optional<String>) processHandleInfoCommandMethod.invoke(processHandleInfo);
-                        if (command.isPresent()) {
-                            result.add(new ProcessInfo(command.get()));
-                        }
-                    } catch (IllegalAccessException | InvocationTargetException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
-                return result;
-            } catch (Exception e) {
-                throw new RuntimeException("Unable to determine running processes", e);
-            }
+            List<ProcessInfo> result = new ArrayList<>();
+            ProcessHandle.allProcesses().forEach(p -> {
+                ProcessHandle.Info info = p.info();
+                Optional<String> command = info.command();
+                if (command.isPresent()) {
+                    result.add(new ProcessInfo(command.get(), info.arguments().orElse(null)));
+                }
+            });
+            return result;
         }
     }
 
     private static class ProcessInfo {
         // the executable pathname of the process.
         private final String command;
+        private final String[] arguments;
 
-        public ProcessInfo(String command) {
+        public ProcessInfo(String command, String[] arguments) {
             this.command = command;
+            this.arguments = arguments;
         }
 
         public String getCommand() {
             return command;
+        }
+
+        public String[] getArguments() {
+            return arguments;
+        }
+
+        private boolean containInCommand(String value) {
+            return this.command.contains(value);
+        }
+
+        private boolean containInArguments(String value) {
+            if (arguments != null) {
+                for (String argument : arguments) {
+                    if (argument.contains(value)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private String getArgumentThatContains(String contain) {
+            if (arguments != null) {
+                for (String argument : arguments) {
+                    if (argument.contains(contain)) {
+                        return argument;
+                    }
+                }
+            }
+            return null;
         }
     }
 }

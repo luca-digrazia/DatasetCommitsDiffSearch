@@ -1,8 +1,7 @@
 package io.quarkus.vertx.http.deployment.devmode.console;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -21,11 +20,7 @@ import io.vertx.ext.web.RoutingContext;
 public class OpenIdeHandler extends DevConsolePostHandler {
 
     private static final Logger log = Logger.getLogger(OpenIdeHandler.class);
-    private static final Map<String, String> LANG_TO_EXT = new HashMap<>();
-    static {
-        LANG_TO_EXT.put("java", "java");
-        LANG_TO_EXT.put("kotlin", "kt");
-    }
+    private static final Map<String, String> LANG_TO_EXT = Map.of("java", "java", "kotlin", "kt");
 
     private final Ide ide;
 
@@ -44,10 +39,8 @@ public class OpenIdeHandler extends DevConsolePostHandler {
             routingContext.fail(400);
         }
 
-        if (ide == Ide.IDEA) {
-            typicalProcessLaunch(routingContext, className, lang, srcMainPath, line, "idea");
-        } else if (ide == Ide.ECLIPSE) {
-            typicalProcessLaunch(routingContext, className, lang, srcMainPath, line, "eclipse");
+        if (ide != null) {
+            typicalProcessLaunch(routingContext, className, lang, srcMainPath, line, ide);
         } else {
             log.debug("Unhandled IDE : " + ide);
             routingContext.fail(500);
@@ -55,26 +48,40 @@ public class OpenIdeHandler extends DevConsolePostHandler {
     }
 
     private void typicalProcessLaunch(RoutingContext routingContext, String className, String lang, String srcMainPath,
-            String line, String binary) {
-        String arg = toFileName(className, lang, srcMainPath);
-        if (!isNullOrEmpty(line)) {
-            arg = arg + ":" + line;
-        }
-        launchInIDE(Arrays.asList(binary, arg), routingContext);
+            String line, Ide ide) {
+        String fileName = toFileName(className, lang, srcMainPath);
+        List<String> args = ide.createFileOpeningArgs(fileName, line);
+        launchInIDE(routingContext, ide, args);
     }
 
     private String toFileName(String className, String lang, String srcMainPath) {
-        // TODO: handler inner classes
+        String effectiveClassName = className;
+        int dollarIndex = className.indexOf("$");
+        if (dollarIndex > -1) {
+            // in this case we are dealing with inner classes, so we need to get the name of the outer class
+            // in order to use for conversion to the file name
+            effectiveClassName = className.substring(0, dollarIndex);
+        }
         return srcMainPath + File.separator + lang + File.separator
-                + (className.replace('.', File.separatorChar) + "." + LANG_TO_EXT.get(lang));
+                + (effectiveClassName.replace('.', File.separatorChar) + "." + LANG_TO_EXT.get(lang));
 
     }
 
-    protected void launchInIDE(List<String> command, RoutingContext routingContext) {
+    protected void launchInIDE(RoutingContext routingContext, Ide ide, List<String> args) {
         new Thread(new Runnable() {
             public void run() {
                 try {
-                    new ProcessBuilder(command).inheritIO().start().waitFor(10, TimeUnit.SECONDS);
+                    String effectiveCommand = ide.getEffectiveCommand();
+                    if (isNullOrEmpty(effectiveCommand)) {
+                        log.debug("Unable to determine proper launch command for IDE: " + ide);
+                        routingContext.response().setStatusCode(500).end();
+                        return;
+                    }
+                    List<String> command = new ArrayList<>();
+                    command.add(effectiveCommand);
+                    command.addAll(args);
+                    new ProcessBuilder(command).inheritIO().start().waitFor(10,
+                            TimeUnit.SECONDS);
                     routingContext.response().setStatusCode(200).end();
                 } catch (Exception e) {
                     routingContext.fail(e);
