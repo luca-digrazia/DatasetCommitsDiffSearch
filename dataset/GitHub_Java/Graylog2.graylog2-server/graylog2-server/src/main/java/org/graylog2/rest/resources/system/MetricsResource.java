@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,10 +15,14 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.resources.system;
 
-import com.codahale.metrics.*;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.Metric;
+import com.codahale.metrics.Timer;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -27,7 +31,6 @@ import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.database.MongoConnection;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.requests.MetricsReadRequest;
@@ -35,7 +38,6 @@ import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
@@ -52,15 +54,6 @@ import java.util.Map;
 public class MetricsResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(MetricsResource.class);
-    private final MetricRegistry metricRegistry;
-    private final MongoConnection mongoConnection;
-
-    @Inject
-    public MetricsResource(MetricRegistry metricRegistry,
-                           MongoConnection mongoConnection) {
-        this.metricRegistry = metricRegistry;
-        this.mongoConnection = mongoConnection;
-    }
 
     @GET @Timed
     @RequiresPermissions(RestPermissions.METRICS_READALL)
@@ -70,7 +63,7 @@ public class MetricsResource extends RestResource {
     public String metrics() {
         Map<String, Object> result = Maps.newHashMap();
 
-        result.put("metrics", metricRegistry.getMetrics());
+        result.put("metrics", core.metrics().getMetrics());
 
         return json(result);
     }
@@ -82,7 +75,7 @@ public class MetricsResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     public String metricNames() {
         Map<String, Object> result = Maps.newHashMap();
-        result.put("names", metricRegistry.getNames());
+        result.put("names", core.metrics().getNames());
 
         return json(result);
     }
@@ -96,7 +89,7 @@ public class MetricsResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     public String singleMetric(@ApiParam(title = "metricName", required = true) @PathParam("metricName") String metricName) {
         checkPermission(RestPermissions.METRICS_READ, metricName);
-        Metric metric = metricRegistry.getMetrics().get(metricName);
+        Metric metric = core.metrics().getMetrics().get(metricName);
 
         if (metric == null) {
             LOG.debug("I do not have a metric called [{}], returning 404.", metricName);
@@ -113,7 +106,7 @@ public class MetricsResource extends RestResource {
             @ApiResponse(code = 400, message = "Malformed body")
     })
     public String multipleMetrics(@ApiParam(title = "Requested metrics", required = true) MetricsReadRequest request) {
-        final Map<String, Metric> metrics = metricRegistry.getMetrics();
+        final Map<String, Metric> metrics = core.metrics().getMetrics();
 
         List<Map<String, Object>> metricsList = Lists.newArrayList();
         if (request.metrics == null) {
@@ -147,7 +140,7 @@ public class MetricsResource extends RestResource {
     public String byNamespace(@ApiParam(title = "namespace", required = true) @PathParam("namespace") String namespace) {
         List<Map<String, Object>> metrics = Lists.newArrayList();
 
-        for(Map.Entry<String, Metric> e : metricRegistry.getMetrics().entrySet()) {
+        for(Map.Entry<String, Metric> e : core.metrics().getMetrics().entrySet()) {
             final String metricName = e.getKey();
             if (metricName.startsWith(namespace) && isPermitted(RestPermissions.METRICS_READ, metricName)) {
                 try {
@@ -223,7 +216,7 @@ public class MetricsResource extends RestResource {
         }
         andQuery.put("$and", obj);
 
-        final DBCursor cursor = mongoConnection.getDatabase().getCollection("graylog2_metrics")
+        final DBCursor cursor = core.getMongoConnection().getDatabase().getCollection("graylog2_metrics")
                 .find(andQuery).sort(new BasicDBObject("timestamp", 1));
         Map<String, Object> metricsData = Maps.newHashMap();
         metricsData.put("name", metricName);
