@@ -327,10 +327,11 @@ public class JunitTestRunner {
                 }
 
                 QuarkusConsole.INSTANCE.setOutputFilter(null);
+                List<TestResult> historicFailures = testState.getHistoricFailures(resultsByClass);
 
                 for (TestRunListener listener : listeners) {
                     listener.runComplete(new TestRunResults(runId, classScanResult, classScanResult == null, start,
-                            System.currentTimeMillis(), toResultsMap(testState.getCurrentResults())));
+                            System.currentTimeMillis(), toResultsMap(historicFailures, resultsByClass)));
                 }
             }
         } catch (Exception e) {
@@ -363,15 +364,29 @@ public class JunitTestRunner {
         notifyAll();
     }
 
-    private Map<String, TestClassResult> toResultsMap(
+    private Map<String, TestClassResult> toResultsMap(List<TestResult> historicFailures,
             Map<String, Map<UniqueId, TestResult>> resultsByClass) {
         Map<String, TestClassResult> resultMap = new HashMap<>();
+        Map<String, List<TestResult>> historicMap = new HashMap<>();
+        for (TestResult i : historicFailures) {
+            historicMap.computeIfAbsent(i.getTestClass(), s -> new ArrayList<>()).add(i);
+        }
         Set<String> classes = new HashSet<>(resultsByClass.keySet());
+        classes.addAll(historicMap.keySet());
         for (String clazz : classes) {
             List<TestResult> passing = new ArrayList<>();
             List<TestResult> failing = new ArrayList<>();
             List<TestResult> skipped = new ArrayList<>();
             for (TestResult i : Optional.ofNullable(resultsByClass.get(clazz)).orElse(Collections.emptyMap()).values()) {
+                if (i.getTestExecutionResult().getStatus() == TestExecutionResult.Status.FAILED) {
+                    failing.add(i);
+                } else if (i.getTestExecutionResult().getStatus() == TestExecutionResult.Status.ABORTED) {
+                    skipped.add(i);
+                } else {
+                    passing.add(i);
+                }
+            }
+            for (TestResult i : Optional.ofNullable(historicMap.get(clazz)).orElse(Collections.emptyList())) {
                 if (i.getTestExecutionResult().getStatus() == TestExecutionResult.Status.FAILED) {
                     failing.add(i);
                 } else if (i.getTestExecutionResult().getStatus() == TestExecutionResult.Status.ABORTED) {
