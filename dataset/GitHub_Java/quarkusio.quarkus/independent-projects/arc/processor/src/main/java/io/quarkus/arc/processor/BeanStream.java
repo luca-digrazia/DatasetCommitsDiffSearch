@@ -7,8 +7,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
 
@@ -93,6 +97,16 @@ public final class BeanStream implements Iterable<BeanInfo> {
 
     /**
      * 
+     * @param predicate
+     * @return the new stream of beans
+     */
+    public BeanStream matchBeanTypes(Predicate<Set<Type>> predicate) {
+        stream = stream.filter(bean -> predicate.test(bean.getTypes()));
+        return this;
+    }
+
+    /**
+     * 
      * @return the new stream of beans
      * @see BeanInfo#getTarget()
      */
@@ -157,6 +171,16 @@ public final class BeanStream implements Iterable<BeanInfo> {
      */
     public BeanStream withName(String name) {
         stream = stream.filter(bean -> name.equals(bean.getName()));
+        return this;
+    }
+
+    /**
+     * 
+     * @return the new stream of beans
+     * @see BeanInfo#getName()
+     */
+    public BeanStream withName() {
+        stream = stream.filter(bean -> bean.getName() != null);
         return this;
     }
 
@@ -246,6 +270,17 @@ public final class BeanStream implements Iterable<BeanInfo> {
     }
 
     /**
+     * 
+     * @param requiredType
+     * @param requiredQualifiers
+     * @return the new stream of beans assignable to the required type and qualifiers
+     */
+    public BeanStream assignableTo(Type requiredType, AnnotationInstance... requiredQualifiers) {
+        stream = stream.filter(bean -> bean.isAssignableTo(requiredType, requiredQualifiers));
+        return this;
+    }
+
+    /**
      * Terminal operation.
      * 
      * @return the list of beans
@@ -288,6 +323,18 @@ public final class BeanStream implements Iterable<BeanInfo> {
      */
     public Optional<BeanInfo> firstResult() {
         return stream.findFirst();
+    }
+
+    /**
+     * Terminal operation.
+     * 
+     * @param <R>
+     * @param <A>
+     * @param collector
+     * @return the collected result
+     */
+    public <R, A> R collect(Collector<BeanInfo, A, R> collector) {
+        return stream.collect(collector);
     }
 
 }
