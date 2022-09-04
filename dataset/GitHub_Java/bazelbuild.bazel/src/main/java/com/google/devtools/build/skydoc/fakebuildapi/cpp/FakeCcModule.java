@@ -219,11 +219,7 @@ public class FakeCcModule
       Object quoteIncludes,
       Object frameworkIncludes,
       Object defines,
-      Object localDefines,
-      Object textualHdrs,
-      Object modularPublicHdrs,
-      Object modularPrivateHdrs,
-      StarlarkThread thread)
+      Object localDefines)
       throws EvalException {
     return null;
   }

@@ -228,7 +228,6 @@ public interface BazelCcModuleApi<
         @Param(
             name = "module_map",
             positional = false,
-            documented = false,
             defaultValue = "unbound",
             allowedTypes = {
               @ParamType(type = CppModuleMapApi.class),
@@ -238,7 +237,6 @@ public interface BazelCcModuleApi<
         @Param(
             name = "additional_module_maps",
             positional = false,
-            documented = false,
             defaultValue = "unbound",
             allowedTypes = {@ParamType(type = Sequence.class, generic1 = CppModuleMapApi.class)},
             named = true),

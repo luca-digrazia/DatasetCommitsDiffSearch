@@ -782,7 +782,6 @@ public interface CcModuleApi<
   @StarlarkMethod(
       name = "create_compilation_context",
       doc = "Creates a <code>CompilationContext</code>.",
-      useStarlarkThread = true,
       parameters = {
         @Param(
             name = "headers",
@@ -838,22 +837,6 @@ public interface CcModuleApi<
             positional = false,
             named = true,
             defaultValue = "unbound"),
-        @Param(
-            name = "textual_hdrs",
-            doc = "",
-            positional = false,
-            named = true,
-            defaultValue = "unbound"),
-        @Param(
-            name = "modular_public_hdrs",
-            positional = false,
-            named = true,
-            defaultValue = "unbound"),
-        @Param(
-            name = "modular_private_hdrs",
-            positional = false,
-            named = true,
-            defaultValue = "unbound"),
       })
   CompilationContextT createCcCompilationContext(
       Object headers,
@@ -862,11 +845,7 @@ public interface CcModuleApi<
       Object quoteIncludes,
       Object frameworkIncludes,
       Object defines,
-      Object localDefines,
-      Object textualHdrs,
-      Object modularPublicHdrs,
-      Object modularPrivateHdrs,
-      StarlarkThread thread)
+      Object localDefines)
       throws EvalException;
 
   @StarlarkMethod(
