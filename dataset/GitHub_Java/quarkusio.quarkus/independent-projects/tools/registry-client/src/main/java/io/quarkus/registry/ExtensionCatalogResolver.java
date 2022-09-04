@@ -86,7 +86,7 @@ public class ExtensionCatalogResolver {
             return this;
         }
 
-        public ExtensionCatalogResolver build() throws RegistryResolutionException {
+        public ExtensionCatalogResolver build() {
             assertNotBuilt();
             built = true;
             completeConfig();
@@ -113,14 +113,20 @@ public class ExtensionCatalogResolver {
             }
         }
 
-        private void buildRegistryClients() throws RegistryResolutionException {
+        private void buildRegistryClients() {
             registries = new ArrayList<>(config.getRegistries().size());
             for (RegistryConfig config : config.getRegistries()) {
                 if (config.isDisabled()) {
                     continue;
                 }
                 final RegistryClientFactory clientFactory = getClientFactory(config);
-                registries.add(new RegistryExtensionResolver(clientFactory.buildRegistryClient(config), log));
+                try {
+                    registries.add(new RegistryExtensionResolver(clientFactory.buildRegistryClient(config), log));
+                } catch (RegistryResolutionException e) {
+                    // TODO this should be enabled once the registry comes to life
+                    log.debug(e.getMessage());
+                    continue;
+                }
             }
         }
 

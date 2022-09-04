@@ -156,9 +156,13 @@ public class ToolsUtils {
                         }
 
                         final OriginPreference originPreference = new OriginPreference(1, 1, 1, ++memberIndex, 1);
-                        Map<String, Object> metadata = new HashMap<>(memberCatalog.getMetadata());
+                        Map<String, Object> metadata = memberCatalog.getMetadata();
+                        if (metadata.isEmpty()) {
+                            metadata = new HashMap<>();
+                            ((JsonExtensionCatalog) memberCatalog).setMetadata(metadata);
+                        }
                         metadata.put("origin-preference", originPreference);
-                        ((JsonExtensionCatalog) memberCatalog).setMetadata(metadata);
+
                         catalogs.add(memberCatalog);
                     }
                     catalog = JsonCatalogMerger.merge(catalogs);
