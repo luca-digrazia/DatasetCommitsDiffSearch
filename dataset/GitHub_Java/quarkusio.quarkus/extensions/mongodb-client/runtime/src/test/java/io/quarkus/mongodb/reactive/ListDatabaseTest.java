@@ -39,12 +39,13 @@ class ListDatabaseTest extends MongoWithReplicasTestBase {
                 .containsExactlyInAnyOrder("local", "admin");
 
         List<String> names = client.startSession()
-                .chain(session -> client.listDatabaseNames(session).collectItems().asList())
+                .onItem().produceUni(session -> client.listDatabaseNames(session).collectItems().asList())
                 .await().indefinitely();
         assertThat(names).containsExactlyInAnyOrder("local", "admin");
 
         names = client.startSession()
-                .chain(session -> client.listDatabases(session).map(doc -> doc.getString("name")).collectItems().asList())
+                .onItem()
+                .produceUni(session -> client.listDatabases(session).map(doc -> doc.getString("name")).collectItems().asList())
                 .await().indefinitely();
         assertThat(names).containsExactlyInAnyOrder("local", "admin");
     }

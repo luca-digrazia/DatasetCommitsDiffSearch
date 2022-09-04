@@ -48,18 +48,7 @@ public class MongoWithReplicasTestBase {
                 MongodExecutable exec = MongodStarter.getDefaultInstance().prepare(config);
                 MONGOS.add(exec);
                 try {
-                    try {
-                        exec.start();
-                    } catch (Exception e) {
-                        //every so often mongo fails to start on CI runs
-                        //see if this helps
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException ignore) {
-
-                        }
-                        exec.start();
-                    }
+                    exec.start();
                 } catch (IOException e) {
                     LOGGER.error("Unable to start the mongo instance", e);
                 }
