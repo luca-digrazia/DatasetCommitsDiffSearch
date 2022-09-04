@@ -1,10 +1,5 @@
 package io.quarkus.bootstrap.resolver.maven;
 
-import io.quarkus.bootstrap.BootstrapConstants;
-import io.quarkus.bootstrap.BootstrapDependencyProcessingException;
-import io.quarkus.bootstrap.model.AppModel;
-import io.quarkus.bootstrap.resolver.AppModelResolverException;
-import io.quarkus.bootstrap.util.ZipUtils;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -22,12 +17,17 @@ import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.util.artifact.JavaScopes;
 import org.jboss.logging.Logger;
+import io.quarkus.bootstrap.BootstrapConstants;
+import io.quarkus.bootstrap.BootstrapDependencyProcessingException;
+import io.quarkus.bootstrap.resolver.AppModelResolverException;
+import io.quarkus.bootstrap.util.ZipUtils;
 
 /**
  *
  * @author Alexey Loubyansky
  */
 public class DeploymentInjectingDependencyVisitor {
+
 
     private static final Logger log = Logger.getLogger(DeploymentInjectingDependencyVisitor.class);
 
@@ -40,20 +40,16 @@ public class DeploymentInjectingDependencyVisitor {
 
     private final MavenArtifactResolver resolver;
     private final List<Dependency> managedDeps;
-    private final List<Dependency> runtimeExtensionDeps = new ArrayList<>();
     private final List<RemoteRepository> mainRepos;
 
     boolean injectedDeps;
 
     private List<DependencyNode> runtimeNodes = new ArrayList<>();
-    private final AppModel.Builder appBuilder;
 
-    public DeploymentInjectingDependencyVisitor(MavenArtifactResolver resolver, List<Dependency> managedDeps,
-            List<RemoteRepository> mainRepos, AppModel.Builder appBuilder) {
+    public DeploymentInjectingDependencyVisitor(MavenArtifactResolver resolver, List<Dependency> managedDeps, List<RemoteRepository> mainRepos) {
         this.resolver = resolver;
         this.managedDeps = managedDeps.isEmpty() ? new ArrayList<>() : managedDeps;
         this.mainRepos = mainRepos;
-        this.appBuilder = appBuilder;
     }
 
     public boolean isInjectedDeps() {
@@ -63,13 +59,13 @@ public class DeploymentInjectingDependencyVisitor {
     public void injectDeploymentDependencies(DependencyNode root) throws BootstrapDependencyProcessingException {
         collectRuntimeExtensions(root.getChildren());
         // resolve and inject deployment dependencies
-        for (DependencyNode rtNode : runtimeNodes) {
-            replaceWith(rtNode, collectDependencies((Artifact) rtNode.getData().get(QUARKUS_DEPLOYMENT_ARTIFACT)));
+        for(DependencyNode rtNode : runtimeNodes) {
+            replaceWith(rtNode, collectDependencies((Artifact)rtNode.getData().get(QUARKUS_DEPLOYMENT_ARTIFACT)));
         }
     }
 
     public void collectRuntimeExtensions(List<DependencyNode> list) {
-        if (list.isEmpty()) {
+        if(list.isEmpty()) {
             return;
         }
         int i = 0;
@@ -80,7 +76,7 @@ public class DeploymentInjectingDependencyVisitor {
 
     private void collectRuntimeExtensions(DependencyNode node) {
         final Artifact artifact = node.getArtifact();
-        if (!artifact.getExtension().equals("jar")) {
+        if(!artifact.getExtension().equals("jar")) {
             return;
         }
         final Path path = resolve(artifact);
@@ -111,38 +107,31 @@ public class DeploymentInjectingDependencyVisitor {
 
     private void processPlatformArtifact(DependencyNode node, Path descriptor) throws BootstrapDependencyProcessingException {
         final Properties rtProps = resolveDescriptor(descriptor);
-        if (rtProps == null) {
+        if(rtProps == null) {
             return;
         }
         final String value = rtProps.getProperty(BootstrapConstants.PROP_DEPLOYMENT_ARTIFACT);
-        appBuilder.handleExtensionProperties(rtProps, node.getArtifact().toString());
-        if (value == null) {
+        if(value == null) {
             return;
         }
-        Artifact deploymentArtifact = toArtifact(value);
-        if (deploymentArtifact.getVersion() == null || deploymentArtifact.getVersion().isEmpty()) {
-            deploymentArtifact = deploymentArtifact.setVersion(node.getArtifact().getVersion());
+        if(value != null) {
+            Artifact deploymentArtifact = toArtifact(value);
+            if(deploymentArtifact.getVersion() == null || deploymentArtifact.getVersion().isEmpty()) {
+                deploymentArtifact = deploymentArtifact.setVersion(node.getArtifact().getVersion());
+            }
+            node.setData(QUARKUS_DEPLOYMENT_ARTIFACT, deploymentArtifact);
+            runtimeNodes.add(node);
+            managedDeps.add(new Dependency(node.getArtifact(), JavaScopes.COMPILE));
+            managedDeps.add(new Dependency(deploymentArtifact, JavaScopes.COMPILE));
         }
-        node.setData(QUARKUS_DEPLOYMENT_ARTIFACT, deploymentArtifact);
-        runtimeNodes.add(node);
-        Dependency dependency = new Dependency(node.getArtifact(), JavaScopes.COMPILE);
-        managedDeps.add(dependency);
-        runtimeExtensionDeps.add(dependency);
-        managedDeps.add(new Dependency(deploymentArtifact, JavaScopes.COMPILE));
     }
 
-    public List<Dependency> getRuntimeExtensionDeps() {
-        return runtimeExtensionDeps;
-    }
-
-    private void replaceWith(DependencyNode originalNode, DependencyNode newNode)
-            throws BootstrapDependencyProcessingException {
+    private void replaceWith(DependencyNode originalNode, DependencyNode newNode) throws BootstrapDependencyProcessingException {
         List<DependencyNode> children = newNode.getChildren();
         if (children.isEmpty()) {
             throw new BootstrapDependencyProcessingException(
                     "No dependencies collected for Quarkus extension deployment artifact " + newNode.getArtifact()
-                            + " while at least the corresponding runtime artifact " + originalNode.getArtifact()
-                            + " is expected");
+                            + " while at least the corresponding runtime artifact " + originalNode.getArtifact() + " is expected");
         }
         log.debugf("Injecting deployment dependency %s", newNode);
 
@@ -156,8 +145,7 @@ public class DeploymentInjectingDependencyVisitor {
     private DependencyNode collectDependencies(Artifact artifact) throws BootstrapDependencyProcessingException {
         try {
             return managedDeps.isEmpty() ? resolver.collectDependencies(artifact, Collections.emptyList(), mainRepos).getRoot()
-                    : resolver.collectManagedDependencies(artifact, Collections.emptyList(), managedDeps, mainRepos, "test")
-                            .getRoot();
+                    : resolver.collectManagedDependencies(artifact, Collections.emptyList(), managedDeps, mainRepos).getRoot();
         } catch (AppModelResolverException e) {
             throw new DeploymentInjectionException(e);
         }
@@ -165,7 +153,7 @@ public class DeploymentInjectingDependencyVisitor {
 
     private Path resolve(Artifact artifact) {
         File file = artifact.getFile();
-        if (file != null) {
+        if(file != null) {
             return file.toPath();
         }
         try {
@@ -194,7 +182,7 @@ public class DeploymentInjectingDependencyVisitor {
         return toArtifact(str, 0);
     }
 
-    public static Artifact toArtifact(String str, int offset) {
+    private static Artifact toArtifact(String str, int offset) {
         String groupId = null;
         String artifactId = null;
         String classifier = "";
@@ -203,31 +191,31 @@ public class DeploymentInjectingDependencyVisitor {
 
         int colon = str.indexOf(':', offset);
         final int length = str.length();
-        if (colon < offset + 1 || colon == length - 1) {
+        if(colon < offset + 1 || colon == length - 1) {
             illegalDependencyFormat(str);
         }
         groupId = str.substring(offset, colon);
         offset = colon + 1;
         colon = str.indexOf(':', offset);
-        if (colon < 0) {
+        if(colon < 0) {
             artifactId = str.substring(offset, length);
         } else {
-            if (colon == length - 1) {
+            if(colon == length - 1) {
                 illegalDependencyFormat(str);
             }
             artifactId = str.substring(offset, colon);
             offset = colon + 1;
             colon = str.indexOf(':', offset);
-            if (colon < 0) {
+            if(colon < 0) {
                 version = str.substring(offset, length);
             } else {
-                if (colon == length - 1) {
+                if(colon == length - 1) {
                     illegalDependencyFormat(str);
                 }
                 type = str.substring(offset, colon);
                 offset = colon + 1;
                 colon = str.indexOf(':', offset);
-                if (colon < 0) {
+                if(colon < 0) {
                     version = str.substring(offset, length);
                 } else {
                     if (colon == length - 1) {
