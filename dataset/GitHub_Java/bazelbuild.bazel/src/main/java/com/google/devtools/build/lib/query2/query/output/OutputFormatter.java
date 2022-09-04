@@ -219,6 +219,15 @@ public abstract class OutputFormatter implements Serializable {
     protected AspectResolver aspectResolver;
     protected DependencyFilter dependencyFilter;
 
+    protected Iterable<Target> getOrderedTargets(
+        Digraph<Target> result, QueryOptions options) {
+      Iterable<Node<Target>> orderedResult =
+          options.orderOutput == OrderOutput.DEPS
+              ? result.getTopologicalOrder()
+              : result.getTopologicalOrder(new TargetOrdering());
+      return Iterables.transform(orderedResult, EXTRACT_NODE_LABEL);
+    }
+
     @Override
     public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
       this.options = options;
@@ -237,14 +246,6 @@ public abstract class OutputFormatter implements Serializable {
       setOptions(options, aspectResolver);
       OutputFormatterCallback.processAllTargets(
           createPostFactoStreamCallback(out, options), getOrderedTargets(result, options));
-    }
-
-    protected Iterable<Target> getOrderedTargets(Digraph<Target> result, QueryOptions options) {
-      Iterable<Node<Target>> orderedResult =
-          options.orderOutput == OrderOutput.DEPS
-              ? result.getTopologicalOrder()
-              : result.getTopologicalOrder(new TargetOrdering());
-      return Iterables.transform(orderedResult, EXTRACT_NODE_LABEL);
     }
   }
 
