@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class WidgetResultCache {
-    private final Map<String, Supplier<ComputationResult>> cache;
+    private final Map<DashboardWidget, Supplier<ComputationResult>> cache;
     private final MetricRegistry metricRegistry;
     private final WidgetStrategyFactory widgetStrategyFactory;
 
@@ -42,23 +42,21 @@ public class WidgetResultCache {
     }
 
     public ComputationResult getComputationResultForDashboardWidget(final DashboardWidget dashboardWidget) throws InvalidWidgetConfigurationException {
-        final String widgetId = dashboardWidget.getId();
-        if (!this.cache.containsKey(widgetId)) {
+        if (!this.cache.containsKey(dashboardWidget)) {
             final WidgetStrategy widgetStrategy = this.widgetStrategyFactory.getWidgetForType(dashboardWidget.getType().toString(),
-                    dashboardWidget.getConfig(), dashboardWidget.getTimeRange(), widgetId);
-            this.cache.put(widgetId, Suppliers.memoizeWithExpiration(
+                    dashboardWidget.getConfig(), dashboardWidget.getTimeRange(), dashboardWidget.getId());
+            this.cache.put(dashboardWidget, Suppliers.memoizeWithExpiration(
                     new ComputationResultSupplier(metricRegistry, dashboardWidget, widgetStrategy),
                     dashboardWidget.getCacheTime(),
                     TimeUnit.SECONDS
             ));
         }
-        return this.cache.get(widgetId).get();
+        return this.cache.get(dashboardWidget).get();
     }
 
     public void invalidate(final DashboardWidget dashboardWidget) {
-        final String widgetId = dashboardWidget.getId();
-        if (this.cache.containsKey(widgetId)) {
-            this.cache.remove(widgetId);
+        if (this.cache.containsKey(dashboardWidget)) {
+            this.cache.remove(dashboardWidget);
         }
     }
 
