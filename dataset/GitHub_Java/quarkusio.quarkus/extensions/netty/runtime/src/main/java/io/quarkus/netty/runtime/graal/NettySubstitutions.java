@@ -48,17 +48,20 @@ final class Target_io_netty_util_internal_logging_InternalLoggerFactory {
 // SSL
 // This whole section is mostly about removing static analysis references to openssl/tcnative
 
+@Delete
+@TargetClass(className = "io.netty.handler.ssl.ReferenceCountedOpenSslEngine")
+final class Target_io_netty_handler_ssl_ReferenceCountedOpenSslEngine {
+}
+
 @TargetClass(className = "io.netty.handler.ssl.JdkSslServerContext")
 final class Target_io_netty_handler_ssl_JdkSslServerContext {
 
     @Alias
-    Target_io_netty_handler_ssl_JdkSslServerContext(Provider provider,
-            X509Certificate[] trustCertCollection, TrustManagerFactory trustManagerFactory,
-            X509Certificate[] keyCertChain, PrivateKey key, String keyPassword,
-            KeyManagerFactory keyManagerFactory, Iterable<String> ciphers, CipherSuiteFilter cipherFilter,
-            ApplicationProtocolConfig apn, long sessionCacheSize, long sessionTimeout,
-            ClientAuth clientAuth, String[] protocols, boolean startTls,
-            String keyStore)
+    Target_io_netty_handler_ssl_JdkSslServerContext(Provider provider, X509Certificate[] trustCertCollection,
+            TrustManagerFactory trustManagerFactory, X509Certificate[] keyCertChain, PrivateKey key,
+            String keyPassword, KeyManagerFactory keyManagerFactory, Iterable<String> ciphers,
+            CipherSuiteFilter cipherFilter, ApplicationProtocolConfig apn, long sessionCacheSize,
+            long sessionTimeout, ClientAuth clientAuth, String[] protocols, boolean startTls)
             throws SSLException {
     }
 }
@@ -71,9 +74,8 @@ final class Target_io_netty_handler_ssl_JdkSslClientContext {
             TrustManagerFactory trustManagerFactory, X509Certificate[] keyCertChain, PrivateKey key,
             String keyPassword, KeyManagerFactory keyManagerFactory, Iterable<String> ciphers,
             CipherSuiteFilter cipherFilter, ApplicationProtocolConfig apn, String[] protocols,
-            long sessionCacheSize, long sessionTimeout, String keyStoreType)
+            long sessionCacheSize, long sessionTimeout)
             throws SSLException {
-
     }
 }
 
@@ -117,39 +119,39 @@ final class Target_io_netty_handler_ssl_Java9SslEngine {
 final class Target_io_netty_handler_ssl_SslContext {
 
     @Substitute
-    static SslContext newServerContextInternal(SslProvider provider,
-            Provider sslContextProvider,
-            X509Certificate[] trustCertCollection, TrustManagerFactory trustManagerFactory,
-            X509Certificate[] keyCertChain, PrivateKey key, String keyPassword, KeyManagerFactory keyManagerFactory,
-            Iterable<String> ciphers, CipherSuiteFilter cipherFilter, ApplicationProtocolConfig apn,
-            long sessionCacheSize, long sessionTimeout, ClientAuth clientAuth, String[] protocols, boolean startTls,
-            boolean enableOcsp, String keyStoreType)
+    static SslContext newServerContextInternal(SslProvider provider, Provider sslContextProvider,
+            X509Certificate[] trustCertCollection,
+            TrustManagerFactory trustManagerFactory, X509Certificate[] keyCertChain, PrivateKey key,
+            String keyPassword, KeyManagerFactory keyManagerFactory, Iterable<String> ciphers,
+            CipherSuiteFilter cipherFilter, ApplicationProtocolConfig apn, long sessionCacheSize,
+            long sessionTimeout, ClientAuth clientAuth, String[] protocols, boolean startTls,
+            boolean enableOcsp)
             throws SSLException {
 
         if (enableOcsp) {
             throw new IllegalArgumentException("OCSP is not supported with this SslProvider: " + provider);
         }
         return (SslContext) (Object) new Target_io_netty_handler_ssl_JdkSslServerContext(sslContextProvider,
-                trustCertCollection, trustManagerFactory, keyCertChain, key, keyPassword,
-                keyManagerFactory, ciphers, cipherFilter, apn, sessionCacheSize, sessionTimeout,
-                clientAuth, protocols, startTls, keyStoreType);
+                trustCertCollection,
+                trustManagerFactory, keyCertChain, key, keyPassword, keyManagerFactory, ciphers, cipherFilter, apn,
+                sessionCacheSize,
+                sessionTimeout, clientAuth, protocols, startTls);
     }
 
     @Substitute
-    static SslContext newClientContextInternal(
-            SslProvider provider,
-            Provider sslContextProvider,
-            X509Certificate[] trustCert, TrustManagerFactory trustManagerFactory,
-            X509Certificate[] keyCertChain, PrivateKey key, String keyPassword, KeyManagerFactory keyManagerFactory,
-            Iterable<String> ciphers, CipherSuiteFilter cipherFilter, ApplicationProtocolConfig apn, String[] protocols,
-            long sessionCacheSize, long sessionTimeout, boolean enableOcsp, String keyStoreType) throws SSLException {
+    static SslContext newClientContextInternal(SslProvider provider, Provider sslContextProvider, X509Certificate[] trustCert,
+            TrustManagerFactory trustManagerFactory, X509Certificate[] keyCertChain, PrivateKey key,
+            String keyPassword, KeyManagerFactory keyManagerFactory, Iterable<String> ciphers,
+            CipherSuiteFilter cipherFilter, ApplicationProtocolConfig apn, String[] protocols,
+            long sessionCacheSize, long sessionTimeout, boolean enableOcsp)
+            throws SSLException {
         if (enableOcsp) {
             throw new IllegalArgumentException("OCSP is not supported with this SslProvider: " + provider);
         }
-        return (SslContext) (Object) new Target_io_netty_handler_ssl_JdkSslClientContext(sslContextProvider,
-                trustCert, trustManagerFactory, keyCertChain, key, keyPassword,
-                keyManagerFactory, ciphers, cipherFilter, apn, protocols, sessionCacheSize,
-                sessionTimeout, keyStoreType);
+        return (SslContext) (Object) new Target_io_netty_handler_ssl_JdkSslClientContext(sslContextProvider, trustCert,
+                trustManagerFactory,
+                keyCertChain, key, keyPassword, keyManagerFactory, ciphers, cipherFilter, apn, protocols, sessionCacheSize,
+                sessionTimeout);
     }
 
 }
