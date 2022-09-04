@@ -1,13 +1,14 @@
 package io.quarkus.undertow.deployment;
 
+import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -30,9 +31,8 @@ import org.jboss.metadata.web.spec.WebMetaData;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.ApplicationArchive;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
+import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 
 /**
  * Build step that handles web.xml and web-fragment.xml parsing
@@ -43,17 +43,12 @@ public class WebXmlParsingBuildStep {
     private static final String WEB_FRAGMENT_XML = "META-INF/web-fragment.xml";
 
     @BuildStep
-    List<HotDeploymentWatchedFileBuildItem> configFile() {
-        return Arrays.asList(new HotDeploymentWatchedFileBuildItem(WEB_XML),
-                new HotDeploymentWatchedFileBuildItem(WEB_FRAGMENT_XML));
+    List<HotDeploymentConfigFileBuildItem> configFile() {
+        return Arrays.asList(new HotDeploymentConfigFileBuildItem(WEB_XML),
+                new HotDeploymentConfigFileBuildItem(WEB_FRAGMENT_XML));
     }
 
-    @BuildStep
-    AdditionalApplicationArchiveMarkerBuildItem marker() {
-        return new AdditionalApplicationArchiveMarkerBuildItem(WEB_FRAGMENT_XML);
-    }
-
-    @BuildStep
+    @BuildStep(applicationArchiveMarkers = WEB_FRAGMENT_XML)
     WebMetadataBuildItem createWebMetadata(ApplicationArchivesBuildItem applicationArchivesBuildItem,
             Consumer<AdditionalBeanBuildItem> additionalBeanBuildItemConsumer) throws Exception {
 
@@ -65,7 +60,7 @@ public class WebXmlParsingBuildStep {
             final XMLInputFactory inputFactory = XMLInputFactory.newInstance();
             MetaDataElementParser.DTDInfo dtdInfo = new MetaDataElementParser.DTDInfo();
             inputFactory.setXMLResolver(dtdInfo);
-            try (InputStream in = Files.newInputStream(webXml)) {
+            try (FileInputStream in = new FileInputStream(webXml.toFile())) {
                 final XMLStreamReader xmlReader = inputFactory.createXMLStreamReader(in);
                 result = WebMetaDataParser.parse(xmlReader, dtdInfo,
                         PropertyReplacers.resolvingReplacer(new MPConfigPropertyResolver()));
@@ -90,14 +85,14 @@ public class WebXmlParsingBuildStep {
         } else {
             result = new WebMetaData();
         }
-        Set<WebFragmentMetaData> webFragments = parseWebFragments(applicationArchivesBuildItem);
-        for (WebFragmentMetaData webFragment : webFragments) {
+        Map<String, WebFragmentMetaData> webFragments = parseWebFragments(applicationArchivesBuildItem);
+        for (Map.Entry<String, WebFragmentMetaData> e : webFragments.entrySet()) {
             //merge in any web fragments
             //at the moment this is fairly simplistic, as it does not handle all the ordering and metadata complete bits
             //of the spec. I am not sure how important this is, and it is very complex and does not 100% map to the quarkus
             //deployment model. If there is demand for it we can look at adding it later
 
-            WebCommonMetaDataMerger.augment(result, webFragment, null, false);
+            WebCommonMetaDataMerger.augment(result, e.getValue(), null, false);
         }
 
         return new WebMetadataBuildItem(result);
@@ -106,19 +101,19 @@ public class WebXmlParsingBuildStep {
     /**
      * parse web-fragment.xml
      */
-    private Set<WebFragmentMetaData> parseWebFragments(ApplicationArchivesBuildItem applicationArchivesBuildItem) {
-        Set<WebFragmentMetaData> webFragments = new LinkedHashSet<>();
+    public Map<String, WebFragmentMetaData> parseWebFragments(ApplicationArchivesBuildItem applicationArchivesBuildItem) {
+        Map<String, WebFragmentMetaData> webFragments = new HashMap<>();
         for (ApplicationArchive archive : applicationArchivesBuildItem.getAllApplicationArchives()) {
             Path webFragment = archive.getChildPath(WEB_FRAGMENT_XML);
             if (webFragment != null && Files.isRegularFile(webFragment)) {
-                try (InputStream is = Files.newInputStream(webFragment)) {
+                try (FileInputStream is = new FileInputStream(webFragment.toFile())) {
                     final XMLInputFactory inputFactory = XMLInputFactory.newInstance();
                     inputFactory.setXMLResolver(NoopXMLResolver.create());
                     XMLStreamReader xmlReader = inputFactory.createXMLStreamReader(is);
 
                     WebFragmentMetaData webFragmentMetaData = WebFragmentMetaDataParser.parse(xmlReader,
                             PropertyReplacers.resolvingReplacer(new MPConfigPropertyResolver()));
-                    webFragments.add(webFragmentMetaData);
+                    webFragments.put(archive.getArchiveRoot().getFileName().toString(), webFragmentMetaData);
 
                 } catch (XMLStreamException e) {
                     throw new RuntimeException("Failed to parse " + webFragment + " " + e.getLocation(), e);
