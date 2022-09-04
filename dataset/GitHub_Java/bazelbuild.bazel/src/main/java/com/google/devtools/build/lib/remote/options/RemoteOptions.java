@@ -121,15 +121,52 @@ public final class RemoteOptions extends OptionsBase {
   public String remoteInstanceName;
 
   @Option(
-      name = "remote_retries",
-      oldName = "experimental_remote_retry_max_attempts",
+      name = "experimental_remote_retry",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.REMOTE,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "Whether to retry transient remote execution/cache errors.")
+  public boolean experimentalRemoteRetry;
+
+  @Option(
+      name = "experimental_remote_retry_start_delay_millis",
+      defaultValue = "100",
+      documentationCategory = OptionDocumentationCategory.REMOTE,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "The initial delay before retrying a transient error.")
+  public long experimentalRemoteRetryStartDelayMillis;
+
+  @Option(
+      name = "experimental_remote_retry_max_delay_millis",
+      defaultValue = "5000",
+      documentationCategory = OptionDocumentationCategory.REMOTE,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "The maximum delay before retrying a transient error.")
+  public long experimentalRemoteRetryMaxDelayMillis;
+
+  @Option(
+      name = "experimental_remote_retry_max_attempts",
       defaultValue = "5",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "The maximum number of attempts to retry a transient error. "
-              + "If set to 0, retries are disabled.")
-  public int remoteMaxRetryAttempts;
+      help = "The maximum number of attempts to retry a transient error.")
+  public int experimentalRemoteRetryMaxAttempts;
+
+  @Option(
+      name = "experimental_remote_retry_multiplier",
+      defaultValue = "2",
+      documentationCategory = OptionDocumentationCategory.REMOTE,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "The multiplier by which to increase the retry delay on transient errors.")
+  public double experimentalRemoteRetryMultiplier;
+
+  @Option(
+      name = "experimental_remote_retry_jitter",
+      defaultValue = "0.1",
+      documentationCategory = OptionDocumentationCategory.REMOTE,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "The random factor to apply to retry delays on transient errors.")
+  public double experimentalRemoteRetryJitter;
 
   @Option(
       name = "disk_cache",
@@ -155,10 +192,9 @@ public final class RemoteOptions extends OptionsBase {
 
   @Option(
       name = "experimental_remote_grpc_log",
-      defaultValue = "null",
+      defaultValue = "",
       category = "remote",
       documentationCategory = OptionDocumentationCategory.REMOTE,
-      converter = OptionsUtils.PathFragmentConverter.class,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "If specified, a path to a file to log gRPC call related details. This log consists of a"
@@ -167,7 +203,7 @@ public final class RemoteOptions extends OptionsBase {
               + "protobufs with each message prefixed by a varint denoting the size of the"
               + " following serialized protobuf message, as performed by the method "
               + "LogEntry.writeDelimitedTo(OutputStream).")
-  public PathFragment experimentalRemoteGrpcLog;
+  public String experimentalRemoteGrpcLog;
 
   @Option(
       name = "incompatible_remote_symlinks",
