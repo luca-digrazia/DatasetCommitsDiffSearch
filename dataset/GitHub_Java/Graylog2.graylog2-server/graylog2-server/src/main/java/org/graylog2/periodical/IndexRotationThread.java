@@ -16,7 +16,6 @@
  */
 package org.graylog2.periodical;
 
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.NoTargetIndexException;
 import org.graylog2.indexer.cluster.Cluster;
@@ -126,11 +125,7 @@ public class IndexRotationThread extends Periodical {
                     LOG.warn(msg);
                     activityWriter.write(new Activity(msg, IndexRotationThread.class));
 
-                    if (ClusterHealthStatus.RED == indices.waitForRecovery(shouldBeTarget)) {
-                        LOG.error("New target index for deflector didn't get healthy within timeout. Skipping deflector update.");
-                    } else {
-                        deflector.pointTo(shouldBeTarget, currentTarget);
-                    }
+                    deflector.pointTo(shouldBeTarget, currentTarget);
                 }
             } catch (NoTargetIndexException e) {
                 LOG.warn("Deflector is not up. Not trying to point to another index.");
