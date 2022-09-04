@@ -68,7 +68,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
     protected int mScreenHeight;
 
     //缓存进度
-    protected int mBufferPoint;
+    protected int mBuffterPoint;
 
     //备份缓存前的播放状态
     protected int mBackUpPlayingBufferState = -1;
@@ -104,7 +104,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
     protected boolean mSoundTouch = false;
 
     //是否需要显示暂停锁定效果
-    protected boolean mShowPauseCover = false;
+    protected boolean mShowPauseCover = true;
 
     //是否准备完成前调用了暂停
     protected boolean mPauseBeforePrepared = false;
@@ -177,17 +177,15 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         if (mCurrentState == CURRENT_STATE_PAUSE && mFullPauseBitmap != null
                 && !mFullPauseBitmap.isRecycled() && mShowPauseCover
                 && mSurface != null && mSurface.isValid()) {
-            if (getGSYVideoManager().isSurfaceSupportLockCanvas()) {
-                try {
-                    RectF rectF = new RectF(0, 0, mTextureView.getWidth(), mTextureView.getHeight());
-                    Canvas canvas = mSurface.lockCanvas(new Rect(0, 0, mTextureView.getWidth(), mTextureView.getHeight()));
-                    if (canvas != null) {
-                        canvas.drawBitmap(mFullPauseBitmap, null, rectF, null);
-                        mSurface.unlockCanvasAndPost(canvas);
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
+            try {
+                RectF rectF = new RectF(0, 0, mTextureView.getWidth(), mTextureView.getHeight());
+                Canvas canvas = mSurface.lockCanvas(new Rect(0, 0, mTextureView.getWidth(), mTextureView.getHeight()));
+                if (canvas != null) {
+                    canvas.drawBitmap(mFullPauseBitmap, null, rectF, null);
+                    mSurface.unlockCanvasAndPost(canvas);
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
 
@@ -976,7 +974,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      * 缓冲进度/缓存进度
      */
     public int getBuffterPoint() {
-        return mBufferPoint;
+        return mBuffterPoint;
     }
 
     /**
