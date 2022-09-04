@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RequiredConfigFragmentsProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -4481,34 +4482,23 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         // TODO(b/75051107): Remove the following line when fixed.
         "    incremental_dexing = 0,",
         ")");
-
     // Test that all bottom jars are on the runtime classpath of the app.
     ConfiguredTarget target = getConfiguredTarget("//java/r/android:foo_app");
-
     ImmutableList<Artifact> transitiveSrcJars =
         OutputGroupInfo.get(target).getOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP).toList();
     assertThat(ActionsTestUtil.baseArtifactNames(transitiveSrcJars))
         .containsExactly("libal_bottom_for_deps-src.jar", "libfoo_app-src.jar");
-    ImmutableList<Artifact> directSrcJar =
-        OutputGroupInfo.get(target)
-            .getOutputGroup(JavaSemantics.DIRECT_SOURCE_JARS_OUTPUT_GROUP)
-            .toList();
-    assertThat(ActionsTestUtil.baseArtifactNames(directSrcJar))
-        .containsExactly("libfoo_app-src.jar");
   }
 
   @Test
   public void androidManifestMergerOrderAlphabetical_MergeesSortedByExecPath() throws Exception {
-    useConfiguration("--android_manifest_merger_order=alphabetical");
-    /*
-     * Dependency heirarchy:
-     * - //java/binary:application
-     *   - //java/binary:library
-     *     - //java/common:theme
-     *     - //java/android:utility
-     *       - //java/common:common
-     *         - //java/android:core
-     */
+    // Hack: Avoid the Android split transition by turning off fat_apk_cpu/android_cpu.
+    // This is necessary because the transition would change the configuration directory, causing
+    // the manifest paths in the assertion not to match.
+    // TODO(b/140634666): Get the library manifests in the same configuration as the binary gets
+    // them.
+    useConfiguration(
+        "--fat_apk_cpu=", "--android_cpu=", "--android_manifest_merger_order=alphabetical");
     scratch.overwriteFile(
         "java/android/BUILD",
         "android_library(",
@@ -4553,23 +4543,22 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    exports_manifest = 1,",
         "    resource_files = ['theme/res/values/values.xml'],",
         ")");
-
-    // These have to be found via the same inheritance hierarchy, because getDirectPrerequsite can
-    // only traverse one level.
     ConfiguredTarget application = getConfiguredTarget("//java/binary:application");
-    ConfiguredTarget library = getDirectPrerequisite(application, "//java/binary:library");
-    ConfiguredTarget theme = getDirectPrerequisite(library, "//java/common:theme");
-    ConfiguredTarget utility = getDirectPrerequisite(library, "//java/android:utility");
-    ConfiguredTarget common = getDirectPrerequisite(utility, "//java/common:common");
-    ConfiguredTarget core = getDirectPrerequisite(common, "//java/android:core");
+    BuildConfiguration appConfiguration = getConfiguration(application);
+    Artifact androidCoreManifest =
+        getLibraryManifest(getConfiguredTarget("//java/android:core", appConfiguration));
+    Artifact androidUtilityManifest =
+        getLibraryManifest(getConfiguredTarget("//java/android:utility", appConfiguration));
+    Artifact binaryLibraryManifest =
+        getLibraryManifest(getConfiguredTarget("//java/binary:library", appConfiguration));
+    Artifact commonManifest =
+        getLibraryManifest(getConfiguredTarget("//java/common:common", appConfiguration));
+    Artifact commonThemeManifest =
+        getLibraryManifest(getConfiguredTarget("//java/common:theme", appConfiguration));
 
-    Artifact androidCoreManifest = getLibraryManifest(core);
-    Artifact androidUtilityManifest = getLibraryManifest(utility);
-    Artifact binaryLibraryManifest = getLibraryManifest(library);
-    Artifact commonManifest = getLibraryManifest(common);
-    Artifact commonThemeManifest = getLibraryManifest(theme);
-
-    assertThat(getBinaryMergeeManifests(application))
+    assertThat(
+            getBinaryMergeeManifests(
+                getConfiguredTarget("//java/binary:application", appConfiguration)))
         .containsExactlyEntriesIn(
             ImmutableMap.of(
                 androidCoreManifest.getExecPath().toString(), "//java/android:core",
@@ -4583,7 +4572,14 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
   @Test
   public void androidManifestMergerOrderAlphabeticalByConfiguration_MergeesSortedByPathInBinOrGen()
       throws Exception {
+    // Hack: Avoid the Android split transition by turning off fat_apk_cpu/android_cpu.
+    // This is necessary because the transition would change the configuration directory, causing
+    // the manifest paths in the assertion not to match.
+    // TODO(b/140634666): Get the library manifests in the same configuration as the binary gets
+    // them.
     useConfiguration(
+        "--fat_apk_cpu=",
+        "--android_cpu=",
         "--android_manifest_merger_order=alphabetical_by_configuration");
     scratch.overwriteFile(
         "java/android/BUILD",

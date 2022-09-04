@@ -62,7 +62,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidBinaryMobileInstall.MobileInstallResourceApks;
@@ -77,6 +76,7 @@ import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
+import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.OneVersionCheckActionBuilder;
@@ -264,7 +264,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     AndroidApplicationResourceInfo androidApplicationResourceInfo =
         ruleContext.getPrerequisite(
-            "application_resources", AndroidApplicationResourceInfo.PROVIDER);
+            "application_resources",
+            AndroidApplicationResourceInfo.PROVIDER);
 
     final ResourceApk resourceApk;
     boolean shouldCompileJavaSrcs = true;
@@ -528,7 +529,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         java8LegacyDex = getDxArtifact(ruleContext, "_java8_legacy.dex.zip");
         Artifact androidJar = AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar();
         ruleContext.registerAction(
-            createSpawnActionBuilder(ruleContext)
+            new SpawnAction.Builder()
                 .setExecutable(ruleContext.getExecutablePrerequisite("$build_java8_legacy_dex"))
                 .addInput(jarToDex)
                 .addInput(androidJar)
@@ -547,7 +548,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       // Append legacy .dex library to app's .dex files
       finalClassesDex = getDxArtifact(ruleContext, "_final_classes.dex.zip");
       ruleContext.registerAction(
-          createSpawnActionBuilder(ruleContext)
+          new SpawnAction.Builder()
               .useDefaultShellEnvironment()
               .setMnemonic("AppendJava8LegacyDex")
               .setProgressMessage("Adding Java 8 legacy library for %s", ruleContext.getLabel())
@@ -625,7 +626,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               AndroidRuleClasses.INSTRUMENTATION_TEST_CHECK_RESULTS);
 
       SpawnAction.Builder checkAction =
-          createSpawnActionBuilder(ruleContext)
+          new SpawnAction.Builder()
               .setExecutable(checker)
               .addInput(targetManifest)
               .addInput(instrumentationManifest)
@@ -693,6 +694,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                     .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES)
                     .addTransitiveArtifacts(filesToBuild)
                     .build()))
+        .addProvider(
+            JavaSourceInfoProvider.class,
+            JavaSourceInfoProvider.fromJavaTargetAttributes(resourceClasses, javaSemantics))
         .addNativeDeclaredProvider(
             new ApkInfo(
                 zipAlignedApk,
@@ -1187,7 +1191,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 .addExecPath("--output_zip", classesDex)
                 .build();
         ruleContext.registerAction(
-            createSpawnActionBuilder(ruleContext)
+            new SpawnAction.Builder()
                 .useDefaultShellEnvironment()
                 .setMnemonic("MergeDexZips")
                 .setProgressMessage("Merging dex shards for %s", ruleContext.getLabel())
@@ -1402,7 +1406,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             ruleContext.getUniqueDirectory("dexsplits"), ruleContext.getBinOrGenfilesDirectory());
 
     SpawnAction.Builder shardAction =
-        createSpawnActionBuilder(ruleContext)
+        new SpawnAction.Builder()
             .useDefaultShellEnvironment()
             .setMnemonic("ShardForMultidex")
             .setProgressMessage(
@@ -1514,7 +1518,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       @Nullable Artifact mainDexList,
       Collection<String> dexopts) {
     SpawnAction.Builder dexmerger =
-        createSpawnActionBuilder(ruleContext)
+        new SpawnAction.Builder()
             .useDefaultShellEnvironment()
             .setExecutable(ruleContext.getExecutablePrerequisite("$dexmerger"))
             .setMnemonic("DexMerger")
@@ -1652,7 +1656,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     }
 
     SpawnAction.Builder shardAction =
-        createSpawnActionBuilder(ruleContext)
+        new SpawnAction.Builder()
             .useDefaultShellEnvironment()
             .setMnemonic("ShardClassesToDex")
             .setProgressMessage("Sharding classes for dexing for %s", ruleContext.getLabel())
@@ -1754,19 +1758,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     return dexedClasspath.build();
   }
 
-  /** Adds execution info by propagating tags from the target */
-  private static SpawnAction.Builder createSpawnActionBuilder(RuleContext ruleContext) {
-    return new SpawnAction.Builder()
-        .setExecutionInfo(
-            TargetUtils.getExecutionInfo(
-                ruleContext.getRule(), ruleContext.isAllowTagsPropagation()));
-  }
-
   // Adds the appropriate SpawnAction options depending on if SingleJar is a jar or not.
   private static SpawnAction.Builder singleJarSpawnActionBuilder(RuleContext ruleContext) {
     Artifact singleJar = JavaToolchainProvider.from(ruleContext).getSingleJar();
-    SpawnAction.Builder builder =
-        createSpawnActionBuilder(ruleContext).useDefaultShellEnvironment();
+    SpawnAction.Builder builder = new SpawnAction.Builder().useDefaultShellEnvironment();
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
@@ -1844,7 +1839,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       // Process the input jar through Proguard into an intermediate, streamlined jar.
       Artifact strippedJar = AndroidBinary.getDxArtifact(ruleContext, "main_dex_intermediate.jar");
       SpawnAction.Builder streamlinedBuilder =
-          createSpawnActionBuilder(ruleContext)
+          new SpawnAction.Builder()
               .useDefaultShellEnvironment()
               .addOutput(strippedJar)
               .setExecutable(sdk.getProguard())
@@ -1875,7 +1870,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       ruleContext.registerAction(streamlinedBuilder.build(ruleContext));
 
       SpawnAction.Builder builder =
-          createSpawnActionBuilder(ruleContext)
+          new SpawnAction.Builder()
               .setMnemonic("MainDexClasses")
               .setProgressMessage("Generating main dex classes list");
 
@@ -1900,7 +1895,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     } else {
       // Use the newer legacy multidex main-dex list generation.
       SpawnAction.Builder actionBuilder =
-          createSpawnActionBuilder(ruleContext)
+          new SpawnAction.Builder()
               .setMnemonic("MainDexClasses")
               .setProgressMessage("Generating main dex classes list");
 
@@ -1949,7 +1944,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Artifact obfuscatedMainDexList =
         AndroidBinary.getDxArtifact(ruleContext, "main_dex_list_obfuscated.txt");
     SpawnAction.Builder actionBuilder =
-        createSpawnActionBuilder(ruleContext)
+        new SpawnAction.Builder()
             .setMnemonic("MainDexProguardClasses")
             .setProgressMessage("Obfuscating main dex classes list")
             .setExecutable(ruleContext.getExecutablePrerequisite("$dex_list_obfuscator"))

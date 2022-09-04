@@ -14,24 +14,23 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.android;
 
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidApplicationResourceInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidApplicationResourceInfoApi.AndroidApplicationResourceInfoApiProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidDeviceBrokerInfoApi;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
+import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidApplicationResourceInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidApplicationResourceInfoApi.AndroidApplicationResourceInfoApiProvider;
+import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidDeviceBrokerInfoApi;
+import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Printer;
 
 /** Fake implementation of {@link AndroidDeviceBrokerInfoApi}. */
 public class FakeAndroidApplicationResourceInfo implements AndroidDeviceBrokerInfoApi {
 
   @Override
-  public String toProto(Location loc) throws EvalException {
+  public String toProto() throws EvalException {
     return "";
   }
 
   @Override
-  public String toJson(Location loc) throws EvalException {
+  public String toJson() throws EvalException {
     return "";
   }
 
@@ -52,7 +51,12 @@ public class FakeAndroidApplicationResourceInfo implements AndroidDeviceBrokerIn
         Object resourceJavaClassJar,
         FileApi manifest,
         Object resourceProguardConfig,
-        Object mainDexProguardConfig)
+        Object mainDexProguardConfig,
+        Object rTxt,
+        Object resourcesZip,
+        Object databindingLayoutInfoZip,
+        Object buildStampJar,
+        boolean shouldCompileJavaSrcs)
         throws EvalException {
       return null;
     }
