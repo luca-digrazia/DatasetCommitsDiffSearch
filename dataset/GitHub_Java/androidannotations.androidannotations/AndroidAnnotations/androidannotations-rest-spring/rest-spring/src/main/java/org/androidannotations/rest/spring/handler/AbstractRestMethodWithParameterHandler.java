@@ -44,7 +44,6 @@ public abstract class AbstractRestMethodWithParameterHandler extends RestMethodH
 
 		validatorHelper.doesNotReturnPrimitive((ExecutableElement) element, validation);
 
-		restSpringValidatorHelper.doesNotHaveDuplicateFieldAndPartName((ExecutableElement) element, validation);
 		restSpringValidatorHelper.hasOneOrZeroBodyParameter((ExecutableElement) element, validation);
 		restSpringValidatorHelper.doesNotMixRequestEntityAnnotations((ExecutableElement) element, validation);
 	}
