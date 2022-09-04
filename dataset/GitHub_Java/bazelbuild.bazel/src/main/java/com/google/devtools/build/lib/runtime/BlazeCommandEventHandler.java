@@ -63,6 +63,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "show_progress",
       defaultValue = "true",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Display progress messages during a build."
@@ -72,6 +73,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "show_task_finish",
       defaultValue = "false",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Display progress messages when tasks complete, not just when they start."
@@ -81,6 +83,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "show_progress_rate_limit",
       defaultValue = "0.2", // A nice middle ground; snappy but not too spammy in logs.
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Minimum number of seconds between progress messages in the output."
@@ -91,6 +94,7 @@ public class BlazeCommandEventHandler implements EventHandler {
       name = "color",
       defaultValue = "auto",
       converter = UseColorConverter.class,
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Use terminal controls to colorize output."
@@ -101,6 +105,7 @@ public class BlazeCommandEventHandler implements EventHandler {
       name = "curses",
       defaultValue = "auto",
       converter = UseCursesConverter.class,
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Use terminal cursor controls to minimize scrolling output"
@@ -149,6 +154,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "show_timestamps",
       defaultValue = "false",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Include timestamps in messages"
@@ -158,6 +164,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "progress_in_terminal_title",
       defaultValue = "false",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
@@ -169,6 +176,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "experimental_external_repositories",
       defaultValue = "false",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Use external repositories for improved stability and speed when available."
@@ -178,6 +186,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "force_experimental_external_repositories",
       defaultValue = "false",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Forces --experimental_external_repositories."
@@ -187,6 +196,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "experimental_ui",
       defaultValue = "true",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
@@ -208,6 +218,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "experimental_ui_actions_shown",
       defaultValue = "8",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
@@ -221,6 +232,7 @@ public class BlazeCommandEventHandler implements EventHandler {
     @Option(
       name = "experimental_ui_limit_console_output",
       defaultValue = "0",
+      category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
