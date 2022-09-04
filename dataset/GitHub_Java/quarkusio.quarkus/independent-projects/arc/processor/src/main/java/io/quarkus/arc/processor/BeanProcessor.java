@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.jboss.jandex.AnnotationInstance;
@@ -30,7 +29,7 @@ import org.jboss.logging.Logger;
  * <ol>
  * <li>{@link #registerCustomContexts()}</li>
  * <li>{@link #registerBeans()}</li>
- * <li>{@link #initialize(Consumer)}</li>
+ * <li>{@link #initialize()}</li>
  * <li>{@link #validate()}</li>
  * <li>{@link #processValidationErrors(io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext)}</li>
  * <li>{@link #generateResources(ReflectionRegistration)}</li>
@@ -74,8 +73,7 @@ public class BeanProcessor {
             List<BeanDeploymentValidator> beanDeploymentValidators, Predicate<DotName> applicationClassPredicate,
             boolean unusedBeansRemovalEnabled,
             List<Predicate<BeanInfo>> unusedExclusions, Map<DotName, Collection<AnnotationInstance>> additionalStereotypes,
-            List<InterceptorBindingRegistrar> interceptorBindingRegistrars,
-            boolean removeFinalForProxyableMethods) {
+            List<InterceptorBindingRegistrar> interceptorBindingRegistrars) {
         this.reflectionRegistration = reflectionRegistration;
         this.applicationClassPredicate = applicationClassPredicate;
         this.name = name;
@@ -93,7 +91,7 @@ public class BeanProcessor {
                 initAndSort(annotationTransformers, buildContext),
                 initAndSort(injectionPointsTransformers, buildContext), resourceAnnotations, buildContext,
                 unusedBeansRemovalEnabled, unusedExclusions,
-                additionalStereotypes, interceptorBindingRegistrars, removeFinalForProxyableMethods);
+                additionalStereotypes, interceptorBindingRegistrars);
     }
 
     public ContextRegistrar.RegistrationContext registerCustomContexts() {
@@ -104,8 +102,8 @@ public class BeanProcessor {
         return beanDeployment.registerBeans(beanRegistrars);
     }
 
-    public void initialize(Consumer<BytecodeTransformer> bytecodeTransformerConsumer) {
-        beanDeployment.init(bytecodeTransformerConsumer);
+    public void initialize() {
+        beanDeployment.init();
     }
 
     public BeanDeploymentValidator.ValidationContext validate() {
@@ -203,12 +201,7 @@ public class BeanProcessor {
     public BeanDeployment process() throws IOException {
         registerCustomContexts();
         registerBeans();
-        initialize(new Consumer<BytecodeTransformer>() {
-            @Override
-            public void accept(BytecodeTransformer transformer) {
-
-            }
-        });
+        initialize();
         ValidationContext validationContext = validate();
         processValidationErrors(validationContext);
         generateResources(null);
@@ -248,8 +241,6 @@ public class BeanProcessor {
                 return true;
             }
         };
-
-        private boolean removeFinalForProxyableMethods;
 
         public Builder setName(String name) {
             this.name = name;
@@ -362,17 +353,12 @@ public class BeanProcessor {
             return this;
         }
 
-        public Builder setRemoveFinalFromProxyableMethods(boolean removeFinalForProxyableMethods) {
-            this.removeFinalForProxyableMethods = removeFinalForProxyableMethods;
-            return this;
-        }
-
         public BeanProcessor build() {
             return new BeanProcessor(name, index, additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
                     reflectionRegistration, annotationTransformers, injectionPointTransformers, resourceAnnotations,
                     beanRegistrars, contextRegistrars, beanDeploymentValidators,
                     applicationClassPredicate, removeUnusedBeans, removalExclusions, additionalStereotypes,
-                    additionalInterceptorBindingRegistrars, removeFinalForProxyableMethods);
+                    additionalInterceptorBindingRegistrars);
         }
 
     }

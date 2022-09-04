@@ -1,6 +1,5 @@
 package io.quarkus.arc.processor;
 
-import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
 import static org.objectweb.asm.Opcodes.ACC_BRIDGE;
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
@@ -1580,7 +1579,7 @@ public class BeanGenerator extends AbstractGenerator {
                         constructor.readStaticField(FieldDescriptor.of(InjectLiteral.class, "INSTANCE", InjectLiteral.class)));
             } else {
                 // Create annotation literal if needed
-                ClassInfo literalClass = getClassByName(beanDeployment.getIndex(), annotation.name());
+                ClassInfo literalClass = beanDeployment.getIndex().getClassByName(annotation.name());
                 constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, annotationsHandle,
                         annotationLiterals.process(constructor,
                                 classOutput, literalClass, annotation,
