@@ -26,7 +26,7 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Type;
 
 import io.quarkus.deployment.annotations.BuildProducer;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
 
 /**
@@ -218,7 +218,7 @@ final class JpaJandexScavenger {
             unindexedClasses.add(className);
             return;
         }
-        // we need to check for enums
+        //we need to check for enums
         for (FieldInfo fieldInfo : classInfo.fields()) {
             DotName fieldType = fieldInfo.type().name();
             ClassInfo fieldTypeClassInfo = index.getClassByName(fieldType);
@@ -272,8 +272,7 @@ final class JpaJandexScavenger {
 
     private static boolean isIgnored(DotName classDotName) {
         String className = classDotName.toString();
-        if (className.startsWith("java.util.") || className.startsWith("java.lang.")
-                || className.startsWith("org.hibernate.engine.spi.")) {
+        if (className.startsWith("java.util.") || className.startsWith("java.lang.")) {
             return true;
         }
         return false;
