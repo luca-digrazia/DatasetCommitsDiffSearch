@@ -60,14 +60,12 @@ public class NodePingThread implements Runnable {
             try {
                 // Check that we still have a master node in the cluster, if not, warn the user.
                 if (Node.thisNode(core).isAnyMasterPresent()) {
-                    boolean removedNotification = Notification.build(core)
+                    Notification.build(core)
                             .addType(Notification.Type.NO_MASTER)
                             .fixed();
-                    if (removedNotification) {
-                        activityWriter.write(
+                    activityWriter.write(
                             new Activity("Notification condition [" + Notification.Type.NO_MASTER + "] " +
                                                  "has been fixed.", NodePingThread.class));
-                    }
                 } else {
                     Notification.buildNow(core)
                             .addThisNode()

@@ -164,25 +164,25 @@ public class Notification extends Persisted {
         return true;
     }
 
-    public static boolean fixed(Core core, Type type) {
-        return fixed(core, type, null);
+    public static void fixed(Core core, Type type) {
+        fixed(core, type, null);
     }
 
-    public static boolean fixed(Core core, Type type, Node node) {
+    public static void fixed(Core core, Type type, Node node) {
         BasicDBObject qry = new BasicDBObject();
         qry.put("type", type.toString().toLowerCase());
         if (node != null)
             qry.put("node_id", node.getNodeId());
-        return destroy(qry, core, COLLECTION).getN() > 0;
+        destroy(qry, core, COLLECTION);
     }
 
-    public boolean fixed() {
+    public void fixed() {
         BasicDBObject qry = new BasicDBObject();
         for (Map.Entry<String, Object> entry : fields.entrySet()) {
             qry.put(entry.getKey(), entry.getValue());
         }
 
-        return destroy(qry, core, COLLECTION).getN() > 0;
+        destroy(qry, core, COLLECTION);
     }
 
     public static boolean isFirst(Core core, Type type) {
