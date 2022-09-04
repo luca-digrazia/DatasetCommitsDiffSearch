@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
+import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import com.google.devtools.build.skyframe.proto.GraphInconsistency.Inconsistency;
 import java.io.IOException;
@@ -805,14 +806,20 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
   }
 
   /**
-   * Applies the change to the graph (mostly) atomically and returns parents to potentially signal
-   * and enqueue.
+   * Apply the change to the graph (mostly) atomically and signal all nodes that are waiting for
+   * this node to complete. Adding nodes and signaling is not atomic, but may need to be changed for
+   * interruptibility.
    *
-   * <p>Parents should be enqueued unless (1) this node is being built after the main evaluation has
-   * aborted, or (2) this node is being built with {@code --nokeep_going}, and so we are about to
-   * shut down the main evaluation anyway.
+   * <p>Parents are only enqueued if {@code enqueueParents} holds. Parents should be enqueued unless
+   * (1) this node is being built after the main evaluation has aborted, or (2) this node is being
+   * built with --nokeep_going, and so we are about to shut down the main evaluation anyway.
+   *
+   * <p>The reverse deps that would have been enqueued are returned if {@code enqueueParents} is
+   * {@link EnqueueParentBehavior#SIGNAL} or {@link EnqueueParentBehavior#NO_ACTION}, so that the
+   * caller may simulate actions on the parents if desired. Otherwise this method returns null.
    */
-  Set<SkyKey> commitAndGetParents(NodeEntry primaryEntry) throws InterruptedException {
+  Set<SkyKey> commit(NodeEntry primaryEntry, EnqueueParentBehavior enqueueParents)
+      throws InterruptedException {
     // Construct the definitive error info, if there is one.
     if (errorInfo == null) {
       errorInfo = evaluatorContext.getErrorInfoManager().getErrorInfoToUse(
@@ -840,6 +847,9 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       valueWithMetadata =
           ValueWithMetadata.error(errorInfo, eventsAndPostables.first, eventsAndPostables.second);
     } else {
+      // We must be enqueueing parents if we have a value.
+      Preconditions.checkState(
+          enqueueParents == EnqueueParentBehavior.ENQUEUE, "%s %s", skyKey, primaryEntry);
       valueWithMetadata =
           ValueWithMetadata.normal(
               value, errorInfo, eventsAndPostables.first, eventsAndPostables.second);
@@ -899,7 +909,10 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
             EvaluationSuccessStateSupplier.fromSkyValue(valueWithMetadata),
             evaluationState);
 
-    return reverseDeps;
+    evaluatorContext.signalValuesAndEnqueueIfReady(
+        skyKey, reverseDeps, currentVersion, enqueueParents);
+
+    return enqueueParents == EnqueueParentBehavior.ENQUEUE ? null : reverseDeps;
   }
 
   @Nullable
