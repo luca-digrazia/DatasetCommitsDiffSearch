@@ -18,13 +18,15 @@ package org.graylog2.outputs;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.journal.Journal;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,6 +37,14 @@ public class DiscardMessageOutput implements MessageOutput {
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final Journal journal;
     private final Meter messagesDiscarded;
+
+    @AssistedInject
+    public DiscardMessageOutput(final Journal journal,
+                                final MetricRegistry metricRegistry,
+                                @Assisted Stream stream,
+                                @Assisted Configuration configuration) {
+        this(journal, metricRegistry);
+    }
 
     @Inject
     public DiscardMessageOutput(final Journal journal, final MetricRegistry metricRegistry) {
@@ -73,7 +83,7 @@ public class DiscardMessageOutput implements MessageOutput {
 
     public interface Factory extends MessageOutput.Factory<DiscardMessageOutput> {
         @Override
-        DiscardMessageOutput create(Stream stream, Configuration configuration, @Nullable String id);
+        DiscardMessageOutput create(Stream stream, Configuration configuration);
 
         @Override
         Config getConfig();
@@ -83,6 +93,10 @@ public class DiscardMessageOutput implements MessageOutput {
     }
 
     public static class Config extends MessageOutput.Config {
+        @Override
+        public ConfigurationRequest getRequestedConfiguration() {
+            return new ConfigurationRequest();
+        }
     }
 
     public static class Descriptor extends MessageOutput.Descriptor {
