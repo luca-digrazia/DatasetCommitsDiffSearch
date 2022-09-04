@@ -235,26 +235,30 @@ public class BootstrapAppModelFactory {
             return createAppModelForJar(appClasses);
         }
 
-        LocalProject localProject = null;
+        final LocalProject localProject = isWorkspaceDiscoveryEnabled() || enableClasspathCache
+                ? loadAppClassesWorkspace()
+                : LocalProject.load(appClasses, false);
+        LocalWorkspace workspace = null;
         AppArtifact appArtifact = this.appArtifact;
-        if (appArtifact == null) {
-            localProject = enableClasspathCache ? loadAppClassesWorkspace() : LocalProject.load(appClasses, false);
-            if (localProject == null) {
-                log.warn("Unable to locate the maven project on the filesystem");
+        if (localProject == null) {
+            log.warn("Unable to locate maven project, falling back to classpath discovery");
+            if (appArtifact == null) {
                 throw new BootstrapException("Failed to determine the Maven artifact associated with the application");
             }
-            appArtifact = localProject.getAppArtifact();
+        } else {
+            workspace = localProject.getWorkspace();
+            if (appArtifact == null) {
+                appArtifact = localProject.getAppArtifact();
+            } else if (!appArtifact.equals(localProject.getAppArtifact())) {
+                log.warn("Provided application artifact attributes " + appArtifact +
+                        " do not match the actual project loaded from the disk " + localProject.getAppArtifact());
+            }
         }
 
         try {
             Path cachedCpPath = null;
 
-            LocalWorkspace workspace = null;
-            if (enableClasspathCache) {
-                if (localProject == null) {
-                    localProject = loadAppClassesWorkspace();
-                }
-                workspace = localProject.getWorkspace();
+            if (workspace != null && enableClasspathCache) {
                 cachedCpPath = resolveCachedCpPath(localProject);
                 if (Files.exists(cachedCpPath)
                         && workspace.getLastModified() < Files.getLastModifiedTime(cachedCpPath).toMillis()) {
@@ -263,8 +267,6 @@ public class BootstrapAppModelFactory {
                             if (reader.readInt() == workspace.getId()) {
                                 ObjectInputStream in = new ObjectInputStream(reader);
                                 AppModel appModel = (AppModel) in.readObject();
-
-                                log.debugf("Loaded cached AppMode %s from %s", appModel, cachedCpPath);
                                 for (AppDependency i : appModel.getFullDeploymentDeps()) {
                                     if (!Files.exists(i.getArtifact().getPath())) {
                                         throw new IOException("Cached artifact does not exist: " + i.getArtifact().getPath());
