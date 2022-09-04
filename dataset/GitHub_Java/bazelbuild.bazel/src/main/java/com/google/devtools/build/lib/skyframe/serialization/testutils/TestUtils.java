@@ -16,11 +16,7 @@ package com.google.devtools.build.lib.skyframe.serialization.testutils;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.devtools.build.lib.skyframe.serialization.CodecRegisterer;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecRegistry;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.devtools.build.lib.syntax.Environment.Frame;
@@ -35,19 +31,19 @@ public class TestUtils {
   private TestUtils() {}
 
   /** Serialize a value to a new byte array. */
-  public static <T> byte[] toBytes(SerializationContext context, ObjectCodec<T> codec, T value)
+  public static <T> byte[] toBytes(ObjectCodec<T> codec, T value)
       throws IOException, SerializationException {
     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
     CodedOutputStream codedOut = CodedOutputStream.newInstance(bytes);
-    codec.serialize(context, value, codedOut);
+    codec.serialize(value, codedOut);
     codedOut.flush();
     return bytes.toByteArray();
   }
 
   /** Deserialize a value from a byte array. */
-  public static <T> T fromBytes(DeserializationContext context, ObjectCodec<T> codec, byte[] bytes)
+  public static <T> T fromBytes(ObjectCodec<T> codec, byte[] bytes)
       throws SerializationException, IOException {
-    return codec.deserialize(context, CodedInputStream.newInstance(bytes));
+    return codec.deserialize(CodedInputStream.newInstance(bytes));
   }
 
   /**
@@ -81,22 +77,16 @@ public class TestUtils {
     }
 
     @Override
-    public void serialize(SerializationContext context, String value, CodedOutputStream codedOut)
+    public void serialize(String value, CodedOutputStream codedOut)
         throws SerializationException, IOException {
-      stringCodec.serialize(context, "dummy", codedOut);
+      stringCodec.serialize("dummy", codedOut);
     }
 
     @Override
-    public String deserialize(DeserializationContext context, CodedInputStream codedIn)
+    public String deserialize(CodedInputStream codedIn)
         throws SerializationException, IOException {
-      stringCodec.deserialize(context, codedIn);
+      stringCodec.deserialize(codedIn);
       return "dummy";
-    }
-
-    /** Disables auto-registration of ConstantStringCodec. */
-    static class ConstantStringCodecRegisterer implements CodecRegisterer<ConstantStringCodec> {
-      @Override
-      public void register(ObjectCodecRegistry.Builder unusedBuilder) {}
     }
   }
 }
