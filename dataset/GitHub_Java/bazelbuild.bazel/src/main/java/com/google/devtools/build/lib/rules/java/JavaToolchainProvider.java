@@ -27,14 +27,11 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import java.util.List;
 import javax.annotation.Nullable;
 
 /** Information about the JDK used by the <code>java_*</code> rules. */
 @Immutable
-@AutoCodec
 public class JavaToolchainProvider extends ToolchainInfo {
 
   /** Returns the Java Toolchain associated with the rule being analyzed or {@code null}. */
@@ -136,8 +133,7 @@ public class JavaToolchainProvider extends ToolchainInfo {
   private final ImmutableList<JavaPackageConfigurationProvider> packageConfiguration;
   private final JavaSemantics javaSemantics;
 
-  @VisibleForSerialization
-  JavaToolchainProvider(
+  private JavaToolchainProvider(
       Label label,
       NestedSet<Artifact> bootclasspath,
       NestedSet<Artifact> extclasspath,

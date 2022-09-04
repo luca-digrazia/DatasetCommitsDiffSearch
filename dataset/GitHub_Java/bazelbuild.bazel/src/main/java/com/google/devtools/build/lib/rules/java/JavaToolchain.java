@@ -18,10 +18,10 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -53,8 +53,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
   }
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+  public ConfiguredTarget create(RuleContext ruleContext) throws RuleErrorException {
     ImmutableList<String> javacopts = getJavacOpts(ruleContext);
     NestedSet<Artifact> bootclasspath = PrerequisiteArtifacts.nestedSet(
         ruleContext, "bootclasspath", Mode.HOST);
@@ -130,7 +129,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
   }
 
   private ImmutableList<String> getJavacOpts(RuleContext ruleContext) {
-    ImmutableList.Builder<String> javacopts = ImmutableList.builder();
+    Builder<String> javacopts = ImmutableList.builder();
     String source = ruleContext.attributes().get("source_version", Type.STRING);
     if (!isNullOrEmpty(source)) {
       javacopts.add("-source").add(source);
