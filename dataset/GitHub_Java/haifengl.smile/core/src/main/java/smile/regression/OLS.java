@@ -22,7 +22,10 @@ import java.util.Properties;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.math.MathEx;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.QR;
+import smile.math.matrix.SVD;
+import smile.math.matrix.Cholesky;
 import smile.math.special.Beta;
 
 /**
@@ -115,62 +118,67 @@ public class OLS {
      * @param recursive if true, the return model supports recursive least squares.
      */
     public static LinearModel fit(Formula formula, DataFrame data, String method, boolean stderr, boolean recursive) {
-        Matrix X = formula.matrix(data);
+        DenseMatrix X = formula.matrix(data);
         double[] y = formula.y(data).toDoubleArray();
 
         int n = X.nrows();
-        int p = X.ncols();
+        int p = X.ncols() - 1;
         
         if (n <= p) {
             throw new IllegalArgumentException(String.format("The input matrix is not over determined: %d rows, %d columns", n, p));
         }
 
         // weights and intercept
-        double[] w = null;
-        Matrix.QR qr = null;
-        Matrix.SVD svd = null;
+        double[] w1 = new double[p+1];
+
+        QR qr = null;
+        SVD svd = null;
 
         if (method.equalsIgnoreCase("svd")) {
-            svd = X.svd();
-            w = svd.solve(y);
+            svd = X.svd(false);
+            svd.solve(y, w1);
         } else {
             try {
-                qr = X.qr();
-                w = qr.solve(y);
+                qr = X.qr(false);
+                qr.solve(y, w1);
             } catch (RuntimeException e) {
                 logger.warn("Matrix is not of full rank, try SVD instead");
                 method = "svd";
-                svd = X.svd();
-                w = svd.solve(y);
+                svd = X.svd(false);
+                Arrays.fill(w1, 0.0);//re-init w1 with zero after exception caught
+                svd.solve(y, w1);
             }
         }
 
         LinearModel model = new LinearModel();
         model.formula = formula;
         model.schema = formula.xschema();
-        model.predictors = X.colNames();
         model.p = p;
-        model.w = w;
+        model.b = w1[p];
+        model.w = new double[p];
+        System.arraycopy(w1, 0, model.w, 0, p);
 
-        double[] fittedValues = X.mv(w);
+        double[] fittedValues = new double[n];
+        X.ax(w1, fittedValues);
         model.fitness(fittedValues, y, MathEx.mean(y));
 
-        Matrix inv = null;
+        DenseMatrix inv = null;
+
         if (stderr || recursive) {
-            Matrix.Cholesky cholesky = method.equalsIgnoreCase("svd") ? X.ata().cholesky() : qr.CholeskyOfAtA();
+            Cholesky cholesky = method.equalsIgnoreCase("svd") ? X.ata().cholesky() : qr.CholeskyOfAtA();
             inv = cholesky.inverse();
             model.V = inv;
         }
 
         if (stderr) {
-            double[][] ttest = new double[p][4];
+            double[][] ttest = new double[p + 1][4];
             model.ttest = ttest;
 
-            for (int i = 0; i < p; i++) {
-                ttest[i][0] = w[i];
+            for (int i = 0; i <= p; i++) {
+                ttest[i][0] = w1[i];
                 double se = model.error * Math.sqrt(inv.get(i, i));
                 ttest[i][1] = se;
-                double t = w[i] / se;
+                double t = w1[i] / se;
                 ttest[i][2] = t;
                 ttest[i][3] = Beta.regularizedIncompleteBetaFunction(0.5 * model.df, 0.5, model.df / (model.df + t * t));
             }
