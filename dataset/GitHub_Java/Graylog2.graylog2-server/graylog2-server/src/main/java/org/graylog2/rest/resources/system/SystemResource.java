@@ -24,8 +24,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import com.sun.jersey.api.core.ResourceConfig;
 import org.graylog2.Core;
-import org.graylog2.ProcessingPauseLockedException;
-import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,7 +78,7 @@ public class SystemResource extends RestResource {
     @Path("/processing/pause")
     public Response pauseProcessing() {
         Core core = (Core) rc.getProperty("core");
-        core.pauseMessageProcessing(false);
+        core.pauseMessageProcessing();
 
         LOG.info("Paused message processing - triggered by REST call.");
         return Response.ok().build();
@@ -90,52 +88,10 @@ public class SystemResource extends RestResource {
     @Path("/processing/resume")
     public Response resumeProcessing() {
         Core core = (Core) rc.getProperty("core");
-
-        try {
-            core.resumeMessageProcessing();
-        } catch (ProcessingPauseLockedException e) {
-            LOG.error("Message processing pause is locked. Returning HTTP 403.");
-            throw new WebApplicationException(403);
-        }
+        core.resumeMessageProcessing();
 
         LOG.info("Resumed message processing - triggered by REST call.");
         return Response.ok().build();
-    }
-
-    @PUT
-    @Path("/processing/pause/unlock")
-    public Response unlockProcessingPause() {
-
-        /*
-         * This is meant to be only used in exceptional cases, when something that locked the processing pause
-         * has crashed and never unlocked so we need to unlock manually.
-         */
-
-        Core core = (Core) rc.getProperty("core");
-        core.manuallyUnlockProcessingPauseLock();
-
-        LOG.info("Manually unlocked message processing pause - triggered by REST call.");
-        return Response.ok().build();
-    }
-
-    @GET
-    @Path("/jvm")
-    @Produces(MediaType.APPLICATION_JSON)
-    public String jvm(@QueryParam("pretty") boolean prettyPrint) {
-        Core core = (Core) rc.getProperty("core");
-
-        Runtime runtime = Runtime.getRuntime();
-
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("free_memory", bytesToValueMap(runtime.freeMemory()));
-        result.put("max_memory",  bytesToValueMap(runtime.maxMemory()));
-        result.put("total_memory", bytesToValueMap(runtime.totalMemory()));
-        result.put("used_memory", bytesToValueMap(runtime.totalMemory() - runtime.freeMemory()));
-
-        result.put("pid", Tools.getPID());
-        result.put("info", Tools.getSystemInformation());
-
-        return json(result, prettyPrint);
     }
 
 }

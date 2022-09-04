@@ -20,9 +20,8 @@
 package org.graylog2.periodical;
 
 import org.graylog2.Core;
-import org.graylog2.system.activities.Activity;
+import org.graylog2.activities.Activity;
 import org.graylog2.indexer.Deflector;
-import org.graylog2.indexer.NoTargetIndexException;
 import org.graylog2.notifications.Notification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,8 +59,8 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
         long messageCountInTarget = 0;
         
         try {
-            currentTarget = this.graylogServer.getDeflector().getNewestTargetName();
-            messageCountInTarget = this.graylogServer.getIndexer().indices().numberOfMessages(currentTarget);
+            currentTarget = this.graylogServer.getDeflector().getCurrentTargetName();
+            messageCountInTarget = this.graylogServer.getIndexer().numberOfMessages(currentTarget);
         } catch(Exception e) {
             LOG.error("Tried to check for number of messages in current deflector target but did not find index. Aborting.", e);
             return;
@@ -85,7 +84,11 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
 
     private void checkAndRepair() {
         if (!graylogServer.getDeflector().isUp()) {
-            if (graylogServer.getIndexer().indices().exists(Deflector.DEFLECTOR_NAME)) {
+            String msg = "Detected that there is no deflector alias. Trying to set up one now.";
+            LOG.warn(msg);
+            graylogServer.getActivityWriter().write(new Activity(msg, DeflectorManagerThread.class));
+
+            if (graylogServer.getIndexer().indexExists(Deflector.DEFLECTOR_NAME)) {
                 // Publish a notification if there is an *index* called graylog2_deflector
                 if (Notification.isFirst(graylogServer, Notification.Type.DEFLECTOR_EXISTS_AS_INDEX)) {
                     Notification.publish(graylogServer, Notification.Type.DEFLECTOR_EXISTS_AS_INDEX, Notification.Severity.URGENT);
@@ -94,22 +97,8 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
             } else {
                 graylogServer.getDeflector().setUp();
             }
-        } else {
-            try {
-                String currentTarget = graylogServer.getDeflector().getCurrentActualTargetIndex();
-                String shouldBeTarget = graylogServer.getDeflector().getNewestTargetName();
-
-                if (!currentTarget.equals(shouldBeTarget)) {
-                    String msg = "Deflector is pointing to [" + currentTarget + "], not the newest one: [" + shouldBeTarget + "]. Re-pointing.";
-                    LOG.warn(msg);
-                    graylogServer.getActivityWriter().write(new Activity(msg, DeflectorManagerThread.class));
-
-                    graylogServer.getDeflector().pointTo(shouldBeTarget, currentTarget);
-                }
-            } catch (NoTargetIndexException e) {
-                LOG.warn("Deflector is not up. Not trying to point to another index.");
-            }
         }
+
 
     }
     

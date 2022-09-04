@@ -31,8 +31,7 @@ public interface Buffer {
     
     public void insertFailFast(Message message) throws BufferOutOfCapacityException, ProcessingDisabledException;
     public void insertCached(Message message);
-
-    public boolean isEmpty();
+    
     public boolean hasCapacity();
     
 }

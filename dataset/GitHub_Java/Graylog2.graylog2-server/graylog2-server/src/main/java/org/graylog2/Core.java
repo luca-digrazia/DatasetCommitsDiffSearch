@@ -64,6 +64,7 @@ import org.graylog2.activities.Activity;
 import org.graylog2.activities.ActivityWriter;
 import org.graylog2.buffers.BasicCache;
 import org.graylog2.buffers.Cache;
+import org.graylog2.cluster.Cluster;
 import org.graylog2.database.HostCounterCacheImpl;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.initializers.*;
@@ -99,6 +100,7 @@ public class Core implements GraylogServer {
     private MongoBridge mongoBridge;
     private Configuration configuration;
     private RulesEngineImpl rulesEngine;
+    private ServerValue serverValues;
     private GELFChunkManager gelfChunkManager;
 
     private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
@@ -107,13 +109,17 @@ public class Core implements GraylogServer {
     public static final String GRAYLOG2_VERSION = "0.20.0-dev";
     public static final String GRAYLOG2_CODENAME = "Amigo Humanos (Flipper)";
 
+    public static final String MASTER_COUNTER_NAME = "master";
+
     private Indexer indexer;
 
     private HostCounterCacheImpl hostCounterCache;
 
+    private MessageCounterManagerImpl messageCounterManager;
+
+    private Cluster cluster;
+    
     private Counter benchmarkCounter = new Counter();
-    private Counter throughputCounter = new Counter();
-    private long throughput = 0;
     
     private List<Initializer> initializers = Lists.newArrayList();
     private List<MessageInput> inputs = Lists.newArrayList();
@@ -142,7 +148,6 @@ public class Core implements GraylogServer {
     private boolean statsMode = false;
 
     private AtomicBoolean isProcessing = new AtomicBoolean(true);
-    private AtomicBoolean processingPauseLocked = new AtomicBoolean(false);
     
     private DateTime startedAt;
 
@@ -166,10 +171,15 @@ public class Core implements GraylogServer {
         mongoBridge = new MongoBridge(this);
         mongoBridge.setConnection(mongoConnection); // TODO use dependency injection
         mongoConnection.connect();
-
+        
+        cluster = new Cluster(this);
+        
         activityWriter = new ActivityWriter(this);
 
         systemJobManager = new SystemJobManager(this);
+
+        messageCounterManager = new MessageCounterManagerImpl();
+        messageCounterManager.register(MASTER_COUNTER_NAME);
 
         hostCounterCache = new HostCounterCacheImpl();
         
@@ -185,7 +195,8 @@ public class Core implements GraylogServer {
         gelfChunkManager = new GELFChunkManager(this);
 
         indexer = new Indexer(this);
-
+        serverValues = new ServerValue(this);
+                
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
@@ -343,8 +354,9 @@ public class Core implements GraylogServer {
     }
     
     public void startRestApi() throws IOException {
-        startRestServer(configuration.getRestListenUri());
-        LOG.info("Started REST API at <{}>", configuration.getRestListenUri());
+        URI restUri = UriBuilder.fromUri(configuration.getRestListenUri()).port(configuration.getRestListenPort()).build();
+        startRestServer(restUri);
+        LOG.info("Started REST API at <{}>", restUri);
     }
     
     private <A> void loadPlugins(Class<A> type, String subDirectory) {
@@ -408,6 +420,10 @@ public class Core implements GraylogServer {
         return indexer;
     }
 
+    public ServerValue getServerValues() {
+        return serverValues;
+    }
+
     public GELFChunkManager getGELFChunkManager() {
         return this.gelfChunkManager;
     }
@@ -453,6 +469,11 @@ public class Core implements GraylogServer {
     public List<AlarmCallback> getAlarmCallbacks() {
         return this.alarmCallbacks;
     }
+    
+    @Override
+    public MessageCounterManagerImpl getMessageCounterManager() {
+        return this.messageCounterManager;
+    }
 
     public HostCounterCacheImpl getHostCounterCache() {
         return this.hostCounterCache;
@@ -461,7 +482,11 @@ public class Core implements GraylogServer {
     public Deflector getDeflector() {
         return this.deflector;
     }
-
+    
+    public Cluster cluster() {
+        return this.cluster;
+    }
+    
     public ActivityWriter getActivityWriter() {
         return this.activityWriter;
     }
@@ -519,18 +544,6 @@ public class Core implements GraylogServer {
         return benchmarkCounter;
     }
 
-    public Counter getThroughputCounter() {
-        return throughputCounter;
-    }
-
-    public void setCurrentThroughput(long x) {
-        this.throughput = x;
-    }
-
-    public long getCurrentThroughput() {
-        return this.throughput;
-    }
-
     public Cache getInputCache() {
         return inputCache;
     }
@@ -543,31 +556,13 @@ public class Core implements GraylogServer {
     	return startedAt;
     }
 
-    public void pauseMessageProcessing(boolean locked) {
+    public void pauseMessageProcessing() {
         // TODO: properly pause and restart AMQP inputs.
         isProcessing.set(false);
-
-        // Never override pause lock if already locked.
-        if (!processingPauseLocked.get()) {
-            processingPauseLocked.set(locked);
-        }
     }
 
-    public void resumeMessageProcessing() throws ProcessingPauseLockedException {
-        if (processingPauseLocked()) {
-            throw new ProcessingPauseLockedException("Processing pause is locked. Wait until the locking task has finished " +
-                    "or manually unlock if you know what you are doing.");
-        }
-
+    public void resumeMessageProcessing() {
         isProcessing.set(true);
-    }
-
-    public boolean processingPauseLocked() {
-        return processingPauseLocked.get();
-    }
-
-    public void manuallyUnlockProcessingPauseLock() {
-        processingPauseLocked.set(false);
     }
 
     public boolean isProcessing() {

@@ -108,12 +108,7 @@ public class ProcessBuffer implements Buffer {
         
         insert(message);
     }
-
-    @Override
-    public boolean isEmpty() {
-        return ringBuffer.getBufferSize() == 0;
-    }
-
+    
     @Override
     public void insertFailFast(Message message) throws BufferOutOfCapacityException, ProcessingDisabledException {
         if (!server.isProcessing()) {
