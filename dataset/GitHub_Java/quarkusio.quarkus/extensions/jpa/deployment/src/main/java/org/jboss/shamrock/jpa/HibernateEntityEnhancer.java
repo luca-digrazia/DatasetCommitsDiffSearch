@@ -51,8 +51,9 @@ public final class HibernateEntityEnhancer implements BiFunction<String, ClassVi
             }
 
             @Override
-            public boolean doExtendedEnhancement(UnloadedClass classDescriptor) {
-                return true;
+            public boolean doDirtyCheckingInline(UnloadedClass classDescriptor) {
+                // perhaps only for subtypes of Model/RxModel?
+                return false;
             }
         };
         this.enhancer = provider.getEnhancer(enhancementContext);
@@ -69,7 +70,7 @@ public final class HibernateEntityEnhancer implements BiFunction<String, ClassVi
         private final ClassVisitor outputClassVisitor;
 
         public HibernateEnhancingClassVisitor(String className, ClassVisitor outputClassVisitor) {
-            super(Opcodes.ASM6, new ClassWriter(0));
+            super(Opcodes.ASM6, new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS));
             this.className = className;
             this.outputClassVisitor = outputClassVisitor;
         }
@@ -92,6 +93,10 @@ public final class HibernateEntityEnhancer implements BiFunction<String, ClassVi
     private byte[] hibernateEnhancement(final String className, final byte[] originalBytes) {
         final byte[] enhanced = enhancer.enhance(className, originalBytes);
         return enhanced == null ? originalBytes : enhanced;
+    }
+
+    public byte[] enhance(String className, byte[] bytes) {
+        return enhancer.enhance(className, bytes);
     }
 
 }
