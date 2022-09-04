@@ -74,8 +74,8 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.LoadingFailureEvent;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.skyframe.ArtifactConflictFinder.ConflictException;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
+import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ConflictException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Root;
@@ -96,7 +96,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -110,7 +109,7 @@ public final class SkyframeBuildView {
   private final ConfiguredTargetFactory factory;
   private final ArtifactFactory artifactFactory;
   private final SkyframeExecutor skyframeExecutor;
-  private final ActionKeyContext actionKeyContext;
+  private final SkyframeActionExecutor skyframeActionExecutor;
   private boolean enableAnalysis = false;
 
   // This hack allows us to see when a configured target has been invalidated, and thus when the set
@@ -143,14 +142,13 @@ public final class SkyframeBuildView {
   private boolean skyframeAnalysisWasDiscarded;
 
   private ImmutableSet<SkyKey> largestTopLevelKeySetCheckedForConflicts = ImmutableSet.of();
-  private boolean foundActionConflict;
 
   public SkyframeBuildView(
       BlazeDirectories directories,
       SkyframeExecutor skyframeExecutor,
       ConfiguredRuleClassProvider ruleClassProvider,
-      ActionKeyContext actionKeyContext) {
-    this.actionKeyContext = actionKeyContext;
+      SkyframeActionExecutor skyframeActionExecutor) {
+    this.skyframeActionExecutor = skyframeActionExecutor;
     this.factory = new ConfiguredTargetFactory(ruleClassProvider);
     this.artifactFactory =
         new ArtifactFactory(
@@ -378,8 +376,7 @@ public final class SkyframeBuildView {
       TopLevelArtifactContext topLevelArtifactContextForConflictPruning,
       EventBus eventBus,
       boolean keepGoing,
-      int numThreads,
-      boolean strictConflictChecks)
+      int numThreads)
       throws InterruptedException, ViewCreationFailedException {
     enableAnalysis(true);
     EvaluationResult<ActionLookupValue> result;
@@ -423,7 +420,6 @@ public final class SkyframeBuildView {
             ? new MapAsPackageRoots(collectPackageRoots(packages.build().toList()))
             : new PackageRootsNoSymlinkCreation(singleSourceRoot);
 
-    ImmutableMap<ActionAnalysisMetadata, ConflictException> actionConflicts = ImmutableMap.of();
     try (SilentCloseable c =
         Profiler.instance().profile("skyframeExecutor.findArtifactConflicts")) {
       ImmutableSet<SkyKey> newKeys =
@@ -431,26 +427,22 @@ public final class SkyframeBuildView {
               .addAll(ctKeys)
               .addAll(aspectKeys)
               .build();
-      if (shouldCheckForConflicts(newKeys)) {
+      if (checkForConflicts(newKeys)) {
         largestTopLevelKeySetCheckedForConflicts = newKeys;
         // This operation is somewhat expensive, so we only do it if the graph might have changed in
         // some way -- either we analyzed a new target or we invalidated an old one or are building
         // targets together that haven't been built before.
-        actionConflicts =
-            ArtifactConflictFinder.findAndStoreArtifactConflicts(
-                skyframeExecutor.getActionLookupValuesInBuild(ctKeys, aspectKeys),
-                strictConflictChecks,
-                actionKeyContext);
+        skyframeActionExecutor.findAndStoreArtifactConflicts(
+            skyframeExecutor.getActionLookupValuesInBuild(ctKeys, aspectKeys));
         someConfiguredTargetEvaluated = false;
       }
     }
-    foundActionConflict = !actionConflicts.isEmpty();
-
-    if (!result.hasError() && actionConflicts.isEmpty()) {
+    ImmutableMap<ActionAnalysisMetadata, ConflictException> badActions =
+        skyframeActionExecutor.badActions();
+    if (!result.hasError() && badActions.isEmpty()) {
       return new SkyframeAnalysisResult(
           /*hasLoadingError=*/ false,
           /*hasAnalysisError=*/ false,
-          foundActionConflict,
           ImmutableList.copyOf(cts),
           result.getWalkableGraph(),
           ImmutableList.copyOf(aspects),
@@ -466,7 +458,7 @@ public final class SkyframeBuildView {
             keepGoing,
             eventBus);
     Collection<Exception> reportedExceptions = Sets.newHashSet();
-    for (Map.Entry<ActionAnalysisMetadata, ConflictException> bad : actionConflicts.entrySet()) {
+    for (Map.Entry<ActionAnalysisMetadata, ConflictException> bad : badActions.entrySet()) {
       ConflictException ex = bad.getValue();
       try {
         ex.rethrowTyped();
@@ -497,49 +489,58 @@ public final class SkyframeBuildView {
       throw errors.second;
     }
 
-    if (!actionConflicts.isEmpty()) {
+    if (!badActions.isEmpty()) {
       // In order to determine the set of configured targets transitively error free from action
       // conflict issues, we run a post-processing update() that uses the bad action map.
-      Predicate<ActionLookupValue.ActionLookupKey> errorFreePredicate;
+      EvaluationResult<ActionLookupConflictFindingValue> actionConflictResult;
       enableAnalysis(true);
       try {
-        errorFreePredicate =
-            skyframeExecutor.filterActionConflictsForConfiguredTargetsAndAspects(
+        actionConflictResult =
+            skyframeExecutor.filterActionConflicts(
                 eventHandler,
                 Iterables.concat(ctKeys, aspectKeys),
-                actionConflicts,
+                keepGoing,
+                badActions,
                 topLevelArtifactContextForConflictPruning);
       } finally {
         enableAnalysis(false);
       }
 
-      cts =
-          ctKeys.stream()
-              .filter(errorFreePredicate)
-              .map(
-                  k ->
-                      Preconditions.checkNotNull((ConfiguredTargetValue) result.get(k), k)
-                          .getConfiguredTarget())
-              .collect(toImmutableList());
+      ImmutableList.Builder<ConfiguredTarget> ctBuilder = ImmutableList.builder();
 
-      aspects =
-          aspectKeys.stream()
-              .filter(errorFreePredicate)
-              .map(k -> Preconditions.checkNotNull((AspectValue) result.get(k), k))
-              .collect(toImmutableList());
+      for (ConfiguredTargetKey key : ctKeys) {
+        TopLevelActionLookupConflictFindingFunction.Key conflictKey =
+            TopLevelActionLookupConflictFindingFunction.Key.create(
+                key, topLevelArtifactContextForConflictPruning);
+        if (actionConflictResult.get(conflictKey) != null) {
+          ctBuilder.add(
+              Preconditions.checkNotNull((ConfiguredTargetValue) result.get(key), key)
+                  .getConfiguredTarget());
+        }
+      }
+      cts = ctBuilder.build();
+
+      ImmutableList.Builder<AspectValue> aspectBuilder = ImmutableList.builder();
+
+      for (AspectValueKey key : aspectKeys) {
+        if (actionConflictResult.get(ActionLookupConflictFindingValue.key(key)) != null) {
+          aspectBuilder.add(Preconditions.checkNotNull((AspectValue) result.get(key), key));
+        }
+      }
+
+      aspects = aspectBuilder.build();
     }
 
     return new SkyframeAnalysisResult(
         errors.first,
-        result.hasError() || foundActionConflict,
-        foundActionConflict,
+        result.hasError() || !badActions.isEmpty(),
         ImmutableList.copyOf(cts),
         result.getWalkableGraph(),
         ImmutableList.copyOf(aspects),
         packageRoots);
   }
 
-  private boolean shouldCheckForConflicts(ImmutableSet<SkyKey> newKeys) {
+  private boolean checkForConflicts(ImmutableSet<SkyKey> newKeys) {
     if (someConfiguredTargetEvaluated) {
       // A top-level target was added and may introduce a conflict, or a top-level target was
       // recomputed and may introduce or resolve a conflict.
@@ -556,7 +557,7 @@ public final class SkyframeBuildView {
       return true;
     }
 
-    if (!foundActionConflict) {
+    if (!skyframeActionExecutor.badActions().isEmpty()) {
       // Example sequence:
       // 1.  Build (x y z), and there is a conflict. We store (x y z) as the largest checked key
       //     set, and record the fact that there were bad actions.
@@ -592,8 +593,8 @@ public final class SkyframeBuildView {
 
     // Case when we DON'T need to re-check:
     // - a configured target is deleted. Deletion can only resolve conflicts, not introduce any, and
-    //   if the previuos build had a conflict then foundActionConflict would be true, and if the
-    //   previous build had no conflict then deleting a CT won't change that.
+    //   if the previuos build had a conflict then skyframeActionExecutor.badActions() would not be
+    //   empty, and if the previous build had no conflict then deleting a CT won't change that.
     //   Example that triggers this scenario:
     //   1.  genrule(name='x', srcs=['A'], ...)
     //       genrule(name='y', outs=['A'], ...)

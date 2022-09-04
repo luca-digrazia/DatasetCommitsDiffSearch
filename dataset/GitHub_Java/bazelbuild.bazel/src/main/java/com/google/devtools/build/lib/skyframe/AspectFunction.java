@@ -120,7 +120,7 @@ public final class AspectFunction implements SkyFunction {
   }
 
   /**
-   * Load Starlark-defined aspect from an extension file. Is to be called from a SkyFunction.
+   * Load Skylark-defined aspect from an extension file. Is to be called from a SkyFunction.
    *
    * @return {@code null} if dependencies cannot be satisfied.
    * @throws AspectCreationException if the value loaded is not a {@link SkylarkDefinedAspect}.
@@ -147,7 +147,7 @@ public final class AspectFunction implements SkyFunction {
   }
 
   /**
-   * Load Starlark aspect from an extension file. Is to be called from a SkyFunction.
+   * Load Skylark aspect from an extension file. Is to be called from a SkyFunction.
    *
    * @return {@code null} if dependencies cannot be satisfied.
    */
@@ -395,7 +395,7 @@ public final class AspectFunction implements SkyFunction {
           unloadedToolchainContext =
               (UnloadedToolchainContext)
                   env.getValueOrThrow(
-                      UnloadedToolchainContextKey.key()
+                      UnloadedToolchainContext.key()
                           .configurationKey(BuildConfigurationValue.key(configuration))
                           .requiredToolchainTypeLabels(requiredToolchains)
                           .shouldSanityCheckConfiguration(
