@@ -2,6 +2,8 @@ package io.quarkus.jaeger.deployment;
 
 import java.util.Optional;
 
+import javax.inject.Inject;
+
 import io.jaegertracing.internal.JaegerTracer;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
@@ -19,9 +21,11 @@ import io.quarkus.jaeger.runtime.JaegerBuildTimeConfig;
 import io.quarkus.jaeger.runtime.JaegerConfig;
 import io.quarkus.jaeger.runtime.JaegerDeploymentRecorder;
 import io.quarkus.runtime.ApplicationConfig;
-import io.quarkus.runtime.metrics.MetricsFactory;
 
 public class JaegerProcessor {
+
+    @Inject
+    BuildProducer<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport;
 
     @BuildStep(onlyIf = NativeBuild.class)
     @Record(ExecutionTime.STATIC_INIT)
@@ -31,29 +35,24 @@ public class JaegerProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    ExtensionSslNativeSupportBuildItem setupTracer(JaegerDeploymentRecorder jdr, JaegerBuildTimeConfig buildTimeConfig,
-            JaegerConfig jaeger,
+    void setupTracer(JaegerDeploymentRecorder jdr, JaegerBuildTimeConfig buildTimeConfig, JaegerConfig jaeger,
             ApplicationConfig appConfig, Optional<MetricsCapabilityBuildItem> metricsCapability) {
+
+        // Indicates that this extension would like the SSL support to be enabled
+        extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.JAEGER.getName()));
 
         if (buildTimeConfig.enabled) {
             if (buildTimeConfig.metricsEnabled && metricsCapability.isPresent()) {
-                if (metricsCapability.get().metricsSupported(MetricsFactory.MICROMETER)) {
-                    jdr.registerTracerWithMicrometerMetrics(jaeger, appConfig);
-                } else {
-                    jdr.registerTracerWithMpMetrics(jaeger, appConfig);
-                }
+                jdr.registerTracerWithMpMetrics(jaeger, appConfig);
             } else {
                 jdr.registerTracerWithoutMetrics(jaeger, appConfig);
             }
         }
-
-        // Indicates that this extension would like the SSL support to be enabled
-        return new ExtensionSslNativeSupportBuildItem(Feature.JAEGER.getName());
     }
 
     @BuildStep
-    public FeatureBuildItem build() {
-        return new FeatureBuildItem(Feature.JAEGER);
+    public void build(BuildProducer<FeatureBuildItem> feature) {
+        feature.produce(new FeatureBuildItem(Feature.JAEGER));
     }
 
     @BuildStep
@@ -65,11 +64,11 @@ public class JaegerProcessor {
     }
 
     @BuildStep
-    public ReflectiveClassBuildItem reflectiveClasses() {
-        return ReflectiveClassBuildItem
+    public void reflectiveClasses(BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
+        reflectiveClasses.produce(ReflectiveClassBuildItem
                 .builder("io.jaegertracing.internal.samplers.http.SamplingStrategyResponse",
                         "io.jaegertracing.internal.samplers.http.ProbabilisticSamplingStrategy")
                 .finalFieldsWritable(true)
-                .build();
+                .build());
     }
 }
