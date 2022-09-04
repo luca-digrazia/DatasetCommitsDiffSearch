@@ -10,13 +10,13 @@ import static io.quarkus.vault.runtime.config.VaultRuntimeConfig.DEFAULT_KV_SECR
 import static io.quarkus.vault.runtime.config.VaultRuntimeConfig.DEFAULT_READ_TIMEOUT;
 import static io.quarkus.vault.runtime.config.VaultRuntimeConfig.DEFAULT_RENEW_GRACE_PERIOD;
 import static io.quarkus.vault.runtime.config.VaultRuntimeConfig.DEFAULT_SECRET_CONFIG_CACHE_PERIOD;
+import static io.quarkus.vault.runtime.config.VaultRuntimeConfig.DEFAULT_TLS_SKIP_VERIFY;
 import static io.quarkus.vault.runtime.config.VaultRuntimeConfig.DEFAULT_TLS_USE_KUBERNETES_CACERT;
 import static io.quarkus.vault.runtime.config.VaultRuntimeConfig.KV_SECRET_ENGINE_VERSION_V2;
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.Integer.parseInt;
 import static java.util.Collections.emptyMap;
 import static java.util.Optional.empty;
-import static java.util.regex.Pattern.compile;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -43,7 +43,6 @@ import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.jboss.logging.Logger;
 
-import io.quarkus.runtime.TlsConfig;
 import io.quarkus.runtime.configuration.DurationConverter;
 import io.quarkus.vault.VaultException;
 import io.quarkus.vault.runtime.LogConfidentialityLevel;
@@ -53,18 +52,16 @@ public class VaultConfigSource implements ConfigSource {
 
     private static final Logger log = Logger.getLogger(VaultConfigSource.class);
 
-    static final String PROPERTY_PREFIX = "quarkus.vault.";
-    public static final Pattern CREDENTIALS_PATTERN = compile("^quarkus\\.vault\\.credentials-provider\\.([^.]+)\\.");
-    public static final Pattern TRANSIT_KEY_PATTERN = compile("^quarkus\\.vault\\.transit.key\\.([^.]+)\\.");
-    public static final String SECRET_CONFIG_KV_PREFIX_PATHS = "secret-config-kv-path";
-    public static final Pattern SECRET_CONFIG_KV_PREFIX_PATH_PATTERN = compile(
-            "^quarkus\\.vault\\." + SECRET_CONFIG_KV_PREFIX_PATHS + "\\.(?:([^.]+)|(?:\"([^\"]+)\"))$");
-    public static final Pattern EXPANSION_PATTERN = compile("\\$\\{([^}]+)\\}");
+    private static final String PROPERTY_PREFIX = "quarkus.vault.";
+    public static final Pattern CREDENTIALS_PATTERN = Pattern.compile("^quarkus\\.vault\\.credentials-provider\\.([^.]+)\\.");
+    public static final Pattern TRANSIT_KEY_PATTERN = Pattern.compile("^quarkus\\.vault\\.transit.key\\.([^.]+)\\.");
+    public static final Pattern SECRET_CONFIG_KV_PATH_PATTERN = Pattern
+            .compile("^quarkus\\.vault\\.secret-config-kv-path\\.(?:([^.]+)|(?:\"([^\"]+)\"))$");
+    public static final Pattern EXPANSION_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}");
 
     private AtomicReference<VaultCacheEntry<Map<String, String>>> cache = new AtomicReference<>(null);
     private AtomicReference<VaultRuntimeConfig> serverConfig = new AtomicReference<>(null);
     private AtomicReference<VaultBuildTimeConfig> buildServerConfig = new AtomicReference<>(null);
-    private AtomicReference<TlsConfig> tlsConfig = new AtomicReference<>(null);
 
     private AtomicBoolean init = new AtomicBoolean(false);
     private int ordinal;
@@ -119,10 +116,13 @@ public class VaultConfigSource implements ConfigSource {
 
         try {
             // default kv paths
-            serverConfig.secretConfigKvPath.ifPresent(strings -> fetchSecrets(strings, null, properties));
+            if (serverConfig.secretConfigKvPath.isPresent()) {
+                fetchSecrets(serverConfig.secretConfigKvPath.get(), null, properties);
+            }
 
             // prefixed kv paths
-            serverConfig.secretConfigKvPathPrefix.forEach((key, value) -> fetchSecrets(value.paths, key, properties));
+            serverConfig.secretConfigKvPrefixPath.entrySet()
+                    .forEach(entry -> fetchSecrets(entry.getValue(), entry.getKey(), properties));
 
             log.debug("loaded " + properties.size() + " properties from vault");
         } catch (RuntimeException e) {
@@ -155,11 +155,10 @@ public class VaultConfigSource implements ConfigSource {
 
         VaultBuildTimeConfig buildTimeConfig = getBuildtimeConfig();
         VaultRuntimeConfig serverConfig = getRuntimeConfig();
-        TlsConfig tlsConfig = getTlsConfig();
 
         // init at most once
         if (init.compareAndSet(false, true)) {
-            VaultManager.init(buildTimeConfig, serverConfig, tlsConfig);
+            VaultManager.init(buildTimeConfig, serverConfig);
         }
 
         return VaultManager.getInstance();
@@ -171,10 +170,6 @@ public class VaultConfigSource implements ConfigSource {
 
     private VaultBuildTimeConfig getBuildtimeConfig() {
         return getConfig(this.buildServerConfig, () -> loadBuildtimeConfig(), "buildtime");
-    }
-
-    private TlsConfig getTlsConfig() {
-        return getConfig(this.tlsConfig, () -> loadTlsConfig(), "tls");
     }
 
     private <T> T getConfig(AtomicReference<T> ref, Supplier<T> supplier, String name) {
@@ -242,7 +237,7 @@ public class VaultConfigSource implements ConfigSource {
         serverConfig.kvSecretEngineMountPath = getVaultProperty("kv-secret-engine-mount-path",
                 DEFAULT_KV_SECRET_ENGINE_MOUNT_PATH);
         serverConfig.secretConfigKvPath = getOptionalListProperty("secret-config-kv-path");
-        serverConfig.tls.skipVerify = getOptionalVaultProperty("tls.skip-verify").map(Boolean::parseBoolean);
+        serverConfig.tls.skipVerify = parseBoolean(getVaultProperty("tls.skip-verify", DEFAULT_TLS_SKIP_VERIFY));
         serverConfig.tls.useKubernetesCaCert = parseBoolean(
                 getVaultProperty("tls.use-kubernetes-ca-cert", DEFAULT_TLS_USE_KUBERNETES_CACERT));
         serverConfig.tls.caCert = getOptionalVaultProperty("tls.ca-cert");
@@ -251,15 +246,9 @@ public class VaultConfigSource implements ConfigSource {
 
         serverConfig.credentialsProvider = createCredentialProviderConfigParser().getConfig();
         serverConfig.transit.key = createTransitKeyConfigParser().getConfig();
-        serverConfig.secretConfigKvPathPrefix = getSecretConfigKvPrefixPaths();
+        serverConfig.secretConfigKvPrefixPath = getSecretConfigKvPrefixPaths();
 
         return serverConfig;
-    }
-
-    private TlsConfig loadTlsConfig() {
-        TlsConfig tlsConfig = new TlsConfig();
-        tlsConfig.trustAll = Boolean.parseBoolean(getProperty("quarkus.tls.trust-all", "false", 0));
-        return tlsConfig;
     }
 
     private VaultMapConfigParser<CredentialsProviderConfig> createCredentialProviderConfigParser() {
@@ -361,7 +350,7 @@ public class VaultConfigSource implements ConfigSource {
                 .orElse(defaultValue);
     }
 
-    private Map<String, VaultRuntimeConfig.KvPathConfig> getSecretConfigKvPrefixPaths() {
+    private Map<String, List<String>> getSecretConfigKvPrefixPaths() {
 
         return getConfigSourceStream()
                 .flatMap(configSource -> configSource.getPropertyNames().stream())
@@ -369,8 +358,7 @@ public class VaultConfigSource implements ConfigSource {
                 .filter(Objects::nonNull)
                 .distinct()
                 .map(this::createNameSecretConfigKvPrefixPathPair)
-                .collect(toMap(SimpleEntry::getKey,
-                        kvStore -> new VaultRuntimeConfig.KvPathConfig(kvStore.getValue())));
+                .collect(toMap(SimpleEntry::getKey, SimpleEntry::getValue));
     }
 
     private Stream<ConfigSource> getConfigSourceStream() {
@@ -394,12 +382,12 @@ public class VaultConfigSource implements ConfigSource {
     }
 
     private String getSecretConfigKvPrefixPathName(String propertyName) {
-        Matcher matcher = SECRET_CONFIG_KV_PREFIX_PATH_PATTERN.matcher(propertyName);
+        Matcher matcher = SECRET_CONFIG_KV_PATH_PATTERN.matcher(propertyName);
         return matcher.matches() ? (matcher.group(1) != null ? matcher.group(1) : matcher.group(2)) : null;
     }
 
     private List<String> getSecretConfigKvPrefixPath(String prefixName) {
-        return getOptionalListProperty(SECRET_CONFIG_KV_PREFIX_PATHS + "." + prefixName).get();
+        return getOptionalListProperty("secret-config-kv-path." + prefixName).get();
     }
 
 }
