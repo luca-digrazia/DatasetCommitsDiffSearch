@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,7 +15,6 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package models;
 
@@ -24,6 +23,8 @@ import lib.Tools;
 import models.api.responses.MessageSummaryResponse;
 import models.api.results.MessageResult;
 import models.api.results.SearchResult;
+import org.apache.commons.lang3.StringEscapeUtils;
+import play.api.templates.Html;
 
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,8 @@ import java.util.Map;
 public class FieldMapper {
 
     public enum Type {
-        SYSLOG_LEVEL
+        SYSLOG_LEVEL,
+        NEWLINE_CONVERTER
     }
 
     private final String field;
@@ -50,7 +52,7 @@ public class FieldMapper {
         List<FieldMapper> mappers = Lists.newArrayList();
 
         mappers.add(new FieldMapper("level", Type.SYSLOG_LEVEL));
-
+        mappers.add(new FieldMapper("full_message", Type.NEWLINE_CONVERTER));
         return mappers;
     }
 
@@ -61,7 +63,7 @@ public class FieldMapper {
             String field = mapper.getField();
 
             if (msg.getFields().containsKey(field)) {
-                String newVal = map(field, mapper.getType(), msg.getFields());
+                Object newVal = map(field, mapper.getType(), msg.getFields());
 
                 msg.getFields().remove(field);
                 msg.getFields().put(field, newVal);
@@ -74,15 +76,17 @@ public class FieldMapper {
     public static SearchResult run(SearchResult sr) {
         List<FieldMapper> mappers = getAll();
 
-        for(MessageSummaryResponse r : sr.getMessages()) {
-            for (FieldMapper mapper : mappers) {
-                String field = mapper.getField();
+        if (sr != null) {
+            for(MessageSummaryResponse r : sr.getMessages()) {
+                for (FieldMapper mapper : mappers) {
+                    String field = mapper.getField();
 
-                if (r.message.containsKey(field)) {
-                    String newVal = map(field, mapper.getType(), r.message);
+                    if (r.message.containsKey(field)) {
+                        Object newVal = map(field, mapper.getType(), r.message);
 
-                    r.message.remove(field);
-                    r.message.put(field, newVal);
+                        r.message.remove(field);
+                        r.message.put(field, newVal);
+                    }
                 }
             }
         }
@@ -90,13 +94,25 @@ public class FieldMapper {
         return sr;
     }
 
-    private static String map(String field, Type type, Map<String, Object> fields) {
+    private static Object map(String field, Type type, Map<String, Object> fields) {
         switch (type) {
             case SYSLOG_LEVEL:
                 return mapSyslogLevel(fields.get(field));
+            case NEWLINE_CONVERTER:
+                return convertNewlinesToBr(fields.get(field));
             default:
                 throw new RuntimeException("Don't know how to map type: [" + type + "]");
         }
+    }
+
+    private static Html convertNewlinesToBr(Object fullMessage) {
+        if (fullMessage == null) {
+            return null;
+        }
+
+        String s = StringEscapeUtils.escapeHtml4(fullMessage.toString());
+        s = s.replaceAll("\\n", "<br>");
+        return Html.apply(s);
     }
 
     private static String mapSyslogLevel(Object level) {
