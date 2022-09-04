@@ -85,7 +85,7 @@ public class AndroidNdkCrosstoolsTest {
         // The contents of the NDK are placed at "external/%repositoryName%/ndk".
         // The "external/%repositoryName%" part is removed using NdkPaths.stripRepositoryPrefix,
         // but to make it easier the "ndk/" part is added here.
-        ndkFiles.add("ndk/" + line.trim());
+        ndkFiles.add("ndk/" + line);
       }
       return ndkFiles.build();
     }
@@ -95,7 +95,7 @@ public class AndroidNdkCrosstoolsTest {
           ResourceFileLoader.loadResource(AndroidNdkCrosstoolsTest.class, ndkDirectoriesFilename);
       ImmutableSet.Builder<String> ndkDirectories = ImmutableSet.builder();
       for (String line : ndkFilesFileContent.split("\n")) {
-        ndkDirectories.add("ndk/" + line.trim());
+        ndkDirectories.add("ndk/" + line);
       }
       return ndkDirectories.build();
     }
@@ -131,9 +131,7 @@ public class AndroidNdkCrosstoolsTest {
 
   public AndroidNdkCrosstoolsTest(AndroidNdkCrosstoolsTestParams params) throws IOException {
     // NDK test data is based on the x86 64-bit Linux Android NDK.
-    NdkPaths ndkPaths =
-        new NdkPaths(
-            REPOSITORY_NAME, HOST_PLATFORM, params.apiLevel, params.ndkRelease.majorRevision);
+    NdkPaths ndkPaths = new NdkPaths(REPOSITORY_NAME, HOST_PLATFORM, params.apiLevel);
 
     ImmutableList.Builder<CrosstoolRelease> crosstools = ImmutableList.builder();
     ImmutableMap.Builder<String, String> stlFilegroupsBuilder = ImmutableMap.builder();
@@ -159,11 +157,6 @@ public class AndroidNdkCrosstoolsTest {
 
         // Test that all tool paths exist.
         for (ToolPath toolpath : toolchain.getToolPathList()) {
-          // TODO(tmsriram): Not all crosstools contain llvm-profdata tool yet, remove
-          // the check once llvm-profdata becomes always available.
-          if (toolpath.getPath().contains("llvm-profdata")) {
-            continue;
-          }
           assertThat(ndkFiles).contains(toolpath.getPath());
         }
 

@@ -70,50 +70,47 @@ class ArmCrosstools {
     String toolchainName = "aarch64-linux-android-4.9";
     String targetPlatform = "aarch64-linux-android";
 
-    CToolchain.Builder toolchain =
-        CToolchain.newBuilder()
-            .setToolchainIdentifier("aarch64-linux-android-4.9")
-            .setTargetSystemName("aarch64-linux-android")
-            .setTargetCpu("arm64-v8a")
-            .setCompiler("gcc-4.9")
-            .addAllToolPath(ndkPaths.createToolpaths(toolchainName, targetPlatform))
-            .addAllCxxBuiltinIncludeDirectory(
-                ndkPaths.createGccToolchainBuiltinIncludeDirectories(
-                    toolchainName, targetPlatform, "4.9"))
-            .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm64"))
+    CToolchain.Builder toolchain = CToolchain.newBuilder()
+        .setToolchainIdentifier("aarch64-linux-android-4.9")
+        .setTargetSystemName("aarch64-linux-android")
+        .setTargetCpu("arm64-v8a")
+        .setCompiler("gcc-4.9")
 
-            // Compiler flags
-            .addCompilerFlag("-fpic")
-            .addCompilerFlag("-ffunction-sections")
-            .addCompilerFlag("-funwind-tables")
-            .addCompilerFlag("-fstack-protector-strong")
-            .addCompilerFlag("-no-canonical-prefixes")
-            .addCompilerFlag("-fno-canonical-system-headers")
+        .addAllToolPath(ndkPaths.createToolpaths(toolchainName, targetPlatform))
+        .addAllCxxBuiltinIncludeDirectory(
+            ndkPaths.createGccToolchainBuiltinIncludeDirectories(
+                toolchainName, targetPlatform, "4.9"))
+        .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm64"))
 
-            // Linker flags
-            .addLinkerFlag("-no-canonical-prefixes")
+        // Compiler flags
+        .addCompilerFlag("-fpic")
+        .addCompilerFlag("-ffunction-sections")
+        .addCompilerFlag("-funwind-tables")
+        .addCompilerFlag("-fstack-protector-strong")
+        .addCompilerFlag("-no-canonical-prefixes")
+        .addCompilerFlag("-fno-canonical-system-headers")
 
-            // Additional release flags
-            .addCompilationModeFlags(
-                CompilationModeFlags.newBuilder()
-                    .setMode(CompilationMode.OPT)
-                    .addCompilerFlag("-O2")
-                    .addCompilerFlag("-g")
-                    .addCompilerFlag("-DNDEBUG")
-                    .addCompilerFlag("-fomit-frame-pointer")
-                    .addCompilerFlag("-fstrict-aliasing")
-                    .addCompilerFlag("-funswitch-loops")
-                    .addCompilerFlag("-finline-limit=300"))
+        // Linker flags
+        .addLinkerFlag("-no-canonical-prefixes")
 
-            // Additional debug flags
-            .addCompilationModeFlags(
-                CompilationModeFlags.newBuilder()
-                    .setMode(CompilationMode.DBG)
-                    .addCompilerFlag("-O0")
-                    .addCompilerFlag("-g")
-                    .addCompilerFlag("-UNDEBUG")
-                    .addCompilerFlag("-fno-omit-frame-pointer")
-                    .addCompilerFlag("-fno-strict-aliasing"));
+        // Additional release flags
+        .addCompilationModeFlags(CompilationModeFlags.newBuilder()
+            .setMode(CompilationMode.OPT)
+            .addCompilerFlag("-O2")
+            .addCompilerFlag("-g")
+            .addCompilerFlag("-DNDEBUG")
+            .addCompilerFlag("-fomit-frame-pointer")
+            .addCompilerFlag("-fstrict-aliasing")
+            .addCompilerFlag("-funswitch-loops")
+            .addCompilerFlag("-finline-limit=300"))
+
+        // Additional debug flags
+        .addCompilationModeFlags(CompilationModeFlags.newBuilder()
+            .setMode(CompilationMode.DBG)
+            .addCompilerFlag("-O0")
+            .addCompilerFlag("-UNDEBUG")
+            .addCompilerFlag("-fno-omit-frame-pointer")
+            .addCompilerFlag("-fno-strict-aliasing"));
 
     stlImpl.addStlImpl(toolchain, "4.9");
     return toolchain;
