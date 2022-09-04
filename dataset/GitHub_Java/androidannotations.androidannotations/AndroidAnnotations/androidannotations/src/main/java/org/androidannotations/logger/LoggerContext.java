@@ -1,5 +1,7 @@
 package org.androidannotations.logger;
 
+import java.io.File;
+
 import javax.annotation.processing.ProcessingEnvironment;
 
 public class LoggerContext {
@@ -40,22 +42,17 @@ public class LoggerContext {
 		this.currentLevel = currentLevel;
 	}
 
+	public void setFileLog(String path) {
+		appender.setFile(new File(path));
+	}
+
 	public void setProcessingEnv(ProcessingEnvironment processingEnv) {
 		appender.setProcessingEnv(processingEnv);
 		appender.resolveLogFile();
-
-		resolveLogLevel(processingEnv);
 	}
 
 	public void close() {
 		appender.closeFile();
-	}
-
-	private void resolveLogLevel(ProcessingEnvironment processingEnv) {
-		if (processingEnv.getOptions().containsKey(LoggerContext.LOG_LEVEL_OPTION)) {
-			Level logLevel = Level.parse(processingEnv.getOptions().get(LoggerContext.LOG_LEVEL_OPTION));
-			setCurrentLevel(logLevel);
-		}
 	}
 
 }
