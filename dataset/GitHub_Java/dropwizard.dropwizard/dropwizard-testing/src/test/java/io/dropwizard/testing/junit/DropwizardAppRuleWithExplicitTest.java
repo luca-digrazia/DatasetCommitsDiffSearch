@@ -1,5 +1,6 @@
 package io.dropwizard.testing.junit;
 
+import com.google.common.collect.ImmutableMap;
 import io.dropwizard.Application;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.server.DefaultServerFactory;
@@ -14,7 +15,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Collections;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,7 +22,6 @@ import static org.assertj.core.api.Assertions.entry;
 
 public class DropwizardAppRuleWithExplicitTest {
 
-    @SuppressWarnings("deprecation")
     @ClassRule
     public static final DropwizardAppRule<TestConfiguration> RULE;
 
@@ -65,7 +64,7 @@ public class DropwizardAppRuleWithExplicitTest {
 
         @GET
         public Response get() {
-            return Response.ok(Collections.singletonMap("message", message)).build();
+            return Response.ok(ImmutableMap.of("message", message)).build();
         }
     }
 }
