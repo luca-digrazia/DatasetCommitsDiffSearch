@@ -33,7 +33,7 @@ public class SkyframeExecutorWrappingWalkableGraph extends DelegatingWalkableGra
           @Override
           public NodeEntry get(@Nullable SkyKey requestor, Reason reason, SkyKey key)
               throws InterruptedException {
-            return evaluator.getExistingEntryAtLatestVersion(key);
+            return evaluator.getGraphMap().get(key);
           }
 
           @Override
