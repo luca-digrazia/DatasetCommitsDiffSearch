@@ -24,9 +24,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.testing.EqualsTester;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
-import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
@@ -43,7 +40,6 @@ import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -137,10 +133,7 @@ public abstract class GlobFunctionTest {
         new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(root, root, root),
-            root,
-            /* defaultSystemJavabase= */ null,
-            TestConstants.PRODUCT_NAME);
+            new ServerDirectories(root, root, root), root, TestConstants.PRODUCT_NAME);
     ExternalFilesHelper externalFilesHelper =
         ExternalFilesHelper.createForTesting(
             pkgLocator,
@@ -164,10 +157,10 @@ public abstract class GlobFunctionTest {
             /*hardcodedBlacklistedPackagePrefixes=*/ ImmutableSet.of(),
             /*additionalBlacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT));
     skyFunctions.put(
-        FileStateValue.FILE_STATE,
+        SkyFunctions.FILE_STATE,
         new FileStateFunction(
             new AtomicReference<TimestampGranularityMonitor>(), externalFilesHelper));
-    skyFunctions.put(FileValue.FILE, new FileFunction(pkgLocator));
+    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
     skyFunctions.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     skyFunctions.put(
         SkyFunctions.DIRECTORY_LISTING_STATE,
@@ -782,7 +775,7 @@ public abstract class GlobFunctionTest {
     private Map<Path, FileStatus> stubbedStats = Maps.newHashMap();
 
     public CustomInMemoryFs(ManualClock manualClock) {
-      super(manualClock, DigestHashFunction.MD5);
+      super(manualClock);
     }
 
     public void stubStat(Path path, @Nullable FileStatus stubbedResult) {

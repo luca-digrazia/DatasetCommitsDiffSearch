@@ -23,14 +23,12 @@ import static com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversa
 import static com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFileFactoryForTesting.symlinkToFileForTesting;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversalRoot;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -75,7 +73,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Test;
@@ -108,17 +105,15 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         new BlazeDirectories(
             new ServerDirectories(rootDirectory, outputBase, rootDirectory),
             rootDirectory,
-            null,
             analysisMock.getProductName());
     ExternalFilesHelper externalFilesHelper = ExternalFilesHelper.createForTesting(
         pkgLocator, ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS, directories);
 
     ConfiguredRuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
     Map<SkyFunctionName, SkyFunction> skyFunctions = new HashMap<>();
-    skyFunctions.put(
-        FileStateValue.FILE_STATE,
-        new FileStateFunction(new AtomicReference<>(), externalFilesHelper));
-    skyFunctions.put(FileValue.FILE, new FileFunction(pkgLocator));
+    skyFunctions.put(SkyFunctions.FILE_STATE, new FileStateFunction(
+        new AtomicReference<>(), externalFilesHelper));
+    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
     skyFunctions.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     skyFunctions.put(
         SkyFunctions.DIRECTORY_LISTING_STATE,
@@ -153,7 +148,9 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         new FileSymlinkInfiniteExpansionUniquenessFunction());
     skyFunctions.put(
         SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, new FileSymlinkCycleUniquenessFunction());
-    skyFunctions.put(Artifact.ARTIFACT, artifactFakeFunction);
+    skyFunctions.put(
+        SkyFunctions.ARTIFACT,
+        artifactFakeFunction);
 
     progressReceiver = new RecordingEvaluationProgressReceiver();
     differencer = new SequencedRecordingDifferencer();
@@ -328,7 +325,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
   private static final class RecordingEvaluationProgressReceiver
       extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
     Set<SkyKey> invalidations;
-    Set<SkyKey> evaluations;
+    Set<SkyValue> evaluations;
 
     RecordingEvaluationProgressReceiver() {
       clear();
@@ -346,11 +343,10 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
 
     @Override
     public void evaluated(
-        SkyKey skyKey,
-        Supplier<EvaluationSuccessState> evaluationSuccessState,
-        EvaluationState state) {
-      if (evaluationSuccessState.get().succeeded()) {
-        evaluations.add(skyKey);
+        SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
+      SkyValue value = skyValueSupplier.get();
+      if (value != null) {
+        evaluations.add(value);
       }
     }
   }
@@ -385,14 +381,14 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     ResolvedFile expected = regularFileForTesting(rootedPath);
     RecursiveFilesystemTraversalValue v1 = traverseAndAssertFiles(traversalRoot, expected);
     assertThat(progressReceiver.invalidations).isEmpty();
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v1);
     progressReceiver.clear();
 
     // Edit the file and verify that the value is rebuilt.
     appendToFile(rootArtifact, "bar");
     RecursiveFilesystemTraversalValue v2 = traverseAndAssertFiles(traversalRoot, expected);
     assertThat(progressReceiver.invalidations).contains(traversalRoot);
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v2);
     assertThat(v2).isNotEqualTo(v1);
     assertTraversalRootHashesAreNotEqual(v1, v2);
 
@@ -425,14 +421,14 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     ResolvedFile expected = symlinkToFileForTesting(symlinkTargetPath, symlinkNamePath, linkValue);
     RecursiveFilesystemTraversalValue v1 = traverseAndAssertFiles(traversalRoot, expected);
     assertThat(progressReceiver.invalidations).isEmpty();
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v1);
     progressReceiver.clear();
 
     // Edit the target of the symlink and verify that the value is rebuilt.
     appendToFile(linkTargetArtifact, "bar");
     RecursiveFilesystemTraversalValue v2 = traverseAndAssertFiles(traversalRoot, expected);
     assertThat(progressReceiver.invalidations).contains(traversalRoot);
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v2);
     assertThat(v2).isNotEqualTo(v1);
     assertTraversalRootHashesAreNotEqual(v1, v2);
   }
@@ -480,7 +476,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     RecursiveFilesystemTraversalValue v1 =
         traverseAndAssertFiles(traversalRoot, expected1, expected2);
     assertThat(progressReceiver.invalidations).isEmpty();
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v1);
     progressReceiver.clear();
 
     // Add a new file to the directory and see that the value is rebuilt.
@@ -496,7 +492,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     RecursiveFilesystemTraversalValue v2 =
         traverseAndAssertFiles(traversalRoot, expected1, expected2, expected3);
     assertThat(progressReceiver.invalidations).contains(traversalRoot);
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v2);
     // Directories always have the same hash code, but that is fine because their contents are also
     // part of the RecursiveFilesystemTraversalValue, so v1 and v2 are unequal.
     assertThat(v2).isNotEqualTo(v1);
@@ -510,7 +506,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
       appendToFile(file1, toInvalidate, "bar");
       v3 = traverseAndAssertFiles(traversalRoot, expected1, expected2, expected3);
       assertThat(progressReceiver.invalidations).contains(traversalRoot);
-      assertThat(progressReceiver.evaluations).contains(traversalRoot);
+      assertThat(progressReceiver.evaluations).contains(v3);
       assertThat(v3).isNotEqualTo(v2);
       // Directories always have the same hash code, but that is fine because their contents are
       // also part of the RecursiveFilesystemTraversalValue, so v2 and v3 are unequal.
@@ -605,7 +601,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     RecursiveFilesystemTraversalValue v1 =
         traverseAndAssertFiles(traversalRoot, expected1, expected2, expected3);
     assertThat(progressReceiver.invalidations).isEmpty();
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v1);
     progressReceiver.clear();
 
     // Add a new file to the directory and see that the value is rebuilt.
@@ -615,7 +611,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     RecursiveFilesystemTraversalValue v2 =
         traverseAndAssertFiles(traversalRoot, expected1, expected2, expected3, expected4);
     assertThat(progressReceiver.invalidations).contains(traversalRoot);
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v2);
     assertThat(v2).isNotEqualTo(v1);
     assertTraversalRootHashesAreNotEqual(v1, v2);
     progressReceiver.clear();
@@ -625,7 +621,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     RecursiveFilesystemTraversalValue v3 =
         traverseAndAssertFiles(traversalRoot, expected1, expected2, expected3, expected4);
     assertThat(progressReceiver.invalidations).contains(traversalRoot);
-    assertThat(progressReceiver.evaluations).contains(traversalRoot);
+    assertThat(progressReceiver.evaluations).contains(v3);
     assertThat(v3).isNotEqualTo(v2);
     assertTraversalRootHashesAreNotEqual(v2, v3);
     progressReceiver.clear();
@@ -808,7 +804,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     TraversalRequest params = fileLikeRoot(artifact, DONT_CROSS);
     ResolvedFile expected = regularFileForTesting(path);
     RecursiveFilesystemTraversalValue v1 = traverseAndAssertFiles(params, expected);
-    assertThat(progressReceiver.evaluations).contains(params);
+    assertThat(progressReceiver.evaluations).contains(v1);
     progressReceiver.clear();
 
     // Change the digest of the file. See that the value is rebuilt.
@@ -829,7 +825,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     TraversalRequest params = fileLikeRoot(artifact, DONT_CROSS);
     ResolvedFile expected = regularFileForTesting(path);
     RecursiveFilesystemTraversalValue v1 = traverseAndAssertFiles(params, expected);
-    assertThat(progressReceiver.evaluations).contains(params);
+    assertThat(progressReceiver.evaluations).contains(v1);
     progressReceiver.clear();
 
     // Change the mtime of the file but not the digest. See that the value is *not* rebuilt.
@@ -894,8 +890,10 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     @Override
     public SkyValue compute(SkyKey skyKey, Environment env)
         throws SkyFunctionException, InterruptedException {
+      ArtifactSkyKey artifactKey = (ArtifactSkyKey) skyKey.argument();
+      Artifact artifact = artifactKey.getArtifact();
       try {
-        return FileArtifactValue.create(((Artifact) skyKey).getPath());
+        return FileArtifactValue.create(artifact.getPath());
       } catch (IOException e) {
         throw new SkyFunctionException(e, Transience.PERSISTENT){};
       }

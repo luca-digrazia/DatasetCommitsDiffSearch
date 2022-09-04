@@ -117,7 +117,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
             fileSystem,
             directories,
             actionKeyContext,
-            /* workspaceStatusActionFactory= */ null,
+            null, /* workspaceStatusActionFactory */
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),
             ImmutableMap.<SkyFunctionName, SkyFunction>of(),

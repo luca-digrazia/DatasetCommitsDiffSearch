@@ -74,7 +74,6 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
                 getScratch().dir("/output"),
                 getScratch().dir("/user_root")),
             rootDirectory,
-            /* defaultSystemJavabase= */ null,
             AnalysisMock.get().getProductName());
     ConfiguredRuleClassProvider ruleClassProvider = AnalysisMock.get().createRuleClassProvider();
     skyframeExecutor =
@@ -107,16 +106,11 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
         AnalysisMock.get().getDefaultsPackageContent(),
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
+        ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(null));
-    skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
-                ImmutableMap.<RepositoryName, PathFragment>of()),
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-                RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY)));
+    skyframeExecutor.injectExtraPrecomputedValues(ImmutableList.of(PrecomputedValue.injected(
+        RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
+        ImmutableMap.<RepositoryName, PathFragment>of())));
     scratch.file(ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING);
   }
 

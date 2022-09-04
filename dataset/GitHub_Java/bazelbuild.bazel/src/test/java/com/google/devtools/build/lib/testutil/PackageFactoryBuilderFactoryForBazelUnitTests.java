@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.testutil;
 
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.packages.BuilderFactoryForTesting;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -50,8 +49,7 @@ class PackageFactoryBuilderFactoryForBazelUnitTests implements BuilderFactoryFor
     public PackageFactory build(RuleClassProvider ruleClassProvider) {
       Package.Builder.Helper packageBuilderHelperForTesting =
           doChecksForTesting
-              ? new BazelPackageBuilderHelperForTesting(
-                  (ConfiguredRuleClassProvider) ruleClassProvider, directories)
+              ? new BazelPackageBuilderHelperForTesting(ruleClassProvider, directories)
               : Package.Builder.DefaultHelper.INSTANCE;
       return new PackageFactory(
           ruleClassProvider,
@@ -62,3 +60,4 @@ class PackageFactoryBuilderFactoryForBazelUnitTests implements BuilderFactoryFor
     }
   }
 }
+

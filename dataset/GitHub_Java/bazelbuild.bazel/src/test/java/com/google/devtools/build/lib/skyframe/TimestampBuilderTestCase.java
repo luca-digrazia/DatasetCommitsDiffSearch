@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
@@ -260,7 +259,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
           Collection<AspectValue> aspects,
           Executor executor,
           Set<ConfiguredTarget> builtTargets,
-          Set<AspectKey> builtAspects,
           boolean explain,
           Range<Long> lastExecutionTimeRange,
           TopLevelArtifactContext topLevelArtifactContext)
@@ -402,8 +400,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
     tsgm.setCommandStartTime();
     Set<Artifact> artifactsToBuild = Sets.newHashSet(artifacts);
-    Set<ConfiguredTarget> builtTargets = new HashSet<>();
-    Set<AspectKey> builtAspects = new HashSet<>();
+    Set<ConfiguredTarget> builtArtifacts = new HashSet<>();
     try {
       builder.buildArtifacts(
           reporter,
@@ -414,9 +411,8 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
           null,
           null,
           executor,
-          builtTargets,
-          builtAspects,
-          false /*explain*/,
+          builtArtifacts, /*explain=*/
+          false,
           null,
           null);
     } finally {

@@ -30,9 +30,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.testing.EqualsTester;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
-import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -52,7 +49,6 @@ import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -135,7 +131,6 @@ public class FileFunctionTest {
         new BlazeDirectories(
             new ServerDirectories(pkgRoot.asPath(), outputBase, outputBase),
             pkgRoot.asPath(),
-            /* defaultSystemJavabase= */ null,
             TestConstants.PRODUCT_NAME);
     ExternalFilesHelper externalFilesHelper =
         ExternalFilesHelper.createForTesting(pkgLocatorRef, externalFileAction, directories);
@@ -144,7 +139,7 @@ public class FileFunctionTest {
         new InMemoryMemoizingEvaluator(
             ImmutableMap.<SkyFunctionName, SkyFunction>builder()
                 .put(
-                    FileStateValue.FILE_STATE,
+                    SkyFunctions.FILE_STATE,
                     new FileStateFunction(
                         new AtomicReference<TimestampGranularityMonitor>(), externalFilesHelper))
                 .put(
@@ -153,7 +148,7 @@ public class FileFunctionTest {
                 .put(
                     SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
                     new FileSymlinkInfiniteExpansionUniquenessFunction())
-                .put(FileValue.FILE, new FileFunction(pkgLocatorRef))
+                .put(SkyFunctions.FILE, new FileFunction(pkgLocatorRef))
                 .put(
                     SkyFunctions.PACKAGE,
                     new PackageFunction(null, null, null, null, null, null, null))
@@ -452,7 +447,7 @@ public class FileFunctionTest {
     createFsAndRoot(
         new CustomInMemoryFs(manualClock) {
           @Override
-          protected byte[] getFastDigest(Path path, DigestHashFunction hf) throws IOException {
+          protected byte[] getFastDigest(Path path, HashFunction hf) throws IOException {
             return digest;
           }
         });
@@ -491,7 +486,7 @@ public class FileFunctionTest {
     createFsAndRoot(
         new CustomInMemoryFs(manualClock) {
           @Override
-          protected byte[] getFastDigest(Path path, DigestHashFunction hf) {
+          protected byte[] getFastDigest(Path path, HashFunction hf) {
             return path.getBaseName().equals("unreadable") ? expectedDigest : null;
           }
         });
@@ -769,7 +764,7 @@ public class FileFunctionTest {
                 Iterables.transform(
                     Iterables.filter(
                         graph.getValues().keySet(),
-                        SkyFunctionName.functionIs(FileStateValue.FILE_STATE)),
+                        SkyFunctionName.functionIs(SkyFunctions.FILE_STATE)),
                     new Function<SkyKey, Object>() {
                       @Override
                       public Object apply(SkyKey skyKey) {
@@ -827,7 +822,7 @@ public class FileFunctionTest {
     fs =
         new CustomInMemoryFs(manualClock) {
           @Override
-          protected byte[] getDigest(Path path, DigestHashFunction hf) throws IOException {
+          protected byte[] getDigest(Path path, HashFunction hf) throws IOException {
             digestCalls.incrementAndGet();
             return super.getDigest(path, hf);
           }
@@ -1687,7 +1682,7 @@ public class FileFunctionTest {
     }
 
     @Override
-    protected byte[] getFastDigest(Path path, DigestHashFunction hashFunction) throws IOException {
+    protected byte[] getFastDigest(Path path, HashFunction hashFunction) throws IOException {
       if (stubbedFastDigestErrors.containsKey(path)) {
         throw stubbedFastDigestErrors.get(path);
       }

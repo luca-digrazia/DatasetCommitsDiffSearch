@@ -16,11 +16,8 @@ package com.google.devtools.build.lib.rules.repository;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -48,8 +45,6 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
@@ -81,10 +76,7 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
     Path root = scratch.dir("/outputbase");
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(root, root, root),
-            root,
-            /* defaultSystemJavabase= */ null,
-            TestConstants.PRODUCT_NAME);
+            new ServerDirectories(root, root, root), root, TestConstants.PRODUCT_NAME);
     delegatorFunction =
         new RepositoryDelegatorFunction(
             ImmutableMap.of(), null, new AtomicBoolean(true), ImmutableMap::of, directories);
@@ -103,10 +95,10 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
         new InMemoryMemoizingEvaluator(
             ImmutableMap.<SkyFunctionName, SkyFunction>builder()
                 .put(
-                    FileStateValue.FILE_STATE,
+                    SkyFunctions.FILE_STATE,
                     new FileStateFunction(
                         new AtomicReference<TimestampGranularityMonitor>(), externalFilesHelper))
-                .put(FileValue.FILE, new FileFunction(pkgLocator))
+                .put(SkyFunctions.FILE, new FileFunction(pkgLocator))
                 .put(SkyFunctions.REPOSITORY_DIRECTORY, delegatorFunction)
                 .put(
                     SkyFunctions.PACKAGE,
@@ -140,25 +132,16 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
         ImmutableMap.<RepositoryName, PathFragment>builder()
             .put(RepositoryName.createFromValidStrippedName("foo"), overrideDirectory.asFragment())
             .build());
-    RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING.set(
-        differencer, RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY);
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
     PrecomputedValue.SKYLARK_SEMANTICS.set(differencer, SkylarkSemantics.DEFAULT_SEMANTICS);
-    RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE.set(
-        differencer, Optional.<RootedPath>absent());
   }
 
   @Test
   public void testOverride() throws Exception {
     StoredEventHandler eventHandler = new StoredEventHandler();
     SkyKey key = RepositoryDirectoryValue.key(RepositoryName.createFromValidStrippedName("foo"));
-    EvaluationContext evaluationContext =
-        EvaluationContext.newBuilder()
-            .setKeepGoing(false)
-            .setNumThreads(8)
-            .setEventHander(eventHandler)
-            .build();
-    EvaluationResult<SkyValue> result = driver.evaluate(ImmutableList.of(key), evaluationContext);
+    EvaluationResult<SkyValue> result =
+        driver.evaluate(ImmutableList.of(key), false, 8, eventHandler);
     assertThat(result.hasError()).isFalse();
     RepositoryDirectoryValue repositoryDirectoryValue = (RepositoryDirectoryValue) result.get(key);
     Path expectedPath = scratch.dir("/outputbase/external/foo");

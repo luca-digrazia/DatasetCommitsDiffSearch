@@ -740,8 +740,7 @@ public class FilesystemValueCheckerTest {
     return new ActionExecutionValue(
         artifactData,
         ImmutableMap.<Artifact, TreeArtifactValue>of(),
-        ImmutableMap.<Artifact, FileArtifactValue>of(),
-        /*outputSymlinks=*/ null);
+        ImmutableMap.<Artifact, FileArtifactValue>of());
   }
 
   private ActionExecutionValue actionValueWithEmptyDirectory(Artifact emptyDir) {
@@ -751,8 +750,7 @@ public class FilesystemValueCheckerTest {
     return new ActionExecutionValue(
         ImmutableMap.<Artifact, FileValue>of(),
         ImmutableMap.of(emptyDir, emptyValue),
-        ImmutableMap.<Artifact, FileArtifactValue>of(),
-        /*outputSymlinks=*/ null);
+        ImmutableMap.<Artifact, FileArtifactValue>of());
   }
 
   private ActionExecutionValue actionValueWithTreeArtifacts(List<TreeFileArtifact> contents) {
@@ -781,11 +779,8 @@ public class FilesystemValueCheckerTest {
       treeArtifactData.put(dirDatum.getKey(), TreeArtifactValue.create(dirDatum.getValue()));
     }
 
-    return new ActionExecutionValue(
-        fileData,
-        treeArtifactData,
-        ImmutableMap.<Artifact, FileArtifactValue>of(),
-        /*outputSymlinks=*/ null);
+    return new ActionExecutionValue(fileData, treeArtifactData,
+        ImmutableMap.<Artifact, FileArtifactValue>of());
   }
 
   @Test

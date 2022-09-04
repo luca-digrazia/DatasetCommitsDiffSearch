@@ -107,7 +107,6 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
         new BlazeDirectories(
             new ServerDirectories(outputBase, outputBase, outputBase),
             rootDirectory,
-            /* defaultSystemJavabase= */ null,
             analysisMock.getProductName());
     pkgFactory =
         analysisMock
@@ -133,14 +132,9 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
             BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE,
             DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider));
     TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
-                ImmutableMap.<RepositoryName, PathFragment>of()),
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-                RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY)));
+    skyframeExecutor.injectExtraPrecomputedValues(ImmutableList.of(PrecomputedValue.injected(
+        RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
+        ImmutableMap.<RepositoryName, PathFragment>of())));
     PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
     packageCacheOptions.showLoadingProgress = true;
     packageCacheOptions.globbingThreads = 7;
@@ -152,8 +146,8 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
             analysisMock.getInvocationPolicyEnforcer().getInvocationPolicy()),
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
+        ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
-    skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
 
     mockToolsConfig = new MockToolsConfig(rootDirectory);
     analysisMock.setupMockClient(mockToolsConfig);
@@ -209,19 +203,16 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
       BuildConfigurationCollection configCollection) throws Exception {
     Map<ArtifactRoot, BuildConfiguration> outputPaths = new HashMap<>();
     for (BuildConfiguration config : configCollection.getTargetConfigurations()) {
-      BuildConfiguration otherConfig =
-          outputPaths.get(config.getOutputDirectory(RepositoryName.MAIN));
-      if (otherConfig != null) {
-        throw new IllegalStateException(
-            "The output path '"
-                + config.getOutputDirectory(RepositoryName.MAIN)
-                + "' is the same for configurations '"
-                + config
-                + "' and '"
-                + otherConfig
-                + "'");
-      } else {
-        outputPaths.put(config.getOutputDirectory(RepositoryName.MAIN), config);
+      if (config.isActionsEnabled()) {
+        BuildConfiguration otherConfig = outputPaths.get(
+            config.getOutputDirectory(RepositoryName.MAIN));
+        if (otherConfig != null) {
+          throw new IllegalStateException("The output path '"
+              + config.getOutputDirectory(RepositoryName.MAIN)
+              + "' is the same for configurations '" + config + "' and '" + otherConfig + "'");
+        } else {
+          outputPaths.put(config.getOutputDirectory(RepositoryName.MAIN), config);
+        }
       }
     }
   }
