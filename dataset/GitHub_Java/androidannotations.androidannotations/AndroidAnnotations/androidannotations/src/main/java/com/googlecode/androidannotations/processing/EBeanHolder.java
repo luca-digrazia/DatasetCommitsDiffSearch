@@ -24,16 +24,16 @@ import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JSwitch;
 import com.sun.codemodel.JVar;
 
 public class EBeanHolder {
 
-	public final JDefinedClass generatedClass;
+	public JDefinedClass eBean;
 	/**
 	 * Only defined on activities
 	 */
@@ -52,8 +52,7 @@ public class EBeanHolder {
 
 	public JFieldVar handler;
 
-	public JBlock onOptionsItemSelectedIfElseBlock;
-	public JVar onOptionsItemSelectedItemId;
+	public JSwitch onOptionsItemSelectedSwitch;
 	public JVar onOptionsItemSelectedItem;
 
 	public JMethod restoreSavedInstanceStateMethod;
@@ -85,16 +84,7 @@ public class EBeanHolder {
 	/**
 	 * TextWatchers by idRef
 	 */
-	public final HashMap<String, TextWatcherHolder> textWatchers = new HashMap<String, TextWatcherHolder>();
-
-	public JConditional onActivityResultLastCondition;
-	public JMethod onActivityResultMethod;
-	public final HashMap<String, JBlock> onActivityResultBlocks = new HashMap<String, JBlock>();
-
-	/**
-	 * onSeekBarChangeListeners by idRef
-	 */
-	public final HashMap<String, OnSeekBarChangeListenerHolder> onSeekBarChangeListeners = new HashMap<String, OnSeekBarChangeListenerHolder>();
+	public HashMap<String, TextWatcherHolder> textWatchers = new HashMap<String, TextWatcherHolder>();
 
 	public JMethod findNativeFragmentById;
 	public JMethod findSupportFragmentById;
@@ -104,10 +94,9 @@ public class EBeanHolder {
 	private final EBeansHolder eBeansHolder;
 	public final Class<? extends Annotation> eBeanAnnotation;
 
-	public EBeanHolder(EBeansHolder eBeansHolder, Class<? extends Annotation> eBeanAnnotation, JDefinedClass generatedClass) {
+	public EBeanHolder(EBeansHolder eBeansHolder, Class<? extends Annotation> eBeanAnnotation) {
 		this.eBeansHolder = eBeansHolder;
 		this.eBeanAnnotation = eBeanAnnotation;
-		this.generatedClass = generatedClass;
 	}
 
 	public Classes classes() {
@@ -116,6 +105,10 @@ public class EBeanHolder {
 
 	public JCodeModel codeModel() {
 		return eBeansHolder.codeModel();
+	}
+
+	public JClass parseClass(String fullyQualifiedClassName) {
+		return eBeansHolder.parseClass(fullyQualifiedClassName);
 	}
 
 	public JClass refClass(String fullyQualifiedClassName) {
