@@ -156,13 +156,14 @@ public class JarClassPathElement implements ClassPathElement {
     public ProtectionDomain getProtectionDomain(ClassLoader classLoader) {
         URL url = null;
         try {
-            URI uri = new URI("file", null, jarPath.getPath(), null);
+            URI uri = new URI("jar:file", null, jarPath.getPath() + "!/", null);
             url = uri.toURL();
         } catch (URISyntaxException | MalformedURLException e) {
             throw new RuntimeException("Unable to create protection domain for " + jarPath, e);
         }
         CodeSource codesource = new CodeSource(url, (Certificate[]) null);
-        return new ProtectionDomain(codesource, null, classLoader, null);
+        ProtectionDomain protectionDomain = new ProtectionDomain(codesource, null, classLoader, null);
+        return protectionDomain;
     }
 
     @Override
