@@ -137,13 +137,7 @@ public class BadOperationChecker extends AstVisitorWithNameResolution {
   @Override
   public void visit(AugmentedAssignmentStatement node) {
     super.visit(node);
-    ImmutableSet<Identifier> lvalues = node.getLValue().boundIdentifiers();
-    if (lvalues.size() != 1) {
-      // assignment visitor does not track information about assignments to IndexExpressions like
-      // kwargs["name"] += "foo" so nothing to do here until that changes
-      return;
-    }
-    Identifier ident = Iterables.getOnlyElement(lvalues);
+    Identifier ident = Iterables.getOnlyElement(node.getLValue().boundIdentifiers());
     NodeType identType = getInferredTypeOrNull(ident);
     NodeType expressionType = getInferredTypeOrNull(node.getExpression());
     if (identType == NodeType.DICT || expressionType == NodeType.DICT) {
