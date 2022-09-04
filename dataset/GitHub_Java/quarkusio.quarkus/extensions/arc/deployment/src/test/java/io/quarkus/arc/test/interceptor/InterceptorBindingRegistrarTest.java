@@ -43,8 +43,7 @@ public class InterceptorBindingRegistrarTest {
                         context.produce(new InterceptorBindingRegistrarBuildItem(new InterceptorBindingRegistrar() {
                             @Override
                             public Map<DotName, Set<String>> registerAdditionalBindings() {
-                                return Collections.singletonMap(DotName.createSimple(NotAnInterceptorBinding.class.getName()),
-                                        Collections.emptySet());
+                                return Collections.singletonMap(DotName.createSimple(NotAnInterceptorBinding.class.getName()), Collections.emptySet());
                             }
 
                         }));
