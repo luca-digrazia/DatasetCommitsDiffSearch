@@ -143,11 +143,11 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
                   Event.error(
                       TargetUtils.getLocationMaybe(fromTarget),
                       String.format(
-                          "%s depends on %s in repository %s which failed to fetch. %s",
+                          "%s depends on %s in repository %s which failed to fetch. "
+                              + e.getMessage(),
                           fromTarget.getLabel(),
                           label,
-                          label.getPackageIdentifier().getRepository(),
-                          e.getMessage())));
+                          label.getPackageIdentifier().getRepository())));
           continue;
         }
         rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
