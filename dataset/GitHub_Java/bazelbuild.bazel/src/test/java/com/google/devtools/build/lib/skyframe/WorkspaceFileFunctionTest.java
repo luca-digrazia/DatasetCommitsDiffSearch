@@ -154,7 +154,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     return ImmutableList.of();
   }
 
-  private static Label getLabelMapping(Package pkg, String name) throws NoSuchTargetException {
+  private Label getLabelMapping(Package pkg, String name) throws NoSuchTargetException {
     return (Label) ((Rule) pkg.getTarget(name)).getAttributeContainer().getAttr("actual");
   }
 

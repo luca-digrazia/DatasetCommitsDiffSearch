@@ -25,17 +25,16 @@ import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 
-/** A collection of global Starlark build API functions that apply to WORKSPACE files. */
+/** A collection of global skylark build API functions that apply to WORKSPACE files. */
 @SkylarkGlobalLibrary
 public interface WorkspaceGlobalsApi {
 
   @SkylarkCallable(
       name = "workspace",
       doc =
-          "<p>This function can only be used in a <code>WORKSPACE</code> file and must be declared "
-              + "before all other functions in the <code>WORKSPACE</code> file. "
-              + "Each <code>WORKSPACE</code> file should have a <code>workspace</code> "
-              + "function.</p>"
+          "<p>This command can only be used in a <code>WORKSPACE</code> file and must come "
+              + "before all other commands in the <code>WORKSPACE</code> file. "
+              + "Each <code>WORKSPACE</code> file should have a <code>workspace</code> command.</p>"
               + "<p>Sets the name for this workspace. "
               + "Workspace names should be a Java-package-style "
               + "description of the project, using underscores as separators, e.g., "
@@ -117,10 +116,7 @@ public interface WorkspaceGlobalsApi {
 
   @SkylarkCallable(
       name = "register_execution_platforms",
-      doc =
-          "Register an already-defined platform so that Bazel can use it as an "
-              + "<a href=\"../../toolchains.html#toolchain-resolution\">execution platform</a> "
-              + "during <a href=\"../../toolchains.html\">toolchain resolution</a>.",
+      doc = "Registers a platform so that it is available to execute actions.",
       allowReturnNones = true,
       extraPositionals =
           @Param(
@@ -135,11 +131,8 @@ public interface WorkspaceGlobalsApi {
   @SkylarkCallable(
       name = "register_toolchains",
       doc =
-          "Register an already-defined toolchain so that Bazel can use it during "
-              + "<a href=\"../../toolchains.html\">toolchain resolution</a>. See examples of "
-              + "<a href=\"../../toolchains.html#defining-toolchains\">defining</a> and "
-              + "<a href=\"../../toolchains.html#registering-and-building-with-toolchains\">"
-              + "registering toolchains.",
+          "Registers a toolchain created with the toolchain() rule so that it is available for "
+              + "toolchain resolution.",
       allowReturnNones = true,
       extraPositionals =
           @Param(

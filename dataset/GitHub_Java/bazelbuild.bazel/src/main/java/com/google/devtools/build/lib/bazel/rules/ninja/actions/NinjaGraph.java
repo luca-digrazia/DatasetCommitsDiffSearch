@@ -34,17 +34,17 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget;
-import com.google.devtools.build.lib.bazel.rules.ninja.pipeline.NinjaPipelineImpl;
+import com.google.devtools.build.lib.bazel.rules.ninja.pipeline.NinjaPipeline;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
+import com.google.devtools.build.lib.repository.ExternalPackageUtil;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -72,13 +72,13 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    if (!ruleContext.getAnalysisEnvironment().getStarlarkSemantics().experimentalNinjaActions()) {
+    if (!ruleContext.getAnalysisEnvironment().getSkylarkSemantics().experimentalNinjaActions()) {
       throw ruleContext.throwWithRuleError(
           "Usage of ninja_graph is only allowed with --experimental_ninja_actions flag");
     }
-    Artifact mainArtifact = ruleContext.getPrerequisiteArtifact("main", TransitionMode.TARGET);
+    Artifact mainArtifact = ruleContext.getPrerequisiteArtifact("main", Mode.TARGET);
     ImmutableList<Artifact> ninjaSrcs =
-        ruleContext.getPrerequisiteArtifacts("ninja_srcs", TransitionMode.TARGET).list();
+        ruleContext.getPrerequisiteArtifacts("ninja_srcs", Mode.TARGET).list();
     PathFragment outputRoot =
         PathFragment.create(ruleContext.attributes().get("output_root", Type.STRING));
     PathFragment workingDirectory =
@@ -118,7 +118,7 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
               .getWorkspace();
       String ownerTargetName = ruleContext.getLabel().getName();
       List<NinjaTarget> ninjaTargets =
-          new NinjaPipelineImpl(
+          new NinjaPipeline(
                   workspace.getRelative(workingDirectory),
                   MoreExecutors.listeningDecorator(NINJA_POOL),
                   childNinjaFiles,
@@ -258,8 +258,7 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
       throws InterruptedException {
     Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
     ImmutableSortedSet<String> notSymlinkedDirs =
-        BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER.getNotSymlinkedInExecrootDirectories(
-            env);
+        ExternalPackageUtil.getNotSymlinkedInExecrootDirectories(env);
     if (env.valuesMissing()) {
       return;
     }

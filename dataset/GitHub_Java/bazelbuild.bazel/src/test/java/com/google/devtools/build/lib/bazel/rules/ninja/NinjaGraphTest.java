@@ -51,7 +51,7 @@ public class NinjaGraphTest extends BuildViewTestCase {
 
   @Before
   public void setUp() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_ninja_actions");
+    setSkylarkSemanticsOptions("--experimental_ninja_actions");
   }
 
   @Test
@@ -156,7 +156,7 @@ public class NinjaGraphTest extends BuildViewTestCase {
     PhonyTarget phonyTarget = provider.getPhonyTargetsMap().get(alias);
     assertThat(phonyTarget.isAlwaysDirty()).isFalse();
     assertThat(phonyTarget.getPhonyNames()).isEmpty();
-    assertThat(phonyTarget.getDirectExplicitInputs())
+    assertThat(phonyTarget.getDirectUsualInputs())
         .containsExactly(PathFragment.create("hello.txt"));
   }
 

@@ -23,7 +23,6 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLines.CommandLineAndParamFileInfo;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
@@ -55,7 +54,7 @@ public class NinjaBuildTest extends BuildViewTestCase {
 
   @Before
   public void setUp() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_ninja_actions");
+    setSkylarkSemanticsOptions("--experimental_ninja_actions");
   }
 
   @Test
@@ -72,7 +71,7 @@ public class NinjaBuildTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//a:build");
     assertContainsEvent(
-        "Source artifact 'subdir/i' is not under the package directory 'a' of ninja_build rule");
+        "Source artifact 'subdir/i' is not under the package of the ninja_build rule");
   }
 
   @Test
@@ -85,7 +84,6 @@ public class NinjaBuildTest extends BuildViewTestCase {
         "build_config/build.ninja",
         "rule echo",
         "  command = echo \"Hello $$(cat ${in})!\" > ${out}",
-        "  description = Creating ${out}",
         "build build_config/hello.txt: echo build_config/input.txt");
 
     // Working directory is workspace root.
@@ -114,105 +112,6 @@ public class NinjaBuildTest extends BuildViewTestCase {
         .isEqualTo("build_config/input.txt");
     assertThat(ninjaAction.getPrimaryOutput().getExecPathString())
         .isEqualTo("build_config/hello.txt");
-    assertThat(ninjaAction.getProgressMessage()).isEqualTo("Creating build_config/hello.txt");
-  }
-
-  @Test
-  public void testNinjaBuildRule_progressMessageFromRule() throws Exception {
-    rewriteWorkspace(
-        "workspace(name = 'test')", "toplevel_output_directories(paths = ['build_config'])");
-
-    scratch.file("build_config/input.txt", "World");
-    scratch.file(
-        "build_config/build.ninja",
-        "file_variable = with greetings",
-        "rule echo",
-        "  command = echo \"Hello $$(cat ${in})!\" > ${out}",
-        "  description = ${action} ${out} ${file_variable}",
-        "build build_config/hello.txt: echo build_config/input.txt",
-        "  action = Creating");
-
-    // Working directory is workspace root.
-    ConfiguredTarget configuredTarget =
-        scratchConfiguredTarget(
-            "",
-            "ninja_target",
-            "ninja_graph(name = 'graph', output_root = 'build_config',",
-            " main = 'build_config/build.ninja',",
-            " output_root_inputs = ['input.txt'])",
-            "ninja_build(name = 'ninja_target', ninja_graph = 'graph',",
-            " output_groups= {'main': ['build_config/hello.txt']})");
-    RuleConfiguredTarget ninjaConfiguredTarget = (RuleConfiguredTarget) configuredTarget;
-    ImmutableList<ActionAnalysisMetadata> actions = ninjaConfiguredTarget.getActions();
-    NinjaAction ninjaAction = (NinjaAction) Iterables.getOnlyElement(actions);
-
-    // The rule description is expanded with rule, build and file level variables.
-    assertThat(ninjaAction.getProgressMessage())
-        .isEqualTo("Creating build_config/hello.txt with greetings");
-  }
-
-  @Test
-  public void testNinjaBuildRule_progressMessageFromBuildStatement() throws Exception {
-    rewriteWorkspace(
-        "workspace(name = 'test')", "toplevel_output_directories(paths = ['build_config'])");
-
-    scratch.file("build_config/input.txt", "World");
-    scratch.file(
-        "build_config/build.ninja",
-        "file_variable = foo bar baz",
-        "rule echo",
-        "  command = echo \"Hello $$(cat ${in})!\" > ${out}",
-        "  description = Creating ${out}",
-        "build build_config/hello.txt: echo build_config/input.txt",
-        "  description = ${file_variable} qux ");
-
-    // Working directory is workspace root.
-    ConfiguredTarget configuredTarget =
-        scratchConfiguredTarget(
-            "",
-            "ninja_target",
-            "ninja_graph(name = 'graph', output_root = 'build_config',",
-            " main = 'build_config/build.ninja',",
-            " output_root_inputs = ['input.txt'])",
-            "ninja_build(name = 'ninja_target', ninja_graph = 'graph',",
-            " output_groups= {'main': ['build_config/hello.txt']})");
-    RuleConfiguredTarget ninjaConfiguredTarget = (RuleConfiguredTarget) configuredTarget;
-    ImmutableList<ActionAnalysisMetadata> actions = ninjaConfiguredTarget.getActions();
-    NinjaAction ninjaAction = (NinjaAction) Iterables.getOnlyElement(actions);
-
-    // The build description is expanded with the file level variable.
-    assertThat(ninjaAction.getProgressMessage()).isEqualTo("foo bar baz qux");
-  }
-
-  @Test
-  public void testNinjaBuildRule_progressMessageGeneratedAtRuntime() throws Exception {
-    rewriteWorkspace(
-        "workspace(name = 'test')", "toplevel_output_directories(paths = ['build_config'])");
-
-    scratch.file("build_config/input.txt", "World");
-    scratch.file(
-        "build_config/build.ninja",
-        "rule echo",
-        "  command = echo \"Hello $$(cat ${in})!\" > ${out}",
-        "build build_config/hello.txt: echo build_config/input.txt");
-
-    // Working directory is workspace root.
-    ConfiguredTarget configuredTarget =
-        scratchConfiguredTarget(
-            "",
-            "ninja_target",
-            "ninja_graph(name = 'graph', output_root = 'build_config',",
-            " main = 'build_config/build.ninja',",
-            " output_root_inputs = ['input.txt'])",
-            "ninja_build(name = 'ninja_target', ninja_graph = 'graph',",
-            " output_groups= {'main': ['build_config/hello.txt']})");
-    RuleConfiguredTarget ninjaConfiguredTarget = (RuleConfiguredTarget) configuredTarget;
-    ImmutableList<ActionAnalysisMetadata> actions = ninjaConfiguredTarget.getActions();
-    NinjaAction ninjaAction = (NinjaAction) Iterables.getOnlyElement(actions);
-
-    // No description in either rule or build statements, so pretty print with rule name and output
-    // basenames.
-    assertThat(ninjaAction.getProgressMessage()).isEqualTo("[rule echo] Outputs: hello.txt");
   }
 
   @Test
@@ -255,7 +154,6 @@ public class NinjaBuildTest extends BuildViewTestCase {
         .isEqualTo("build_config/input.txt");
     assertThat(ninjaAction.getPrimaryOutput().getExecPathString())
         .isEqualTo("build_config/hello.txt");
-    assertThat(ninjaAction.getProgressMessage()).isEqualTo("[rule echo] Outputs: hello.txt");
   }
 
   @Test
@@ -486,9 +384,6 @@ public class NinjaBuildTest extends BuildViewTestCase {
     assertThat(commandLines).hasSize(1);
     assertThat(commandLines.get(0).commandLine.toString())
         .endsWith("cd build_config && executable -d out_file.d ../input > out_file");
-
-    assertThat(ActionsTestUtil.baseArtifactNames(action.getOutputs()))
-        .containsExactly("out_file", "out_file.d");
   }
 
   @Test
