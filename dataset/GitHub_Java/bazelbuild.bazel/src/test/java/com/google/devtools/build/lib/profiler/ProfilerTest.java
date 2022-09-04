@@ -149,8 +149,7 @@ public class ProfilerTest {
     JsonProfile jsonProfile = new JsonProfile(new ByteArrayInputStream(buffer.toByteArray()));
     assertThat(jsonProfile.getTraceEvents())
         .hasSize(
-            2 /* thread names */
-                + 2 /* thread indices */
+            2 /* threads */
                 + 2 /* build phase marker */
                 + 1 /* VFS event, the first is too short */
                 + 2 /* action + action dependency checking */
@@ -160,12 +159,6 @@ public class ProfilerTest {
     assertThat(
             jsonProfile.getTraceEvents().stream()
                 .filter(traceEvent -> "thread_name".equals(traceEvent.name()))
-                .collect(Collectors.toList()))
-        .hasSize(2);
-
-    assertThat(
-            jsonProfile.getTraceEvents().stream()
-                .filter(traceEvent -> "thread_sort_index".equals(traceEvent.name()))
                 .collect(Collectors.toList()))
         .hasSize(2);
 
@@ -226,12 +219,10 @@ public class ProfilerTest {
     }
     profiler.stop();
 
-
     JsonProfile jsonProfile = new JsonProfile(new ByteArrayInputStream(buffer.toByteArray()));
     assertThat(jsonProfile.getTraceEvents())
         .hasSize(
-            2 /* thread names */
-                + 2 /* thread sort indices */
+            2 /* threads */
                 + 1 /* VFS */
                 + 1 /* action */
                 + 1 /* action counters */
@@ -277,15 +268,11 @@ public class ProfilerTest {
     profiler.stop();
 
     JsonProfile jsonProfile = new JsonProfile(new ByteArrayInputStream(buffer.toByteArray()));
-    assertThat(jsonProfile.getTraceEvents())
-        .hasSize(2 /* threads */ + 2 /* threads sort index */ + 1 /* VFS */);
+    assertThat(jsonProfile.getTraceEvents()).hasSize(2 /* threads */ + 1 /* VFS */);
 
     assertThat(
             jsonProfile.getTraceEvents().stream()
-                .filter(
-                    traceEvent ->
-                        !"thread_name".equals(traceEvent.name())
-                            && !"thread_sort_index".equals(traceEvent.name()))
+                .filter(traceEvent -> !"thread_name".equals(traceEvent.name()))
                 .collect(Collectors.toList()))
         .hasSize(1);
   }
@@ -395,14 +382,11 @@ public class ProfilerTest {
     profiler.stop();
 
     JsonProfile jsonProfile = new JsonProfile(new ByteArrayInputStream(buffer.toByteArray()));
-    assertThat(jsonProfile.getTraceEvents()).hasSize(2);
+    assertThat(jsonProfile.getTraceEvents()).hasSize(1);
 
     assertThat(
             jsonProfile.getTraceEvents().stream()
-                .filter(
-                    traceEvent ->
-                        !"thread_name".equals(traceEvent.name())
-                            && !"thread_sort_index".equals(traceEvent.name()))
+                .filter(traceEvent -> !"thread_name".equals(traceEvent.name()))
                 .collect(Collectors.toList()))
         .isEmpty();
   }
@@ -439,8 +423,7 @@ public class ProfilerTest {
     JsonProfile jsonProfile = new JsonProfile(new ByteArrayInputStream(buffer.toByteArray()));
     assertThat(jsonProfile.getTraceEvents())
         .hasSize(
-            4 /* thread names */
-                + 4 /* thread indices */
+            4 /* threads */
                 + 1 /* main task phase marker */
                 + 2 /* starting, joining events */
                 + 2 * 10000 /* thread1/thread2 events */
@@ -505,8 +488,7 @@ public class ProfilerTest {
     JsonProfile jsonProfile = new JsonProfile(new ByteArrayInputStream(buffer.toByteArray()));
     assertThat(jsonProfile.getTraceEvents())
         .hasSize(
-            4 /* thread names*/
-                + 4 /* threads sort index */
+            4 /* threads */
                 + 4 /* build phase marker */
                 + 3 * 100 /* thread1, thread2a, thread2b */
                 + 1 /* complex task */
@@ -525,7 +507,7 @@ public class ProfilerTest {
   /**
    * Extracts all events for a given phase.
    *
-   * <p>Excludes thread_name and thread_sort_index events.
+   * <p>Excludes thread_name events.
    */
   private static List<TraceEvent> getTraceEventsForPhase(
       ProfilePhase phase, List<TraceEvent> traceEvents) {
@@ -540,9 +522,7 @@ public class ProfilerTest {
           continue;
         }
       }
-      if (foundPhase
-          && !"thread_name".equals(traceEvent.name())
-          && !"thread_sort_index".equals(traceEvent.name())) {
+      if (foundPhase && !"thread_name".equals(traceEvent.name())) {
         filteredEvents.add(traceEvent);
       }
     }
