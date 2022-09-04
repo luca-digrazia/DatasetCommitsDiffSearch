@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.exec;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -34,7 +35,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.rules.test.TestActionContext;
-import com.google.devtools.build.lib.rules.test.TestAttempt;
 import com.google.devtools.build.lib.rules.test.TestResult;
 import com.google.devtools.build.lib.rules.test.TestRunnerAction;
 import com.google.devtools.build.lib.rules.test.TestRunnerAction.ResolvedPaths;
@@ -112,9 +112,10 @@ public class StandaloneTestStrategy extends TestStrategy {
     info.put("timeout", "" + getTimeout(action));
     info.putAll(action.getTestProperties().getExecutionInfo());
 
+    Artifact testSetup = action.getRuntimeArtifact(TEST_SETUP_BASENAME);
     Spawn spawn =
         new BaseSpawn(
-            getArgs(COLLECT_COVERAGE, action),
+            getArgs(testSetup.getExecPathString(), COLLECT_COVERAGE, action),
             env,
             info,
             new RunfilesSupplierImpl(
@@ -155,7 +156,7 @@ public class StandaloneTestStrategy extends TestStrategy {
                 workingDirectory);
       }
       processLastTestAttempt(attempt, dataBuilder, data);
-      finalizeTest(attempt, actionExecutionContext, action, dataBuilder.build());
+      finalizeTest(actionExecutionContext, action, dataBuilder.build());
     } catch (IOException e) {
       executor.getEventHandler().handle(Event.error("Caught I/O exception: " + e));
       throw new EnvironmentalExecException("unexpected I/O exception", e);
@@ -190,7 +191,6 @@ public class StandaloneTestStrategy extends TestStrategy {
     dataBuilder.addFailedLogs(testLog.toString());
     dataBuilder.addTestTimes(data.getTestTimes(0));
     dataBuilder.addAllTestProcessTimes(data.getTestProcessTimesList());
-    executor.getEventBus().post(new TestAttempt(action, attempt));
     processTestOutput(executor, outErr, new TestResult(action, data, false), testLog);
   }
 
@@ -365,12 +365,9 @@ public class StandaloneTestStrategy extends TestStrategy {
   }
 
   private final void finalizeTest(
-      int attempt,
-      ActionExecutionContext actionExecutionContext,
-      TestRunnerAction action,
-      TestResultData data)
+      ActionExecutionContext actionExecutionContext, TestRunnerAction action, TestResultData data)
       throws IOException, ExecException {
-    TestResult result = new TestResult(action, data, false, attempt);
+    TestResult result = new TestResult(action, data, false);
     postTestResult(actionExecutionContext.getExecutor(), result);
 
     processTestOutput(
