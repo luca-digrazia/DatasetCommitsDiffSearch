@@ -38,6 +38,7 @@ public class DateTools {
     public static final String ES_DATE_FORMAT_NO_MS = "yyyy-MM-dd HH:mm:ss";
 
     public static final DateTimeFormatter DEFAULT_DATE_FORMAT = DateTimeFormat.forPattern("E MMM dd YYYY HH:mm:ss.SSS ZZ");
+    public static final DateTimeFormatter SHORT_DATE_FORMAT_TZ = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS ZZ");
     public static final DateTimeFormatter SHORT_DATE_FORMAT = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS");
     private static DateTimeZone globalTimezone = DateTimeZone.getDefault();
 
@@ -84,5 +85,23 @@ public class DateTools {
 
     public static DateTime nowInUTC() {
         return DateTime.now(DateTimeZone.UTC);
+    }
+
+    public static int getUserTimeZoneOffset() {
+        DateTimeZone tz = globalTimezone;
+
+        final User currentUser = UserService.current();
+
+        if (currentUser != null && currentUser.getTimeZone() != null) {
+            tz = currentUser.getTimeZone();
+        }
+
+        int offsetMillis = tz.toTimeZone().getRawOffset() / 1000;
+
+        if (tz.toTimeZone().useDaylightTime()) {
+            offsetMillis += 3600;
+        }
+
+        return (offsetMillis / 60) * -1;
     }
 }
