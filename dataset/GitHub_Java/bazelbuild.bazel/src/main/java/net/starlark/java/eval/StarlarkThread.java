@@ -126,8 +126,6 @@ public final class StarlarkThread {
     @Nullable
     final Debug.Debugger dbg = Debug.debugger.get(); // the debugger, if active for this frame
 
-    int compcount = 0; // number of enclosing comprehensions
-
     Object result = Starlark.NONE; // the operand of a Starlark return statement
 
     // Current PC location. Initially fn.getLocation(); for Starlark functions,
@@ -190,6 +188,9 @@ public final class StarlarkThread {
 
   /** The semantics options that affect how Starlark code is evaluated. */
   private final StarlarkSemantics semantics;
+
+  /** Whether recursive calls are allowed (cached from semantics). */
+  private final boolean allowRecursion;
 
   /** PrintHandler for Starlark print statements. */
   private PrintHandler printHandler = StarlarkThread::defaultPrintHandler;
@@ -375,6 +376,7 @@ public final class StarlarkThread {
     Preconditions.checkArgument(!mu.isFrozen());
     this.mutability = mu;
     this.semantics = semantics;
+    this.allowRecursion = semantics.getBool(StarlarkSemantics.ALLOW_RECURSION);
   }
 
   /**
@@ -396,6 +398,11 @@ public final class StarlarkThread {
 
   public StarlarkSemantics getSemantics() {
     return semantics;
+  }
+
+  /** Reports whether this thread is allowed to make recursive calls. */
+  public boolean isRecursionAllowed() {
+    return allowRecursion;
   }
 
   // Implementation of Debug.getCallStack.
