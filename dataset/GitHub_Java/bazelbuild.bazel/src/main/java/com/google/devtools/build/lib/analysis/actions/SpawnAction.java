@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
-import com.google.devtools.build.lib.actions.CommandLineItemSimpleFormatter;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
 import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -1385,9 +1384,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         } else if (value instanceof Artifact) {
           Artifact paramFile = (Artifact) value;
           String flagFormatString = (String) values[++i];
-          result.add(
-              CommandLineItemSimpleFormatter.format(
-                  flagFormatString, paramFile.getExecPathString()));
+          result.add(flagFormatString.replaceFirst("%s", paramFile.getExecPathString()));
         } else if (value instanceof CommandLine) {
           CommandLine commandLine = (CommandLine) value;
           if (artifactExpander != null) {
