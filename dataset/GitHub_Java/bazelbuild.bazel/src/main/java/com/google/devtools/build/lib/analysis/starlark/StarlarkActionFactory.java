@@ -540,10 +540,14 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Object shadowedActionUnchecked,
       StarlarkAction.Builder builder)
       throws EvalException {
+    Iterable<Artifact> inputArtifacts;
     if (inputs instanceof Sequence) {
-      builder.addInputs(Sequence.cast(inputs, Artifact.class, "inputs"));
+      inputArtifacts = Sequence.cast(inputs, Artifact.class, "inputs");
+      builder.addInputs(inputArtifacts);
     } else {
-      builder.addTransitiveInputs(Depset.cast(inputs, Artifact.class, "inputs"));
+      NestedSet<Artifact> inputSet = Depset.cast(inputs, Artifact.class, "inputs");
+      builder.addTransitiveInputs(inputSet);
+      inputArtifacts = inputSet.toList();
     }
 
     List<Artifact> outputArtifacts = Sequence.cast(outputs, Artifact.class, "outputs");
