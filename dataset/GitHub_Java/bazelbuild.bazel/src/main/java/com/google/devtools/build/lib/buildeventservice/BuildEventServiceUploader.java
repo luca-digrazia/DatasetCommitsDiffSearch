@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.buildeventservice;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.util.concurrent.Uninterruptibles.getUninterruptibly;
 import static com.google.devtools.build.v1.BuildStatus.Result.COMMAND_FAILED;
 import static com.google.devtools.build.v1.BuildStatus.Result.COMMAND_SUCCEEDED;
 import static com.google.devtools.build.v1.BuildStatus.Result.UNKNOWN_STATUS;
@@ -50,6 +51,7 @@ import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Sleeper;
 import com.google.devtools.build.v1.BuildStatus.Result;
 import com.google.devtools.build.v1.PublishBuildToolEventStreamRequest;
@@ -60,11 +62,14 @@ import com.google.protobuf.util.Timestamps;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -95,6 +100,7 @@ public final class BuildEventServiceUploader implements Runnable {
   private final BuildEventServiceProtoUtil besProtoUtil;
   private final BuildEventProtocolOptions buildEventProtocolOptions;
   private final boolean publishLifecycleEvents;
+  private final Duration closeTimeout;
   private final Sleeper sleeper;
   private final Clock clock;
   private final ArtifactGroupNamer namer;
@@ -131,6 +137,9 @@ public final class BuildEventServiceUploader implements Runnable {
   private Thread uploadThread;
 
   @GuardedBy("lock")
+  private boolean interruptCausedByTimeout;
+
+  @GuardedBy("lock")
   private boolean interruptCausedByCancel;
 
   private StreamContext streamContext;
@@ -141,6 +150,7 @@ public final class BuildEventServiceUploader implements Runnable {
       BuildEventServiceProtoUtil besProtoUtil,
       BuildEventProtocolOptions buildEventProtocolOptions,
       boolean publishLifecycleEvents,
+      Duration closeTimeout,
       Sleeper sleeper,
       Clock clock,
       ArtifactGroupNamer namer,
@@ -150,6 +160,7 @@ public final class BuildEventServiceUploader implements Runnable {
     this.besProtoUtil = besProtoUtil;
     this.buildEventProtocolOptions = buildEventProtocolOptions;
     this.publishLifecycleEvents = publishLifecycleEvents;
+    this.closeTimeout = closeTimeout;
     this.sleeper = sleeper;
     this.clock = clock;
     this.namer = namer;
@@ -204,6 +215,10 @@ public final class BuildEventServiceUploader implements Runnable {
     // Enqueue the last event which will terminate the upload.
     eventQueue.addLast(new SendLastBuildEventCommand(nextSeqNum.getAndIncrement(), currentTime()));
 
+    if (!closeTimeout.isZero()) {
+      startCloseTimer(closeFuture, closeTimeout);
+    }
+
     final SettableFuture<Void> finalCloseFuture = closeFuture;
     closeFuture.addListener(
         () -> {
@@ -215,6 +230,13 @@ public final class BuildEventServiceUploader implements Runnable {
         MoreExecutors.directExecutor());
 
     return closeFuture;
+  }
+
+  private void closeOnTimeout() {
+    synchronized (lock) {
+      interruptCausedByTimeout = true;
+      closeNow();
+    }
   }
 
   private void closeOnCancel() {
@@ -266,7 +288,14 @@ public final class BuildEventServiceUploader implements Runnable {
       logger.info("Aborting the BES upload due to having received an interrupt");
       synchronized (lock) {
         Preconditions.checkState(
-            interruptCausedByCancel, "Unexpected interrupt on BES uploader thread");
+            interruptCausedByTimeout || interruptCausedByCancel,
+            "Unexpected interrupt on BES uploader thread");
+        if (interruptCausedByTimeout) {
+          logAndExitAbruptly(
+              "The Build Event Protocol upload timed out",
+              ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
+              e);
+        }
       }
     } catch (StatusException e) {
       logAndExitAbruptly(
@@ -576,6 +605,32 @@ public final class BuildEventServiceUploader implements Runnable {
     }
   }
 
+  private void startCloseTimer(ListenableFuture<Void> closeFuture, Duration closeTimeout) {
+    Thread closeTimer =
+        new Thread(
+            () -> {
+              // Call closeOnTimeout() if the future does not complete within closeTimeout
+              try {
+                getUninterruptibly(closeFuture, closeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+              } catch (TimeoutException e) {
+                closeOnTimeout();
+              } catch (ExecutionException e) {
+                if (e.getCause() instanceof TimeoutException) {
+                  // This is likely due to an internal timeout doing the local file uploading.
+                  closeOnTimeout();
+                } else {
+                  // This code only cares about calling closeOnTimeout() if the closeFuture does
+                  // not complete within closeTimeout.
+                  String failureMsg = "BES close failure";
+                  logger.severe(failureMsg);
+                  LoggingUtil.logToRemote(Level.SEVERE, failureMsg, e);
+                }
+              }
+            },
+            "bes-uploader-close-timer");
+    closeTimer.start();
+  }
+
   private PathConverter waitForLocalFileUploads(SendRegularBuildEventCommand orderedBuildEvent)
       throws LocalFileUploadException, InterruptedException {
     try {
@@ -656,6 +711,7 @@ public final class BuildEventServiceUploader implements Runnable {
     private BuildEventServiceProtoUtil besProtoUtil;
     private BuildEventProtocolOptions bepOptions;
     private boolean publishLifecycleEvents;
+    private Duration closeTimeout;
     private Sleeper sleeper;
     private Clock clock;
     private ArtifactGroupNamer artifactGroupNamer;
@@ -686,6 +742,11 @@ public final class BuildEventServiceUploader implements Runnable {
       return this;
     }
 
+    Builder closeTimeout(Duration value) {
+      this.closeTimeout = value;
+      return this;
+    }
+
     Builder clock(Clock value) {
       this.clock = value;
       return this;
@@ -713,6 +774,7 @@ public final class BuildEventServiceUploader implements Runnable {
           checkNotNull(besProtoUtil),
           checkNotNull(bepOptions),
           publishLifecycleEvents,
+          checkNotNull(closeTimeout),
           checkNotNull(sleeper),
           checkNotNull(clock),
           checkNotNull(artifactGroupNamer),
@@ -720,3 +782,4 @@ public final class BuildEventServiceUploader implements Runnable {
     }
   }
 }
+
