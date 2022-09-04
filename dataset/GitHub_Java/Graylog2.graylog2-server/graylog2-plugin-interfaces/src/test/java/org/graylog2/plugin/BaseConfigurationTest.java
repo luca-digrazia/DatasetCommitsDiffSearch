@@ -41,28 +41,19 @@ import static org.junit.Assert.assertEquals;
 
 public class BaseConfigurationTest {
     private class Configuration extends BaseConfiguration {
-        @Parameter(value = "rest_listen_uri", required = true)
-        private URI restListenUri = URI.create("http://127.0.0.1:12900/");
-
-        @Parameter(value = "web_listen_uri", required = true)
-        private URI webListenUri = URI.create("http://127.0.0.1:9000/");
-
-        @Parameter(value = "node_id_file", required = false)
-        private String nodeIdFile = "/etc/graylog/server/node-id";
-
         @Override
         public String getNodeIdFile() {
-            return nodeIdFile;
+            return "/etc/graylog/server/node-id";
         }
 
         @Override
         public URI getRestListenUri() {
-            return Tools.getUriWithPort(restListenUri, BaseConfiguration.GRAYLOG2_DEFAULT_PORT);
+            return Tools.getUriWithPort(URI.create("http://127.0.0.1:12900/"), BaseConfiguration.GRAYLOG2_DEFAULT_PORT);
         }
 
         @Override
         public URI getWebListenUri() {
-            return Tools.getUriWithPort(webListenUri, BaseConfiguration.GRAYLOG2_DEFAULT_WEB_PORT);
+            return Tools.getUriWithPort(URI.create("http://127.0.0.1:9000/"), BaseConfiguration.GRAYLOG2_DEFAULT_WEB_PORT);
         }
     }
 
@@ -77,6 +68,12 @@ public class BaseConfigurationTest {
         // Required properties
         validProperties.put("password_secret", "ipNUnWxmBLCxTEzXcyamrdy0Q3G7HxdKsAvyg30R9SCof0JydiZFiA3dLSkRsbLF");
         validProperties.put("elasticsearch_config_file", tempFile.getAbsolutePath());
+        validProperties.put("mongodb_useauth", "true");
+        validProperties.put("mongodb_user", "user");
+        validProperties.put("mongodb_password", "pass");
+        validProperties.put("mongodb_database", "test");
+        validProperties.put("mongodb_host", "localhost");
+        validProperties.put("mongodb_port", "27017");
         validProperties.put("use_gelf", "true");
         validProperties.put("gelf_listen_port", "12201");
         validProperties.put("root_password_sha2", "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"); // sha2 of admin
@@ -132,19 +129,5 @@ public class BaseConfigurationTest {
 
         assertEquals("http", configWithoutTls.getRestUriScheme());
         assertEquals("https", configWithTls.getRestUriScheme());
-    }
-
-    @Test
-    public void testGetWebUriScheme() throws RepositoryException, ValidationException {
-        validProperties.put("web_enable_tls", "false");
-        final Configuration configWithoutTls = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configWithoutTls).process();
-
-        validProperties.put("web_enable_tls", "true");
-        final Configuration configWithTls = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configWithTls).process();
-
-        assertEquals("http", configWithoutTls.getWebUriScheme());
-        assertEquals("https", configWithTls.getWebUriScheme());
     }
 }

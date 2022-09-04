@@ -23,7 +23,6 @@ import com.github.joschi.jadconfig.validators.DirectoryPathReadableValidator;
 import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
-import com.github.joschi.jadconfig.validators.StringNotBlankValidator;
 import org.graylog2.plugin.BaseConfiguration;
 import org.joda.time.DateTimeZone;
 
@@ -38,21 +37,21 @@ import static org.graylog2.plugin.Tools.getUriWithPort;
 import static org.graylog2.plugin.Tools.getUriWithScheme;
 
 /**
- * Helper class to hold configuration of Graylog
+ * Helper class to hold configuration of Graylog2
  */
 @SuppressWarnings("FieldMayBeFinal")
 public class Configuration extends BaseConfiguration {
     @Parameter(value = "is_master", required = true)
     private boolean isMaster = true;
 
-    @Parameter(value = "password_secret", required = true, validator = StringNotBlankValidator.class)
+    @Parameter(value = "password_secret", required = true)
     private String passwordSecret;
 
     @Parameter(value = "rest_listen_uri", required = true)
-    private URI restListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_PORT + "/");
+    private URI restListenUri = URI.create("http://127.0.0.1:" + GRAYLOG2_DEFAULT_PORT + "/");
 
     @Parameter(value = "web_listen_uri", required = true)
-    private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_WEB_PORT + "/");
+    private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG2_DEFAULT_WEB_PORT + "/");
 
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBatchSize = 500;
@@ -132,6 +131,12 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "default_message_output_class")
     private String defaultMessageOutputClass = "";
 
+    @Parameter(value = "collector_expiration_threshold", validator = PositiveDurationValidator.class)
+    private Duration collectorExpirationThreshold = Duration.days(14);
+
+    @Parameter(value = "collector_inactive_threshold", validator = PositiveDurationValidator.class)
+    private Duration collectorInactiveThreshold = Duration.minutes(1);
+
     @Parameter(value = "dashboard_widget_default_cache_time", validator = PositiveDurationValidator.class)
     private Duration dashboardWidgetDefaultCacheTime = Duration.seconds(10L);
 
@@ -199,12 +204,12 @@ public class Configuration extends BaseConfiguration {
 
     @Override
     public URI getRestListenUri() {
-        return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(restListenUri, getRestUriScheme()), GRAYLOG_DEFAULT_PORT), "/");
+        return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(restListenUri, getRestUriScheme()), GRAYLOG2_DEFAULT_PORT), "/");
     }
 
     @Override
     public URI getWebListenUri() {
-        return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(webListenUri, getWebUriScheme()), GRAYLOG_DEFAULT_WEB_PORT), "/");
+        return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(webListenUri, getWebUriScheme()), GRAYLOG2_DEFAULT_WEB_PORT), "/");
     }
 
     public String getRootUsername() {
@@ -277,6 +282,14 @@ public class Configuration extends BaseConfiguration {
 
     public String getDefaultMessageOutputClass() {
         return defaultMessageOutputClass;
+    }
+
+    public Duration getCollectorExpirationThreshold() {
+        return collectorExpirationThreshold;
+    }
+
+    public Duration getCollectorInactiveThreshold() {
+        return collectorInactiveThreshold;
     }
 
     public Duration getDashboardWidgetDefaultCacheTime() {

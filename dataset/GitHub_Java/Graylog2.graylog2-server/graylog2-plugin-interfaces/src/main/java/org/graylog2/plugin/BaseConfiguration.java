@@ -1,42 +1,56 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * The MIT License
+ * Copyright (c) 2012 Graylog, Inc.
  *
- * This file is part of Graylog2.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
-
 package org.graylog2.plugin;
 
 import com.github.joschi.jadconfig.Parameter;
+import com.github.joschi.jadconfig.util.Duration;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
+import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
-import com.lmax.disruptor.*;
+import com.github.joschi.jadconfig.validators.StringNotBlankValidator;
+import com.lmax.disruptor.BlockingWaitStrategy;
+import com.lmax.disruptor.BusySpinWaitStrategy;
+import com.lmax.disruptor.SleepingWaitStrategy;
+import com.lmax.disruptor.WaitStrategy;
+import com.lmax.disruptor.YieldingWaitStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.net.InetAddress;
 import java.net.URI;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
+@SuppressWarnings("FieldMayBeFinal")
 public abstract class BaseConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(BaseConfiguration.class);
+    protected static final int GRAYLOG2_DEFAULT_PORT = 12900;
+    protected static final int GRAYLOG2_DEFAULT_WEB_PORT = 9000;
 
-    @Parameter(value = "rest_transport_uri", required = false)
-    private String restTransportUri;
+    @Parameter(value = "shutdown_timeout", validator = PositiveIntegerValidator.class)
+    protected int shutdownTimeout = 30000;
+
+    @Parameter(value = "rest_transport_uri")
+    private URI restTransportUri;
 
     @Parameter(value = "processbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
     private int processBufferProcessors = 5;
@@ -44,17 +58,47 @@ public abstract class BaseConfiguration {
     @Parameter(value = "processor_wait_strategy", required = true)
     private String processorWaitStrategy = "blocking";
 
+    @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
+    private int ringSize = 65536;
+
+    @Parameter(value = "inputbuffer_ring_size", required = true, validator = PositiveIntegerValidator.class)
+    private int inputBufferRingSize = 65536;
+
+    @Parameter(value = "inputbuffer_wait_strategy", required = true)
+    private String inputBufferWaitStrategy = "blocking";
+
     @Parameter(value = "rest_enable_cors")
     private boolean restEnableCors = false;
 
     @Parameter(value = "rest_enable_gzip")
     private boolean restEnableGzip = false;
 
-    @Parameter(value = "groovy_shell_enable")
-    private boolean groovyShellEnable = false;
+    @Parameter(value = "rest_max_initial_line_length", required = true, validator = PositiveIntegerValidator.class)
+    private int restMaxInitialLineLength = 4096;
 
-    @Parameter(value = "groovy_shell_port", validator = InetPortValidator.class)
-    private int groovyShellPort = 6789;
+    @Parameter(value = "rest_max_header_size", required = true, validator = PositiveIntegerValidator.class)
+    private int restMaxHeaderSize = 8192;
+
+    @Parameter(value = "rest_max_chunk_size", required = true, validator = PositiveIntegerValidator.class)
+    private int restMaxChunkSize = 8192;
+
+    @Parameter(value = "rest_enable_tls")
+    private boolean restEnableTls = false;
+
+    @Parameter(value = "rest_thread_pool_size")
+    private int restThreadPoolSize = 16;
+
+    @Parameter(value = "rest_tls_cert_file")
+    private File restTlsCertFile;
+
+    @Parameter(value = "rest_tls_key_file")
+    private File restTlsKeyFile;
+
+    @Parameter(value = "rest_tls_key_password")
+    private String restTlsKeyPassword;
+
+    @Parameter(value = "rest_worker_threads_max_pool_size", required = true, validator = PositiveIntegerValidator.class)
+    private int restWorkerThreadsMaxPoolSize = 16;
 
     @Parameter(value = "plugin_dir")
     private String pluginDir = "plugin";
@@ -62,15 +106,86 @@ public abstract class BaseConfiguration {
     @Parameter(value = "async_eventbus_processors")
     private int asyncEventbusProcessors = 2;
 
-    public URI getRestTransportUri() {
-        if (restTransportUri == null || restTransportUri.isEmpty()) {
-            return null;
-        }
+    @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
+    private int udpRecvBufferSizes = 1048576;
 
-        return Tools.getUriStandard(restTransportUri);
+    @Parameter("message_journal_enabled")
+    private boolean messageJournalEnabled = true;
+
+    @Parameter("inputbuffer_processors")
+    private int inputbufferProcessors = 2;
+
+    @Parameter("message_recordings_enable")
+    private boolean messageRecordingsEnable = false;
+
+    @Parameter("disable_sigar")
+    private boolean disableSigar = false;
+
+    @Parameter(value = "http_proxy_uri")
+    private URI httpProxyUri;
+
+    @Parameter(value = "http_connect_timeout", validator = PositiveDurationValidator.class)
+    private Duration httpConnectTimeout = Duration.seconds(5L);
+
+    @Parameter(value = "http_write_timeout", validator = PositiveDurationValidator.class)
+    private Duration httpWriteTimeout = Duration.seconds(10L);
+
+    @Parameter(value = "http_read_timeout", validator = PositiveDurationValidator.class)
+    private Duration httpReadTimeout = Duration.seconds(10L);
+
+    @Parameter(value = "installation_source", validator = StringNotBlankValidator.class)
+    private String installationSource = "unknown";
+
+    @Parameter(value = "web_enable_cors")
+    private boolean webEnableCors = false;
+
+    @Parameter(value = "web_enable_gzip")
+    private boolean webEnableGzip = false;
+
+    @Parameter(value = "web_max_initial_line_length", required = true, validator = PositiveIntegerValidator.class)
+    private int webMaxInitialLineLength = 4096;
+
+    @Parameter(value = "web_max_header_size", required = true, validator = PositiveIntegerValidator.class)
+    private int webMaxHeaderSize = 8192;
+
+    @Parameter(value = "web_max_chunk_size", required = true, validator = PositiveIntegerValidator.class)
+    private int webMaxChunkSize = 8192;
+
+    @Parameter(value = "web_enable_tls")
+    private boolean webEnableTls = false;
+
+    @Parameter(value = "web_thread_pool_size")
+    private int webThreadPoolSize = 16;
+
+    @Parameter(value = "web_tls_cert_file")
+    private File webTlsCertFile;
+
+    @Parameter(value = "web_tls_key_file")
+    private File webTlsKeyFile;
+
+    @Parameter(value = "web_tls_key_password")
+    private String webTlsKeyPassword;
+
+    @Parameter(value = "web_worker_threads_max_pool_size", required = true, validator = PositiveIntegerValidator.class)
+    private int webWorkerThreadsMaxPoolSize = 16;
+
+    public String getRestUriScheme() {
+        return getUriScheme(isRestEnableTls());
     }
 
-    public void setRestTransportUri(String restTransportUri) {
+    public String getWebUriScheme() {
+        return getUriScheme(isWebEnableTls());
+    }
+
+    public String getUriScheme(boolean enableTls) {
+        return enableTls ? "https" : "http";
+    }
+
+    public URI getRestTransportUri() {
+        return Tools.getUriWithPort(restTransportUri, GRAYLOG2_DEFAULT_PORT);
+    }
+
+    public void setRestTransportUri(final URI restTransportUri) {
         this.restTransportUri = restTransportUri;
     }
 
@@ -78,20 +193,21 @@ public abstract class BaseConfiguration {
         final URI transportUri;
         final URI listenUri = getRestListenUri();
 
-        if (listenUri.getHost().equals("0.0.0.0")) {
+        if ("0.0.0.0".equals(listenUri.getHost())) {
             final InetAddress guessedAddress;
             try {
                 guessedAddress = Tools.guessPrimaryNetworkAddress();
 
-                if(guessedAddress.isLoopbackAddress()) {
+                if (guessedAddress.isLoopbackAddress()) {
                     LOG.debug("Using loopback address {}", guessedAddress);
                 }
             } catch (Exception e) {
-                LOG.error("Could not guess primary network address for rest_transport_uri. Please configure it in your graylog2.conf.", e);
+                LOG.error("Could not guess primary network address for \"rest_transport_uri\". Please configure it in your Graylog configuration.", e);
                 throw new RuntimeException("No rest_transport_uri.", e);
             }
 
-            transportUri = Tools.getUriStandard("http://" + guessedAddress.getHostAddress() + ":" + listenUri.getPort());
+            transportUri = Tools.getUriWithPort(
+                    URI.create("http://" + guessedAddress.getHostAddress() + ":" + listenUri.getPort()), GRAYLOG2_DEFAULT_PORT);
         } else {
             transportUri = listenUri;
         }
@@ -103,26 +219,37 @@ public abstract class BaseConfiguration {
         return processBufferProcessors;
     }
 
+    private WaitStrategy getWaitStrategy(String waitStrategyName, String configOptionName) {
+        switch (waitStrategyName) {
+            case "sleeping":
+                return new SleepingWaitStrategy();
+            case "yielding":
+                return new YieldingWaitStrategy();
+            case "blocking":
+                return new BlockingWaitStrategy();
+            case "busy_spinning":
+                return new BusySpinWaitStrategy();
+            default:
+                LOG.warn("Invalid setting for [{}]:"
+                        + " Falling back to default: BlockingWaitStrategy.", configOptionName);
+                return new BlockingWaitStrategy();
+        }
+    }
+
     public WaitStrategy getProcessorWaitStrategy() {
-        if (processorWaitStrategy.equals("sleeping")) {
-            return new SleepingWaitStrategy();
-        }
+        return getWaitStrategy(processorWaitStrategy, "processbuffer_wait_strategy");
+    }
 
-        if (processorWaitStrategy.equals("yielding")) {
-            return new YieldingWaitStrategy();
-        }
+    public int getRingSize() {
+        return ringSize;
+    }
 
-        if (processorWaitStrategy.equals("blocking")) {
-            return new BlockingWaitStrategy();
-        }
+    public int getInputBufferRingSize() {
+        return inputBufferRingSize;
+    }
 
-        if (processorWaitStrategy.equals("busy_spinning")) {
-            return new BusySpinWaitStrategy();
-        }
-
-        LOG.warn("Invalid setting for [processor_wait_strategy]:"
-                + " Falling back to default: BlockingWaitStrategy.");
-        return new BlockingWaitStrategy();
+    public WaitStrategy getInputBufferWaitStrategy() {
+        return getWaitStrategy(inputBufferWaitStrategy, "inputbuffer_wait_strategy");
     }
 
     public boolean isRestEnableCors() {
@@ -133,12 +260,40 @@ public abstract class BaseConfiguration {
         return restEnableGzip;
     }
 
-    public boolean isGroovyShellEnable() {
-        return groovyShellEnable;
+    public int getRestMaxInitialLineLength() {
+        return restMaxInitialLineLength;
     }
 
-    public int getGroovyShellPort() {
-        return groovyShellPort;
+    public int getRestMaxHeaderSize() {
+        return restMaxHeaderSize;
+    }
+
+    public int getRestMaxChunkSize() {
+        return restMaxChunkSize;
+    }
+
+    public boolean isRestEnableTls() {
+        return restEnableTls;
+    }
+
+    public int getRestThreadPoolSize() {
+        return restThreadPoolSize;
+    }
+
+    public File getRestTlsCertFile() {
+        return restTlsCertFile;
+    }
+
+    public File getRestTlsKeyFile() {
+        return restTlsKeyFile;
+    }
+
+    public String getRestTlsKeyPassword() {
+        return restTlsKeyPassword;
+    }
+
+    public int getRestWorkerThreadsMaxPoolSize() {
+        return restWorkerThreadsMaxPoolSize;
     }
 
     public String getPluginDir() {
@@ -150,5 +305,100 @@ public abstract class BaseConfiguration {
     }
 
     public abstract String getNodeIdFile();
+
     public abstract URI getRestListenUri();
+
+    public abstract URI getWebListenUri();
+
+    public boolean isMessageJournalEnabled() {
+        return messageJournalEnabled;
+    }
+
+    public void setMessageJournalEnabled(boolean messageJournalEnabled) {
+        this.messageJournalEnabled = messageJournalEnabled;
+    }
+
+    public int getInputbufferProcessors() {
+        return inputbufferProcessors;
+    }
+
+    public int getShutdownTimeout() {
+        return shutdownTimeout;
+    }
+
+    public int getUdpRecvBufferSizes() {
+        return udpRecvBufferSizes;
+    }
+
+    public boolean isMessageRecordingsEnabled() {
+        return messageRecordingsEnable;
+    }
+
+    public boolean isDisableSigar() {
+        return disableSigar;
+    }
+
+    public URI getHttpProxyUri() {
+        return httpProxyUri;
+    }
+
+    public Duration getHttpConnectTimeout() {
+        return httpConnectTimeout;
+    }
+
+    public Duration getHttpWriteTimeout() {
+        return httpWriteTimeout;
+    }
+
+    public Duration getHttpReadTimeout() {
+        return httpReadTimeout;
+    }
+
+    public String getInstallationSource() {
+        return installationSource;
+    }
+
+    public boolean isWebEnableCors() {
+        return webEnableCors;
+    }
+
+    public boolean isWebEnableGzip() {
+        return webEnableGzip;
+    }
+
+    public int getWebMaxInitialLineLength() {
+        return webMaxInitialLineLength;
+    }
+
+    public int getWebMaxHeaderSize() {
+        return webMaxHeaderSize;
+    }
+
+    public int getWebMaxChunkSize() {
+        return webMaxChunkSize;
+    }
+
+    public boolean isWebEnableTls() {
+        return webEnableTls;
+    }
+
+    public int getWebThreadPoolSize() {
+        return webThreadPoolSize;
+    }
+
+    public File getWebTlsCertFile() {
+        return webTlsCertFile;
+    }
+
+    public File getWebTlsKeyFile() {
+        return webTlsKeyFile;
+    }
+
+    public String getWebTlsKeyPassword() {
+        return webTlsKeyPassword;
+    }
+
+    public int getWebWorkerThreadsMaxPoolSize() {
+        return webWorkerThreadsMaxPoolSize;
+    }
 }
