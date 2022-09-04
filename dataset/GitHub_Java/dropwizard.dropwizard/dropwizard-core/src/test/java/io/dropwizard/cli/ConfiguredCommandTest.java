@@ -1,18 +1,23 @@
 package io.dropwizard.cli;
 
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import io.dropwizard.Application;
+import io.dropwizard.Configuration;
+import io.dropwizard.configuration.ConfigurationFactory;
+import io.dropwizard.configuration.ConfigurationFactoryFactory;
+import io.dropwizard.setup.Bootstrap;
+import io.dropwizard.setup.Environment;
+
+import javax.validation.Validator;
+
 import net.sourceforge.argparse4j.inf.Namespace;
 
 import org.junit.Test;
 import org.mockito.Mockito;
 
-import io.dropwizard.Application;
-import io.dropwizard.Configuration;
-import io.dropwizard.configuration.ConfigurationFactory;
-import io.dropwizard.setup.Bootstrap;
-import io.dropwizard.setup.Environment;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 
 public class ConfiguredCommandTest {
@@ -45,12 +50,14 @@ public class ConfiguredCommandTest {
         ConfigurationFactory<Configuration> factory = Mockito.mock(ConfigurationFactory.class);
         when(factory.build()).thenReturn(null);
         
-        bootstrap.setConfigurationFactoryFactory(
-            (klass, validator, objectMapper, propertyPrefix) -> factory
-        );
+
+        ConfigurationFactoryFactory<Configuration> factoryFactory = Mockito.mock(ConfigurationFactoryFactory.class);
+        when(factoryFactory.create(any(Class.class), any(Validator.class), any(ObjectMapper.class), any(String.class))).thenReturn(factory);       
+        bootstrap.setConfigurationFactoryFactory(factoryFactory);
         
         command.run(bootstrap, namespace);
         
+        Mockito.verify(factoryFactory).create(any(Class.class), any(Validator.class), any(ObjectMapper.class), any(String.class));
         Mockito.verify(factory).build();
     }
 }

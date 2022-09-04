@@ -3,6 +3,7 @@ package io.dropwizard.testing.junit;
 import com.google.common.collect.ImmutableMap;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
+import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import java.util.Map;
 import javax.ws.rs.GET;
@@ -19,19 +20,19 @@ import org.junit.Test;
 public class DropwizardAppRuleWithoutConfigTest {
 
     @ClassRule
-    public static final DropwizardAppRule<Configuration> RULE = new DropwizardAppRule<>(TestApplication.class);
+    public static final DropwizardAppRule<Configuration> RULE = new DropwizardAppRule<>(TestApplication.class, null);
 
     Client client = ClientBuilder.newClient();
 
     @Test
     public void runWithoutConfigFile() {
-        Map<?,?> response = client.target("http://localhost:" + RULE.getLocalPort() + "/test")
+        Map response = client.target("http://localhost:" + RULE.getLocalPort() + "/test")
                 .request()
                 .get(Map.class);
         Assert.assertEquals(ImmutableMap.of("color", "orange"), response);
     }
 
-    public static class TestApplication extends Application<Configuration> {
+    static class TestApplication extends Application<Configuration> {
         @Override
         public void run(Configuration configuration, Environment environment) throws Exception {
             environment.jersey().register(new TestResource());

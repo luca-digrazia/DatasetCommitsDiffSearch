@@ -5,11 +5,11 @@ import io.dropwizard.Configuration;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 
 public class CheckCommandTest {
     private static class MyApplication extends Application<Configuration> {
@@ -27,13 +27,13 @@ public class CheckCommandTest {
     private final Configuration configuration = mock(Configuration.class);
 
     @Test
-    public void hasAName() {
+    public void hasAName() throws Exception {
         assertThat(command.getName())
                 .isEqualTo("check");
     }
 
     @Test
-    public void hasADescription() {
+    public void hasADescription() throws Exception {
         assertThat(command.getDescription())
                 .isEqualTo("Parses and validates the configuration file");
     }
@@ -42,6 +42,6 @@ public class CheckCommandTest {
     public void doesNotInteractWithAnything() throws Exception {
         command.run(bootstrap, namespace, configuration);
 
-        verifyNoInteractions(bootstrap, namespace, configuration);
+        verifyZeroInteractions(bootstrap, namespace, configuration);
     }
 }
