@@ -23,6 +23,7 @@ import javax.ws.rs.core.Variant;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 
+import org.jboss.resteasy.core.ResourceLocatorInvoker;
 import org.jboss.resteasy.core.ResourceMethodInvoker;
 import org.jboss.resteasy.core.ResourceMethodRegistry;
 import org.jboss.resteasy.spi.Registry;
@@ -93,9 +94,8 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
             for (Map.Entry<String, List<ResourceInvoker>> entry : bound) {
                 for (ResourceInvoker invoker : entry.getValue()) {
                     // skip those for now
-                    if (!(invoker instanceof ResourceMethodInvoker)) {
+                    if (invoker instanceof ResourceLocatorInvoker)
                         continue;
-                    }
                     ResourceMethodInvoker method = (ResourceMethodInvoker) invoker;
                     Class<?> resourceClass = method.getResourceClass();
                     Path path = resourceClass.getAnnotation(Path.class);
