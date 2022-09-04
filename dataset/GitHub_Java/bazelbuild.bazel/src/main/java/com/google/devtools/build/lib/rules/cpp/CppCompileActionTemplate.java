@@ -97,7 +97,7 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
     ImmutableList.Builder<CppCompileAction> expandedActions = new ImmutableList.Builder<>();
 
     ImmutableList.Builder<TreeFileArtifact> sourcesBuilder = ImmutableList.builder();
-    NestedSetBuilder<Artifact> privateHeadersBuilder = NestedSetBuilder.<Artifact>stableOrder();
+    ImmutableList.Builder<Artifact> privateHeadersBuilder = ImmutableList.builder();
     for (TreeFileArtifact inputTreeFileArtifact : inputTreeFileArtifacts) {
       boolean isHeader = CppFileTypes.CPP_HEADER.matches(inputTreeFileArtifact.getExecPath());
       boolean isTextualInclude =
@@ -122,7 +122,7 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
       }
     }
     ImmutableList<TreeFileArtifact> sources = sourcesBuilder.build();
-    NestedSet<Artifact> privateHeaders = privateHeadersBuilder.build();
+    ImmutableList<Artifact> privateHeaders = privateHeadersBuilder.build();
 
     for (TreeFileArtifact inputTreeFileArtifact : sources) {
       try {
@@ -153,7 +153,7 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
       ActionKeyContext actionKeyContext,
       @Nullable Artifact.ArtifactExpander artifactExpander,
       Fingerprint fp)
-      throws CommandLineExpansionException, InterruptedException {
+      throws CommandLineExpansionException {
     CompileCommandLine commandLine =
         CppCompileAction.buildCommandLine(
             sourceTreeArtifact,
@@ -173,7 +173,7 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
             commandLine.getCompilerOptions(/*overwrittenVariables=*/ null)),
         cppCompileActionBuilder.getCcCompilationContext().getDeclaredIncludeSrcs(),
         cppCompileActionBuilder.buildMandatoryInputs(),
-        cppCompileActionBuilder.getPrunableHeaders(),
+        cppCompileActionBuilder.buildPrunableHeaders(),
         cppCompileActionBuilder.getCcCompilationContext().getLooseHdrsDirs(),
         cppCompileActionBuilder.getBuiltinIncludeDirectories(),
         cppCompileActionBuilder.buildInputsForInvalidation(),
@@ -190,7 +190,7 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
       Artifact sourceTreeFileArtifact,
       Artifact outputTreeFileArtifact,
       @Nullable Artifact dotdFileArtifact,
-      NestedSet<Artifact> privateHeaders)
+      ImmutableList<Artifact> privateHeaders)
       throws ActionTemplateExpansionException {
     CppCompileActionBuilder builder = new CppCompileActionBuilder(cppCompileActionBuilder);
     builder.setAdditionalPrunableHeaders(privateHeaders);
