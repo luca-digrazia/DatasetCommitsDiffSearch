@@ -115,15 +115,10 @@ public class Searches {
         }
 
         TermsFacetBuilder terms = new TermsFacetBuilder(TERMS_FACET_NAME);
+        terms.facetFilter(IndexHelper.getTimestampRangeFilter(range));
         terms.global(false);
         terms.field(field);
         terms.size(size);
-
-        terms.facetFilter(
-                FilterBuilders.boolFilter()
-                        .must(IndexHelper.getTimestampRangeFilter(range))
-                        .must(FilterBuilders.queryFilter(QueryBuilders.queryString(filter)))
-        );
 
         srb.addFacet(terms);
 
