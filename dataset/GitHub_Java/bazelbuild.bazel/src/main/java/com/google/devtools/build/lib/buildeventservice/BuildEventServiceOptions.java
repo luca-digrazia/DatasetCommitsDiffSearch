@@ -83,16 +83,17 @@ public class BuildEventServiceOptions extends OptionsBase {
   public String projectId;
 
   @Option(
-      name = "bes_keywords",
-      defaultValue = "null",
-      converter = Converters.CommaSeparatedOptionListConverter.class,
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      allowMultiple = true,
-      help =
-          "Specifies a list of notification keywords to be added the default set of keywords "
-              + "published to BES (\"command_name=<command_name> \", \"protocol_name=BEP\"). "
-              + "Defaults to none.")
+    name = "bes_keywords",
+    defaultValue = "",
+    converter = Converters.CommaSeparatedOptionListConverter.class,
+    documentationCategory = OptionDocumentationCategory.LOGGING,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    allowMultiple = true,
+    help =
+        "Specifies a list of notification keywords to be added the default set of keywords "
+            + "published to BES (\"command_name=<command_name> \", \"protocol_name=BEP\"). "
+            + "Defaults to none."
+  )
   public List<String> besKeywords;
 
   @Option(
@@ -136,16 +137,6 @@ public class BuildEventServiceOptions extends OptionsBase {
           "Specifies whether the Build Event Service upload should block the build completion "
               + "or should end the invocation immediately and finish the upload in the background.")
   public BesUploadMode besUploadMode;
-
-  @Option(
-      name = "bes_proxy",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Connect to the Build Event Service through a proxy. Currently this flag can only be"
-              + " used to configure a Unix domain socket (unix:/path/to/socket).")
-  public String besProxy;
 
   /** Determines the mode that will be used to upload data to the Build Event Service. */
   public enum BesUploadMode {
