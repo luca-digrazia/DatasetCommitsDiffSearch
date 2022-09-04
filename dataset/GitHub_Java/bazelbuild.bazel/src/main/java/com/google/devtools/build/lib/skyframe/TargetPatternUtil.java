@@ -17,7 +17,9 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
+import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException;
@@ -32,8 +34,20 @@ import javax.annotation.Nullable;
 public class TargetPatternUtil {
 
   /**
+   * Expand the given {@code targetPatterns}. This handles the needed underlying Skyframe calls (via
+   * {@code env}), and will return {@code null} to signal a Skyframe restart.
+   */
+  @Nullable
+  public static ImmutableList<Label> expandTargetPatterns(
+      Environment env, List<String> targetPatterns)
+      throws InvalidTargetPatternException, InterruptedException {
+
+    return expandTargetPatterns(env, targetPatterns, FilteringPolicies.NO_FILTER);
+  }
+
+  /**
    * Expand the given {@code targetPatterns}, using the {@code filteringPolicy}. This handles the
-   * needed underlying Skyframe calls (via {@code env}), and no will return {@code null} to signal a
+   * needed underlying Skyframe calls (via {@code env}), and will return {@code null} to signal a
    * Skyframe restart.
    */
   @Nullable
@@ -41,10 +55,14 @@ public class TargetPatternUtil {
       Environment env, List<String> targetPatterns, FilteringPolicy filteringPolicy)
       throws InvalidTargetPatternException, InterruptedException {
 
+    if (targetPatterns.isEmpty()) {
+      return ImmutableList.of();
+    }
+
     // First parse the patterns, and throw any errors immediately.
     List<TargetPatternValue.TargetPatternKey> patternKeys = new ArrayList<>();
     for (TargetPatternValue.TargetPatternSkyKeyOrException keyOrException :
-        TargetPatternValue.keys(targetPatterns, filteringPolicy, "")) {
+        TargetPatternValue.keys(targetPatterns, filteringPolicy, PathFragment.EMPTY_FRAGMENT)) {
 
       try {
         patternKeys.add(keyOrException.getSkyKey());
@@ -78,10 +96,7 @@ public class TargetPatternUtil {
     return labels.build();
   }
 
-  /**
-   * Exception used when an error occurs in {@link #expandTargetPatterns(Environment, List,
-   * FilteringPolicy)}.
-   */
+  /** Exception used when an error occurs in {@link #expandTargetPatterns}. */
   static final class InvalidTargetPatternException extends Exception {
     private String invalidPattern;
     private TargetParsingException tpe;
