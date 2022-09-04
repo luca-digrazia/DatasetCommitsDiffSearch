@@ -52,6 +52,7 @@ import com.google.devtools.build.lib.rules.android.AndroidConfiguration.Configur
 import com.google.devtools.build.lib.rules.config.ConfigFeatureFlagProvider;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
+import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleClasses;
@@ -834,9 +835,9 @@ public final class AndroidRuleClasses {
                   .value(JavaSemantics.BYTECODE_OPTIMIZERS))
           // We need the C++ toolchain for every sub-configuration to get the correct linker.
           .add(
-              attr("$cc_toolchain_split", LABEL)
+              attr(":cc_toolchain_split", LABEL)
                   .cfg(AndroidRuleClasses.ANDROID_SPLIT_TRANSITION)
-                  .value(env.getToolsLabel("//tools/cpp:current_cc_toolchain")))
+                  .value(CppRuleClasses.ccToolchainAttribute(env)))
           /* <!-- #BLAZE_RULE(android_binary).ATTRIBUTE(manifest_values) -->
           A dictionary of values to be overridden in the manifest. Any instance of ${name} in the
           manifest will be replaced with the value corresponding to name in this dictionary.
