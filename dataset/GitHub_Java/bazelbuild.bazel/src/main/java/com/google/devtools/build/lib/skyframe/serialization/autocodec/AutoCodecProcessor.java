@@ -222,12 +222,6 @@ public class AutoCodecProcessor extends AbstractProcessor {
                 UnsafeProvider.class,
                 parameter.getSimpleName());
             break;
-          case DOUBLE:
-            serializeBuilder.addStatement(
-                "codedOut.writeDoubleNoTag($T.getInstance().getDouble(input, $L_offset))",
-                UnsafeProvider.class,
-                parameter.getSimpleName());
-            break;
           case ARRAY:
             // fall through
           case DECLARED:
@@ -297,9 +291,6 @@ public class AutoCodecProcessor extends AbstractProcessor {
       case INT:
         serializeBuilder.addStatement("codedOut.writeInt32NoTag($L)", getter);
         break;
-      case DOUBLE:
-        serializeBuilder.addStatement("codedOut.writeDoubleNoTag($L)", getter);
-        break;
       case ARRAY:
         // fall through
       case DECLARED:
@@ -359,10 +350,10 @@ public class AutoCodecProcessor extends AbstractProcessor {
         case INT:
           serializeBuilder.addStatement("codedOut.writeInt32NoTag($L)", paramAccessor);
           break;
-        case DOUBLE:
-          serializeBuilder.addStatement("codedOut.writeDoubleNoTag($L)", paramAccessor);
-          break;
         case ARRAY:
+          marshallers.writeSerializationCode(
+              new Marshaller.Context(serializeBuilder, parameter.asType(), paramAccessor));
+          break;
         case DECLARED:
           marshallers.writeSerializationCode(
               new Marshaller.Context(serializeBuilder, parameter.asType(), paramAccessor));
@@ -393,10 +384,10 @@ public class AutoCodecProcessor extends AbstractProcessor {
         case INT:
           builder.addStatement("int $L = codedIn.readInt32()", paramName);
           break;
-        case DOUBLE:
-          builder.addStatement("double $L = codedIn.readDouble()", paramName);
-          break;
         case ARRAY:
+          marshallers.writeDeserializationCode(
+              new Marshaller.Context(builder, parameter.asType(), paramName));
+          break;
         case DECLARED:
           marshallers.writeDeserializationCode(
               new Marshaller.Context(builder, parameter.asType(), paramName));
