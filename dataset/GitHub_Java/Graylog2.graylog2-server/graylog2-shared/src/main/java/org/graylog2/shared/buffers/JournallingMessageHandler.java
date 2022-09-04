@@ -18,13 +18,9 @@ package org.graylog2.shared.buffers;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
-import com.github.rholder.retry.Retryer;
-import com.github.rholder.retry.RetryerBuilder;
-import com.github.rholder.retry.StopStrategies;
-import com.github.rholder.retry.WaitStrategies;
 import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.Uninterruptibles;
 import com.lmax.disruptor.EventHandler;
 import org.graylog2.shared.journal.Journal;
 import org.slf4j.Logger;
@@ -33,30 +29,16 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
-import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import static com.google.common.base.Predicates.notNull;
+import static com.google.common.collect.Collections2.filter;
 import static com.google.common.collect.Lists.transform;
 
 public class JournallingMessageHandler implements EventHandler<RawMessageEvent> {
     private static final Logger log = LoggerFactory.getLogger(JournallingMessageHandler.class);
-
-    private static final Set<Journal.Entry> NULL_SINGLETON = Collections.singleton(null);
-    private static final Retryer<Void> JOURNAL_WRITE_RETRYER = RetryerBuilder.<Void>newBuilder()
-            .retryIfException(new Predicate<Throwable>() {
-                @Override
-                public boolean apply(@Nullable Throwable input) {
-                    log.error("Unable to write to journal - retrying with exponential back-off", input);
-                    return true;
-                }
-            })
-            .withWaitStrategy(WaitStrategies.exponentialWait(250, 1, TimeUnit.MINUTES))
-            .withStopStrategy(StopStrategies.neverStop())
-            .build();
 
     private final List<RawMessageEvent> batch = Lists.newArrayList();
     private final Counter byteCounter;
@@ -80,10 +62,8 @@ public class JournallingMessageHandler implements EventHandler<RawMessageEvent> 
 
             final Converter converter = new Converter();
             // copy to avoid re-running this all the time
-            final List<Journal.Entry> entries = Lists.newArrayList(transform(batch, converter));
-
             // Remove all null values returned from the converter (might happen if the Converter throws an exception)
-            entries.removeAll(NULL_SINGLETON);
+            final List<Journal.Entry> entries = Lists.newArrayList(filter(transform(batch, converter), notNull()));
 
             // Clear the batch list after transforming it with the Converter because the fields of the RawMessageEvent
             // objects in there have been set to null and cannot be used anymore.
@@ -92,29 +72,21 @@ public class JournallingMessageHandler implements EventHandler<RawMessageEvent> 
             // Catch all exceptions that might happen during the journal write and retry the operation.
             // This basically blocks if the journal write always throws an exception. Once the write succeeds, we will
             // continue.
-            try {
-                writeToJournal(converter, entries);
-            } catch (Exception e) {
-                log.error("Unable to write to journal - retrying", e);
-
-                // Use retryer with exponential back-off to avoid spamming the logs.
-                JOURNAL_WRITE_RETRYER.call(new Callable<Void>() {
-                    @Override
-                    public Void call() throws Exception {
-                        writeToJournal(converter, entries);
-                        return null;
-                    }
-                });
-            }
+            boolean done = false;
+            do {
+                try {
+                    final long lastOffset = journal.write(entries);
+                    log.debug("Processed batch, wrote {} bytes, last journal offset: {}, signalling reader.",
+                            converter.getBytesWritten(),
+                            lastOffset);
+                    journalFilled.release();
+                    done = true;
+                } catch (Exception e) {
+                    log.error("Unable to write to journal - retrying after 250ms", e);
+                    Uninterruptibles.sleepUninterruptibly(250, TimeUnit.MILLISECONDS);
+                }
+            } while (!done);
         }
-    }
-
-    private void writeToJournal(Converter converter, List<Journal.Entry> entries) {
-        final long lastOffset = journal.write(entries);
-        log.debug("Processed batch, wrote {} bytes, last journal offset: {}, signalling reader.",
-                converter.getBytesWritten(),
-                lastOffset);
-        journalFilled.release();
     }
 
     private class Converter implements Function<RawMessageEvent, Journal.Entry> {
