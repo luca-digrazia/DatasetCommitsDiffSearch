@@ -1,7 +1,14 @@
 package io.quarkus.maven;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
+import io.quarkus.bootstrap.resolver.TsArtifact;
+import io.quarkus.bootstrap.resolver.TsDependency;
+import io.quarkus.bootstrap.resolver.TsQuarkusExt;
+import io.quarkus.bootstrap.resolver.TsRepoBuilder;
+import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
+import io.quarkus.bootstrap.util.IoUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -11,20 +18,13 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
+import org.apache.maven.artifact.DefaultArtifact;
+import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.model.Model;
 import org.apache.maven.project.MavenProject;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
-import io.quarkus.bootstrap.resolver.TsArtifact;
-import io.quarkus.bootstrap.resolver.TsDependency;
-import io.quarkus.bootstrap.resolver.TsQuarkusExt;
-import io.quarkus.bootstrap.resolver.TsRepoBuilder;
-import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
-import io.quarkus.bootstrap.util.IoUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public abstract class TreeMojoTestBase {
     protected Path workDir;
@@ -35,7 +35,7 @@ public abstract class TreeMojoTestBase {
     protected TsArtifact app;
     protected Model appModel;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         workDir = IoUtils.createRandomTmpDir();
         repoHome = IoUtils.mkdirs(workDir.resolve("repo"));
@@ -53,7 +53,8 @@ public abstract class TreeMojoTestBase {
     protected void initRepo() throws Exception {
         final TsQuarkusExt coreExt = new TsQuarkusExt("test-core-ext");
         app = TsArtifact.jar("test-app")
-                .addDependency(new TsArtifact(TsArtifact.DEFAULT_GROUP_ID, "artifact-with-classifier", "classifier", "jar", TsArtifact.DEFAULT_VERSION))
+                .addDependency(new TsArtifact(TsArtifact.DEFAULT_GROUP_ID, "artifact-with-classifier", "classifier", "jar",
+                        TsArtifact.DEFAULT_VERSION))
                 .addDependency(new TsQuarkusExt("test-ext2")
                         .addDependency(new TsQuarkusExt("test-ext1").addDependency(coreExt)))
                 .addDependency(new TsDependency(TsArtifact.jar("optional"), true))
@@ -65,9 +66,9 @@ public abstract class TreeMojoTestBase {
         app.install(repoBuilder);
     }
 
-    @After
+    @AfterEach
     public void cleanup() {
-        if(workDir != null) {
+        if (workDir != null) {
             IoUtils.recursiveDelete(workDir);
         }
     }
@@ -81,12 +82,11 @@ public abstract class TreeMojoTestBase {
 
         final AbstractTreeMojo mojo = newTreeMojo();
         mojo.project = new MavenProject();
+        mojo.project.setArtifact(new DefaultArtifact(app.getGroupId(), app.getArtifactId(), app.getVersion(), "compile",
+                app.getType(), app.getClassifier(), new DefaultArtifactHandler("jar")));
         mojo.project.setModel(appModel);
         mojo.project.setOriginalModel(appModel);
-
-        mojo.repoSystem = mvnResolver.getSystem();
-        mojo.repoSession = mvnResolver.getSession();
-        mojo.repos = mvnResolver.getRepositories();
+        mojo.resolver = mvnResolver;
 
         final Path mojoLog = workDir.resolve("mojo.log");
         final PrintStream defaultOut = System.out;
@@ -104,9 +104,9 @@ public abstract class TreeMojoTestBase {
 
     private static List<String> readInLowCase(Path p) throws IOException {
         final List<String> list = new ArrayList<>();
-        try(BufferedReader reader = Files.newBufferedReader(p)) {
+        try (BufferedReader reader = Files.newBufferedReader(p)) {
             String line = reader.readLine();
-            while(line != null) {
+            while (line != null) {
                 list.add(line.toLowerCase());
                 line = reader.readLine();
             }
