@@ -20,6 +20,7 @@
 
 package org.graylog2;
 
+import com.rabbitmq.client.ConnectionFactory;
 import java.io.BufferedWriter;
 import org.graylog2.messagehandlers.syslog.SyslogServerThread;
 import org.graylog2.messagehandlers.gelf.GELFMainThread;
@@ -30,8 +31,11 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import org.graylog2.messagehandlers.amqp.AMQPBroker;
+import org.graylog2.messagehandlers.amqp.AMQPSubscriberThread;
 import org.graylog2.periodical.ChunkedGELFClientManagerThread;
-import org.graylog2.periodical.LoadStatisticsThread;
+import org.graylog2.periodical.ServerValueHistoryWriterThread;
+import org.graylog2.periodical.ThroughputWriterThread;
 
 /**
  * Main class of Graylog2.
@@ -46,19 +50,12 @@ public final class Main {
     public static boolean debugMode = false;
 
     /**
-     * Controlled by parameter "debug". Enables output of messages/second for benchmarking.
-     */
-    public static boolean printLoadStats = false;
-
-    /**
      * This holds the configuration from /etc/graylog2.conf
      */
     public static Properties masterConfig = null;
+
+    public static final String GRAYLOG2_VERSION = "0.9.5-dev";
     
-    /**
-     * This holds the filter out regular expressions from /etc/graylog2.d/filterout.properties
-     */
-    public static Properties regexConfig = null;
 
     private Main() { }
 
@@ -71,12 +68,9 @@ public final class Main {
         // Read config.
         System.out.println("[x] Reading config.");
         Main.masterConfig = new Properties();
-        Main.regexConfig = new Properties();
         // Allow -DconfigPath=/some/different/config.
         String configPath = System.getProperty("configPath", "/etc/graylog2.conf");
-        String regexPath = System.getProperty("regexPath", "/etc/graylog2.d/filterout.properties");
         System.out.println("[x] Using config: " + configPath);
-        System.out.println("[x] Using filter out rules: " + regexPath);
 
         try {
             FileInputStream configStream = new FileInputStream(configPath);
@@ -84,15 +78,6 @@ public final class Main {
             configStream.close();
         } catch(java.io.IOException e) {
             System.out.println("Could not read config file: " + e.toString());
-        }
-        
-        try {
-        	FileInputStream regexStream = new FileInputStream(regexPath);
-        	Main.regexConfig.load(regexStream);
-        	regexStream.close();
-			Tools.watchFilterFile(regexPath);
-        } catch(java.io.IOException e) {
-        	System.out.println("Could not read regex config file: " + e.toString());
         }
 
         // Define required configuration fields.
@@ -146,18 +131,12 @@ public final class Main {
             Main.debugMode = true;
         } else {
             System.out.println("[x] Not in Debug mode.");
-
-            // Maybe print out messages/second? (Only available if not in debug mode)
-            if (args.length > 0 && args[0].equalsIgnoreCase("loadstats")) {
-                Main.printLoadStats = true;
-                System.out.println("[x] Printing load stats.");
-            }
         }
 
         // Write a PID file.
         try {
             String pid = Tools.getPID();
-            if (pid == null || pid.length() == 0) {
+            if (pid == null || pid.length() == 0 || pid.equals("unknown")) {
                 throw new Exception("Could not determine PID.");
             }
 
@@ -176,7 +155,7 @@ public final class Main {
                     Main.masterConfig.getProperty("mongodb_password"),
                     Main.masterConfig.getProperty("mongodb_host"),
                     Main.masterConfig.getProperty("mongodb_database"),
-                    Integer.valueOf(Main.masterConfig.getProperty("mongodb_port")),
+                    (Main.masterConfig.getProperty("mongodb_port") == null) ? 0 : Integer.parseInt(Main.masterConfig.getProperty("mongodb_port")),
                     Main.masterConfig.getProperty("mongodb_useauth"),
                     Configuration.getMongoDBReplicaSetServers(Main.masterConfig)
             );
@@ -185,6 +164,14 @@ public final class Main {
             e.printStackTrace();
             System.exit(1); // Exit with error.
         }
+
+        // Fill some stuff into the server_values collection.
+        ServerValue.setStartupTime(Tools.getUTCTimestamp());
+        ServerValue.setPID(Integer.parseInt(Tools.getPID()));
+        ServerValue.setJREInfo(Tools.getSystemInformation());
+        ServerValue.setGraylog2Version(GRAYLOG2_VERSION);
+        ServerValue.setAvailableProcessors(HostSystem.getAvailableProcessors());
+        ServerValue.setLocalHostname(Tools.getLocalHostname());
 
         // Start the Syslog thread that accepts syslog packages.
         SyslogServerThread syslogServerThread = new SyslogServerThread(Integer.parseInt(Main.masterConfig.getProperty("syslog_listen_port")));
@@ -210,11 +197,38 @@ public final class Main {
             System.out.println("[x] GELF threads are up.");
         }
 
-        if (Main.printLoadStats) {
-            // Start thread that prints out load statistics.
-            LoadStatisticsThread loadStatThread = new LoadStatisticsThread();
-            loadStatThread.start();
+        // XXXXXXXXX TODO
+        boolean useAMQPSubscription = true;
+        if (useAMQPSubscription) {
+            // Connect to AMQP broker.
+            AMQPBroker amqpBroker = new AMQPBroker(
+                    Main.masterConfig.getProperty("amqp_host"),
+                    (Main.masterConfig.getProperty("amqp_port") == null) ? 0 : Integer.parseInt(Main.masterConfig.getProperty("amqp_port")),
+                    Main.masterConfig.getProperty("amqp_username"),
+                    Main.masterConfig.getProperty("amqp_password"),
+                    Main.masterConfig.getProperty("amqp_virtualhost")
+            );
+
+            List<String> amqpQueues = Configuration.getAMQPSubscribedQueues(Main.masterConfig);
+
+            if (amqpQueues != null) {
+                // Start AMQP subscriber thread for each queue to listen on.
+                for (String queue : amqpQueues) {
+                    AMQPSubscriberThread amqpThread = new AMQPSubscriberThread(queue, amqpBroker);
+                    amqpThread.start();
+                }
+            }
+
+            System.out.println("[x] AMQP threads are up. (" + amqpQueues.size() + " queues)");
         }
+
+        // Start thread that stores throughput info.
+        ThroughputWriterThread throughputThread = new ThroughputWriterThread();
+        throughputThread.start();
+
+        // Start thread that stores system information periodically.
+        ServerValueHistoryWriterThread serverValueHistoryThread = new ServerValueHistoryWriterThread();
+        serverValueHistoryThread.start();
 
         System.out.println("[x] Graylog2 up and running.");
     }

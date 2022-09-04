@@ -25,19 +25,10 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.QueueingConsumer;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.InetAddress;
-import java.util.zip.DataFormatException;
 import org.graylog2.Log;
-import org.graylog2.messagehandlers.gelf.InvalidGELFCompressionMethodException;
-import org.graylog2.messagehandlers.gelf.SimpleGELFClientHandler;
-import org.graylog2.messagehandlers.syslog.GraylogSyslogServerEvent;
-import org.graylog2.messagehandlers.syslog.SyslogEventHandler;
-import org.productivity.java.syslog4j.server.SyslogServer;
-import org.productivity.java.syslog4j.server.SyslogServerIF;
 
 /**
- * AMQPSubscriberThread.java: Jan 20, 2011 7:19:52 PM
+ * AMQPSubscriberThread.java: Jun 23, 2010 7:19:52 PM
  *
  * Thread responsible for subscribing to AMQP queues.
  *
@@ -45,12 +36,12 @@ import org.productivity.java.syslog4j.server.SyslogServerIF;
  */
 public class AMQPSubscriberThread extends Thread {
 
-    private AMQPSubscribedQueue queue = null;
+    private String queue = null;
     private AMQPBroker broker = null;
 
     public final static int SLEEP_INTERVAL = 10;
 
-    public AMQPSubscriberThread(AMQPSubscribedQueue queue, AMQPBroker broker) {
+    public AMQPSubscriberThread(String queue, AMQPBroker broker) {
         this.queue = queue;
         this.broker = broker;
     }
@@ -67,11 +58,9 @@ public class AMQPSubscriberThread extends Thread {
             try {
                 connection = broker.getConnection();
                 channel = connection.createChannel();
-                channel.basicConsume(this.queue.getName(), false, consumer);
-
-                Log.info("Successfully connected to queue '" + this.queue.getName() + "'");
+                channel.basicConsume(this.queue, false, consumer);
             } catch (Exception e) {
-                Log.crit("AMQP queue '" + this.queue.getName() + "': Could not connect to AMQP broker or channel (Make sure that "
+                Log.crit("AMQP queue '" + this.queue + "': Could not connect to AMQP broker or channel (Make sure that "
                         + "the queue exists. Retrying in " + SLEEP_INTERVAL + " seconds. (" + e.toString() + ")");
                 
                 // Retry after waiting for SLEEP_INTERVAL seconds.
@@ -88,12 +77,7 @@ public class AMQPSubscriberThread extends Thread {
                         continue;
                     }
 
-                    // Handle the message. (Store in MongoDB etc)
-                    try {
-                        handleMessage(delivery.getBody());
-                    } catch(Exception e) {
-                        Log.crit("Could not handle AMQP message: " + e.toString());
-                    }
+                    System.out.println("HANDLED MESSAGE: " + new String(delivery.getBody()));
 
                     try {
                         channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
@@ -102,7 +86,7 @@ public class AMQPSubscriberThread extends Thread {
                     }
                 } catch(Exception e) {
                     // Error while receiving. i.e. when AMQP broker breaks down.
-                    Log.crit("AMQP queue '" + this.queue.getName() + "': Error while subscribed (rebuilding connection "
+                    Log.crit("AMQP queue '" + this.queue + "': Error while subscribed (rebuilding connection "
                             + "in " + SLEEP_INTERVAL + " seconds. (" + e.toString() + ")");
 
                     // Better close connection stuff it is still active.
@@ -120,27 +104,6 @@ public class AMQPSubscriberThread extends Thread {
                     break;
                 }
             }
-        }
-    }
-
-    private void handleMessage(byte[] amqpBody) throws DataFormatException, UnsupportedEncodingException, InvalidGELFCompressionMethodException, IOException {
-        // Handle message.
-        switch (this.queue.getType()) {
-            case AMQPSubscribedQueue.TYPE_GELF:
-                // Handle GELF message.
-                SimpleGELFClientHandler gelfHandler = new SimpleGELFClientHandler(new String(amqpBody));
-                gelfHandler.setAmqpReceiverQueue(this.queue.getName());
-                gelfHandler.handle();
-                break;
-            case AMQPSubscribedQueue.TYPE_SYSLOG:
-                // Handle syslog message.
-                GraylogSyslogServerEvent message = new GraylogSyslogServerEvent(amqpBody, amqpBody.length, InetAddress.getLocalHost());
-                SyslogEventHandler syslogHandler = new SyslogEventHandler();
-                message.setAmqpReceiverQueue(this.queue.getName());
-                syslogHandler.event(null, null, message);
-                break;
-            default:
-                Log.crit("Invalid type of AMQP message. This should not be possible.");
         }
     }
 
