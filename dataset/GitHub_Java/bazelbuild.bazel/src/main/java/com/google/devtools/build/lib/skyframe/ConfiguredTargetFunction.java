@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.PlatformSemantics;
@@ -748,9 +749,15 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution)
       throws ConfiguredTargetFunctionException, InterruptedException {
     StoredEventHandler events = new StoredEventHandler();
+    BuildConfiguration ownerConfig =
+        ConfiguredTargetFactory.getArtifactOwnerConfiguration(
+            env, configuration, defaultBuildOptions);
+    if (env.valuesMissing()) {
+      return null;
+    }
     CachingAnalysisEnvironment analysisEnvironment =
         view.createAnalysisEnvironment(
-            ConfiguredTargetKey.of(target.getLabel(), configuration),
+            ConfiguredTargetKey.of(target.getLabel(), ownerConfig),
             false,
             events,
             env,
