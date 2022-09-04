@@ -30,12 +30,6 @@ import javax.inject.Provider;
  */
 public class InstanceImpl<T> implements InjectableInstance<T> {
 
-    static <T> InstanceImpl<T> of(Type requiredType, Set<Annotation> requiredQualifiers) {
-        return new InstanceImpl<>(null, null, requiredType, requiredQualifiers,
-                new CreationalContextImpl<>(null),
-                Collections.emptySet(), null, -1);
-    }
-
     private static final Annotation[] EMPTY_ANNOTATION_ARRAY = new Annotation[] {};
 
     private final CreationalContextImpl<?> creationalContext;
@@ -56,7 +50,7 @@ public class InstanceImpl<T> implements InjectableInstance<T> {
         this(targetBean, type, getRequiredType(type), qualifiers, creationalContext, annotations, javaMember, position);
     }
 
-    private InstanceImpl(InstanceImpl<?> parent, Type requiredType, Set<Annotation> requiredQualifiers) {
+    InstanceImpl(InstanceImpl<?> parent, Type requiredType, Set<Annotation> requiredQualifiers) {
         this(parent.targetBean, parent.injectionPointType, requiredType, requiredQualifiers, parent.creationalContext,
                 parent.annotations, parent.javaMember, parent.position);
     }
@@ -141,27 +135,15 @@ public class InstanceImpl<T> implements InjectableInstance<T> {
         return getHandle(bean());
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public Iterable<InstanceHandle<T>> handles() {
-        return new Iterable<InstanceHandle<T>>() {
-            @Override
-            public Iterator<InstanceHandle<T>> iterator() {
-                return new InstanceHandlesIterator<T>(beans());
-            }
-        };
+        return (Iterable<InstanceHandle<T>>) beans().stream().map(this::getHandle).iterator();
     }
 
     @SuppressWarnings("unchecked")
     private <H> InstanceHandle<H> getHandle(InjectableBean<H> bean) {
-        InjectionPoint prev = InjectionPointProvider
-                .set(new InjectionPointImpl(injectionPointType, requiredType, requiredQualifiers, targetBean, annotations,
-                        javaMember, position));
-        try {
-            return ArcContainerImpl.beanInstanceHandle(bean, (CreationalContextImpl<H>) creationalContext, false,
-                    this::destroy);
-        } finally {
-            InjectionPointProvider.set(prev);
-        }
+        return ArcContainerImpl.beanInstanceHandle(bean, (CreationalContextImpl<H>) creationalContext, true, this::destroy);
     }
 
     @SuppressWarnings("unchecked")
@@ -228,27 +210,6 @@ public class InstanceImpl<T> implements InjectableInstance<T> {
         @Override
         public T next() {
             return getBeanInstance((InjectableBean<T>) delegate.next());
-        }
-
-    }
-
-    private class InstanceHandlesIterator<H> implements Iterator<InstanceHandle<H>> {
-
-        final Iterator<InjectableBean<?>> delegate;
-
-        InstanceHandlesIterator(Collection<InjectableBean<?>> beans) {
-            this.delegate = beans.iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return delegate.hasNext();
-        }
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public InstanceHandle<H> next() {
-            return getHandle((InjectableBean<H>) delegate.next());
         }
 
     }
