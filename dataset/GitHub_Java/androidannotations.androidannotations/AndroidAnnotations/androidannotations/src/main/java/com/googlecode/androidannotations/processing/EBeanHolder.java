@@ -91,7 +91,7 @@ public class EBeanHolder {
 	/**
 	 * OnActivityResult byResultCode
 	 */
-	public final HashMap<Integer, JCase> onActivityResultCases = new HashMap<Integer, JCase>();
+	public HashMap<Integer, JCase> onActivityResultCases = new HashMap<Integer, JCase>();
 
 	public JSwitch onActivityResultSwitch;
 	public JMethod onActivityResultMethod;

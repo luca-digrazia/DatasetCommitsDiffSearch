@@ -94,6 +94,8 @@ import android.content.Intent;
 @Target(ElementType.METHOD)
 public @interface OnActivityResult {
 
-	int value();
+	public static final int DEFAULT_VALUE = Integer.MAX_VALUE - 1;
+
+	int value() default DEFAULT_VALUE;
 
 }
