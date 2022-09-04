@@ -63,7 +63,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-import javax.swing.plaf.FontUIResource;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -206,10 +205,12 @@ public class UserRequestAdapter {
     }
   }
 
-  public FutureResult<Vector> getRow(int matrixId, int rowIndex, int clock) {
+  public Vector getRow(int matrixId, int rowIndex, int clock)
+      throws InterruptedException, ExecutionException {
     LOG.debug("start to getRow request, matrix=" + matrixId + ", rowIndex=" + rowIndex + ", clock="
         + clock);
     checkParams(matrixId, rowIndex);
+    long startTs = System.currentTimeMillis();
 
     // Get partitions for this row
     List<PartitionKey> partList =
@@ -218,40 +219,67 @@ public class UserRequestAdapter {
     MatrixMeta meta = PSAgentContext.get().getMatrixMetaManager().getMatrixMeta(matrixId);
 
     // Distinct get row requests
-    FutureResult<Vector> result = null;
+    FutureResult<Vector> result;
     Integer requestId = getRowSubrespons.get(request);
-
-    if(requestId != null) {
+    if (requestId != null) {
       result = requestIdToResultMap.get(requestId);
+    } else {
+      result = null;
     }
 
-    if(result == null) {
-      requestId = request.getRequestId();
-      result = new FutureResult<>();
-      GetRowPipelineCache responseCache =
-          new GetRowPipelineCache(partList.size(), meta.getRowType());
-      requests.put(requestId, request);
-      requestIdToResultMap.put(requestId, result);
-      requestIdToSubresponsMap.put(requestId, responseCache);
-      getRowSubrespons.put(request, requestId);
+    // Need get from ps or storage/cache
+    if (result == null) {
+      // Switch to new request id, send a new request
+      try {
+        requestId = request.getRequestId();
+        result = new FutureResult<>();
+        GetRowPipelineCache responseCache =
+            new GetRowPipelineCache(partList.size(), meta.getRowType());
+        requests.put(requestId, request);
+        requestIdToResultMap.put(requestId, result);
+        requestIdToSubresponsMap.put(requestId, responseCache);
+        getRowSubrespons.put(request, requestId);
 
-      // Get row splits of this row from the matrix cache first
-      MatricesCache matricesCache = PSAgentContext.get().getMatricesCache();
-      MatrixTransportClient matrixClient = PSAgentContext.get().getMatrixTransportClient();
-      int size = partList.size();
-      for (int i = 0; i < size; i++) {
-        ServerRow rowSplit = matricesCache.getRowSplit(matrixId, partList.get(i), rowIndex);
-        if (rowSplit != null && rowSplit.getClock() >= clock) {
-          notifyResponse(requestId, rowSplit);
-          //responseCache.addSubResponse(rowSplit);
-        } else {
-          // If the row split does not exist in cache, get it from parameter server
-          matrixClient.getRowSplit(requestId, partList.get(i), rowIndex, clock);
+        // First get this row from matrix storage
+        //MatrixStorage matrixStorage =
+        //  PSAgentContext.get().getMatrixStorageManager().getMatrixStoage(matrixId);
+        //TVector row = matrixStorage.getRow(rowIndex);
+        //if (row != null && row.getClock() >= clock) {
+        //  result.set(row);
+        //  return row;
+        //}
+
+        // Get row splits of this row from the matrix cache first
+        MatricesCache matricesCache = PSAgentContext.get().getMatricesCache();
+        MatrixTransportClient matrixClient = PSAgentContext.get().getMatrixTransportClient();
+        int size = partList.size();
+        for (int i = 0; i < size; i++) {
+          ServerRow rowSplit = matricesCache.getRowSplit(matrixId, partList.get(i), rowIndex);
+          if (rowSplit != null && rowSplit.getClock() >= clock) {
+            notifyResponse(requestId, rowSplit);
+            //responseCache.addSubResponse(rowSplit);
+          } else {
+            // If the row split does not exist in cache, get it from parameter server
+            matrixClient.getRowSplit(requestId, partList.get(i), rowIndex, clock);
+          }
         }
-      }
-    }
 
-    return result;
+        // Wait the final result
+        Vector row = result.get();
+        LOG.debug("get row use time=" + (System.currentTimeMillis() - startTs));
+        // Put it to the matrix cache
+        // matrixStorage.addRow(rowIndex, row);
+        return row;
+      } finally {
+        requests.remove(requestId);
+        requestIdToResultMap.remove(requestId);
+        requestIdToSubresponsMap.remove(requestId);
+        getRowSubrespons.remove(request);
+      }
+    } else {
+      // Just wait result
+      return result.get();
+    }
   }
 
   /**
@@ -615,7 +643,7 @@ public class UserRequestAdapter {
    * that aborted by throwing an exception
    * @throws InterruptedException interrupted while wait the result
    */
-  public FutureResult<GetResult> get(GetFunc func) throws InterruptedException, ExecutionException {
+  public GetResult get(GetFunc func) throws InterruptedException, ExecutionException {
     MatrixTransportClient matrixClient = PSAgentContext.get().getMatrixTransportClient();
     GetParam param = func.getParam();
 
@@ -629,14 +657,20 @@ public class UserRequestAdapter {
     FutureResult<GetResult> result = new FutureResult<>();
     GetPSFResponseCache cache = new GetPSFResponseCache(size);
 
-    requests.put(requestId, request);
-    requestIdToSubresponsMap.put(requestId, cache);
-    requestIdToResultMap.put(requestId, result);
+    try {
+      requests.put(requestId, request);
+      requestIdToSubresponsMap.put(requestId, cache);
+      requestIdToResultMap.put(requestId, result);
 
-    for (int i = 0; i < size; i++) {
-      matrixClient.get(requestId, func, partParams.get(i));
+      for (int i = 0; i < size; i++) {
+        matrixClient.get(requestId, func, partParams.get(i));
+      }
+      return result.get();
+    } finally {
+      requests.remove(requestId);
+      requestIdToResultMap.remove(requestId);
+      requestIdToSubresponsMap.remove(requestId);
     }
-    return result;
   }
 
   /**
@@ -667,7 +701,10 @@ public class UserRequestAdapter {
         switch (request.getType()) {
           case GET_PSF:
             if (cache.canMerge()) {
-              workerPool.execute(new GetPSFMerger((GetPSFRequest) request, cache, result));
+              // LOG.info("start to merge " + cache + " for request " + request);
+              long startTs = System.currentTimeMillis();
+              result.set(((GetPSFRequest) request).getGetFunc().merge(cache.getSubResponses()));
+              // LOG.info("psf get merge use time = " + (System.currentTimeMillis() - startTs));
             }
             break;
 
@@ -739,10 +776,7 @@ public class UserRequestAdapter {
   }
 
   private void clear(int requestId) {
-    UserRequest request = requests.remove(requestId);
-    if(request != null) {
-      getRowSubrespons.remove(request);
-    }
+    requests.remove(requestId);
     requestIdToSubresponsMap.remove(requestId);
     requestIdToResultMap.remove(requestId);
   }
@@ -797,7 +831,7 @@ public class UserRequestAdapter {
     return false;
   }
 
-  public FutureResult<Vector> getRow(int matrixId, int rowId) {
+  public Vector getRow(int matrixId, int rowId) throws ExecutionException, InterruptedException {
     return getRow(matrixId, rowId, -1);
   }
 
@@ -1085,36 +1119,6 @@ public class UserRequestAdapter {
     }
   }
 
-
-  /**
-   * Row splits merge thread.
-   */
-  class GetPSFMerger extends Thread {
-
-    private final GetPSFRequest request;
-    private final PartitionResponseCache cache;
-    private FutureResult result;
-
-    public GetPSFMerger(GetPSFRequest request, PartitionResponseCache cache, FutureResult result) {
-      this.request = request;
-      this.cache = cache;
-      this.result = result;
-    }
-
-    private void merge(PartitionResponseCache cache) {
-      try {
-        result.set((request).getGetFunc().merge(cache.getSubResponses()));
-      } catch (Exception x) {
-        LOG.fatal("merge row failed ", x);
-        PSAgentContext.get().getPsAgent().error("merge row splits failed " + x.getMessage());
-      }
-    }
-
-    @Override
-    public void run() {
-      merge(cache);
-    }
-  }
 
   /**
    * Row splits merge thread.

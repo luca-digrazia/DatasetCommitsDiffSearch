@@ -19,14 +19,14 @@
 package com.tencent.angel.psagent.matrix.oplog.cache;
 
 import com.tencent.angel.ml.math2.VFactory;
-import com.tencent.angel.ml.math2.vector.IntIntVector;
+import com.tencent.angel.ml.math2.vector.IntLongVector;
 import com.tencent.angel.ml.matrix.RowType;
 import io.netty.buffer.ByteBuf;
 
 /**
  * Row split of sparse int row update
  */
-public class SparseIntRowUpdateSplit extends RowUpdateSplit {
+public class SparseLongRowUpdateSplit extends RowUpdateSplit {
 
   /**
    * indexes
@@ -36,7 +36,7 @@ public class SparseIntRowUpdateSplit extends RowUpdateSplit {
   /**
    * values of row
    */
-  private final int[] values;
+  private final long[] values;
 
   /**
    * Create a new sparse int row split update
@@ -46,16 +46,15 @@ public class SparseIntRowUpdateSplit extends RowUpdateSplit {
    * @param offsets values indexes
    * @param values values of row update
    */
-  public SparseIntRowUpdateSplit(int rowIndex, int start, int end, int[] offsets, int[] values) {
-    super(rowIndex, RowType.T_INT_SPARSE, start, end);
+  public SparseLongRowUpdateSplit(int rowIndex, int start, int end, int[] offsets, long[] values) {
+    super(rowIndex, RowType.T_LONG_SPARSE, start, end);
     this.offsets = offsets;
     this.values = values;
   }
 
-  public SparseIntRowUpdateSplit() {
+  public SparseLongRowUpdateSplit() {
     this(-1, -1, -1, null, null);
   }
-
 
   /**
    * Get indexes of row values
@@ -71,7 +70,7 @@ public class SparseIntRowUpdateSplit extends RowUpdateSplit {
    *
    * @return float[] row values
    */
-  public int[] getValues() {
+  public long[] getValues() {
     return values;
   }
 
@@ -87,7 +86,7 @@ public class SparseIntRowUpdateSplit extends RowUpdateSplit {
       for (int i = start; i < end; i++) {
         if (Math.abs(values[i]) > filterValue) {
           buf.writeInt(offsets[i] - startCol);
-          buf.writeInt(values[i]);
+          buf.writeLong(values[i]);
           needUpdateItemNum++;
         }
       }
@@ -96,7 +95,7 @@ public class SparseIntRowUpdateSplit extends RowUpdateSplit {
       buf.writeInt(end - start);
       for (int i = start; i < end; i++) {
         buf.writeInt(offsets[i] - startCol);
-        buf.writeInt(values[i]);
+        buf.writeLong(values[i]);
       }
     }
   }
@@ -105,17 +104,17 @@ public class SparseIntRowUpdateSplit extends RowUpdateSplit {
   public void deserialize(ByteBuf buf) {
     super.deserialize(buf);
     int size = buf.readInt();
-    vector = VFactory.sparseIntVector(
+    vector = VFactory.sparseLongVector(
         (int) (splitContext.getPartKey().getEndCol() - splitContext.getPartKey().getStartCol()),
         size);
     for (int i = 0; i < size; i++) {
-      ((IntIntVector) vector).set(buf.readInt(), buf.readInt());
+      ((IntLongVector) vector).set(buf.readInt(), buf.readLong());
     }
   }
 
   private int getNeedUpdateItemNum() {
     int needUpdateItemNum = 0;
-    int filterValue = (int) splitContext.getFilterThreshold();
+    long filterValue = (long) splitContext.getFilterThreshold();
     for (int i = start; i < end; i++) {
       if (Math.abs(values[i]) > filterValue) {
         needUpdateItemNum++;
@@ -127,9 +126,9 @@ public class SparseIntRowUpdateSplit extends RowUpdateSplit {
   @Override
   public int bufferLen() {
     if (splitContext.isEnableFilter()) {
-      return 4 + super.bufferLen() + getNeedUpdateItemNum() * 8;
+      return 4 + super.bufferLen() + getNeedUpdateItemNum() * 12;
     } else {
-      return 4 + super.bufferLen() + (end - start) * 8;
+      return 4 + super.bufferLen() + (end - start) * 12;
     }
   }
 }
