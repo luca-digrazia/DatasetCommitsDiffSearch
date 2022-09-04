@@ -78,7 +78,6 @@ import com.google.devtools.build.skyframe.AbstractSkyFunctionEnvironment;
 import com.google.devtools.build.skyframe.BuildDriver;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
-import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrUntypedException;
@@ -148,8 +147,7 @@ public final class ActionsTestUtil {
         actionGraph == null
             ? createDummyArtifactExpander()
             : ActionInputHelper.actionGraphArtifactExpander(actionGraph),
-        /*actionFileSystem=*/ null,
-        /*skyframeDepsResult=*/ null);
+        /*actionFileSystem=*/ null);
   }
 
   public static ActionExecutionContext createContextForInputDiscovery(
@@ -184,8 +182,7 @@ public final class ActionsTestUtil {
         ImmutableMap.of(),
         ImmutableMap.of(),
         createDummyArtifactExpander(),
-        /*actionFileSystem=*/ null,
-        /*skyframeDepsResult=*/ null);
+        /*actionFileSystem=*/ null);
   }
 
   private static ArtifactExpander createDummyArtifactExpander() {
@@ -713,12 +710,7 @@ public final class ActionsTestUtil {
    */
   public static class FakeMetadataHandlerBase implements MetadataHandler {
     @Override
-    public FileArtifactValue getMetadata(ActionInput input) throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public ActionInput getInput(String execPath) {
+    public FileArtifactValue getMetadata(Artifact artifact) throws IOException {
       throw new UnsupportedOperationException();
     }
 

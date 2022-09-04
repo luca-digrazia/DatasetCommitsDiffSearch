@@ -189,12 +189,10 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
         actionKeyContext,
         null,
         new FileOutErr(),
-        executor.getEventHandler(),
-        ImmutableMap.of(),
+        ImmutableMap.<String, String>of(),
         ImmutableMap.of(),
         null,
-        /*actionFileSystem=*/ null,
-        /*skyframeDepsResult=*/ null);
+        /*actionFileSystem=*/ null);
   }
 
   private void executeTemplateExpansion(String expected) throws Exception {

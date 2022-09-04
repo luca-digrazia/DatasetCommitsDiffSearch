@@ -249,12 +249,11 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    public Object establishSkyframeDependencies(Environment env)
+    public void establishSkyframeDependencies(Environment env)
         throws ExceptionBase, InterruptedException {
       // Establish some Skyframe dependency. A real action would then use this to compute and
       // cache data for the execute(...) method.
       env.getValue(actionDepKey);
-      return null;
     }
   }
 
@@ -541,17 +540,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
             : ExpectActionIs.DIRTIED_BUT_VERIFIED_CLEAN);
   }
 
-  @Test
-  public void testCacheCheckingActionWithNonChangingInput() throws Exception {
-    assertActionWithNonChangingInput(/* unconditionalExecution */ false);
-  }
-
-  @Test
-  public void testCacheBypassingActionWithNonChangingInput() throws Exception {
-    assertActionWithNonChangingInput(/* unconditionalExecution */ true);
-  }
-
-  private void assertActionWithNonChangingInput(final boolean unconditionalExecution)
+  public void testActionWithNonChangingInput(final boolean unconditionalExecution)
       throws Exception {
     // Assert that a simple, non-skyframe-aware action is executed only once
     // if its input does not change at all between builds.
@@ -808,9 +797,8 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     registerAction(
         new SingleOutputSkyframeAwareAction(genFile1, genFile2) {
           @Override
-          public Object establishSkyframeDependencies(Environment env) throws ExceptionBase {
+          public void establishSkyframeDependencies(Environment env) throws ExceptionBase {
             assertThat(env.valuesMissing()).isFalse();
-            return null;
           }
 
           @Override

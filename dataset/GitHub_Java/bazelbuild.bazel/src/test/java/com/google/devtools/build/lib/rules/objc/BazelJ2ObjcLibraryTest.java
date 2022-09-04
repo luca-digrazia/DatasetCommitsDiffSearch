@@ -791,11 +791,9 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
             actionKeyContext,
             null,
             null,
-            null,
             ImmutableMap.<String, String>of(),
             ImmutableMap.of(),
             DUMMY_ARTIFACT_EXPANDER,
-            null,
             null);
     ByteArrayOutputStream moduleMapStream = new ByteArrayOutputStream();
     ByteArrayOutputStream umbrellaHeaderStream = new ByteArrayOutputStream();
@@ -844,11 +842,9 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
             actionKeyContext,
             null,
             null,
-            null,
-            ImmutableMap.of(),
+            ImmutableMap.<String, String>of(),
             ImmutableMap.of(),
             DUMMY_ARTIFACT_EXPANDER,
-            null,
             null);
 
     ByteArrayOutputStream moduleMapStream = new ByteArrayOutputStream();

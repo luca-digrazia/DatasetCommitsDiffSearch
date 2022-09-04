@@ -13,9 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
-import com.google.devtools.build.skyframe.SkyKey;
 
 /**
  * Interface of an Action that is Skyframe-aware.
@@ -70,15 +68,6 @@ public interface SkyframeAwareAction {
    * <p>This method should not attempt to handle errors or missing dependencies (other than wrapping
    * exceptions); that is the responsibility of the caller. It should return as soon as possible,
    * ready to be called again at a later time if need be.
-   *
-   * <p>The return value will be incorporated into the
-   * {@link com.google.devtools.build.lib.actions.ActionExecutionContext}.
    */
-  Object establishSkyframeDependencies(Environment env) throws ExceptionBase, InterruptedException;
-
-  /**
-   * Returns the Skyframe nodes which need to be rewound if a consumer of this action's output finds
-   * out that output has been lost.
-   */
-  ImmutableSet<SkyKey> getSkyframeDependenciesForRewinding();
+  void establishSkyframeDependencies(Environment env) throws ExceptionBase, InterruptedException;
 }

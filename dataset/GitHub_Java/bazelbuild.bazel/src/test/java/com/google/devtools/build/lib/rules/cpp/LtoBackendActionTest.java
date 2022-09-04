@@ -90,8 +90,7 @@ public class LtoBackendActionTest extends BuildViewTestCase {
             ImmutableMap.<String, String>of(),
             ImmutableMap.of(),
             null,
-            /*actionFileSystem=*/ null,
-            /*skyframeDepsResult=*/ null);
+            /*actionFileSystem=*/ null);
   }
 
   @Test
@@ -104,7 +103,7 @@ public class LtoBackendActionTest extends BuildViewTestCase {
             .addOutput(destinationArtifact)
             .setExecutable(scratch.file("/bin/clang").asFragment())
             .setProgressMessage("Test")
-            .build(ActionsTestUtil.NULL_ACTION_OWNER, targetConfig);
+            .build(ActionsTestUtil.NULL_ACTION_OWNER, collectingAnalysisEnvironment, targetConfig);
     collectingAnalysisEnvironment.registerAction(actions);
     LtoBackendAction action = (LtoBackendAction) actions[0];
     assertThat(action.getOwner().getLabel())
@@ -133,7 +132,7 @@ public class LtoBackendActionTest extends BuildViewTestCase {
             .addOutput(destinationArtifact)
             .setExecutable(scratch.file("/bin/clang").asFragment())
             .setProgressMessage("Test")
-            .build(ActionsTestUtil.NULL_ACTION_OWNER, targetConfig);
+            .build(ActionsTestUtil.NULL_ACTION_OWNER, collectingAnalysisEnvironment, targetConfig);
     collectingAnalysisEnvironment.registerAction(actions);
     LtoBackendAction action = (LtoBackendAction) actions[0];
     assertThat(action.getOwner().getLabel())
@@ -217,7 +216,7 @@ public class LtoBackendActionTest extends BuildViewTestCase {
 
             Action[] actions =
                 builder.build(
-                    ActionsTestUtil.NULL_ACTION_OWNER, targetConfig);
+                    ActionsTestUtil.NULL_ACTION_OWNER, collectingAnalysisEnvironment, targetConfig);
             collectingAnalysisEnvironment.registerAction(actions);
             return actions[0];
           }

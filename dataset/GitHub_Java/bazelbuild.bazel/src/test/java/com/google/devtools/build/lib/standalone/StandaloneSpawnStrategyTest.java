@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.events.PrintingEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
-import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
@@ -116,7 +115,8 @@ public class StandaloneSpawnStrategyTest {
             /* defaultSystemJavabase= */ null,
             "mock-product-name");
     // This call implicitly symlinks the integration bin tools into the exec root.
-    IntegrationMock.get().getIntegrationBinTools(fileSystem, directories);
+    IntegrationMock.get()
+        .getIntegrationBinTools(fileSystem, directories, TestConstants.WORKSPACE_NAME);
     OptionsParser optionsParser = OptionsParser.newOptionsParser(ExecutionOptions.class);
     optionsParser.parse("--verbose_failures");
     LocalExecutionOptions localExecutionOptions = Options.getDefaults(LocalExecutionOptions.class);
@@ -125,7 +125,7 @@ public class StandaloneSpawnStrategyTest {
 
     ResourceManager resourceManager = ResourceManager.instanceForTestingOnly();
     resourceManager.setAvailableResources(
-        ResourceSet.create(/*memoryMb=*/1, /*cpuUsage=*/1, /*localTestCount=*/1));
+        ResourceSet.create(/*memoryMb=*/1, /*cpuUsage=*/1, /*ioUsage=*/1, /*localTestCount=*/1));
     Path execRoot = directories.getExecRoot(TestConstants.WORKSPACE_NAME);
     this.executor =
         new BlazeExecutor(
@@ -145,8 +145,7 @@ public class StandaloneSpawnStrategyTest {
                             execRoot,
                             localExecutionOptions,
                             resourceManager,
-                            LocalEnvProvider.UNMODIFIED,
-                            BinTools.forIntegrationTesting(directories, ImmutableList.of()))))),
+                            LocalEnvProvider.UNMODIFIED)))),
             ImmutableList.<ActionContextProvider>of());
 
     executor.getExecRoot().createDirectoryAndParents();
@@ -195,8 +194,7 @@ public class StandaloneSpawnStrategyTest {
         ImmutableMap.<String, String>of(),
         ImmutableMap.of(),
         SIMPLE_ARTIFACT_EXPANDER,
-        /*actionFileSystem=*/ null,
-        /*skyframeDepsResult=*/ null);
+        /*actionFileSystem=*/ null);
   }
 
   @Test

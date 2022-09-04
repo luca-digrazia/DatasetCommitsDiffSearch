@@ -59,7 +59,7 @@ public class SymlinkActionTest extends BuildViewTestCase {
     outputArtifact = getBinArtifactWithNoOwner("destination.txt");
     output = outputArtifact.getPath();
     FileSystemUtils.createDirectoryAndParents(output.getParentDirectory());
-    action = SymlinkAction.toArtifact(NULL_ACTION_OWNER,
+    action = new SymlinkAction(NULL_ACTION_OWNER,
         inputArtifact, outputArtifact, "Symlinking test");
   }
 
@@ -90,8 +90,7 @@ public class SymlinkActionTest extends BuildViewTestCase {
                 ImmutableMap.<String, String>of(),
                 ImmutableMap.of(),
                 null,
-                /*actionFileSystem=*/ null,
-                /*skyframeDepsResult=*/ null));
+                /*actionFileSystem=*/ null));
     assertThat(actionResult.spawnResults()).isEmpty();
     assertThat(output.isSymbolicLink()).isTrue();
     assertThat(output.resolveSymbolicLinks()).isEqualTo(input);
