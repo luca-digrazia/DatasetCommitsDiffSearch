@@ -16,11 +16,13 @@
 package smile.manifold;
 
 import java.util.Collection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.data.SparseDataset;
 import smile.graph.AdjacencyList;
 import smile.graph.Graph;
 import smile.graph.Graph.Edge;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.SparseArray;
 import smile.math.distance.EuclideanDistance;
 import smile.math.matrix.DenseMatrix;
@@ -54,7 +56,7 @@ import smile.neighbor.Neighbor;
  * @author Haifeng Li
  */
 public class LaplacianEigenmap {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(LaplacianEigenmap.class);
+    private static final Logger logger = LoggerFactory.getLogger(LaplacianEigenmap.class);
 
     /**
      * The width of heat kernel.
@@ -145,7 +147,7 @@ public class LaplacianEigenmap {
                     j = edge.v1;
                 }
 
-                double w = t <= 0 ? 1.0 : Math.exp(gamma * MathEx.sqr(edge.weight));
+                double w = t <= 0 ? 1.0 : Math.exp(gamma * Math.sqr(edge.weight));
                 W.set(i, j, w);
                 D[i] += w;
             }
