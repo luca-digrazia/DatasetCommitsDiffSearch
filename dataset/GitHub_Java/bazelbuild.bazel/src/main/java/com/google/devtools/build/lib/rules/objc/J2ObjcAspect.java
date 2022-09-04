@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
@@ -221,7 +220,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
   @Override
   public ConfiguredAspect create(
       ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
-      throws InterruptedException, ActionConflictException {
+      throws InterruptedException {
     ConfiguredTarget base = ctadBase.getConfiguredTarget();
     if (isProtoRule(base)) {
       return proto(base, ruleContext, parameters);
@@ -238,7 +237,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       J2ObjcMappingFileProvider directJ2ObjcMappingFileProvider,
       Iterable<Attribute> depAttributes,
       List<TransitiveInfoCollection> otherDeps)
-      throws InterruptedException, ActionConflictException {
+      throws InterruptedException {
     ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(this, parameters, ruleContext);
     ObjcCommon common;
 
@@ -301,7 +300,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
   private ConfiguredAspect java(
       ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
-      throws InterruptedException, ActionConflictException {
+      throws InterruptedException {
     JavaCompilationArgsProvider compilationArgsProvider =
         JavaInfo.getProvider(JavaCompilationArgsProvider.class, base);
     JavaSourceInfoProvider sourceInfoProvider = base.getProvider(JavaSourceInfoProvider.class);
@@ -350,7 +349,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
   private ConfiguredAspect proto(
       ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
-      throws InterruptedException, ActionConflictException {
+      throws InterruptedException {
     ProtoSourcesProvider protoSourcesProvider = base.getProvider(ProtoSourcesProvider.class);
     ImmutableList<Artifact> protoSources = protoSourcesProvider.getDirectProtoSources();
 
