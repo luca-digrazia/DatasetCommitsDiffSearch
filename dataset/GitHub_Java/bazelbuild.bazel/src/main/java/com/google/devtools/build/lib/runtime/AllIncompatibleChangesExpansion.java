@@ -18,38 +18,34 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.ExpansionFunction;
 import com.google.devtools.common.options.IsolatedOptionsData;
+import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionMetadataTag;
+import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser;
 import java.util.ArrayList;
 import java.util.Map;
 
 /**
  * Expansion function for {@code --all_incompatible_changes}. Expands to all options of form {@code
- * --incompatible_*} that are declared in the {@link com.google.devtools.common.options.OptionsBase}
- * subclasses that are passed to the parser.
+ * --incompatible_*} that are declared in the {@link OptionsBase} subclasses that are passed to the
+ * parser.
  *
  * <p>The incompatible changes system provides users with a uniform way of opting into backwards-
  * incompatible changes, in order to test whether their builds will be broken by an upcoming
  * release. When adding a new breaking change to Bazel, prefer to use this mechanism for guarding
  * the behavior.
  *
- * <p>An {@link com.google.devtools.common.options.Option}-annotated field that is considered an
- * incompatible change must satisfy the following requirements.
+ * <p>An {@link Option}-annotated field that is considered an incompatible change must satisfy the
+ * following requirements.
  *
  * <ul>
- *   <li>the {@link com.google.devtools.common.options.Option#name} must be prefixed with
- *       "incompatible_"
- *   <li>the {@link com.google.devtools.common.options.Option#metadataTags()} must include {@link
- *       OptionMetadataTag#INCOMPATIBLE_CHANGE} and {@link
- *       OptionMetadataTag#TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES}
- *   <li>the {@link com.google.devtools.common.options.Option#help} field must be set, and must
- *       refer the user to information about what the change does and how to migrate their code
- *   <li>the following fields may not be used: {@link
- *       com.google.devtools.common.options.Option#abbrev}, {@link
- *       com.google.devtools.common.options.Option#valueHelp}, {@link
- *       com.google.devtools.common.options.Option#converter}, {@link
- *       com.google.devtools.common.options.Option#allowMultiple}, and {@link
- *       com.google.devtools.common.options.Option#oldName}
+ *   <li>the {@link Option#name} must be prefixed with "incompatible_"
+ *   <li>the {@link Option#category} must be "incompatible changes"
+ *   <li>the {@link Option#help} field must be set, and must refer the user to information about
+ *       what the change does and how to migrate their code
+ *   <li>the following fields may not be used: {@link Option#abbrev}, {@link Option#valueHelp},
+ *       {@link Option#converter}, {@link Option#allowMultiple}, and {@link Option#oldName}
  * </ul>
  *
  * Example:
@@ -57,23 +53,18 @@ import java.util.Map;
  * <pre>{@code
  * @Option(
  *   name = "incompatible_foo",
- *   metadataTags = {
- *     OptionMetadataTag.INCOMPATIBLE_CHANGE,
- *     OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
- *   },
+ *   category = "incompatible changes",
  *   defaultValue = "false",
  *   help = "Deprecates bar and changes the semantics of baz. To migrate your code see [...].")
  * public boolean incompatibleFoo;
  * }</pre>
  *
- * All options that have either the "incompatible_" prefix or the tag {@link
- * OptionMetadataTag#TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES} will be validated using the above
- * criteria. Any failure will cause {@link IllegalArgumentException} to be thrown, which will cause
- * the construction of the {@link com.google.devtools.common.options.OptionsParser} to fail with the
- * <i>unchecked</i> exception {@link
- * com.google.devtools.common.options.OptionsParser.ConstructionException}. Therefore, when adding a
- * new incompatible change, be aware that an error in the specification of the {@code @Option} will
- * exercise failure code paths in the early part of the Bazel server execution.
+ * All options that satisfy either the name or category requirement will be validated using the
+ * above criteria. Any failure will cause {@link IllegalArgumentException} to be thrown, which will
+ * cause the construction of the {@link OptionsParser} to fail with the <i>unchecked</i> exception
+ * {@link OptionsParser.ConstructionException}. Therefore, when adding a new incompatible change, be
+ * aware that an error in the specification of the {@code @Option} will exercise failure code paths
+ * in the early part of the Bazel server execution.
  *
  * <p>After the breaking change has been enabled by default, it is recommended (required?) that the
  * flag stick around for a few releases, to provide users the flexibility to opt out. Even after
@@ -94,6 +85,8 @@ public class AllIncompatibleChangesExpansion implements ExpansionFunction {
 
   // The reserved prefix for all incompatible change option names.
   public static final String INCOMPATIBLE_NAME_PREFIX = "incompatible_";
+  // The reserved category for all incompatible change options.
+  public static final String INCOMPATIBLE_CATEGORY = "incompatible changes";
 
   /**
    * Ensures that the given option satisfies all the requirements on incompatible change options
@@ -125,8 +118,7 @@ public class AllIncompatibleChangesExpansion implements ExpansionFunction {
     if (optionDefinition.hasImplicitRequirements()) {
       throw new IllegalArgumentException(prefix + "must not use the implicitRequirements field");
     }
-    if (!optionDefinition.getOldOptionName().equals(defaultString)
-        && !optionDefinition.getOldOptionName().startsWith("experimental_")) {
+    if (!optionDefinition.getOldOptionName().equals(defaultString)) {
       throw new IllegalArgumentException(prefix + "must not use the oldName field");
     }
 
@@ -134,16 +126,13 @@ public class AllIncompatibleChangesExpansion implements ExpansionFunction {
     if (!optionDefinition.getOptionName().startsWith(INCOMPATIBLE_NAME_PREFIX)) {
       throw new IllegalArgumentException(prefix + "must have name starting with \"incompatible_\"");
     }
-    if (!ImmutableList.copyOf(optionDefinition.getOptionMetadataTags())
-        .contains(OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES)) {
-      throw new IllegalArgumentException(
-          prefix
-              + "must have metadata tag OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES");
+    if (!optionDefinition.getOptionCategory().equals(INCOMPATIBLE_CATEGORY)) {
+      throw new IllegalArgumentException(prefix + "must have category \"incompatible changes\"");
     }
     if (!ImmutableList.copyOf(optionDefinition.getOptionMetadataTags())
         .contains(OptionMetadataTag.INCOMPATIBLE_CHANGE)) {
       throw new IllegalArgumentException(
-          prefix + "must have metadata tag OptionMetadataTag.INCOMPATIBLE_CHANGE");
+          prefix + "must have metadata tag \"OptionMetadataTag.INCOMPATIBLE_CHANGE\"");
     }
     if (!optionDefinition.isExpansionOption()) {
       if (!optionDefinition.getType().equals(Boolean.TYPE)) {
@@ -162,13 +151,12 @@ public class AllIncompatibleChangesExpansion implements ExpansionFunction {
   @Override
   public ImmutableList<String> getExpansion(IsolatedOptionsData optionsData) {
     // Grab all registered options that are identified as incompatible changes by either name or
-    // by OptionMetadataTag. Ensure they satisfy our requirements.
+    // by category. Ensure they satisfy our requirements.
     ArrayList<String> incompatibleChanges = new ArrayList<>();
     for (Map.Entry<String, OptionDefinition> entry : optionsData.getAllOptionDefinitions()) {
       OptionDefinition optionDefinition = entry.getValue();
       if (optionDefinition.getOptionName().startsWith(INCOMPATIBLE_NAME_PREFIX)
-          || ImmutableList.copyOf(optionDefinition.getOptionMetadataTags())
-              .contains(OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES)) {
+          || optionDefinition.getOptionCategory().equals(INCOMPATIBLE_CATEGORY)) {
         validateIncompatibleChange(optionDefinition);
         incompatibleChanges.add("--" + optionDefinition.getOptionName());
       }

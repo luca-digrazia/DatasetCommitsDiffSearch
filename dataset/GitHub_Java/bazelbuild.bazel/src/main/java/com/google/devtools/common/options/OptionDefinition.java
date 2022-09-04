@@ -137,7 +137,7 @@ public class OptionDefinition implements Comparable<OptionDefinition> {
   }
 
   /** {@link Option#expansionFunction()} ()} */
-  public Class<? extends ExpansionFunction> getExpansionFunction() {
+  Class<? extends ExpansionFunction> getExpansionFunction() {
     return optionAnnotation.expansionFunction();
   }
 
@@ -253,20 +253,19 @@ public class OptionDefinition implements Comparable<OptionDefinition> {
 
   /** Returns the evaluated default value for this option & memoizes the result. */
   public Object getDefaultValue() {
-    if (defaultValue != null) {
+    if (defaultValue != null || isSpecialNullDefault()) {
       return defaultValue;
     }
+    Converter<?> converter = getConverter();
+    String defaultValueAsString = getUnparsedDefaultValue();
+    boolean allowsMultiple = allowsMultiple();
     // If the option allows multiple values then we intentionally return the empty list as
     // the default value of this option since it is not always the case that an option
     // that allows multiple values will have a converter that returns a list value.
-    if (allowsMultiple()) {
+    if (allowsMultiple) {
       defaultValue = Collections.emptyList();
-    } else if (isSpecialNullDefault()) {
-      return null;
     } else {
       // Otherwise try to convert the default value using the converter
-      Converter<?> converter = getConverter();
-      String defaultValueAsString = getUnparsedDefaultValue();
       try {
         defaultValue = converter.convert(defaultValueAsString);
       } catch (OptionsParsingException e) {

@@ -204,33 +204,30 @@ class OptionsParserImpl {
    * OptionInstanceOrigin)}
    */
   ImmutableList<ParsedOptionDescription> getExpansionValueDescriptions(
-      OptionDefinition expansionFlagDef, OptionInstanceOrigin originOfExpansionFlag)
+      OptionDefinition expansionFlag, OptionInstanceOrigin originOfExpansionFlag)
       throws OptionsParsingException {
     ImmutableList.Builder<ParsedOptionDescription> builder = ImmutableList.builder();
     OptionInstanceOrigin originOfSubflags;
     ImmutableList<String> options;
-    ParsedOptionDescription expansionFlagParsedDummy =
-        ParsedOptionDescription.newDummyInstance(expansionFlagDef, originOfExpansionFlag);
-    if (expansionFlagDef.hasImplicitRequirements()) {
-      options = ImmutableList.copyOf(expansionFlagDef.getImplicitRequirements());
+    if (expansionFlag.hasImplicitRequirements()) {
+      options = ImmutableList.copyOf(expansionFlag.getImplicitRequirements());
       originOfSubflags =
           new OptionInstanceOrigin(
               originOfExpansionFlag.getPriority(),
               String.format(
                   "implicitly required by %s (source: %s)",
-                  expansionFlagDef, originOfExpansionFlag.getSource()),
-              expansionFlagParsedDummy,
+                  expansionFlag, originOfExpansionFlag.getSource()),
+              expansionFlag,
               null);
-    } else if (expansionFlagDef.isExpansionOption()) {
-      options = optionsData.getEvaluatedExpansion(expansionFlagDef);
+    } else if (expansionFlag.isExpansionOption()) {
+      options = optionsData.getEvaluatedExpansion(expansionFlag);
       originOfSubflags =
           new OptionInstanceOrigin(
               originOfExpansionFlag.getPriority(),
               String.format(
-                  "expanded by %s (source: %s)",
-                  expansionFlagDef, originOfExpansionFlag.getSource()),
+                  "expanded by %s (source: %s)", expansionFlag, originOfExpansionFlag.getSource()),
               null,
-              expansionFlagParsedDummy);
+              expansionFlag);
     } else {
       return ImmutableList.of();
     }
@@ -287,19 +284,12 @@ class OptionsParserImpl {
     }
   }
 
-  /** Implements {@link OptionsParser#parseArgsFixedAsExpansionOfOption} */
-  List<String> parseArgsFixedAsExpansionOfOption(
-      ParsedOptionDescription optionToExpand,
-      Function<OptionDefinition, String> sourceFunction,
-      List<String> args)
+  /** Parses the args at the fixed priority. */
+  List<String> parseOptionsFixedAtSpecificPriority(
+      OptionPriority priority, Function<OptionDefinition, String> sourceFunction, List<String> args)
       throws OptionsParsingException {
     ResidueAndPriority residueAndPriority =
-        parse(
-            OptionPriority.getLockedPriority(optionToExpand.getPriority()),
-            sourceFunction,
-            null,
-            optionToExpand,
-            args);
+        parse(OptionPriority.getLockedPriority(priority), sourceFunction, null, null, args);
     return residueAndPriority.residue;
   }
 
@@ -314,8 +304,8 @@ class OptionsParserImpl {
   private ResidueAndPriority parse(
       OptionPriority priority,
       Function<OptionDefinition, String> sourceFunction,
-      ParsedOptionDescription implicitDependent,
-      ParsedOptionDescription expandedFrom,
+      OptionDefinition implicitDependent,
+      OptionDefinition expandedFrom,
       List<String> args)
       throws OptionsParsingException {
     List<String> unparsedArgs = new ArrayList<>();
@@ -379,7 +369,7 @@ class OptionsParserImpl {
         priorityCategory);
 
     handleNewParsedOption(
-        ParsedOptionDescription.newParsedOptionDescription(
+        new ParsedOptionDescription(
             option,
             String.format("--%s=%s", option.getOptionName(), unconvertedValue),
             unconvertedValue,
@@ -421,8 +411,8 @@ class OptionsParserImpl {
           parse(
               OptionPriority.getLockedPriority(parsedOption.getPriority()),
               o -> expansionBundle.sourceOfExpansionArgs,
-              optionDefinition.hasImplicitRequirements() ? parsedOption : null,
-              optionDefinition.isExpansionOption() ? parsedOption : null,
+              optionDefinition.hasImplicitRequirements() ? optionDefinition : null,
+              optionDefinition.isExpansionOption() ? optionDefinition : null,
               expansionBundle.expansionArgs);
       if (!residueAndPriority.residue.isEmpty()) {
 
@@ -443,8 +433,8 @@ class OptionsParserImpl {
       Iterator<String> nextArgs,
       OptionPriority priority,
       Function<OptionDefinition, String> sourceFunction,
-      ParsedOptionDescription implicitDependent,
-      ParsedOptionDescription expandedFrom)
+      OptionDefinition implicitDependent,
+      OptionDefinition expandedFrom)
       throws OptionsParsingException {
 
     // Store the way this option was parsed on the command line.
@@ -520,7 +510,7 @@ class OptionsParserImpl {
       }
     }
 
-    return ParsedOptionDescription.newParsedOptionDescription(
+    return new ParsedOptionDescription(
         optionDefinition,
         commandLineForm.toString(),
         unconvertedValue,
