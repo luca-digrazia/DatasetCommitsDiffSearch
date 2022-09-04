@@ -13,19 +13,17 @@ import io.dropwizard.client.ssl.TlsConfiguration;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.Duration;
+import javax.net.ssl.HostnameVerifier;
 import org.apache.http.ConnectionReuseStrategy;
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.Credentials;
-import org.apache.http.auth.NTCredentials;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.RedirectStrategy;
-import org.apache.http.client.ServiceUnavailableRetryStrategy;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.config.Registry;
@@ -46,7 +44,6 @@ import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpProcessor;
 
-import javax.net.ssl.HostnameVerifier;
 import java.util.List;
 
 /**
@@ -79,7 +76,6 @@ public class HttpClientBuilder {
     private boolean disableContentCompression;
     private List<? extends Header> defaultHeaders;
     private HttpProcessor httpProcessor;
-    private ServiceUnavailableRetryStrategy serviceUnavailableRetryStrategy;
 
     public HttpClientBuilder(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
@@ -224,17 +220,6 @@ public class HttpClientBuilder {
     }
 
     /**
-     * Use the given {@link ServiceUnavailableRetryStrategy} instance
-     *
-     * @param serviceUnavailableRetryStrategy a {@link ServiceUnavailableRetryStrategy} instance
-     * @return {@code} this
-     */
-    public HttpClientBuilder using(ServiceUnavailableRetryStrategy serviceUnavailableRetryStrategy) {
-        this.serviceUnavailableRetryStrategy = serviceUnavailableRetryStrategy;
-        return this;
-    }
-
-    /**
      * Disable support of decompression of responses
      *
      * @param disableContentCompression {@code true}, if disabled
@@ -363,16 +348,10 @@ public class HttpClientBuilder {
                 if (credentialsProvider == null) {
                     credentialsProvider = new BasicCredentialsProvider();
                 }
-                // set the AuthScope
-                AuthScope authScope = new AuthScope(httpHost, auth.getRealm(), auth.getAuthScheme());
-
-                // set the credentials type
-                Credentials credentials = configureCredentials(auth);
-
-                credentialsProvider.setCredentials(authScope, credentials);
+                credentialsProvider.setCredentials(new AuthScope(httpHost),
+                        new UsernamePasswordCredentials(auth.getUsername(), auth.getPassword()));
             }
         }
-
 
         if (credentialsProvider != null) {
             builder.setDefaultCredentialsProvider(credentialsProvider);
@@ -400,10 +379,6 @@ public class HttpClientBuilder {
 
         if (httpProcessor != null) {
             builder.setHttpProcessor(httpProcessor);
-        }
-
-        if (serviceUnavailableRetryStrategy != null) {
-            builder.setServiceUnavailableRetryStrategy(serviceUnavailableRetryStrategy);
         }
 
         return new ConfiguredCloseableHttpClient(builder.build(), requestConfig);
@@ -478,20 +453,5 @@ public class HttpClientBuilder {
         connectionManager.setMaxTotal(configuration.getMaxConnections());
         connectionManager.setValidateAfterInactivity((int) configuration.getValidateAfterInactivityPeriod().toMilliseconds());
         return connectionManager;
-    }
-
-    /**
-     * determine the Credentials implementation to use
-     * @param auth
-     * @return a {@code Credentials} instance, either {{@link UsernamePasswordCredentials} or {@link NTCredentials}}
-     */
-    protected Credentials configureCredentials(AuthConfiguration auth) {
-
-        if (null != auth.getCredentialType() && auth.getCredentialType().equalsIgnoreCase(AuthConfiguration.NT_CREDS)) {
-            return new NTCredentials(auth.getUsername(), auth.getPassword(), auth.getHostname(), auth.getDomain());
-        } else {
-            return new UsernamePasswordCredentials(auth.getUsername(), auth.getPassword());
-        }
-
     }
 }
