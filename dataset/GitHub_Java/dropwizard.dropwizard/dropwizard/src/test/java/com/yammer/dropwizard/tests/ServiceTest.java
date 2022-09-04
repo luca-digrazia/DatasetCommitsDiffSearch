@@ -24,8 +24,7 @@ public class ServiceTest {
         }
 
         @Override
-        protected void initialize(FakeConfiguration configuration,
-                                  Environment environment) {
+        public void initialize(FakeConfiguration configuration, Environment environment) {
         }
     }
 
@@ -36,6 +35,12 @@ public class ServiceTest {
     public void hasAReferenceToItsTypeParameter() throws Exception {
         assertThat(service.getConfigurationClass(),
                    is(sameInstance(FakeConfiguration.class)));
+    }
+
+    @Test
+    public void hasModules() throws Exception {
+        assertThat(service.getModules(),
+                   hasItem(module));
     }
 
     @Test
