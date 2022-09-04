@@ -15,28 +15,42 @@
 package com.google.devtools.build.lib.rules.java;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
+import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
+import com.google.devtools.build.lib.analysis.config.ConfigAwareRuleClassBuilder;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /** Rule definition for {@code java_runtime} */
 public final class JavaRuntimeRule implements RuleDefinition {
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
-    return builder
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+    return ConfigAwareRuleClassBuilder.of(builder)
+        .requiresHostConfigurationFragments(JavaConfiguration.class)
+        .originalBuilder()
+        .requiresConfigurationFragments(JavaConfiguration.class)
+        .advertiseProvider(TemplateVariableInfo.class)
+        .advertiseStarlarkProvider(JavaRuntimeInfo.PROVIDER.id())
         /* <!-- #BLAZE_RULE(java_runtime).ATTRIBUTE(srcs) -->
         All files in the runtime.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("srcs", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE).mandatory())
+        .add(attr("srcs", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
+        /* <!-- #BLAZE_RULE(java_runtime).ATTRIBUTE(java) -->
+        The path to the java executable.
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("java", LABEL).singleArtifact().allowedFileTypes(FileTypeSet.ANY_FILE).exec())
         /* <!-- #BLAZE_RULE(java_runtime).ATTRIBUTE(java_home) -->
-        The relative path to the root of the runtime.
+        The path to the root of the runtime.
+        Subject to <a href="${link make-variables}">"Make" variable</a> substitution.
+        If this path is absolute, the rule denotes a non-hermetic Java runtime with a well-known
+        path. In that case, the <code>srcs</code> and <code>java</code> attributes must be empty.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("java_home", STRING))
         .add(attr("output_licenses", LICENSE))
@@ -47,7 +61,7 @@ public final class JavaRuntimeRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("java_runtime")
-        .ancestors(BaseRuleClasses.BaseRule.class)
+        .ancestors(BaseRuleClasses.NativeBuildRule.class)
         .factoryClass(JavaRuntime.class)
         .build();
   }
@@ -58,7 +72,7 @@ public final class JavaRuntimeRule implements RuleDefinition {
 Specifies the configuration for a Java runtime.
 </p>
 
-<h4 id="java_runtime">Example:</h4>
+<h4 id="java_runtime_example">Example:</h4>
 
 <pre class="code">
 java_runtime(
