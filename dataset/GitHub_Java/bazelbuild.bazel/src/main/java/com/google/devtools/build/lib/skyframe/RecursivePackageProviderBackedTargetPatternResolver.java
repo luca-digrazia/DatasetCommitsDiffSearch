@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -30,10 +31,7 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPatternResolver;
-import com.google.devtools.build.lib.concurrent.BatchCallback;
 import com.google.devtools.build.lib.concurrent.MultisetSemaphore;
-import com.google.devtools.build.lib.concurrent.ParallelVisitor.UnusedException;
-import com.google.devtools.build.lib.concurrent.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -45,6 +43,8 @@ import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.pkgcache.TargetPatternResolverUtil;
+import com.google.devtools.build.lib.util.BatchCallback;
+import com.google.devtools.build.lib.util.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 
 /**
  * A {@link TargetPatternResolver} backed by a {@link RecursivePackageProvider}.
@@ -61,7 +62,7 @@ public class RecursivePackageProviderBackedTargetPatternResolver
     extends TargetPatternResolver<Target> {
 
   // TODO(janakr): Move this to a more generic place and unify with SkyQueryEnvironment's value?
-  static final int MAX_PACKAGES_BULK_GET = 1000;
+  private static final int MAX_PACKAGES_BULK_GET = 1000;
 
   protected final FilteringPolicy policy;
   private final RecursivePackageProvider recursivePackageProvider;
@@ -252,20 +253,18 @@ public class RecursivePackageProviderBackedTargetPatternResolver
       ListeningExecutorService executor) {
     FilteringPolicy actualPolicy =
         rulesOnly ? FilteringPolicies.and(FilteringPolicies.RULES_ONLY, policy) : policy;
-
+    PathFragment pathFragment;
     ArrayList<ListenableFuture<Void>> futures = new ArrayList<>();
-    ThreadSafeBatchCallback<PackageIdentifier, UnusedException> getPackageTargetsCallback =
+    Consumer<ImmutableList<PackageIdentifier>> startGettingTargetsCallback =
         (pkgIdBatch) ->
             futures.add(
                 executor.submit(
                     new GetTargetsInPackagesTask<>(pkgIdBatch, pattern, actualPolicy, callback)));
-
-    PathFragment pathFragment;
-    try (PackageIdentifierBatchingCallback batchingCallback =
-        new PackageIdentifierBatchingCallback(getPackageTargetsCallback, MAX_PACKAGES_BULK_GET)) {
+    try (PackageIdentifierBatchingCallback pkgIdBatchProducer =
+        new PackageIdentifierBatchingCallback(startGettingTargetsCallback, MAX_PACKAGES_BULK_GET)) {
       pathFragment = TargetPatternResolverUtil.getPathFragment(directory);
       recursivePackageProvider.streamPackagesUnderDirectory(
-          batchingCallback,
+          pkgIdBatchProducer,
           eventHandler,
           repository,
           pathFragment,
