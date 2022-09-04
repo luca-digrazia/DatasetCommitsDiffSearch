@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,30 +15,32 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.periodical;
 
-import com.google.inject.Inject;
+import org.graylog2.Core;
+import org.graylog2.system.activities.Activity;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.NoTargetIndexException;
 import org.graylog2.notifications.Notification;
-import org.graylog2.notifications.NotificationService;
-import org.graylog2.system.activities.Activity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class DeflectorManagerThread extends Periodical { // public class Klimperkiste
+public class DeflectorManagerThread implements Runnable { // public class Klimperkiste
     
     private static final Logger LOG = LoggerFactory.getLogger(DeflectorManagerThread.class);
-
-    private NotificationService notificationService;
-
-    @Inject
-    public DeflectorManagerThread(NotificationService notificationService) {
-        this.notificationService = notificationService;
+    
+    public static final int INITIAL_DELAY = 0;
+    public static final int PERIOD = 10;
+    
+    private final Core graylogServer;
+    
+    public DeflectorManagerThread(Core graylogServer) {
+        this.graylogServer = graylogServer;
     }
 
     @Override
@@ -58,54 +60,54 @@ public class DeflectorManagerThread extends Periodical { // public class Klimper
         long messageCountInTarget = 0;
         
         try {
-            currentTarget = core.getDeflector().getNewestTargetName();
-            messageCountInTarget = core.getIndexer().indices().numberOfMessages(currentTarget);
+            currentTarget = this.graylogServer.getDeflector().getNewestTargetName();
+            messageCountInTarget = this.graylogServer.getIndexer().indices().numberOfMessages(currentTarget);
         } catch(Exception e) {
             LOG.error("Tried to check for number of messages in current deflector target but did not find index. Aborting.", e);
             return;
         }
         
-        if (messageCountInTarget > core.getConfiguration().getElasticSearchMaxDocsPerIndex()) {
+        if (messageCountInTarget > graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()) {
             LOG.info("Number of messages in <{}> ({}) is higher than the limit ({}). Pointing deflector to new index now!",
                     new Object[] {
                             currentTarget, messageCountInTarget,
-                            core.getConfiguration().getElasticSearchMaxDocsPerIndex()
+                            graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()
                     });
-            core.getDeflector().cycle();
+            graylogServer.getDeflector().cycle();
         } else {
             LOG.debug("Number of messages in <{}> ({}) is lower than the limit ({}). Not doing anything.",
                     new Object[] {
                             currentTarget,messageCountInTarget,
-                            core.getConfiguration().getElasticSearchMaxDocsPerIndex()
+                            graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()
                     });
         }
     }
 
     private void checkAndRepair() {
-        if (!core.getDeflector().isUp()) {
-            if (core.getIndexer().indices().exists(Deflector.DEFLECTOR_NAME)) {
+        if (!graylogServer.getDeflector().isUp()) {
+            if (graylogServer.getIndexer().indices().exists(Deflector.DEFLECTOR_NAME)) {
                 // Publish a notification if there is an *index* called graylog2_deflector
-                Notification notification = notificationService.buildNow()
+                final boolean published = Notification.buildNow(graylogServer)
                         .addType(Notification.Type.DEFLECTOR_EXISTS_AS_INDEX)
-                        .addSeverity(Notification.Severity.URGENT);
-                final boolean published = notificationService.publishIfFirst(notification);
+                        .addSeverity(Notification.Severity.URGENT)
+                        .publishIfFirst();
                 if (published) {
                     LOG.warn("There is an index called [" + Deflector.DEFLECTOR_NAME + "]. Cannot fix this automatically and published a notification.");
                 }
             } else {
-                core.getDeflector().setUp();
+                graylogServer.getDeflector().setUp();
             }
         } else {
             try {
-                String currentTarget = core.getDeflector().getCurrentActualTargetIndex();
-                String shouldBeTarget = core.getDeflector().getNewestTargetName();
+                String currentTarget = graylogServer.getDeflector().getCurrentActualTargetIndex();
+                String shouldBeTarget = graylogServer.getDeflector().getNewestTargetName();
 
                 if (!currentTarget.equals(shouldBeTarget)) {
                     String msg = "Deflector is pointing to [" + currentTarget + "], not the newest one: [" + shouldBeTarget + "]. Re-pointing.";
                     LOG.warn(msg);
-                    core.getActivityWriter().write(new Activity(msg, DeflectorManagerThread.class));
+                    graylogServer.getActivityWriter().write(new Activity(msg, DeflectorManagerThread.class));
 
-                    core.getDeflector().pointTo(shouldBeTarget, currentTarget);
+                    graylogServer.getDeflector().pointTo(shouldBeTarget, currentTarget);
                 }
             } catch (NoTargetIndexException e) {
                 LOG.warn("Deflector is not up. Not trying to point to another index.");
@@ -113,40 +115,5 @@ public class DeflectorManagerThread extends Periodical { // public class Klimper
         }
 
     }
-
-    @Override
-    public boolean runsForever() {
-        return false;
-    }
-
-    @Override
-    public boolean stopOnGracefulShutdown() {
-        return true;
-    }
-
-    @Override
-    public boolean masterOnly() {
-        return true;
-    }
-
-    @Override
-    public boolean startOnThisNode() {
-        return true;
-    }
-
-    @Override
-    public boolean isDaemon() {
-        return true;
-    }
-
-    @Override
-    public int getInitialDelaySeconds() {
-        return 0;
-    }
-
-    @Override
-    public int getPeriodSeconds() {
-        return 10;
-    }
-
+    
 }
