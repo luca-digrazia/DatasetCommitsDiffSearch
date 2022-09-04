@@ -392,25 +392,17 @@ public abstract class PackageSpecification {
      * specifications match.
      */
     public boolean containsPackage(PackageIdentifier packageIdentifier) {
-      // DO NOT use streams or iterators here as they create excessive garbage.
-
       // if some negative matches, returns false immediately.
-      for (int i = 0; i < negativePackageSpecifications.size(); i++) {
-        if (negativePackageSpecifications.get(i).containsPackage(packageIdentifier)) {
-          return false;
-        }
+      if (negativePackageSpecifications.stream()
+          .anyMatch(p -> p.containsPackage(packageIdentifier))) {
+        return false;
       }
 
       if (singlePackages.containsKey(packageIdentifier)) {
         return true;
       }
 
-      for (int i = 0; i < allSpecifications.size(); i++) {
-        if (allSpecifications.get(i).containsPackage(packageIdentifier)) {
-          return true;
-        }
-      }
-      return false;
+      return allSpecifications.stream().anyMatch(p -> p.containsPackage(packageIdentifier));
     }
 
     /**
