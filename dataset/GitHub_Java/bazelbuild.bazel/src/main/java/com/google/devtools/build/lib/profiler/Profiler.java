@@ -186,14 +186,16 @@ public final class Profiler {
    */
   private static final class SlowestTaskAggregator {
     private static final int SHARDS = 16;
-    private static final int SIZE = 30;
+    private final int size;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private final Extrema<SlowTask>[] extremaAggregators = new Extrema[SHARDS];
 
-    SlowestTaskAggregator() {
+    SlowestTaskAggregator(int size) {
+      this.size = size;
+
       for (int i = 0; i < SHARDS; i++) {
-        extremaAggregators[i] = Extrema.max(SIZE);
+        extremaAggregators[i] = Extrema.max(size);
       }
     }
 
@@ -218,8 +220,8 @@ public final class Profiler {
 
     // @ThreadSafe
     Iterable<SlowTask> getSlowestTasks() {
-      // This is slow, but since it only happens during the end of the invocation, it's OK.
-      Extrema<SlowTask> mergedExtrema = Extrema.max(SIZE);
+      // This is slow, but since it only happens during the end of the invocation, it's OK
+      Extrema<SlowTask> mergedExtrema = Extrema.max(size);
       for (int i = 0; i < SHARDS; i++) {
         Extrema<SlowTask> extrema = extremaAggregators[i];
         synchronized (extrema) {
@@ -270,8 +272,8 @@ public final class Profiler {
   private Profiler() {
     initHistograms();
     for (ProfilerTask task : ProfilerTask.values()) {
-      if (task.collectsSlowestInstances) {
-        slowestTasks[task.ordinal()] = new SlowestTaskAggregator();
+      if (task.slowestInstancesCount != 0) {
+        slowestTasks[task.ordinal()] = new SlowestTaskAggregator(task.slowestInstancesCount);
       }
     }
   }
