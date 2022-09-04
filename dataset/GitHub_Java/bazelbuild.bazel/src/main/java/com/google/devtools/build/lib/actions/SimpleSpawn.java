@@ -18,7 +18,11 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
 /**
@@ -31,12 +35,11 @@ public final class SimpleSpawn implements Spawn {
   private final ImmutableList<String> arguments;
   private final ImmutableMap<String, String> environment;
   private final ImmutableMap<String, String> executionInfo;
-  private final ImmutableList<? extends ActionInput> inputs;
-  private final ImmutableList<? extends ActionInput> tools;
+  private final NestedSet<? extends ActionInput> inputs;
+  private final NestedSet<? extends ActionInput> tools;
   private final RunfilesSupplier runfilesSupplier;
-  private final ImmutableList<Artifact> filesetManifests;
+  private final ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings;
   private final ImmutableList<? extends ActionInput> outputs;
-  private final ImmutableSet<PathFragment> optionalOutputFiles;
   private final ResourceSet localResources;
 
   public SimpleSpawn(
@@ -45,11 +48,10 @@ public final class SimpleSpawn implements Spawn {
       ImmutableMap<String, String> environment,
       ImmutableMap<String, String> executionInfo,
       RunfilesSupplier runfilesSupplier,
-      ImmutableList<? extends ActionInput> inputs,
-      ImmutableList<? extends ActionInput> tools,
-      ImmutableList<Artifact> filesetManifests,
-      ImmutableList<? extends ActionInput> outputs,
-      ImmutableSet<PathFragment> optionalOutputFiles,
+      ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings,
+      NestedSet<? extends ActionInput> inputs,
+      NestedSet<? extends ActionInput> tools,
+      ImmutableSet<? extends ActionInput> outputs,
       ResourceSet localResources) {
     this.owner = Preconditions.checkNotNull(owner);
     this.arguments = Preconditions.checkNotNull(arguments);
@@ -59,9 +61,8 @@ public final class SimpleSpawn implements Spawn {
     this.tools = Preconditions.checkNotNull(tools);
     this.runfilesSupplier =
         runfilesSupplier == null ? EmptyRunfilesSupplier.INSTANCE : runfilesSupplier;
-    this.filesetManifests = Preconditions.checkNotNull(filesetManifests);
-    this.outputs = Preconditions.checkNotNull(outputs);
-    this.optionalOutputFiles = Preconditions.checkNotNull(optionalOutputFiles);
+    this.filesetMappings = filesetMappings;
+    this.outputs = Preconditions.checkNotNull(outputs).asList();
     this.localResources = Preconditions.checkNotNull(localResources);
   }
 
@@ -70,8 +71,8 @@ public final class SimpleSpawn implements Spawn {
       ImmutableList<String> arguments,
       ImmutableMap<String, String> environment,
       ImmutableMap<String, String> executionInfo,
-      ImmutableList<? extends ActionInput> inputs,
-      ImmutableList<? extends ActionInput> outputs,
+      NestedSet<? extends ActionInput> inputs,
+      ImmutableSet<? extends ActionInput> outputs,
       ResourceSet localResources) {
     this(
         owner,
@@ -79,37 +80,21 @@ public final class SimpleSpawn implements Spawn {
         environment,
         executionInfo,
         null,
+        ImmutableMap.of(),
         inputs,
-        ImmutableList.<Artifact>of(),
-        ImmutableList.<Artifact>of(),
+        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
         outputs,
-        ImmutableSet.<PathFragment>of(),
         localResources);
   }
 
   @Override
-  public boolean hasNoSandbox() {
-    return executionInfo.containsKey("nosandbox");
-  }
-
-  @Override
-  public boolean isRemotable() {
-    return !executionInfo.containsKey("local");
-  }
-
-  @Override
-  public final ImmutableMap<String, String> getExecutionInfo() {
+  public ImmutableMap<String, String> getExecutionInfo() {
     return executionInfo;
   }
 
   @Override
   public RunfilesSupplier getRunfilesSupplier() {
     return runfilesSupplier;
-  }
-
-  @Override
-  public ImmutableList<Artifact> getFilesetManifests() {
-    return filesetManifests;
   }
 
   @Override
@@ -123,23 +108,23 @@ public final class SimpleSpawn implements Spawn {
   }
 
   @Override
-  public ImmutableList<? extends ActionInput> getInputFiles() {
+  public ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> getFilesetMappings() {
+    return filesetMappings;
+  }
+
+  @Override
+  public NestedSet<? extends ActionInput> getInputFiles() {
     return inputs;
   }
 
   @Override
-  public ImmutableList<? extends ActionInput> getToolFiles() {
+  public NestedSet<? extends ActionInput> getToolFiles() {
     return tools;
   }
 
   @Override
   public ImmutableList<? extends ActionInput> getOutputFiles() {
     return outputs;
-  }
-
-  @Override
-  public ImmutableSet<PathFragment> getOptionalOutputFiles() {
-    return optionalOutputFiles;
   }
 
   @Override
@@ -155,5 +140,16 @@ public final class SimpleSpawn implements Spawn {
   @Override
   public String getMnemonic() {
     return owner.getMnemonic();
+  }
+
+  @Override
+  public ImmutableMap<String, String> getCombinedExecProperties() {
+    return owner.getExecProperties();
+  }
+
+  @Override
+  @Nullable
+  public PlatformInfo getExecutionPlatform() {
+    return owner.getExecutionPlatform();
   }
 }
