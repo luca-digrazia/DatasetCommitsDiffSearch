@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
-import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
@@ -464,13 +463,20 @@ public class AndroidCommon {
     classJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR);
     idlHelper = new AndroidIdlHelper(ruleContext, classJar);
 
-    NestedSetBuilder<Artifact> bootclasspath = NestedSetBuilder.<Artifact>stableOrder();
+    ImmutableList<Artifact> bootclasspath;
     if (getAndroidConfig(ruleContext).desugarJava8()) {
-      bootclasspath.addTransitive(
-          PrerequisiteArtifacts.nestedSet(
-              ruleContext, "$desugar_java8_extra_bootclasspath", Mode.HOST));
+      bootclasspath =
+          ImmutableList.<Artifact>builder()
+              .addAll(
+                  ruleContext
+                      .getPrerequisiteArtifacts("$desugar_java8_extra_bootclasspath", Mode.HOST)
+                      .list())
+              .add(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar())
+              .build();
+    } else {
+      bootclasspath =
+          ImmutableList.of(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar());
     }
-    bootclasspath.add(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar());
     ImmutableList.Builder<String> javacopts = ImmutableList.builder();
     javacopts.addAll(androidSemantics.getCompatibleJavacOptions(ruleContext));
 
@@ -480,7 +486,8 @@ public class AndroidCommon {
     JavaTargetAttributes.Builder attributesBuilder =
         javaCommon
             .initCommon(idlHelper.getIdlGeneratedJavaSources(), javacopts.build())
-            .setBootClassPath(bootclasspath.build());
+            .setBootClassPath(
+                NestedSetBuilder.<Artifact>wrap(Order.NAIVE_LINK_ORDER, bootclasspath));
 
     resourceApk
         .asDataBindingContext()

@@ -65,7 +65,7 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
   }
 
   @Override
-  public Map<String, String> rewriteLocalEnv(
+  public ImmutableMap<String, String> rewriteLocalEnv(
       Map<String, String> env, BinTools binTools, String fallbackTmpDir) throws IOException {
     boolean containsXcodeVersion = env.containsKey(AppleConfiguration.XCODE_VERSION_ENV_NAME);
     boolean containsAppleSdkVersion =
@@ -93,7 +93,7 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
     String developerDir = "";
     if (containsXcodeVersion) {
       String version = env.get(AppleConfiguration.XCODE_VERSION_ENV_NAME);
-      developerDir = getDeveloperDir(binTools, DottedVersion.fromString(version));
+      developerDir = getDeveloperDir(binTools, DottedVersion.fromStringUnchecked(version));
       newEnvBuilder.put("DEVELOPER_DIR", developerDir);
     }
     if (containsAppleSdkVersion) {

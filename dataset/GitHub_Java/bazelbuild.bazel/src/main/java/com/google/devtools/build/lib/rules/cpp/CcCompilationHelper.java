@@ -198,7 +198,7 @@ public final class CcCompilationHelper {
   // TODO(plf): Rename so that it's not confused with CcCompilationContext and also consider
   // merging
   // this class with {@code CcCompilationOutputs}.
-  public static final class CompilationInfo implements CompilationInfoApi<Artifact> {
+  public static final class CompilationInfo implements CompilationInfoApi {
     private final CcCompilationContext ccCompilationContext;
     private final CcCompilationOutputs compilationOutputs;
 
@@ -335,8 +335,7 @@ public final class CcCompilationHelper {
   }
 
   /** Sets fields that overlap for cc_library and cc_binary rules. */
-  public CcCompilationHelper fromCommon(CcCommon common, ImmutableList<String> additionalCopts)
-      throws InterruptedException {
+  public CcCompilationHelper fromCommon(CcCommon common, ImmutableList<String> additionalCopts) {
     Preconditions.checkNotNull(additionalCopts);
 
     setCopts(ImmutableList.copyOf(Iterables.concat(common.getCopts(), additionalCopts)));
@@ -440,6 +439,17 @@ public final class CcCompilationHelper {
     }
     
     this.privateHeaders.add(privateHeader);
+    return this;
+  }
+
+  /**
+   * Add directly to privateHeaders, which are added to the compilation prerequisites and can be
+   * removed by include scanning. This is only used to work around cases where we are not
+   * propagating transitive dependencies properly via scheduling dependency middleman (i.e. objc
+   * compiles).
+   */
+  public CcCompilationHelper addPrivateHeadersUnchecked(Collection<Artifact> privateHeaders) {
+    this.privateHeaders.addAll(privateHeaders);
     return this;
   }
 
@@ -744,7 +754,7 @@ public final class CcCompilationHelper {
    *
    * @throws RuleErrorException
    */
-  public CompilationInfo compile() throws RuleErrorException, InterruptedException {
+  public CompilationInfo compile() throws RuleErrorException {
 
     if (!generatePicAction && !generateNoPicAction) {
       ruleErrorConsumer.ruleError("Either PIC or no PIC actions have to be created.");
@@ -825,7 +835,7 @@ public final class CcCompilationHelper {
     }
   }
 
-  private PublicHeaders computePublicHeaders() throws InterruptedException {
+  private PublicHeaders computePublicHeaders() {
     PathFragment prefix = null;
     if (includePrefix != null) {
       prefix = PathFragment.create(includePrefix);
@@ -934,8 +944,10 @@ public final class CcCompilationHelper {
         virtualToOriginalHeaders.build());
   }
 
-  /** Create {@code CcCompilationContext} for cc compile action from generated inputs. */
-  private CcCompilationContext initializeCcCompilationContext() throws InterruptedException {
+  /**
+   * Create {@code CcCompilationContext} for cc compile action from generated inputs.
+   */
+  private CcCompilationContext initializeCcCompilationContext() {
     CcCompilationContext.Builder ccCompilationContextBuilder =
         CcCompilationContext.builder(actionConstructionContext, configuration, label);
 
@@ -947,13 +959,8 @@ public final class CcCompilationHelper {
     // generated files. It is important that the execRoot (EMPTY_FRAGMENT) comes
     // before the genfilesFragment to preferably pick up source files. Otherwise
     // we might pick up stale generated files.
-    boolean siblingRepositoryLayout =
-        actionConstructionContext
-            .getAnalysisEnvironment()
-            .getSkylarkSemantics()
-            .experimentalSiblingRepositoryLayout();
     PathFragment repositoryPath =
-        label.getPackageIdentifier().getRepository().getExecPath(siblingRepositoryLayout);
+        label.getPackageIdentifier().getRepository().getPathUnderExecRoot();
     ccCompilationContextBuilder.addQuoteIncludeDir(repositoryPath);
     ccCompilationContextBuilder.addQuoteIncludeDir(
         configuration.getGenfilesFragment().getRelative(repositoryPath));

@@ -24,9 +24,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.StrictDepsMode;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import java.util.ArrayList;
@@ -196,8 +193,7 @@ public final class JavaLibraryHelper {
         outputSourceJar,
         /* javaInfoBuilder= */ null,
         ImmutableList.of(), // ignored when javaInfoBuilder is null
-        ImmutableList.of(),
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER));
+        ImmutableList.of());
   }
 
   public JavaCompilationArtifacts build(
@@ -209,8 +205,7 @@ public final class JavaLibraryHelper {
       @Nullable Artifact outputSourceJar,
       @Nullable JavaInfo.Builder javaInfoBuilder,
       List<JavaGenJarsProvider> transitiveJavaGenJars,
-      ImmutableList<Artifact> additionalJavaBaseInputs,
-      NestedSet<Artifact> localClassPathEntries)
+      ImmutableList<Artifact> additionalJavaBaseInputs)
       throws InterruptedException {
 
     Preconditions.checkState(output != null, "must have an output file; use setOutput()");
@@ -248,7 +243,6 @@ public final class JavaLibraryHelper {
             javaToolchainProvider,
             hostJavabase,
             additionalJavaBaseInputs);
-    helper.addLocalClassPathEntries(localClassPathEntries);
     JavaCompileOutputs<Artifact> outputs = helper.createOutputs(output);
     artifactsBuilder.setCompileTimeDependencies(outputs.depsProto());
     helper.createCompileAction(outputs);

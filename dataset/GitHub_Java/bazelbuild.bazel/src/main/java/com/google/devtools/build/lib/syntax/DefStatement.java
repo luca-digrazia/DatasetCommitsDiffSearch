@@ -19,25 +19,20 @@ import com.google.common.collect.ImmutableList;
 /** Syntax node for a 'def' statement, which defines a function. */
 public final class DefStatement extends Statement {
 
-  private final int defOffset;
   private final Identifier identifier;
   private final FunctionSignature signature;
-  private final ImmutableList<Statement> body; // non-empty if well formed
+  private final ImmutableList<Statement> statements;
   private final ImmutableList<Parameter> parameters;
 
   DefStatement(
-      FileLocations locs,
-      int defOffset,
       Identifier identifier,
       ImmutableList<Parameter> parameters,
       FunctionSignature signature,
-      ImmutableList<Statement> body) {
-    super(locs);
-    this.defOffset = defOffset;
+      ImmutableList<Statement> statements) {
     this.identifier = identifier;
     this.parameters = Preconditions.checkNotNull(parameters);
-    this.signature = Preconditions.checkNotNull(signature);
-    this.body = Preconditions.checkNotNull(body);
+    this.signature = signature;
+    this.statements = Preconditions.checkNotNull(statements);
   }
 
   @Override
@@ -53,29 +48,16 @@ public final class DefStatement extends Statement {
     return identifier;
   }
 
-  // TODO(adonovan): rename to getBody.
   public ImmutableList<Statement> getStatements() {
-    return body;
+    return statements;
   }
 
   public ImmutableList<Parameter> getParameters() {
     return parameters;
   }
 
-  FunctionSignature getSignature() {
+  public FunctionSignature getSignature() {
     return signature;
-  }
-
-  @Override
-  public int getStartOffset() {
-    return defOffset;
-  }
-
-  @Override
-  public int getEndOffset() {
-    return body.isEmpty()
-        ? identifier.getEndOffset() // wrong, but tree is ill formed
-        : body.get(body.size() - 1).getEndOffset();
   }
 
   @Override

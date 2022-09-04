@@ -14,12 +14,13 @@
 
 package com.google.devtools.build.lib.shell;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * A builder class that starts a subprocess.
@@ -36,8 +37,10 @@ public class SubprocessBuilder {
     DISCARD,
 
     /** Stream back to the parent process using an output stream. */
-    STREAM };
+    STREAM
+  }
 
+  private final SubprocessFactory factory;
   private ImmutableList<String> argv;
   private ImmutableMap<String, String> env;
   private StreamAction stdoutAction;
@@ -45,28 +48,55 @@ public class SubprocessBuilder {
   private StreamAction stderrAction;
   private File stderrFile;
   private File workingDirectory;
-  private long timeoutMillis = -1;
+  private long timeoutMillis;
+  private boolean redirectErrorStream;
 
-  private static Subprocess.Factory factory = JavaSubprocessFactory.INSTANCE;
+  static SubprocessFactory defaultFactory = JavaSubprocessFactory.INSTANCE;
 
-  public static void setSubprocessFactory(Subprocess.Factory factory) {
-    SubprocessBuilder.factory = factory;
+  public static void setDefaultSubprocessFactory(SubprocessFactory factory) {
+    SubprocessBuilder.defaultFactory = factory;
   }
 
   public SubprocessBuilder() {
-    stdoutAction = StreamAction.STREAM;
-    stderrAction = StreamAction.STREAM;
+    this(defaultFactory);
   }
 
+  public SubprocessBuilder(SubprocessFactory factory) {
+    stdoutAction = StreamAction.STREAM;
+    stderrAction = StreamAction.STREAM;
+    this.factory = factory;
+  }
+
+  /**
+   * Returns the complete argv, including argv0.
+   *
+   * <p>argv[0] is either absolute (e.g. "/foo/bar" or "c:/foo/bar.exe"), or is a single file name
+   * (no directory component, e.g. "true" or "cmd.exe"). It might be non-normalized though (e.g.
+   * "/foo/../bar/./baz").
+   */
   public ImmutableList<String> getArgv() {
     return argv;
   }
 
   /**
    * Sets the argv, including argv[0], that is, the binary to execute.
+   *
+   * <p>argv[0] must be either absolute (e.g. "/foo/bar" or "c:/foo/bar.exe"), or a single file name
+   * (no directory component, e.g. "true" or "cmd.exe") which should be on the OS-specific search
+   * path (PATH on Unixes, Windows-specific lookup paths on Windows).
+   *
+   * @throws IllegalArgumentException if argv is empty, or its first element (which becomes
+   *     this.argv[0]) is neither an absolute path nor just a single file name
    */
-  public SubprocessBuilder setArgv(Iterable<String> argv) {
-    this.argv = ImmutableList.copyOf(argv);
+  public SubprocessBuilder setArgv(ImmutableList<String> argv) {
+    this.argv = Preconditions.checkNotNull(argv);
+    Preconditions.checkArgument(!this.argv.isEmpty());
+    File argv0 = new File(this.argv.get(0));
+    Preconditions.checkArgument(
+        argv0.isAbsolute() || argv0.getParent() == null,
+        "argv[0] = '%s'; it should be either absolute or just a single file name"
+            + " (no directory component)",
+        this.argv.get(0));
     return this;
   }
 
@@ -78,9 +108,8 @@ public class SubprocessBuilder {
    * Sets the environment passed to the child process. If null, inherit the environment of the
    * server.
    */
-  public SubprocessBuilder setEnv(Map<String, String> env) {
-    this.env = env == null
-        ? null : ImmutableMap.copyOf(env);
+  public SubprocessBuilder setEnv(@Nullable Map<String, String> env) {
+    this.env = env == null ? null : ImmutableMap.copyOf(env);
     return this;
   }
 
@@ -94,7 +123,7 @@ public class SubprocessBuilder {
 
   /**
    * Tells the object what to do with stdout: either stream as a {@code InputStream} or discard.
-   * 
+   *
    * <p>It can also be redirected to a file using {@link #setStdout(File)}.
    */
   public SubprocessBuilder setStdout(StreamAction action) {
@@ -105,7 +134,7 @@ public class SubprocessBuilder {
     this.stdoutFile = null;
     return this;
   }
-  
+
   /**
    * Sets the file stdout is appended to. If null, the stdout will be available as an input stream
    * on the resulting object representing the process.
@@ -135,7 +164,7 @@ public class SubprocessBuilder {
 
   /**
    * Tells the object what to do with stderr: either stream as a {@code InputStream} or discard.
-   * 
+   *
    * <p>It can also be redirected to a file using {@link #setStderr(File)}.
    */
   public SubprocessBuilder setStderr(StreamAction action) {
@@ -146,14 +175,38 @@ public class SubprocessBuilder {
     this.stderrFile = null;
     return this;
   }
-  
+
   /**
    * Sets the file stderr is appended to. If null, the stderr will be available as an input stream
-   * on the resulting object representing the process.
+   * on the resulting object representing the process. When {@code redirectErrorStream} is set to
+   * True, this method has no effect.
    */
   public SubprocessBuilder setStderr(File file) {
     this.stderrAction = StreamAction.REDIRECT;
     this.stderrFile = file;
+    return this;
+  }
+
+  /**
+   * Tells whether this process builder merges standard error and standard output.
+   *
+   * @return this process builder's {@code redirectErrorStream} property
+   */
+  public boolean redirectErrorStream() {
+    return redirectErrorStream;
+  }
+
+  /**
+   * Sets whether this process builder merges standard error and standard output.
+   *
+   * <p>If this property is {@code true}, then any error output generated by subprocesses
+   * subsequently started by this object's {@link #start()} method will be merged with the standard
+   * output, so that both can be read using the {@link Subprocess#getInputStream()} method. This
+   * makes it easier to correlate error messages with the corresponding output. The initial value is
+   * {@code false}.
+   */
+  public SubprocessBuilder redirectErrorStream(boolean redirectErrorStream) {
+    this.redirectErrorStream = redirectErrorStream;
     return this;
   }
 

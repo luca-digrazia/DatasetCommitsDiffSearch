@@ -69,7 +69,6 @@ public class DeployArchiveBuilder {
   private boolean checkDesugarDeps;
   private OneVersionEnforcementLevel oneVersionEnforcementLevel = OneVersionEnforcementLevel.OFF;
   @Nullable private Artifact oneVersionWhitelistArtifact;
-  @Nullable private Artifact sharedArchive;
 
   /** Type of compression to apply to output archive. */
   public enum Compression {
@@ -167,11 +166,6 @@ public class DeployArchiveBuilder {
       @Nullable Artifact oneVersionWhitelistArtifact) {
     this.oneVersionEnforcementLevel = oneVersionEnforcementLevel;
     this.oneVersionWhitelistArtifact = oneVersionWhitelistArtifact;
-    return this;
-  }
-
-  public DeployArchiveBuilder setSharedArchive(@Nullable Artifact sharedArchive) {
-    this.sharedArchive = sharedArchive;
     return this;
   }
 
@@ -340,9 +334,6 @@ public class DeployArchiveBuilder {
       }
       inputs.add(oneVersionWhitelistArtifact);
     }
-    if (sharedArchive != null) {
-      inputs.add(sharedArchive);
-    }
     // If singlejar's name ends with .jar, it is Java application, otherwise it is native.
     // TODO(asmundak): once https://github.com/bazelbuild/bazel/issues/2241 is fixed (that is,
     // the native singlejar is used on windows) remove support for the Java implementation
@@ -364,8 +355,7 @@ public class DeployArchiveBuilder {
             launcher,
             usingNativeSinglejar,
             oneVersionEnforcementLevel,
-            oneVersionWhitelistArtifact,
-            sharedArchive);
+            oneVersionWhitelistArtifact);
     if (checkDesugarDeps) {
       commandLine = CommandLine.concat(commandLine, ImmutableList.of("--check_desugar_deps"));
     }

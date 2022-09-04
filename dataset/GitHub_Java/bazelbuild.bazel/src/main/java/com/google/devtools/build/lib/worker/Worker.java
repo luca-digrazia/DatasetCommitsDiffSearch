@@ -27,7 +27,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 
@@ -56,8 +55,6 @@ class Worker {
 
   private Subprocess process;
   private Thread shutdownHook;
-  /** True if we deliberately destroyed this process. */
-  private boolean wasDestroyed;
 
   Worker(WorkerKey workerKey, int workerId, final Path workDir, Path logFile) {
     this.workerKey = workerKey;
@@ -79,7 +76,7 @@ class Worker {
     Runtime.getRuntime().addShutdownHook(shutdownHook);
   }
 
-  Subprocess createProcess() throws IOException {
+  void createProcess() throws IOException {
     ImmutableList<String> args = workerKey.getArgs();
     File executable = new File(args.get(0));
     if (!executable.isAbsolute() && executable.getParent() != null) {
@@ -92,7 +89,7 @@ class Worker {
     processBuilder.setWorkingDirectory(workDir.getPathFile());
     processBuilder.setStderr(logFile.getPathFile());
     processBuilder.setEnv(workerKey.getEnv());
-    return processBuilder.start();
+    this.process = processBuilder.start();
   }
 
   void destroy() throws IOException {
@@ -100,7 +97,6 @@ class Worker {
       Runtime.getRuntime().removeShutdownHook(shutdownHook);
     }
     if (process != null) {
-      wasDestroyed = true;
       process.destroyAndWait();
     }
   }
@@ -127,18 +123,6 @@ class Worker {
     return !process.finished();
   }
 
-  /** Returns true if this process is dead but we didn't deliberately kill it. */
-  boolean diedUnexpectedly() {
-    return process != null && !wasDestroyed && !process.isAlive();
-  }
-
-  /** Returns the exit value of this worker's process, if it has exited. */
-  public Optional<Integer> getExitValue() {
-    return process != null && !process.isAlive()
-        ? Optional.of(process.exitValue())
-        : Optional.empty();
-  }
-
   void putRequest(WorkRequest request) throws IOException {
     request.writeDelimitedTo(process.getOutputStream());
     process.getOutputStream().flush();
@@ -161,7 +145,7 @@ class Worker {
       SandboxInputs inputFiles, SandboxOutputs outputs, Set<PathFragment> workerFiles)
       throws IOException {
     if (process == null) {
-      process = createProcess();
+      createProcess();
     }
   }
 

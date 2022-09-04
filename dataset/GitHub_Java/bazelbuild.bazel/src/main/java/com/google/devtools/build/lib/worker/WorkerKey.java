@@ -17,19 +17,14 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.HashCode;
-import com.google.devtools.build.lib.actions.ExecutionRequirements.WorkerProtocolFormat;
 import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.Objects;
 import java.util.SortedMap;
 
 /**
  * Data container that uniquely identifies a kind of worker process and is used as the key for the
  * {@link WorkerPool}.
- *
- * <p>We expect a small number of WorkerKeys per mnemonic. Unbounded creation of WorkerKeys will
- * break various things as well as render the workers less useful.
  */
 final class WorkerKey {
   private final ImmutableList<String> args;
@@ -47,13 +42,6 @@ final class WorkerKey {
   private final boolean mustBeSandboxed;
   /** A WorkerProxy will be instantiated if true, instantiate a regular Worker if false. */
   private final boolean proxied;
-  /**
-   * Cached value for the hash of this key, because the value is expensive to calculate
-   * (ImmutableMap and ImmutableList do not cache their hashcodes.
-   */
-  private final int hash;
-
-  private final WorkerProtocolFormat protocolFormat;
 
   WorkerKey(
       ImmutableList<String> args,
@@ -63,8 +51,7 @@ final class WorkerKey {
       HashCode workerFilesCombinedHash,
       SortedMap<PathFragment, HashCode> workerFilesWithHashes,
       boolean mustBeSandboxed,
-      boolean proxied,
-      WorkerProtocolFormat protocolFormat) {
+      boolean proxied) {
     /** Build options. */
     this.args = Preconditions.checkNotNull(args);
     /** Environment variables. */
@@ -81,10 +68,6 @@ final class WorkerKey {
     this.mustBeSandboxed = mustBeSandboxed;
     /** Set it to true if this job should be run with WorkerProxy. */
     this.proxied = proxied;
-    /** The format of the worker protocol sent to and read from the worker. */
-    this.protocolFormat = protocolFormat;
-
-    hash = calculateHashCode();
   }
 
   /** Getter function for variable args. */
@@ -127,20 +110,6 @@ final class WorkerKey {
     return proxied;
   }
 
-  /** Returns the format of the worker protocol. */
-  public WorkerProtocolFormat getProtocolFormat() {
-    return protocolFormat;
-  }
-
-  /** Returns a user-friendly name for this worker type. */
-  public static String makeWorkerTypeName(boolean proxied) {
-    if (proxied) {
-      return "multiplex-worker";
-    } else {
-      return "worker";
-    }
-  }
-
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -151,13 +120,8 @@ final class WorkerKey {
     }
 
     WorkerKey workerKey = (WorkerKey) o;
-    if (this.hash != workerKey.hash) {
-      return false;
-    }
+
     if (!args.equals(workerKey.args)) {
-      return false;
-    }
-    if (!proxied == workerKey.proxied) {
       return false;
     }
     if (!env.equals(workerKey.env)) {
@@ -170,14 +134,13 @@ final class WorkerKey {
 
   }
 
-  /** Since all fields involved in the {@code hashCode} are final, we cache the result. */
   @Override
   public int hashCode() {
-    return hash;
-  }
-
-  private int calculateHashCode() {
-    return Objects.hash(args, env, execRoot, mnemonic, proxied);
+    int result = args.hashCode();
+    result = 31 * result + env.hashCode();
+    result = 31 * result + execRoot.hashCode();
+    result = 31 * result + mnemonic.hashCode();
+    return result;
   }
 
   @Override

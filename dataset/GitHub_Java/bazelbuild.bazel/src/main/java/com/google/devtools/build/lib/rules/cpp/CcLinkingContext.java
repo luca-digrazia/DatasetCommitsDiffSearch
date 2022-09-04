@@ -317,7 +317,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
       if (this == other) {
         return true;
       }
-      return Objects.equal(this.owner, other.owner)
+      return ((this.owner == null && other.owner == null) || this.owner.equals(other.owner))
           && this.libraries.equals(other.libraries)
           && this.userLinkFlags.equals(other.userLinkFlags)
           && this.linkstamps.equals(other.linkstamps)
