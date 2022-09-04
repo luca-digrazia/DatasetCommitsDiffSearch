@@ -31,7 +31,4 @@ public interface RuleDefinitionEnvironment {
    * Returns the tools repository prefix.
    */
   String getToolsRepository();
-
-  /** Returns whether the execution transition should be enabled. */
-  boolean enableExecutionTransition();
 }

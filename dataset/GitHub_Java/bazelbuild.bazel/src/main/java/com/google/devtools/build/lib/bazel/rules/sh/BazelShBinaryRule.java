@@ -32,7 +32,7 @@ public final class BazelShBinaryRule implements RuleDefinition {
     return builder
         .add(
             attr("$launcher", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(environment.getToolsLabel("//tools/launcher:launcher")))
         .build();
   }

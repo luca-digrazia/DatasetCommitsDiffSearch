@@ -32,10 +32,8 @@ import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRul
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAarImportRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidBinaryRule;
-import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidInstrumentationTestRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidLocalTestRule;
-import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidSdkRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidSemantics;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppSemantics;
 import com.google.devtools.build.lib.bazel.rules.cpp.proto.BazelCcProtoAspect;
@@ -66,7 +64,7 @@ import com.google.devtools.build.lib.rules.android.AndroidDeviceRule;
 import com.google.devtools.build.lib.rules.android.AndroidDeviceScriptFixtureRule;
 import com.google.devtools.build.lib.rules.android.AndroidHostServiceFixtureRule;
 import com.google.devtools.build.lib.rules.android.AndroidInstrumentationInfo;
-import com.google.devtools.build.lib.rules.android.AndroidInstrumentationTestBaseRule;
+import com.google.devtools.build.lib.rules.android.AndroidInstrumentationTestRule;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidLocalTestBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidLocalTestConfiguration;
@@ -75,7 +73,6 @@ import com.google.devtools.build.lib.rules.android.AndroidNeverlinkAspect;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesInfo;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidToolsDefaultsJarRule;
-import com.google.devtools.build.lib.rules.android.AndroidSdkBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidSkylarkCommon;
 import com.google.devtools.build.lib.rules.android.ApkInfo;
 import com.google.devtools.build.lib.rules.android.DexArchiveAspect;
@@ -294,8 +291,7 @@ public class BazelRuleClassProvider {
           builder.addNativeAspectClass(androidNeverlinkAspect);
           builder.addNativeAspectClass(dexArchiveAspect);
 
-          builder.addRuleDefinition(new AndroidSdkBaseRule());
-          builder.addRuleDefinition(new BazelAndroidSdkRule());
+          builder.addRuleDefinition(new AndroidRuleClasses.AndroidSdkRule());
           builder.addRuleDefinition(new AndroidToolsDefaultsJarRule());
           builder.addRuleDefinition(new AndroidRuleClasses.AndroidBaseRule());
           builder.addRuleDefinition(new AndroidRuleClasses.AndroidResourceSupportRule());
@@ -310,8 +306,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AndroidDeviceRule());
           builder.addRuleDefinition(new AndroidLocalTestBaseRule());
           builder.addRuleDefinition(new BazelAndroidLocalTestRule());
-          builder.addRuleDefinition(new AndroidInstrumentationTestBaseRule());
-          builder.addRuleDefinition(new BazelAndroidInstrumentationTestRule());
+          builder.addRuleDefinition(new AndroidInstrumentationTestRule());
           builder.addRuleDefinition(new AndroidDeviceScriptFixtureRule());
           builder.addRuleDefinition(new AndroidHostServiceFixtureRule());
 
