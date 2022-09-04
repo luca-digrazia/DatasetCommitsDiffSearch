@@ -24,16 +24,16 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import javax.annotation.Nullable;
 
 /**
@@ -104,18 +104,18 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
 
   @Nullable
   @Override
-  public Info get(Provider.Key providerKey) {
+  public InfoInterface get(Provider.Key providerKey) {
     return actual.get(providerKey);
   }
 
   @Override
-  public Object getIndex(StarlarkSemantics semantics, Object key) throws EvalException {
-    return actual.getIndex(semantics, key);
+  public Object getIndex(Object key, Location loc) throws EvalException {
+    return actual.getIndex(key, loc);
   }
 
   @Override
-  public boolean containsKey(StarlarkSemantics semantics, Object key) throws EvalException {
-    return actual.containsKey(semantics, key);
+  public boolean containsKey(Object key, Location loc) throws EvalException {
+    return actual.containsKey(key, loc);
   }
 
   @Override
@@ -152,19 +152,19 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
     return null;
   }
 
-  @Override
+  /**
+   *  Returns a target this target aliases.
+   */
   public ConfiguredTarget getActual() {
-    // This will either dereference an alias chain, or return the final ConfiguredTarget.
-    return actual.getActual();
+    return actual;
   }
 
-  @Override
   public Label getOriginalLabel() {
     return label;
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("<alias target " + label + " of " + actual.getLabel() + ">");
   }
 }

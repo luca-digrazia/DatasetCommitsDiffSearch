@@ -24,11 +24,11 @@ import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Starlark;
 
 /** Static helper class for creating and accessing instances of the legacy "py" struct provider. */
-// TODO(b/153363654): Remove this file.
+// TODO(#7010): Remove this in favor of PyInfo.
 public class PyStructUtils {
 
   // Disable construction.
@@ -100,18 +100,36 @@ public class PyStructUtils {
    * @throws EvalException if the field does not exist or is not a depset of {@link Artifact}
    */
   public static NestedSet<Artifact> getTransitiveSources(StructImpl info) throws EvalException {
-    Object x = getValue(info, TRANSITIVE_SOURCES);
-    if (x == null) {
-      throw Starlark.errorf(
-          "'%s' provider's '%s' field is missing, want depset", PROVIDER_NAME, TRANSITIVE_SOURCES);
+    Object fieldValue = getValue(info, TRANSITIVE_SOURCES);
+    Depset castValue =
+        SkylarkType.cast(
+            fieldValue,
+            Depset.class,
+            Artifact.class,
+            null,
+            "'%s' provider's '%s' field should be a depset of Files (got a '%s')",
+            PROVIDER_NAME,
+            TRANSITIVE_SOURCES,
+            EvalUtils.getDataTypeName(fieldValue, /*fullDetails=*/ true));
+    try {
+      NestedSet<Artifact> unwrappedValue = castValue.getSet(Artifact.class);
+      if (!unwrappedValue.getOrder().isCompatible(Order.COMPILE_ORDER)) {
+        throw new EvalException(
+            /*location=*/ null,
+            String.format(
+                "Incompatible depset order for 'transitive_sources': expected 'default' or "
+                    + "'postorder', but got '%s'",
+                unwrappedValue.getOrder().getSkylarkName()));
+      }
+      return unwrappedValue;
+    } catch (Depset.TypeException exception) {
+      throw new EvalException(
+          null,
+          String.format(
+              "expected field '%s' to be a depset of type 'file', but was a depset of type '%s'",
+              TRANSITIVE_SOURCES, castValue.getContentType()),
+          exception);
     }
-    NestedSet<Artifact> set = Depset.cast(x, Artifact.class, TRANSITIVE_SOURCES);
-    if (!set.getOrder().isCompatible(Order.COMPILE_ORDER)) {
-      throw Starlark.errorf(
-          "Incompatible depset order for '%s': expected 'default' or 'postorder', but got '%s'",
-          TRANSITIVE_SOURCES, set.getOrder().getSkylarkName());
-    }
-    return set;
   }
 
   /**
@@ -120,13 +138,15 @@ public class PyStructUtils {
    * @throws EvalException if the field exists and is not a boolean
    */
   public static boolean getUsesSharedLibraries(StructImpl info) throws EvalException {
-    Object v = getValue(info, USES_SHARED_LIBRARIES);
-    if (v instanceof Boolean) {
-      return (Boolean) v;
-    }
-    throw Starlark.errorf(
-        "'%s' provider's '%s' field was %s, want bool",
-        PROVIDER_NAME, USES_SHARED_LIBRARIES, Starlark.type(v));
+    Object fieldValue = getValue(info, USES_SHARED_LIBRARIES);
+    return SkylarkType.cast(
+        fieldValue,
+        Boolean.class,
+        null,
+        "'%s' provider's '%s' field should be a boolean (got a '%s')",
+        PROVIDER_NAME,
+        USES_SHARED_LIBRARIES,
+        EvalUtils.getDataTypeName(fieldValue, /*fullDetails=*/ true));
   }
 
   /**
@@ -135,12 +155,27 @@ public class PyStructUtils {
    * @throws EvalException if the field exists and is not a depset of strings
    */
   public static NestedSet<String> getImports(StructImpl info) throws EvalException {
-    Object x = getValue(info, IMPORTS);
-    if (x == null) {
-      throw Starlark.errorf(
-          "'%s' provider's '%s' field is missing, want depset", PROVIDER_NAME, IMPORTS);
+    Object fieldValue = getValue(info, IMPORTS);
+    Depset castValue =
+        SkylarkType.cast(
+            fieldValue,
+            Depset.class,
+            String.class,
+            null,
+            "'%s' provider's '%s' field should be a depset of strings (got a '%s')",
+            PROVIDER_NAME,
+            IMPORTS,
+            EvalUtils.getDataTypeNameFromClass(fieldValue.getClass()));
+    try {
+      return castValue.getSet(String.class);
+    } catch (Depset.TypeException exception) {
+      throw new EvalException(
+          null,
+          String.format(
+              "expected field '%s' to be a depset of type 'file', but was a depset of type '%s'",
+              IMPORTS, castValue.getContentType()),
+          exception);
     }
-    return Depset.cast(x, String.class, IMPORTS);
   }
 
   /**
@@ -149,13 +184,15 @@ public class PyStructUtils {
    * @throws EvalException if the field exists and is not a boolean
    */
   public static boolean getHasPy2OnlySources(StructImpl info) throws EvalException {
-    Object v = getValue(info, HAS_PY2_ONLY_SOURCES);
-    if (v instanceof Boolean) {
-      return (Boolean) v;
-    }
-    throw Starlark.errorf(
-        "'%s' provider's '%s' field was %s, want bool",
-        PROVIDER_NAME, HAS_PY2_ONLY_SOURCES, Starlark.type(v));
+    Object fieldValue = getValue(info, HAS_PY2_ONLY_SOURCES);
+    return SkylarkType.cast(
+        fieldValue,
+        Boolean.class,
+        null,
+        "'%s' provider's '%s' field should be a boolean (got a '%s')",
+        PROVIDER_NAME,
+        HAS_PY2_ONLY_SOURCES,
+        EvalUtils.getDataTypeNameFromClass(fieldValue.getClass()));
   }
 
   /**
@@ -164,13 +201,15 @@ public class PyStructUtils {
    * @throws EvalException if the field exists and is not a boolean
    */
   public static boolean getHasPy3OnlySources(StructImpl info) throws EvalException {
-    Object v = getValue(info, HAS_PY3_ONLY_SOURCES);
-    if (v instanceof Boolean) {
-      return (Boolean) v;
-    }
-    throw Starlark.errorf(
-        "'%s' provider's '%s' field was %s, want bool",
-        PROVIDER_NAME, HAS_PY3_ONLY_SOURCES, Starlark.type(v));
+    Object fieldValue = getValue(info, HAS_PY3_ONLY_SOURCES);
+    return SkylarkType.cast(
+        fieldValue,
+        Boolean.class,
+        null,
+        "'%s' provider's '%s' field should be a boolean (got a '%s')",
+        PROVIDER_NAME,
+        HAS_PY3_ONLY_SOURCES,
+        EvalUtils.getDataTypeNameFromClass(fieldValue.getClass()));
   }
 
   public static Builder builder() {

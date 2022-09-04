@@ -59,9 +59,9 @@ public class ObjcProviderSkylarkConverters {
   }
 
   /** Converts {@link PathFragment}s into a skylark-compatible nested set of path strings. */
-  public static Depset convertPathFragmentsToSkylark(NestedSet<PathFragment> pathFragments) {
+  public static Depset convertPathFragmentsToSkylark(Iterable<PathFragment> pathFragments) {
     NestedSetBuilder<String> result = NestedSetBuilder.stableOrder();
-    for (PathFragment path : pathFragments.toList()) {
+    for (PathFragment path : pathFragments) {
       result.add(path.getSafePathString());
     }
     return Depset.of(SkylarkType.STRING, result.build());
@@ -125,7 +125,7 @@ public class ObjcProviderSkylarkConverters {
     @Override
     public Object valueForSkylark(Key<?> javaKey, NestedSet<?> javaValue) {
       NestedSetBuilder<String> result = NestedSetBuilder.stableOrder();
-      for (SdkFramework framework : ((NestedSet<SdkFramework>) javaValue).toList()) {
+      for (SdkFramework framework : (Iterable<SdkFramework>) javaValue) {
         result.add(framework.getName());
       }
       return Depset.of(SkylarkType.STRING, result.build());

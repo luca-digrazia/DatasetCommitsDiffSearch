@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
-import com.google.devtools.build.lib.packages.StructImpl;
+import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.OutputGroupInfoApi;
 import com.google.devtools.build.lib.syntax.Depset;
@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
-import com.google.devtools.build.lib.syntax.StarlarkIterable;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -60,8 +59,8 @@ import javax.annotation.Nullable;
  */
 @Immutable
 @AutoCodec
-public final class OutputGroupInfo extends StructImpl
-    implements SkylarkIndexable, StarlarkIterable<String>, OutputGroupInfoApi {
+public final class OutputGroupInfo extends NativeInfo
+    implements SkylarkIndexable, Iterable<String>, OutputGroupInfoApi {
   public static final String SKYLARK_NAME = "output_groups";
 
   public static final OutputGroupInfoProvider SKYLARK_CONSTRUCTOR = new OutputGroupInfoProvider();
@@ -138,7 +137,7 @@ public final class OutputGroupInfo extends StructImpl
   private final ImmutableMap<String, NestedSet<Artifact>> outputGroups;
 
   public OutputGroupInfo(ImmutableMap<String, NestedSet<Artifact>> outputGroups) {
-    super(SKYLARK_CONSTRUCTOR, Location.BUILTIN);
+    super(SKYLARK_CONSTRUCTOR);
     this.outputGroups = outputGroups;
   }
 

@@ -86,8 +86,6 @@ public class JavaToolchainProvider extends ToolchainInfo
       @Nullable FilesToRunProvider headerCompilerDirect,
       ImmutableSet<String> headerCompilerBuiltinProcessors,
       ImmutableSet<String> reducedClasspathIncompatibleProcessors,
-      ImmutableSet<Label> reducedClasspathIncompatibleTargets,
-      ImmutableSet<String> turbineIncompatibleProcessors,
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
       @Nullable Artifact oneVersion,
@@ -111,8 +109,6 @@ public class JavaToolchainProvider extends ToolchainInfo
         headerCompilerDirect,
         headerCompilerBuiltinProcessors,
         reducedClasspathIncompatibleProcessors,
-        reducedClasspathIncompatibleTargets,
-        turbineIncompatibleProcessors,
         forciblyDisableHeaderCompilation,
         singleJar,
         oneVersion,
@@ -142,8 +138,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   @Nullable private final FilesToRunProvider headerCompilerDirect;
   private final ImmutableSet<String> headerCompilerBuiltinProcessors;
   private final ImmutableSet<String> reducedClasspathIncompatibleProcessors;
-  private final ImmutableSet<Label> reducedClasspathIncompatibleTargets;
-  private final ImmutableSet<String> turbineIncompatibleProcessors;
   private final boolean forciblyDisableHeaderCompilation;
   private final Artifact singleJar;
   @Nullable private final Artifact oneVersion;
@@ -174,8 +168,6 @@ public class JavaToolchainProvider extends ToolchainInfo
       @Nullable FilesToRunProvider headerCompilerDirect,
       ImmutableSet<String> headerCompilerBuiltinProcessors,
       ImmutableSet<String> reducedClasspathIncompatibleProcessors,
-      ImmutableSet<Label> reducedClasspathIncompatibleTargets,
-      ImmutableSet<String> turbineIncompatibleProcessors,
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
       @Nullable Artifact oneVersion,
@@ -205,8 +197,6 @@ public class JavaToolchainProvider extends ToolchainInfo
     this.headerCompilerDirect = headerCompilerDirect;
     this.headerCompilerBuiltinProcessors = headerCompilerBuiltinProcessors;
     this.reducedClasspathIncompatibleProcessors = reducedClasspathIncompatibleProcessors;
-    this.reducedClasspathIncompatibleTargets = reducedClasspathIncompatibleTargets;
-    this.turbineIncompatibleProcessors = turbineIncompatibleProcessors;
     this.forciblyDisableHeaderCompilation = forciblyDisableHeaderCompilation;
     this.singleJar = singleJar;
     this.oneVersion = oneVersion;
@@ -279,14 +269,6 @@ public class JavaToolchainProvider extends ToolchainInfo
 
   public ImmutableSet<String> getReducedClasspathIncompatibleProcessors() {
     return reducedClasspathIncompatibleProcessors;
-  }
-
-  public ImmutableSet<Label> getReducedClasspathIncompatibleTargets() {
-    return reducedClasspathIncompatibleTargets;
-  }
-
-  public ImmutableSet<String> getTurbineIncompatibleProcessors() {
-    return turbineIncompatibleProcessors;
   }
 
   /**

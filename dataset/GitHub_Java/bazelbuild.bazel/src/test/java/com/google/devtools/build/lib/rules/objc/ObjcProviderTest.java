@@ -22,15 +22,17 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -39,8 +41,8 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ObjcProviderTest {
 
-  private static ObjcProvider.StarlarkBuilder objcProviderBuilder() {
-    return new ObjcProvider.StarlarkBuilder(StarlarkSemantics.DEFAULT);
+  private static ObjcProvider.Builder objcProviderBuilder() {
+    return new ObjcProvider.Builder(StarlarkSemantics.DEFAULT_SEMANTICS);
   }
 
   private static ImmutableList<ObjcProvider.Key<?>> getAllKeys() throws Exception {
@@ -61,7 +63,7 @@ public class ObjcProviderTest {
   @Test
   public void emptyProvider() {
     ObjcProvider empty = objcProviderBuilder().build();
-    assertThat(empty.get(ObjcProvider.SDK_DYLIB).toList()).isEmpty();
+    assertThat(empty.get(ObjcProvider.SDK_DYLIB)).isEmpty();
   }
 
   @Test
@@ -72,7 +74,7 @@ public class ObjcProviderTest {
     Artifact rootArtifact = createArtifact("/root.m");
     ObjcProvider root =
         objcProviderBuilder()
-            .addDirect(ObjcProvider.SOURCE, rootArtifact)
+            .add(ObjcProvider.SOURCE, rootArtifact)
             .addTransitiveAndPropagate(leaf)
             .build();
     assertThat(root.getDirect(ObjcProvider.SOURCE)).containsExactly(rootArtifact);
@@ -85,9 +87,9 @@ public class ObjcProviderTest {
     Artifact module = createArtifact("/module.modulemap");
     ObjcProvider provider =
         objcProviderBuilder()
-            .addDirect(ObjcProvider.SOURCE, source)
-            .addDirect(ObjcProvider.HEADER, header)
-            .addDirect(ObjcProvider.MODULE_MAP, module)
+            .add(ObjcProvider.SOURCE, source)
+            .add(ObjcProvider.HEADER, header)
+            .add(ObjcProvider.MODULE_MAP, module)
             .build();
     assertThat(provider.getDirect(ObjcProvider.SOURCE)).containsExactly(source);
     assertThat(provider.getDirect(ObjcProvider.HEADER)).containsExactly(header);
@@ -100,9 +102,9 @@ public class ObjcProviderTest {
         ImmutableList.of(createArtifact("/foo"), createArtifact("/bar"));
     ObjcProvider provider =
         objcProviderBuilder()
-            .addAllDirect(ObjcProvider.SOURCE, artifacts)
-            .addAllDirect(ObjcProvider.HEADER, artifacts)
-            .addAllDirect(ObjcProvider.MODULE_MAP, artifacts)
+            .addAll(ObjcProvider.SOURCE, artifacts)
+            .addAll(ObjcProvider.HEADER, artifacts)
+            .addAll(ObjcProvider.MODULE_MAP, artifacts)
             .build();
     assertThat(provider.getDirect(ObjcProvider.SOURCE)).containsExactlyElementsIn(artifacts);
     assertThat(provider.getDirect(ObjcProvider.HEADER)).containsExactlyElementsIn(artifacts);
@@ -114,7 +116,7 @@ public class ObjcProviderTest {
     ImmutableList<Artifact> artifacts =
         ImmutableList.of(createArtifact("/foo"), createArtifact("/bar"));
     Depset set = Depset.of(Artifact.TYPE, NestedSetBuilder.wrap(Order.STABLE_ORDER, artifacts));
-    ObjcProvider.StarlarkBuilder builder = objcProviderBuilder();
+    ObjcProvider.Builder builder = objcProviderBuilder();
     builder.addElementsFromSkylark(ObjcProvider.SOURCE, set);
     builder.addElementsFromSkylark(ObjcProvider.HEADER, set);
     builder.addElementsFromSkylark(ObjcProvider.MODULE_MAP, set);
@@ -125,11 +127,80 @@ public class ObjcProviderTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  public void directFieldsLimitedToCertainKeys() throws Exception {
+    ObjcProvider.Builder builder = objcProviderBuilder();
+    ImmutableList<String> values = ImmutableList.of("dummy", "fooey");
+
+    List<ObjcProvider.Key<?>> allKeys = getAllKeys();
+    for (ObjcProvider.Key<?> key : allKeys) {
+      // Use a List without a generic type to trick the compiler into allowing strings.
+      builder.addAll(key, (List) values);
+    }
+    ObjcProvider provider = builder.build();
+
+    for (ObjcProvider.Key<?> key : allKeys) {
+      if (ObjcProvider.KEYS_FOR_DIRECT.contains(key)) {
+        assertThat(provider.getDirect(key)).containsExactlyElementsIn(values);
+      } else {
+        assertThat(provider.getDirect(key)).isEmpty();
+      }
+    }
+  }
+
+  @Test
   public void onlyPropagatesProvider() {
     ObjcProvider onlyPropagates = objcProviderBuilder()
         .add(ObjcProvider.SDK_DYLIB, "foo")
         .build();
-    assertThat(onlyPropagates.get(ObjcProvider.SDK_DYLIB).toList()).containsExactly("foo");
+    assertThat(onlyPropagates.get(ObjcProvider.SDK_DYLIB)).containsExactly("foo");
+  }
+
+  @Test
+  public void strictDependencyDoesNotPropagateMoreThanOneLevel() {
+    PathFragment strictInclude = PathFragment.create("strict_path");
+    PathFragment propagatedInclude = PathFragment.create("propagated_path");
+
+    ObjcProvider strictDep =
+        objcProviderBuilder()
+            .addForDirectDependents(ObjcProvider.INCLUDE, strictInclude)
+            .build();
+    ObjcProvider propagatedDep =
+        objcProviderBuilder().add(ObjcProvider.INCLUDE, propagatedInclude).build();
+
+    ObjcProvider provider =
+        objcProviderBuilder()
+            .addTransitiveAndPropagate(ImmutableList.of(strictDep, propagatedDep))
+            .build();
+    ObjcProvider depender = objcProviderBuilder().addTransitiveAndPropagate(provider).build();
+
+    assertThat(provider.get(ObjcProvider.INCLUDE))
+        .containsExactly(strictInclude, propagatedInclude);
+    assertThat(depender.get(ObjcProvider.INCLUDE)).containsExactly(propagatedInclude);
+  }
+
+  @Test
+  public void strictDependencyDoesNotPropagateMoreThanOneLevelOnSkylark() {
+    PathFragment strictInclude = PathFragment.create("strict_path");
+    PathFragment propagatedInclude = PathFragment.create("propagated_path");
+
+    ObjcProvider strictDep =
+        objcProviderBuilder()
+            .addForDirectDependents(ObjcProvider.INCLUDE, strictInclude)
+            .build();
+    ObjcProvider propagatedDep =
+        objcProviderBuilder().add(ObjcProvider.INCLUDE, propagatedInclude).build();
+
+    ObjcProvider provider =
+        objcProviderBuilder()
+            .addTransitiveAndPropagate(ImmutableList.of(strictDep, propagatedDep))
+            .build();
+    ObjcProvider depender = objcProviderBuilder().addTransitiveAndPropagate(provider).build();
+
+    assertThat(provider.include().toCollection())
+        .containsExactly(strictInclude.toString(), propagatedInclude.toString());
+    assertThat(depender.include().toCollection())
+        .containsExactly(propagatedInclude.toString());
   }
 
   @Test
@@ -140,11 +211,8 @@ public class ObjcProviderTest {
         .build();
 
     for (ObjcProvider.Key<?> key : getAllKeys()) {
-      assertWithMessage(
-              "Key %s must either be exposed to Starlark or explicitly blacklisted",
-              key.getSkylarkKeyName())
-          .that(allRegisteredKeys)
-          .contains(key);
+      assertWithMessage("Key %s must either be exposed to skylark or explicitly blacklisted",
+          key.getSkylarkKeyName()).that(allRegisteredKeys).contains(key);
     }
   }
 }

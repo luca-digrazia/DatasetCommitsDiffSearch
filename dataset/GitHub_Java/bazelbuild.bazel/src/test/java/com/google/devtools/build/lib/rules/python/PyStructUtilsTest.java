@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.SkylarkInfo;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.syntax.Depset;
@@ -111,13 +110,11 @@ public class PyStructUtilsTest extends FoundationTestCase {
     assertThat(PyStructUtils.getTransitiveSources(info)).isSameInstanceAs(sources);
   }
 
-  private static final StructImpl emptyInfo =
-      SkylarkInfo.create(StructProvider.STRUCT, ImmutableMap.of(), /* loc= */ null);
-
   @Test
   public void getTransitiveSources_Missing() {
+    StructImpl info = StructProvider.STRUCT.createEmpty(null);
     assertHasMissingFieldMessage(
-        () -> PyStructUtils.getTransitiveSources(emptyInfo), "transitive_sources");
+        () -> PyStructUtils.getTransitiveSources(info), "transitive_sources");
   }
 
   @Test
@@ -147,7 +144,8 @@ public class PyStructUtilsTest extends FoundationTestCase {
 
   @Test
   public void getUsesSharedLibraries_Missing() throws Exception {
-    assertThat(PyStructUtils.getUsesSharedLibraries(emptyInfo)).isFalse();
+    StructImpl info = StructProvider.STRUCT.createEmpty(null);
+    assertThat(PyStructUtils.getUsesSharedLibraries(info)).isFalse();
   }
 
   @Test
@@ -167,7 +165,8 @@ public class PyStructUtilsTest extends FoundationTestCase {
 
   @Test
   public void getImports_Missing() throws Exception {
-    assertHasOrderAndContainsExactly(PyStructUtils.getImports(emptyInfo), Order.COMPILE_ORDER);
+    StructImpl info = StructProvider.STRUCT.createEmpty(null);
+    assertHasOrderAndContainsExactly(PyStructUtils.getImports(info), Order.COMPILE_ORDER);
   }
 
   @Test
@@ -184,7 +183,8 @@ public class PyStructUtilsTest extends FoundationTestCase {
 
   @Test
   public void getHasPy2OnlySources_Missing() throws Exception {
-    assertThat(PyStructUtils.getHasPy2OnlySources(emptyInfo)).isFalse();
+    StructImpl info = StructProvider.STRUCT.createEmpty(null);
+    assertThat(PyStructUtils.getHasPy2OnlySources(info)).isFalse();
   }
 
   @Test
@@ -202,7 +202,8 @@ public class PyStructUtilsTest extends FoundationTestCase {
 
   @Test
   public void getHasPy3OnlySources_Missing() throws Exception {
-    assertThat(PyStructUtils.getHasPy3OnlySources(emptyInfo)).isFalse();
+    StructImpl info = StructProvider.STRUCT.createEmpty(null);
+    assertThat(PyStructUtils.getHasPy3OnlySources(info)).isFalse();
   }
 
   @Test

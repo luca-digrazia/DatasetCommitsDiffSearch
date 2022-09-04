@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.DefaultInfoApi;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import javax.annotation.Nullable;
 
 /** DefaultInfo is provided by all targets implicitly and contains all standard fields. */
@@ -132,13 +131,8 @@ public final class DefaultInfo extends NativeInfo implements DefaultInfoApi {
     }
 
     @Override
-    public DefaultInfo constructor(
-        Object files,
-        Object runfilesObj,
-        Object dataRunfilesObj,
-        Object defaultRunfilesObj,
-        Object executable,
-        StarlarkThread thread)
+    public DefaultInfo constructor(Object files, Object runfilesObj,
+        Object dataRunfilesObj, Object defaultRunfilesObj, Object executable, Location loc)
         throws EvalException {
 
       Runfiles statelessRunfiles = castNoneToNull(Runfiles.class, runfilesObj);
@@ -146,13 +140,12 @@ public final class DefaultInfo extends NativeInfo implements DefaultInfoApi {
       Runfiles defaultRunfiles = castNoneToNull(Runfiles.class, defaultRunfilesObj);
 
       if ((statelessRunfiles != null) && (dataRunfiles != null || defaultRunfiles != null)) {
-        throw Starlark.errorf(
-            "Cannot specify the provider 'runfiles' together with 'data_runfiles' or"
-                + " 'default_runfiles'");
+        throw new EvalException(loc, "Cannot specify the provider 'runfiles' "
+            + "together with 'data_runfiles' or 'default_runfiles'");
       }
 
       return new DefaultInfo(
-          thread.getCallerLocation(),
+          loc,
           castNoneToNull(Depset.class, files),
           statelessRunfiles,
           dataRunfiles,
