@@ -17,37 +17,51 @@
 package org.graylog2.web.resources;
 
 import com.floreysoft.jmte.Engine;
-import org.apache.commons.io.IOUtils;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.io.Resources;
 import org.graylog2.Configuration;
+import org.graylog2.rest.MoreMediaTypes;
+import org.graylog2.rest.RestTools;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 import java.io.IOException;
-import java.net.URI;
-import java.util.HashMap;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+
+import static java.util.Objects.requireNonNull;
 
 @Path("/config.js")
 public class AppConfigResource {
-    private static final Engine engine = new Engine();
-    private final String content;
+    private final Configuration configuration;
+    private final Engine templateEngine;
 
     @Inject
-    public AppConfigResource(Configuration configuration) throws IOException {
-        final String template = IOUtils.toString(ClassLoader.getSystemResourceAsStream("web-interface/config.js.template"));
-        final Map<String, Object> model = new HashMap<String, Object>() {{
-            put("serverUri", configuration.getRestTransportUri());
-            put("appPathPrefix", "");
-        }};
-        this.content = engine.transform(template, model);
+    public AppConfigResource(Configuration configuration, Engine templateEngine) {
+        this.configuration = requireNonNull(configuration, "configuration");
+        this.templateEngine = requireNonNull(templateEngine, "templateEngine");
     }
 
     @GET
-    @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    public String get() {
-        return this.content;
+    @Produces(MoreMediaTypes.APPLICATION_JAVASCRIPT)
+    public String get(@Context HttpHeaders headers) {
+        final URL templateUrl = this.getClass().getResource("/web-interface/config.js.template");
+        final String template;
+        try {
+            template = Resources.toString(templateUrl, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to read AppConfig template while generating web interface configuration: ", e);
+        }
+
+        final Map<String, Object> model = ImmutableMap.of(
+            "rootTimeZone", configuration.getRootTimeZone(),
+            "serverUri", RestTools.buildEndpointUri(headers, configuration.getWebEndpointUri()),
+            "appPathPrefix", configuration.getWebPrefix());
+        return templateEngine.transform(template, model);
     }
 }

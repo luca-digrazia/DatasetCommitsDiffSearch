@@ -17,35 +17,36 @@
 package org.graylog2.web;
 
 import com.floreysoft.jmte.Engine;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
-import org.apache.commons.io.IOUtils;
-import org.graylog2.web.resources.PluginAssets;
+import org.graylog2.Configuration;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 import java.io.IOException;
-import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 
+import static java.util.Objects.requireNonNull;
+
+@Singleton
 public class IndexHtmlGenerator {
     private static final String title = "Graylog Web Interface";
-    private final Engine engine = new Engine();
     private final String content;
 
     @Inject
-    public IndexHtmlGenerator(PluginAssets pluginAssets) throws IOException {
+    public IndexHtmlGenerator(PluginAssets pluginAssets, Configuration configuration, Engine templateEngine) throws IOException {
         final URL templateUrl = this.getClass().getResource("/web-interface/index.html.template");
         final String template = Resources.toString(templateUrl, StandardCharsets.UTF_8);
-        final Map<String, Object> model = new HashMap<String, Object>() {{
-            put("title", title);
-            put("cssFiles", pluginAssets.cssFiles());
-            put("jsFiles", pluginAssets.jsFiles());
-        }};
+        final Map<String, Object> model = ImmutableMap.<String, Object>builder()
+                .put("title", title)
+                .put("cssFiles", pluginAssets.cssFiles())
+                .put("jsFiles", pluginAssets.sortedJsFiles())
+                .put("appPrefix", configuration.getWebPrefix())
+                .build();
 
-        this.content = engine.transform(template, model);
+        this.content = requireNonNull(templateEngine, "templateEngine").transform(template, model);
     }
 
     public String get() {

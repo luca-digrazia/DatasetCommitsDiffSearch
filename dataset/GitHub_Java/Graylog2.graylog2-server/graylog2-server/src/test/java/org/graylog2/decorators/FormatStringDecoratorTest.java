@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.graylog2.rest.models.messages.responses.ResultMessageSummary.create;
 
 public class FormatStringDecoratorTest {
-    private final Engine templateEngine = new Engine();
+    private final Engine templateEngine = Engine.createDefaultEngine();
 
     @Test
     public void testFormat() {
