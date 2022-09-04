@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.matrix;
 
@@ -68,7 +68,7 @@ public class ARPACKTest {
         assertEquals(0.990, eig.wr[5], 1E-4);
 
         // non-symmetric
-        eig = ARPACK.eigen(a, ARPACK.AsymmOption.LM, 6);
+        eig = ARPACK.eigen(a, 6, ARPACK.AsymmOption.LM);
         assertEquals(2.0, eig.wr[0], 1E-4);
         assertEquals(2.0, eig.wr[1], 1E-4);
         assertEquals(2.0, eig.wr[2], 1E-4);
