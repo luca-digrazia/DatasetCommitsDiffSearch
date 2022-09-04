@@ -109,7 +109,7 @@ public class TextChangeProcessor implements DecoratingElementProcessor {
 			JBlock methodBody = methodToCall.body();
 
 			methodBody.add(previousBody);
-			JExpression activityRef = holder.generatedClass.staticRef("this");
+			JExpression activityRef = holder.eBean.staticRef("this");
 			textChangeCall = methodBody.invoke(activityRef, methodName);
 
 			for (int i = 0; i < parameters.size(); i++) {
