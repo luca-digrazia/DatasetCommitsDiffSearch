@@ -34,7 +34,7 @@ public class VertxHotReplacementSetup implements HotReplacementSetup {
         synchronized (this) {
             if (nextUpdate < System.currentTimeMillis()) {
                 try {
-                    restart = hotReplacementContext.doScan(true);
+                    restart = hotReplacementContext.doScan();
                 } catch (Exception e) {
                     throw new IllegalStateException("Unable to perform hot replacement scanning", e);
                 }

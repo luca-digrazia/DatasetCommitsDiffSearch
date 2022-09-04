@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -91,16 +90,8 @@ public class ResolvedGradleArtifactDeps extends AppArtifactResolverBase {
         dependencies.forEach(dependency -> {
             if (dependency instanceof ResolvedDependencyResult) {
                 ResolvedComponentResult result = ((ResolvedDependencyResult) dependency).getSelected();
-                //if the resolved component is platform-compile its a bom, which do not have a jar, lets ignore it
-                AtomicBoolean platformCompile = new AtomicBoolean(false);
-                result.getVariants().forEach(variant -> {
-                    if (variant.getDisplayName().equals("platform-compile"))
-                        platformCompile.set(true);
-                });
-                if (!platformCompile.get()) {
-                    appDependencies.add(new AppDependency(toAppArtifact(result), "provided"));
-                    traverseDependencies(result.getDependencies(), appDependencies);
-                }
+                appDependencies.add(new AppDependency(toAppArtifact(result), "provided"));
+                traverseDependencies(result.getDependencies(), appDependencies);
             }
         });
     }

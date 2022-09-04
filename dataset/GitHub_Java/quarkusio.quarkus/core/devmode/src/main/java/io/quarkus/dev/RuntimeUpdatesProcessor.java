@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -79,19 +80,16 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
 
     public boolean doScan() throws IOException {
         final long startNanoseconds = System.nanoTime();
+        final ConcurrentMap<String, byte[]> changedClasses = scanForChangedClasses();
+        if (changedClasses == null)
+            return false;
 
-        boolean classChanged = checkForChangedClasses();
-        boolean configFileChanged = checkForConfigFileChange();
-
-        if (classChanged || configFileChanged) {
-            DevModeMain.restartApp();
-            log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
-            return true;
-        }
-        return false;
+        DevModeMain.restartApp();
+        log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
+        return true;
     }
 
-    boolean checkForChangedClasses() throws IOException {
+    ConcurrentMap<String, byte[]> scanForChangedClasses() throws IOException {
         final Set<File> changedSourceFiles;
 
         if (sourcesDir != null) {
@@ -105,26 +103,35 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                         .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
             }
         } else {
-            changedSourceFiles = Collections.emptySet();
+            changedSourceFiles = Collections.EMPTY_SET;
         }
         if (!changedSourceFiles.isEmpty()) {
-            log.info("Changed source files detected, recompiling " + changedSourceFiles);
+            log.info("Changes source files detected, recompiling " + changedSourceFiles);
+
             try {
                 compiler.compile(changedSourceFiles.stream()
                         .collect(groupingBy(this::getFileExtension, Collectors.toSet())));
             } catch (Exception e) {
                 DevModeMain.deploymentProblem = e;
-                return false;
+                return null;
             }
         }
+        final ConcurrentMap<String, byte[]> changedClasses;
         try (final Stream<Path> classesStream = Files.walk(classesDir)) {
-            if (classesStream.parallel().anyMatch(p -> p.toString().endsWith(".class") && wasRecentlyModified(p))) {
-                // At least one class was recently modified
-                lastChange = System.currentTimeMillis();
-                return true;
-            }
+            changedClasses = classesStream
+                    .parallel()
+                    .filter(p -> p.toString().endsWith(".class"))
+                    .filter(p -> wasRecentlyModified(p))
+                    .collect(Collectors.toConcurrentMap(
+                            p -> pathToClassName(p),
+                            p -> CopyUtils.readFileContentNoIOExceptions(p)));
         }
-        return false;
+        if (changedClasses.isEmpty() && !checkForConfigFileChange()) {
+            return null;
+        }
+
+        lastChange = System.currentTimeMillis();
+        return changedClasses;
     }
 
     private Optional<String> matchingHandledExtension(Path p) {
@@ -156,7 +163,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                     Long existing = configFileTimestamps.get(i);
                     if (value > existing) {
                         ret = true;
-                        log.infof("Config file change detected: %s", config);
                         if (doCopy) {
                             Path target = classesDir.resolve(i);
                             byte[] data = CopyUtils.readFileContent(config);
@@ -195,6 +201,12 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private String pathToClassName(final Path path) {
+        String pathName = classesDir.relativize(path).toString();
+        String className = pathName.substring(0, pathName.length() - 6).replace('/', '.');
+        return className;
     }
 
     interface UpdateHandler {
