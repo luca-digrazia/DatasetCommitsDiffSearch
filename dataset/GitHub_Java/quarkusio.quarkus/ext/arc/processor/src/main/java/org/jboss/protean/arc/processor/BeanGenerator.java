@@ -60,12 +60,10 @@ import org.jboss.protean.arc.Subclass;
 import org.jboss.protean.arc.processor.BeanInfo.InterceptionInfo;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource.SpecialType;
-import org.jboss.protean.gizmo.AssignableResultHandle;
 import org.jboss.protean.gizmo.BytecodeCreator;
 import org.jboss.protean.gizmo.CatchBlockCreator;
 import org.jboss.protean.gizmo.ClassCreator;
 import org.jboss.protean.gizmo.ClassOutput;
-import org.jboss.protean.gizmo.DescriptorUtils;
 import org.jboss.protean.gizmo.FieldCreator;
 import org.jboss.protean.gizmo.FieldDescriptor;
 import org.jboss.protean.gizmo.FunctionCreator;
@@ -726,7 +724,7 @@ public class BeanGenerator extends AbstractGenerator {
             ReflectionRegistration reflectionRegistration, String targetPackage) {
 
         MethodCreator create = beanCreator.getMethodCreator("create", providerTypeName, CreationalContext.class).setModifiers(ACC_PUBLIC);
-        AssignableResultHandle instanceHandle;
+        ResultHandle instanceHandle = null;
 
         if (bean.isClassBean()) {
             List<Injection> methodInjections = new ArrayList<>();
@@ -801,7 +799,6 @@ public class BeanGenerator extends AbstractGenerator {
 
             // AroundConstruct lifecycle callback interceptors
             InterceptionInfo aroundConstructs = bean.getLifecycleInterceptors(InterceptionType.AROUND_CONSTRUCT);
-            instanceHandle = create.createVariable(DescriptorUtils.extToInt(providerTypeName));
             if (!aroundConstructs.isEmpty()) {
                 Optional<Injection> constructorInjection = bean.getConstructorInjection();
                 ResultHandle constructorHandle;
@@ -852,13 +849,13 @@ public class BeanGenerator extends AbstractGenerator {
                 CatchBlockCreator exceptionCatch = tryCatch.addCatch(Exception.class);
                 // throw new RuntimeException(e)
                 exceptionCatch.throwException(RuntimeException.class, "Error invoking aroundConstructs", exceptionCatch.getCaughtException());
-                tryCatch.assign(instanceHandle, tryCatch.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class),
-                    invocationContextHandle));
+                instanceHandle = tryCatch.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class),
+                        invocationContextHandle);
 
             } else {
-                create.assign(instanceHandle, newInstanceHandle(bean, beanCreator, create, create, providerTypeName, baseName,
+                instanceHandle = newInstanceHandle(bean, beanCreator, create, create, providerTypeName, baseName,
                         newProviderHandles(bean, beanCreator, create, injectionPointToProviderField, interceptorToProviderField, interceptorToWrap),
-                        reflectionRegistration));
+                        reflectionRegistration);
             }
 
             // Perform field and initializer injections
@@ -961,7 +958,6 @@ public class BeanGenerator extends AbstractGenerator {
             create.returnValue(instanceHandle);
 
         } else if (bean.isProducerMethod()) {
-            instanceHandle = create.createVariable(DescriptorUtils.extToInt(providerTypeName));
             // instance = declaringProvider.get(new CreationalContextImpl<>()).produce()
             ResultHandle declaringProviderHandle = create.readInstanceField(
                     FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_DECLARING_PROVIDER, InjectableBean.class.getName()), create.getThis());
@@ -997,11 +993,11 @@ public class BeanGenerator extends AbstractGenerator {
                     create.writeArrayValue(argsArray, i, referenceHandles[i]);
                 }
                 reflectionRegistration.registerMethod(producerMethod);
-                create.assign(instanceHandle, create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
+                instanceHandle = create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
                         create.loadClass(producerMethod.declaringClass().name().toString()), create.load(producerMethod.name()), paramTypesArray,
-                        declaringProviderInstanceHandle, argsArray));
+                        declaringProviderInstanceHandle, argsArray);
             } else {
-                create.assign(instanceHandle, create.invokeVirtualMethod(MethodDescriptor.of(producerMethod), declaringProviderInstanceHandle, referenceHandles));
+                instanceHandle = create.invokeVirtualMethod(MethodDescriptor.of(producerMethod), declaringProviderInstanceHandle, referenceHandles);
             }
 
             // If the declaring bean is @Dependent we must destroy the instance afterwards
@@ -1011,7 +1007,6 @@ public class BeanGenerator extends AbstractGenerator {
             create.returnValue(instanceHandle);
 
         } else if (bean.isProducerField()) {
-            instanceHandle = create.createVariable(DescriptorUtils.extToInt(providerTypeName));
             // instance = declaringProvider.get(new CreationalContextImpl<>()).field
 
             FieldInfo producerField = bean.getTarget().get().asField();
@@ -1032,10 +1027,10 @@ public class BeanGenerator extends AbstractGenerator {
                 LOGGER.infof("Producer %s#%s is private - Arc users are encouraged to avoid using private producers", producerField.declaringClass().name(),
                         producerField.name());
                 reflectionRegistration.registerField(producerField);
-                create.assign(instanceHandle, create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_READ_FIELD,
-                        create.loadClass(producerField.declaringClass().name().toString()), create.load(producerField.name()), declaringProviderInstanceHandle));
+                instanceHandle = create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_READ_FIELD,
+                        create.loadClass(producerField.declaringClass().name().toString()), create.load(producerField.name()), declaringProviderInstanceHandle);
             } else {
-                create.assign(instanceHandle, create.readInstanceField(FieldDescriptor.of(producerField), declaringProviderInstanceHandle));
+                instanceHandle = create.readInstanceField(FieldDescriptor.of(producerField), declaringProviderInstanceHandle);
             }
 
             // If the declaring bean is @Dependent we must destroy the instance afterwards

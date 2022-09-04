@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc.processor;
 
 import java.util.Collections;
@@ -32,6 +48,8 @@ import org.jboss.protean.gizmo.ResultHandle;
  */
 final class Types {
 
+    private static final Type OBJECT_TYPE = Type.create(DotNames.OBJECT, Kind.CLASS);
+
     private Types() {
     }
 
@@ -48,7 +66,7 @@ final class Types {
             } else {
                 boundsHandle = creator.newArray(java.lang.reflect.Type.class, creator.load(bounds.size()));
                 for (int i = 0; i < bounds.size(); i++) {
-                    creator.writeArrayValue(boundsHandle, creator.load(i), getTypeHandle(creator, bounds.get(i)));
+                    creator.writeArrayValue(boundsHandle, i, getTypeHandle(creator, bounds.get(i)));
                 }
             }
             return creator.newInstance(MethodDescriptor.ofConstructor(TypeVariableImpl.class, String.class, java.lang.reflect.Type[].class),
@@ -61,7 +79,7 @@ final class Types {
             List<Type> arguments = parameterizedType.arguments();
             ResultHandle typeArgsHandle = creator.newArray(java.lang.reflect.Type.class, creator.load(arguments.size()));
             for (int i = 0; i < arguments.size(); i++) {
-                creator.writeArrayValue(typeArgsHandle, creator.load(i), getTypeHandle(creator, arguments.get(i)));
+                creator.writeArrayValue(typeArgsHandle, i, getTypeHandle(creator, arguments.get(i)));
             }
             return creator.newInstance(
                     MethodDescriptor.ofConstructor(ParameterizedTypeImpl.class, java.lang.reflect.Type.class, java.lang.reflect.Type[].class),
@@ -86,6 +104,27 @@ final class Types {
                         MethodDescriptor.ofMethod(WildcardTypeImpl.class, "withLowerBound", java.lang.reflect.WildcardType.class, java.lang.reflect.Type.class),
                         getTypeHandle(creator, wildcardType.superBound()));
             }
+        } else if (Kind.PRIMITIVE.equals(type.kind())) {
+            switch (type.asPrimitiveType().primitive()) {
+                case INT:
+                    return creator.loadClass(int.class);
+                case LONG:
+                    return creator.loadClass(long.class);
+                case BOOLEAN:
+                    return creator.loadClass(boolean.class);
+                case BYTE:
+                    return creator.loadClass(byte.class);
+                case CHAR:
+                    return creator.loadClass(char.class);
+                case DOUBLE:
+                    return creator.loadClass(double.class);
+                case FLOAT:
+                    return creator.loadClass(float.class);
+                case SHORT:
+                    return creator.loadClass(short.class);
+                default:
+                    throw new IllegalArgumentException("Unsupported primitive type: " + type);
+            }
         } else {
             throw new IllegalArgumentException("Unsupported bean type: " + type.kind() + ", " + type);
         }
@@ -102,11 +141,17 @@ final class Types {
     }
 
     static Set<Type> getTypeClosure(MethodInfo producerMethod, BeanDeployment beanDeployment) {
-        ClassInfo returnTypeClassInfo = beanDeployment.getIndex().getClassByName(producerMethod.returnType().name());
+        Type returnType = producerMethod.returnType();
+        if (returnType.kind() == Kind.PRIMITIVE) {
+            Set<Type> types = new HashSet<>();
+            types.add(returnType);
+            types.add(OBJECT_TYPE);
+            return types;
+        }
+        ClassInfo returnTypeClassInfo = beanDeployment.getIndex().getClassByName(returnType.name());
         if (returnTypeClassInfo == null) {
             throw new IllegalArgumentException("Producer method return type not found in index: " + producerMethod.returnType().name());
         }
-        Type returnType = producerMethod.returnType();
         if (Kind.CLASS.equals(returnType.kind())) {
             return getTypeClosure(returnTypeClassInfo, Collections.emptyMap(), beanDeployment);
         } else if (Kind.PARAMETERIZED_TYPE.equals(returnType.kind())) {
@@ -119,11 +164,17 @@ final class Types {
     }
 
     static Set<Type> getTypeClosure(FieldInfo producerField, BeanDeployment beanDeployment) {
+        Type fieldType = producerField.type();
+        if (fieldType.kind() == Kind.PRIMITIVE) {
+            Set<Type> types = new HashSet<>();
+            types.add(fieldType);
+            types.add(OBJECT_TYPE);
+            return types;
+        }
         ClassInfo fieldClassInfo = beanDeployment.getIndex().getClassByName(producerField.type().name());
         if (fieldClassInfo == null) {
             throw new IllegalArgumentException("Producer field type not found in index: " + producerField.type().name());
         }
-        Type fieldType = producerField.type();
         if (Kind.CLASS.equals(fieldType.kind())) {
             return getTypeClosure(fieldClassInfo, Collections.emptyMap(), beanDeployment);
         } else if (Kind.PARAMETERIZED_TYPE.equals(fieldType.kind())) {
@@ -141,7 +192,12 @@ final class Types {
             // Canonical ParameterizedType with unresolved type variables
             Type[] typeParams = new Type[typeParameters.size()];
             for (int i = 0; i < typeParameters.size(); i++) {
-                typeParams[i] = resolvedTypeParameters.get(typeParameters.get(i));
+                TypeVariable paramType = typeParameters.get(i);
+                Type resolvedType = resolvedTypeParameters.get(paramType);
+                if (resolvedType == null) {
+                    resolvedType = paramType.bounds().get(0);
+                }
+                typeParams[i] = resolvedType;
             }
             types.add(ParameterizedType.create(classInfo.name(), typeParams, null));
         } else {
@@ -205,11 +261,11 @@ final class Types {
     }
 
     static String convertNested(String name) {
-        return name.replace("$", ".");
+        return name.replace('$', '.');
     }
 
     static String getPackageName(String className) {
-        className = className.replace("/", ".");
+        className = className.replace('/', '.');
         return className.contains(".") ? className.substring(0, className.lastIndexOf(".")) : "";
     }
 

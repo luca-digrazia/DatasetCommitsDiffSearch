@@ -16,11 +16,7 @@
 
 package org.jboss.protean.arc.processor;
 
-import java.nio.charset.Charset;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,8 +46,6 @@ import org.jboss.protean.gizmo.MethodCreator;
  * @author Martin Kouba
  */
 public class BeanInfo {
-
-    private final String identifier;
 
     private final ClassInfo implClazz;
 
@@ -138,12 +132,6 @@ public class BeanInfo {
         this.creatorConsumer = creatorConsumer;
         this.destroyerConsumer = destroyerConsumer;
         this.params = params;
-        // Identifier is generated and unique for a specific deployment
-        this.identifier = generateId();
-    }
-
-    public String getIdentifier() {
-        return identifier;
     }
 
     public Optional<AnnotationTarget> getTarget() {
@@ -405,34 +393,6 @@ public class BeanInfo {
         }
     }
 
-    @Override
-    public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append(getType());
-        builder.append(" bean [types=");
-        builder.append(types);
-        builder.append(", qualifiers=");
-        builder.append(qualifiers);
-        builder.append(", target=");
-        builder.append(target);
-        if (declaringBean != null) {
-            builder.append(", declaringBean=");
-            builder.append(declaringBean.target);
-        }
-        builder.append("]");
-        return builder.toString();
-    }
-
-    private String generateId() {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-1");
-            md.reset();
-            return Base64.getEncoder().encodeToString(md.digest(toString().getBytes(Charset.forName("UTF-8"))));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
     static class InterceptionInfo {
 
         static final InterceptionInfo EMPTY = new InterceptionInfo(Collections.emptyList(), Collections.emptySet());
@@ -450,6 +410,24 @@ public class BeanInfo {
             return interceptors.isEmpty();
         }
 
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append(getType());
+        builder.append(" bean [types=");
+        builder.append(types);
+        builder.append(", qualifiers=");
+        builder.append(qualifiers);
+        builder.append(", target=");
+        builder.append(target);
+        if (declaringBean != null) {
+            builder.append(", declaringBean=");
+            builder.append(declaringBean.target);
+        }
+        builder.append("]");
+        return builder.toString();
     }
 
     static class Builder {
