@@ -267,7 +267,6 @@ public class SchedulerProcessor {
             this.producer = producer;
         }
 
-        @Override
         public void write(final String name, final byte[] data) {
             producer.produce(new GeneratedClassBuildItem(true, name, data));
         }
