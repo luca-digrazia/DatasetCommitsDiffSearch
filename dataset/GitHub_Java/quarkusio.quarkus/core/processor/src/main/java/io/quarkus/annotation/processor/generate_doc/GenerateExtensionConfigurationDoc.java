@@ -398,9 +398,7 @@ final public class GenerateExtensionConfigurationDoc {
             if (field.getKind() == ElementKind.ENUM_CONSTANT) {
                 if (sb.length() > 0)
                     sb.append(", ");
-                sb.append("`");
                 sb.append(DocGeneratorUtil.hyphenateEnumValue(field.getSimpleName().toString()));
-                sb.append("`");
             }
         }
         return sb.toString();
