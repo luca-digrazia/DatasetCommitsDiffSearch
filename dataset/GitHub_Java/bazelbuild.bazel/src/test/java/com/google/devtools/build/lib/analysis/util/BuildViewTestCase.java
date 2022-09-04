@@ -55,11 +55,10 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
-import com.google.devtools.build.lib.analysis.AnalysisOptions;
-import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
+import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -123,6 +122,7 @@ import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
@@ -901,6 +901,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             .build());
 
     invalidatePackages();
+    // Need to re-initialize the workspace status.
+    getSkyframeExecutor().maybeInvalidateWorkspaceStatusValue("test");
   }
 
   /**
@@ -1728,10 +1730,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             ? Options.getDefaults(LoadingOptions.class)
             : customLoadingOptions;
 
-    AnalysisOptions viewOptions = Options.getDefaults(AnalysisOptions.class);
+    BuildView.Options viewOptions = Options.getDefaults(BuildView.Options.class);
 
+    LoadingPhaseRunner runner =
+        skyframeExecutor.getLoadingPhaseRunner(ruleClassProvider.getRuleClassMap().keySet());
     LoadingResult loadingResult =
-        skyframeExecutor.loadTargetPatterns(
+        runner.execute(
             reporter,
             targets,
             PathFragment.EMPTY_FRAGMENT,

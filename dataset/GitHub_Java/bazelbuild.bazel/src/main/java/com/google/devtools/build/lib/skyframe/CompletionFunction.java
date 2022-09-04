@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.analysis.AspectCompleteEvent;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -303,8 +302,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
 
     Map<SkyKey, ValueOrException2<MissingInputFileException, ActionExecutionException>> inputDeps =
         env.getValuesOrThrow(
-            ArtifactSkyKey.mandatoryKeys(
-                completor.getAllArtifactsToBuild(value, topLevelContext).getAllArtifacts()),
+            completor.getAllArtifactsToBuild(value, topLevelContext).getAllArtifacts(),
             MissingInputFileException.class,
             ActionExecutionException.class);
 

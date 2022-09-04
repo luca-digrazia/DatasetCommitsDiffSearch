@@ -13,13 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Multimaps;
-import com.google.devtools.build.lib.actions.ActionLookupData;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
@@ -27,7 +21,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.util.Map;
 
 /**
  * TestCompletionFunction builds all relevant test artifacts of a {@link
@@ -52,54 +45,19 @@ public final class TestCompletionFunction implements SkyFunction {
 
     ConfiguredTarget ct = ctValue.getConfiguredTarget();
     if (key.exclusiveTesting()) {
-      // Request test execution iteratively if testing exclusively.
+      // Request test artifacts iteratively if testing exclusively.
       for (Artifact testArtifact : TestProvider.getTestStatusArtifacts(ct)) {
-        ActionLookupValue.ActionLookupKey actionLookupKey =
-            ArtifactFunction.getActionLookupKey(testArtifact);
-        ActionLookupValue actionLookupValue =
-            ArtifactFunction.getActionLookupValue(actionLookupKey, env, testArtifact);
-        if (actionLookupValue == null) {
-          return null;
-        }
-        env.getValue(getActionLookupData(testArtifact, actionLookupKey, actionLookupValue));
-        if (env.valuesMissing()) {
+        if (env.getValue(ArtifactSkyKey.key(testArtifact, /*isMandatory=*/ true)) == null) {
           return null;
         }
       }
     } else {
-      Multimap<ActionLookupValue.ActionLookupKey, ArtifactSkyKey> keyToArtifactMap =
-          Multimaps.index(
-              ArtifactSkyKey.mandatoryKeys(TestProvider.getTestStatusArtifacts(ct)),
-              (val) -> ArtifactFunction.getActionLookupKey(val.getArtifact()));
-      Map<SkyKey, SkyValue> actionLookupValues = env.getValues(keyToArtifactMap.keySet());
-      if (env.valuesMissing()) {
-        return null;
-      }
-      env.getValues(
-          keyToArtifactMap
-              .entries()
-              .stream()
-              .map(
-                  entry ->
-                      getActionLookupData(
-                          entry.getValue().getArtifact(),
-                          entry.getKey(),
-                          (ActionLookupValue) actionLookupValues.get(entry.getKey())))
-              .distinct()
-              .collect(ImmutableSet.toImmutableSet()));
+      env.getValues(TestProvider.getTestStatusArtifacts(ct));
       if (env.valuesMissing()) {
         return null;
       }
     }
     return TestCompletionValue.TEST_COMPLETION_MARKER;
-  }
-
-  private static ActionLookupData getActionLookupData(
-      Artifact artifact,
-      ActionLookupValue.ActionLookupKey actionLookupKey,
-      ActionLookupValue actionLookupValue) {
-    return ActionExecutionValue.key(
-        actionLookupKey, actionLookupValue.getGeneratingActionIndex(artifact));
   }
 
   @Override

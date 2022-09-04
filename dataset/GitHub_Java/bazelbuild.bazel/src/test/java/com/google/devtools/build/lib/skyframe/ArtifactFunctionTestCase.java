@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -30,7 +31,6 @@ import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Root;
@@ -122,7 +122,8 @@ abstract class ArtifactFunctionTestCase {
                 .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
                 .put(
                     SkyFunctions.ACTION_TEMPLATE_EXPANSION,
-                    new ActionTemplateExpansionFunction(actionKeyContext))
+                    new ActionTemplateExpansionFunction(
+                        actionKeyContext, Suppliers.ofInstance(false)))
                 .build(),
             differencer);
     driver = new SequentialBuildDriver(evaluator);
@@ -169,7 +170,7 @@ abstract class ArtifactFunctionTestCase {
   /** InMemoryFileSystem that can pretend to do a fast digest. */
   protected class CustomInMemoryFs extends InMemoryFileSystem {
     @Override
-    protected byte[] getFastDigest(Path path, DigestHashFunction hashFunction) throws IOException {
+    protected byte[] getFastDigest(Path path, HashFunction hashFunction) throws IOException {
       return fastDigest ? getDigest(path, hashFunction) : null;
     }
   }

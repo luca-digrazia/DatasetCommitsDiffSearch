@@ -28,7 +28,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
@@ -348,7 +347,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     @Override
     public void evaluated(
         SkyKey skyKey,
-        @Nullable SkyValue value,
         Supplier<EvaluationSuccessState> evaluationSuccessState,
         EvaluationState state) {
       if (evaluationSuccessState.get().succeeded()) {
@@ -896,10 +894,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     @Override
     public SkyValue compute(SkyKey skyKey, Environment env)
         throws SkyFunctionException, InterruptedException {
-      ArtifactSkyKey artifactKey = (ArtifactSkyKey) skyKey.argument();
-      Artifact artifact = artifactKey.getArtifact();
       try {
-        return FileArtifactValue.create(artifact.getPath());
+        return FileArtifactValue.create(((Artifact) skyKey).getPath());
       } catch (IOException e) {
         throw new SkyFunctionException(e, Transience.PERSISTENT){};
       }

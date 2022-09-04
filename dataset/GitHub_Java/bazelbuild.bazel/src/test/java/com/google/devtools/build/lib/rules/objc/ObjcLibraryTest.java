@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.Collections;
@@ -82,31 +81,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   @Override
   protected ScratchAttributeWriter createLibraryTargetWriter(String labelString) {
     return ScratchAttributeWriter.fromLabelString(this, "objc_library", labelString);
-  }
-
-  @Test
-  public void testConfigTransitionWithTopLevelAppleConfiguration() throws Exception {
-    scratch.file("bin/BUILD",
-        "objc_library(",
-        "    name = 'objc',",
-        "    srcs = ['objc.m'],",
-        ")",
-        "cc_binary(",
-        "    name = 'cc',",
-        "    srcs = ['cc.cc'],",
-        "    deps = [':objc'],",
-        ")");
-
-    useConfiguration(
-        "--apple_crosstool_in_output_directory_name",
-        "--cpu=ios_x86_64",
-        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
-
-    ConfiguredTarget cc = getConfiguredTarget("//bin:cc");
-    Artifact objcObject = ActionsTestUtil.getFirstArtifactEndingWith(
-        actionsTestUtil().artifactClosureOf(getFilesToBuild(cc)), "objc.o");
-    assertThat(objcObject.getExecPathString()).startsWith(
-        TestConstants.PRODUCT_NAME + "-out/ios_x86_64-fastbuild/");
   }
 
   @Test
@@ -148,7 +122,8 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testCompilesSourcesWithSameBaseName() throws Exception {
+  public void testCompilesSourcesWithSameBaseNameWithNewObjPath() throws Exception {
+    useConfiguration("--experimental_shortened_obj_file_path=true");
     createLibraryTargetWriter("//foo:lib")
         .setAndCreateFiles("srcs", "a.m", "pkg1/a.m", "b.m")
         .setAndCreateFiles("non_arc_srcs", "pkg2/a.m")
@@ -160,6 +135,32 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     Artifact a1 = getBinArtifact("_objs/lib/arc/1/a.o", getConfiguredTarget("//foo:lib"));
     Artifact a2 = getBinArtifact("_objs/lib/non_arc/a.o", getConfiguredTarget("//foo:lib"));
     Artifact b = getBinArtifact("_objs/lib/arc/b.o", getConfiguredTarget("//foo:lib"));
+
+    assertThat(getGeneratingAction(a0)).isNotNull();
+    assertThat(getGeneratingAction(a1)).isNotNull();
+    assertThat(getGeneratingAction(a2)).isNotNull();
+    assertThat(getGeneratingAction(b)).isNotNull();
+
+    assertThat(getGeneratingAction(a0).getInputs()).contains(getSourceArtifact("foo/a.m"));
+    assertThat(getGeneratingAction(a1).getInputs()).contains(getSourceArtifact("foo/pkg1/a.m"));
+    assertThat(getGeneratingAction(a2).getInputs()).contains(getSourceArtifact("foo/pkg2/a.m"));
+    assertThat(getGeneratingAction(b).getInputs()).contains(getSourceArtifact("foo/b.m"));
+  }
+
+  @Test
+  public void testCompilesSourcesWithSameBaseNameWithLegacyObjPath() throws Exception {
+    useConfiguration("--experimental_shortened_obj_file_path=false");
+    createLibraryTargetWriter("//foo:lib")
+        .setAndCreateFiles("srcs", "a.m", "pkg1/a.m", "b.m")
+        .setAndCreateFiles("non_arc_srcs", "pkg2/a.m")
+        .write();
+
+    getConfiguredTarget("//foo:lib");
+
+    Artifact a0 = getBinArtifact("_objs/lib/foo/a.o", getConfiguredTarget("//foo:lib"));
+    Artifact a1 = getBinArtifact("_objs/lib/foo/pkg1/a.o", getConfiguredTarget("//foo:lib"));
+    Artifact a2 = getBinArtifact("_objs/lib/foo/pkg2/a.o", getConfiguredTarget("//foo:lib"));
+    Artifact b = getBinArtifact("_objs/lib/foo/b.o", getConfiguredTarget("//foo:lib"));
 
     assertThat(getGeneratingAction(a0)).isNotNull();
     assertThat(getGeneratingAction(a1)).isNotNull();
@@ -1265,54 +1266,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     CommandAction action = compileAction("//objc:lib", "a.o");
 
     assertXcodeVersionEnv(action, "5.8");
-  }
-
-  @Test
-  public void testXcodeVersionFeature() throws Exception {
-    useConfiguration("--xcode_version=5.8");
-
-    createLibraryTargetWriter("//objc:lib")
-        .setAndCreateFiles("srcs", "a.m")
-        .write();
-    CommandAction action = compileAction("//objc:lib", "a.o");
-
-    assertThat(action.getArguments()).contains("-DXCODE_FEATURE_FOR_TESTING=xcode_5.8");
-  }
-
-  @Test
-  public void testXcodeVersionFeatureUnused() throws Exception {
-    useConfiguration("--xcode_version=7.3");
-
-    createLibraryTargetWriter("//objc:lib")
-        .setAndCreateFiles("srcs", "a.m")
-        .write();
-    CommandAction action = compileAction("//objc:lib", "a.o");
-
-    assertThat(action.getArguments()).doesNotContain("-DXCODE_FEATURE_FOR_TESTING=xcode_5.8");
-  }
-
-  @Test
-  public void testXcodeVersionFeatureTwoComponentsTooMany() throws Exception {
-    useConfiguration("--xcode_version=7.3.1");
-
-    createLibraryTargetWriter("//objc:lib")
-        .setAndCreateFiles("srcs", "a.m")
-        .write();
-    CommandAction action = compileAction("//objc:lib", "a.o");
-
-    assertThat(action.getArguments()).contains("-DXCODE_FEATURE_FOR_TESTING=xcode_7.3");
-  }
-
-  @Test
-  public void testXcodeVersionFeatureTwoComponentsTooFew() throws Exception {
-    useConfiguration("--xcode_version=5");
-
-    createLibraryTargetWriter("//objc:lib")
-        .setAndCreateFiles("srcs", "a.m")
-        .write();
-    CommandAction action = compileAction("//objc:lib", "a.o");
-
-    assertThat(action.getArguments()).contains("-DXCODE_FEATURE_FOR_TESTING=xcode_5.0");
   }
 
   @Test

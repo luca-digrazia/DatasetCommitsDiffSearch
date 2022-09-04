@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.escape.Escaper;
 import com.google.common.escape.Escapers;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
@@ -25,10 +24,12 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.vfs.OsPathPolicy;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -74,13 +75,37 @@ public final class Actions {
     }
     // Don't bother to check input and output counts first; the expected result for these tests is
     // to always be true (i.e., that this method returns true).
-    if (!Iterables.elementsEqual(actionA.getMandatoryInputs(), actionB.getMandatoryInputs())) {
+    if (!artifactsEqualWithoutOwner(actionA.getMandatoryInputs(), actionB.getMandatoryInputs())) {
       return false;
     }
-    if (!Iterables.elementsEqual(actionA.getOutputs(), actionB.getOutputs())) {
+    if (!artifactsEqualWithoutOwner(actionA.getOutputs(), actionB.getOutputs())) {
       return false;
     }
     return true;
+  }
+
+  private static boolean artifactsEqualWithoutOwner(
+      Iterable<Artifact> iterable1, Iterable<Artifact> iterable2) {
+    if (iterable1 instanceof Collection && iterable2 instanceof Collection) {
+      Collection<?> collection1 = (Collection<?>) iterable1;
+      Collection<?> collection2 = (Collection<?>) iterable2;
+      if (collection1.size() != collection2.size()) {
+        return false;
+      }
+    }
+    Iterator<Artifact> iterator1 = iterable1.iterator();
+    Iterator<Artifact> iterator2 = iterable2.iterator();
+    while (iterator1.hasNext()) {
+      if (!iterator2.hasNext()) {
+        return false;
+      }
+      Artifact artifact1 = iterator1.next();
+      Artifact artifact2 = iterator2.next();
+      if (!artifact1.equalsWithoutOwner(artifact2)) {
+        return false;
+      }
+    }
+    return !iterator2.hasNext();
   }
 
   /**
@@ -93,7 +118,7 @@ public final class Actions {
    * @throws ActionConflictException iff there are two actions generate the same output
    */
   public static GeneratingActions findAndThrowActionConflict(
-      ActionKeyContext actionKeyContext, ImmutableList<ActionAnalysisMetadata> actions)
+      ActionKeyContext actionKeyContext, List<ActionAnalysisMetadata> actions)
       throws ActionConflictException {
     return Actions.maybeFilterSharedActionsAndThrowIfConflict(
         actionKeyContext, actions, /*allowSharedAction=*/ false);
@@ -110,7 +135,7 @@ public final class Actions {
    *     output
    */
   public static GeneratingActions filterSharedActionsAndThrowActionConflict(
-      ActionKeyContext actionKeyContext, ImmutableList<ActionAnalysisMetadata> actions)
+      ActionKeyContext actionKeyContext, List<? extends ActionAnalysisMetadata> actions)
       throws ActionConflictException {
     return Actions.maybeFilterSharedActionsAndThrowIfConflict(
         actionKeyContext, actions, /*allowSharedAction=*/ true);
@@ -118,7 +143,7 @@ public final class Actions {
 
   private static GeneratingActions maybeFilterSharedActionsAndThrowIfConflict(
       ActionKeyContext actionKeyContext,
-      ImmutableList<ActionAnalysisMetadata> actions,
+      List<? extends ActionAnalysisMetadata> actions,
       boolean allowSharedAction)
       throws ActionConflictException {
     Map<Artifact, Integer> generatingActions = new HashMap<>();
@@ -313,11 +338,11 @@ public final class Actions {
     public static final GeneratingActions EMPTY =
         new GeneratingActions(ImmutableList.of(), ImmutableMap.of());
 
-    private final ImmutableList<ActionAnalysisMetadata> actions;
+    private final List<? extends ActionAnalysisMetadata> actions;
     private final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
     private GeneratingActions(
-        ImmutableList<ActionAnalysisMetadata> actions,
+        List<? extends ActionAnalysisMetadata> actions,
         ImmutableMap<Artifact, Integer> generatingActionIndex) {
       this.actions = actions;
       this.generatingActionIndex = generatingActionIndex;
@@ -337,7 +362,7 @@ public final class Actions {
       return generatingActionIndex;
     }
 
-    public ImmutableList<ActionAnalysisMetadata> getActions() {
+    public List<? extends ActionAnalysisMetadata> getActions() {
       return actions;
     }
   }

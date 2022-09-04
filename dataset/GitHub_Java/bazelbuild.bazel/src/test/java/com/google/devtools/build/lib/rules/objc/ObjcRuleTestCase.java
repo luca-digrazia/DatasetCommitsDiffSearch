@@ -31,7 +31,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
@@ -911,7 +910,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   protected Action actionProducingArtifact(String targetLabel,
       String artifactSuffix) throws Exception {
     ConfiguredTarget libraryTarget = getConfiguredTarget(targetLabel);
-    Label parsedLabel = Label.parseAbsolute(targetLabel, ImmutableMap.of());
+    Label parsedLabel = Label.parseAbsolute(targetLabel);
     Artifact linkedLibrary = getBinArtifact(
         parsedLabel.getName() + artifactSuffix,
         libraryTarget);
@@ -1399,7 +1398,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   private BinaryFileWriteAction plMergeAction(String binaryLabelString) throws Exception {
-    Label binaryLabel = Label.parseAbsolute(binaryLabelString, ImmutableMap.of());
+    Label binaryLabel = Label.parseAbsolute(binaryLabelString);
     ConfiguredTarget binary = getConfiguredTarget(binaryLabelString);
     return (BinaryFileWriteAction)
         getGeneratingAction(getBinArtifact(binaryLabel.getName()

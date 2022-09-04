@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileValue;
@@ -152,10 +151,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     actions.add(action);
     file(input2.getPath(), "contents");
     file(input1.getPath(), "source contents");
-    evaluate(
-        Iterables.toArray(
-            ArtifactSkyKey.mandatoryKeys(ImmutableSet.of(input2, input1, input2, tree)),
-            SkyKey.class));
+    evaluate(Iterables.toArray(ImmutableSet.of(input2, input1, input2, tree), SkyKey.class));
     SkyValue value = evaluateArtifactValue(output);
     assertThat(((AggregatingArtifactValue) value).getInputs())
         .containsExactly(
@@ -382,7 +378,8 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
               ALL_OWNER,
               new BasicActionLookupValue(
                   Actions.filterSharedActionsAndThrowActionConflict(
-                      actionKeyContext, ImmutableList.copyOf(actions)))));
+                      actionKeyContext, ImmutableList.copyOf(actions)),
+                  false)));
     }
   }
 
@@ -429,12 +426,8 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
       } catch (IOException e) {
         throw new IllegalStateException(e);
       }
-      return ActionExecutionValue.create(
-          artifactData,
-          treeArtifactData,
-          additionalOutputData,
-          /*outputSymlinks=*/ null,
-          /*notifyOnActionCacheHitAction=*/ false);
+      return new ActionExecutionValue(
+          artifactData, treeArtifactData, additionalOutputData, /*outputSymlinks=*/ null);
     }
 
     @Override

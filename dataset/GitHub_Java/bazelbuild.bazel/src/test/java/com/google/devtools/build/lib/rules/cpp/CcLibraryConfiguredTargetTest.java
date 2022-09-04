@@ -219,9 +219,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(
             hello
                 .get(CcLinkingInfo.PROVIDER)
-                .getCcLinkParamsStore()
-                .get(/* linkingStatically= */ false, /* linkShared= */ false)
-                .getDynamicLibrariesForRuntime())
+                .getCcExecutionDynamicLibraries()
+                .getExecutionDynamicLibraryArtifacts())
         .containsExactly(implSharedObjectLink);
   }
 
@@ -285,9 +284,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(
             hello
                 .get(CcLinkingInfo.PROVIDER)
-                .getCcLinkParamsStore()
-                .get(/* linkingStatically= */ false, /* linkShared= */ false)
-                .getDynamicLibrariesForRuntime())
+                .getCcExecutionDynamicLibraries()
+                .getExecutionDynamicLibraryArtifacts())
         .containsExactly(implSharedObjectLink);
   }
 
@@ -736,9 +734,9 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testContainingSourcesWithSameBaseName() throws Exception {
+  public void testContainingSourcesWithSameBaseNameWithNewObjPath() throws Exception {
     AnalysisMock.get().ccSupport().setup(mockToolsConfig);
-    useConfiguration("--cpu=k8");
+    useConfiguration("--cpu=k8", "--experimental_shortened_obj_file_path=true");
     setupPackagesForSourcesWithSameBaseNameTests();
     getConfiguredTarget("//foo:lib");
 
@@ -747,6 +745,32 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Artifact a2 = getBinArtifact("_objs/lib/2/a.pic.o", getConfiguredTarget("//foo:lib"));
     Artifact a3 = getBinArtifact("_objs/lib/3/A.pic.o", getConfiguredTarget("//foo:lib"));
     Artifact b = getBinArtifact("_objs/lib/b.pic.o", getConfiguredTarget("//foo:lib"));
+
+    assertThat(getGeneratingAction(a0)).isNotNull();
+    assertThat(getGeneratingAction(a1)).isNotNull();
+    assertThat(getGeneratingAction(a2)).isNotNull();
+    assertThat(getGeneratingAction(a3)).isNotNull();
+    assertThat(getGeneratingAction(b)).isNotNull();
+
+    assertThat(getGeneratingAction(a0).getInputs()).contains(getSourceArtifact("foo/a.cc"));
+    assertThat(getGeneratingAction(a1).getInputs()).contains(getSourceArtifact("foo/subpkg1/a.c"));
+    assertThat(getGeneratingAction(a2).getInputs()).contains(getSourceArtifact("bar/a.cpp"));
+    assertThat(getGeneratingAction(a3).getInputs()).contains(getSourceArtifact("foo/subpkg2/A.c"));
+    assertThat(getGeneratingAction(b).getInputs()).contains(getSourceArtifact("foo/subpkg1/b.cc"));
+  }
+
+  @Test
+  public void testContainingSourcesWithSameBaseNameWithLegacyObjPath() throws Exception {
+    AnalysisMock.get().ccSupport().setup(mockToolsConfig);
+    useConfiguration("--cpu=k8", "--experimental_shortened_obj_file_path=false");
+    setupPackagesForSourcesWithSameBaseNameTests();
+    getConfiguredTarget("//foo:lib");
+
+    Artifact a0 = getBinArtifact("_objs/lib/foo/a.pic.o", getConfiguredTarget("//foo:lib"));
+    Artifact a1 = getBinArtifact("_objs/lib/foo/subpkg1/a.pic.o", getConfiguredTarget("//foo:lib"));
+    Artifact a2 = getBinArtifact("_objs/lib/bar/a.pic.o", getConfiguredTarget("//foo:lib"));
+    Artifact a3 = getBinArtifact("_objs/lib/foo/subpkg2/A.pic.o", getConfiguredTarget("//foo:lib"));
+    Artifact b = getBinArtifact("_objs/lib/foo/subpkg1/b.pic.o", getConfiguredTarget("//foo:lib"));
 
     assertThat(getGeneratingAction(a0)).isNotNull();
     assertThat(getGeneratingAction(a1)).isNotNull();
@@ -1054,7 +1078,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testDoNotCompileSourceFilesInHeaders() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.PARSE_HEADERS_FEATURE_CONFIGURATION);
+        .setupCrosstool(mockToolsConfig, MockCcSupport.HEADER_PROCESSING_FEATURE_CONFIGURATION);
     useConfiguration("--features=parse_headers");
     ConfiguredTarget x =
         scratchConfiguredTarget("x", "x", "cc_library(name = 'x', hdrs = ['x.cc'])");
@@ -1065,7 +1089,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testProcessHeadersInDependencies() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.PARSE_HEADERS_FEATURE_CONFIGURATION);
+        .setupCrosstool(mockToolsConfig, MockCcSupport.HEADER_PROCESSING_FEATURE_CONFIGURATION);
     useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
     ConfiguredTarget x =
         scratchConfiguredTarget(
@@ -1081,7 +1105,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testProcessHeadersInDependenciesOfBinaries() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.PARSE_HEADERS_FEATURE_CONFIGURATION);
+        .setupCrosstool(mockToolsConfig, MockCcSupport.HEADER_PROCESSING_FEATURE_CONFIGURATION);
     useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
     ConfiguredTarget x =
         scratchConfiguredTarget(
@@ -1100,7 +1124,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testDoNotProcessHeadersInDependencies() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.PARSE_HEADERS_FEATURE_CONFIGURATION);
+        .setupCrosstool(mockToolsConfig, MockCcSupport.HEADER_PROCESSING_FEATURE_CONFIGURATION);
     useConfiguration("--features=parse_headers");
     ConfiguredTarget x =
         scratchConfiguredTarget(
@@ -1116,7 +1140,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testProcessHeadersInCompileOnlyMode() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.PARSE_HEADERS_FEATURE_CONFIGURATION);
+        .setupCrosstool(mockToolsConfig, MockCcSupport.HEADER_PROCESSING_FEATURE_CONFIGURATION);
     useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
     ConfiguredTarget y =
         scratchConfiguredTarget(
@@ -1407,7 +1431,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCcLinkParamsHasDynamicLibrariesForRuntime() throws Exception {
+  public void testCcLinkParamsHasExecutionDynamicLibraries() throws Exception {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(
@@ -1420,13 +1444,13 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
             .get(CcLinkingInfo.PROVIDER)
             .getCcLinkParamsStore()
             .getCcLinkParams(false, true)
-            .getDynamicLibrariesForRuntime();
+            .getExecutionDynamicLibraries();
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin a/libfoo.ifso");
     assertThat(artifactsToStrings(libraries)).contains("bin a/libfoo.so");
   }
 
   @Test
-  public void testCcLinkParamsHasDynamicLibrariesForRuntimeWithoutCopyFeature() throws Exception {
+  public void testCcLinkParamsHasExecutionDynamicLibrariesWithoutCopyFeature() throws Exception {
     useConfiguration("--cpu=k8");
     ConfiguredTarget target =
         scratchConfiguredTarget("a", "foo", "cc_library(name = 'foo', srcs = ['foo.cc'])");
@@ -1435,13 +1459,13 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
             .get(CcLinkingInfo.PROVIDER)
             .getCcLinkParamsStore()
             .getCcLinkParams(false, true)
-            .getDynamicLibrariesForRuntime();
+            .getExecutionDynamicLibraries();
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin _solib_k8/liba_Slibfoo.ifso");
     assertThat(artifactsToStrings(libraries)).contains("bin _solib_k8/liba_Slibfoo.so");
   }
 
   @Test
-  public void testCcLinkParamsDoNotHaveDynamicLibrariesForRuntime() throws Exception {
+  public void testCcLinkParamsDoNotHasExecutionDynamicLibraries() throws Exception {
     useConfiguration("--cpu=k8");
     ConfiguredTarget target =
         scratchConfiguredTarget(
@@ -1451,7 +1475,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
             .get(CcLinkingInfo.PROVIDER)
             .getCcLinkParamsStore()
             .getCcLinkParams(false, true)
-            .getDynamicLibrariesForRuntime();
+            .getExecutionDynamicLibraries();
     assertThat(artifactsToStrings(libraries)).isEmpty();
   }
 
@@ -1473,7 +1497,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testProcessedHeadersWithPicSharedLibsAndNoPicBinaries() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.PARSE_HEADERS_FEATURE_CONFIGURATION);
+        .setupCrosstool(mockToolsConfig,
+            MockCcSupport.HEADER_PROCESSING_FEATURE_CONFIGURATION);
     useConfiguration("--features=parse_headers", "-c", "opt");
     // Should not crash
     scratchConfiguredTarget("a", "a", "cc_library(name='a', hdrs=['a.h'])");

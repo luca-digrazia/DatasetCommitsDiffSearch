@@ -278,9 +278,4 @@ public class RecordingSkyFunctionEnvironment implements Environment {
   public GroupedList<SkyKey> getTemporaryDirectDeps() {
     return delegate.getTemporaryDirectDeps();
   }
-
-  @Override
-  public void injectVersionForNonHermeticFunction(Version version) {
-    delegate.injectVersionForNonHermeticFunction(version);
-  }
 }

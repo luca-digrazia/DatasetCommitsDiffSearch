@@ -22,7 +22,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.truth.Truth;
@@ -479,11 +478,9 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//java/com/google/exports:dummy");
     List<Label> exports = ImmutableList.copyOf(
         target.getProvider(JavaExportsProvider.class).getTransitiveExports());
-    assertThat(exports)
-        .containsExactly(
-            Label.parseAbsolute("//java/com/google/exports:dummy2", ImmutableMap.of()),
-            Label.parseAbsolute("//java/com/google/exports:dummy3", ImmutableMap.of()),
-            Label.parseAbsolute("//java/com/google/exports:dummy4", ImmutableMap.of()));
+    assertThat(exports).containsExactly(Label.parseAbsolute("//java/com/google/exports:dummy2"),
+        Label.parseAbsolute("//java/com/google/exports:dummy3"),
+        Label.parseAbsolute("//java/com/google/exports:dummy4"));
     assertNoEvents();
   }
 
@@ -946,22 +943,22 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
             Iterables.transform(
                 foo.get(AndroidResourcesInfo.PROVIDER).getTransitiveAndroidResources(), getLabel))
         .containsExactly(
-            Label.parseAbsolute("//java/apps/android:lib", ImmutableMap.of()),
-            Label.parseAbsolute("//java/apps/android:bar", ImmutableMap.of()));
+            Label.parseAbsolute("//java/apps/android:lib"),
+            Label.parseAbsolute("//java/apps/android:bar"));
     assertThat(
             Iterables.transform(
                 foo.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources(), getLabel))
-        .containsExactly(Label.parseAbsolute("//java/apps/android:foo", ImmutableMap.of()));
+        .containsExactly(Label.parseAbsolute("//java/apps/android:foo"));
 
     ConfiguredTarget lib = getConfiguredTarget("//java/apps/android:lib");
     assertThat(
             Iterables.transform(
                 lib.get(AndroidResourcesInfo.PROVIDER).getTransitiveAndroidResources(), getLabel))
-        .containsExactly(Label.parseAbsolute("//java/apps/android:bar", ImmutableMap.of()));
+        .containsExactly(Label.parseAbsolute("//java/apps/android:bar"));
     assertThat(
             Iterables.transform(
                 lib.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources(), getLabel))
-        .containsExactly(Label.parseAbsolute("//java/apps/android:lib", ImmutableMap.of()));
+        .containsExactly(Label.parseAbsolute("//java/apps/android:lib"));
 
     ConfiguredTarget libNeverlink = getConfiguredTarget("//java/apps/android:lib_neverlink");
     assertThat(libNeverlink.get(AndroidResourcesInfo.PROVIDER).getTransitiveAndroidResources())

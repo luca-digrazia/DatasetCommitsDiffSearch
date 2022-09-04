@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -27,7 +28,6 @@ import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
@@ -53,11 +53,11 @@ class ArtifactFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws ArtifactFunctionException, InterruptedException {
-    ArtifactSkyKey artifactSkyKey = (ArtifactSkyKey) skyKey.argument();
-    Artifact artifact = artifactSkyKey.getArtifact();
+    Artifact artifact = ArtifactSkyKey.artifact(skyKey);
+    boolean isMandatory = ArtifactSkyKey.isMandatory(skyKey);
     if (artifact.isSourceArtifact()) {
       try {
-        return createSourceValue(artifact, artifactSkyKey.isMandatory(), env);
+        return createSourceValue(artifact, isMandatory, env);
       } catch (MissingInputFileException e) {
         // The error is not necessarily truly transient, but we mark it as such because we have
         // the above side effect of posting an event to the EventBus. Importantly, that event
@@ -279,8 +279,7 @@ class ArtifactFunction implements SkyFunction {
       throws InterruptedException {
     // This artifact aggregates other artifacts. Keep track of them so callers can find them.
     ImmutableList.Builder<Pair<Artifact, FileArtifactValue>> inputs = ImmutableList.builder();
-    for (Map.Entry<SkyKey, SkyValue> entry :
-        env.getValues(ArtifactSkyKey.mandatoryKeys(action.getInputs())).entrySet()) {
+    for (Map.Entry<SkyKey, SkyValue> entry : env.getValues(action.getInputs()).entrySet()) {
       Artifact input = ArtifactSkyKey.artifact(entry.getKey());
       SkyValue inputValue = entry.getValue();
       Preconditions.checkNotNull(inputValue, "%s has null dep %s", artifact, input);
@@ -316,9 +315,10 @@ class ArtifactFunction implements SkyFunction {
 
   @Override
   public String extractTag(SkyKey skyKey) {
-    return Label.print(((ArtifactSkyKey) skyKey.argument()).getArtifact().getOwner());
+    return Label.print(ArtifactSkyKey.artifact(skyKey).getOwner());
   }
 
+  @VisibleForTesting
   static ActionLookupKey getActionLookupKey(Artifact artifact) {
     ArtifactOwner artifactOwner = artifact.getArtifactOwner();
 
@@ -327,7 +327,7 @@ class ArtifactFunction implements SkyFunction {
   }
 
   @Nullable
-  static ActionLookupValue getActionLookupValue(
+  private static ActionLookupValue getActionLookupValue(
       SkyKey actionLookupKey, SkyFunction.Environment env, Artifact artifact)
       throws InterruptedException {
     ActionLookupValue value = (ActionLookupValue) env.getValue(actionLookupKey);

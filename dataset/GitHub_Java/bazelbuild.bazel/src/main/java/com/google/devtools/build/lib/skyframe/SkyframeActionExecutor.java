@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.actions.AlreadyReportedActionExecutionExcep
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.OwnerlessArtifactWrapper;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
 import com.google.devtools.build.lib.actions.CachedActionEvent;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
@@ -77,7 +76,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -521,8 +519,7 @@ public final class SkyframeActionExecutor {
       Map<Artifact, Collection<Artifact>> expandedInputs,
       ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> inputFilesetMappings,
       @Nullable ActionFileSystem actionFileSystem) {
-    FileOutErr fileOutErr = actionLogBufferPathGenerator.generate(
-        ArtifactPathResolver.createPathResolver(actionFileSystem, executorEngine.getExecRoot()));
+    FileOutErr fileOutErr = actionLogBufferPathGenerator.generate();
     return new ActionExecutionContext(
         executorEngine,
         createFileCache(graphFileCache, actionFileSystem),
@@ -549,16 +546,11 @@ public final class SkyframeActionExecutor {
       long actionStartTime,
       Iterable<Artifact> resolvedCacheArtifacts,
       Map<String, String> clientEnv) {
-    Token token;
-    try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION_CHECK, action.describe())) {
-      token =
-          actionCacheChecker.getTokenIfNeedToExecute(
-              action,
-              resolvedCacheArtifacts,
-              clientEnv,
-              explain ? reporter : null,
-              metadataHandler);
-    }
+    startProfileAction(ProfilerTask.ACTION_CHECK, action);
+    Token token =
+        actionCacheChecker.getTokenIfNeedToExecute(
+            action, resolvedCacheArtifacts, clientEnv, explain ? reporter : null, metadataHandler);
+    profiler.completeTask(ProfilerTask.ACTION_CHECK);
     if (token == null) {
       boolean eventPosted = false;
       // Notify BlazeRuntimeStatistics about the action middleman 'execution'.
@@ -657,8 +649,7 @@ public final class SkyframeActionExecutor {
             actionInputPrefetcher,
             actionKeyContext,
             metadataHandler,
-            actionLogBufferPathGenerator.generate(ArtifactPathResolver.createPathResolver(
-                actionFileSystem, executorEngine.getExecRoot())),
+            actionLogBufferPathGenerator.generate(),
             clientEnv,
             env,
             actionFileSystem);
@@ -711,6 +702,10 @@ public final class SkyframeActionExecutor {
     this.actionInputPrefetcher = actionInputPrefetcher;
   }
 
+  private void startProfileAction(ProfilerTask task, Action action) {
+    profiler.startTask(task, action.describe());
+  }
+
   private class ActionRunner implements Callable<ActionExecutionValue> {
     private final ExtendedEventHandler eventHandler;
     private final Action action;
@@ -736,7 +731,8 @@ public final class SkyframeActionExecutor {
 
     @Override
     public ActionExecutionValue call() throws ActionExecutionException, InterruptedException {
-      try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION, action.describe())) {
+      startProfileAction(ProfilerTask.ACTION, action);
+      try {
         if (actionCacheChecker.isActionExecutionProhibited(action)) {
           // We can't execute an action (e.g. because --check_???_up_to_date option was used). Fail
           // the build instead.
@@ -770,6 +766,8 @@ public final class SkyframeActionExecutor {
             metadataHandler.getOutputTreeArtifactData(),
             metadataHandler.getAdditionalOutputData(),
             actionExecutionContext.getOutputSymlinks());
+      } finally {
+        profiler.completeTask(ProfilerTask.ACTION);
       }
     }
   }
@@ -962,11 +960,12 @@ public final class SkyframeActionExecutor {
       Action action,
       ActionExecutionContext actionExecutionContext)
           throws ActionExecutionException, InterruptedException {
+    startProfileAction(ProfilerTask.ACTION_EXECUTE, action);
     // ActionExecutionExceptions that occur as the thread is interrupted are
     // assumed to be a result of that, so we throw InterruptedException
     // instead.
     FileOutErr outErrBuffer = actionExecutionContext.getFileOutErr();
-    try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION_EXECUTE, action.describe())) {
+    try {
       ActionResult actionResult = action.execute(actionExecutionContext);
       if (actionResult != ActionResult.EMPTY) {
         eventHandler.post(new ActionResultReceivedEvent(action, actionResult));
@@ -984,6 +983,8 @@ public final class SkyframeActionExecutor {
       // Defer reporting action success until outputs are checked
     } catch (ActionExecutionException e) {
       throw processAndThrow(eventHandler, e, action, outErrBuffer, ErrorTiming.AFTER_EXECUTION);
+    } finally {
+      profiler.completeTask(ProfilerTask.ACTION_EXECUTE);
     }
     return false;
   }
@@ -998,11 +999,14 @@ public final class SkyframeActionExecutor {
       Preconditions.checkState(action.inputsDiscovered(),
           "Action %s successfully executed, but inputs still not known", action);
 
-      try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION_COMPLETE, action.describe())) {
+      startProfileAction(ProfilerTask.ACTION_COMPLETE, action);
+      try {
         if (!checkOutputs(action, metadataHandler)) {
           reportError("not all outputs were created or valid", null, action,
               outputAlreadyDumped ? null : fileOutErr);
         }
+      } finally {
+        profiler.completeTask(ProfilerTask.ACTION_COMPLETE);
       }
 
       if (outputService != null) {

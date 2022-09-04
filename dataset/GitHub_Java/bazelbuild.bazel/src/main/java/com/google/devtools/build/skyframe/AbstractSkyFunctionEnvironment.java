@@ -28,12 +28,6 @@ import javax.annotation.Nullable;
 @VisibleForTesting
 public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Environment {
   protected boolean valuesMissing = false;
-  // Hack for the common case that there are no errors in the retrieved values. In that case, we
-  // don't have to filter out any impermissible exceptions. Hack because we communicate this in an
-  // out-of-band way from #getValueOrUntypedExceptions. It's out-of-band because we don't want to
-  // incur the garbage overhead of returning a more complex data structure from
-  // #getValueOrUntypedExceptions.
-  protected boolean errorMightHaveBeenFound = false;
   @Nullable private final GroupedList<SkyKey> temporaryDirectDeps;
 
   public AbstractSkyFunctionEnvironment(@Nullable GroupedList<SkyKey> temporaryDirectDeps) {
@@ -140,7 +134,7 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
   public Map<SkyKey, SkyValue> getValues(Iterable<? extends SkyKey> depKeys)
       throws InterruptedException {
     Map<SkyKey, ValueOrUntypedException> valuesOrExceptions = getValueOrUntypedExceptions(depKeys);
-    checkValuesMissingBecauseOfFilteredError(valuesOrExceptions, null, null, null, null, null);
+    checkValuesAreMissing5(valuesOrExceptions, null, null, null, null, null);
     return Collections.unmodifiableMap(
         Maps.transformValues(valuesOrExceptions, ValueOrUntypedException::getValue));
   }
@@ -150,8 +144,7 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
       Iterable<? extends SkyKey> depKeys, Class<E> exceptionClass) throws InterruptedException {
     SkyFunctionException.validateExceptionType(exceptionClass);
     Map<SkyKey, ValueOrUntypedException> valuesOrExceptions = getValueOrUntypedExceptions(depKeys);
-    checkValuesMissingBecauseOfFilteredError(
-        valuesOrExceptions, exceptionClass, null, null, null, null);
+    checkValuesAreMissing5(valuesOrExceptions, exceptionClass, null, null, null, null);
     return Collections.unmodifiableMap(
         Maps.transformValues(
             valuesOrExceptions, voe -> ValueOrException.fromUntypedException(voe, exceptionClass)));
@@ -165,8 +158,7 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
     SkyFunctionException.validateExceptionType(exceptionClass1);
     SkyFunctionException.validateExceptionType(exceptionClass2);
     Map<SkyKey, ValueOrUntypedException> valuesOrExceptions = getValueOrUntypedExceptions(depKeys);
-    checkValuesMissingBecauseOfFilteredError(
-        valuesOrExceptions, exceptionClass1, exceptionClass2, null, null, null);
+    checkValuesAreMissing5(valuesOrExceptions, exceptionClass1, exceptionClass2, null, null, null);
     return Collections.unmodifiableMap(
         Maps.transformValues(
             valuesOrExceptions,
@@ -185,7 +177,7 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
     SkyFunctionException.validateExceptionType(exceptionClass2);
     SkyFunctionException.validateExceptionType(exceptionClass3);
     Map<SkyKey, ValueOrUntypedException> valuesOrExceptions = getValueOrUntypedExceptions(depKeys);
-    checkValuesMissingBecauseOfFilteredError(
+    checkValuesAreMissing5(
         valuesOrExceptions, exceptionClass1, exceptionClass2, exceptionClass3, null, null);
     return Collections.unmodifiableMap(
         Maps.transformValues(
@@ -209,7 +201,7 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
     SkyFunctionException.validateExceptionType(exceptionClass3);
     SkyFunctionException.validateExceptionType(exceptionClass4);
     Map<SkyKey, ValueOrUntypedException> valuesOrExceptions = getValueOrUntypedExceptions(depKeys);
-    checkValuesMissingBecauseOfFilteredError(
+    checkValuesAreMissing5(
         valuesOrExceptions,
         exceptionClass1,
         exceptionClass2,
@@ -245,7 +237,7 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
     SkyFunctionException.validateExceptionType(exceptionClass4);
     SkyFunctionException.validateExceptionType(exceptionClass5);
     Map<SkyKey, ValueOrUntypedException> valuesOrExceptions = getValueOrUntypedExceptions(depKeys);
-    checkValuesMissingBecauseOfFilteredError(
+    checkValuesAreMissing5(
         valuesOrExceptions,
         exceptionClass1,
         exceptionClass2,
@@ -271,17 +263,13 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
           E3 extends Exception,
           E4 extends Exception,
           E5 extends Exception>
-      void checkValuesMissingBecauseOfFilteredError(
+      void checkValuesAreMissing5(
           Map<SkyKey, ValueOrUntypedException> voes,
           @Nullable Class<E1> exceptionClass1,
           @Nullable Class<E2> exceptionClass2,
           @Nullable Class<E3> exceptionClass3,
           @Nullable Class<E4> exceptionClass4,
           @Nullable Class<E5> exceptionClass5) {
-    if (!errorMightHaveBeenFound) {
-      // Short-circuit in the common case of no errors.
-      return;
-    }
     for (ValueOrUntypedException voe : voes.values()) {
       SkyValue value = voe.getValue();
       if (value == null) {
