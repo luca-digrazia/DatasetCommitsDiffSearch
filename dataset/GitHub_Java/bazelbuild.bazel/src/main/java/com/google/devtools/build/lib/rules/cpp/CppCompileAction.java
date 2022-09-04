@@ -61,11 +61,10 @@ import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.MissingNestedSetException;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.exec.SpawnStrategyResolver;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
@@ -76,7 +75,10 @@ import com.google.devtools.build.lib.server.FailureDetails.CppCompile;
 import com.google.devtools.build.lib.server.FailureDetails.CppCompile.Code;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.ActionExecutionValue;
-import com.google.devtools.build.lib.starlarkbuildapi.CommandLineArgsApi;
+import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -106,9 +108,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkList;
 
 /** Action that represents some kind of C++ compilation step. */
 @ThreadCompatible
@@ -565,7 +564,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
             systemIncludeDirs,
             actionExecutionContext
                 .getOptions()
-                .getOptions(BuildLanguageOptions.class)
+                .getOptions(StarlarkSemanticsOptions.class)
                 .experimentalSiblingRepositoryLayout);
       }
 
@@ -626,9 +625,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         String message = "Timed out expanding modules";
         DetailedExitCode code = createDetailedExitCode(message, Code.MODULE_EXPANSION_TIMEOUT);
         throw new ActionExecutionException(message, this, /*catastrophe=*/ false, code);
-      } catch (MissingNestedSetException e) {
-        // TODO(b/168360382): Make this non-fatal by treating it like a timeout.
-        throw new IllegalStateException(e);
       }
 
       for (Artifact module : modules) {
@@ -707,7 +703,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     return compileCommandLine.getSourceFile();
   }
 
-  /** Returns the path where gcc should put its result. */
+  /**
+   * Returns the path where gcc should put its result.
+   */
   public Artifact getOutputFile() {
     return outputFile;
   }
@@ -830,7 +828,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   private List<String> getCmdlineIncludes(List<String> args) {
     ImmutableList.Builder<String> cmdlineIncludes = ImmutableList.builder();
-    for (Iterator<String> argi = args.iterator(); argi.hasNext(); ) {
+    for (Iterator<String> argi = args.iterator(); argi.hasNext();) {
       String arg = argi.next();
       if (arg.equals("-include") && argi.hasNext()) {
         cmdlineIncludes.add(argi.next());
@@ -866,8 +864,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   /**
-   * Returns the list of "-D" arguments that should be used by this gcc invocation. Only used for
-   * testing.
+   * Returns the list of "-D" arguments that should be used by this gcc
+   * invocation. Only used for testing.
    */
   @VisibleForTesting
   public ImmutableCollection<String> getDefines() {
@@ -1056,8 +1054,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
           if (errors.hasProblems()) {
             System.err.println("ERROR: Include(s) were not in declared srcs:");
           } else {
-            System.err.println(
-                "INFO: Include(s) were OK for '" + getSourceFile() + "', declared srcs:");
+            System.err.println("INFO: Include(s) were OK for '" + getSourceFile()
+                + "', declared srcs:");
           }
           for (Artifact a : ccCompilationContext.getDeclaredIncludeSrcs().toList()) {
             System.err.println("  '" + a.toDetailString() + "'");
@@ -1150,13 +1148,13 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       return true; // Legacy behavior nobody understands anymore.
     }
     if (declaredIncludeDirs.contains(includeDir)) {
-      return true; // OK: quick exact match.
+      return true;  // OK: quick exact match.
     }
     // Not found in the quick lookup: try the wildcards.
     for (PathFragment declared : declaredIncludeDirs) {
       if (declared.getBaseName().equals("**")) {
         if (includeDir.startsWith(declared.getParentDirectory())) {
-          return true; // OK: under a wildcard dir.
+          return true;  // OK: under a wildcard dir.
         }
       }
     }
@@ -1175,15 +1173,15 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       packagesToCheckForBuildFiles.add(dir);
       dir = dir.getParentDirectory();
       if (dir.equals(root.asPath())) {
-        return false; // Bad: at the top, give up.
+        return false;  // Bad: at the top, give up.
       }
       if (declaredIncludeDirs.contains(root.relativize(dir))) {
         for (Path dirOrPackage : packagesToCheckForBuildFiles) {
           if (dirOrPackage.getRelative(BUILD_PATH_FRAGMENT).exists()) {
-            return false; // Bad: this is a sub-package, not a subdir of a declared package.
+            return false;  // Bad: this is a sub-package, not a subdir of a declared package.
           }
         }
-        return true; // OK: found under a declared dir.
+        return true;  // OK: found under a declared dir.
       }
     }
   }
@@ -1284,20 +1282,22 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   /**
-   * Returns the directories in which to look for headers (pertains to headers not specifically
+   * Return the directories in which to look for headers (pertains to headers not specifically
    * listed in {@code declaredIncludeSrcs}).
    */
   public NestedSet<PathFragment> getDeclaredIncludeDirs() {
     return ccCompilationContext.getLooseHdrsDirs();
   }
 
-  /** Returns explicitly listed header files. */
+  /** Return explicitly listed header files. */
   @Override
   public NestedSet<Artifact> getDeclaredIncludeSrcs() {
     return ccCompilationContext.getDeclaredIncludeSrcs();
   }
 
-  /** Estimates resource consumption when this action is executed locally. */
+  /**
+   * Estimate resource consumption when this action is executed locally.
+   */
   public ResourceSet estimateResourceConsumptionLocal() {
     return AbstractAction.DEFAULT_RESOURCE_SET;
   }
@@ -1856,7 +1856,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       boolean siblingRepositoryLayout =
           actionExecutionContext
               .getOptions()
-              .getOptions(BuildLanguageOptions.class)
+              .getOptions(StarlarkSemanticsOptions.class)
               .experimentalSiblingRepositoryLayout;
 
       NestedSet<Artifact> discoveredInputs;
