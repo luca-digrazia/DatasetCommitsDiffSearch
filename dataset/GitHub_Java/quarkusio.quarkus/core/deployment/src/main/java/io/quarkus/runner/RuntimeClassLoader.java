@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -153,12 +154,55 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         if (ex != null) {
             return ex;
         }
-
-        if (appClasses.containsKey(name)
-                || (!frameworkClasses.contains(name) && getClassInApplicationClassPaths(name) != null)) {
+        if (appClasses.containsKey(name)) {
             return findClass(name);
         }
+        if (frameworkClasses.contains(name)) {
+            return super.loadClass(name, resolve);
+        }
 
+        final String fileName = name.replace('.', '/') + ".class";
+        Path classLoc = null;
+        for (Path i : applicationClasses) {
+            classLoc = i.resolve(fileName);
+            if (Files.exists(classLoc)) {
+                break;
+            }
+        }
+        if (classLoc != null && Files.exists(classLoc)) {
+            CompletableFuture<Class<?>> res = new CompletableFuture<>();
+            Future<Class<?>> existing = loadingClasses.putIfAbsent(name, res);
+            if (existing != null) {
+                try {
+                    return existing.get();
+                } catch (Exception e) {
+                    throw new ClassNotFoundException("Failed to load " + name, e);
+                }
+            }
+            try {
+                byte[] buf = new byte[1024];
+                int r;
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try (FileInputStream in = new FileInputStream(classLoc.toFile())) {
+                    while ((r = in.read(buf)) > 0) {
+                        out.write(buf, 0, r);
+                    }
+                } catch (IOException e) {
+                    throw new ClassNotFoundException("Failed to load class", e);
+                }
+                byte[] bytes = out.toByteArray();
+                bytes = handleTransform(name, bytes);
+                Class<?> clazz = defineClass(name, bytes, 0, bytes.length);
+                res.complete(clazz);
+                return clazz;
+            } catch (RuntimeException e) {
+                res.completeExceptionally(e);
+                throw e;
+            } catch (Throwable e) {
+                res.completeExceptionally(e);
+                throw e;
+            }
+        }
         return super.loadClass(name, resolve);
     }
 
@@ -216,72 +260,28 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         if (existing != null) {
             return existing;
         }
-
         byte[] bytes = appClasses.get(name);
-        if (bytes != null) {
-            try {
-                definePackage(name);
-                return defineClass(name, bytes, 0, bytes.length);
-            } catch (Error e) {
-                //potential race conditions if another thread is loading the same class
-                existing = findLoadedClass(name);
-                if (existing != null) {
-                    return existing;
-                }
-                throw e;
-            }
+        if (bytes == null) {
+            throw new ClassNotFoundException(name);
         }
-
-        Path classLoc = getClassInApplicationClassPaths(name);
-
-        if (classLoc != null) {
-            CompletableFuture<Class<?>> res = new CompletableFuture<>();
-            Future<Class<?>> loadingClass = loadingClasses.putIfAbsent(name, res);
-            if (loadingClass != null) {
-                try {
-                    return loadingClass.get();
-                } catch (Exception e) {
-                    throw new ClassNotFoundException("Failed to load " + name, e);
-                }
-            }
-            try {
-                byte[] buf = new byte[1024];
-                int r;
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                try (FileInputStream in = new FileInputStream(classLoc.toFile())) {
-                    while ((r = in.read(buf)) > 0) {
-                        out.write(buf, 0, r);
+        try {
+            final String pkgName = getPackageNameFromClassName(name);
+            if ((pkgName != null) && getPackage(pkgName) == null) {
+                synchronized (getClassLoadingLock(pkgName)) {
+                    if (getPackage(pkgName) == null) {
+                        // this could certainly be improved to use the actual manifest
+                        definePackage(pkgName, null, null, null, null, null, null, null);
                     }
-                } catch (IOException e) {
-                    throw new ClassNotFoundException("Failed to load class", e);
-                }
-                bytes = out.toByteArray();
-                bytes = handleTransform(name, bytes);
-                definePackage(name);
-                Class<?> clazz = defineClass(name, bytes, 0, bytes.length);
-                res.complete(clazz);
-                return clazz;
-            } catch (RuntimeException e) {
-                res.completeExceptionally(e);
-                throw e;
-            } catch (Throwable e) {
-                res.completeExceptionally(e);
-                throw e;
-            }
-        }
-
-        throw new ClassNotFoundException(name);
-    }
-
-    private void definePackage(String name) {
-        final String pkgName = getPackageNameFromClassName(name);
-        if ((pkgName != null) && getPackage(pkgName) == null) {
-            synchronized (getClassLoadingLock(pkgName)) {
-                if (getPackage(pkgName) == null) {
-                    // this could certainly be improved to use the actual manifest
-                    definePackage(pkgName, null, null, null, null, null, null, null);
                 }
             }
+            return defineClass(name, bytes, 0, bytes.length);
+        } catch (Error e) {
+            //potential race conditions if another thread is loading the same class
+            existing = findLoadedClass(name);
+            if (existing != null) {
+                return existing;
+            }
+            throw e;
         }
     }
 
@@ -365,18 +365,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         } catch (IOException e) {
             throw new IllegalArgumentException("Unable to read file " + path, e);
         }
-    }
-
-    private Path getClassInApplicationClassPaths(String name) {
-        final String fileName = name.replace('.', '/') + ".class";
-        Path classLocation;
-        for (Path i : applicationClasses) {
-            classLocation = i.resolve(fileName);
-            if (Files.exists(classLocation)) {
-                return classLocation;
-            }
-        }
-        return null;
     }
 
     private URL findApplicationResource(String name) {
