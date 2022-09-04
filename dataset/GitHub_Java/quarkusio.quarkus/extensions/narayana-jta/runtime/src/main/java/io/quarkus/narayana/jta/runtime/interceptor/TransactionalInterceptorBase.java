@@ -82,7 +82,7 @@ public abstract class TransactionalInterceptorBase implements Serializable {
 
     private TransactionConfiguration getTransactionConfiguration(InvocationContext ic) {
         TransactionConfiguration configuration = ic.getMethod().getAnnotation(TransactionConfiguration.class);
-        if (configuration == null) {
+        if (ic == null) {
             return ic.getTarget().getClass().getAnnotation(TransactionConfiguration.class);
         }
         return configuration;
