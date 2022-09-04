@@ -49,7 +49,6 @@ class LambdaClassFixer extends ClassVisitor {
   private final ClassReaderFactory factory;
   private final ImmutableSet<String> interfaceLambdaMethods;
   private final boolean allowDefaultMethods;
-  private final boolean copyBridgeMethods;
   private final HashSet<String> implementedMethods = new HashSet<>();
   private final LinkedHashSet<String> methodsToMoveIn = new LinkedHashSet<>();
 
@@ -63,16 +62,12 @@ class LambdaClassFixer extends ClassVisitor {
   private String signature;
 
   public LambdaClassFixer(ClassVisitor dest, LambdaInfo lambdaInfo, ClassReaderFactory factory,
-      ImmutableSet<String> interfaceLambdaMethods, boolean allowDefaultMethods,
-      boolean copyBridgeMethods) {
+      ImmutableSet<String> interfaceLambdaMethods, boolean allowDefaultMethods) {
     super(Opcodes.ASM5, dest);
-    checkArgument(!allowDefaultMethods || interfaceLambdaMethods.isEmpty());
-    checkArgument(allowDefaultMethods || copyBridgeMethods);
     this.lambdaInfo = lambdaInfo;
     this.factory = factory;
     this.interfaceLambdaMethods = interfaceLambdaMethods;
     this.allowDefaultMethods = allowDefaultMethods;
-    this.copyBridgeMethods = copyBridgeMethods;
   }
 
   @Override
@@ -185,7 +180,7 @@ class LambdaClassFixer extends ClassVisitor {
     }
 
     copyRewrittenLambdaMethods();
-    if (copyBridgeMethods) {
+    if (!allowDefaultMethods) {
       copyBridgeMethods(interfaces);
     }
     super.visitEnd();
@@ -332,9 +327,8 @@ class LambdaClassFixer extends ClassVisitor {
         // Only copy bridge methods--hand-written default methods are not supported--and only if
         // we haven't seen the method already.
         if (implementedMethods.add(name + ":" + desc)) {
-          MethodVisitor result =
-              LambdaClassFixer.super.visitMethod(access, name, desc, signature, exceptions);
-          return allowDefaultMethods ? result : new AvoidJacocoInit(result);
+          return new AvoidJacocoInit(
+              LambdaClassFixer.super.visitMethod(access, name, desc, signature, exceptions));
         }
       }
       return null;
@@ -354,7 +348,6 @@ class LambdaClassFixer extends ClassVisitor {
     public CopyOneMethod(String methodName) {
       // No delegate visitor; instead we'll add methods to the outer class's delegate where needed
       super(Opcodes.ASM5);
-      checkState(!allowDefaultMethods, "Couldn't copy interface lambda bodies");
       this.methodName = methodName;
     }
 
