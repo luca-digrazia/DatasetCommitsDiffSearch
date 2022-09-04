@@ -16,7 +16,6 @@ import org.junit.Test;
 import java.io.Serializable;
 import java.util.List;
 
-import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,7 +88,6 @@ public class AbstractDAOTest {
     }
 
     private final SessionFactory factory = mock(SessionFactory.class);
-    private final CriteriaBuilder criteriaBuilder = mock(CriteriaBuilder.class);
     private final Criteria criteria = mock(Criteria.class);
     @SuppressWarnings("unchecked")
     private final CriteriaQuery<String> criteriaQuery = mock(CriteriaQuery.class);
@@ -100,10 +98,8 @@ public class AbstractDAOTest {
 
     @Before
     public void setup() throws Exception {
-        when(criteriaBuilder.createQuery(same(String.class))).thenReturn(criteriaQuery);
         when(factory.getCurrentSession()).thenReturn(session);
         when(session.createCriteria(String.class)).thenReturn(criteria);
-        when(session.getCriteriaBuilder()).thenReturn(criteriaBuilder);
         when(session.getNamedQuery(anyString())).thenReturn(query);
         when(session.createQuery(anyString(), same(String.class))).thenReturn(query);
     }
@@ -137,20 +133,11 @@ public class AbstractDAOTest {
     }
 
     @Test
-    public void createsNewCriteria() throws Exception {
+    public void createsNewCriteriaQueries() throws Exception {
         assertThat(dao.criteria())
                 .isEqualTo(criteria);
 
         verify(session).createCriteria(String.class);
-    }
-
-    @Test
-    public void createsNewCriteriaQueries() throws Exception {
-        assertThat(dao.criteriaQuery())
-                .isEqualTo(criteriaQuery);
-
-        verify(session).getCriteriaBuilder();
-        verify(criteriaBuilder).createQuery(String.class);
     }
 
     @Test
