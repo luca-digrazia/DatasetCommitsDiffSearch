@@ -1,7 +1,6 @@
 package io.quarkus.qute.runtime;
 
 import java.util.List;
-import java.util.Map;
 
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -19,19 +18,5 @@ public class QuteConfig {
      */
     @ConfigItem(defaultValue = "qute.html,qute.txt,html,txt")
     public List<String> suffixes;
-
-    /**
-     * Specify whether the parser should remove standalone lines from the output. A standalone line is a line that contains
-     * only section tags, parameter declarations and whitespace characters.
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean removeStandaloneLines;
-
-    /**
-     * The additional map of suffixes to content types. This map is used when working with template variants. By default, the
-     * {@link java.net.URLConnection#getFileNameMap()} is used to determine the content type of a template file.
-     */
-    @ConfigItem
-    public Map<String, String> contentTypes;
 
 }
