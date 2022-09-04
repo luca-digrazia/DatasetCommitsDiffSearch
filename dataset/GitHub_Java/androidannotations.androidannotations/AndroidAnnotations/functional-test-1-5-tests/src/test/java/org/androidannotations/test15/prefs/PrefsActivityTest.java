@@ -15,22 +15,26 @@
  */
 package org.androidannotations.test15.prefs;
 
-import android.content.SharedPreferences;
+import static org.fest.assertions.Assertions.assertThat;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Set;
+import java.util.TreeSet;
+
 import org.androidannotations.api.sharedpreferences.SetXmlSerializer;
+import org.androidannotations.test15.AndroidAnnotationsTestRunner;
 import org.androidannotations.test15.R;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.robolectric.Robolectric;
-import org.robolectric.RobolectricTestRunner;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.TreeSet;
+import com.xtremelabs.robolectric.Robolectric;
+import com.xtremelabs.robolectric.shadows.ShadowXml;
 
-import static org.fest.assertions.Assertions.assertThat;
+import android.content.SharedPreferences;
 
-@RunWith(RobolectricTestRunner.class)
+@RunWith(AndroidAnnotationsTestRunner.class)
 public class PrefsActivityTest {
 
 	private PrefsActivity_ activity;
@@ -40,9 +44,11 @@ public class PrefsActivityTest {
 
 	@Before
 	public void setup() {
-		activity = Robolectric.buildActivity(PrefsActivity_.class).create().get();
+		activity = new PrefsActivity_();
+		activity.onCreate(null);
 		somePrefs = activity.somePrefs;
 		sharedPref = somePrefs.getSharedPreferences();
+		Robolectric.bindShadowClass(ShadowXml.class);
 	}
 
 	@Test
@@ -53,11 +59,6 @@ public class PrefsActivityTest {
 	@Test
 	public void sharedPrefsNotNull() {
 		assertThat(sharedPref).isNotNull();
-	}
-
-	@Test
-	public void innerPrefsNotNull() {
-		assertThat(activity.innerPrefs).isNotNull();
 	}
 
 	@Test
@@ -82,8 +83,15 @@ public class PrefsActivityTest {
 	@Test
 	public void putStringSet() {
 		Set<String> values = new TreeSet<String>(Arrays.asList("1", "2", "3"));
+		
 		somePrefs.types().put(values);
-		assertThat(sharedPref.getStringSet("types", null)).isEqualTo(values);
+		assertThat(SetXmlSerializer.deserialize(sharedPref.getString("types", null))).isEqualTo(values);
+	}
+	
+	@Test
+	public void putNullSet() {
+		somePrefs.types().put(null);
+		assertThat(SetXmlSerializer.deserialize(sharedPref.getString("types", null))).isEqualTo(Collections.emptySet());
 	}
 
 	@Test
@@ -165,23 +173,14 @@ public class PrefsActivityTest {
 	}
 
 	@Test
-	public void getStringSetCompat() {
-		Set<String> values = new TreeSet<String>(Arrays.asList("1", "2", "3"));
-		
-		sharedPref.edit().putString("types", SetXmlSerializer.serialize(values)).commit();
-		
-		assertThat(somePrefs.types().get()).isEqualTo(values);
-	}
-
-	@Test
 	public void getStringSet() {
 		Set<String> values = new TreeSet<String>(Arrays.asList("1", "2", "3"));
+		sharedPref.edit().putString("types", SetXmlSerializer.serialize(values)).commit();
 		
-		sharedPref.edit().putStringSet("types", values).commit();
-		
-		assertThat(somePrefs.types().get()).isEqualTo(values);
+		Set<String> set = somePrefs.types().get();
+		assertThat(values).isEqualTo(set);
 	}
-	
+
 	@Test
 	public void defaultValue() {
 		assertThat(somePrefs.name().get()).isEqualTo("John");
@@ -204,23 +203,5 @@ public class PrefsActivityTest {
 	public void stringResourcePrefKey() {
 		somePrefs.stringResKeyPref().put(88);
 		assertThat(sharedPref.getInt(activity.getString(R.string.prefStringKey), 0)).isEqualTo(88);
-	}
-
-	@Test
-	public void setStringInIntFieldAndGetInt() {
-		sharedPref.edit().putString("age", "18").commit();
-		assertThat(somePrefs.age().get()).isEqualTo(18);
-	}
-
-	@Test
-	public void setStringInFloatFieldAndGetFloat() {
-		sharedPref.edit().putString("ageFloat", "6.1").commit();
-		assertThat(somePrefs.ageFloat().get()).isEqualTo(6.1f);
-	}
-
-	@Test
-	public void setStringInLongFieldAndGetLong() {
-		sharedPref.edit().putString("ageLong", "90211105578124").commit();
-		assertThat(somePrefs.ageLong().get()).isEqualTo(90211105578124l);
 	}
 }
