@@ -483,13 +483,13 @@ public class DevConsoleProcessor {
         try {
             switch (os) {
                 case MAC:
-                    rt.exec(new String[] { "open", url });
+                    rt.exec("open " + url);
                     break;
                 case LINUX:
-                    rt.exec(new String[] { "xdg-open", url });
+                    rt.exec("xdg-open " + url);
                     break;
                 case WINDOWS:
-                    rt.exec(new String[] { "rundll32 url.dll,FileProtocolHandler", url });
+                    rt.exec("rundll32 url.dll,FileProtocolHandler " + url);
                     break;
                 case OTHER:
                     log.error("Cannot launch browser on this operating system");
