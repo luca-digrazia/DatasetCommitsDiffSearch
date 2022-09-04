@@ -138,9 +138,9 @@ public final class CcToolchainRule implements RuleDefinition {
                     LabelLateBoundDefault.fromTargetConfiguration(
                         CppConfiguration.class,
                         null,
-                        // TODO(b/69547565): Remove call to shouldIncludeZipperInToolchain
+                        // TODO(b/69547565): Remove call to isLLVMOptimizedFdo
                         (rule, attributes, cppConfig) ->
-                            cppConfig.shouldIncludeZipperInToolchain() ? zipper : null)))
+                            cppConfig.isLLVMOptimizedFdo() ? zipper : null)))
         .add(attr(":libc_top", LABEL).value(LIBC_TOP))
         .add(attr(":fdo_optimize", LABEL).singleArtifact().value(FDO_OPTIMIZE_LABEL))
         .add(
