@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.config.transitions;
 
+import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory.TransitionFactoryData;
+
 /**
  * Factory interface for transitions that are created dynamically, instead of being created as
  * singletons.
@@ -29,7 +31,10 @@ package com.google.devtools.build.lib.analysis.config.transitions;
  * @param <T> the type of data object passed to the {@link #create} method, used to create the
  *     actual {@link ConfigurationTransition} instance
  */
-public interface TransitionFactory<T> {
+public interface TransitionFactory<T extends TransitionFactoryData> {
+
+  /** Interface for types of data that a {@link TransitionFactory} can use. */
+  interface TransitionFactoryData {}
 
   /** Returns a new {@link ConfigurationTransition}, based on the given data. */
   ConfigurationTransition create(T data);
@@ -43,6 +48,11 @@ public interface TransitionFactory<T> {
 
   /** Returns {@code true} if the result of this {@link TransitionFactory} is a split transition. */
   default boolean isSplit() {
+    return false;
+  }
+
+  /** Returns {@code true} if the result of this {@link TransitionFactory} is a final transition. */
+  default boolean isFinal() {
     return false;
   }
 }
