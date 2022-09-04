@@ -41,7 +41,7 @@ public class OutputFileConfiguredTargetTest extends BuildViewTestBase {
     OutputFileConfiguredTarget generatedSource = (OutputFileConfiguredTarget)
         getConfiguredTarget("//foo:generated.source", getHostConfiguration());
     assertThat(generatedSource.getGeneratingRule())
-        .isSameInstanceAs(getConfiguredTarget("//foo:generating_rule", getHostConfiguration()));
+        .isSameAs(getConfiguredTarget("//foo:generating_rule", getHostConfiguration()));
   }
 
   /**

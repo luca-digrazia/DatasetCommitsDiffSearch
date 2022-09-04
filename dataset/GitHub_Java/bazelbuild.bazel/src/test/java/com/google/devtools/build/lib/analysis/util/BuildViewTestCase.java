@@ -1353,7 +1353,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         "'" + packageName + ":gvalid' does not produce any " + descriptionPlural,
         "'" + packageName + ":gmix' does not produce any " + descriptionPlural);
     assertSrcsValidity(ruleType, packageName + ":invalid", true,
-        "source file '" + packageName + ":a.foo' is misplaced here " + descriptionPluralFile,
+        "file '" + packageName + ":a.foo' is misplaced here " + descriptionPluralFile,
         "'" + packageName + ":ginvalid' does not produce any " + descriptionPlural);
     assertSrcsValidity(ruleType, packageName + ":mix", true,
         "'" + packageName + ":a.foo' does not produce any " + descriptionPlural);
@@ -1736,7 +1736,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected String getErrorMsgMisplacedFiles(String attrName, String ruleType, String ruleName,
       String fileName) {
-    return "in " + attrName + " attribute of " + ruleType + " rule " + ruleName + ": source file '"
+    return "in " + attrName + " attribute of " + ruleType + " rule " + ruleName + ": file '"
         + fileName + "' is misplaced here";
   }
 
@@ -1999,7 +1999,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     Artifact inputManifest = Iterables.getOnlyElement(symlinkTreeAction.getInputs());
     SourceManifestAction inputManifestAction =
         (SourceManifestAction) getGeneratingAction(inputManifest);
-    // Ask the manifest to write itself to a byte array so that we can read its contents.
+        // Ask the manifest to write itself to a byte array so that we can
+    // read its contents.
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     inputManifestAction.writeOutputFile(stream, reporter);
     String contents = stream.toString();
@@ -2051,9 +2052,5 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
     return view.getArtifactFactory()
         .getDerivedArtifact(target.getLabel().getPackageFragment().getRelative(path), root, owner);
-  }
-
-  public Path getExecRoot() {
-    return directories.getExecRoot(ruleClassProvider.getRunfilesPrefix());
   }
 }
