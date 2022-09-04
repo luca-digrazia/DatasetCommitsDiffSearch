@@ -158,7 +158,6 @@ public abstract class CcModule
     // flipped.
     BuildOptions buildOptions =
         ruleContext == null ? null : ruleContext.getConfiguration().getOptions();
-    getSemantics().validateLayeringCheckFeatures(ruleContext.getRuleContext());
     return FeatureConfigurationForStarlark.from(
         CcCommon.configureFeaturesOrThrowEvalException(
             ImmutableSet.copyOf(requestedFeatures.getContents(String.class, "requested_features")),
