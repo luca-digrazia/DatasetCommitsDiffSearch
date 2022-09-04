@@ -29,6 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -65,7 +67,7 @@ public class UserPermissionMigrationPeriodical extends Periodical {
             final Set<String> fixedPermissions = Sets.newHashSet();
             final Set<String> fixedRoleIds = Sets.newHashSet(user.getRoleIds());
 
-            final Set<String> permissionSet = Sets.newHashSet(user.getPermissions());
+            final HashSet<String> permissionSet = Sets.newHashSet(user.getPermissions());
 
             boolean hasWildcardPermission = permissionSet.contains("*");
 
@@ -90,12 +92,15 @@ public class UserPermissionMigrationPeriodical extends Periodical {
                 fixedRoleIds.add(readerRoleId);
             }
             // filter out the individual permissions to dashboards and streams
-            final List<String> dashboardStreamPermissions = Lists.newArrayList(
+            final ArrayList<String> dashboardStreamPermissions = Lists.newArrayList(
                     Sets.filter(permissionSet,
                                 new Predicate<String>() {
                                     @Override
-                                    public boolean apply(String permission) {
-                                        return !basePermissions.contains(permission) && !permission.equals("*");
+                                    public boolean apply(
+                                            String permission) {
+                                        return !basePermissions.contains(
+                                                permission) && !permission.equals(
+                                                "*");
                                     }
                                 }));
             // add the minimal permission set back to the user
