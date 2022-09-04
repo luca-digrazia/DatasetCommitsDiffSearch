@@ -18,7 +18,6 @@ package org.graylog2.alerts;
 
 import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
-import org.graylog2.alerts.types.FieldContentValueAlertCondition;
 import org.graylog2.alerts.types.FieldValueAlertCondition;
 import org.graylog2.alerts.types.MessageCountAlertCondition;
 import org.graylog2.database.MongoConnection;
@@ -58,8 +57,6 @@ public abstract class AlertConditionTest {
     @Before
     public void setUp() throws Exception {
         stream = mock(Stream.class);
-        when(stream.getId()).thenReturn(STREAM_ID);
-
         searches = mock(Searches.class);
         mongoConnection = mock(MongoConnection.class);
         // TODO use injection please. this sucks so bad
@@ -83,25 +80,16 @@ public abstract class AlertConditionTest {
                                                                            Map<String, Object> parameters) {
                         return new MessageCountAlertCondition(searches, stream, id, createdAt, creatorUserId, parameters);
                     }
-                },
-                new FieldContentValueAlertCondition.Factory() {
-                    @Override
-                    public FieldContentValueAlertCondition createAlertCondition(Stream stream,
-                                                                           String id,
-                                                                           DateTime createdAt,
-                                                                           @Assisted("userid") String creatorUserId,
-                                                                           Map<String, Object> parameters) {
-                        return new FieldContentValueAlertCondition(searches, null, stream, id, createdAt, creatorUserId, parameters);
-                    }
                 }));
 
+        when(stream.getId()).thenReturn(STREAM_ID);
     }
 
     protected void assertTriggered(AlertCondition alertCondition, AlertCondition.CheckResult result) {
         assertTrue("AlertCondition should be triggered, but it's not!", result.isTriggered());
         assertNotNull("Timestamp of returned check result should not be null!", result.getTriggeredAt());
         assertEquals("AlertCondition of result is not the same we created!", result.getTriggeredCondition(), alertCondition);
-        long difference = Tools.nowUTC().getMillis() - result.getTriggeredAt().getMillis();
+        long difference = Tools.iso8601().getMillis() - result.getTriggeredAt().getMillis();
         assertTrue("AlertCondition should be triggered about now", difference < 1000);
         assertFalse("Alert was triggered, so we should not be in grace period!", alertService.inGracePeriod(alertCondition));
     }
@@ -139,7 +127,7 @@ public abstract class AlertConditionTest {
     protected <T extends AbstractAlertCondition> T getTestInstance(Class<T> klazz, Map<String, Object> parameters) {
         try {
             return klazz.getConstructor(Searches.class, Stream.class, String.class, DateTime.class, String.class, Map.class)
-                    .newInstance(searches, stream, CONDITION_ID, Tools.nowUTC(), STREAM_CREATOR, parameters);
+                    .newInstance(searches, stream, CONDITION_ID, Tools.iso8601(), STREAM_CREATOR, parameters);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
