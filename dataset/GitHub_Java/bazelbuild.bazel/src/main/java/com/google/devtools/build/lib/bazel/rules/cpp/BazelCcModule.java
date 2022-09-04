@@ -74,7 +74,6 @@ public class BazelCcModule extends CcModule
       SkylarkList<String> includes,
       SkylarkList<String> quoteIncludes,
       SkylarkList<String> systemIncludes,
-      SkylarkList<String> frameworkIncludes,
       SkylarkList<String> defines,
       SkylarkList<String> userCompileFlags,
       SkylarkList<CcCompilationContext> ccCompilationContexts,
@@ -94,7 +93,6 @@ public class BazelCcModule extends CcModule
         includes,
         quoteIncludes,
         systemIncludes,
-        frameworkIncludes,
         defines,
         userCompileFlags,
         ccCompilationContexts,
@@ -104,7 +102,7 @@ public class BazelCcModule extends CcModule
         /* grepIncludes= */ null,
         SkylarkList.createImmutable(ImmutableList.of()),
         location,
-        /* environment= */ null);
+        environment);
   }
 
   @Override
@@ -112,7 +110,7 @@ public class BazelCcModule extends CcModule
       SkylarkActionFactory actions,
       FeatureConfigurationForStarlark skylarkFeatureConfiguration,
       CcToolchainProvider skylarkCcToolchainProvider,
-      Object compilationOutputs,
+      CcCompilationOutputs compilationOutputs,
       SkylarkList<String> userLinkFlags,
       SkylarkList<CcLinkingContext> linkingContexts,
       String name,
@@ -128,7 +126,7 @@ public class BazelCcModule extends CcModule
         actions,
         skylarkFeatureConfiguration,
         skylarkCcToolchainProvider,
-        convertFromNoneable(compilationOutputs, /* defaultValue= */ null),
+        compilationOutputs,
         userLinkFlags,
         linkingContexts,
         name,
@@ -138,14 +136,19 @@ public class BazelCcModule extends CcModule
         additionalInputs,
         /* grepIncludes= */ null,
         location,
-        /* environment= */ null,
+        environment,
         starlarkContext);
   }
 
   @Override
   public CcCompilationOutputs createCompilationOutputsFromSkylark(
-      Object objectsObject, Object picObjectsObject, Location location) throws EvalException {
-    return super.createCompilationOutputsFromSkylark(objectsObject, picObjectsObject, location);
+      Object objectsObject, Object picObjectsObject) {
+    CcCompilationOutputs.Builder ccCompilationOutputsBuilder = CcCompilationOutputs.builder();
+    ccCompilationOutputsBuilder.addObjectFiles(
+        convertSkylarkListOrNestedSetToNestedSet(objectsObject, Artifact.class));
+    ccCompilationOutputsBuilder.addPicObjectFiles(
+        convertSkylarkListOrNestedSetToNestedSet(picObjectsObject, Artifact.class));
+    return ccCompilationOutputsBuilder.build();
   }
 
   @Override
