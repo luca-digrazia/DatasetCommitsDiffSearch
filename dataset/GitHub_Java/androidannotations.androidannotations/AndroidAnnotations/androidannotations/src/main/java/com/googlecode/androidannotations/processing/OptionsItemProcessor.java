@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -35,11 +35,10 @@ import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.helper.SherlockHelper;
 import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCase;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
@@ -49,7 +48,7 @@ import com.sun.codemodel.JVar;
 /**
  * @author Pierre-Yves Ricau
  */
-public class OptionsItemProcessor implements DecoratingElementProcessor {
+public class OptionsItemProcessor implements ElementProcessor {
 
 	private final IdAnnotationHelper helper;
 
@@ -66,7 +65,8 @@ public class OptionsItemProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 		Classes classes = holder.classes();
 
 		String methodName = element.getSimpleName().toString();
@@ -85,9 +85,10 @@ public class OptionsItemProcessor implements DecoratingElementProcessor {
 
 		boolean hasItemParameter = parameters.size() == 1;
 
-		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, Res.ID, true);
+		OptionsItem annotation = element.getAnnotation(OptionsItem.class);
+		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "Selected", holder);
 
-		if (holder.onOptionsItemSelectedIfElseBlock == null) {
+		if (holder.onOptionsItemSelectedSwitch == null) {
 			JMethod method = holder.eBean.method(JMod.PUBLIC, codeModel.BOOLEAN, "onOptionsItemSelected");
 			method.annotate(Override.class);
 			holder.onOptionsItemSelectedItem = method.param(menuItemClass, "item");
@@ -97,26 +98,25 @@ public class OptionsItemProcessor implements DecoratingElementProcessor {
 
 			body._if(handled)._then()._return(TRUE);
 
-			holder.onOptionsItemSelectedItemId = body.decl(codeModel.INT, "itemId_", holder.onOptionsItemSelectedItem.invoke("getItemId"));
-			holder.onOptionsItemSelectedIfElseBlock = body.block();
+			holder.onOptionsItemSelectedSwitch = body._switch(holder.onOptionsItemSelectedItem.invoke("getItemId"));
 
-			body._return(FALSE);
+			JBlock defaultBody = holder.onOptionsItemSelectedSwitch._default().body();
+			defaultBody._return(FALSE);
 		}
 
-		JExpression ifExpr = holder.onOptionsItemSelectedItemId.eq(idsRefs.get(0));
-
-		for (int i = 1; i < idsRefs.size(); i++) {
-			ifExpr = ifExpr.cor(holder.onOptionsItemSelectedItemId.eq(idsRefs.get(i)));
+		JCase itemCase = null;
+		for (JFieldRef idRef : idsRefs) {
+			itemCase = holder.onOptionsItemSelectedSwitch._case(idRef);
 		}
 
-		JBlock itemIfBody = holder.onOptionsItemSelectedIfElseBlock._if(ifExpr)._then();
+		JBlock itemCaseBody = itemCase.body();
 		JInvocation methodCall = invoke(methodName);
 
 		if (returnMethodResult) {
-			itemIfBody._return(methodCall);
+			itemCaseBody._return(methodCall);
 		} else {
-			itemIfBody.add(methodCall);
-			itemIfBody._return(TRUE);
+			itemCaseBody.add(methodCall);
+			itemCaseBody._return(TRUE);
 		}
 
 		if (hasItemParameter) {

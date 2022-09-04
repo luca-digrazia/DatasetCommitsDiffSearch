@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,8 +15,6 @@
  */
 package com.googlecode.androidannotations.processing;
 
-import java.io.FileInputStream;
-import java.io.InputStream;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,20 +30,17 @@ public class EBeansHolder {
 	public class Classes {
 
 		/*
-		 * Java
+		 * Java classes
 		 */
 		public final JClass RUNTIME_EXCEPTION = refClass(RuntimeException.class);
-		public final JClass EXCEPTION = refClass(Exception.class);
 		public final JClass CHAR_SEQUENCE = refClass(CharSequence.class);
 		public final JClass CLASS_CAST_EXCEPTION = refClass(ClassCastException.class);
 		public final JClass SERIALIZABLE = refClass(Serializable.class);
 		public final JClass STRING = refClass(String.class);
 		public final JClass SYSTEM = refClass(System.class);
-		public final JClass INPUT_STREAM = refClass(InputStream.class);
-		public final JClass FILE_INPUT_STREAM = refClass(FileInputStream.class);
 
 		/*
-		 * Android
+		 * Android classes
 		 */
 		public final JClass LOG = refClass(CanonicalNameConstants.LOG);
 		public final JClass BUNDLE = refClass(CanonicalNameConstants.BUNDLE);
@@ -81,10 +76,9 @@ public class EBeansHolder {
 		public final JClass MOTION_EVENT = refClass(CanonicalNameConstants.MOTION_EVENT);
 		public final JClass ON_TOUCH_LISTENER = refClass(CanonicalNameConstants.ON_TOUCH_LISTENER);
 		public final JClass HANDLER = refClass(CanonicalNameConstants.HANDLER);
-		public final JClass KEY_STORE = refClass(CanonicalNameConstants.KEY_STORE);
 
 		/*
-		 * Sherlock
+		 * Sherlock classes
 		 */
 		public final JClass SHERLOCK_MENU = refClass(CanonicalNameConstants.SHERLOCK_MENU);
 		public final JClass SHERLOCK_MENU_ITEM = refClass(CanonicalNameConstants.SHERLOCK_MENU_ITEM);
@@ -110,16 +104,6 @@ public class EBeansHolder {
 		public final JClass ON_ACTIVITY_RESULT_EVENT = refClass(CanonicalNameConstants.ON_ACTIVITY_RESULT_EVENT);
 		public final JClass ON_CONTENT_VIEW_AVAILABLE_EVENT = refClass(CanonicalNameConstants.ON_CONTENT_VIEW_AVAILABLE_EVENT);
 		public final JClass ON_CREATE_EVENT = refClass(CanonicalNameConstants.ON_CREATE_EVENT);
-
-		/*
-		 * HttpClient
-		 */
-		public final JClass CLIENT_CONNECTION_MANAGER = refClass(CanonicalNameConstants.CLIENT_CONNECTION_MANAGER);
-		public final JClass DEFAULT_HTTP_CLIENT = refClass(CanonicalNameConstants.DEFAULT_HTTP_CLIENT);
-		public final JClass SSL_SOCKET_FACTORY = refClass(CanonicalNameConstants.SSL_SOCKET_FACTORY);
-		public final JClass SCHEME = refClass(CanonicalNameConstants.SCHEME);
-		public final JClass SCHEME_REGISTRY = refClass(CanonicalNameConstants.SCHEME_REGISTRY);
-		public final JClass SINGLE_CLIENT_CONN_MANAGER = refClass(CanonicalNameConstants.SINGLE_CLIENT_CONN_MANAGER);
 
 	}
 
@@ -153,12 +137,6 @@ public class EBeansHolder {
 
 	public JClass refClass(String fullyQualifiedClassName) {
 
-		int arrayCounter = 0;
-		while (fullyQualifiedClassName.endsWith("[]")) {
-			arrayCounter++;
-			fullyQualifiedClassName = fullyQualifiedClassName.substring(0, fullyQualifiedClassName.length() - 2);
-		}
-
 		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
 
 		if (refClass == null) {
@@ -168,10 +146,6 @@ public class EBeansHolder {
 				refClass = codeModel.directClass(fullyQualifiedClassName);
 			}
 			loadedClasses.put(fullyQualifiedClassName, refClass);
-		}
-
-		for (int i = 0; i < arrayCounter; i++) {
-			refClass = refClass.array();
 		}
 
 		return refClass;

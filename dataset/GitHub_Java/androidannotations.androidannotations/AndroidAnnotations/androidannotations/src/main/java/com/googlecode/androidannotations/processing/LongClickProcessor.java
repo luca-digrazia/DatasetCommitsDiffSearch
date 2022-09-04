@@ -33,7 +33,6 @@ import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
@@ -82,8 +81,7 @@ public class LongClickProcessor implements ElementProcessor {
 
 		JBlock listenerMethodBody = listenerMethod.body();
 
-		JExpression activityRef = holder.eBean.staticRef("this");
-		JInvocation call = JExpr.invoke(activityRef, methodName);
+		JInvocation call = JExpr.invoke(methodName);
 
 		if (returnMethodResult) {
 			listenerMethodBody._return(call);

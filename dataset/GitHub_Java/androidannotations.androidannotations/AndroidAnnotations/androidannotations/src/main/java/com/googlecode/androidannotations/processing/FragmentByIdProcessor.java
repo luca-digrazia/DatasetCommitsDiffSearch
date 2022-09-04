@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -25,27 +25,30 @@ import java.lang.annotation.Annotation;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.FragmentById;
+import com.googlecode.androidannotations.annotations.Id;
+import com.googlecode.androidannotations.helper.AnnotationHelper;
 import com.googlecode.androidannotations.helper.CanonicalNameConstants;
-import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
+import com.googlecode.androidannotations.rclass.IRInnerClass;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
-public class FragmentByIdProcessor implements DecoratingElementProcessor {
+public class FragmentByIdProcessor implements ElementProcessor {
 
-	private final IdAnnotationHelper annotationHelper;
+	private final IRClass rClass;
+	private final AnnotationHelper annotationHelper;
 
 	public FragmentByIdProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
-		annotationHelper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
+		annotationHelper = new AnnotationHelper(processingEnv);
+		this.rClass = rClass;
 	}
 
 	@Override
@@ -54,8 +57,9 @@ public class FragmentByIdProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) {
 
+		EBeanHolder holder = eBeansHolder.getEnclosingEBeanHolder(element);
 		Classes classes = holder.classes();
 
 		String fieldName = element.getSimpleName().toString();
@@ -63,11 +67,23 @@ public class FragmentByIdProcessor implements DecoratingElementProcessor {
 		TypeMirror elementType = element.asType();
 		String typeQualifiedName = elementType.toString();
 
-		TypeElement nativeFragmentElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT);
+		FragmentById annotation = element.getAnnotation(FragmentById.class);
+		int idValue = annotation.value();
+
+		IRInnerClass rInnerClass = rClass.get(Res.ID);
+		JFieldRef idRef;
+		if (idValue == Id.DEFAULT_VALUE) {
+			idRef = rInnerClass.getIdStaticRef(fieldName, holder);
+		} else {
+			idRef = rInnerClass.getIdStaticRef(idValue, holder);
+		}
+
+		TypeMirror nativeFragmentType = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT).asType();
 
 		JMethod findFragmentById;
-		if (nativeFragmentElement != null && annotationHelper.isSubtype(elementType, nativeFragmentElement.asType())) {
+		if (annotationHelper.isSubtype(elementType, nativeFragmentType)) {
 			// Injecting native fragment
+
 			findFragmentById = null;
 
 			if (holder.findNativeFragmentById == null) {
@@ -105,9 +121,6 @@ public class FragmentByIdProcessor implements DecoratingElementProcessor {
 		}
 
 		JBlock methodBody = holder.afterSetContentView.body();
-
-		JFieldRef idRef = annotationHelper.extractOneAnnotationFieldRef(holder, element, Res.ID, true);
-
 		methodBody.assign(ref(fieldName), cast(holder.refClass(typeQualifiedName), invoke(findFragmentById).arg(idRef)));
 	}
 }

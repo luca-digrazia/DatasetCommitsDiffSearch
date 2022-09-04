@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -36,7 +36,7 @@ import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
-public class FragmentByTagProcessor implements DecoratingElementProcessor {
+public class FragmentByTagProcessor implements ElementProcessor {
 
 	private final AnnotationHelper annotationHelper;
 
@@ -50,7 +50,9 @@ public class FragmentByTagProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) {
+
+		EBeanHolder holder = eBeansHolder.getEnclosingEBeanHolder(element);
 		Classes classes = holder.classes();
 
 		String fieldName = element.getSimpleName().toString();
@@ -74,7 +76,7 @@ public class FragmentByTagProcessor implements DecoratingElementProcessor {
 			findFragmentByTag = null;
 
 			if (holder.findNativeFragmentByTag == null) {
-				holder.findNativeFragmentByTag = holder.generatedClass.method(PRIVATE, classes.FRAGMENT, "findNativeFragmentByTag");
+				holder.findNativeFragmentByTag = holder.eBean.method(PRIVATE, classes.FRAGMENT, "findNativeFragmentByTag");
 				JVar tagParam = holder.findNativeFragmentByTag.param(classes.STRING, "tag");
 
 				holder.findNativeFragmentByTag.javadoc().add("You should check that context is an activity before calling this method");
@@ -92,7 +94,7 @@ public class FragmentByTagProcessor implements DecoratingElementProcessor {
 			// Injecting support fragment
 
 			if (holder.findSupportFragmentByTag == null) {
-				holder.findSupportFragmentByTag = holder.generatedClass.method(PRIVATE, classes.SUPPORT_V4_FRAGMENT, "findSupportFragmentByTag");
+				holder.findSupportFragmentByTag = holder.eBean.method(PRIVATE, classes.SUPPORT_V4_FRAGMENT, "findSupportFragmentByTag");
 				JVar tagParam = holder.findSupportFragmentByTag.param(classes.STRING, "tag");
 
 				JBlock body = holder.findSupportFragmentByTag.body();

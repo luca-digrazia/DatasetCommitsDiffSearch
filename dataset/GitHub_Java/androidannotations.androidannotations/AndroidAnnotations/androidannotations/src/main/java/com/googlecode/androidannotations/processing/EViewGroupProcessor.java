@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,18 +21,18 @@ import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.lang.annotation.Annotation;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.EViewGroup;
+import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
-import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.helper.ModelConstants;
 import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
+import com.googlecode.androidannotations.rclass.IRInnerClass;
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -60,13 +60,13 @@ public class EViewGroupProcessor implements ElementProcessor {
 			+ "are in a View." //
 	;
 
+	private final IRClass rClass;
+
 	private final APTCodeModelHelper codeModelHelper;
 
-	private final IdAnnotationHelper helper;
-
-	public EViewGroupProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
+	public EViewGroupProcessor(IRClass rClass) {
+		this.rClass = rClass;
 		codeModelHelper = new APTCodeModelHelper();
-		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
 	}
 
 	@Override
@@ -77,7 +77,7 @@ public class EViewGroupProcessor implements ElementProcessor {
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
 
-		EBeanHolder holder = eBeansHolder.create(element, getTarget());
+		EBeanHolder holder = eBeansHolder.create(element);
 
 		Classes classes = holder.classes();
 
@@ -127,9 +127,13 @@ public class EViewGroupProcessor implements ElementProcessor {
 		JBlock ifNotInflated = onFinishInflate.body()._if(JExpr.ref("mAlreadyInflated_").not())._then();
 		ifNotInflated.assign(mAlreadyInflated_, JExpr.TRUE);
 
-		JFieldRef contentViewId = helper.extractOneAnnotationFieldRef(holder, element, Res.LAYOUT, false);
-
-		if (contentViewId != null) {
+		// inflate layout if ID is given on annotation
+		EViewGroup layoutAnnotation = element.getAnnotation(EViewGroup.class);
+		int layoutIdValue = layoutAnnotation.value();
+		JFieldRef contentViewId;
+		if (layoutIdValue != Id.DEFAULT_VALUE) {
+			IRInnerClass rInnerClass = rClass.get(Res.LAYOUT);
+			contentViewId = rInnerClass.getIdStaticRef(layoutIdValue, holder);
 			ifNotInflated.invoke("inflate").arg(invoke("getContext")).arg(contentViewId).arg(JExpr._this());
 		}
 		ifNotInflated.invoke(holder.afterSetContentView);

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,25 +21,16 @@ import java.util.List;
 import java.util.Set;
 
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.model.AnnotationElements;
-import com.googlecode.androidannotations.model.AnnotationElements.AnnotatedAndRootElements;
 import com.sun.codemodel.JCodeModel;
 
 public class ModelProcessor {
 
-	private final List<DecoratingElementProcessor> enclosedProcessors = new ArrayList<DecoratingElementProcessor>();
-	private final List<GeneratingElementProcessor> typeProcessors = new ArrayList<GeneratingElementProcessor>();
+	private final List<ElementProcessor> processors = new ArrayList<ElementProcessor>();
 
-	public void register(DecoratingElementProcessor processor) {
-		enclosedProcessors.add(processor);
-	}
-
-	public void register(GeneratingElementProcessor processor) {
-		typeProcessors.add(processor);
+	public void register(ElementProcessor processor) {
+		processors.add(processor);
 	}
 
 	public JCodeModel process(AnnotationElements validatedModel) throws Exception {
@@ -47,78 +38,16 @@ public class ModelProcessor {
 		JCodeModel codeModel = new JCodeModel();
 
 		EBeansHolder eBeansHolder = new EBeansHolder(codeModel);
-
-		for (GeneratingElementProcessor processor : typeProcessors) {
+		for (ElementProcessor processor : processors) {
 			Class<? extends Annotation> target = processor.getTarget();
-			Set<? extends Element> annotatedElements = validatedModel.getRootAnnotatedElements(target.getName());
+
+			Set<? extends Element> annotatedElements = validatedModel.getAnnotatedElements(target);
+
 			for (Element annotatedElement : annotatedElements) {
-				/*
-				 * We do not generate code for abstract classes, because the
-				 * generated classes are final anyway (we do not want anyone to
-				 * extend them).
-				 */
-				if (!isAbstractClass(annotatedElement)) {
-					processor.process(annotatedElement, codeModel, eBeansHolder);
-				}
-			}
-			/*
-			 * We currently do not take into account class annotations from
-			 * ancestors. We should careful design the priority rules first.
-			 */
-		}
-
-		for (DecoratingElementProcessor processor : enclosedProcessors) {
-			Class<? extends Annotation> target = processor.getTarget();
-
-			Set<? extends Element> rootAnnotatedElements = validatedModel.getRootAnnotatedElements(target.getName());
-
-			for (Element annotatedElement : rootAnnotatedElements) {
-
-				Element enclosingElement;
-				if (annotatedElement instanceof TypeElement) {
-					enclosingElement = annotatedElement;
-				} else {
-
-					enclosingElement = annotatedElement.getEnclosingElement();
-				}
-
-				/*
-				 * We do not generate code for elements belonging to abstract
-				 * classes, because the generated classes are final anyway
-				 */
-				if (!isAbstractClass(enclosingElement)) {
-					EBeanHolder holder = eBeansHolder.getEBeanHolder(enclosingElement);
-					processor.process(annotatedElement, codeModel, holder);
-				}
-			}
-
-			/*
-			 * For ancestors, the processor manipulates the annotated elements,
-			 * but uses the holder for the root element
-			 */
-			Set<AnnotatedAndRootElements> ancestorAnnotatedElements = validatedModel.getAncestorAnnotatedElements(target.getName());
-			for (AnnotatedAndRootElements elements : ancestorAnnotatedElements) {
-				EBeanHolder holder = eBeansHolder.getEBeanHolder(elements.rootTypeElement);
-				/*
-				 * Annotations coming from ancestors may be applied to root
-				 * elements that are not validated, and therefore not available.
-				 */
-				if (holder != null) {
-					processor.process(elements.annotatedElement, codeModel, holder);
-				}
+				processor.process(annotatedElement, codeModel, eBeansHolder);
 			}
 		}
 
 		return codeModel;
-	}
-
-	private boolean isAbstractClass(Element annotatedElement) {
-		if (annotatedElement instanceof TypeElement) {
-			TypeElement typeElement = (TypeElement) annotatedElement;
-
-			return typeElement.getKind() == ElementKind.CLASS && typeElement.getModifiers().contains(Modifier.ABSTRACT);
-		} else {
-			return false;
-		}
 	}
 }

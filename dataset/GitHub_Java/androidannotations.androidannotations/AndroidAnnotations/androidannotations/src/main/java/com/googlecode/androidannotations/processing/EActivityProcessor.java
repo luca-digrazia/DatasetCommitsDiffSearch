@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -39,11 +39,13 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
 
 import com.googlecode.androidannotations.annotations.EActivity;
+import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.api.SdkVersionHelper;
 import com.googlecode.androidannotations.helper.AnnotationHelper;
 import com.googlecode.androidannotations.helper.ModelConstants;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
+import com.googlecode.androidannotations.rclass.IRInnerClass;
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -147,11 +149,13 @@ public class EActivityProcessor implements ElementProcessor {
 
 		onCreateBody.invoke(_super(), onCreate).arg(onCreateSavedInstanceState);
 
-		List<JFieldRef> fieldRefs = annotationHelper.extractAnnotationFieldRefs(holder, element, EActivity.class, rClass.get(Res.LAYOUT), false);
+		EActivity layoutAnnotation = element.getAnnotation(EActivity.class);
+		int layoutIdValue = layoutAnnotation.value();
 
 		JFieldRef contentViewId;
-		if (fieldRefs.size() == 1) {
-			contentViewId = fieldRefs.get(0);
+		if (layoutIdValue != Id.DEFAULT_VALUE) {
+			IRInnerClass rInnerClass = rClass.get(Res.LAYOUT);
+			contentViewId = rInnerClass.getIdStaticRef(layoutIdValue, holder);
 		} else {
 			contentViewId = null;
 		}
@@ -187,7 +191,7 @@ public class EActivityProcessor implements ElementProcessor {
 			JClass keyEventClass = holder.classes().KEY_EVENT;
 			JVar eventParam = onKeyDownMethod.param(keyEventClass, "event");
 
-			JClass versionHelperClass = holder.refClass(SdkVersionHelper.class);
+			JClass versionHelperClass = codeModel.ref(SdkVersionHelper.class);
 
 			JInvocation sdkInt = versionHelperClass.staticInvoke("getSdkInt");
 

@@ -78,7 +78,6 @@ public class ItemSelectedProcessor implements ElementProcessor {
 
 		JDefinedClass onItemSelectedListenerClass = codeModel.anonymousClass(classes.ON_ITEM_SELECTED_LISTENER);
 		JMethod onItemSelectedMethod = onItemSelectedListenerClass.method(JMod.PUBLIC, codeModel.VOID, "onItemSelected");
-		onItemSelectedMethod.annotate(Override.class);
 
 		JClass narrowAdapterViewClass = classes.ADAPTER_VIEW.narrow(codeModel.wildcard());
 		JVar onItemClickParentParam = onItemSelectedMethod.param(narrowAdapterViewClass, "parent");
@@ -110,7 +109,6 @@ public class ItemSelectedProcessor implements ElementProcessor {
 		}
 
 		JMethod onNothingSelectedMethod = onItemSelectedListenerClass.method(JMod.PUBLIC, codeModel.VOID, "onNothingSelected");
-		onNothingSelectedMethod.annotate(Override.class);
 
 		onNothingSelectedMethod.param(narrowAdapterViewClass, "parent");
 
