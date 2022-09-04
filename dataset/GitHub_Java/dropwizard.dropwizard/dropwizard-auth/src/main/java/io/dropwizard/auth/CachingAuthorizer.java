@@ -3,16 +3,12 @@ package io.dropwizard.auth;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheBuilderSpec;
-import com.google.common.cache.CacheLoader;
 import com.google.common.cache.CacheStats;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.UncheckedExecutionException;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 
 import java.security.Principal;
@@ -23,7 +19,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 /**
  * An {@link Authorizer} decorator which uses a Guava {@link Cache} to
  * temporarily cache principals' role associations.
- * <p>
+ *
  * Cache entries include both inclusion and exclusion of a principal
  * within a given role.
  *
@@ -43,29 +39,29 @@ public class CachingAuthorizer<P extends Principal> implements Authorizer<P> {
     //
     // `null` cache values are interpreted as cache misses, and will
     // thus result in read through to the underlying `Authorizer`.
-    private final LoadingCache<ImmutablePair<P, String>, Boolean> cache;
+    private final Cache<ImmutablePair<P, String>, Boolean> cache;
 
     /**
      * Creates a new cached authorizer.
      *
      * @param metricRegistry the application's registry of metrics
-     * @param authorizer     the underlying authorizer
-     * @param cacheSpec      {@link CacheBuilderSpec}
+     * @param authorizer the underlying authorizer
+     * @param cacheSpec {@link CacheBuilderSpec}
      */
     public CachingAuthorizer(
         final MetricRegistry metricRegistry,
         final Authorizer<P> authorizer,
         final CacheBuilderSpec cacheSpec
     ) {
-        this(metricRegistry, authorizer, CacheBuilder.from(cacheSpec));
+      this(metricRegistry, authorizer, CacheBuilder.from(cacheSpec));
     }
 
     /**
      * Creates a new cached authorizer.
      *
      * @param metricRegistry the application's registry of metrics
-     * @param authorizer     the underlying authorizer
-     * @param builder        a {@link CacheBuilder}
+     * @param authorizer the underlying authorizer
+     * @param builder a {@link CacheBuilder}
      */
     public CachingAuthorizer(
         final MetricRegistry metricRegistry,
@@ -75,13 +71,7 @@ public class CachingAuthorizer<P extends Principal> implements Authorizer<P> {
         this.underlying = authorizer;
         this.cacheMisses = metricRegistry.meter(name(authorizer.getClass(), "cache-misses"));
         this.getsTimer = metricRegistry.timer(name(authorizer.getClass(), "gets"));
-        this.cache = builder.recordStats().build(new CacheLoader<ImmutablePair<P, String>, Boolean>() {
-            @Override
-            public Boolean load(ImmutablePair<P, String> key) throws Exception {
-                cacheMisses.mark();
-                return underlying.authorize(key.left, key.right);
-            }
-        });
+        this.cache = builder.recordStats().build();
     }
 
     @Override
@@ -90,10 +80,15 @@ public class CachingAuthorizer<P extends Principal> implements Authorizer<P> {
 
         try {
             final ImmutablePair<P, String> cacheKey = ImmutablePair.of(principal, role);
-            return cache.getUnchecked(cacheKey);
-        } catch (UncheckedExecutionException e) {
-            Throwables.throwIfUnchecked(e.getCause());
-            throw e;
+            Boolean isAuthorized = cache.getIfPresent(cacheKey);
+
+            if (isAuthorized == null) {
+                cacheMisses.mark();
+                isAuthorized = underlying.authorize(principal, role);
+                cache.put(cacheKey, isAuthorized);
+            }
+
+            return isAuthorized;
         } finally {
             context.stop();
         }
@@ -141,8 +136,8 @@ public class CachingAuthorizer<P extends Principal> implements Authorizer<P> {
      * @param predicate a predicate to filter credentials
      */
     public void invalidateAll(Predicate<? super P> predicate) {
-        final Predicate<ImmutablePair<P, String>> nestedPredicate =
-            cacheKey -> predicate.test(cacheKey.getLeft());
+      final Predicate<ImmutablePair<P, String>> nestedPredicate =
+          cacheKey -> predicate.test(cacheKey.getLeft());
 
         cache.invalidateAll(Sets.filter(cache.asMap().keySet(), nestedPredicate::test));
     }
