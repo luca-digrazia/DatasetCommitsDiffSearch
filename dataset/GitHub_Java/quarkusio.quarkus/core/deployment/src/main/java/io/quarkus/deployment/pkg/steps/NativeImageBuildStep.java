@@ -101,14 +101,15 @@ public class NativeImageBuildStep {
                     outputPath + ":" + CONTAINER_BUILD_VOLUME_PATH + ":z", "--env", "LANG=C");
 
             if (SystemUtils.IS_OS_LINUX) {
-                String uid = getLinuxID("-ur");
-                String gid = getLinuxID("-gr");
-                if (uid != null && gid != null && !"".equals(uid) && !"".equals(gid)) {
-                    Collections.addAll(nativeImage, "--user", uid + ":" + gid);
-                    if ("podman".equals(containerRuntime)) {
-                        // Needed to avoid AccessDeniedExceptions
-                        nativeImage.add("--userns=keep-id");
+                if ("docker".equals(containerRuntime)) {
+                    String uid = getLinuxID("-ur");
+                    String gid = getLinuxID("-gr");
+                    if (uid != null && gid != null && !"".equals(uid) && !"".equals(gid)) {
+                        Collections.addAll(nativeImage, "--user", uid + ":" + gid);
                     }
+                } else if ("podman".equals(containerRuntime)) {
+                    // Needed to avoid AccessDeniedExceptions
+                    nativeImage.add("--userns=keep-id");
                 }
             }
             nativeConfig.containerRuntimeOptions.ifPresent(nativeImage::addAll);
@@ -182,8 +183,10 @@ public class NativeImageBuildStep {
             throw new RuntimeException("Failed to get GraalVM version", e);
         }
 
+        boolean isMandrel = false;
         if (graalVMVersion.isPresent()) {
             checkGraalVMVersion(graalVMVersion.get());
+            isMandrel = graalVMVersion.get().contains("Mandrel");
         } else {
             log.error("Unable to get GraalVM version from the native-image binary.");
         }
@@ -306,7 +309,7 @@ public class NativeImageBuildStep {
                         + " Please consider removing this configuration key as it is ignored (JNI is always enabled) and it"
                         + " will be removed in a future Quarkus version.");
             }
-            if (!nativeConfig.enableServer && !SystemUtils.IS_OS_WINDOWS) {
+            if (!nativeConfig.enableServer && !SystemUtils.IS_OS_WINDOWS && !isMandrel) {
                 command.add("--no-server");
             }
             if (nativeConfig.enableVmInspection) {
