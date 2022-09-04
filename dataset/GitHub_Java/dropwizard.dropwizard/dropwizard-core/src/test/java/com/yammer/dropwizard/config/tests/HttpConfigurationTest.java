@@ -12,6 +12,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.FileInputStream;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 
@@ -20,8 +21,10 @@ public class HttpConfigurationTest {
 
     @Before
     public void setUp() throws Exception {
-        this.http = ConfigurationFactory.forClass(HttpConfiguration.class, new Validator())
-                                        .build(new File(Resources.getResource("yaml/http.yml").toURI()));
+        File httpFile = new File(Resources.getResource("yaml/http.yml").toURI());
+        this.http = ConfigurationFactory.forClass(HttpConfiguration.class,
+                                                  new Validator())
+                                        .build(httpFile.toString(), new FileInputStream(httpFile));
     }
 
     @Test
