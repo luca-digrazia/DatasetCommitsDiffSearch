@@ -17,6 +17,7 @@ import com.android.SdkConstants;
 import com.android.annotations.NonNull;
 import com.android.ide.common.internal.PngCruncher;
 import com.android.ide.common.internal.PngException;
+import com.android.ide.common.res2.MergingException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -27,7 +28,6 @@ import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.AndroidResourceMergingAction.Options;
 import com.google.devtools.build.android.xml.Namespaces;
 import java.io.BufferedWriter;
@@ -74,7 +74,7 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
         Files.createDirectories(destinationPath.getParent());
         cruncher.crunchPng(0, source.toFile(), destinationPath.toFile());
       } catch (PngException e) {
-        throw MergingException.wrapException(e);
+        throw MergingException.wrapException(e).build();
       }
       return Boolean.TRUE;
     }

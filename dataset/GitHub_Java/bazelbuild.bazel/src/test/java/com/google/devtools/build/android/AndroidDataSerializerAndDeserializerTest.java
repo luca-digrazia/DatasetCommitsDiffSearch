@@ -282,7 +282,7 @@ public class AndroidDataSerializerAndDeserializerTest {
     }
 
     @Override
-    public void accept(DataKey key, T value) {
+    public void consume(DataKey key, T value) {
       target.put(key, value);
     }
 
