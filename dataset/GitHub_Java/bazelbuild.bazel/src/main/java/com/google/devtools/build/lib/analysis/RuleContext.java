@@ -1087,7 +1087,7 @@ public final class RuleContext extends TargetContext
     if (getToolchainContext() == null) {
       return null;
     }
-    return getToolchainContext().executionPlatform();
+    return getToolchainContext().getExecutionPlatform();
   }
 
   private void checkAttribute(String attributeName, Mode mode) {

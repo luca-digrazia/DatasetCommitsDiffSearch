@@ -145,11 +145,8 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> resolvedSrcs = resolvedSrcsBuilder.build();
 
     CommandHelper commandHelper =
-        CommandHelper.builder(ruleContext)
-            .addHostToolDependencies("tools")
-            .addHostToolDependencies("toolchains")
-            .addLabelMap(labelMap.build())
-            .build();
+        new CommandHelper(
+            ruleContext, ruleContext.getPrerequisites("tools", Mode.HOST), labelMap.build());
 
     if (ruleContext.hasErrors()) {
       return null;
