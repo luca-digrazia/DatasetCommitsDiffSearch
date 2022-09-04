@@ -119,7 +119,7 @@ class BazelBuilder implements Builder {
 
   @Override
   public void clean() throws CommandException {
-    String[] cleanCommand = {"bazel", "clean", "--expunge"};
+    String[] cleanCommand = {"bazel", "clean"};
     Command cmd = new Command(cleanCommand, null, generatedCodeDir.toFile());
     cmd.execute();
   }
