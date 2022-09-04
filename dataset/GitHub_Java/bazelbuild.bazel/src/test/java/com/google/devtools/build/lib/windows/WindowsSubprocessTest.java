@@ -34,9 +34,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for {@link WindowsSubprocess}. */
+/**
+ * Unit tests for {@link WindowsSubprocess}.
+ */
 @RunWith(JUnit4.class)
-@TestSpec(supportedOs = OS.WINDOWS)
+@TestSpec(localOnly = true, supportedOs = OS.WINDOWS)
 public class WindowsSubprocessTest {
   private String mockSubprocess;
   private String mockBinary;
