@@ -18,16 +18,13 @@ package org.graylog2.database;
 
 import com.mongodb.DB;
 import com.mongodb.Mongo;
-import com.mongodb.client.MongoDatabase;
-
-import static java.util.Objects.requireNonNull;
 
 public class MongoConnectionForTests implements MongoConnection {
     private final Mongo mongoClient;
     private final DB db;
 
     public MongoConnectionForTests(Mongo mongoClient, String dbName) {
-        this.mongoClient = requireNonNull(mongoClient);
+        this.mongoClient = mongoClient;
         this.db = mongoClient.getDB(dbName);
     }
 
@@ -39,10 +36,5 @@ public class MongoConnectionForTests implements MongoConnection {
     @Override
     public DB getDatabase() {
         return db;
-    }
-
-    @Override
-    public MongoDatabase getMongoDatabase() {
-        throw new UnsupportedOperationException("Unsupported until NoSQLUnit updates its interfaces to use MongoClient.");
     }
 }
