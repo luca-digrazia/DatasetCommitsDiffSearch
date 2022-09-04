@@ -333,6 +333,7 @@ public final class PackageFactory {
   private final RuleClassProvider ruleClassProvider;
 
   private AtomicReference<? extends UnixGlob.FilesystemCalls> syscalls;
+  private Preprocessor.Factory preprocessorFactory = Preprocessor.Factory.NullFactory.INSTANCE;
 
   private final ThreadPoolExecutor threadPool;
   private Map<String, String> platformSetRegexps;
@@ -410,6 +411,13 @@ public final class PackageFactory {
     this.nativeModule = newNativeModule();
     this.workspaceNativeModule = WorkspaceFactory.newNativeModule(ruleClassProvider, version);
     this.packageBuilderHelper = packageBuilderHelper;
+  }
+
+  /**
+   * Sets the preprocessor used.
+   */
+  public void setPreprocessorFactory(Preprocessor.Factory preprocessorFactory) {
+    this.preprocessorFactory = preprocessorFactory;
   }
 
  /**
@@ -1336,6 +1344,7 @@ public final class PackageFactory {
       prefetchGlobs(
           packageId,
           astAfterPreprocessing.ast,
+          false /* waspreprocessed */,
           buildFile,
           globber,
           defaultVisibility,
@@ -1407,8 +1416,14 @@ public final class PackageFactory {
     }
 
     Globber globber = createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator);
-    Preprocessor.Result preprocessingResult =
-        Preprocessor.Result.noPreprocessing(buildFile.asFragment(), buildFileBytes);
+    Preprocessor.Result preprocessingResult;
+    try {
+      preprocessingResult = preprocess(buildFile, packageId, buildFileBytes, globber);
+    } catch (IOException e) {
+      eventHandler.handle(
+          Event.error(Location.fromFile(buildFile), "preprocessing failed: " + e.getMessage()));
+      throw new BuildFileContainsErrorsException(packageId, "preprocessing failed", e);
+    }
 
     Package result =
         createPackageFromPreprocessingResult(
@@ -1424,6 +1439,44 @@ public final class PackageFactory {
             .build();
     Event.replayEventsOn(eventHandler, result.getEvents());
     return result;
+  }
+
+  /** Preprocesses the given BUILD file. */
+  public Preprocessor.Result preprocess(
+      PackageIdentifier packageId, Path buildFile, CachingPackageLocator locator)
+      throws InterruptedException, IOException {
+    byte[] buildFileBytes =
+        FileSystemUtils.readWithKnownFileSize(buildFile, buildFile.getFileSize());
+    Globber globber = createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator);
+    try {
+      return preprocess(buildFile, packageId, buildFileBytes, globber);
+    } finally {
+      globber.onCompletion();
+    }
+  }
+
+  /**
+   * Preprocesses the given BUILD file, executing {@code globber.onInterrupt()} on an
+   * {@link InterruptedException}.
+   */
+  public Preprocessor.Result preprocess(
+      Path buildFilePath, PackageIdentifier packageId, byte[] buildFileBytes,
+      Globber globber) throws InterruptedException, IOException {
+    Preprocessor preprocessor = preprocessorFactory.getPreprocessor();
+    if (preprocessor == null) {
+      return Preprocessor.Result.noPreprocessing(buildFilePath.asFragment(), buildFileBytes);
+    }
+    try {
+      return preprocessor.preprocess(
+          buildFilePath,
+          buildFileBytes,
+          packageId.toString(),
+          globber,
+          ruleFactory.getRuleClassNames());
+    } catch (InterruptedException e) {
+      globber.onInterrupt();
+      throw e;
+    }
   }
 
   /** Returns a new {@link LegacyGlobber}. */
@@ -1585,9 +1638,9 @@ public final class PackageFactory {
     pkgEnv
         .setup("native", nativeModule)
         .setup("distribs", newDistribsFunction.apply(context))
-        .setup("glob", newGlobFunction.apply(context, /*async=*/ false))
-        .setup("licenses", newLicensesFunction.apply(context))
+        .setup("glob", newGlobFunction.apply(context, /*async=*/false))
         .setup("mocksubinclude", newMockSubincludeFunction.apply(context))
+        .setup("licenses", newLicensesFunction.apply(context))
         .setup("exports_files", newExportsFilesFunction.apply())
         .setup("package_group", newPackageGroupFunction.apply())
         .setup("package", newPackageFunction(packageArguments))
@@ -1715,12 +1768,19 @@ public final class PackageFactory {
   private void prefetchGlobs(
       PackageIdentifier packageId,
       BuildFileAST buildFileAST,
+      boolean wasPreprocessed,
       Path buildFilePath,
       Globber globber,
       RuleVisibility defaultVisibility,
       MakeEnvironment.Builder pkgMakeEnv,
       Map<String, Extension> imports)
       throws InterruptedException {
+    if (wasPreprocessed && preprocessorFactory.considersGlobs()) {
+      // All the globs have either already been evaluated and they aren't in the ast anymore, or
+      // they are in the ast but the globber has been evaluating them lazily and so there is no
+      // point in prefetching them again.
+      return;
+    }
     // TODO(bazel-team): It may be wasteful to evaluate the BUILD file here, only to throw away the
     // result. It may be better to first scan the ast and see if there are even possibly any globs
     // at all. Additionally, it's wasteful to execute Skylark code that cannot invoke globs. So one
