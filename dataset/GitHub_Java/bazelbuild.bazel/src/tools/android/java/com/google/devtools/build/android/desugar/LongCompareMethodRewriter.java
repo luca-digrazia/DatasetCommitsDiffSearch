@@ -30,7 +30,7 @@ public class LongCompareMethodRewriter extends ClassVisitor {
   private final CoreLibraryRewriter rewriter;
 
   public LongCompareMethodRewriter(ClassVisitor cv, CoreLibraryRewriter rewriter) {
-    super(Opcodes.ASM8, cv);
+    super(Opcodes.ASM7, cv);
     this.rewriter = rewriter;
   }
 
@@ -44,7 +44,7 @@ public class LongCompareMethodRewriter extends ClassVisitor {
   private class LongCompareMethodVisitor extends MethodVisitor {
 
     public LongCompareMethodVisitor(MethodVisitor visitor) {
-      super(Opcodes.ASM8, visitor);
+      super(Opcodes.ASM7, visitor);
     }
 
     @Override

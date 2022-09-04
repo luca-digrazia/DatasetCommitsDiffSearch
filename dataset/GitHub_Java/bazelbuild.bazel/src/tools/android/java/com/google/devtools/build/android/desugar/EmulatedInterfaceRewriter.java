@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android.desugar;
 
-import com.google.devtools.build.android.desugar.ClassSignatureParser.ClassSignature;
 import com.google.devtools.build.android.desugar.io.BitFlags;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -22,8 +21,8 @@ import org.objectweb.asm.Opcodes;
 
 /**
  * Visitor that renames emulated interfaces and marks classes that extend emulated interfaces to
- * also implement the renamed interfaces. {@link DefaultMethodClassFixer} makes sure the requisite
- * methods are present in all classes implementing the renamed interface. Doing this helps with
+ * also implement the renamed interfaces.  {@link DefaultMethodClassFixer} makes sure the requisite
+ * methods are present in all classes implementing the renamed interface.  Doing this helps with
  * dynamic dispatch on emulated interfaces.
  */
 public class EmulatedInterfaceRewriter extends ClassVisitor {
@@ -47,15 +46,6 @@ public class EmulatedInterfaceRewriter extends ClassVisitor {
       String[] interfaces) {
     boolean emulated = support.isEmulatedCoreClassOrInterface(name);
     {
-      // If signature is already broken (if it is null), we can't salvage it. Bail out.
-      ClassSignature classSignature =
-          signature != null
-              ? ClassSignatureParser.readTypeParametersForInterfaces(
-                  name, signature, superName, interfaces)
-              : null;
-
-      StringBuilder signatureAdditions = new StringBuilder();
-
       // 1. see if we should implement any additional interfaces.
       // Use LinkedHashSet to dedupe but maintain deterministic order
       LinkedHashSet<String> newInterfaces = new LinkedHashSet<>();
@@ -63,24 +53,12 @@ public class EmulatedInterfaceRewriter extends ClassVisitor {
         // Make classes implementing emulated interfaces also implement the renamed interfaces we
         // create below.  This includes making the renamed interfaces extends each other as needed.
         Collections.addAll(newInterfaces, interfaces);
-        for (int i = 0; i < interfaces.length; i++) {
-          String itf = interfaces[i];
-
+        for (String itf : interfaces) {
           if (support.isEmulatedCoreClassOrInterface(itf)) {
-            String newInterface = support.renameCoreLibrary(itf);
-            newInterfaces.add(newInterface);
-
-            if (classSignature != null) {
-              signatureAdditions
-                  .append("L")
-                  .append(newInterface)
-                  .append(classSignature.interfaceTypeParameters().get(i))
-                  .append(";");
-            }
+            newInterfaces.add(support.renameCoreLibrary(itf));
           }
         }
       }
-
       if (!emulated) {
         // For an immediate subclass of an emulated class, also fill in any interfaces implemented
         // by superclasses, similar to the additional default method stubbing performed in
@@ -90,20 +68,7 @@ public class EmulatedInterfaceRewriter extends ClassVisitor {
           for (Class<?> implemented : superclass.getInterfaces()) {
             String itf = implemented.getName().replace('.', '/');
             if (support.isEmulatedCoreClassOrInterface(itf)) {
-              String newInterface = support.renameCoreLibrary(itf);
-              boolean added = newInterfaces.add(newInterface);
-
-              // Make sure we don't generate the same signature for an interface implemented in
-              // multiple superclasses
-              if (classSignature != null && added) {
-                signatureAdditions
-                    .append("L")
-                    .append(newInterface)
-                    // TODO(b/137073683): Handle the case where superclass has additional type
-                    // parameters not used in the emulated interface.
-                    .append(classSignature.superClassSignature().typeParameters())
-                    .append(";");
-              }
+              newInterfaces.add(support.renameCoreLibrary(itf));
             }
           }
           superclass = superclass.getSuperclass();
@@ -114,12 +79,7 @@ public class EmulatedInterfaceRewriter extends ClassVisitor {
           ? !newInterfaces.isEmpty()
           : interfaces.length != newInterfaces.size()) {
         interfaces = newInterfaces.toArray(EMPTY_ARRAY);
-        if (signature != null) {
-          // If we had no previous interfaces but have new interfaces from the super class, which
-          // should still append this additions. Per the specification, it is valid to add these
-          // interfaces after the superclass signature.
-          signature += signatureAdditions;
-        }
+        signature = null; // additional interfaces invalidate any signature
       }
     }
 

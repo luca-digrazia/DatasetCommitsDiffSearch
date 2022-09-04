@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.importdeps;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.collect.ImmutableSet;
@@ -42,7 +43,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   private final DepsCheckerMethodVisitor defaultMethodChecker = new DepsCheckerMethodVisitor();
 
   public DepsCheckerClassVisitor(ClassCache classCache, ResultCollector resultCollector) {
-    super(Opcodes.ASM6);
+    super(Opcodes.ASM7);
     this.classCache = classCache;
     this.resultCollector = resultCollector;
   }
@@ -91,17 +92,28 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   }
 
   private void checkMember(String owner, String name, String desc) {
-    checkDescriptor(desc);
-    AbstractClassEntryState state = checkInternalName(owner);
+    try {
+      if (checkInternalNameOrArrayDescriptor(owner)) {
+        // The owner is an array descriptor.
+        return; // Assume all methods of arrays exist by default.
+      }
+      checkDescriptor(desc);
+      AbstractClassEntryState state = checkInternalName(owner);
 
-    Optional<ClassInfo> classInfo = state.classInfo();
-    if (!classInfo.isPresent()) {
-      checkState(state.isMissingState(), "The state should be MissingState. %s", state);
-      return; // The class is already missing.
-    }
-    MemberInfo member = MemberInfo.create(owner, name, desc);
-    if (!classInfo.get().containsMember(member)) {
-      resultCollector.addMissingMember(member);
+      Optional<ClassInfo> classInfo = state.classInfo();
+      if (!classInfo.isPresent()) {
+        checkState(state.isMissingState(), "The state should be MissingState. %s", state);
+        return; // The class is already missing.
+      }
+      MemberInfo member = MemberInfo.create(name, desc);
+      if (!classInfo.get().containsMember(member)) {
+        resultCollector.addMissingMember(classInfo.get(), member);
+      }
+    } catch (RuntimeException e) {
+      System.err.printf(
+          "A runtime exception occurred when checking the member: owner=%s, name=%s, desc=%s\n",
+          owner, name, desc);
+      throw e;
     }
   }
 
@@ -138,17 +150,48 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
     }
   }
 
+  /**
+   * Checks the type, and returns {@literal true} if the type is an array descriptor, otherwise
+   * {@literal false}
+   */
+  private boolean checkInternalNameOrArrayDescriptor(String type) {
+    if (type.charAt(0) == '[') {
+      checkDescriptor(type);
+      return true;
+    } else {
+      checkInternalName(type);
+      return false;
+    }
+  }
+
   private AbstractClassEntryState checkInternalName(String internalName) {
+    checkArgument(
+        internalName.length() > 0 && Character.isJavaIdentifierStart(internalName.charAt(0)),
+        "The internal name is invalid. %s",
+        internalName);
     AbstractClassEntryState state = classCache.getClassState(internalName);
     if (state.isMissingState()) {
       resultCollector.addMissingOrIncompleteClass(internalName, state);
-    } else if (state.isIncompleteState()) {
-      String missingAncestor = state.asIncompleteState().getMissingAncestor();
-      AbstractClassEntryState ancestorState = classCache.getClassState(missingAncestor);
-      checkState(
-          ancestorState.isMissingState(), "The ancestor should be missing. %s", ancestorState);
-      resultCollector.addMissingOrIncompleteClass(missingAncestor, ancestorState);
-      resultCollector.addMissingOrIncompleteClass(internalName, state);
+    } else {
+      if (state.isIncompleteState()) {
+        state
+            .asIncompleteState()
+            .missingAncestors()
+            .forEach(
+                missingAncestor -> {
+                  AbstractClassEntryState ancestorState = classCache.getClassState(missingAncestor);
+                  checkState(
+                      ancestorState.isMissingState(),
+                      "The ancestor should be missing. %s",
+                      ancestorState);
+                  resultCollector.addMissingOrIncompleteClass(missingAncestor, ancestorState);
+                  resultCollector.addMissingOrIncompleteClass(internalName, state);
+                });
+      }
+      ClassInfo info = state.classInfo().get();
+      if (!info.directDep()) {
+        resultCollector.addIndirectDep(info.jarPath());
+      }
     }
     return state;
   }
@@ -178,7 +221,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   private class DepsCheckerAnnotationVisitor extends AnnotationVisitor {
 
     DepsCheckerAnnotationVisitor() {
-      super(Opcodes.ASM6);
+      super(Opcodes.ASM7);
     }
 
     @Override
@@ -193,11 +236,15 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
         checkType(((Type) value)); // Class literals.
         return;
       }
-      if (PRIMITIVE_TYPES.contains(value.getClass())) {
-        checkType(Type.getType(value.getClass()));
+      Class<?> clazz = value.getClass();
+      if (PRIMITIVE_TYPES.contains(clazz)) {
         return;
       }
-      throw new UnsupportedOperationException("Unhandled value " + value);
+      checkState(
+          clazz.isArray() && clazz.getComponentType().isPrimitive(),
+          "Unexpected value %s of type %s",
+          value,
+          clazz);
     }
 
     @Override
@@ -215,7 +262,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   private class DepsCheckerFieldVisitor extends FieldVisitor {
 
     DepsCheckerFieldVisitor() {
-      super(Opcodes.ASM6);
+      super(Opcodes.ASM7);
     }
 
     @Override
@@ -236,7 +283,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   private class DepsCheckerMethodVisitor extends MethodVisitor {
 
     DepsCheckerMethodVisitor() {
-      super(Opcodes.ASM6);
+      super(Opcodes.ASM7);
     }
 
     @Override
@@ -254,6 +301,9 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
 
     @Override
     public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
+      if ("Ljava/lang/Synthetic;".equals(desc)) {
+        return null; // ASM sometimes makes up this annotation, so we can ignore it (b/78024300)
+      }
       checkDescriptor(desc);
       return defaultAnnotationChecker;
     }
@@ -267,7 +317,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
 
     @Override
     public void visitTypeInsn(int opcode, String type) {
-      checkInternalName(type);
+      checkInternalNameOrArrayDescriptor(type);
       super.visitTypeInsn(opcode, type);
     }
 
