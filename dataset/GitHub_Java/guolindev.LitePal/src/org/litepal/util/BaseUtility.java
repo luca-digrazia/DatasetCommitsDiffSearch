@@ -1,7 +1,9 @@
 package org.litepal.util;
 
 import java.util.Collection;
+import java.util.Locale;
 
+import org.litepal.exceptions.DataSupportException;
 import org.litepal.parser.LitePalAttr;
 
 import android.text.TextUtils;
@@ -38,9 +40,9 @@ public class BaseUtility {
 			if (Const.LitePal.CASES_KEEP.equals(cases)) {
 				return string;
 			} else if (Const.LitePal.CASES_UPPER.equals(cases)) {
-				return string.toUpperCase();
+				return string.toUpperCase(Locale.getDefault());
 			}
-			return string.toLowerCase();
+			return string.toLowerCase(Locale.getDefault());
 		}
 		return null;
 	}
@@ -85,7 +87,7 @@ public class BaseUtility {
 	 */
 	public static String capitalize(String string) {
 		if (!TextUtils.isEmpty(string)) {
-			return string.substring(0, 1).toUpperCase() + string.substring(1);
+			return string.substring(0, 1).toUpperCase(Locale.getDefault()) + string.substring(1);
 		}
 		return string == null ? null : "";
 	}
@@ -111,6 +113,29 @@ public class BaseUtility {
 			return count;
 		}
 		return 0;
+	}
+	
+	/**
+	 * Check the number of question mark existed in conditions[0] equals the
+	 * number of rest conditions elements or not. If not equals, throws
+	 * DataSupportException.
+	 * 
+	 * @param conditions
+	 *            A string array representing the WHERE part of an SQL
+	 *            statement.
+	 * @throws DataSupportException
+	 */
+	public static void checkConditionsCorrect(String... conditions) {
+		if (conditions != null) {
+			int conditionsSize = conditions.length;
+			if (conditionsSize > 0) {
+				String whereClause = conditions[0];
+				int placeHolderSize = BaseUtility.count(whereClause, "?");
+				if (conditionsSize != placeHolderSize + 1) {
+					throw new DataSupportException(DataSupportException.UPDATE_CONDITIONS_EXCEPTION);
+				}
+			}
+		}
 	}
 
 	/**
