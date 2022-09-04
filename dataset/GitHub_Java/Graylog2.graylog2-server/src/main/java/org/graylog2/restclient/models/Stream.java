@@ -25,13 +25,16 @@ import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ApiRequestBuilder;
 import org.graylog2.restclient.models.alerts.Alert;
+import org.graylog2.restclient.models.alerts.AlertCondition;
 import org.graylog2.restclient.models.alerts.AlertConditionService;
 import org.graylog2.restclient.models.api.requests.alerts.CreateAlertConditionRequest;
 import org.graylog2.restclient.models.api.responses.alerts.AlertSummaryResponse;
 import org.graylog2.restclient.models.api.responses.alerts.AlertsResponse;
+import org.graylog2.restclient.models.api.responses.alerts.CheckConditionResponse;
 import org.graylog2.restclient.models.api.responses.streams.StreamRuleSummaryResponse;
 import org.graylog2.restclient.models.api.responses.streams.StreamSummaryResponse;
 import org.graylog2.restclient.models.api.responses.streams.StreamThroughputResponse;
+import org.graylog2.restroutes.generated.routes;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
@@ -39,6 +42,8 @@ import java.util.Collection;
 import java.util.List;
 
 public class Stream {
+
+    private final StreamService streamService;
 
     public interface Factory {
         public Stream fromSummaryResponse(StreamSummaryResponse ssr);
@@ -64,8 +69,14 @@ public class Stream {
     private AlertsResponse alertsResponse;
 
 	@AssistedInject
-    private Stream(ApiClient api, UserService userService, AlertConditionService alertConditionService, StreamRule.Factory streamRuleFactory, @Assisted StreamSummaryResponse ssr) {
-		this.id = ssr.id;
+    private Stream(ApiClient api,
+                   UserService userService,
+                   AlertConditionService alertConditionService,
+                   StreamRule.Factory streamRuleFactory,
+                   StreamService streamService,
+                   @Assisted StreamSummaryResponse ssr) {
+        this.streamService = streamService;
+        this.id = ssr.id;
         this.title = ssr.title;
         this.description = ssr.description;
         this.creatorUserId = ssr.creatorUserId;
@@ -107,7 +118,7 @@ public class Stream {
     }
 
     public void addAlertReceiver(User user) throws APIException, IOException {
-        api.post().path("/streams/{0}/alerts/receivers", getId())
+        api.path(routes.StreamAlertReceiverResource().addReceiver(getId()))
                 .queryParam("entity", user.getName())
                 .queryParam("type", "users")
                 .expect(201)
@@ -115,7 +126,7 @@ public class Stream {
     }
 
     public void addAlertReceiver(String email) throws APIException, IOException {
-        api.post().path("/streams/{0}/alerts/receivers", getId())
+        api.path(routes.StreamAlertReceiverResource().addReceiver(getId()))
                 .queryParam("entity", email)
                 .queryParam("type", "emails")
                 .expect(201)
@@ -123,7 +134,7 @@ public class Stream {
     }
 
     public void removeAlertReceiver(User user) throws APIException, IOException {
-        api.delete().path("/streams/{0}/alerts/receivers", getId())
+        api.path(routes.StreamAlertReceiverResource().removeReceiver(getId()))
                 .queryParam("entity", user.getName())
                 .queryParam("type", "users")
                 .expect(204)
@@ -131,7 +142,7 @@ public class Stream {
     }
 
     public void removeAlertReceiver(String email) throws APIException, IOException {
-        api.delete().path("/streams/{0}/alerts/receivers", getId())
+        api.path(routes.StreamAlertReceiverResource().removeReceiver(getId()))
                 .queryParam("entity", email)
                 .queryParam("type", "emails")
                 .expect(204)
@@ -188,10 +199,9 @@ public class Stream {
         return (disabled != null && disabled);
     }
 
-    private final AlertsResponse getAlertsInformation(int since) throws APIException, IOException {
+    private AlertsResponse getAlertsInformation(int since) throws APIException, IOException {
         if (alertsResponse == null) {
-            ApiRequestBuilder<AlertsResponse> call = api.get(AlertsResponse.class)
-                    .path("/streams/{0}/alerts", getId());
+            ApiRequestBuilder<AlertsResponse> call = api.path(routes.StreamAlertResource().list(getId()), AlertsResponse.class);
 
             if (since > 0) {
                 call.queryParam("since", since);
@@ -203,9 +213,24 @@ public class Stream {
         return alertsResponse;
     }
 
+    public int getActiveAlerts() throws APIException, IOException {
+        /*int total = 0;
+        for (AlertCondition alertCondition : this.alertConditionService.allOfStream(this)) {
+            if (alertCondition.getParameters() == null) continue;
+
+            int time = (alertCondition.getParameters().get("time") == null ? 0 : Integer.parseInt(alertCondition.getParameters().get("time").toString()));
+            int grace = (alertCondition.getParameters().get("grace") == null ? 0 : Integer.parseInt(alertCondition.getParameters().get("grace").toString()));
+            int since = Math.round(new DateTime().minusMinutes((time + grace == 0 ? 1 : time + grace)).getMillis()/1000);
+            total += getAlertsInformation(since).alerts.size();
+        }*/
+        CheckConditionResponse response = streamService.activeAlerts(this.getId());
+        int size = (response.results == null ? 0 : response.results.size());
+
+        return size;
+    }
+
     public long getThroughput() throws APIException, IOException {
-        final StreamThroughputResponse throughputResponse = api.get(StreamThroughputResponse.class)
-                .path("/streams/{0}/throughput", getId())
+        final StreamThroughputResponse throughputResponse = api.path(routes.StreamResource().oneStreamThroughput(getId()), StreamThroughputResponse.class)
                 .expect(200, 404)
                 .execute();
 
