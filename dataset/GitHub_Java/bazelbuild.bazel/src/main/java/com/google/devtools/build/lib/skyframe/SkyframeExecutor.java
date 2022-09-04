@@ -141,9 +141,7 @@ import com.google.devtools.build.lib.rules.repository.ResolvedFileFunction;
 import com.google.devtools.build.lib.rules.repository.ResolvedHashesFunction;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.BuildConfiguration.Code;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.FileDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.FileFunction.NonexistentFileReceiver;
@@ -569,7 +567,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
             ruleClassProvider,
             shouldStoreTransitivePackagesInLoadingAndAnalysis(),
             defaultBuildOptions));
-    map.put(SkyFunctions.LOAD_STARLARK_ASPECT, new ToplevelStarlarkAspectFunction());
+    map.put(SkyFunctions.LOAD_STARLARK_ASPECT, new ToplevelSkylarkAspectFunction());
     map.put(SkyFunctions.ACTION_LOOKUP_CONFLICT_FINDING, new ActionLookupConflictFindingFunction());
     map.put(
         SkyFunctions.TOP_LEVEL_ACTION_LOOKUP_CONFLICT_FINDING,
@@ -589,10 +587,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     map.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction(externalPackageHelper));
     map.put(
         SkyFunctions.TARGET_COMPLETION,
-        TargetCompletor.targetCompletionFunction(pathResolverFactory, skyframeActionExecutor));
+        TargetCompletor.targetCompletionFunction(
+            pathResolverFactory, skyframeActionExecutor::getExecRoot));
     map.put(
         SkyFunctions.ASPECT_COMPLETION,
-        AspectCompletor.aspectCompletionFunction(pathResolverFactory, skyframeActionExecutor));
+        AspectCompletor.aspectCompletionFunction(
+            pathResolverFactory, skyframeActionExecutor::getExecRoot));
     map.put(SkyFunctions.TEST_COMPLETION, new TestCompletionFunction());
     map.put(
         Artifact.ARTIFACT,
@@ -1013,7 +1013,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
    */
   protected void discardPreExecutionCache(
       Collection<ConfiguredTarget> topLevelTargets,
-      ImmutableSet<AspectKey> topLevelAspects,
+      Collection<AspectValue> topLevelAspects,
       DiscardType discardType) {
     if (discardType.discardsAnalysis()) {
       topLevelTargets = ImmutableSet.copyOf(topLevelTargets);
@@ -1076,7 +1076,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
             }
             // value may be null if target was not successfully analyzed.
             if (aspectValue != null) {
-              aspectValue.clear(!topLevelAspects.contains(key));
+              aspectValue.clear(!topLevelAspects.contains(aspectValue));
             }
           }
         }
@@ -1090,7 +1090,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
    * graph.
    */
   public abstract void clearAnalysisCache(
-      Collection<ConfiguredTarget> topLevelTargets, ImmutableSet<AspectKey> topLevelAspects);
+      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects);
 
   protected abstract void dropConfiguredTargetsNow(final ExtendedEventHandler eventHandler);
 
@@ -1142,7 +1142,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     PrecomputedValue.DEFAULT_VISIBILITY.set(injectable(), defaultVisibility);
   }
 
-  private void setStarlarkSemantics(StarlarkSemantics starlarkSemantics) {
+  private void setSkylarkSemantics(StarlarkSemantics starlarkSemantics) {
     PrecomputedValue.STARLARK_SEMANTICS.set(injectable(), starlarkSemantics);
   }
 
@@ -1401,7 +1401,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     setDefaultVisibility(packageOptions.defaultVisibility);
 
     StarlarkSemantics starlarkSemantics = getEffectiveStarlarkSemantics(starlarkSemanticsOptions);
-    setStarlarkSemantics(starlarkSemantics);
+    setSkylarkSemantics(starlarkSemantics);
     setSiblingDirectoryLayout(starlarkSemantics.experimentalSiblingRepositoryLayout());
     setPackageLocator(pkgLocator);
 
@@ -1434,7 +1434,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
 
   public StarlarkSemantics getEffectiveStarlarkSemantics(
       StarlarkSemanticsOptions starlarkSemanticsOptions) {
-    return starlarkSemanticsOptions.toStarlarkSemantics();
+    return starlarkSemanticsOptions.toSkylarkSemantics();
   }
 
   private void setPackageLocator(PathPackageLocator pkgLocator) {
@@ -1564,7 +1564,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       Executor executor,
       Set<Artifact> artifactsToBuild,
       Collection<ConfiguredTarget> targetsToBuild,
-      ImmutableSet<AspectKey> aspects,
+      Collection<AspectValue> aspects,
       Set<ConfiguredTarget> parallelTests,
       Set<ConfiguredTarget> exclusiveTests,
       OptionsProvider options,
@@ -2142,8 +2142,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     EvaluationResult<SkyValue> evaluationResult =
         evaluateSkyKeys(eventHandler, ImmutableSet.of(platformMappingKey));
     if (evaluationResult.hasError()) {
-      throw new InvalidConfigurationException(
-          Code.PLATFORM_MAPPING_EVALUATION_FAILURE, evaluationResult.getError().getException());
+      throw new InvalidConfigurationException(evaluationResult.getError().getException());
     }
     return (PlatformMappingValue) evaluationResult.get(platformMappingKey);
   }
@@ -2797,9 +2796,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
         new ConfiguredTargetCycleReporter(packageManager),
         new TestExpansionCycleReporter(packageManager),
         new RegisteredToolchainsCycleReporter(),
-        // TODO(ulfjack): The StarlarkModuleCycleReporter swallows previously reported cycles
+        // TODO(ulfjack): The SkylarkModuleCycleReporter swallows previously reported cycles
         // unconditionally! Is that intentional?
-        new StarlarkModuleCycleReporter());
+        new SkylarkModuleCycleReporter());
   }
 
   CyclesReporter getCyclesReporter() {

@@ -45,13 +45,12 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.LoadStatement;
 import com.google.devtools.build.lib.syntax.Location;
-import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
 import com.google.devtools.build.lib.syntax.Statement;
-import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -62,7 +61,6 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,14 +68,14 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
- * A Skyframe function to look up and load a single .bzl module.
+ * A Skyframe function to look up and import a single Starlark extension.
  *
- * <p>Given a {@link Label} referencing a .bzl file, attempts to locate the file and load it. The
- * Label must be absolute, and must not reference the special {@code external} package. If loading
- * is successful, returns a {@link StarlarkImportLookupValue} that encapsulates the loaded {@link
- * Module} and its transitive digest and {@link StarlarkFileDependency} information. If loading is
- * unsuccessful, throws a {@link StarlarkImportLookupFunctionException} that encapsulates the cause
- * of the failure.
+ * <p>Given a {@link Label} referencing a Starlark file, attempts to locate the file and load it.
+ * The Label must be absolute, and must not reference the special {@code external} package. If
+ * loading is successful, returns a {@link StarlarkImportLookupValue} that encapsulates the loaded
+ * {@link Extension} and {@link StarlarkFileDependency} information. If loading is unsuccessful,
+ * throws a {@link StarlarkImportLookupFunctionException} that encapsulates the cause of the
+ * failure.
  */
 public class StarlarkImportLookupFunction implements SkyFunction {
 
@@ -399,8 +397,8 @@ public class StarlarkImportLookupFunction implements SkyFunction {
       @Nullable InliningState inliningState)
       throws InconsistentFilesystemException, StarlarkImportFailedException, InterruptedException {
     if (!astLookupValue.lookupSuccessful()) {
-      // Starlark import files must exist.
-      throw new StarlarkImportFailedException(astLookupValue.getError());
+      // Starlark import files have to exist.
+      throw new StarlarkImportFailedException(astLookupValue.getErrorMsg());
     }
     StarlarkFile file = astLookupValue.getAST();
     if (!file.ok()) {
@@ -442,12 +440,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
     }
 
     // Process the loaded imports.
-    //
-    // Compute a digest of the file itself plus the transitive hashes of the modules it directly
-    // loads. Loop iteration order matches the source order of load statements.
-    Fingerprint fp = new Fingerprint();
-    fp.addBytes(astLookupValue.getDigest());
-    Map<String, Module> loadedModules = Maps.newHashMapWithExpectedSize(loadMap.size());
+    Map<String, Extension> extensionsForImports = Maps.newHashMapWithExpectedSize(loadMap.size());
     ImmutableList.Builder<StarlarkFileDependency> fileDependencies =
         ImmutableList.builderWithExpectedSize(loadMap.size());
     for (Map.Entry<String, Label> importEntry : loadMap.entrySet()) {
@@ -460,30 +453,26 @@ public class StarlarkImportLookupFunction implements SkyFunction {
       } else {
         keyForLabel = StarlarkImportLookupValue.key(importLabel);
       }
-      StarlarkImportLookupValue v = (StarlarkImportLookupValue) starlarkImportMap.get(keyForLabel);
-      loadedModules.put(importString, v.getModule());
-      fileDependencies.add(v.getDependency());
-      fp.addBytes(v.getTransitiveDigest());
+      StarlarkImportLookupValue importLookupValue =
+          (StarlarkImportLookupValue) starlarkImportMap.get(keyForLabel);
+      extensionsForImports.put(importString, importLookupValue.getEnvironmentExtension());
+      fileDependencies.add(importLookupValue.getDependency());
     }
-    byte[] transitiveDigest = fp.digestAndReset();
 
-    // executeModule does not request values from the Environment. It may post events to the
+    // #createExtension does not request values from the Environment. It may post events to the
     // Environment, but events do not matter when caching StarlarkImportLookupValues.
-    Module module =
-        executeModule(
+    Extension extension =
+        createExtension(
             file,
             fileLabel,
-            transitiveDigest,
-            loadedModules,
+            extensionsForImports,
             starlarkSemantics,
             env,
             inWorkspace,
             repoMapping);
     StarlarkImportLookupValue result =
         new StarlarkImportLookupValue(
-            module,
-            transitiveDigest,
-            new StarlarkFileDependency(fileLabel, fileDependencies.build()));
+            extension, new StarlarkFileDependency(fileLabel, fileDependencies.build()));
     return result;
   }
 
@@ -525,8 +514,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
   /**
    * Returns a mapping from each load string in the BUILD or .bzl file to the Label it resolves to.
    * Labels are resolved relative to {@code base}, the file's package. If any load statement is
-   * malformed, getLoadMap reports one or more errors to the handler and returns null. Iteration
-   * order matches the source.
+   * malformed, getLoadMap reports one or more errors to the handler and returns null.
    */
   @Nullable
   static Map<String, Label> getLoadMap(
@@ -541,7 +529,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
     Label buildLabel = getBUILDLabel(base);
 
     boolean ok = true;
-    Map<String, Label> loadMap = Maps.newLinkedHashMap();
+    Map<String, Label> loadMap = Maps.newHashMap();
     for (Statement stmt : file.getStatements()) {
       if (stmt instanceof LoadStatement) {
         LoadStatement load = (LoadStatement) stmt;
@@ -659,49 +647,45 @@ public class StarlarkImportLookupFunction implements SkyFunction {
     return valuesMissing ? null : starlarkImportMap;
   }
 
-  /** Executes the .bzl file defining the module to be imported. */
-  private Module executeModule(
+  /** Creates the Extension to be imported. */
+  private Extension createExtension(
       StarlarkFile file,
-      Label moduleLabel,
-      byte[] transitiveDigest,
-      Map<String, Module> loadedModules,
+      Label extensionLabel,
+      Map<String, Extension> importMap,
       StarlarkSemantics starlarkSemantics,
       Environment env,
       boolean inWorkspace,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws StarlarkImportFailedException, InterruptedException {
-    // .bzl predeclared environment
-    Map<String, Object> predeclared = new HashMap<>(ruleClassProvider.getEnvironment());
-    predeclared.put("native", packageFactory.getNativeModule(inWorkspace));
-
-    try (Mutability mu = Mutability.create("importing", moduleLabel)) {
+    StoredEventHandler eventHandler = new StoredEventHandler();
+    // Any change to an input file may affect program behavior,
+    // even if only by changing line numbers in error messages.
+    PathFragment extensionFile = extensionLabel.toPathFragment();
+    try (Mutability mutability = Mutability.create("importing", extensionFile)) {
       StarlarkThread thread =
-          StarlarkThread.builder(mu)
-              .setGlobals(Module.createForBuiltins(predeclared).withLabel(moduleLabel))
-              .setSemantics(starlarkSemantics)
-              .setLoadedModules(loadedModules)
-              .build();
-      StoredEventHandler eventHandler = new StoredEventHandler();
-      thread.setPrintHandler(Event.makeDebugPrintHandler(eventHandler));
-      ruleClassProvider.setStarlarkThreadContext(
-          thread, moduleLabel, transitiveDigest, repositoryMapping);
-      Module module = thread.getGlobals();
-      execAndExport(file, moduleLabel, eventHandler, thread);
+          ruleClassProvider.createRuleClassStarlarkThread(
+              extensionLabel,
+              mutability,
+              starlarkSemantics,
+              Event.makeDebugPrintHandler(eventHandler),
+              file.getContentHashCode(),
+              importMap,
+              packageFactory.getNativeModule(inWorkspace),
+              repositoryMapping);
+      execAndExport(file, extensionLabel, eventHandler, thread);
 
       Event.replayEventsOn(env.getListener(), eventHandler.getEvents());
       for (Postable post : eventHandler.getPosts()) {
         env.getListener().post(post);
       }
       if (eventHandler.hasErrors()) {
-        throw StarlarkImportFailedException.errors(moduleLabel.toPathFragment());
+        throw StarlarkImportFailedException.errors(extensionFile);
       }
-      return module;
+      return new Extension(thread);
     }
   }
 
   // Precondition: file is validated and error-free.
-  // Precondition: thread has a valid transitiveDigest.
-  // TODO(adonovan): executeModule would make a better public API than this function.
   public static void execAndExport(
       StarlarkFile file, Label extensionLabel, EventHandler handler, StarlarkThread thread)
       throws InterruptedException {

@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
-import com.google.devtools.build.lib.packages.PackageLoadingListener;
 import com.google.devtools.build.lib.packages.PackageValidator;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -188,7 +187,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     }
 
     public Builder useDefaultSkylarkSemantics() {
-      this.starlarkSemantics = StarlarkSemantics.DEFAULT;
+      this.starlarkSemantics = StarlarkSemantics.DEFAULT_SEMANTICS;
       return this;
     }
 
@@ -277,8 +276,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
             getEnvironmentExtensions(),
             "PackageLoader",
             Package.Builder.DefaultHelper.INSTANCE,
-            PackageValidator.NOOP_VALIDATOR,
-            PackageLoadingListener.NOOP_LISTENER);
+            PackageValidator.NOOP_VALIDATOR);
   }
 
   private static ImmutableDiff makePreinjectedDiff(
