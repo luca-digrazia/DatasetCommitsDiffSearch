@@ -18,7 +18,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.devtools.build.android.desugar.LambdaClassMaker.LAMBDA_METAFACTORY_DUMPER_PROPERTY;
-import static com.google.devtools.build.android.desugar.retarget.ReplacementRange.DESUGAR_JAVA8_CORE_LIBS;
 import static com.google.devtools.build.android.desugar.retarget.ReplacementRange.DESUGAR_JAVA8_LIBS;
 import static com.google.devtools.build.android.desugar.retarget.ReplacementRange.REPLACE_CALLS_TO_LONG_UNSIGNED;
 import static com.google.devtools.build.android.desugar.retarget.ReplacementRange.REPLACE_CALLS_TO_PRIMITIVE_WRAPPERS;
@@ -153,21 +152,15 @@ public class Desugar {
     ImmutableSet.Builder<ReplacementRange> invocationReplacementRangesBuilder =
         ImmutableSet.builder();
 
-    // Exclude the dependency on desugar runtime libs from desugar_jdk_libs.
-    if (!allowCallsToLongUnsigned && !this.options.coreLibrary) {
+    if (!allowCallsToLongUnsigned) {
       invocationReplacementRangesBuilder.add(REPLACE_CALLS_TO_LONG_UNSIGNED);
     }
-    // Exclude the dependency on desugar runtime libs from desugar_jdk_libs.
-    if (!allowCallsToPrimitiveWrappers && !this.options.coreLibrary) {
+    if (!allowCallsToPrimitiveWrappers) {
       invocationReplacementRangesBuilder.add(REPLACE_CALLS_TO_PRIMITIVE_WRAPPERS);
     }
 
     if (options.desugarCoreLibs && options.autoDesugarShadowedApiUse) {
       invocationReplacementRangesBuilder.add(DESUGAR_JAVA8_LIBS);
-    }
-
-    if (options.coreLibrary) {
-      invocationReplacementRangesBuilder.add(DESUGAR_JAVA8_CORE_LIBS);
     }
 
     enabledInvocationReplacementRanges = invocationReplacementRangesBuilder.build();
@@ -226,8 +219,8 @@ public class Desugar {
 
     ClassMemberRetargetConfig classMemberRetargetConfig =
         ClassMemberRetargetConfig.builder()
-            .addInvocationReplacementConfigUrl(ClassMemberRetargetConfig.DEFAULT_PROTO_URL)
-            .addAllEnabledInvocationReplacementRange(enabledInvocationReplacementRanges)
+            .setInvocationReplacementConfigUrl(ClassMemberRetargetConfig.DEFAULT_PROTO_URL)
+            .setEnabledInvocationReplacementRanges(enabledInvocationReplacementRanges)
             .build();
 
     try (Closer closer = Closer.create()) {
@@ -301,8 +294,8 @@ public class Desugar {
                   loader,
                   options.rewriteCoreLibraryPrefixes,
                   options.emulateCoreLibraryInterfaces,
-                  options.dontTouchCoreLibraryMembers,
-                  classMemberRetargetConfig)
+                  options.retargetCoreLibraryMembers,
+                  options.dontTouchCoreLibraryMembers)
               : null;
 
       InvocationSiteTransformationRecordBuilder callSiteTransCollector =
