@@ -766,7 +766,7 @@ public class CppOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_remove_legacy_whole_archive",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {
@@ -892,7 +892,7 @@ public class CppOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_disable_nocopts",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
       metadataTags = {
