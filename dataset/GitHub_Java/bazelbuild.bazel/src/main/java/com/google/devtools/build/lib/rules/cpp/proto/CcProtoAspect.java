@@ -60,8 +60,6 @@ import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
-import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Exports;
-import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Services;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.ToolchainInvocation;
 import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
@@ -368,15 +366,14 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       ImmutableList.Builder<ToolchainInvocation> invocations = ImmutableList.builder();
       invocations.add(
           new ToolchainInvocation("C++", checkNotNull(getProtoToolchainProvider()), genfilesPath));
-      ProtoCompileActionBuilder.registerActions(
+      ProtoCompileActionBuilder.registerActionsWithoutExports(
           ruleContext,
           invocations.build(),
           protoProvider,
           ruleContext.getLabel(),
           outputs,
           "C++",
-          Exports.DO_NOT_USE,
-          Services.ALLOW);
+          /* allowServices= */ true);
     }
 
     private ProtoLangToolchainProvider getProtoToolchainProvider() {

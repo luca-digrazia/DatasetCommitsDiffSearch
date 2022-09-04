@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -347,11 +348,15 @@ public class ProtoCompileActionBuilder {
   public static void writeDescriptorSet(
       RuleContext ruleContext,
       final CharSequence outReplacement,
-      ProtoSourcesProvider protoProvider,
+      Collection<Artifact> protosToCompile,
+      NestedSet<Artifact> transitiveSources,
+      NestedSet<Artifact> protosInDirectDeps,
       Artifact output,
-      Services allowServices,
-      NestedSet<Artifact> transitiveDescriptorSets) {
-    if (protoProvider.getDirectProtoSources().isEmpty()) {
+      boolean allowServices,
+      NestedSet<Artifact> transitiveDescriptorSets,
+      NestedSet<String> protoSourceRoots,
+      NestedSet<String> directProtoSourceRoots) {
+    if (protosToCompile.isEmpty()) {
       ruleContext.registerAction(
           FileWriteAction.createEmptyWithInputs(
               ruleContext.getActionOwner(), transitiveDescriptorSets, output));
@@ -362,11 +367,16 @@ public class ProtoCompileActionBuilder {
         createActions(
             ruleContext,
             ImmutableList.of(createDescriptorSetToolchain(outReplacement)),
-            protoProvider,
+            protosToCompile,
+            transitiveSources,
+            protosInDirectDeps,
+            /* protosInExports= */ null,
+            protoSourceRoots,
+            directProtoSourceRoots,
+            /* exportedProtoSourceRoots= */ null,
             ruleContext.getLabel(),
             ImmutableList.of(output),
             "Descriptor Set",
-            Exports.DO_NOT_USE,
             allowServices);
     if (actions == null) {
       return;
@@ -392,23 +402,34 @@ public class ProtoCompileActionBuilder {
         outReplacement);
   }
 
-  /** Whether to use exports in the proto compile action. */
-  public enum Exports {
-    USE,
-    DO_NOT_USE,
+  public static void registerActionsWithoutExports(
+      RuleContext ruleContext,
+      List<ToolchainInvocation> toolchainInvocations,
+      ProtoSourcesProvider protoProvider,
+      Label ruleLabel,
+      Iterable<Artifact> outputs,
+      String flavorName,
+      boolean allowServices) {
+    SpawnAction.Builder actions =
+        createActions(
+            ruleContext,
+            toolchainInvocations,
+            protoProvider.getDirectProtoSources(),
+            protoProvider.getTransitiveProtoSources(),
+            protoProvider.getProtosInDirectDeps(),
+            null,
+            protoProvider.getTransitiveProtoSourceRoots(),
+            protoProvider.getDirectProtoSourceRoots(),
+            null,
+            ruleLabel,
+            outputs,
+            flavorName,
+            allowServices);
+    if (actions != null) {
+      ruleContext.registerAction(actions.build(ruleContext));
+    }
   }
 
-  /** Whether to allow services in the proto compiler invocation. */
-  public enum Services {
-    ALLOW,
-    DISALLOW,
-  }
-
-  /** Whether to enable strict dependency checking. */
-  public enum Deps {
-    STRICT,
-    NON_STRICT,
-  }
   /**
    * Registers actions to generate code from .proto files.
    *
@@ -428,17 +449,21 @@ public class ProtoCompileActionBuilder {
       Label ruleLabel,
       Iterable<Artifact> outputs,
       String flavorName,
-      Exports useExports,
-      Services allowServices) {
+      boolean allowServices) {
     SpawnAction.Builder actions =
         createActions(
             ruleContext,
             toolchainInvocations,
-            protoProvider,
+            protoProvider.getDirectProtoSources(),
+            protoProvider.getTransitiveProtoSources(),
+            protoProvider.getProtosInDirectDeps(),
+            protoProvider.getProtosInExports(),
+            protoProvider.getTransitiveProtoSourceRoots(),
+            protoProvider.getDirectProtoSourceRoots(),
+            protoProvider.getExportedProtoSourceRoots(),
             ruleLabel,
             outputs,
             flavorName,
-            useExports,
             allowServices);
     if (actions != null) {
       ruleContext.registerAction(actions.build(ruleContext));
@@ -449,19 +474,23 @@ public class ProtoCompileActionBuilder {
   private static SpawnAction.Builder createActions(
       RuleContext ruleContext,
       List<ToolchainInvocation> toolchainInvocations,
-      ProtoSourcesProvider protoProvider,
+      Iterable<Artifact> protosToCompile,
+      NestedSet<Artifact> transitiveSources,
+      @Nullable NestedSet<Artifact> protosInDirectDeps,
+      @Nullable NestedSet<Artifact> protosInExports,
+      NestedSet<String> protoSourceRoots,
+      NestedSet<String> directProtoSourceRoots,
+      @Nullable NestedSet<String> exportedProtoSourceRoots,
       Label ruleLabel,
       Iterable<Artifact> outputs,
       String flavorName,
-      Exports useExports,
-      Services allowServices) {
+      boolean allowServices) {
 
     if (isEmpty(outputs)) {
       return null;
     }
 
-    SpawnAction.Builder result =
-        new SpawnAction.Builder().addTransitiveInputs(protoProvider.getTransitiveProtoSources());
+    SpawnAction.Builder result = new SpawnAction.Builder().addTransitiveInputs(transitiveSources);
 
     for (ToolchainInvocation invocation : toolchainInvocations) {
       ProtoLangToolchainProvider toolchain = invocation.toolchain;
@@ -484,10 +513,14 @@ public class ProtoCompileActionBuilder {
         .addCommandLine(
             createCommandLineFromToolchains(
                 toolchainInvocations,
-                protoProvider,
+                protosToCompile,
+                transitiveSources,
+                protoSourceRoots,
+                directProtoSourceRoots,
+                exportedProtoSourceRoots,
+                areDepsStrict(ruleContext) ? protosInDirectDeps : null,
+                arePublicImportsStrict(ruleContext) ? protosInExports : null,
                 ruleLabel,
-                areDepsStrict(ruleContext) ? Deps.STRICT : Deps.NON_STRICT,
-                arePublicImportsStrict(ruleContext) ? useExports : Exports.DO_NOT_USE,
                 allowServices,
                 ruleContext.getFragment(ProtoConfiguration.class).protocOpts()),
             ParamFileInfo.builder(ParameterFileType.UNQUOTED).build())
@@ -524,17 +557,20 @@ public class ProtoCompileActionBuilder {
   @VisibleForTesting
   static CustomCommandLine createCommandLineFromToolchains(
       List<ToolchainInvocation> toolchainInvocations,
-      ProtoSourcesProvider protoProvider,
+      Iterable<Artifact> protosToCompile,
+      NestedSet<Artifact> transitiveSources,
+      NestedSet<String> transitiveProtoPathFlags,
+      NestedSet<String> directProtoSourceRoots,
+      NestedSet<String> exportedProtoSourceRoots,
+      @Nullable NestedSet<Artifact> protosInDirectDeps,
+      @Nullable NestedSet<Artifact> protosInExports,
       Label ruleLabel,
-      Deps strictDeps,
-      Exports useExports,
-      Services allowServices,
+      boolean allowServices,
       ImmutableList<String> protocOpts) {
     CustomCommandLine.Builder cmdLine = CustomCommandLine.builder();
 
     cmdLine.addAll(
-        VectorArg.of(protoProvider.getTransitiveProtoSourceRoots())
-            .mapped(EXPAND_TRANSITIVE_PROTO_PATH_FLAGS));
+        VectorArg.of(transitiveProtoPathFlags).mapped(EXPAND_TRANSITIVE_PROTO_PATH_FLAGS));
 
     // A set to check if there are multiple invocations with the same name.
     HashSet<String> invocationNames = new HashSet<>();
@@ -569,34 +605,30 @@ public class ProtoCompileActionBuilder {
     cmdLine.addAll(protocOpts);
 
     // Add include maps
-    addIncludeMapArguments(
-        cmdLine,
-        strictDeps == Deps.STRICT ? protoProvider.getProtosInDirectDeps() : null,
-        protoProvider.getDirectProtoSourceRoots(),
-        protoProvider.getTransitiveProtoSources());
+    addIncludeMapArguments(cmdLine, protosInDirectDeps, directProtoSourceRoots, transitiveSources);
 
-    if (strictDeps == Deps.STRICT) {
+    if (protosInDirectDeps != null) {
       cmdLine.addFormatted(STRICT_DEPS_FLAG_TEMPLATE, ruleLabel);
     }
 
-    if (useExports == Exports.USE) {
-      if (protoProvider.getProtosInExports().isEmpty()) {
+    if (protosInExports != null) {
+      if (protosInExports.isEmpty()) {
         // This line is necessary to trigger the check.
         cmdLine.add("--allowed_public_imports=");
       } else {
         cmdLine.addAll(
             "--allowed_public_imports",
             VectorArg.join(":")
-                .each(protoProvider.getProtosInExports())
-                .mapped(new ExpandToPathFn(protoProvider.getExportedProtoSourceRoots())));
+                .each(protosInExports)
+                .mapped(new ExpandToPathFn(exportedProtoSourceRoots)));
       }
     }
 
-    for (Artifact src : protoProvider.getDirectProtoSources()) {
+    for (Artifact src : protosToCompile) {
       cmdLine.addPath(src.getExecPath());
     }
 
-    if (allowServices == Services.DISALLOW) {
+    if (!allowServices) {
       cmdLine.add("--disallow_services");
     }
 
