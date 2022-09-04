@@ -1,21 +1,19 @@
 package org.graylog2.streams.matchers;
 
-import com.google.common.collect.Maps;
+import com.mongodb.BasicDBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.streams.InvalidStreamRuleTypeException;
 import org.graylog2.streams.StreamRuleMatcherFactory;
-
-import java.util.Map;
+import org.joda.time.DateTime;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class MatcherTest {
     protected StreamRule getSampleRule() {
-        Map<String, Object> mongoRule = Maps.newHashMap();
+        BasicDBObject mongoRule = new BasicDBObject();
         mongoRule.put("_id", new ObjectId());
         mongoRule.put("field", "something");
 
@@ -23,14 +21,14 @@ public class MatcherTest {
     }
 
     protected Message getSampleMessage() {
-        return new Message("foo", "bar", Tools.iso8601());
+        return new Message("foo", "bar", new DateTime());
     }
 
     protected StreamRuleMatcher getMatcher(StreamRule rule) {
         StreamRuleMatcher matcher;
         try {
             matcher = StreamRuleMatcherFactory.build(rule.getType());
-        } catch (InvalidStreamRuleTypeException e) {
+        } catch(InvalidStreamRuleTypeException e) {
             return null;
         }
 
