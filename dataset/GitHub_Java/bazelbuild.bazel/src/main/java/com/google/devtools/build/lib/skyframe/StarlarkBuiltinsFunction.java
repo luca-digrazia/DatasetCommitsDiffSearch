@@ -237,14 +237,19 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
     return ImmutableMap.copyOf(predeclared);
   }
 
-  /** Returns a set of predeclared symbols without considering injected builtins. */
+  /** Returns a {@link StarlarkBuiltinsValue} that completely ignores injected builtins. */
   // TODO(#11437): Delete once injection cannot be disabled.
-  static ImmutableMap<String, Object> createPredeclaredForBuildBzlWithoutInjection(
+  static StarlarkBuiltinsValue createStarlarkBuiltinsValueWithoutInjection(
       PackageFactory packageFactory) {
-    return createPredeclaredForBuildBzlUsingInjection(
-        packageFactory,
-        /*exportedToplevels=*/ ImmutableMap.of(),
-        /*exportedRules=*/ ImmutableMap.of());
+    ImmutableMap<String, Object> predeclared =
+        createPredeclaredForBuildBzlUsingInjection(
+            packageFactory,
+            /*exportedToplevels=*/ ImmutableMap.of(),
+            /*exportedRules=*/ ImmutableMap.of());
+    return new StarlarkBuiltinsValue(
+        /*predeclaredForBuildBzl=*/ predeclared,
+        /*exportedToJava=*/ ImmutableMap.of(),
+        /*transitiveDigest=*/ new byte[] {});
   }
 
   /**

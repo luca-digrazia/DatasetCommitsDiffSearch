@@ -22,7 +22,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.hash.HashFunction;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -156,7 +155,6 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
             .getPackageFactoryBuilderForTesting(directories)
             .build(ruleClassProvider, fileSystem);
 
-    HashFunction hashFunction = fileSystem.getDigestFunction().getHashFunction();
     MemoizingEvaluator evaluator =
         new InMemoryMemoizingEvaluator(
             ImmutableMap.<SkyFunctionName, SkyFunction>builder()
@@ -198,11 +196,13 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
                 .put(SkyFunctions.PRECOMPUTED, new PrecomputedFunction())
                 .put(
                     SkyFunctions.AST_FILE_LOOKUP,
-                    new ASTFileLookupFunction(pkgFactory, hashFunction))
+                    new ASTFileLookupFunction(pkgFactory, fileSystem.getDigestFunction()))
                 .put(
                     SkyFunctions.BZL_LOAD,
                     BzlLoadFunction.create(
-                        pkgFactory, hashFunction, CacheBuilder.newBuilder().build()))
+                        pkgFactory,
+                        fileSystem.getDigestFunction(),
+                        CacheBuilder.newBuilder().build()))
                 .put(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, new ContainingPackageLookupFunction())
                 .put(
                     SkyFunctions.IGNORED_PACKAGE_PREFIXES,
