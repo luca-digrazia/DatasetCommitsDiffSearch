@@ -250,13 +250,14 @@ public class MethodNameParser {
                 where.append(containsAnd ? " AND " : " OR ");
             }
 
-            String upperPrefix = (ignoreCase || allIgnoreCase) ? "UPPER(" : "";
-            String upperSuffix = (ignoreCase || allIgnoreCase) ? ")" : "";
-            where.append(upperPrefix).append(fieldName).append(upperSuffix);
             if ((operation == null) || "Equals".equals(operation) || "Is".equals(operation)) {
+                String upperPrefix = (ignoreCase || allIgnoreCase) ? "UPPER(" : "";
+                String upperSuffix = (ignoreCase || allIgnoreCase) ? ")" : "";
+                where.append(upperPrefix).append(fieldName).append(upperSuffix);
                 paramsCount++;
                 where.append(" = ").append(upperPrefix).append("?").append(paramsCount).append(upperSuffix);
             } else {
+                where.append(fieldName);
                 switch (operation) {
                     case "IsNot":
                     case "Not":
@@ -317,22 +318,19 @@ public class MethodNameParser {
                     case "StartingWith":
                     case "StartsWith":
                         paramsCount++;
-                        where.append(" LIKE CONCAT(").append(upperPrefix).append("?").append(paramsCount).append(upperSuffix)
-                                .append(", '%')");
+                        where.append(" LIKE CONCAT(?").append(paramsCount).append(", '%')");
                         break;
                     case "IsEndingWith":
                     case "EndingWith":
                     case "EndsWith":
                         paramsCount++;
-                        where.append(" LIKE CONCAT('%', ").append(upperPrefix).append("?").append(paramsCount)
-                                .append(upperSuffix).append(")");
+                        where.append(" LIKE CONCAT('%', ?").append(paramsCount).append(")");
                         break;
                     case "IsContaining":
                     case "Containing":
                     case "Contains":
                         paramsCount++;
-                        where.append(" LIKE CONCAT('%', ").append(upperPrefix).append("?").append(paramsCount)
-                                .append(upperSuffix).append(", '%')");
+                        where.append(" LIKE CONCAT('%', ?").append(paramsCount).append(", '%')");
                         break;
                     case "True":
                     case "False":

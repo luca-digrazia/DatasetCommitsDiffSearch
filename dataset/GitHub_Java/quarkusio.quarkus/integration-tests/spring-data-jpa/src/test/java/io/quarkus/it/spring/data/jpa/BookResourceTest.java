@@ -74,48 +74,9 @@ public class BookResourceTest {
     }
 
     @Test
-    void testByNameContainingIgnoreCase() {
-        when().get("/book/name/FUL/contains").then()
-                .statusCode(200)
-                .body(containsString("Factfulness"));
-    }
-
-    @Test
-    void testCountByNameStartsWithIgnoreCase() {
-        when().get("/book/name/t/count/like").then()
-                .statusCode(200)
-                .body(is("1"));
-    }
-
-    @Test
-    void testByYear() {
-        when().get("/book/year/2012").then()
-                .statusCode(200)
-                .body(containsString("Sleepwalkers"));
-        when().get("/book/year/2050").then()
-                .statusCode(204);
-    }
-
-    @Test
     void testByNameNotFound() {
         when().get("/book/name/DoesNotExist").then()
                 .statusCode(200)
                 .body("size()", is(0));
-    }
-
-    @Test
-    void testCountAllByPublicationYear() {
-        when().get("/book/count/year").then()
-                .statusCode(200)
-                .contentType("application/json")
-                .body(containsString("publicationYear"));
-    }
-
-    @Test
-    void testCountAllByPublicationYear2() {
-        when().get("/book/count/year2").then()
-                .statusCode(200)
-                .contentType("application/json")
-                .body(containsString("publicationYear"));
     }
 }
