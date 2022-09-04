@@ -32,12 +32,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.ExecGroupCollection;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.StarlarkAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkExecGroupCollection;
 import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.analysis.util.MockRule;
@@ -3059,10 +3059,9 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
                     Label.parseAbsoluteUnchecked("//something:defs.bzl"), "result"));
     assertThat(info).isNotNull();
     assertThat(info.getValue("toolchain_value")).isEqualTo("foo");
-    assertThat(info.getValue("exec_groups")).isInstanceOf(StarlarkExecGroupCollection.class);
+    assertThat(info.getValue("exec_groups")).isInstanceOf(ExecGroupCollection.class);
     ImmutableMap<String, ResolvedToolchainContext> toolchainContexts =
-        ((StarlarkExecGroupCollection) info.getValue("exec_groups"))
-            .getToolchainCollectionForTesting();
+        ((ExecGroupCollection) info.getValue("exec_groups")).getToolchainCollectionForTesting();
     assertThat(toolchainContexts.keySet()).containsExactly(DEFAULT_EXEC_GROUP_NAME, "dragonfruit");
     assertThat(toolchainContexts.get(DEFAULT_EXEC_GROUP_NAME).requiredToolchainTypes()).isEmpty();
     assertThat(toolchainContexts.get("dragonfruit").resolvedToolchainLabels())
@@ -3116,10 +3115,9 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
                     Label.parseAbsoluteUnchecked("//something:defs.bzl"), "result"));
     assertThat(info).isNotNull();
     assertThat(info.getValue("toolchain_value")).isEqualTo("foo");
-    assertThat(info.getValue("exec_groups")).isInstanceOf(StarlarkExecGroupCollection.class);
+    assertThat(info.getValue("exec_groups")).isInstanceOf(ExecGroupCollection.class);
     ImmutableMap<String, ResolvedToolchainContext> toolchainContexts =
-        ((StarlarkExecGroupCollection) info.getValue("exec_groups"))
-            .getToolchainCollectionForTesting();
+        ((ExecGroupCollection) info.getValue("exec_groups")).getToolchainCollectionForTesting();
     assertThat(toolchainContexts.keySet())
         .containsExactly(DEFAULT_EXEC_GROUP_NAME, "dragonfruit", "passionfruit");
     assertThat(toolchainContexts.get(DEFAULT_EXEC_GROUP_NAME).requiredToolchainTypes()).isEmpty();
@@ -3233,15 +3231,14 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
     scratch.file(
         "test/rule.bzl",
         "def _sample_impl(ctx):",
-        "    # This should raise an error.",
-        "    ctx.toolchains['//:toolchain_type']",
-        "    fail('Toolchain was not empty')",
+        "    info = ctx.toolchains['//:toolchain_type']",
+        "    if info != None:",
+        "        fail('Toolchain should be empty')",
         "sample_setting = rule(",
         "    implementation = _sample_impl,",
         "    build_setting = config.bool(flag = True),",
         ")");
-    assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:test"));
-    assertContainsEvent("Toolchains are not valid in this context");
-    assertDoesNotContainEvent("Toolchain was not empty");
+    getConfiguredTarget("//test:test");
+    assertNoEvents();
   }
 }
