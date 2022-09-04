@@ -91,9 +91,9 @@ public class ObserverInfo {
         return isAsync;
     }
 
-    void init() {
+    void init(List<Throwable> errors) {
         for (InjectionPointInfo injectionPoint : injection.injectionPoints) {
-            Beans.resolveInjectionPoint(declaringBean.getDeployment(), null, injectionPoint);
+            Beans.resolveInjectionPoint(declaringBean.getDeployment(), getDeclaringBean(), injectionPoint, errors);
         }
     }
 
@@ -103,7 +103,7 @@ public class ObserverInfo {
 
     public Set<AnnotationInstance> getQualifiers() {
         Set<AnnotationInstance> qualifiers = new HashSet<>();
-        for (AnnotationInstance annotation : observerMethod.annotations()) {
+        for (AnnotationInstance annotation : declaringBean.getDeployment().getAnnotations(observerMethod)) {
             if (annotation.target().equals(eventParameter) && declaringBean.getDeployment().getQualifier(annotation.name()) != null) {
                 qualifiers.add(annotation);
             }
@@ -117,7 +117,7 @@ public class ObserverInfo {
 
     MethodParameterInfo initEventParam(MethodInfo observerMethod) {
         List<MethodParameterInfo> eventParams = new ArrayList<>();
-        for (AnnotationInstance annotation : observerMethod.annotations()) {
+        for (AnnotationInstance annotation : declaringBean.getDeployment().getAnnotations(observerMethod)) {
             if (Kind.METHOD_PARAMETER == annotation.target().kind()
                     && (annotation.name().equals(DotNames.OBSERVES) || annotation.name().equals(DotNames.OBSERVES_ASYNC))) {
                 eventParams.add(annotation.target().asMethodParameter());
