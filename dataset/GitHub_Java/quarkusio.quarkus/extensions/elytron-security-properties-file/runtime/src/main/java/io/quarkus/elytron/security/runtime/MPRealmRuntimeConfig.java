@@ -2,8 +2,6 @@ package io.quarkus.elytron.security.runtime;
 
 import java.util.Map;
 
-import org.wildfly.security.password.interfaces.DigestPassword;
-
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -21,14 +19,6 @@ public class MPRealmRuntimeConfig {
      */
     @ConfigItem
     public boolean plainText;
-
-    /**
-     * Determine which algorithm to use.
-     * <p>
-     * This property is ignored if {@code plainText} is true.
-     */
-    @ConfigItem(defaultValue = DigestPassword.ALGORITHM_DIGEST_MD5)
-    public DigestAlgorithm algorithm;
 
     /**
      * The realm users user1=password\nuser2=password2... mapping.

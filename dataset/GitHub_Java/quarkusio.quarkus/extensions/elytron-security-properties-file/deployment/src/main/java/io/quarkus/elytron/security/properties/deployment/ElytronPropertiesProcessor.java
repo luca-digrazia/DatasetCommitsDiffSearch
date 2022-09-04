@@ -1,20 +1,20 @@
 package io.quarkus.elytron.security.properties.deployment;
 
-import java.util.Set;
-
 import org.jboss.logging.Logger;
 import org.wildfly.security.auth.server.SecurityRealm;
 
-import io.quarkus.deployment.QuarkusConfig;
+import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.quarkus.elytron.security.deployment.ElytronPasswordMarkerBuildItem;
 import io.quarkus.elytron.security.deployment.SecurityRealmBuildItem;
 import io.quarkus.elytron.security.runtime.ElytronPropertiesFileRecorder;
 import io.quarkus.elytron.security.runtime.MPRealmConfig;
+import io.quarkus.elytron.security.runtime.MPRealmRuntimeConfig;
 import io.quarkus.elytron.security.runtime.PropertiesRealmConfig;
 import io.quarkus.elytron.security.runtime.SecurityUsersConfig;
 import io.quarkus.runtime.RuntimeValue;
@@ -25,11 +25,6 @@ import io.quarkus.runtime.RuntimeValue;
  * {@linkplain org.wildfly.security.auth.realm.LegacyPropertiesSecurityRealm}
  * and {@linkplain org.wildfly.security.auth.realm.SimpleMapBackedSecurityRealm} realm implementations. Others could be
  * added by creating an extension that produces a SecurityRealmBuildItem for the realm.
- *
- * Additional authentication mechanisms can be added by producing AuthConfigBuildItems and including the associated
- * {@linkplain io.undertow.servlet.ServletExtension} implementations to register the
- * {@linkplain io.undertow.security.api.AuthenticationMechanismFactory}.
- *
  *
  */
 class ElytronPropertiesProcessor {
@@ -43,7 +38,7 @@ class ElytronPropertiesProcessor {
 
     @BuildStep
     FeatureBuildItem feature() {
-        return new FeatureBuildItem(FeatureBuildItem.SECURITY_PROPERTIES_FILE);
+        return new FeatureBuildItem(Feature.SECURITY_PROPERTIES_FILE);
     }
 
     /**
@@ -54,29 +49,42 @@ class ElytronPropertiesProcessor {
      * to include the build artifact.
      *
      * @param recorder - runtime security recorder
-     * @param resources - SubstrateResourceBuildItem used to register the realm user/roles properties files names.
      * @param securityRealm - the producer factory for the SecurityRealmBuildItem
      * @return the AuthConfigBuildItem for the realm authentication mechanism if there was an enabled PropertiesRealmConfig,
      *         null otherwise
      * @throws Exception - on any failure
      */
     @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
+    @Record(ExecutionTime.RUNTIME_INIT)
     void configureFileRealmAuthConfig(ElytronPropertiesFileRecorder recorder,
-            BuildProducer<SubstrateResourceBuildItem> resources,
+            BuildProducer<NativeImageResourceBuildItem> resources,
             BuildProducer<SecurityRealmBuildItem> securityRealm) throws Exception {
         if (propertiesConfig.file.enabled) {
             PropertiesRealmConfig realmConfig = propertiesConfig.file;
-            log.debugf("Configuring from PropertiesRealmConfig, users=%s, roles=%s", realmConfig.getUsers(),
-                    realmConfig.getRoles());
-            // Add the users/roles properties files resource names to build artifact
-            resources.produce(new SubstrateResourceBuildItem(realmConfig.users, realmConfig.roles));
+            log.debugf("Configuring from PropertiesRealmConfig, users=%s, roles=%s", realmConfig.users,
+                    realmConfig.roles);
             // Have the runtime recorder create the LegacyPropertiesSecurityRealm and create the build item
             RuntimeValue<SecurityRealm> realm = recorder.createRealm(realmConfig);
             securityRealm
                     .produce(new SecurityRealmBuildItem(realm, realmConfig.realmName, recorder.loadRealm(realm, realmConfig)));
             // Return the realm authentication mechanism build item
         }
+    }
+
+    @BuildStep
+    void nativeResource(BuildProducer<NativeImageResourceBuildItem> resources) throws Exception {
+        if (propertiesConfig.file.enabled) {
+            PropertiesRealmConfig realmConfig = propertiesConfig.file;
+            resources.produce(new NativeImageResourceBuildItem(realmConfig.users, realmConfig.roles));
+        }
+    }
+
+    @BuildStep
+    ElytronPasswordMarkerBuildItem marker() {
+        if (propertiesConfig.file.enabled || propertiesConfig.embedded.enabled) {
+            return new ElytronPasswordMarkerBuildItem();
+        }
+        return null;
     }
 
     /**
@@ -91,34 +99,18 @@ class ElytronPropertiesProcessor {
      * @throws Exception - on any failure
      */
     @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
+    @Record(ExecutionTime.RUNTIME_INIT)
     void configureMPRealmConfig(ElytronPropertiesFileRecorder recorder,
-            BuildProducer<SecurityRealmBuildItem> securityRealm) throws Exception {
+            BuildProducer<SecurityRealmBuildItem> securityRealm,
+            MPRealmRuntimeConfig runtimeConfig) throws Exception {
         if (propertiesConfig.embedded.enabled) {
             MPRealmConfig realmConfig = propertiesConfig.embedded;
             log.info("Configuring from MPRealmConfig");
-            // These are not being populated correctly by the core config Map logic for some reason, so reparse them here
-            log.debugf("MPRealmConfig.users: %s", realmConfig.users);
-            log.debugf("MPRealmConfig.roles: %s", realmConfig.roles);
-            Set<String> userKeys = QuarkusConfig.getNames(USERS_PREFIX);
-
-            log.debugf("userKeys: %s", userKeys);
-            for (String key : userKeys) {
-                String pass = QuarkusConfig.getString(USERS_PREFIX + '.' + key, null, false);
-                log.debugf("%s.pass = %s", key, pass);
-                realmConfig.users.put(key, pass);
-            }
-            Set<String> roleKeys = QuarkusConfig.getNames(ROLES_PREFIX);
-            log.debugf("roleKeys: %s", roleKeys);
-            for (String key : roleKeys) {
-                String roles = QuarkusConfig.getString(ROLES_PREFIX + '.' + key, null, false);
-                log.debugf("%s.roles = %s", key, roles);
-                realmConfig.roles.put(key, roles);
-            }
 
             RuntimeValue<SecurityRealm> realm = recorder.createRealm(realmConfig);
             securityRealm
-                    .produce(new SecurityRealmBuildItem(realm, realmConfig.realmName, recorder.loadRealm(realm, realmConfig)));
+                    .produce(new SecurityRealmBuildItem(realm, realmConfig.realmName,
+                            recorder.loadRealm(realm, realmConfig, runtimeConfig)));
         }
     }
 }
