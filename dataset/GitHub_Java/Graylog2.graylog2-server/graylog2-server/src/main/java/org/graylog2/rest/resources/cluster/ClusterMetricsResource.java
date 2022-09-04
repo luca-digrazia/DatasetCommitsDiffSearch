@@ -50,8 +50,6 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 
-import static javax.ws.rs.core.Response.Status.BAD_GATEWAY;
-
 @RequiresAuthentication
 @Api(value = "Cluster/Metrics", description = "Cluster-wide Internal Graylog metrics")
 @Path("/cluster/{nodeId}/metrics")
@@ -85,7 +83,7 @@ public class ClusterMetricsResource extends ProxiedResource {
         if (result.isSuccess()) {
             return result.body();
         } else {
-            throw new WebApplicationException(result.message(), BAD_GATEWAY);
+            throw new WebApplicationException(result.message(), 503);
         }
     }
 
@@ -104,7 +102,7 @@ public class ClusterMetricsResource extends ProxiedResource {
         if (result.isSuccess()) {
             return result.body();
         } else {
-            throw new WebApplicationException(result.message(), BAD_GATEWAY);
+            throw new WebApplicationException(result.message(), result.code());
         }
     }
 
@@ -123,7 +121,7 @@ public class ClusterMetricsResource extends ProxiedResource {
         if (result.isSuccess()) {
             return result.body();
         } else {
-            throw new WebApplicationException(result.message(), BAD_GATEWAY);
+            throw new WebApplicationException(result.message(), result.code());
         }
     }
 }
