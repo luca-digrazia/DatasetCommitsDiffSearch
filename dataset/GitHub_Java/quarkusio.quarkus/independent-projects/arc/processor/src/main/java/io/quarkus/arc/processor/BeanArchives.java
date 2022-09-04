@@ -242,19 +242,14 @@ public final class BeanArchives {
     }
 
     static boolean index(Indexer indexer, String className, ClassLoader classLoader) {
-        boolean result = false;
         try (InputStream stream = classLoader
                 .getResourceAsStream(className.replace('.', '/') + ".class")) {
-            if (stream != null) {
-                indexer.index(stream);
-                result = true;
-            } else {
-                LOGGER.warnf("Failed to index %s: Class does not exist in ClassLoader %s", className, classLoader);
-            }
+            indexer.index(stream);
+            return true;
         } catch (IOException e) {
-            LOGGER.warnf(e, "Failed to index %s: %s", className, e.getMessage());
+            LOGGER.warnf("Failed to index %s: %s", className, e.getMessage());
+            return false;
         }
-        return result;
     }
 
 }

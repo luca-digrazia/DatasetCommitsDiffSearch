@@ -46,8 +46,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
 
     private final Predicate<DotName> applicationClassPredicate;
 
-    public ClientProxyGenerator(Predicate<DotName> applicationClassPredicate, boolean generateSources) {
-        super(generateSources);
+    public ClientProxyGenerator(Predicate<DotName> applicationClassPredicate) {
         this.applicationClassPredicate = applicationClassPredicate;
     }
 
@@ -59,8 +58,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
      */
     Collection<Resource> generate(BeanInfo bean, String beanClassName, ReflectionRegistration reflectionRegistration) {
 
-        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()),
-                generateSources);
+        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()));
 
         Type providerType = bean.getProviderType();
         ClassInfo providerClass = getClassByName(bean.getDeployment().getIndex(), providerType.name());
