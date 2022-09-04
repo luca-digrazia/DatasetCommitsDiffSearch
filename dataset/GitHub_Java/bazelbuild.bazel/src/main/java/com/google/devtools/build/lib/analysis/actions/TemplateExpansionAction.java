@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -439,15 +438,17 @@ public final class TemplateExpansionAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
-    fp.addString(String.valueOf(makeExecutable));
-    fp.addString(template.getKey());
-    fp.addInt(substitutions.size());
+  protected String computeKey() {
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
+    f.addString(String.valueOf(makeExecutable));
+    f.addString(template.getKey());
+    f.addInt(substitutions.size());
     for (Substitution entry : substitutions) {
-      fp.addString(entry.getKey());
-      fp.addString(entry.getValue());
+      f.addString(entry.getKey());
+      f.addString(entry.getValue());
     }
+    return f.hexDigestAndReset();
   }
 
   @Override
