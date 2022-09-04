@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.ConvenienceSymlinks.SymlinkDefinition;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
@@ -99,8 +100,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     private Label preludeLabel;
     private String runfilesPrefix;
     private String toolsRepository;
-    private String builtinsPackagePathInSource;
-    private final List<Class<? extends Fragment>> configurationFragmentClasses = new ArrayList<>();
+    private final List<ConfigurationFragmentFactory> configurationFragmentFactories =
+        new ArrayList<>();
     private final List<BuildInfoFactory> buildInfoFactories = new ArrayList<>();
     private final Set<Class<? extends FragmentOptions>> configurationOptions =
         new LinkedHashSet<>();
@@ -170,13 +171,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       return this;
     }
 
-    // This is required if the rule class provider will be used with
-    // "--experimental_builtins_bzl_path=%workspace%", but can be skipped in unit tests.
-    public Builder setBuiltinsPackagePathInSource(String path) {
-      this.builtinsPackagePathInSource = path;
-      return this;
-    }
-
     public Builder setPrerequisiteValidator(PrerequisiteValidator prerequisiteValidator) {
       this.prerequisiteValidator = prerequisiteValidator;
       return this;
@@ -204,22 +198,22 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     }
 
     /**
-     * Adds a configuration fragment and all build options required by its fragment.
+     * Adds a configuration fragment factory and all build options required by its fragment.
      *
      * <p>Note that configuration fragments annotated with a Starlark name must have a unique name;
      * no two different configuration fragments can share the same name.
      */
-    public Builder addConfigurationFragment(Class<? extends Fragment> fragmentClass) {
-      this.configurationOptions.addAll(Fragment.requiredOptions(fragmentClass));
-      configurationFragmentClasses.add(fragmentClass);
+    public Builder addConfigurationFragment(ConfigurationFragmentFactory factory) {
+      this.configurationOptions.addAll(factory.requiredOptions());
+      configurationFragmentFactories.add(factory);
       return this;
     }
 
     /**
      * Adds configuration options that aren't required by configuration fragments.
      *
-     * <p>If {@link #addConfigurationFragment} adds a fragment that also requires these options,
-     * this method is redundant.
+     * <p>If {@link #addConfigurationFragment(ConfigurationFragmentFactory)} adds a fragment factory
+     * that also requires these options, this method is redundant.
      */
     public Builder addConfigurationOptions(Class<? extends FragmentOptions> configurationOptions) {
       this.configurationOptions.add(configurationOptions);
@@ -417,7 +411,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
           preludeLabel,
           runfilesPrefix,
           toolsRepository,
-          builtinsPackagePathInSource,
           ImmutableMap.copyOf(ruleClassMap),
           ImmutableMap.copyOf(ruleDefinitionMap),
           ImmutableMap.copyOf(nativeAspectClassMap),
@@ -425,7 +418,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
           defaultWorkspaceFileSuffix.toString(),
           ImmutableList.copyOf(buildInfoFactories),
           ImmutableList.copyOf(configurationOptions),
-          ImmutableList.copyOf(configurationFragmentClasses),
+          ImmutableList.copyOf(configurationFragmentFactories),
           ImmutableList.copyOf(universalFragments),
           trimmingTransitionFactory,
           toolchainTaggedTrimmingTransition,
@@ -477,9 +470,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
    */
   private final String toolsRepository;
 
-  /** The relative location of the builtins_bzl directory within a Bazel source tree. */
-  private final String builtinsPackagePathInSource;
-
   /**
    * Maps rule class name to the metaclass instance for that rule.
    */
@@ -501,7 +491,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
   private final ImmutableList<Class<? extends FragmentOptions>> configurationOptions;
 
   /** The set of configuration fragment factories. */
-  private final ImmutableList<Class<? extends Fragment>> configurationFragmentClasses;
+  private final ImmutableList<ConfigurationFragmentFactory> configurationFragmentFactories;
 
   /**
    * Maps build option names to matching config fragments. This is used to determine correct
@@ -549,7 +539,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       Label preludeLabel,
       String runfilesPrefix,
       String toolsRepository,
-      String builtinsPackagePathInSource,
       ImmutableMap<String, RuleClass> ruleClassMap,
       ImmutableMap<String, RuleDefinition> ruleDefinitionMap,
       ImmutableMap<String, NativeAspectClass> nativeAspectClassMap,
@@ -557,7 +546,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       String defaultWorkspaceFileSuffix,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       ImmutableList<Class<? extends FragmentOptions>> configurationOptions,
-      ImmutableList<Class<? extends Fragment>> configurationFragmentClasses,
+      ImmutableList<ConfigurationFragmentFactory> configurationFragments,
       ImmutableList<Class<? extends Fragment>> universalFragments,
       @Nullable TransitionFactory<Rule> trimmingTransitionFactory,
       PatchTransition toolchainTaggedTrimmingTransition,
@@ -573,7 +562,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     this.preludeLabel = preludeLabel;
     this.runfilesPrefix = runfilesPrefix;
     this.toolsRepository = toolsRepository;
-    this.builtinsPackagePathInSource = builtinsPackagePathInSource;
     this.ruleClassMap = ruleClassMap;
     this.ruleDefinitionMap = ruleDefinitionMap;
     this.nativeAspectClassMap = nativeAspectClassMap;
@@ -581,8 +569,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     this.defaultWorkspaceFileSuffix = defaultWorkspaceFileSuffix;
     this.buildInfoFactories = buildInfoFactories;
     this.configurationOptions = configurationOptions;
-    this.configurationFragmentClasses = configurationFragmentClasses;
-    this.optionsToFragmentMap = computeOptionsToFragmentMap(configurationFragmentClasses);
+    this.configurationFragmentFactories = configurationFragments;
+    this.optionsToFragmentMap = computeOptionsToFragmentMap(configurationFragments);
     this.universalFragments = universalFragments;
     this.trimmingTransitionFactory = trimmingTransitionFactory;
     this.toolchainTaggedTrimmingTransition = toolchainTaggedTrimmingTransition;
@@ -594,7 +582,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     this.symlinkDefinitions = symlinkDefinitions;
     this.reservedActionMnemonics = reservedActionMnemonics;
     this.actionEnvironmentProvider = actionEnvironmentProvider;
-    this.configurationFragmentMap = createFragmentMap(configurationFragmentClasses);
+    this.configurationFragmentMap = createFragmentMap(configurationFragments);
     this.constraintSemantics = constraintSemantics;
     this.thirdPartyLicenseExistencePolicy = thirdPartyLicenseExistencePolicy;
   }
@@ -606,11 +594,11 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
    * that's all that's needed to satisfy the config_setting.
    */
   private static Map<String, Class<? extends Fragment>> computeOptionsToFragmentMap(
-      ImmutableList<Class<? extends Fragment>> configurationFragments) {
+      Iterable<ConfigurationFragmentFactory> configurationFragments) {
     Map<String, Class<? extends Fragment>> result = new LinkedHashMap<>();
     Map<Class<? extends FragmentOptions>, Integer> visitedOptionsClasses = new HashMap<>();
-    for (Class<? extends Fragment> fragment : configurationFragments) {
-      Set<Class<? extends FragmentOptions>> requiredOpts = Fragment.requiredOptions(fragment);
+    for (ConfigurationFragmentFactory factory : configurationFragments) {
+      Set<Class<? extends FragmentOptions>> requiredOpts = factory.requiredOptions();
       for (Class<? extends FragmentOptions> optionsClass : requiredOpts) {
         Integer previousBest = visitedOptionsClasses.get(optionsClass);
         if (previousBest != null && previousBest <= requiredOpts.size()) {
@@ -622,7 +610,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
         visitedOptionsClasses.put(optionsClass, requiredOpts.size());
         for (Field field : optionsClass.getFields()) {
           if (field.isAnnotationPresent(Option.class)) {
-            result.put(field.getAnnotation(Option.class).name(), fragment);
+            result.put(field.getAnnotation(Option.class).name(), factory.creates());
           }
         }
       }
@@ -650,11 +638,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
   }
 
   @Override
-  public String getBuiltinsPackagePathInSource() {
-    return builtinsPackagePathInSource;
-  }
-
-  @Override
   public Map<String, RuleClass> getRuleClassMap() {
     return ruleClassMap;
   }
@@ -679,8 +662,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
 
   /** Returns the set of configuration fragments provided by this module. */
   @Override
-  public ImmutableList<Class<? extends Fragment>> getConfigurationFragments() {
-    return configurationFragmentClasses;
+  public ImmutableList<ConfigurationFragmentFactory> getConfigurationFragments() {
+    return configurationFragmentFactories;
   }
 
   @Nullable
@@ -767,9 +750,10 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
   }
 
   private static ImmutableMap<String, Class<?>> createFragmentMap(
-      Iterable<Class<? extends Fragment>> configurationFragments) {
+      Iterable<ConfigurationFragmentFactory> configurationFragmentFactories) {
     ImmutableMap.Builder<String, Class<?>> mapBuilder = ImmutableMap.builder();
-    for (Class<? extends Fragment> fragmentClass : configurationFragments) {
+    for (ConfigurationFragmentFactory fragmentFactory : configurationFragmentFactories) {
+      Class<? extends Fragment> fragmentClass = fragmentFactory.creates();
       StarlarkBuiltin fragmentModule = StarlarkAnnotations.getStarlarkBuiltin(fragmentClass);
       if (fragmentModule != null) {
         mapBuilder.put(fragmentModule.name(), fragmentClass);
@@ -802,7 +786,6 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
             toolsRepository,
             configurationFragmentMap,
             repoMapping,
-            /*convertedLabelsInPackage=*/ new HashMap<>(),
             new SymbolGenerator<>(fileLabel),
             /*analysisRuleLabel=*/ null)
         .storeInThread(thread);
@@ -850,7 +833,9 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
   public ImmutableSortedSet<Class<? extends Fragment>> getAllFragments() {
     ImmutableSortedSet.Builder<Class<? extends Fragment>> fragmentsBuilder =
         ImmutableSortedSet.orderedBy(BuildConfiguration.lexicalFragmentSorter);
-    fragmentsBuilder.addAll(getConfigurationFragments());
+    for (ConfigurationFragmentFactory factory : getConfigurationFragments()) {
+      fragmentsBuilder.add(factory.creates());
+    }
     fragmentsBuilder.addAll(getUniversalFragments());
     return fragmentsBuilder.build();
   }

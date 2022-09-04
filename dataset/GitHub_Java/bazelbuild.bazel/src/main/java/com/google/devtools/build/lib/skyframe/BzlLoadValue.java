@@ -64,7 +64,7 @@ public class BzlLoadValue implements SkyValue {
   abstract static class Key implements SkyKey {
 
     /**
-     * Returns the absolute label of the .bzl file to be loaded.
+     * Returns the label of the .bzl file to be loaded.
      *
      * <p>For {@link KeyForBuiltins}, it must begin with {@code @_builtins//:}. (It is legal for
      * other keys to use {@code @_builtins}, but since no real repo by that name may be defined,
@@ -74,11 +74,6 @@ public class BzlLoadValue implements SkyValue {
 
     /** Returns true if this is a request for the special BUILD prelude file. */
     boolean isBuildPrelude() {
-      return false;
-    }
-
-    /** Returns true if this is a request for a builtins bzl file. */
-    boolean isBuiltins() {
       return false;
     }
 
@@ -151,7 +146,6 @@ public class BzlLoadValue implements SkyValue {
       }
     }
 
-    // TODO(brandjon): Use something more similar to AbstractSkyKey's stringification (same below).
     @Override
     public String toString() {
       return label.toString();
@@ -255,11 +249,8 @@ public class BzlLoadValue implements SkyValue {
    * <p>This kind of key is only requested by {@link StarlarkBuiltinsFunction} and its transitively
    * loaded {@link BzlLoadFunction} calls.
    *
-   * <p>The label must have {@link StarlarkBuiltinsValue#BUILTINS_REPO} as its repository component.
-   * (It is valid for other key types to use that repo name, but since it is not a real repository
-   * and cannot be fetched, any attempt to resolve such a key would fail.)
+   * <p>The label begins with {@code @_builtins//:}, but there is no actual repo by that name.
    */
-  // TODO(#11437): Prevent users from trying to declare a repo named "@_builtins".
   @Immutable
   @AutoCodec.VisibleForSerialization
   static final class KeyForBuiltins extends Key {
@@ -268,19 +259,11 @@ public class BzlLoadValue implements SkyValue {
 
     private KeyForBuiltins(Label label) {
       this.label = Preconditions.checkNotNull(label);
-      if (!StarlarkBuiltinsValue.isBuiltinsRepo(label.getRepository())) {
-        throw new IllegalArgumentException("repository name for builtins key must be '@_builtins'");
-      }
     }
 
     @Override
     Label getLabel() {
       return label;
-    }
-
-    @Override
-    boolean isBuiltins() {
-      return true;
     }
 
     @Override
@@ -295,7 +278,7 @@ public class BzlLoadValue implements SkyValue {
 
     @Override
     public String toString() {
-      return label.toString();
+      return label + " (in builtins)";
     }
 
     @Override
