@@ -133,17 +133,11 @@ public class MultipartFormHandler implements RuntimeConfigurableServerRestHandle
                     String uploadedFileName = new File(MultipartFormVertxHandler.this.uploadsDirectory,
                             UUID.randomUUID().toString()).getPath();
                     upload.exceptionHandler(new UploadExceptionHandler(rrContext));
-                    upload.streamToFileSystem(uploadedFileName)
-                            .onSuccess(new Handler<Void>() {
+                    upload.streamToFileSystem(uploadedFileName).exceptionHandler(new UploadExceptionHandler(rrContext))
+                            .endHandler(new Handler<Void>() {
                                 @Override
-                                public void handle(Void x) {
+                                public void handle(Void event) {
                                     uploadEnded();
-                                }
-                            })
-                            .onFailure(new Handler<Throwable>() {
-                                @Override
-                                public void handle(Throwable ignored) {
-                                    new UploadExceptionHandler(rrContext);
                                 }
                             });
                     FileUploadImpl fileUpload = new FileUploadImpl(uploadedFileName, upload);
