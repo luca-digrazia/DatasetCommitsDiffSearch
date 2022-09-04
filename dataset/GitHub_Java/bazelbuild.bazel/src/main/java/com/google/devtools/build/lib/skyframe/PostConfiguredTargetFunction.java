@@ -156,7 +156,9 @@ public class PostConfiguredTargetFunction implements SkyFunction {
               hostConfiguration,
               /*aspect=*/ null,
               configConditions,
-              unloadedToolchainContext,
+              unloadedToolchainContext == null
+                  ? ImmutableSet.of()
+                  : unloadedToolchainContext.resolvedToolchainLabels(),
               ruleClassProvider.getTrimmingTransitionFactory());
       deps =
           ConfigurationResolver.resolveConfigurations(
