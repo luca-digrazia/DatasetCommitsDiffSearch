@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.zip.Checksum;
 
-import io.quarkus.deployment.Capabilities;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.clients.consumer.StickyAssignor;
@@ -60,6 +59,7 @@ public class KafkaProcessor {
             ByteBufferSerializer.class,
             StringSerializer.class,
             FloatSerializer.class,
+            JsonbSerializer.class,
 
             //deserializers
             ShortDeserializer.class,
@@ -71,12 +71,13 @@ public class KafkaProcessor {
             ByteBufferDeserializer.class,
             StringDeserializer.class,
             FloatDeserializer.class,
+            JsonbDeserializer.class,
     };
     static final String TARGET_JAVA_9_CHECKSUM_FACTORY = "io.quarkus.kafka.client.generated.Target_Java9ChecksumFactory";
 
     @BuildStep
     public void build(CombinedIndexBuildItem indexBuildItem, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<JniBuildItem> jni, Capabilities capabilities) {
+            BuildProducer<JniBuildItem> jni) {
         Collection<ClassInfo> serializers = indexBuildItem.getIndex()
                 .getAllKnownSubclasses(DotName.createSimple(Serializer.class.getName()));
         Collection<ClassInfo> deserializers = indexBuildItem.getIndex()
@@ -88,9 +89,6 @@ public class KafkaProcessor {
 
         for (Class i : BUILT_INS) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, i.getName()));
-        }
-        if (capabilities.isCapabilityPresent(Capabilities.JSONB)) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, JsonbSerializer.class, JsonbDeserializer.class));
         }
 
         for (Collection<ClassInfo> list : Arrays.asList(serializers, deserializers, partitioners, partitionAssignors)) {
