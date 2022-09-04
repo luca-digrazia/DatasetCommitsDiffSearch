@@ -2,19 +2,22 @@ package com.shuyu.gsyvideoplayer.video.base;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.SurfaceTexture;
 import android.support.annotation.AttrRes;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 import android.view.Surface;
+import android.view.SurfaceHolder;
 import android.view.TextureView;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+
+import com.shuyu.gsyvideoplayer.listener.GSYVideoGLRenderErrorListener;
 import com.shuyu.gsyvideoplayer.render.GSYRenderView;
 import com.shuyu.gsyvideoplayer.render.view.GSYVideoGLView;
 import com.shuyu.gsyvideoplayer.render.effect.NoEffect;
 import com.shuyu.gsyvideoplayer.render.glrender.GSYVideoGLViewBaseRender;
-import com.shuyu.gsyvideoplayer.render.view.listener.IGSYSurfaceListener;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
 
 /**
@@ -22,7 +25,7 @@ import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
  * Created by guoshuyu on 2017/8/2.
  */
 
-public abstract class GSYTextureRenderView extends FrameLayout implements IGSYSurfaceListener {
+public abstract class GSYTextureRenderView extends FrameLayout implements TextureView.SurfaceTextureListener, SurfaceHolder.Callback2, GSYVideoGLView.onGSYSurfaceListener {
 
     //native绘制
     protected Surface mSurface;
@@ -63,32 +66,62 @@ public abstract class GSYTextureRenderView extends FrameLayout implements IGSYSu
 
     /******************** start render  listener****************************/
 
+    /******************** TextureView  ****************************/
 
     @Override
-    public void onSurfaceAvailable(Surface surface) {
-        pauseLogic(surface, (mTextureView != null && mTextureView.getShowView() instanceof TextureView));
+    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+        Surface newSurface = new Surface(surface);
+        //同一消息队列中去release
+        pauseLogic(newSurface, true);
     }
 
     @Override
-    public void onSurfaceSizeChanged(Surface surface, int width, int height) {
+    public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
 
     }
 
     @Override
-    public boolean onSurfaceDestroyed(Surface surface) {
+    public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
         //清空释放
         setDisplay(null);
         //同一消息队列中去release
-        releaseSurface(surface);
+        releaseSurface(mSurface);
         return true;
     }
 
     @Override
-    public void onSurfaceUpdated(Surface surface) {
+    public void onSurfaceTextureUpdated(SurfaceTexture surface) {
         //如果播放的是暂停全屏了
         releasePauseCover();
     }
 
+    /******************** SurfaceView ****************************/
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        pauseLogic(holder.getSurface(), false);
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        //清空释放
+        setDisplay(null);
+        releaseSurface(holder.getSurface());
+    }
+
+    @Override
+    public void surfaceRedrawNeeded(SurfaceHolder holder) {
+    }
+
+    /******************** GLSurfaceView ****************************/
+    @Override
+    public void onSurfaceAvailable(Surface surface) {
+        pauseLogic(surface, false);
+    }
 
     /******************** end render listener****************************/
 
@@ -107,9 +140,37 @@ public abstract class GSYTextureRenderView extends FrameLayout implements IGSYSu
      * 添加播放的view
      */
     protected void addTextureView() {
+
         mTextureView = new GSYRenderView();
-        mTextureView.addView(getContext(), mTextureViewContainer, mRotate, this, mEffectFilter, mMatrixGL, mRenderer, mMode);
+
+        if (GSYVideoType.getRenderType() == GSYVideoType.SUFRACE) {
+            mTextureView.addSurfaceView(getContext(), mTextureViewContainer, mRotate, this);
+            return;
+        } else if (GSYVideoType.getRenderType() == GSYVideoType.GLSURFACE) {
+            mTextureView.addGLView(getContext(), mTextureViewContainer, mRotate, this, mEffectFilter, mMatrixGL, mRenderer, mGLRenderError);
+            setGLRenderMode(mMode);
+            return;
+        }
+        mTextureView.addTextureView(getContext(), mTextureViewContainer, mRotate, this);
+
     }
+
+    /**
+     * GL因为切换render效果错误时，重置渲染
+     */
+    protected GSYVideoGLRenderErrorListener mGLRenderError = new GSYVideoGLRenderErrorListener() {
+        @Override
+        public void onError(String Error, int code, final boolean byChangedRenderError) {
+            post(new Runnable() {
+                @Override
+                public void run() {
+                    if (byChangedRenderError)
+                        mTextureView.addGLView(getContext(), mTextureViewContainer, mRotate, GSYTextureRenderView.this, mEffectFilter, mMatrixGL, mRenderer, mGLRenderError);
+                }
+            });
+
+        }
+    };
 
     /**
      * 获取布局参数
@@ -159,7 +220,6 @@ public abstract class GSYTextureRenderView extends FrameLayout implements IGSYSu
         }
         return null;
     }
-
 
     //暂停时使用绘制画面显示暂停、避免黑屏
     protected abstract void showPauseCover();

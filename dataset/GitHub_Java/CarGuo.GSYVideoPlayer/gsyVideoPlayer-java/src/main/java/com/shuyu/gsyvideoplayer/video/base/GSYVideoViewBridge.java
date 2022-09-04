@@ -1,11 +1,10 @@
 package com.shuyu.gsyvideoplayer.video.base;
 
-import android.content.Context;
 import android.view.Surface;
 
+import com.danikula.videocache.CacheListener;
 import com.shuyu.gsyvideoplayer.listener.GSYMediaPlayerListener;
 
-import java.io.File;
 import java.util.Map;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
@@ -33,9 +32,11 @@ public interface GSYVideoViewBridge {
 
     void setPlayPosition(int playPosition);
 
-    void prepare(final String url, final Map<String, String> mapHeadData, boolean loop, float speed, boolean cache, File cachePath);
+    void prepare(final String url, final Map<String, String> mapHeadData, boolean loop, float speed);
 
     IMediaPlayer getMediaPlayer();
+
+    CacheListener getCacheListener();
 
     void releaseMediaPlayer();
 
@@ -56,9 +57,5 @@ public interface GSYVideoViewBridge {
     int getLastState();
 
     void setLastState(int lastState);
-
-    boolean isCacheFile();
-
-    void clearCache(Context context, String url);
 
 }

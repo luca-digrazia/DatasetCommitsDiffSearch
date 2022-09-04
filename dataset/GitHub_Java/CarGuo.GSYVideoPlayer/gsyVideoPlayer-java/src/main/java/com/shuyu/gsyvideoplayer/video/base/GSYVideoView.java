@@ -61,6 +61,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
     //避免切换时频繁setup
     public static final int CHANGE_DELAY_TIME = 2000;
 
+
     //当前的播放状态
     protected int mCurrentState = -1;
 
@@ -117,15 +118,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
 
     //是否准备完成前调用了暂停
     protected boolean mPauseBeforePrepared = false;
-
-    //Prepared之后是否自动开始播放
-    protected boolean mStartAfterPrepared = true;
-
-    //Prepared
-    protected boolean mHadPrepared = false;
-
-    //是否播放器当失去音频焦点
-    protected boolean mReleaseWhenLossAudio = true;
 
     //音频焦点的监听
     protected AudioManager mAudioManager;
@@ -186,15 +178,11 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         if (mCurrentState == CURRENT_STATE_PAUSE && mFullPauseBitmap != null
                 && !mFullPauseBitmap.isRecycled() && mShowPauseCover
                 && mSurface != null && mSurface.isValid()) {
-            try {
-                RectF rectF = new RectF(0, 0, mTextureView.getWidth(), mTextureView.getHeight());
-                Canvas canvas = mSurface.lockCanvas(new Rect(0, 0, mTextureView.getWidth(), mTextureView.getHeight()));
-                if (canvas != null) {
-                    canvas.drawBitmap(mFullPauseBitmap, null, rectF, null);
-                    mSurface.unlockCanvasAndPost(canvas);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
+            RectF rectF = new RectF(0, 0, mTextureView.getWidth(), mTextureView.getHeight());
+            Canvas canvas = mSurface.lockCanvas(new Rect(0, 0, mTextureView.getWidth(), mTextureView.getHeight()));
+            if (canvas != null) {
+                canvas.drawBitmap(mFullPauseBitmap, null, rectF, null);
+                mSurface.unlockCanvasAndPost(canvas);
             }
         }
 
@@ -300,7 +288,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         mAudioManager.requestAudioFocus(onAudioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
         ((Activity) getActivityContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         mBackUpPlayingBufferState = -1;
-        getGSYVideoManager().prepare(mUrl, (mMapHeadData == null) ? new HashMap<String, String>() : mMapHeadData, mLooping, mSpeed);
+        getGSYVideoManager().prepare(mUrl, mMapHeadData, mLooping, mSpeed);
         setStateAndUi(CURRENT_STATE_PREPAREING);
     }
 
@@ -317,17 +305,15 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
                     post(new Runnable() {
                         @Override
                         public void run() {
-                            if (mReleaseWhenLossAudio) {
-                                releaseVideos();
-                            } else {
-                                onVideoPause();
-                            }
+                            releaseVideos();
                         }
                     });
                     break;
                 case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
                     try {
-                        onVideoPause();
+                        if (getGSYVideoManager().getMediaPlayer() != null && getGSYVideoManager().getMediaPlayer().isPlaying()) {
+                            getGSYVideoManager().getMediaPlayer().pause();
+                        }
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -387,20 +373,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      * @return
      */
     public boolean setUp(String url, boolean cacheWithPlay, File cachePath, String title) {
-        return setUp(url, cacheWithPlay, cachePath, title, true);
-    }
-
-    /**
-     * 设置播放URL
-     *
-     * @param url           播放url
-     * @param cacheWithPlay 是否边播边缓存
-     * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
-     * @param title         title
-     * @param changeState   是否修改状态
-     * @return
-     */
-    protected boolean setUp(String url, boolean cacheWithPlay, File cachePath, String title, boolean changeState) {
         mCache = cacheWithPlay;
         mCachePath = cachePath;
         mOriginUrl = url;
@@ -410,14 +382,12 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         mCurrentState = CURRENT_STATE_NORMAL;
         if (cacheWithPlay && url.startsWith("http") && !url.contains("127.0.0.1") && !url.contains(".m3u8")) {
             HttpProxyCacheServer proxy = getProxy(getActivityContext().getApplicationContext(), cachePath);
-            if (proxy != null) {
-                //此处转换了url，然后再赋值给mUrl。
-                url = proxy.getProxyUrl(url);
-                mCacheFile = (!url.startsWith("http"));
-                //注册上缓冲监听
-                if (!mCacheFile && getGSYVideoManager() != null) {
-                    proxy.registerCacheListener(getGSYVideoManager().getCacheListener(), mOriginUrl);
-                }
+            //此处转换了url，然后再赋值给mUrl。
+            url = proxy.getProxyUrl(url);
+            mCacheFile = (!url.startsWith("http"));
+            //注册上缓冲监听
+            if (!mCacheFile && getGSYVideoManager() != null) {
+                proxy.registerCacheListener(getGSYVideoManager().getCacheListener(), mOriginUrl);
             }
         } else if (!cacheWithPlay && (!url.startsWith("http") && !url.startsWith("rtmp")
                 && !url.startsWith("rtsp") && !url.contains(".m3u8"))) {
@@ -425,8 +395,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         }
         this.mUrl = url;
         this.mTitle = title;
-        if (changeState)
-            setStateAndUi(CURRENT_STATE_NORMAL);
+        setStateAndUi(CURRENT_STATE_NORMAL);
         return true;
     }
 
@@ -471,9 +440,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
                     getGSYVideoManager().getMediaPlayer().seekTo(mCurrentPosition);
                     getGSYVideoManager().getMediaPlayer().start();
                     setStateAndUi(CURRENT_STATE_PLAYING);
-                    if (mAudioManager != null && !mReleaseWhenLossAudio) {
-                        mAudioManager.requestAudioFocus(onAudioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-                    }
                     mCurrentPosition = 0;
                 }
             } catch (Exception e) {
@@ -513,14 +479,42 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
 
     @Override
     public void onPrepared() {
-
         if (mCurrentState != CURRENT_STATE_PREPAREING) return;
 
-        mHadPrepared = true;
+        try {
+            if (getGSYVideoManager().getMediaPlayer() != null) {
+                getGSYVideoManager().getMediaPlayer().start();
+            }
 
-        if (!mStartAfterPrepared) return;
+            setStateAndUi(CURRENT_STATE_PLAYING);
 
-        startAfterPrepared();
+            if (mVideoAllCallBack != null && isCurrentMediaListener()) {
+                Debuger.printfLog("onPrepared");
+                mVideoAllCallBack.onPrepared(mOriginUrl, mTitle, this);
+            }
+
+            if (getGSYVideoManager().getMediaPlayer() != null && mSeekOnStart > 0) {
+                getGSYVideoManager().getMediaPlayer().seekTo(mSeekOnStart);
+                mSeekOnStart = 0;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        createNetWorkState();
+
+        listenerNetWorkState();
+
+        mHadPlay = true;
+
+        if (mTextureView != null) {
+            mTextureView.onResume();
+        }
+
+        if (mPauseBeforePrepared) {
+            onVideoPause();
+            mPauseBeforePrepared = false;
+        }
     }
 
     @Override
@@ -712,50 +706,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         }
     }
 
-    /**
-     * prepared成功之后会开始播放
-     */
-    public void startAfterPrepared() {
-
-        if (!mHadPrepared) {
-            prepareVideo();
-        }
-
-        try {
-            if (getGSYVideoManager().getMediaPlayer() != null) {
-                getGSYVideoManager().getMediaPlayer().start();
-            }
-
-            setStateAndUi(CURRENT_STATE_PLAYING);
-
-            if (mVideoAllCallBack != null && isCurrentMediaListener()) {
-                Debuger.printfLog("onPrepared");
-                mVideoAllCallBack.onPrepared(mOriginUrl, mTitle, this);
-            }
-
-            if (getGSYVideoManager().getMediaPlayer() != null && mSeekOnStart > 0) {
-                getGSYVideoManager().getMediaPlayer().seekTo(mSeekOnStart);
-                mSeekOnStart = 0;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        createNetWorkState();
-
-        listenerNetWorkState();
-
-        mHadPlay = true;
-
-        if (mTextureView != null) {
-            mTextureView.onResume();
-        }
-
-        if (mPauseBeforePrepared) {
-            onVideoPause();
-            mPauseBeforePrepared = false;
-        }
-    }
 
     protected boolean isCurrentMediaListener() {
         return getGSYVideoManager().listener() != null
@@ -811,35 +761,21 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
 
     /************************* 需要继承处理部分 *************************/
 
-    /**
-     * 获取代理服务
-     * @param file 文件可以为空
-     * @return 如果不需要可以为空
-     */
     protected abstract HttpProxyCacheServer getProxy(Context context, File file);
 
-    /**
-     * 退出全屏
-     * @return 是否在全屏界面
-     */
     protected abstract boolean backFromFull(Context context);
 
-    /**
-     * 释放播放器
-     */
     protected abstract void releaseVideos();
 
-    /**
-     * 获取管理器桥接的实现
-     */
     protected abstract GSYVideoViewBridge getGSYVideoManager();
-
+    
     /**
      * 设置播放显示状态
      *
      * @param state
      */
     protected abstract void setStateAndUi(int state);
+
 
     /**
      * 当前UI
@@ -850,7 +786,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      * 开始播放
      */
     public abstract void startPlayLogic();
-
 
     /************************* 公开接口 *************************/
 
@@ -1045,29 +980,4 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         }
     }
 
-    public boolean isStartAfterPrepared() {
-        return mStartAfterPrepared;
-    }
-
-    /**
-     * 准备成功之后立即播放
-     *
-     * @param startAfterPrepared 默认true，false的时候需要在prepared后调用startAfterPrepared()
-     */
-    public void setStartAfterPrepared(boolean startAfterPrepared) {
-        this.mStartAfterPrepared = startAfterPrepared;
-    }
-
-    public boolean isReleaseWhenLossAudio() {
-        return mReleaseWhenLossAudio;
-    }
-
-    /**
-     * 长时间失去音频焦点，暂停播放器
-     *
-     * @param releaseWhenLossAudio 默认true，false的时候只会暂停
-     */
-    public void setReleaseWhenLossAudio(boolean releaseWhenLossAudio) {
-        this.mReleaseWhenLossAudio = releaseWhenLossAudio;
-    }
 }

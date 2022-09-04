@@ -305,12 +305,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     @Override
     protected void setStateAndUi(int state) {
         mCurrentState = state;
-
-        if ((state == CURRENT_STATE_NORMAL && isCurrentMediaListener())
-                || state == CURRENT_STATE_AUTO_COMPLETE || state == CURRENT_STATE_ERROR) {
-            mHadPrepared = false;
-        }
-
         switch (mCurrentState) {
             case CURRENT_STATE_NORMAL:
                 if (isCurrentMediaListener()) {
@@ -880,7 +874,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
     protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime) {
 
-        if (mGSYVideoProgressListener != null && mCurrentState == CURRENT_STATE_PLAYING) {
+        if (mGSYVideoProgressListener != null) {
             mGSYVideoProgressListener.onProgress(progress, secProgress, currentTime, totalTime);
         }
 
