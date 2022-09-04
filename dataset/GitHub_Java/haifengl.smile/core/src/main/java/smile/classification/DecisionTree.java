@@ -265,7 +265,7 @@ public class DecisionTree implements SoftClassifier<double[]>, Serializable {
     /**
      * Classification tree node.
      */
-    class Node implements Serializable {
+    class Node {
 
         /**
          * Predicted class label for this node.
