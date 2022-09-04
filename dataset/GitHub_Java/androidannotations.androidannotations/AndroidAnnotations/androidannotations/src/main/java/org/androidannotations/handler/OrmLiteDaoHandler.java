@@ -136,10 +136,12 @@ public class OrmLiteDaoHandler extends BaseAnnotationHandler<EComponentHolder> {
 	 * succeeding
 	 */
 	private void createDaoParametrizedTypes() {
-		TypeMirror wildcardType = helper.getTypeUtils().getWildcardType(null, null);
-		TypeElement daoTypeElement = helper.typeElementFromQualifiedName(CanonicalNameConstants.DAO);
-		daoParametrizedType = helper.getTypeUtils().getDeclaredType(daoTypeElement, wildcardType, wildcardType);
-		TypeElement runtimeExceptionDaoTypeElement = helper.typeElementFromQualifiedName(CanonicalNameConstants.RUNTIME_EXCEPTION_DAO);
-		runtimeExceptionDaoParametrizedType = helper.getTypeUtils().getDeclaredType(runtimeExceptionDaoTypeElement, wildcardType, wildcardType);
+		if (daoParametrizedType == null) {
+			TypeMirror wildcardType = helper.getTypeUtils().getWildcardType(null, null);
+			TypeElement daoTypeElement = helper.typeElementFromQualifiedName(CanonicalNameConstants.DAO);
+			daoParametrizedType = helper.getTypeUtils().getDeclaredType(daoTypeElement, wildcardType, wildcardType);
+			TypeElement runtimeExceptionDaoTypeElement = helper.typeElementFromQualifiedName(CanonicalNameConstants.RUNTIME_EXCEPTION_DAO);
+			runtimeExceptionDaoParametrizedType = helper.getTypeUtils().getDeclaredType(runtimeExceptionDaoTypeElement, wildcardType, wildcardType);
+		}
 	}
 }
