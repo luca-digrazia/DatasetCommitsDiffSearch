@@ -1,24 +1,23 @@
 /*
- * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ * Copyright 2013 TORCH UG
  *
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package controllers;
 
-import org.graylog2.rest.models.system.sessions.responses.SessionResponse;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ServerNodes;
 import org.graylog2.restclient.lib.Graylog2ServerUnavailableException;
@@ -28,6 +27,7 @@ import org.graylog2.restclient.models.SessionService;
 import org.graylog2.restclient.models.UserService;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationException;
+import org.graylog2.restclient.models.api.responses.SessionCreateResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.data.Form;
@@ -81,7 +81,7 @@ public class SessionsController extends BaseController {
 
     private void checkServerConnections() {
         if (!serverNodes.isConnected()) {
-            flash("error", "No Graylog servers available. Cannot log in.");
+            flash("error", "No Graylog2 servers available. Cannot log in.");
         }
     }
 
@@ -96,9 +96,9 @@ public class SessionsController extends BaseController {
 		LoginRequest r = loginRequest.get();
 
         try {
-            final SessionResponse sessionResponse = sessionService.create(r.username, r.password, request().remoteAddress());
+            final SessionCreateResponse sessionResponse = sessionService.create(r.username, r.password, request().remoteAddress());
             // if we have successfully created a session, we can save that id for the next request
-            final String cookieContent = Crypto.encryptAES(r.username + "\t" + sessionResponse.sessionId());
+            final String cookieContent = Crypto.encryptAES(r.username + "\t" + sessionResponse.sessionId);
             Http.Context.current().session().put("sessionid", cookieContent);
 
             // if we were redirected from somewhere else because the session had expired, redirect back to that page
@@ -107,7 +107,11 @@ public class SessionsController extends BaseController {
                 return redirect(r.destination);
             }
             // upon redirect, the auth layer will load the user with the given session and log the user in.
-            return redirect(routes.StartpageController.redirect());
+            if(r.noStartpage) {
+                return redirect(routes.SystemController.index(0));
+            } else {
+                return redirect(routes.StartpageController.redirect());
+            }
         } catch (APIException e) {
             log.warn("Unable to authenticate user {}. Redirecting back to '/'", r.username, e);
             if (e.getCause() instanceof Graylog2ServerUnavailableException) {
@@ -116,8 +120,8 @@ public class SessionsController extends BaseController {
                 flash("error", "Sorry, those credentials are invalid.");
             }
         } catch (IOException e) {
-            flash("error", "We discovered Graylog servers but could not reach any. Please check your log file.(IOException)");
-            log.error("Error when trying to reach Graylog servers.", e);
+            flash("error", "We discovered Graylog2 servers but could not reach any. Please check your log file.(IOException)");
+            log.error("Error when trying to reach Graylog2 servers.", e);
         } catch (AuthenticationException e) {
         }
         return badRequest(views.html.sessions.login.render(loginRequest, !serverNodes.isConnected(), loginRequest.field("destination").value()));
