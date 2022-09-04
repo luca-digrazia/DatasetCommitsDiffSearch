@@ -1,12 +1,17 @@
 package io.dropwizard.views;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableMap;
 import io.dropwizard.Configuration;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
 import io.dropwizard.setup.Environment;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.WebApplicationException;
@@ -23,8 +28,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ViewBundleTest {
-    private JerseyEnvironment jerseyEnvironment = mock(JerseyEnvironment.class);
-    private Environment environment = mock(Environment.class);
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+    @Mock
+    private JerseyEnvironment jerseyEnvironment;
+
+    private final Environment environment = mock(Environment.class);
 
     private static class MyConfiguration extends Configuration {
         @NotNull
@@ -37,28 +46,32 @@ public class ViewBundleTest {
 
         @JsonProperty("viewRendererConfiguration")
         public void setViewRendererConfiguration(Map<String, Map<String, String>> viewRendererConfiguration) {
-            this.viewRendererConfiguration = viewRendererConfiguration;
+            ImmutableMap.Builder<String, Map<String, String>> builder = ImmutableMap.builder();
+            for (Map.Entry<String, Map<String, String>> entry : viewRendererConfiguration.entrySet()) {
+                builder.put(entry.getKey(), ImmutableMap.copyOf(entry.getValue()));
+            }
+            this.viewRendererConfiguration = builder.build();
         }
     }
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         when(environment.jersey()).thenReturn(jerseyEnvironment);
     }
 
     @Test
-    void addsTheViewMessageBodyWriterToTheEnvironment() throws Exception {
-        new ViewBundle<>().run(new MyConfiguration(), environment);
+    public void addsTheViewMessageBodyWriterToTheEnvironment() throws Exception {
+        new ViewBundle<>().run(null, environment);
 
         verify(jerseyEnvironment).register(any(ViewMessageBodyWriter.class));
     }
 
     @Test
-    void addsTheViewMessageBodyWriterWithSingleViewRendererToTheEnvironment() throws Exception {
-        final String configurationKey = "freemarker";
+    public void addsTheViewMessageBodyWriterWithSingleViewRendererToTheEnvironment() throws Exception {
+        final String viewSuffix = ".ftl";
         final String testKey = "testKey";
         final Map<String, String> freeMarkerConfig = Collections.singletonMap(testKey, "yes");
-        final Map<String, Map<String, String>> viewRendererConfig = Collections.singletonMap(configurationKey, freeMarkerConfig);
+        final Map<String, Map<String, String>> viewRendererConfig = Collections.singletonMap(viewSuffix, freeMarkerConfig);
 
         final MyConfiguration myConfiguration = new MyConfiguration();
         myConfiguration.setViewRendererConfiguration(viewRendererConfig);
@@ -80,8 +93,8 @@ public class ViewBundleTest {
             }
 
             @Override
-            public String getConfigurationKey() {
-                return configurationKey;
+            public String getSuffix() {
+                return viewSuffix;
             }
         };
 

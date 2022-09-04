@@ -2,14 +2,11 @@ package io.dropwizard.jdbi;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.health.HealthCheckRegistry;
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import io.dropwizard.db.DataSourceFactory;
 import io.dropwizard.db.ManagedDataSource;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
-import io.dropwizard.logging.LoggingFactory;
+import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.setup.Environment;
 import org.joda.time.DateTime;
 import org.junit.After;
@@ -19,22 +16,27 @@ import org.mockito.ArgumentCaptor;
 import org.skife.jdbi.v2.DBI;
 import org.skife.jdbi.v2.Handle;
 import org.skife.jdbi.v2.Query;
-import org.skife.jdbi.v2.util.StringMapper;
+import org.skife.jdbi.v2.util.StringColumnMapper;
 
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Executors;
 
-import static org.fest.assertions.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class JDBITest {
     private final DataSourceFactory hsqlConfig = new DataSourceFactory();
 
     {
-        LoggingFactory.bootstrap();
-        hsqlConfig.setUrl("jdbc:h2:mem:DbTest-" + System.currentTimeMillis());
+        BootstrapLogging.bootstrap();
+        hsqlConfig.setUrl("jdbc:h2:mem:JDBITest-" + System.currentTimeMillis());
         hsqlConfig.setUser("sa");
         hsqlConfig.setDriverClass("org.h2.Driver");
         hsqlConfig.setValidationQuery("SELECT 1");
@@ -44,7 +46,7 @@ public class JDBITest {
     private final LifecycleEnvironment lifecycleEnvironment = mock(LifecycleEnvironment.class);
     private final Environment environment = mock(Environment.class);
     private final DBIFactory factory = new DBIFactory();
-    private final List<Managed> managed = Lists.newArrayList();
+    private final List<Managed> managed = new ArrayList<>();
     private final MetricRegistry metricRegistry = new MetricRegistry();
     private DBI dbi;
 
@@ -53,6 +55,7 @@ public class JDBITest {
         when(environment.healthChecks()).thenReturn(healthChecks);
         when(environment.lifecycle()).thenReturn(lifecycleEnvironment);
         when(environment.metrics()).thenReturn(metricRegistry);
+        when(environment.getHealthCheckExecutorService()).thenReturn(Executors.newSingleThreadExecutor());
 
         this.dbi = factory.build(environment, hsqlConfig, "hsql");
         final ArgumentCaptor<Managed> managedCaptor = ArgumentCaptor.forClass(Managed.class);
@@ -65,26 +68,32 @@ public class JDBITest {
         try (Handle handle = dbi.open()) {
             handle.createCall("DROP TABLE people IF EXISTS").invoke();
             handle.createCall(
-                    "CREATE TABLE people (name varchar(100) primary key, email varchar(100), age int, created_at timestamp)")
-                  .invoke();
+                "CREATE TABLE people (name varchar(100) primary key, email varchar(100), age int, created_at timestamp)")
+                .invoke();
             handle.createStatement("INSERT INTO people VALUES (?, ?, ?, ?)")
-                  .bind(0, "Coda Hale")
-                  .bind(1, "chale@yammer-inc.com")
-                  .bind(2, 30)
-                  .bind(3, new Timestamp(1365465078000L))
-                  .execute();
+                .bind(0, "Coda Hale")
+                .bind(1, "chale@yammer-inc.com")
+                .bind(2, 30)
+                .bind(3, new Timestamp(1365465078000L))
+                .execute();
             handle.createStatement("INSERT INTO people VALUES (?, ?, ?, ?)")
-                  .bind(0, "Kris Gale")
-                  .bind(1, "kgale@yammer-inc.com")
-                  .bind(2, 32)
-                  .bind(3, new Timestamp(1365465078000L))
-                  .execute();
+                .bind(0, "Kris Gale")
+                .bind(1, "kgale@yammer-inc.com")
+                .bind(2, 32)
+                .bind(3, new Timestamp(1365465078000L))
+                .execute();
             handle.createStatement("INSERT INTO people VALUES (?, ?, ?, ?)")
-                  .bind(0, "Old Guy")
-                  .bindNull(1, Types.VARCHAR)
-                  .bind(2, 99)
-                  .bind(3, new Timestamp(1365465078000L))
-                  .execute();
+                .bind(0, "Old Guy")
+                .bindNull(1, Types.VARCHAR)
+                .bind(2, 99)
+                .bind(3, new Timestamp(1365465078000L))
+                .execute();
+            handle.createStatement("INSERT INTO people VALUES (?, ?, ?, ?)")
+                .bind(0, "Alice Example")
+                .bind(1, "alice@example.org")
+                .bind(2, 99)
+                .bindNull(3, Types.TIMESTAMP)
+                .execute();
         }
     }
 
@@ -101,10 +110,9 @@ public class JDBITest {
         final Handle handle = dbi.open();
 
         final Query<String> names = handle.createQuery("SELECT name FROM people WHERE age < ?")
-                                          .bind(0, 50)
-                                          .map(StringMapper.FIRST);
-        assertThat(ImmutableList.copyOf(names))
-                .containsOnly("Coda Hale", "Kris Gale");
+            .bind(0, 50)
+            .map(StringColumnMapper.INSTANCE);
+        assertThat(names).containsOnly("Coda Hale", "Kris Gale");
     }
 
     @Test
@@ -117,7 +125,7 @@ public class JDBITest {
         final PersonDAO dao = dbi.open(PersonDAO.class);
 
         assertThat(dao.findByName(Optional.of("Coda Hale")))
-                .isEqualTo("Coda Hale");
+            .isEqualTo("Coda Hale");
     }
 
     @Test
@@ -125,7 +133,7 @@ public class JDBITest {
         final PersonDAO dao = dbi.open(PersonDAO.class);
 
         assertThat(dao.findAllNames())
-                .containsOnly("Coda Hale", "Kris Gale", "Old Guy");
+            .containsOnly("Coda Hale", "Kris Gale", "Old Guy", "Alice Example");
     }
 
     @Test
@@ -133,7 +141,7 @@ public class JDBITest {
         final PersonDAO dao = dbi.open(PersonDAO.class);
 
         assertThat(dao.findAllUniqueNames())
-                .containsOnly("Coda Hale", "Kris Gale", "Old Guy");
+            .containsOnly("Coda Hale", "Kris Gale", "Old Guy", "Alice Example");
     }
 
     @Test
@@ -149,7 +157,7 @@ public class JDBITest {
         final Optional<String> missing = dao.findByEmail("cemalettin.koc@gmail.com");
         assertThat(missing).isNotNull();
         assertThat(missing.isPresent()).isFalse();
-        assertThat(missing.orNull()).isNull();
+        assertThat(missing.orElse(null)).isNull();
     }
 
     @Test
@@ -160,5 +168,16 @@ public class JDBITest {
         assertThat(found).isNotNull();
         assertThat(found.getMillis()).isEqualTo(1365465078000L);
         assertThat(found).isEqualTo(new DateTime(1365465078000L));
+
+        final DateTime notFound = dao.getCreatedAtByEmail("alice@example.org");
+        assertThat(notFound).isNull();
+
+        final Optional<DateTime> absentDateTime = dao.getCreatedAtByName("Alice Example");
+        assertThat(absentDateTime).isNotNull();
+        assertThat(absentDateTime.isPresent()).isFalse();
+
+        final Optional<DateTime> presentDateTime = dao.getCreatedAtByName("Coda Hale");
+        assertThat(presentDateTime).isNotNull();
+        assertThat(presentDateTime.isPresent()).isTrue();
     }
 }

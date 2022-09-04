@@ -25,8 +25,10 @@ public class GuavaExtrasModule extends Module {
         public CacheBuilderSpec deserialize(JsonParser jp,
                                             DeserializationContext ctxt) throws IOException {
             final String text = jp.getText();
-            final boolean disabled = "off".equalsIgnoreCase(text) || "disabled".equalsIgnoreCase(text);
-            return disabled ? CacheBuilderSpec.disableCaching() : CacheBuilderSpec.parse(text);
+            if ("off".equalsIgnoreCase(text) || "disabled".equalsIgnoreCase(text)) {
+                return CacheBuilderSpec.disableCaching();
+            }
+            return CacheBuilderSpec.parse(text);
         }
     }
 

@@ -285,14 +285,6 @@ import java.util.concurrent.TimeUnit;
  *             implementation, which will be used for validating connections.
  *         </td>
  *     </tr>
- *     <tr>
- *         <td>{@code jdbcInterceptors}</td>
- *         <td>(none)</td>
- *         <td>
- *             A semicolon separated list of classnames extending
- *             {@link org.apache.tomcat.jdbc.pool.JdbcInterceptor}
- *         </td>
- *     </tr>
  * </table>
  */
 public class DataSourceFactory implements PooledDataSourceFactory {
@@ -407,8 +399,6 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     @NotNull
     @MinDuration(1)
     private Duration removeAbandonedTimeout = Duration.seconds(60L);
-
-    private Optional<String> jdbcInterceptors = Optional.empty();
 
     @JsonProperty
     @Override
@@ -810,16 +800,6 @@ public class DataSourceFactory implements PooledDataSourceFactory {
         this.removeAbandonedTimeout = Objects.requireNonNull(removeAbandonedTimeout);
     }
 
-    @JsonProperty
-    public Optional<String> getJdbcInterceptors() {
-        return jdbcInterceptors;
-    }
-
-    @JsonProperty
-    public void setJdbcInterceptors(Optional<String> jdbcInterceptors) {
-        this.jdbcInterceptors = jdbcInterceptors;
-    }
-
     @Override
     public void asSingleConnectionPool() {
         minSize = 1;
@@ -879,7 +859,7 @@ public class DataSourceFactory implements PooledDataSourceFactory {
             poolConfig.setValidationQueryTimeout((int) validationQueryTimeout.toSeconds());
         }
         validatorClassName.ifPresent(poolConfig::setValidatorClassName);
-        jdbcInterceptors.ifPresent(poolConfig::setJdbcInterceptors);
+
         return new ManagedPooledDataSource(poolConfig, metricRegistry);
     }
 }

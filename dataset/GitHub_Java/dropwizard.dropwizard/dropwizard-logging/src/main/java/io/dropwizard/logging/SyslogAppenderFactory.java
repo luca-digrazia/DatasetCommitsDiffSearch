@@ -19,8 +19,6 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
 /**
  * An {@link AppenderFactory} implementation which provides an appender that sends events to a
  * syslog server.
@@ -74,19 +72,15 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 @JsonTypeName("syslog")
 public class SyslogAppenderFactory extends AbstractAppenderFactory<ILoggingEvent> {
     public enum Facility {
-        ALERT,
-        AUDIT,
         AUTH,
         AUTHPRIV,
         DAEMON,
-        CLOCK,
         CRON,
         FTP,
         LPR,
         KERN,
         MAIL,
         NEWS,
-        NTP,
         SYSLOG,
         USER,
         UUCP,
@@ -130,11 +124,28 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory<ILoggingEvent
     @NotNull
     private String stackTracePrefix = SyslogAppender.DEFAULT_STACKTRACE_PATTERN;
 
+    // prefix the logFormat with the application name and PID (if available)
+    private String logFormat = LOG_TOKEN_NAME + LOG_TOKEN_PID + ": " +
+            SyslogAppender.DEFAULT_SUFFIX_PATTERN;
+
     private boolean includeStackTrace = true;
 
-    public SyslogAppenderFactory() {
-        // prefix the logFormat with the application name and PID (if available)
-        this.logFormat = LOG_TOKEN_NAME + LOG_TOKEN_PID + ": " + SyslogAppender.DEFAULT_SUFFIX_PATTERN;
+    /**
+     * Returns the Logback pattern with which events will be formatted.
+     */
+    @Override
+    @JsonProperty
+    public String getLogFormat() {
+        return logFormat;
+    }
+
+    /**
+     * Sets the Logback pattern with which events will be formatted.
+     */
+    @Override
+    @JsonProperty
+    public void setLogFormat(String logFormat) {
+        this.logFormat = logFormat;
     }
 
     /**
@@ -196,11 +207,9 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory<ILoggingEvent
         final SyslogAppender appender = new SyslogAppender();
         appender.setName("syslog-appender");
         appender.setContext(context);
-        if (!isNullOrEmpty(logFormat)) {
-            appender.setSuffixPattern(logFormat
-                    .replaceAll(LOG_TOKEN_PID, pid)
-                    .replaceAll(LOG_TOKEN_NAME, Matcher.quoteReplacement(applicationName)));
-        }
+        appender.setSuffixPattern(logFormat
+                .replaceAll(LOG_TOKEN_PID, pid)
+                .replaceAll(LOG_TOKEN_NAME, Matcher.quoteReplacement(applicationName)));
         appender.setSyslogHost(host);
         appender.setPort(port);
         appender.setFacility(facility.toString().toLowerCase(Locale.ENGLISH));

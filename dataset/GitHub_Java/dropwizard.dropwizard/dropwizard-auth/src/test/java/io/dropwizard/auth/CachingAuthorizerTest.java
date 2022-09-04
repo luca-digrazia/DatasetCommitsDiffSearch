@@ -10,7 +10,6 @@ import org.mockito.InOrder;
 import java.security.Principal;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.inOrder;
@@ -120,18 +119,8 @@ public class CachingAuthorizerTest {
 
     @Test
     public void calculatesCacheStats() throws Exception {
-        assertThat(cached.stats().loadCount()).isEqualTo(0);
         cached.authorize(principal, role);
-        assertThat(cached.stats().loadCount()).isEqualTo(1);
+        assertThat(cached.stats().loadCount()).isEqualTo(0);
         assertThat(cached.size()).isEqualTo(1);
-    }
-
-    @Test
-    public void shouldPropagateRuntimeException() throws AuthenticationException {
-        final RuntimeException e = new NullPointerException();
-        when(underlying.authorize(principal, role)).thenThrow(e);
-        assertThatNullPointerException()
-            .isThrownBy(() -> cached.authorize(principal, role))
-            .isSameAs(e);
     }
 }
