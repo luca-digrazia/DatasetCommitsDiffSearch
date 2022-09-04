@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,6 +24,8 @@ import javax.lang.model.element.ExecutableElement;
 
 import org.androidannotations.annotations.Background;
 import org.androidannotations.api.BackgroundExecutor;
+import org.androidannotations.api.BackgroundExecutor.Task;
+import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.holder.EComponentHolder;
 
 import com.sun.codemodel.JBlock;
@@ -39,6 +41,8 @@ import com.sun.codemodel.JVar;
 
 public class BackgroundHandler extends AbstractRunnableHandler {
 
+	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
+
 	public BackgroundHandler(ProcessingEnvironment processingEnvironment) {
 		super(Background.class, processingEnvironment);
 	}
@@ -47,11 +51,13 @@ public class BackgroundHandler extends AbstractRunnableHandler {
 	public void process(Element element, EComponentHolder holder) throws Exception {
 		ExecutableElement executableElement = (ExecutableElement) element;
 
+		generateApiClass(element, BackgroundExecutor.class);
+
 		JMethod delegatingMethod = codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
 
 		JBlock previousMethodBody = codeModelHelper.removeBody(delegatingMethod);
 
-		JDefinedClass anonymousTaskClass = codeModel().anonymousClass(BackgroundExecutor.Task.class);
+		JDefinedClass anonymousTaskClass = codeModel().anonymousClass(Task.class);
 
 		JMethod executeMethod = anonymousTaskClass.method(JMod.PUBLIC, codeModel().VOID, "execute");
 		executeMethod.annotate(Override.class);
@@ -61,10 +67,10 @@ public class BackgroundHandler extends AbstractRunnableHandler {
 		tryBlock.body().add(previousMethodBody);
 		JCatchBlock catchBlock = tryBlock._catch(holder.classes().THROWABLE);
 		JVar caughtException = catchBlock.param("e");
-		JStatement uncaughtExceptionCall = holder.classes().THREAD //
-				.staticInvoke("getDefaultUncaughtExceptionHandler") //
-				.invoke("uncaughtException") //
-				.arg(holder.classes().THREAD.staticInvoke("currentThread")) //
+		JStatement uncaughtExceptionCall = holder.classes().THREAD
+				.staticInvoke("getDefaultUncaughtExceptionHandler")
+				.invoke("uncaughtException")
+				.arg(holder.classes().THREAD.staticInvoke("currentThread"))
 				.arg(caughtException);
 		catchBlock.body().add(uncaughtExceptionCall);
 

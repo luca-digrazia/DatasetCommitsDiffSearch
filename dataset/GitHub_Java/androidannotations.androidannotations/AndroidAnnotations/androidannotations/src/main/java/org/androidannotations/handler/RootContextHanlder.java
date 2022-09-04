@@ -1,20 +1,39 @@
+/**
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package org.androidannotations.handler;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpression;
-import org.androidannotations.annotations.RootContext;
-import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.holder.EBeanHolder;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.validation.IsValid;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.lit;
+import static com.sun.codemodel.JExpr.ref;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.type.TypeMirror;
 
-import static com.sun.codemodel.JExpr.cast;
-import static com.sun.codemodel.JExpr.ref;
+import org.androidannotations.annotations.RootContext;
+import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.holder.EBeanHolder;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.IsValid;
+
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JConditional;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JInvocation;
 
 public class RootContextHanlder extends BaseAnnotationHandler<EBeanHolder> {
 
@@ -23,16 +42,12 @@ public class RootContextHanlder extends BaseAnnotationHandler<EBeanHolder> {
 	}
 
 	@Override
-	public boolean validate(Element element, AnnotationElements validatedElements) {
-		IsValid valid = new IsValid();
-
+	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
 		validatorHelper.enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
 
 		validatorHelper.extendsContext(element, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
-
-		return valid.isValid();
 	}
 
 	@Override
@@ -42,16 +57,23 @@ public class RootContextHanlder extends BaseAnnotationHandler<EBeanHolder> {
 		TypeMirror elementType = element.asType();
 		String typeQualifiedName = elementType.toString();
 
-		JBlock body = holder.getInit().body();
+		JBlock body = holder.getInitBody();
 		JExpression contextRef = holder.getContextRef();
 
 		if (CanonicalNameConstants.CONTEXT.equals(typeQualifiedName)) {
 			body.assign(ref(fieldName), contextRef);
 		} else {
-			JClass extendingContextClass = holder.refClass(typeQualifiedName);
-			body._if(contextRef._instanceof(extendingContextClass)) //
-					._then() //
-					.assign(ref(fieldName), cast(extendingContextClass, contextRef));
+            JClass extendingContextClass = holder.refClass(typeQualifiedName);
+            JConditional cond = body._if(holder.getContextRef()._instanceof(extendingContextClass));
+            cond._then() //
+                    .assign(ref(fieldName), cast(extendingContextClass, holder.getContextRef()));
+
+            JInvocation warningInvoke = holder.classes().LOG.staticInvoke("w");
+            warningInvoke.arg(holder.getGeneratedClass().name());
+            JExpression expr = lit("Due to Context class ").plus(holder.getContextRef().invoke("getClass").invoke("getSimpleName")).plus(lit(", the @RootContext " + extendingContextClass.name() + " won't be populated"));
+            warningInvoke.arg(expr);
+            cond._else() //
+                    .add(warningInvoke);
 		}
 	}
 }

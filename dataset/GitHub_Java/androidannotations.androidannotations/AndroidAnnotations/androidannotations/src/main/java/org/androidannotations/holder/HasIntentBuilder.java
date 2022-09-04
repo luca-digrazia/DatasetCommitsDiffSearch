@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,9 +15,10 @@
  */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JFieldRef;
 import org.androidannotations.helper.IntentBuilder;
+
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JFieldVar;
 
 public interface HasIntentBuilder extends GeneratedClassHolder {
 
@@ -27,7 +28,7 @@ public interface HasIntentBuilder extends GeneratedClassHolder {
 
 	public JDefinedClass getIntentBuilderClass();
 
-	public void setIntentField(JFieldRef intentField);
+	public void setIntentField(JFieldVar intentField);
 
-	public JFieldRef getIntentField();
+	public JFieldVar getIntentField();
 }

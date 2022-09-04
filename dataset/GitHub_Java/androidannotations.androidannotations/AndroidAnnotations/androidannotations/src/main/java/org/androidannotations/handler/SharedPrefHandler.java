@@ -59,7 +59,7 @@ import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
-public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPrefHolder> {
+public class SharedPrefHandler extends BaseAnnotationHandler<SharedPrefHolder> implements GeneratingAnnotationHandler<SharedPrefHolder> {
 
 	private IdAnnotationHelper annotationHelper;
 
@@ -80,8 +80,6 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 
 	@Override
 	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		super.validate(element, validatedElements, valid);
-
 		TypeElement typeElement = (TypeElement) element;
 
 		validatorHelper.isInterface(typeElement, valid);

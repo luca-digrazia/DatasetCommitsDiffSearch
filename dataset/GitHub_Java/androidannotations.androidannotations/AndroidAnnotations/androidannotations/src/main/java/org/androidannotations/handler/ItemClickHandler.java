@@ -108,7 +108,7 @@ public class ItemClickHandler extends AbstractListenerHandler {
 	}
 
 	@Override
-	protected JClass getViewClass() {
+	protected JType getViewClass() {
 		return classes().ADAPTER_VIEW.narrow(codeModel().wildcard());
 	}
 }

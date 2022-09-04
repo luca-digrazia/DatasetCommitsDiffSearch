@@ -19,6 +19,7 @@ import static com.sun.codemodel.JMod.PUBLIC;
 
 import javax.lang.model.element.TypeElement;
 
+import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.process.ProcessHolder;
 
@@ -29,6 +30,8 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
 public class EIntentServiceHolder extends EServiceHolder {
+
+    private APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
     private JVar onHandleIntentIntent;
     private JMethod onHandleIntentMethod;

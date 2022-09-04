@@ -15,9 +15,9 @@
  */
 package org.androidannotations.rclass;
 
+import org.androidannotations.process.ProcessHolder;
+
 import com.sun.codemodel.JFieldRef;
-import org.androidannotations.holder.GeneratedClassHolder;
-import org.androidannotations.processing.EBeanHolder;
 
 public interface IRInnerClass {
 
@@ -29,13 +29,9 @@ public interface IRInnerClass {
 
 	String getIdQualifiedName(String name);
 
-	JFieldRef getIdStaticRef(Integer idValue, GeneratedClassHolder holder);
+	JFieldRef getIdStaticRef(Integer idValue, ProcessHolder holder);
 
-	JFieldRef getIdStaticRef(Integer idValue, EBeanHolder holder);
-
-	JFieldRef getIdStaticRef(String name, GeneratedClassHolder holder);
-
-	JFieldRef getIdStaticRef(String name, EBeanHolder holder);
+	JFieldRef getIdStaticRef(String name, ProcessHolder holder);
 
 	final IRInnerClass EMPTY_R_INNER_CLASS = new RInnerClass(null);
 

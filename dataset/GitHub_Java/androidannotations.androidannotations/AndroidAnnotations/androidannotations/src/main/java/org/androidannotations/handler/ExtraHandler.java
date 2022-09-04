@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,7 +23,6 @@ import static com.sun.codemodel.JMod.STATIC;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
-import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.Extra;
 import org.androidannotations.helper.APTCodeModelHelper;
@@ -95,8 +94,7 @@ public class ExtraHandler extends BaseAnnotationHandler<HasExtras> {
 		JVar extras = hasExtras.getInjectExtras();
 		JBlock injectExtrasBlock = hasExtras.getInjectExtrasBlock();
 
-		TypeMirror type = codeModelHelper.getActualType(element, hasExtras);
-		BundleHelper bundleHelper = new BundleHelper(annotationHelper, type);
+		BundleHelper bundleHelper = new BundleHelper(annotationHelper, element);
 
 		JFieldRef extraField = JExpr.ref(fieldName);
 		JBlock ifContainsKey = injectExtrasBlock._if(JExpr.invoke(extras, "containsKey").arg(extraKeyStaticField))._then();

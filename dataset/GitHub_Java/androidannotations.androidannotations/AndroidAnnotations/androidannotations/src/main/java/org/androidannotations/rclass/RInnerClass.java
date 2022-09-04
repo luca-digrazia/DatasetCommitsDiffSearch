@@ -15,18 +15,23 @@
  */
 package org.androidannotations.rclass;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JFieldRef;
-import org.androidannotations.helper.CaseHelper;
-import org.androidannotations.holder.GeneratedClassHolder;
-import org.androidannotations.processing.EBeanHolder;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
-import java.util.*;
+
+import org.androidannotations.helper.CaseHelper;
+import org.androidannotations.process.ProcessHolder;
+
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JFieldRef;
 
 public class RInnerClass implements IRInnerClass {
 
@@ -100,43 +105,18 @@ public class RInnerClass implements IRInnerClass {
 	}
 
 	@Override
-	public JFieldRef getIdStaticRef(Integer idValue, GeneratedClassHolder holder) {
+	public JFieldRef getIdStaticRef(Integer idValue, ProcessHolder holder) {
 		String layoutFieldQualifiedName = getIdQualifiedName(idValue);
 		return extractIdStaticRef(holder, layoutFieldQualifiedName);
 	}
 
 	@Override
-	public JFieldRef getIdStaticRef(Integer idValue, EBeanHolder holder) {
-		String layoutFieldQualifiedName = getIdQualifiedName(idValue);
-		return extractIdStaticRef(holder, layoutFieldQualifiedName);
-	}
-
-	@Override
-	public JFieldRef getIdStaticRef(String name, GeneratedClassHolder holder) {
+	public JFieldRef getIdStaticRef(String name, ProcessHolder holder) {
 		String layoutFieldQualifiedName = getIdQualifiedName(name);
 		return extractIdStaticRef(holder, layoutFieldQualifiedName);
 	}
 
-	@Override
-	public JFieldRef getIdStaticRef(String name, EBeanHolder holder) {
-		String layoutFieldQualifiedName = getIdQualifiedName(name);
-		return extractIdStaticRef(holder, layoutFieldQualifiedName);
-	}
-
-    public static JFieldRef extractIdStaticRef(GeneratedClassHolder holder, String layoutFieldQualifiedName) {
-        if (layoutFieldQualifiedName != null) {
-            int fieldSuffix = layoutFieldQualifiedName.lastIndexOf('.');
-            String fieldName = layoutFieldQualifiedName.substring(fieldSuffix + 1);
-            String rInnerClassName = layoutFieldQualifiedName.substring(0, fieldSuffix);
-
-            JClass refClass = holder.refClass(rInnerClassName);
-            return refClass.staticRef(fieldName);
-        } else {
-            return null;
-        }
-    }
-
-	public static JFieldRef extractIdStaticRef(EBeanHolder holder, String layoutFieldQualifiedName) {
+	public static JFieldRef extractIdStaticRef(ProcessHolder holder, String layoutFieldQualifiedName) {
 		if (layoutFieldQualifiedName != null) {
 			int fieldSuffix = layoutFieldQualifiedName.lastIndexOf('.');
 			String fieldName = layoutFieldQualifiedName.substring(fieldSuffix + 1);
@@ -148,5 +128,4 @@ public class RInnerClass implements IRInnerClass {
 			return null;
 		}
 	}
-
 }

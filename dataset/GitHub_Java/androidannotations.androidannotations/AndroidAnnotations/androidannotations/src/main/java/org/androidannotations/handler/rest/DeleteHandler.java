@@ -15,14 +15,13 @@
  */
 package org.androidannotations.handler.rest;
 
-import org.androidannotations.annotations.rest.Delete;
-import org.androidannotations.handler.rest.RestMethodHandler;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.IsValid;
-
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+
+import org.androidannotations.annotations.rest.Delete;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.IsValid;
 
 public class DeleteHandler extends RestMethodHandler {
 
@@ -31,19 +30,13 @@ public class DeleteHandler extends RestMethodHandler {
 	}
 
 	@Override
-	public boolean validate(Element element, AnnotationElements validatedElements) {
-		IsValid valid = new IsValid();
+	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+		super.validate(element, validatedElements, valid);
 
-		if (!super.validate(element, validatedElements)) {
-			valid.invalidate();
-		}
+        validatorHelper.doesNotReturnPrimitive((ExecutableElement) element, valid);
 
-		validatorHelper.returnTypeIsVoid((ExecutableElement) element, valid);
-
-		restAnnotationHelper.urlVariableNamesExistInParametersAndHasNoOneMoreParameter((ExecutableElement) element, valid);
-
-		return valid.isValid();
-	}
+        restAnnotationHelper.urlVariableNamesExistInParametersAndHasOnlyOneMoreParameter((ExecutableElement) element, valid);
+    }
 
 	@Override
 	protected String getUrlSuffix(Element element) {

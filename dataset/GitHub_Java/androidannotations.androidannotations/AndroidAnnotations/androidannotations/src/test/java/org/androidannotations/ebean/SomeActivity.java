@@ -28,7 +28,4 @@ public class SomeActivity extends Activity {
 	@Bean(SomeImplementation.class)
 	SomeInterface someInterface;
 
-    @Bean
-    SomeGenericBean<Object> objectSomeGenericBean;
-
 }

@@ -32,7 +32,6 @@ import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.IdAnnotationHelper;
 import org.androidannotations.helper.IdValidatorHelper;
 import org.androidannotations.holder.EComponentWithViewSupportHolder;
-import org.androidannotations.holder.FoundViewHolder;
 import org.androidannotations.model.AndroidSystemServices;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
@@ -106,8 +105,17 @@ public abstract class AbstractListenerHandler extends BaseAnnotationHandler<ECom
 		processParameters(listenerMethod, call, parameters);
 
 		for (JFieldRef idRef : idsRefs) {
-			FoundViewHolder foundViewHolder = holder.getFoundViewHolder(idRef, getViewClass());
-			foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getView(), getSetterName()).arg(_new(listenerAnonymousClass));
+            if (idRef != null) {
+                JBlock block = holder.getOnViewChangedBody().block();
+
+                JExpression findViewExpression = holder.findViewById(idRef);
+                if (!getViewClass().equals(classes().VIEW)) {
+                    findViewExpression = cast(getViewClass(), findViewExpression);
+                }
+
+                JVar view = block.decl(getViewClass(), "view", findViewExpression);
+                block._if(view.ne(_null()))._then().invoke(view, getSetterName()).arg(_new(listenerAnonymousClass));
+            }
 		}
 	}
 
@@ -121,7 +129,7 @@ public abstract class AbstractListenerHandler extends BaseAnnotationHandler<ECom
 
 	protected abstract JClass getListenerClass();
 
-	protected JClass getViewClass() {
+	protected JType getViewClass() {
 		return classes().VIEW;
 	}
 
