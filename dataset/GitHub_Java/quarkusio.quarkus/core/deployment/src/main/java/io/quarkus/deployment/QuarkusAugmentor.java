@@ -23,22 +23,23 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import org.jboss.builder.BuildChain;
+import org.jboss.builder.BuildChainBuilder;
+import org.jboss.builder.BuildExecutionBuilder;
+import org.jboss.builder.BuildResult;
+import org.jboss.builder.item.BuildItem;
 import org.jboss.logging.Logger;
 
-import io.quarkus.builder.BuildChain;
-import io.quarkus.builder.BuildChainBuilder;
-import io.quarkus.builder.BuildExecutionBuilder;
-import io.quarkus.builder.BuildResult;
-import io.quarkus.builder.item.BuildItem;
 import io.quarkus.deployment.builditem.AdditionalApplicationArchiveBuildItem;
+import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
 import io.quarkus.deployment.builditem.ClassOutputBuildItem;
 import io.quarkus.deployment.builditem.ExtensionClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.runtime.LaunchMode;
 
 public class QuarkusAugmentor {
@@ -52,7 +53,6 @@ public class QuarkusAugmentor {
     private final List<Consumer<BuildChainBuilder>> buildChainCustomizers;
     private final LaunchMode launchMode;
     private final List<Path> additionalApplicationArchives;
-    private final LiveReloadBuildItem liveReloadBuildItem;
 
     QuarkusAugmentor(Builder builder) {
         this.output = builder.output;
@@ -62,7 +62,6 @@ public class QuarkusAugmentor {
         this.buildChainCustomizers = new ArrayList<>(builder.buildChainCustomizers);
         this.launchMode = builder.launchMode;
         this.additionalApplicationArchives = new ArrayList<>(builder.additionalApplicationArchives);
-        this.liveReloadBuildItem = builder.liveReloadState;
     }
 
     public BuildResult run() throws Exception {
@@ -83,7 +82,6 @@ public class QuarkusAugmentor {
                     .addInitial(ShutdownContextBuildItem.class)
                     .addInitial(ClassOutputBuildItem.class)
                     .addInitial(LaunchModeBuildItem.class)
-                    .addInitial(LiveReloadBuildItem.class)
                     .addInitial(AdditionalApplicationArchiveBuildItem.class)
                     .addInitial(ExtensionClassLoaderBuildItem.class);
             for (Class<? extends BuildItem> i : finalResults) {
@@ -100,7 +98,6 @@ public class QuarkusAugmentor {
                     .build();
             BuildExecutionBuilder execBuilder = chain.createExecutionBuilder("main")
                     .produce(QuarkusConfig.INSTANCE)
-                    .produce(liveReloadBuildItem)
                     .produce(new ArchiveRootBuildItem(root))
                     .produce(new ClassOutputBuildItem(output))
                     .produce(new ShutdownContextBuildItem())
@@ -139,7 +136,6 @@ public class QuarkusAugmentor {
         Set<Class<? extends BuildItem>> finalResults = new HashSet<>();
         private final List<Consumer<BuildChainBuilder>> buildChainCustomizers = new ArrayList<>();
         LaunchMode launchMode = LaunchMode.NORMAL;
-        LiveReloadBuildItem liveReloadState = new LiveReloadBuildItem();
 
         public Builder addBuildChainCustomizer(Consumer<BuildChainBuilder> customizer) {
             this.buildChainCustomizers.add(customizer);
@@ -198,15 +194,6 @@ public class QuarkusAugmentor {
 
         public QuarkusAugmentor build() {
             return new QuarkusAugmentor(this);
-        }
-
-        public LiveReloadBuildItem getLiveReloadState() {
-            return liveReloadState;
-        }
-
-        public Builder setLiveReloadState(LiveReloadBuildItem liveReloadState) {
-            this.liveReloadState = liveReloadState;
-            return this;
         }
     }
 }
