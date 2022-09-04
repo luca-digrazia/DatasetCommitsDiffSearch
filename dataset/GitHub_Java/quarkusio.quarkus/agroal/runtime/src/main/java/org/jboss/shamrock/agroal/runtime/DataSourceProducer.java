@@ -35,11 +35,7 @@ import javax.sql.XADataSource;
 import javax.transaction.TransactionManager;
 import javax.transaction.TransactionSynchronizationRegistry;
 
-import com.arjuna.ats.arjuna.common.CoreEnvironmentBeanException;
-import com.arjuna.ats.arjuna.common.arjPropertyManager;
-import com.arjuna.ats.arjuna.coordinator.TxControl;
 import io.agroal.api.AgroalDataSource;
-import io.agroal.api.configuration.supplier.AgroalConnectionPoolConfigurationSupplier;
 import io.agroal.api.configuration.supplier.AgroalDataSourceConfigurationSupplier;
 import io.agroal.api.security.NamePrincipal;
 import io.agroal.api.security.SimplePassword;
@@ -51,9 +47,6 @@ public class DataSourceProducer {
 
     private static final Logger log = Logger.getLogger(DataSourceProducer.class.getName());
 
-    private static final int DEFAULT_MIN_POOL_SIZE = 2;
-    private static final int DEFAULT_MAX_POOL_SIZE = 20;
-
     private Class driver;
     private String dataSourceName;
     private String url;
@@ -62,8 +55,6 @@ public class DataSourceProducer {
     private boolean jta = true;
     private boolean connectable;
     private boolean xa;
-    private Integer minSize;
-    private Integer maxSize;
 
     private AgroalDataSource agroalDataSource;
 
@@ -95,42 +86,22 @@ public class DataSourceProducer {
         }
 
         AgroalDataSourceConfigurationSupplier dataSourceConfiguration = new AgroalDataSourceConfigurationSupplier();
-        final AgroalConnectionPoolConfigurationSupplier poolConfiguration = dataSourceConfiguration.connectionPoolConfiguration();
-        poolConfiguration.connectionFactoryConfiguration().jdbcUrl( targetUrl);
-        poolConfiguration.connectionFactoryConfiguration().connectionProviderClass( providerClass);
+        dataSourceConfiguration.connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl(targetUrl);
+        dataSourceConfiguration.connectionPoolConfiguration().connectionFactoryConfiguration().connectionProviderClass(providerClass);
 
         if (jta || xa) {
             TransactionIntegration txIntegration = new NarayanaTransactionIntegration(transactionManager, transactionSynchronizationRegistry, null, connectable);
-            poolConfiguration.transactionIntegration( txIntegration);
+            dataSourceConfiguration.connectionPoolConfiguration().transactionIntegration(txIntegration);
         }
         // use the name / password from the callbacks
         if (userName != null) {
-            poolConfiguration
-                    .connectionFactoryConfiguration().principal( new NamePrincipal( userName));
+            dataSourceConfiguration.connectionPoolConfiguration().connectionFactoryConfiguration().principal(new NamePrincipal(userName));
         }
         if (password != null) {
-            poolConfiguration
-                    .connectionFactoryConfiguration().credential( new SimplePassword( password));
+            dataSourceConfiguration.connectionPoolConfiguration().connectionFactoryConfiguration().credential(new SimplePassword(password));
         }
 
-        //Pool size configuration:
-        if (minSize != null) {
-            poolConfiguration.minSize( minSize );
-        }
-        else {
-            log.warning( "Agroal pool 'minSize' was not set: setting to default value " + DEFAULT_MIN_POOL_SIZE );
-            poolConfiguration.minSize( DEFAULT_MIN_POOL_SIZE );
-        }
-        if (maxSize != null) {
-            poolConfiguration.maxSize( maxSize );
-        }
-        else {
-            log.warning( "Agroal pool 'maxSize' was not set: setting to default value " + DEFAULT_MAX_POOL_SIZE );
-            poolConfiguration.maxSize( DEFAULT_MAX_POOL_SIZE );
-        }
-
-        //Explicit reference to bypass reflection need of the ServiceLoader used by AgroalDataSource#from
-        agroalDataSource = new io.agroal.pool.DataSource(dataSourceConfiguration.get());
+        agroalDataSource = AgroalDataSource.from(dataSourceConfiguration);
         log.log(Level.INFO, "Started data source " + url);
         return agroalDataSource;
     }
@@ -216,21 +187,5 @@ public class DataSourceProducer {
 
     public void setAgroalDataSource(AgroalDataSource agroalDataSource) {
         this.agroalDataSource = agroalDataSource;
-    }
-
-    public Integer getMinSize() {
-        return minSize;
-    }
-
-    public void setMinSize(Integer minSize) {
-        this.minSize = minSize;
-    }
-
-    public Integer getMaxSize() {
-        return maxSize;
-    }
-
-    public void setMaxSize(Integer maxSize) {
-        this.maxSize = maxSize;
     }
 }
