@@ -14,8 +14,8 @@
 package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static com.google.devtools.build.lib.vfs.PathFragment.create;
-import static org.junit.Assert.assertThrows;
 
 import java.io.File;
 import org.junit.Test;
@@ -95,7 +95,7 @@ public class PathFragmentWindowsTest {
   }
 
   @Test
-  public void testGetRelativeMixed() {
+  public void testGetRelativeMixed() throws Exception {
     assertThat(create("a").getRelative("b")).isEqualTo(create("a/b"));
     assertThat(create("a").getRelative("/b")).isEqualTo(create("/b"));
     assertThat(create("a").getRelative("E:/b")).isEqualTo(create("E:/b"));
@@ -110,7 +110,7 @@ public class PathFragmentWindowsTest {
   }
 
   @Test
-  public void testRelativeTo() {
+  public void testRelativeTo() throws Exception {
     assertThat(create("").relativeTo("").getPathString()).isEqualTo("");
     assertThrows(IllegalArgumentException.class, () -> create("").relativeTo("a"));
 
@@ -126,16 +126,6 @@ public class PathFragmentWindowsTest {
   @Test
   public void testGetChildWorks() {
     assertThat(create("../some/path").getChild("hi")).isEqualTo(create("../some/path/hi"));
-    assertThat(create("../some/path").getChild(".hi")).isEqualTo(create("../some/path/.hi"));
-    assertThat(create("../some/path").getChild("..hi")).isEqualTo(create("../some/path/..hi"));
-  }
-
-  @Test
-  public void testGetChildRejectsInvalidBaseNames() {
-    assertThrows(IllegalArgumentException.class, () -> create("").getChild("."));
-    assertThrows(IllegalArgumentException.class, () -> create("").getChild(".."));
-    assertThrows(IllegalArgumentException.class, () -> create("").getChild("multi/segment"));
-    assertThrows(IllegalArgumentException.class, () -> create("").getChild("multi\\segment"));
   }
 
   @Test
@@ -236,7 +226,7 @@ public class PathFragmentWindowsTest {
   }
 
   @Test
-  public void testWindowsDriveRelativePaths() {
+  public void testWindowsDriveRelativePaths() throws Exception {
     // On Windows, paths that look like "C:foo" mean "foo relative to the current directory
     // of drive C:\".
     // Bazel doesn't resolve such paths, and just takes them literally like normal path segments.

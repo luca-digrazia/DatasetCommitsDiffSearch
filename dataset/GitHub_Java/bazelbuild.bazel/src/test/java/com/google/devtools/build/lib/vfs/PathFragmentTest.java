@@ -15,19 +15,16 @@ package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static com.google.devtools.build.lib.vfs.PathFragment.create;
-import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.TestUtils;
+import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
-import com.google.protobuf.ByteString;
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
@@ -43,7 +40,7 @@ public class PathFragmentTest {
 
   @Test
   public void testEqualsAndHashCode() {
-    InMemoryFileSystem filesystem = new InMemoryFileSystem(DigestHashFunction.SHA256);
+    InMemoryFileSystem filesystem = new InMemoryFileSystem();
 
     new EqualsTester()
         .addEqualityGroup(
@@ -172,9 +169,6 @@ public class PathFragmentTest {
   public void testGetChildWorks() {
     PathFragment pf = create("../some/path");
     assertThat(pf.getChild("hi")).isEqualTo(create("../some/path/hi"));
-    assertThat(pf.getChild("h\\i")).isEqualTo(create("../some/path/h\\i"));
-    assertThat(create("../some/path").getChild(".hi")).isEqualTo(create("../some/path/.hi"));
-    assertThat(create("../some/path").getChild("..hi")).isEqualTo(create("../some/path/..hi"));
   }
 
   @Test
@@ -578,26 +572,25 @@ public class PathFragmentTest {
 
   @Test
   public void testSerializationSimple() throws Exception {
-    checkSerialization("a", 6);
+   checkSerialization("a", 91);
   }
 
   @Test
   public void testSerializationAbsolute() throws Exception {
-    checkSerialization("/foo", 9);
+    checkSerialization("/foo", 94);
    }
 
   @Test
   public void testSerializationNested() throws Exception {
-    checkSerialization("foo/bar/baz", 16);
+    checkSerialization("foo/bar/baz", 101);
   }
 
   private void checkSerialization(String pathFragmentString, int expectedSize) throws Exception {
     PathFragment a = create(pathFragmentString);
-    ByteString sa = TestUtils.toBytes(a, ImmutableMap.of());
-    assertThat(sa.size()).isEqualTo(expectedSize);
+    byte[] sa = TestUtils.serializeObject(a);
+    assertThat(sa).hasLength(expectedSize);
 
-    PathFragment a2 =
-        (PathFragment) TestUtils.fromBytes(new DeserializationContext(ImmutableMap.of()), sa);
+    PathFragment a2 = (PathFragment) TestUtils.deserializeObject(sa);
     assertThat(a2).isEqualTo(a);
   }
 }
