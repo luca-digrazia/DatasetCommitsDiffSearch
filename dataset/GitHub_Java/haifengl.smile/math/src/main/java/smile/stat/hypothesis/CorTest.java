@@ -86,44 +86,38 @@ import smile.sort.QuickSort;
  */
 public class CorTest {
     /**
-     * The type of test.
+     * A character string indicating what type of test was performed.
      */
     public final String method;
 
     /**
-     * The correlation coefficient.
+     * Correlation coefficient
      */
     public final double cor;
 
     /**
-     * The test statistic.
-     */
-    public final double t;
-
-    /**
-     * The degree of freedom of test statistic.
-     * It is set to 0 in case of Kendall test as the test is non-parametric.
+     * Degree of freedom
      */
     public final double df;
 
     /**
-     * Two-sided p-value.
+     * test statistic
+     */
+    public final double t;
+
+    /**
+     * (two-sided) p-value of test
      */
     public final double pvalue;
 
     /**
      * Constructor.
-     * @param method the type of correlation.
-     * @param cor the correlation coefficient.
-     * @param t the t-statistic.
-     * @param df the degree of freedom.
-     * @param pvalue the p-value.
      */
-    public CorTest(String method, double cor, double t, double df, double pvalue) {
+    private CorTest(String method, double cor, double df, double t, double pvalue) {
         this.method = method;
         this.cor = cor;
-        this.t = t;
         this.df = df;
+        this.t = t;
         this.pvalue = pvalue;
     }
 
@@ -160,9 +154,9 @@ public class CorTest {
         double r = sxy / (Math.sqrt(sxx * syy) + TINY);
         int df = n - 2;
         double t = r * Math.sqrt(df / ((1.0 - r + TINY) * (1.0 + r + TINY)));
-        double pvalue = Beta.regularizedIncompleteBetaFunction(0.5 * df, 0.5, df / (df + t * t));
+        double prob = Beta.regularizedIncompleteBetaFunction(0.5 * df, 0.5, df / (df + t * t));
 
-        return new CorTest("Pearson", r, t, df, pvalue);
+        return new CorTest("Pearson", r, df, t, prob);
     }
 
     /**
@@ -241,14 +235,14 @@ public class CorTest {
         double rs = (1.0 - (6.0 / en3n) * (d + (sf + sg) / 12.0)) / Math.sqrt(fac);
         fac = (rs + 1.0) * (1.0 - rs);
 
-        double pvalue = 0.0;
+        double probrs = 0.0;
         double t = rs * Math.sqrt((n - 2.0) / fac);
         int df = n - 2;
         if (fac > 0.0) {
-            pvalue = Beta.regularizedIncompleteBetaFunction(0.5 * df, 0.5, df / (df + t * t));
+            probrs = Beta.regularizedIncompleteBetaFunction(0.5 * df, 0.5, df / (df + t * t));
         }
 
-        return new CorTest("Spearman", rs, t, df, pvalue);
+        return new CorTest("Spearman", rs, df, t, probrs);
     }
 
     /**
@@ -286,22 +280,9 @@ public class CorTest {
         }
 
         double tau = is / (Math.sqrt(n1) * Math.sqrt(n2));
-
-        // Kendall test is non-parametric as it does not rely on any
-        // assumptions on the distributions of X or Y or the distribution
-        // of (X,Y).
-
-        // Under the null hypothesis of independence of X and Y, the sampling
-        // distribution of tau has an expected value of zero. The precise
-        // distribution cannot be characterized in terms of common distributions,
-        // but may be calculated exactly for small samples. For larger samples,
-        // it is common to use an approximation to the normal distribution,
-        // with mean zero and variance sqrt(2(2n+5)/9n(n-1)).
-        double var = (4.0 * n + 10.0) / (9.0 * n * (n - 1.0));
-        double z = tau / Math.sqrt(var);
-        double pvalue = Erf.erfcc(Math.abs(z) / 1.4142136);
-
-        // Set the degree of freedom to 0 as the test is non-parametric.
-        return new CorTest("Kendall", tau, z, 0, pvalue);
+        double svar = (4.0 * n + 10.0) / (9.0 * n * (n - 1.0));
+        double z = tau / Math.sqrt(svar);
+        double prob = Erf.erfcc(Math.abs(z) / 1.4142136);
+        return new CorTest("Kendall", tau, 0, z, prob);
     }
 }

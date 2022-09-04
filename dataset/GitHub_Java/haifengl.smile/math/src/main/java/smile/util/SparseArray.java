@@ -69,7 +69,6 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
         /**
          * Update the value of entry in the array.
          * Note that the field <code>x</code> is final and thus not updated.
-         * @param x the new entry value.
          */
         public void update(double x) {
             value.set(index, x);
@@ -99,7 +98,6 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
 
     /**
      * Constructor.
-     * @param entries the nonzero entries.
      */
     public SparseArray(List<Entry> entries) {
         index = new IntArrayList(entries.size());
@@ -113,7 +111,6 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
 
     /**
      * Constructor.
-     * @param stream the stream of nonzero entries.
      */
     public SparseArray(Stream<Entry> stream) {
         this(stream.collect(Collectors.toList()));
@@ -156,17 +153,12 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
         };
     }
 
-    /**
-     * Returns the stream of nonzero entries.
-     * @return the stream of nonzero entries.
-     */
+    /** Returns the stream of nonzero entries. */
     public Stream<Entry> stream() {
         return IntStream.range(0, size()).mapToObj(Entry::new);
     }
 
-    /**
-     * Sorts the array elements such that the indices are in ascending order.
-     */
+    /** Sorts the array elements such that the indices are in ascending order. */
     public void sort() {
         QuickSort.sort(index.data, value.data, size());
     }

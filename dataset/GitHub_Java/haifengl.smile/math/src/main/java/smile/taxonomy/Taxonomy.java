@@ -60,25 +60,21 @@ public class Taxonomy {
     }
 
     /**
-     * Returns the concept node which synset contains the keyword.
-     * @param keyword the keyword.
-     * @return the concept node which synset contains the keyword.
+     * Returns a concept node which synset contains the keyword.
      */
     public Concept getConcept(String keyword) {
         return concepts.get(keyword);
     }
 
     /**
-     * Returns all named concepts in the taxonomy.
-     * @return all named concepts.
+     * Returns all named concepts from this taxonomy
      */
     public List<String> getConcepts() {
         return getConcepts(root);
     }
 
     /**
-     * Returns all named sub-concepts in the taxonomy.
-     * @return all named sub-concepts.
+     * Returns all named sub-concepts from this taxonomy
      */
     private List<String> getConcepts(Concept c) {
         List<String> keywords = new ArrayList<>();
@@ -101,10 +97,6 @@ public class Taxonomy {
      * common ancestor is defined between two nodes v and w as the lowest node
      * that has both v and w as descendants (where we allow a node to be a
      * descendant of itself).
-     *
-     * @param v a concept.
-     * @param w the other concept.
-     * @return the lowest common ancestor.
      */
     public Concept lowestCommonAncestor(String v, String w) {
         Concept vnode = getConcept(v);
@@ -118,10 +110,6 @@ public class Taxonomy {
      * common ancestor is defined between two nodes v and w as the lowest node
      * that has both v and w as descendants (where we allow a node to be a
      * descendant of itself).
-     *
-     * @param v a concept.
-     * @param w the other concept.
-     * @return the lowest common ancestor.
      */
     public Concept lowestCommonAncestor(Concept v, Concept w) {
         if (v.taxonomy != w.taxonomy) {

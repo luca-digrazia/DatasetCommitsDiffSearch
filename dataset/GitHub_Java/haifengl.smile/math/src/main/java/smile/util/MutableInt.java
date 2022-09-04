@@ -44,36 +44,22 @@ public class MutableInt {
         this.value = value;
     }
 
-    /**
-     * Increment by one.
-     * @return the update value.
-     */
+    /** Increment by one. */
     public int increment() {
         return ++value;
     }
 
-    /**
-     * Increment.
-     * @param x the operand.
-     * @return the update value.
-     */
+    /** Increment. */
     public int increment(int x) {
         return value += x;
     }
 
-    /**
-     * Decrement by one.
-     * @return the update value.
-     */
+    /** Decrement by one. */
     public int decrement() {
         return --value;
     }
 
-    /**
-     * Decrement.
-     * @param x the operand.
-     * @return the update value.
-     */
+    /** Decrement. */
     public int decrement(int x) {
         return value -= x;
     }

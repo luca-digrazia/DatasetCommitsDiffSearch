@@ -86,7 +86,6 @@ public class Concept {
 
     /**
      * Check if a node is a leaf in the taxonomy tree.
-     * @return true if a node is a leaf.
      */
     public boolean isLeaf() {
         return children == null || children.isEmpty();
@@ -103,7 +102,6 @@ public class Concept {
 
     /**
      * Adds a list of synomym to the concept synset.
-     * @param keywords the synomyms.
      */
     public void addKeywords(String... keywords) {
         for (String keyword : keywords) {
@@ -125,7 +123,6 @@ public class Concept {
 
     /**
      * Removes a keyword from the concept synset.
-     * @param keyword the keyword.
      */
     public void removeKeyword(String keyword) {
         if (!taxonomy.concepts.containsKey(keyword)) {
@@ -148,17 +145,14 @@ public class Concept {
     }
 
     /**
-     * Adds a child to this node.
-     * @param concept the concept.
-     * @return the child node.
+     * Adds a child to this node
      */
     public Concept addChild(String concept) {
         return new Concept(this, concept);
     }
 
     /**
-     * Adds a child to this node.
-     * @param concept the concept.
+     * Adds a child to this node
      */
     public void addChild(Concept concept) {
         if (taxonomy != concept.taxonomy) {
@@ -174,9 +168,7 @@ public class Concept {
     }
 
     /**
-     * Removes a child to this node.
-     * @param concept the concept.
-     * @return true if the given concept is a child.
+     * Removes a child to this node
      */
     public boolean removeChild(Concept concept) {
         if (concept.parent != this) {
@@ -196,8 +188,6 @@ public class Concept {
 
     /**
      * Returns true if this concept is an ancestor of the given concept.
-     * @param concept the concept.
-     * @return true if this concept is an ancestor of the given concept.
      */
     public boolean isAncestorOf(Concept concept) {
         Concept p = concept.parent;
@@ -214,8 +204,7 @@ public class Concept {
     }
 
     /**
-     * Returns the path from root to this node.
-     * @return the path from root to this node.
+     * Returns the path from root to the given node.
      */
     public List<Concept> getPathFromRoot() {
         LinkedList<Concept> path = new LinkedList<>();
@@ -230,8 +219,7 @@ public class Concept {
     }
 
     /**
-     * Returns the path from this node to the root.
-     * @return the path from this node to the root.
+     * Returns the path from the given node to the root.
      */
     public List<Concept> getPathToRoot() {
         LinkedList<Concept> path = new LinkedList<>();

@@ -26,11 +26,7 @@ package smile.util;
  * @author Haifeng Li
  */
 public interface ToFloatFunction<T> {
-    /**
-     * Applies this function to the given argument.
-     * @param o the input object.
-     * @return the function value.
-     */
+    /** Applies this function to the given argument. */
     float applyAsFloat(T o);
 }
 
