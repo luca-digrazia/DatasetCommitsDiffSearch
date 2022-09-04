@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
@@ -34,13 +35,10 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TopDownActionCache;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -593,8 +591,7 @@ public class CommandEnvironment {
 
   /**
    * Initializes the package cache using the given options, and syncs the package cache. Also
-   * injects the skylark semantics using the options for the {@link
-   * com.google.devtools.build.lib.analysis.config.BuildConfiguration}.
+   * injects the skylark semantics using the options for the {@link BuildConfiguration}.
    */
   public void setupPackageCache(OptionsProvider options)
       throws InterruptedException, AbruptExitException {
@@ -699,15 +696,7 @@ public class CommandEnvironment {
     if (inWorkspace()) {
       if (commonOptions.clientCwd.containsUplevelReferences()) {
         throw new AbruptExitException(
-            DetailedExitCode.of(
-                ExitCode.COMMAND_LINE_ERROR,
-                FailureDetail.newBuilder()
-                    .setMessage("Client cwd contains uplevel references")
-                    .setClientEnvironment(
-                        FailureDetails.ClientEnvironment.newBuilder()
-                            .setCode(FailureDetails.ClientEnvironment.Code.CLIENT_CWD_MALFORMED)
-                            .build())
-                    .build()));
+            "Client cwd contains uplevel references", ExitCode.COMMAND_LINE_ERROR);
       }
       workingDirectory = workspace.getRelative(commonOptions.clientCwd);
     } else {

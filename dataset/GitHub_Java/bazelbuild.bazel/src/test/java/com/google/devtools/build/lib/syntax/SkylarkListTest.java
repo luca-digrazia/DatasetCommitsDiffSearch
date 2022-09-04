@@ -18,6 +18,7 @@ import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import java.util.ArrayList;
 import org.junit.Test;
@@ -275,17 +276,17 @@ public final class SkylarkListTest extends EvaluationTestCase {
     // report failures using unchecked exceptions.
     EvalException e =
         assertThrows(EvalException.class, () -> list.add((Object) 4, (Location) null));
-    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen list value");
+    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen object");
     e = assertThrows(EvalException.class, () -> list.add(0, (Object) 4, (Location) null));
-    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen list value");
+    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen object");
     e =
         assertThrows(
             EvalException.class, () -> list.addAll(ImmutableList.of(4, 5, 6), (Location) null));
-    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen list value");
+    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen object");
     e = assertThrows(EvalException.class, () -> list.remove(0, (Location) null));
-    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen list value");
+    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen object");
     e = assertThrows(EvalException.class, () -> list.set(0, 10, (Location) null));
-    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen list value");
+    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen object");
   }
 
   @Test
@@ -295,7 +296,7 @@ public final class SkylarkListTest extends EvaluationTestCase {
     list.unsafeShallowFreeze();
 
     EvalException e = assertThrows(EvalException.class, () -> list.add((Object) 4, null));
-    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen list value");
+    assertThat(e).hasMessageThat().isEqualTo("trying to mutate a frozen object");
   }
 
   @Test
