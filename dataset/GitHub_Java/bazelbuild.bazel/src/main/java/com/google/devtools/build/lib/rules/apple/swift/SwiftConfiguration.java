@@ -16,9 +16,9 @@ package com.google.devtools.build.lib.rules.apple.swift;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -26,10 +26,11 @@ import com.google.devtools.build.lib.skylarkbuildapi.apple.SwiftConfigurationApi
 
 /**
  * A configuration containing flags required for Swift tools. This is used primarily by swift_*
- * family of rules written in Starlark.
+ * family of rules written in Skylark.
  */
 @Immutable
-public class SwiftConfiguration extends Fragment implements SwiftConfigurationApi {
+public class SwiftConfiguration extends BuildConfiguration.Fragment
+    implements SwiftConfigurationApi {
   private final ImmutableList<String> copts;
 
   private SwiftConfiguration(SwiftCommandLineOptions options) {
@@ -53,7 +54,7 @@ public class SwiftConfiguration extends Fragment implements SwiftConfigurationAp
     }
 
     @Override
-    public Class<? extends Fragment> creates() {
+    public Class<? extends BuildConfiguration.Fragment> creates() {
       return SwiftConfiguration.class;
     }
 
