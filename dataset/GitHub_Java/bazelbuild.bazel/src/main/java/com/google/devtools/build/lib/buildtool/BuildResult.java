@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.Local
 import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
 import com.google.devtools.build.lib.buildeventstream.BuildToolLogs;
 import com.google.devtools.build.lib.buildeventstream.BuildToolLogs.LogFileEntry;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.DetailedExitCode;
@@ -63,8 +62,6 @@ public final class BuildResult {
   private ImmutableSet<AspectKey> successfulAspects;
 
   private final BuildToolLogCollection buildToolLogCollection = new BuildToolLogCollection();
-
-  @Nullable private FailureDetail postBuildCallbackFailureDetail;
 
   public BuildResult(long startTimeMillis) {
     this.startTimeMillis = startTimeMillis;
@@ -233,14 +230,6 @@ public final class BuildResult {
     this.successfulAspects = successfulAspects;
   }
 
-  void setPostBuildCallbackFailureDetail(FailureDetail failureDetail) {
-    this.postBuildCallbackFailureDetail = failureDetail;
-  }
-
-  public FailureDetail getPostBuildCallBackFailureDetail() {
-    return postBuildCallbackFailureDetail;
-  }
-
   /**
    * Returns the set of targets that were successfully built. This value is set at the end of the
    * build, after the target patterns have been parsed and resolved and after attempting to build
@@ -276,6 +265,7 @@ public final class BuildResult {
    * Returns the set of targets which were skipped (Blaze didn't attempt to execute them)
    * because they're not compatible with the build's target platform.
    */
+  @VisibleForTesting
   public Collection<ConfiguredTarget> getSkippedTargets() {
     return skippedTargets;
   }

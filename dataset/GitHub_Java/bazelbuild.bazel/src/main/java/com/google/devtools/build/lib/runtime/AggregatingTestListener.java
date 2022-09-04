@@ -41,12 +41,10 @@ import com.google.devtools.build.lib.server.FailureDetails.TestCommand.Code;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.DetailedExitCode.DetailedExitCodeComparator;
-import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.annotation.Nullable;
 
 /** Aggregates and reports target-wide test statuses in real-time. */
 @ThreadSafety.ThreadSafe
@@ -208,14 +206,12 @@ public final class AggregatingTestListener {
    * build, run only once.
    *
    * @param testTargets The list of targets being run
-   * @param validatedTargets targets with ValidateTarget aspect success or null if aspect not used
    * @param notifier A console notifier to echo results to.
    * @return true if all the tests passed, else false
    */
   public DetailedExitCode differentialAnalyzeAndReport(
       Collection<ConfiguredTarget> testTargets,
       Collection<ConfiguredTarget> skippedTargets,
-      @Nullable ImmutableSet<ConfiguredTargetKey> validatedTargets,
       TestResultNotifier notifier) {
     Preconditions.checkNotNull(testTargets);
     Preconditions.checkNotNull(notifier);
@@ -236,34 +232,14 @@ public final class AggregatingTestListener {
                 .setConfigurationKey(testTarget.getConfigurationKey())
                 .build();
         TestResultAggregator aggregator = aggregators.get(actualKey);
-        TestSummary.Builder summaryBuilder = TestSummary.newBuilder(testTarget);
+        TestSummary.Builder summaryBuilder = TestSummary.newBuilder();
         summaryBuilder.mergeFrom(aggregator.aggregateAndReportSummary(skipTargetsOnFailure));
+        summaryBuilder.setTarget(testTarget);
         summary = summaryBuilder.build();
       } else {
         TestResultAggregator aggregator = aggregators.get(asKey(testTarget));
         summary = aggregator.aggregateAndReportSummary(skipTargetsOnFailure);
       }
-
-      if (validatedTargets != null
-          && summary.getStatus() != BlazeTestStatus.NO_STATUS
-          && !validatedTargets.contains(asKey(testTarget))) {
-        // Approximate what targetFailure() would do for test targets that failed validation for
-        // the purposes of printing test results to console only. Note that absent -k,
-        // targetFailure() ends up marking one test as FAILED_TO_BUILD before buildComplete() marks
-        // the remaining targets NO_STATUS. While we could approximate that, for simplicity, we
-        // just use NO_STATUS for all tests with failed validations for simplicity here (absent -k).
-        // Events published on BEP are not affected by this, but validation failures are published
-        // as separate events and are additionally accounted in TargetSummary BEP messages.
-        TestSummary.Builder summaryBuilder = TestSummary.newBuilder(summary.getTarget());
-        summaryBuilder.mergeFrom(summary);
-        summaryBuilder.setStatus(
-            skipTargetsOnFailure
-                ? BlazeTestStatus.NO_STATUS
-                : TestResultAggregator.aggregateStatus(
-                    summary.getStatus(), BlazeTestStatus.FAILED_TO_BUILD));
-        summary = summaryBuilder.build();
-      }
-
       summaries.add(summary);
 
       // Finished aggregating; build the final console output.
