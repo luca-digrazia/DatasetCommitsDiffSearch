@@ -19,17 +19,15 @@
  */
 package org.graylog2.periodical;
 
-import com.codahale.metrics.Meter;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
+import java.util.concurrent.TimeUnit;
 import org.graylog2.Core;
 import org.graylog2.buffers.Cache;
-import org.graylog2.buffers.ProcessBuffer;
-import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -46,13 +44,10 @@ public class MasterCacheWorkerThread implements Runnable {
     private final Buffer targetBuffer;
     private final Core core;
 
-    private final Meter writtenMessages;
-    private final Meter outOfCapacity;
+    private final Meter writtenMessages = Metrics.newMeter(MasterCacheWorkerThread.class, "SuccessfulWrites", "messages", TimeUnit.SECONDS);
+    private final Meter outOfCapacity = Metrics.newMeter(MasterCacheWorkerThread.class, "FailedWritesOutOfCapacity", "messages", TimeUnit.SECONDS);
     
     public MasterCacheWorkerThread(Core core, Cache cache, Buffer targetBuffer) {
-        writtenMessages = core.metrics().meter(name(MasterCacheWorkerThread.class, "writtenMessages"));
-        outOfCapacity =  core.metrics().meter(name(MasterCacheWorkerThread.class, "FailedWritesOutOfCapacity"));
-
         this.cache = cache;
         this.cacheName = cache.getClass().getCanonicalName();
         
@@ -76,8 +71,7 @@ public class MasterCacheWorkerThread implements Runnable {
                         if (targetBuffer.hasCapacity() && core.isProcessing()) {
                             try {
                                 LOG.debug("Reading message from {}.", cacheName);
-                                Message msg = cache.pop();
-                                targetBuffer.insertFailFast(msg, (String) msg.getField(ProcessBuffer.SOURCE_INPUT_ATTR_NAME));
+                                targetBuffer.insertFailFast(cache.pop());
                                 writtenMessages.mark();
                             } catch (BufferOutOfCapacityException ex) {
                                 outOfCapacity.mark();
