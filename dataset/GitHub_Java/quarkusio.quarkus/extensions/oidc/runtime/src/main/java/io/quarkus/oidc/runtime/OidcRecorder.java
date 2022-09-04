@@ -68,42 +68,42 @@ public class OidcRecorder {
                         new Function<OidcTenantConfig, Uni<TenantConfigContext>>() {
                             @Override
                             public Uni<TenantConfigContext> apply(OidcTenantConfig config) {
-
-                                return Uni.createFrom().emitter(new Consumer<UniEmitter<? super TenantConfigContext>>() {
-                                    @Override
-                                    public void accept(UniEmitter<? super TenantConfigContext> uniEmitter) {
-                                        if (BlockingOperationControl.isBlockingAllowed()) {
-                                            createDynamicTenantContext(uniEmitter, vertxValue, config,
-                                                    config.getTenantId().get());
-                                        } else {
+                                if (BlockingOperationControl.isBlockingAllowed()) {
+                                    try {
+                                        return Uni.createFrom().item(createDynamicTenantContext(vertxValue, config,
+                                                config.getTenantId().get()));
+                                    } catch (Throwable t) {
+                                        return Uni.createFrom().failure(t);
+                                    }
+                                } else {
+                                    return Uni.createFrom().emitter(new Consumer<UniEmitter<? super TenantConfigContext>>() {
+                                        @Override
+                                        public void accept(UniEmitter<? super TenantConfigContext> uniEmitter) {
                                             ExecutorRecorder.getCurrent().execute(new Runnable() {
                                                 @Override
                                                 public void run() {
-                                                    createDynamicTenantContext(uniEmitter, vertxValue, config,
-                                                            config.getTenantId().get());
+                                                    try {
+                                                        uniEmitter.complete(createDynamicTenantContext(vertxValue, config,
+                                                                config.getTenantId().get()));
+                                                    } catch (Throwable t) {
+                                                        uniEmitter.fail(t);
+                                                    }
                                                 }
                                             });
                                         }
-                                    }
-                                });
-
+                                    });
+                                }
                             }
-                        },
-                        ExecutorRecorder.getCurrent());
+                        });
             }
         };
     }
 
-    private void createDynamicTenantContext(UniEmitter<? super TenantConfigContext> uniEmitter, Vertx vertx,
-            OidcTenantConfig oidcConfig, String tenantId) {
-        try {
-            if (!dynamicTenantsConfig.containsKey(tenantId)) {
-                dynamicTenantsConfig.putIfAbsent(tenantId, createTenantContext(vertx, oidcConfig, tenantId));
-            }
-            uniEmitter.complete(dynamicTenantsConfig.get(tenantId));
-        } catch (Throwable t) {
-            uniEmitter.fail(t);
+    private TenantConfigContext createDynamicTenantContext(Vertx vertx, OidcTenantConfig oidcConfig, String tenantId) {
+        if (!dynamicTenantsConfig.containsKey(tenantId)) {
+            dynamicTenantsConfig.putIfAbsent(tenantId, createTenantContext(vertx, oidcConfig, tenantId));
         }
+        return dynamicTenantsConfig.get(tenantId);
     }
 
     private TenantConfigContext createTenantContext(Vertx vertx, OidcTenantConfig oidcConfig, String tenantId) {

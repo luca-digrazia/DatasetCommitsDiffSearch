@@ -1,5 +1,7 @@
 package io.quarkus.oidc.runtime;
 
+import java.time.Duration;
+
 import org.jboss.logging.Logger;
 
 import io.vertx.core.Handler;
@@ -9,11 +11,11 @@ public class JwkSetRefreshHandler implements Handler<String> {
     private static final Logger LOG = Logger.getLogger(JwkSetRefreshHandler.class);
     private OAuth2Auth auth;
     private volatile long lastForcedRefreshTime;
-    private long forcedJwksRefreshIntervalMilliSecs;
+    private volatile long forcedJwksRefreshIntervalMilliSecs;
 
-    public JwkSetRefreshHandler(OAuth2Auth auth, long forcedJwksRefreshInterval) {
+    public JwkSetRefreshHandler(OAuth2Auth auth, Duration forcedJwksRefreshInterval) {
         this.auth = auth;
-        this.forcedJwksRefreshIntervalMilliSecs = forcedJwksRefreshInterval * 60 * 1000;
+        this.forcedJwksRefreshIntervalMilliSecs = forcedJwksRefreshInterval.toMillis();
     }
 
     @SuppressWarnings("deprecation")
