@@ -17,13 +17,8 @@
 
 package org.graylog2.periodical;
 
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
-import com.mongodb.QueryBuilder;
-import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationAVImpl;
-import org.graylog2.database.CollectionName;
-import org.graylog2.database.MongoConnection;
+import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
+import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationServiceMJImpl;
 import org.graylog2.plugin.periodical.Periodical;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,24 +35,18 @@ import javax.inject.Inject;
  */
 public class AlarmCallbacksMigrationPeriodical extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(AlarmCallbacksMigrationPeriodical.class);
-    private static final String DUPLICATED_ID = "id";
 
-    private final DBCollection dbCollection;
+    private final AlarmCallbackConfigurationService alarmCallbackConfigurationService;
 
     @Inject
-    public AlarmCallbacksMigrationPeriodical(MongoConnection mongoConnection) {
-        final String collectionName = AlarmCallbackConfigurationAVImpl.class.getAnnotation(CollectionName.class).value();
-        this.dbCollection = mongoConnection.getDatabase().getCollection(collectionName);
+    public AlarmCallbacksMigrationPeriodical(AlarmCallbackConfigurationService alarmCallbackConfigurationService) {
+        this.alarmCallbackConfigurationService = alarmCallbackConfigurationService;
     }
 
     @Override
     public void doRun() {
         LOG.debug("Starting alarm callbacks migration");
-
-        final DBObject selection = QueryBuilder.start("id").exists(true).get();
-        final DBObject modifications = new BasicDBObject("$unset", new BasicDBObject(DUPLICATED_ID, ""));
-        this.dbCollection.updateMulti(selection, modifications);
-
+        ((AlarmCallbackConfigurationServiceMJImpl)this.alarmCallbackConfigurationService).migrate();
         LOG.debug("Done with alarm callbacks migration");
     }
 
