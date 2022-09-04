@@ -48,7 +48,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.stream.Stream;
 
 /**
  * An experimental state tracker for the new experimental UI.
@@ -59,8 +58,7 @@ class ExperimentalStateTracker {
   static final String ELLIPSIS = "...";
   static final String FETCH_PREFIX = "    Fetching ";
   static final String AND_MORE = " ...";
-  static final String NO_STATUS = "-----";
-  static final int STATUS_LENGTH = 5;
+
 
   static final int NANOS_PER_SECOND = 1000000000;
   static final String URL_PROTOCOL_SEP = "://";
@@ -81,8 +79,7 @@ class ExperimentalStateTracker {
   private final Deque<String> runningActions;
   private final Map<String, Action> actions;
   private final Map<String, Long> actionNanoStartTimes;
-  private final Map<String, String> actionStatus;
-  private final Set<String> executingActions;
+  private final Map<String, String> actionStrategy;
 
   // running downloads are identified by the original URL they were trying to
   // access.
@@ -115,9 +112,8 @@ class ExperimentalStateTracker {
   ExperimentalStateTracker(Clock clock, int targetWidth) {
     this.runningActions = new ArrayDeque<>();
     this.actions = new TreeMap<>();
-    this.executingActions = new TreeSet<>();
     this.actionNanoStartTimes = new TreeMap<>();
-    this.actionStatus = new TreeMap<>();
+    this.actionStrategy = new TreeMap<>();
     this.testActions = new TreeMap<>();
     this.runningDownloads = new ArrayDeque<>();
     this.downloads = new TreeMap<>();
@@ -252,14 +248,12 @@ class ExperimentalStateTracker {
     String name = event.getActionMetadata().getPrimaryOutput().getPath().getPathString();
     if (strategy != null) {
       synchronized (this) {
-        actionStatus.put(name, strategy);
-        executingActions.add(name);
+        actionStrategy.put(name, strategy);
       }
     } else {
       String message = event.getMessage();
       synchronized (this) {
-        actionStatus.put(name, message);
-        executingActions.remove(name);
+        actionStrategy.put(name, message);
       }
     }
   }
@@ -269,10 +263,9 @@ class ExperimentalStateTracker {
     Action action = event.getAction();
     String name = action.getPrimaryOutput().getPath().getPathString();
     runningActions.remove(name);
-    executingActions.remove(name);
     actions.remove(name);
     actionNanoStartTimes.remove(name);
-    actionStatus.remove(name);
+    actionStrategy.remove(name);
 
     if (action.getOwner() != null) {
       Label owner = action.getOwner().getLabel();
@@ -400,22 +393,9 @@ class ExperimentalStateTracker {
     }
 
     String postfix = "";
-    String prefix = "";
     long nanoRuntime = nanoTime - actionNanoStartTimes.get(name);
     long runtimeSeconds = nanoRuntime / NANOS_PER_SECOND;
-    String strategy = null;
-    if (executingActions.contains(name)) {
-      strategy = actionStatus.get(name);
-    } else {
-      String status = actionStatus.get(name);
-      if (status == null) {
-        status = NO_STATUS;
-      }
-      if (status.length() > STATUS_LENGTH) {
-        status = status.substring(0, STATUS_LENGTH);
-      }
-      prefix = prefix + "[" + status + "] ";
-    }
+    String strategy = actionStrategy.get(name);
     // To keep the UI appearance more stable, always show the elapsed
     // time if we also show a strategy (otherwise the strategy will jump in
     // the progress bar).
@@ -432,10 +412,10 @@ class ExperimentalStateTracker {
     }
 
     if (desiredWidth <= 0) {
-      return prefix + message + postfix;
+      return message + postfix;
     }
-    if (prefix.length() + message.length() + postfix.length() <= desiredWidth) {
-      return prefix + message + postfix;
+    if (message.length() + postfix.length() <= desiredWidth) {
+      return message + postfix;
     }
 
     // We have to shorten the message to fit into the line.
@@ -448,56 +428,31 @@ class ExperimentalStateTracker {
         if (pathIndex >= 0) {
           String start = message.substring(0, pathIndex);
           String end = message.substring(pathIndex + pathString.length());
-          int pathTargetLength =
-              desiredWidth - start.length() - end.length() - postfix.length() - prefix.length();
+          int pathTargetLength = desiredWidth - start.length() - end.length() - postfix.length();
           // This attempt of shortening is reasonable if what is left from the label
           // is significantly longer (twice as long) as the ellipsis symbols introduced.
           if (pathTargetLength >= 3 * ELLIPSIS.length()) {
             String shortPath = suffix(pathString, pathTargetLength - ELLIPSIS.length());
             int slashPos = shortPath.indexOf('/');
             if (slashPos >= 0) {
-              return prefix + start + ELLIPSIS + shortPath.substring(slashPos) + end + postfix;
+              return start + ELLIPSIS + shortPath.substring(slashPos) + end + postfix;
             }
           }
         }
 
         // Second attempt: just take a shortened version of the label.
         String shortLabel =
-            shortenedLabelString(
-                action.getOwner().getLabel(), desiredWidth - postfix.length() - prefix.length());
-        if (prefix.length() + shortLabel.length() + postfix.length() <= desiredWidth) {
-          return prefix + shortLabel + postfix;
+            shortenedLabelString(action.getOwner().getLabel(), desiredWidth - postfix.length());
+        if (shortLabel.length() + postfix.length() <= desiredWidth) {
+          return shortLabel + postfix;
         }
       }
     }
-    if (3 * ELLIPSIS.length() + postfix.length() + prefix.length() <= desiredWidth) {
-      message =
-          ELLIPSIS
-              + suffix(
-                  message, desiredWidth - ELLIPSIS.length() - postfix.length() - prefix.length());
+    if (3 * ELLIPSIS.length() + postfix.length() <= desiredWidth) {
+      message = ELLIPSIS + suffix(message, desiredWidth - ELLIPSIS.length() - postfix.length());
     }
 
-    return prefix + message + postfix;
-  }
-
-  /**
-   * Stream of actions in decreasing order of importance for the UI. I.e., first have all executing
-   * actions and then all non-executing actions, each time in order of increasing start time.
-   */
-  private Stream<String> sortedActions() {
-    return Stream.concat(
-        runningActions.stream().filter(s -> executingActions.contains(s)),
-        runningActions.stream().filter(s -> !executingActions.contains(s)));
-  }
-
-  private String countActions() {
-    if (runningActions.size() == 1) {
-      return " 1 action";
-    } else if (runningActions.size() == executingActions.size()) {
-      return "" + runningActions.size() + " actions running";
-    } else {
-      return "" + runningActions.size() + " actions, " + executingActions.size() + " running";
-    }
+    return message + postfix;
   }
 
   private void sampleOldestActions(AnsiTerminalWriter terminalWriter) throws IOException {
@@ -506,7 +461,7 @@ class ExperimentalStateTracker {
     long nanoTime = clock.nanoTime();
     int actionCount = runningActions.size();
     Set<String> toSkip = new TreeSet<>();
-    for (String action : (Iterable<String>) sortedActions()::iterator) {
+    for (String action : runningActions) {
       totalCount++;
       if (toSkip.contains(action)) {
         continue;
@@ -812,14 +767,14 @@ class ExperimentalStateTracker {
       if (shortVersion) {
         String statusMessage =
             describeAction(
-                sortedActions().findFirst().get(),
+                runningActions.peekFirst(),
                 clock.nanoTime(),
                 targetWidth - terminalWriter.getPosition(),
                 null);
-        statusMessage += " ... (" + countActions() + ")";
+        statusMessage += " ... (" + runningActions.size() + " actions)";
         terminalWriter.normal().append(" " + statusMessage);
       } else {
-        String statusMessage = countActions();
+        String statusMessage = "" + runningActions.size() + " actions";
         terminalWriter.normal().append(" " + statusMessage);
         maybeShowRecentTest(
             terminalWriter, shortVersion, targetWidth - terminalWriter.getPosition());
