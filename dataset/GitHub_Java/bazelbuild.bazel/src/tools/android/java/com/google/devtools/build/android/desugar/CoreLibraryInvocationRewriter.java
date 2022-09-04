@@ -79,7 +79,8 @@ public class CoreLibraryInvocationRewriter extends ClassVisitor {
           checkArgument(itf, "Expected interface to rewrite %s.%s : %s", owner, name, desc);
           owner = InterfaceDesugaring.getCompanionClassName(coreInterfaceName);
         } else {
-          owner = coreInterfaceName + "$$Dispatch";
+          // TODO(kmb): Simulate dynamic dispatch instead of calling most general default method
+          owner = InterfaceDesugaring.getCompanionClassName(coreInterfaceName);
         }
 
         opcode = Opcodes.INVOKESTATIC;
