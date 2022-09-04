@@ -20,21 +20,6 @@
 
 package org.graylog2;
 
-import java.net.UnknownHostException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-
-import org.graylog2.inputs.amqp.AMQPInput;
-import org.graylog2.inputs.gelf.GELFTCPInput;
-import org.graylog2.inputs.gelf.GELFUDPInput;
-import org.graylog2.inputs.http.GELFHttpInput;
-import org.graylog2.inputs.syslog.SyslogTCPInput;
-import org.graylog2.inputs.syslog.SyslogUDPInput;
-import org.graylog2.plugin.inputs.MessageInput;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.ValidatorMethod;
@@ -44,12 +29,15 @@ import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.lmax.disruptor.BlockingWaitStrategy;
-import com.lmax.disruptor.BusySpinWaitStrategy;
-import com.lmax.disruptor.SleepingWaitStrategy;
-import com.lmax.disruptor.WaitStrategy;
-import com.lmax.disruptor.YieldingWaitStrategy;
 import com.mongodb.ServerAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.graylog2.indexer.EmbeddedElasticSearchClient;
+
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Helper class to hold configuration of Graylog2
@@ -82,15 +70,6 @@ public class Configuration {
     @Parameter(value = "syslog_store_full_message", required = false)
     private boolean syslogStoreFullMessage = true;
     
-    @Parameter(value = "rest_listen_uri", required = true)
-    private String restListenUri = "http://0.0.0.0/";
-    
-    @Parameter(value = "rest_listen_port", required = true, validator = InetPortValidator.class)
-    private int restListenPort = 12900;
-    
-    @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
-    private int udpRecvBufferSizes = 1048576;
-    
     @Parameter(value = "force_syslog_rdns", required = true)
     private boolean forceSyslogRdns = false;
 
@@ -99,6 +78,12 @@ public class Configuration {
 
     @Parameter(value = "allow_override_syslog_date", required = true)
     private boolean allowOverrideSyslogDate = true;
+    
+    @Parameter(value = "recent_index_ttl_minutes", required = true, validator = PositiveIntegerValidator.class)
+    private int recentIndexTtlMinutes = 60;
+    
+    @Parameter(value = "recent_index_store_type")
+    private String recentIndexStoreType = EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE;
 
     @Parameter(value = "no_retention")
     private boolean noRetention;
@@ -121,12 +106,9 @@ public class Configuration {
     @Parameter(value = "outputbuffer_processor_threads_core_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessorThreadsCorePoolSize = 3;
     
-    @Parameter(value = "processor_wait_strategy", required = true)
-    private String processorWaitStrategy = "sleeping";
-    
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
     private int ringSize = 1024;
-
+    
     @Parameter(value = "elasticsearch_config_file", required = true, validator = FileReadableValidator.class)
     private String elasticSearchConfigFile = "/etc/graylog2-elasticsearch.yml";
 
@@ -155,7 +137,7 @@ public class Configuration {
     private String mongoDatabase = "graylog2";
 
     @Parameter(value = "mongodb_host", required = true)
-    private String mongoHost = "127.0.0.1";
+    private String mongoHost = "localhost";
 
     @Parameter(value = "mongodb_port", required = true, validator = InetPortValidator.class)
     private int mongoPort = 27017;
@@ -216,9 +198,6 @@ public class Configuration {
 
     @Parameter(value = "enable_libratometrics_output", required = false)
     private boolean enableLibratoMetricsOutput = false;
-    
-    @Parameter(value = "enable_libratometrics_system_metrics", required = false)
-    private boolean enableLibratoSystemMetrics = false;
 
     @Parameter(value = "libratometrics_api_user", required = false)
     private String libratometricsApiUser;
@@ -236,7 +215,7 @@ public class Configuration {
     private int libratometricsInterval = 10;
 
     @Parameter(value = "libratometrics_prefix", required = false)
-    private String libratometricsPrefix = "gl2-";
+    private String libratometricsPrefix = "gl2";
 
     @Parameter(value = "plugin_dir", required = false)
     private String pluginDir = "plugin";
@@ -245,9 +224,6 @@ public class Configuration {
     @Parameter(value = "transport_email_enabled", required = false)
     private boolean emailTransportEnabled = false;
     
-    @Parameter(value = "transport_email_protocol", required = false)
-    private String emailTransportProtocol = "smtp";
-
     @Parameter(value = "transport_email_hostname", required = false)
     private String emailTransportHostname;
     
@@ -274,9 +250,6 @@ public class Configuration {
     
     @Parameter(value = "transport_email_from_name", required = false)
     private String emailTransportFromName;
-    
-    @Parameter(value = "transport_email_web_interface_url", required = false)
-    private String emailTransportWebInterfaceUrl = "http://your-graylog2.example.org/";
     
     // Transport: Jabber
     @Parameter(value = "transport_jabber_enabled", required = false)
@@ -359,6 +332,18 @@ public class Configuration {
     public boolean getAllowOverrideSyslogDate() {
         return allowOverrideSyslogDate;
     }
+    
+    public int getRecentIndexTtlMinutes() {
+        return recentIndexTtlMinutes;
+    }
+    
+    public String getRecentIndexStoreType() {
+        if (!EmbeddedElasticSearchClient.ALLOWED_RECENT_INDEX_STORE_TYPES.contains(recentIndexStoreType)) {
+            LOG.error("Invalid recent index store type configured. Falling back to <{}>", EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE);
+            return EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE;
+        }
+        return recentIndexStoreType;
+    }
 
     public boolean performRetention() {
         return !noRetention;
@@ -386,32 +371,6 @@ public class Configuration {
     
     public int getOutputBufferProcessorThreadsMaxPoolSize() {
         return outputBufferProcessorThreadsMaxPoolSize;
-    }
-    
-    public int getUdpRecvBufferSizes() {
-        return udpRecvBufferSizes;
-    }
-    
-    public WaitStrategy getProcessorWaitStrategy() {
-        if (processorWaitStrategy.equals("sleeping")) {
-            return new SleepingWaitStrategy();
-        }
-        
-        if (processorWaitStrategy.equals("yielding")) {
-            return new YieldingWaitStrategy();
-        }
-        
-        if (processorWaitStrategy.equals("blocking")) {
-            return new BlockingWaitStrategy();
-        }
-        
-        if (processorWaitStrategy.equals("busy_spinning")) {
-            return new BusySpinWaitStrategy();
-        }
-        
-        LOG.warn("Invalid setting for [processor_wait_strategy]:"
-                + " Falling back to default: SleepingWaitStrategy.");
-        return new SleepingWaitStrategy();
     }
 
     public int getRingSize() {
@@ -569,10 +528,6 @@ public class Configuration {
         return enableLibratoMetricsOutput;
     }
 
-    public boolean isEnableLibratoSystemMetrics() {
-        return enableLibratoSystemMetrics;
-    }
-    
     public String getLibratoMetricsAPIUser() {
         return libratometricsApiUser;
     }
@@ -611,7 +566,6 @@ public class Configuration {
     public Map<String, String> getEmailTransportConfiguration() {
         Map<String, String> c = Maps.newHashMap();
         
-        c.put("protocol", emailTransportProtocol);
         c.put("hostname", emailTransportHostname);
         c.put("port", String.valueOf(emailTransportPort));
         c.put("use_auth", String.valueOf(emailTransportUseAuth));
@@ -621,7 +575,6 @@ public class Configuration {
         c.put("subject_prefix", emailTransportSubjectPrefix);
         c.put("from_email", emailTransportFromEmail);
         c.put("from_name", emailTransportFromName);
-        c.put("web_interface_url", emailTransportWebInterfaceUrl);
         
         return c;
     }
@@ -644,28 +597,6 @@ public class Configuration {
         return c;
     }
     
-    public Map<String, String> getInputConfig(Class<? extends MessageInput> input) {
-        if (input.equals(GELFTCPInput.class) || input.equals(GELFUDPInput.class)) {
-            return getGELFInputConfig();
-        }
-        
-        if (input.equals(SyslogTCPInput.class) || input.equals(SyslogUDPInput.class)) {
-            return getSyslogInputConfig();
-        }
-        
-        if (input.equals(GELFHttpInput.class)) {
-            return getGELFHttpInputConfig();
-        }
-        
-        if (input.equals(AMQPInput.class)) {
-            // AMQP has no special config needs for now.
-            return Maps.newHashMap();
-        }
-            
-        LOG.error("No standard configuration for input <{}> found.", input.getCanonicalName());
-        return Maps.newHashMap();
-    }
-    
     @ValidatorMethod
     public void validate() throws ValidationException {
 
@@ -686,40 +617,4 @@ public class Configuration {
     public int getHttpListenPort() {
         return httpListenPort;
     }
-    
-    public String getRestListenUri() {
-    	return restListenUri;
-    }
-    
-    public int getRestListenPort() {
-    	return restListenPort;
-    }
-    
-    private Map<String, String> getGELFInputConfig() {
-        Map<String, String> c = Maps.newHashMap();
-        
-        c.put("listen_address", getGelfListenAddress());
-        c.put("listen_port", String.valueOf(getGelfListenPort()));
-        
-        return c;
-    }
-    
-    private Map<String, String> getSyslogInputConfig() {
-        Map<String, String> c = Maps.newHashMap();
-        
-        c.put("listen_address", getSyslogListenAddress());
-        c.put("listen_port", String.valueOf(getSyslogListenPort()));
-        
-        return c;
-    }
-    
-    private Map<String, String> getGELFHttpInputConfig() {
-        Map<String, String> c = Maps.newHashMap();
-        
-        c.put("listen_address", getHttpListenAddress());
-        c.put("listen_port", String.valueOf(getHttpListenPort()));
-        
-        return c;
-    }
-    
 }
