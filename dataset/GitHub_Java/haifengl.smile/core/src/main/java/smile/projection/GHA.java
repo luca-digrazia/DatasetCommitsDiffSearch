@@ -139,7 +139,6 @@ public class GHA implements LinearProjection, Serializable {
 
     /**
      * Returns the learning rate.
-     * @return the learning rate.
      */
     public double getLearningRate() {
         return r;
@@ -147,10 +146,10 @@ public class GHA implements LinearProjection, Serializable {
 
     /**
      * Set the learning rate.
-     * @param r the learning rate.
      */
-    public void setLearningRate(double r) {
+    public GHA setLearningRate(double r) {
         this.r = r;
+        return this;
     }
 
     /**

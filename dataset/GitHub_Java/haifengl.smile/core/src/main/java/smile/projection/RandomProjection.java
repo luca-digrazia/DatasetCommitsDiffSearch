@@ -77,7 +77,6 @@ public class RandomProjection implements LinearProjection, Serializable {
      * Generates a non-sparse random projection.
      * @param n the dimension of input space.
      * @param p the dimension of feature space.
-     * @return the model.
      */
     public static RandomProjection of(int n, int p) {
         if (n < 2) {
@@ -114,7 +113,6 @@ public class RandomProjection implements LinearProjection, Serializable {
      * Generates a sparse random projection.
      * @param n the dimension of input space.
      * @param p the dimension of feature space.
-     * @return the model.
      */
     public static RandomProjection sparse(int n, int p) {
         if (n < 2) {

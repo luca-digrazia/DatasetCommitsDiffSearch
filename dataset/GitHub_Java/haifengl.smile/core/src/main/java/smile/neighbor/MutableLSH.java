@@ -67,8 +67,6 @@ public class MutableLSH<E> extends LSH<E> {
 
     /**
      * Remove an entry from the hash table.
-     * @param key the key.
-     * @param value the value.
      */
     public void remove(double[] key, E value) {
         int n = data.size();
@@ -94,8 +92,7 @@ public class MutableLSH<E> extends LSH<E> {
     /**
      * Update an entry with new key. Note that the new key and old key
      * should not be the same object.
-     * @param key the key.
-     * @param value the value.     */
+     */
     public void update(double[] key, E value) {
         int n = data.size();
         for (int i = 0; i < n; i++) {
@@ -118,18 +115,12 @@ public class MutableLSH<E> extends LSH<E> {
         throw new IllegalArgumentException("Update non-exist element");
     }
 
-    /**
-     * Returns the keys.
-     * @return the keys.
-     */
+    /** Returns the keys. */
     public List<double[]> keys() {
         return keys.stream().filter(Objects::nonNull).collect(Collectors.toList());
     }
 
-    /**
-     * Returns the values.
-     * @return the values.
-     */
+    /** Returns the values. */
     public List<E> values() {
         return data.stream().filter(Objects::nonNull).collect(Collectors.toList());
     }

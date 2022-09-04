@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.vq.hebb;
 
@@ -21,11 +21,14 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import smile.math.MathEx;
 
 /**
  * The neuron vertex in the growing neural gas network.
+ *
+ * @author Haifeng Li
  */
-public class Neuron implements Serializable {
+public class Neuron implements Comparable<Neuron>, Serializable {
     private static final long serialVersionUID = 2L;
     /**
      * The reference vector.
@@ -36,9 +39,13 @@ public class Neuron implements Serializable {
      */
     public final List<Edge> edges;
     /**
-     * THe local error measurement.
+     * The distance between the neuron and an input signal.
      */
-    public double error;
+    public double distance = Double.MAX_VALUE;
+    /**
+     * The local counter variable (e.g. the accumulated error, freshness, etc.)
+     */
+    public double counter;
 
     /**
      * Constructor.
@@ -50,9 +57,9 @@ public class Neuron implements Serializable {
     /**
      * Constructor.
      */
-    public Neuron(double[] w, double error) {
+    public Neuron(double[] w, double counter) {
         this.w = w;
-        this.error = error;
+        this.counter = counter;
         this.edges = new LinkedList<>();
     }
 
@@ -90,8 +97,7 @@ public class Neuron implements Serializable {
 
     /** Sets the age of edge. */
     public void setEdgeAge(Neuron neighbor, int age) {
-        for (Iterator<Edge> iter = edges.iterator(); iter.hasNext();) {
-            Edge edge = iter.next();
+        for (Edge edge : edges) {
             if (edge.neighbor == neighbor) {
                 edge.age = age;
                 return;
@@ -104,5 +110,17 @@ public class Neuron implements Serializable {
         for (Edge edge : edges) {
             edge.age++;
         }
+    }
+
+    /**
+     * Computes the distance between the neuron and a signal.
+     */
+    public void distance(double[] x) {
+        distance = MathEx.distance(w, x);
+    }
+
+    @Override
+    public int compareTo(Neuron o) {
+        return Double.compare(distance, o.distance);
     }
 }

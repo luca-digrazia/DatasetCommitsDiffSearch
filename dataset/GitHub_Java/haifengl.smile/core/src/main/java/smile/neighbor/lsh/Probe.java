@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,19 +13,21 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.neighbor.lsh;
 
 /**
  * Probe to check for nearest neighbors.
+ *
+ * @author Haifeng Li
  */
 public class Probe implements Comparable<Probe> {
 
     /**
      * The valid range of buckets.
      */
-    private int[] range;
+    private final int[] range;
     /**
      * The bucket for probing.
      */
@@ -57,10 +59,7 @@ public class Probe implements Comparable<Probe> {
     }
 
     public boolean isShiftable() {
-        if (bucket[last] != 1 || last + 1 >= bucket.length || range[last + 1] <= 1) {
-            return false;
-        }
-        return true;
+        return bucket[last] == 1 && last + 1 < bucket.length && range[last + 1] > 1;
     }
 
     /**
@@ -76,10 +75,7 @@ public class Probe implements Comparable<Probe> {
     }
 
     public boolean isExpandable() {
-        if (last + 1 >= bucket.length || range[last + 1] <= 1) {
-            return false;
-        }
-        return true;
+        return last + 1 < bucket.length && range[last + 1] > 1;
     }
 
     /**
@@ -94,10 +90,7 @@ public class Probe implements Comparable<Probe> {
     }
 
     public boolean isExtendable() {
-        if (bucket[last] + 1 >= range[last]) {
-            return false;
-        }
-        return true;
+        return bucket[last] + 1 < range[last];
     }
 
     /**
@@ -111,7 +104,7 @@ public class Probe implements Comparable<Probe> {
 
     @Override
     public int compareTo(Probe o) {
-        return (int) Math.signum(prob - o.prob);
+        return Double.compare(prob, o.prob);
     }
 
     /**

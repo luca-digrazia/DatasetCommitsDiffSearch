@@ -55,7 +55,6 @@ public class SVR {
      *            to the calibration/training data.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
-     * @return the model.
      */
     public static Regression<double[]> fit(double[][] x, double[] y, double eps, double C, double tol) {
         smile.base.svm.SVR<double[]> svr = new smile.base.svm.SVR<>(new LinearKernel(), eps, C, tol);
@@ -82,7 +81,6 @@ public class SVR {
      * @param p the dimension of input vector.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
-     * @return the model.
      */
     public static Regression<int[]> fit(int[][] x, double[] y, int p, double eps, double C, double tol) {
         smile.base.svm.SVR<int[]> svr = new smile.base.svm.SVR<>(new BinarySparseLinearKernel(), eps, C, tol);
@@ -109,7 +107,6 @@ public class SVR {
      * @param p the dimension of input vector.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
-     * @return the model.
      */
     public static Regression<SparseArray> fit(SparseArray[] x, double[] y, int p, double eps, double C, double tol) {
         smile.base.svm.SVR<SparseArray> svr = new smile.base.svm.SVR<>(new SparseLinearKernel(), eps, C, tol);
@@ -136,8 +133,6 @@ public class SVR {
      * @param kernel the kernel function.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
-     * @param <T> the data type of samples.
-     * @return the model.
      */
     public static <T> KernelMachine<T> fit(T[] x, double[] y, MercerKernel<T> kernel, double eps, double C, double tol) {
         smile.base.svm.SVR<T> svr = new smile.base.svm.SVR<>(kernel, eps, C, tol);

@@ -174,8 +174,7 @@ public class NeuralMap implements VectorQuantizer {
     }
 
     /**
-     * Returns the neurons.
-     * @return the neurons.
+     * Returns the set of neurons.
      */
     public Neuron[] neurons() {
         return neurons.toArray(new Neuron[0]);

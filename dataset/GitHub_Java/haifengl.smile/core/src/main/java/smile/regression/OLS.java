@@ -95,8 +95,7 @@ public class OLS {
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
      *             NO NEED to include a constant column of 1s for bias.
-     * @param prop the hyper-parameters.
-     * @return the model.
+     * @param prop Training algorithm hyper-parameters and properties.
      */
     public static LinearModel fit(Formula formula, DataFrame data, Properties prop) {
         String method = prop.getProperty("smile.ols.method", "qr");
