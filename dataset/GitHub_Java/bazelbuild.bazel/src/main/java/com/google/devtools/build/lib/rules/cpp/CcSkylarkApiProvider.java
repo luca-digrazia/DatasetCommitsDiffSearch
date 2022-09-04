@@ -16,14 +16,11 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkApiProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcSkylarkApiProviderApi;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -36,53 +33,39 @@ public final class CcSkylarkApiProvider extends SkylarkApiProvider
   /** The name of the field in Skylark used to access this class. */
   public static final String NAME = "cc";
 
-  public static void maybeAdd(RuleContext ruleContext, RuleConfiguredTargetBuilder builder) {
-    if (ruleContext.getFragment(CppConfiguration.class).enableLegacyCcProvider()) {
-      builder.addSkylarkTransitiveInfo(NAME, new CcSkylarkApiProvider());
-    }
-  }
-
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getTransitiveHeadersForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, getTransitiveHeaders());
-  }
-
-  NestedSet<Artifact> getTransitiveHeaders() {
+  public NestedSet<Artifact> getTransitiveHeaders() {
     CcCompilationContext ccCompilationContext =
-        getInfo().get(CcInfo.PROVIDER).getCcCompilationContext();
+        getInfo().get(CcCompilationInfo.PROVIDER).getCcCompilationContext();
     return ccCompilationContext.getDeclaredIncludeSrcs();
   }
 
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getLibrariesForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, getLibraries());
-  }
-
-  NestedSet<Artifact> getLibraries() {
+  public NestedSet<Artifact> getLibraries() {
     NestedSetBuilder<Artifact> libs = NestedSetBuilder.linkOrder();
-    CcInfo ccInfo = getInfo().get(CcInfo.PROVIDER);
-    if (ccInfo == null) {
+    CcLinkingInfo ccLinkingInfo = getInfo().get(CcLinkingInfo.PROVIDER);
+    if (ccLinkingInfo == null) {
       return libs.build();
     }
-    for (Artifact lib : ccInfo.getCcLinkingContext().getStaticModeParamsForExecutableLibraries()) {
-      libs.add(lib);
+    for (LinkerInput lib : ccLinkingInfo.getStaticModeParamsForExecutable().getLibraries()) {
+      libs.add(lib.getArtifact());
     }
     return libs.build();
   }
 
   @Override
   public ImmutableList<String> getLinkopts() {
-    CcInfo ccInfo = getInfo().get(CcInfo.PROVIDER);
-    if (ccInfo == null) {
+    CcLinkingInfo ccLinkingInfo = getInfo().get(CcLinkingInfo.PROVIDER);
+    if (ccLinkingInfo == null) {
       return ImmutableList.of();
     }
-    return ccInfo.getCcLinkingContext().getFlattenedUserLinkFlags();
+    return ccLinkingInfo.getStaticModeParamsForExecutable().flattenedLinkopts();
   }
 
   @Override
   public ImmutableList<String> getDefines() {
     CcCompilationContext ccCompilationContext =
-        getInfo().get(CcInfo.PROVIDER).getCcCompilationContext();
+        getInfo().get(CcCompilationInfo.PROVIDER).getCcCompilationContext();
     return ccCompilationContext == null
         ? ImmutableList.<String>of()
         : ccCompilationContext.getDefines();
@@ -91,7 +74,7 @@ public final class CcSkylarkApiProvider extends SkylarkApiProvider
   @Override
   public ImmutableList<String> getSystemIncludeDirs() {
     CcCompilationContext ccCompilationContext =
-        getInfo().get(CcInfo.PROVIDER).getCcCompilationContext();
+        getInfo().get(CcCompilationInfo.PROVIDER).getCcCompilationContext();
     if (ccCompilationContext == null) {
       return ImmutableList.of();
     }
@@ -105,7 +88,7 @@ public final class CcSkylarkApiProvider extends SkylarkApiProvider
   @Override
   public ImmutableList<String> getIncludeDirs() {
     CcCompilationContext ccCompilationContext =
-        getInfo().get(CcInfo.PROVIDER).getCcCompilationContext();
+        getInfo().get(CcCompilationInfo.PROVIDER).getCcCompilationContext();
     if (ccCompilationContext == null) {
       return ImmutableList.of();
     }
@@ -119,7 +102,7 @@ public final class CcSkylarkApiProvider extends SkylarkApiProvider
   @Override
   public ImmutableList<String> getQuoteIncludeDirs() {
     CcCompilationContext ccCompilationContext =
-        getInfo().get(CcInfo.PROVIDER).getCcCompilationContext();
+        getInfo().get(CcCompilationInfo.PROVIDER).getCcCompilationContext();
     if (ccCompilationContext == null) {
       return ImmutableList.of();
     }
@@ -133,7 +116,7 @@ public final class CcSkylarkApiProvider extends SkylarkApiProvider
   @Override
   public ImmutableList<String> getCcFlags() {
     CcCompilationContext ccCompilationContext =
-        getInfo().get(CcInfo.PROVIDER).getCcCompilationContext();
+        getInfo().get(CcCompilationInfo.PROVIDER).getCcCompilationContext();
 
     ImmutableList.Builder<String> options = ImmutableList.builder();
     for (String define : ccCompilationContext.getDefines()) {

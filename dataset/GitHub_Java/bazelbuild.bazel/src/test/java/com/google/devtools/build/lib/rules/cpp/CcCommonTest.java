@@ -116,8 +116,7 @@ public class CcCommonTest extends BuildViewTestCase {
     }
     assertThat(
             emptylib
-                .get(CcInfo.PROVIDER)
-                .getCcLinkingInfo()
+                .get(CcLinkingInfo.PROVIDER)
                 .getDynamicModeParamsForExecutable()
                 .getDynamicLibrariesForRuntime()
                 .isEmpty())
@@ -230,8 +229,7 @@ public class CcCommonTest extends BuildViewTestCase {
             "           linkstatic=1)");
     assertThat(
             statically
-                .get(CcInfo.PROVIDER)
-                .getCcLinkingInfo()
+                .get(CcLinkingInfo.PROVIDER)
                 .getDynamicModeParamsForExecutable()
                 .getDynamicLibrariesForRuntime()
                 .isEmpty())
@@ -251,7 +249,8 @@ public class CcCommonTest extends BuildViewTestCase {
             "cc_library(name = 'defineslib',",
             "           srcs = ['defines.cc'],",
             "           defines = ['FOO', 'BAR'])");
-    assertThat(isolatedDefines.get(CcInfo.PROVIDER).getCcCompilationContext().getDefines())
+    assertThat(
+            isolatedDefines.get(CcCompilationInfo.PROVIDER).getCcCompilationContext().getDefines())
         .containsExactly("FOO", "BAR")
         .inOrder();
   }
@@ -419,7 +418,7 @@ public class CcCommonTest extends BuildViewTestCase {
     ConfiguredTarget foo = getConfiguredTarget("//bang:bang");
 
     String includesRoot = "bang/bang_includes";
-    assertThat(foo.get(CcInfo.PROVIDER).getCcCompilationContext().getSystemIncludeDirs())
+    assertThat(foo.get(CcCompilationInfo.PROVIDER).getCcCompilationContext().getSystemIncludeDirs())
         .containsAllOf(
             PathFragment.create(includesRoot),
             targetConfig.getGenfilesFragment().getRelative(includesRoot));
@@ -447,12 +446,15 @@ public class CcCommonTest extends BuildViewTestCase {
     List<PathFragment> expected =
         new ImmutableList.Builder<PathFragment>()
             .addAll(
-                noIncludes.get(CcInfo.PROVIDER).getCcCompilationContext().getSystemIncludeDirs())
+                noIncludes
+                    .get(CcCompilationInfo.PROVIDER)
+                    .getCcCompilationContext()
+                    .getSystemIncludeDirs())
             .add(PathFragment.create(includesRoot))
             .add(targetConfig.getGenfilesFragment().getRelative(includesRoot))
             .add(targetConfig.getBinFragment().getRelative(includesRoot))
             .build();
-    assertThat(foo.get(CcInfo.PROVIDER).getCcCompilationContext().getSystemIncludeDirs())
+    assertThat(foo.get(CcCompilationInfo.PROVIDER).getCcCompilationContext().getSystemIncludeDirs())
         .containsExactlyElementsIn(expected);
   }
 
@@ -481,7 +483,7 @@ public class CcCommonTest extends BuildViewTestCase {
     useConfiguration("--cpu=k8", "--build_test_dwp", "--dynamic_mode=off", "--fission=yes");
     ConfiguredTarget target =
         scratchConfiguredTarget(
-            "mypackage", "mytest", "cc_test(name = 'mytest', srcs = ['mytest.cc'])");
+            "mypackage", "mytest", "cc_test(name = 'mytest', ", "         srcs = ['mytest.cc'])");
 
     Iterable<Artifact> runfiles = collectRunfiles(target);
     assertThat(baseArtifactNames(runfiles)).contains("mytest.dwp");
@@ -840,7 +842,8 @@ public class CcCommonTest extends BuildViewTestCase {
         "cc_library(name='a', hdrs=['v1/b/c.h'], strip_include_prefix='v1', include_prefix='lib')");
 
     ConfiguredTarget lib = getConfiguredTarget("//third_party/a");
-    CcCompilationContext ccCompilationContext = lib.get(CcInfo.PROVIDER).getCcCompilationContext();
+    CcCompilationContext ccCompilationContext =
+        lib.get(CcCompilationInfo.PROVIDER).getCcCompilationContext();
     assertThat(ActionsTestUtil.prettyArtifactNames(ccCompilationContext.getDeclaredIncludeSrcs()))
         .containsExactly("third_party/a/_virtual_includes/a/lib/b/c.h");
     assertThat(ccCompilationContext.getIncludeDirs())
@@ -881,11 +884,11 @@ public class CcCommonTest extends BuildViewTestCase {
 
     CcCompilationContext relative =
         getConfiguredTarget("//third_party/a:relative")
-            .get(CcInfo.PROVIDER)
+            .get(CcCompilationInfo.PROVIDER)
             .getCcCompilationContext();
     CcCompilationContext absolute =
         getConfiguredTarget("//third_party/a:absolute")
-            .get(CcInfo.PROVIDER)
+            .get(CcCompilationInfo.PROVIDER)
             .getCcCompilationContext();
 
     assertThat(ActionsTestUtil.prettyArtifactNames(relative.getDeclaredIncludeSrcs()))
@@ -914,7 +917,9 @@ public class CcCommonTest extends BuildViewTestCase {
         "cc_library(name='a', hdrs=['a.h'], include_prefix='third_party')");
 
     CcCompilationContext ccCompilationContext =
-        getConfiguredTarget("//third_party:a").get(CcInfo.PROVIDER).getCcCompilationContext();
+        getConfiguredTarget("//third_party:a")
+            .get(CcCompilationInfo.PROVIDER)
+            .getCcCompilationContext();
     assertThat(ActionsTestUtil.prettyArtifactNames(ccCompilationContext.getDeclaredIncludeSrcs()))
         .doesNotContain("third_party/_virtual_includes/a/third_party/a.h");
   }
@@ -923,7 +928,6 @@ public class CcCommonTest extends BuildViewTestCase {
   public void
   testConfigureFeaturesDoesntCrashOnCollidingFeaturesExceptionButReportsRuleErrorCleanly()
       throws Exception {
-    reporter.removeHandler(failFastHandler);
     getAnalysisMock()
         .ccSupport()
         .setupCrosstool(
@@ -935,6 +939,7 @@ public class CcCommonTest extends BuildViewTestCase {
     scratch.file("x/BUILD", "cc_library(name = 'foo', srcs = ['a.cc'])");
     scratch.file("x/a.cc");
 
+    reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//x:foo");
     assertContainsEvent("Symbol a is provided by all of the following features: a1 a2");
   }

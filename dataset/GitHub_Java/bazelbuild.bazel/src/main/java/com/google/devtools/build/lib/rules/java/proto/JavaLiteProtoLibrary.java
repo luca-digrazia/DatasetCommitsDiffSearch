@@ -30,17 +30,16 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.WrappingProvider;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRunfilesProvider;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaStrictCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.ProguardLibrary;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
 
@@ -66,7 +65,8 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
 
     JavaSourceJarsProvider sourceJarsProvider =
         JavaSourceJarsProvider.merge(
-            ruleContext.getPrerequisites("deps", Mode.TARGET, JavaSourceJarsProvider.class));
+            WrappingProvider.Helper.unwrapProviders(
+                javaProtoLibraryAspectProviders, JavaSourceJarsProvider.class));
 
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
@@ -78,19 +78,9 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
 
     JavaRunfilesProvider javaRunfilesProvider = new JavaRunfilesProvider(runfiles);
 
-    JavaInfo.Builder javaInfoBuilder =
-        JavaInfo.Builder.create()
-            .addProvider(JavaCompilationArgsProvider.class, dependencyArgsProviders);
-    if (ruleContext.getFragment(JavaConfiguration.class).isJlplStrictDepsEnforced()) {
-      JavaStrictCompilationArgsProvider strictDependencyArgsProviders =
-          new JavaStrictCompilationArgsProvider(
-              constructJcapFromAspectDeps(
-                  ruleContext, javaProtoLibraryAspectProviders, /* alwaysStrict= */ true));
-      javaInfoBuilder.addProvider(
-          JavaStrictCompilationArgsProvider.class, strictDependencyArgsProviders);
-    }
     JavaInfo javaInfo =
-        javaInfoBuilder
+        JavaInfo.Builder.create()
+            .addProvider(JavaCompilationArgsProvider.class, dependencyArgsProviders)
             .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
             .addProvider(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.EMPTY)
             .addProvider(JavaRunfilesProvider.class, javaRunfilesProvider)
@@ -105,7 +95,7 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
         .addOutputGroup(OutputGroupInfo.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
         .addNativeDeclaredProvider(getJavaLiteRuntimeSpec(ruleContext))
         .addNativeDeclaredProvider(javaInfo)
-        .addNativeDeclaredProvider(createCcLinkingInfo(ruleContext, ImmutableList.of()))
+        .addProvider(createCcLinkingInfo(ruleContext, ImmutableList.of()))
         .build();
   }
 

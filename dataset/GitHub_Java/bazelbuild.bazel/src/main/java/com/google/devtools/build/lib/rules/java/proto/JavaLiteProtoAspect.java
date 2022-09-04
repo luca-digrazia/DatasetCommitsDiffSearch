@@ -29,6 +29,9 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
+import com.google.devtools.build.lib.analysis.WrappingProvider;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -158,7 +161,12 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
     private final JavaProtoAspectCommon aspectCommon;
     private final Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders;
 
-    Impl(RuleContext ruleContext, SupportData supportData, JavaProtoAspectCommon aspectCommon) {
+    private final boolean isJavaProtoExportsEnabled;
+
+    Impl(
+        RuleContext ruleContext,
+        SupportData supportData,
+        JavaProtoAspectCommon aspectCommon) {
       this.ruleContext = ruleContext;
       this.supportData = supportData;
       this.aspectCommon = aspectCommon;
@@ -168,13 +176,24 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
 
       dependencyCompilationArgs =
           JavaCompilationArgsProvider.merge(
-              ruleContext.getPrerequisites(
-                  "deps", RuleConfiguredTarget.Mode.TARGET, JavaCompilationArgsProvider.class));
+              WrappingProvider.Helper.unwrapProviders(
+                  javaProtoLibraryAspectProviders, JavaCompilationArgsProvider.class));
 
-      this.exportsCompilationArgs =
-          JavaCompilationArgsProvider.merge(
-              ruleContext.getPrerequisites(
-                  "exports", RuleConfiguredTarget.Mode.TARGET, JavaCompilationArgsProvider.class));
+      this.isJavaProtoExportsEnabled =
+          ruleContext.getFragment(JavaConfiguration.class).isJavaProtoExportsEnabled();
+
+      if (this.isJavaProtoExportsEnabled) {
+        this.exportsCompilationArgs =
+            JavaCompilationArgsProvider.merge(
+                WrappingProvider.Helper.unwrapProviders(
+                    ruleContext.getPrerequisites(
+                        "exports",
+                        RuleConfiguredTarget.Mode.TARGET,
+                        JavaProtoLibraryAspectProvider.class),
+                    JavaCompilationArgsProvider.class));
+      } else {
+        this.exportsCompilationArgs = null;
+      }
     }
 
     void addProviders(ConfiguredAspect.Builder aspect) {
@@ -188,6 +207,9 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
       for (JavaProtoLibraryAspectProvider provider : javaProtoLibraryAspectProviders) {
         transitiveOutputJars.addTransitive(provider.getJars());
       }
+
+      TransitiveInfoProviderMapBuilder javaProvidersBuilder =
+          new TransitiveInfoProviderMapBuilder();
 
       if (supportData.hasProtoSources()) {
         Artifact sourceJar = aspectCommon.getSourceJarArtifact();
@@ -217,32 +239,32 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
             JavaSourceJarsProvider.create(
                 NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars);
 
-        aspect.addProvider(ruleOutputJarsProvider).addProvider(sourceJarsProvider);
+        javaProvidersBuilder.add(ruleOutputJarsProvider).add(sourceJarsProvider);
       } else {
         // No sources - this proto_library is an alias library, which exports its dependencies.
         // Simply propagate the compilation-args from its dependencies.
         generatedCompilationArgsProvider = dependencyCompilationArgs;
-        aspect.addProvider(JavaRuleOutputJarsProvider.EMPTY);
+        javaProvidersBuilder.add(JavaRuleOutputJarsProvider.EMPTY);
       }
 
-      generatedCompilationArgsProvider =
-          JavaCompilationArgsProvider.merge(
-              ImmutableList.of(generatedCompilationArgsProvider, exportsCompilationArgs));
+      if (isJavaProtoExportsEnabled) {
+        generatedCompilationArgsProvider =
+            JavaCompilationArgsProvider.merge(
+                ImmutableList.of(generatedCompilationArgsProvider, exportsCompilationArgs));
+      }
 
-      aspect.addProvider(generatedCompilationArgsProvider);
-      aspect.addNativeDeclaredProvider(
+      javaProvidersBuilder.add(generatedCompilationArgsProvider);
+      javaProvidersBuilder.add(
           createCcLinkingInfo(ruleContext, aspectCommon.getProtoRuntimeDeps()));
+      TransitiveInfoProviderMap javaProviders = javaProvidersBuilder.build();
 
-      JavaSkylarkApiProvider skylarkApiProvider = JavaSkylarkApiProvider.fromRuleContext();
       aspect
-          .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider)
-          // This is legacy from when we had a "java" provider on the base proto_library,
-          // forcing us to use a different name ("proto_java") for the aspect's provider.
-          // For backwards compatibility we retain proto_java as well.
           .addSkylarkTransitiveInfo(
-              JavaSkylarkApiProvider.PROTO_NAME.getLegacyId(), skylarkApiProvider)
+              JavaSkylarkApiProvider.PROTO_NAME.getLegacyId(),
+              JavaSkylarkApiProvider.fromProviderMap(javaProviders))
           .addProvider(
               new JavaProtoLibraryAspectProvider(
+                  javaProviders,
                   transitiveOutputJars.build(),
                   createNonStrictCompilationArgsProvider(
                       javaProtoLibraryAspectProviders,

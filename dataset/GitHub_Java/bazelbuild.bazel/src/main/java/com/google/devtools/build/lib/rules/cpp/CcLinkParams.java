@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
@@ -163,30 +162,6 @@ public final class CcLinkParams implements CcLinkParamsApi {
     return new Builder(linkingStatically, linkShared);
   }
 
-  /**
-   * {@link CcLinkParams} objects contain {@link ExtraLinkTimeLibraries} used for Go linking. These
-   * are actually callbacks that get called at the end. With this method we build a new CcLinkParams
-   * in which we have called every callback and put the result into the list of libraries. The list
-   * of {@link ExtraLinkTimeLibraries} then gets nullified.
-   */
-  public static CcLinkParams buildFinalExtraLinkTimeLibraries(
-      RuleContext ruleContext, CcLinkParams ccLinkParams)
-      throws InterruptedException, RuleErrorException {
-    ExtraLinkTimeLibraries extraLinkTimeLibraries = ccLinkParams.getExtraLinkTimeLibraries();
-    NestedSetBuilder<LibraryToLink> builtExtraLinkTimeLibrariesBuilder =
-        NestedSetBuilder.linkOrder();
-    if (extraLinkTimeLibraries != null) {
-      for (ExtraLinkTimeLibrary extraLibrary : extraLinkTimeLibraries.getExtraLibraries()) {
-        builtExtraLinkTimeLibrariesBuilder.addTransitive(extraLibrary.buildLibraries(ruleContext));
-      }
-    }
-    CcLinkParams.Builder ccLinkParamsBuilder = CcLinkParams.builder();
-    ccLinkParamsBuilder.addTransitiveArgs(ccLinkParams);
-    ccLinkParamsBuilder.addLibraries(builtExtraLinkTimeLibrariesBuilder.build());
-    ccLinkParamsBuilder.extraLinkTimeLibrariesBuilder = null;
-    return ccLinkParamsBuilder.build();
-  }
-
   public static final Builder builder() {
     return new Builder();
   }
@@ -210,7 +185,7 @@ public final class CcLinkParams implements CcLinkParamsApi {
 
     // TODO(plf): Ideally the two booleans above are removed from this Builder. We would pass the
     // specific instances of CcLinkParams that are needed from transitive dependencies instead of
-    // calling the convenience methods that dig them out from the CcLinkingInfo using these
+    // calling the convenience methods that dig them out from the CcLinkParamsStore using these
     // booleans.
     private boolean linkingStaticallyLinkSharedSet;
 
@@ -283,10 +258,20 @@ public final class CcLinkParams implements CcLinkParamsApi {
     }
 
     /**
+     * Includes link parameters from a collection of dependency targets.
+     */
+    public Builder addTransitiveTargets(Iterable<? extends TransitiveInfoCollection> targets) {
+      for (TransitiveInfoCollection target : targets) {
+        addTransitiveTarget(target);
+      }
+      return this;
+    }
+
+    /**
      * Includes link parameters from a dependency target.
      *
-     * <p>The target should implement {@link CcLinkingInfo}. If it does not, the method does not do
-     * anything.
+     * <p>The target should implement {@link CcLinkParamsStore}. If it does not, the method does not
+     * do anything.
      */
     public Builder addTransitiveTarget(TransitiveInfoCollection target) {
       CcLinkingInfo ccLinkingInfo = target.get(CcLinkingInfo.PROVIDER);
@@ -424,7 +409,7 @@ public final class CcLinkParams implements CcLinkParamsApi {
     /** Processes typical dependencies of a C/C++ library. */
     public Builder addCcLibrary(RuleContext context) {
       addTransitiveTargets(
-          context.getPrerequisites("deps", Mode.TARGET), x -> x.get(CcLinkingInfo.PROVIDER));
+          context.getPrerequisites("deps", Mode.TARGET), CcLinkParamsStore.TO_LINK_PARAMS);
       return this;
     }
   }

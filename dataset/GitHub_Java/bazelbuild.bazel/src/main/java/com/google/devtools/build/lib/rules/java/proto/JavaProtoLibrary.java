@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.WrappingProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
@@ -45,13 +46,6 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(final RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-
-    if (ruleContext.getFragment(JavaConfiguration.class).isDisallowStrictDepsForJpl()
-        && ruleContext.attributes().has("strict_deps")
-        && ruleContext.attributes().isAttributeValueExplicitlySpecified("strict_deps")) {
-      ruleContext.attributeError("strict_deps", "Not allowed to be set explicitly.");
-      return null;
-    }
 
     Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders =
         ruleContext.getPrerequisites("deps", TARGET, JavaProtoLibraryAspectProvider.class);
@@ -72,7 +66,8 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
 
     JavaSourceJarsProvider sourceJarsProvider =
         JavaSourceJarsProvider.merge(
-            ruleContext.getPrerequisites("deps", TARGET, JavaSourceJarsProvider.class));
+            WrappingProvider.Helper.unwrapProviders(
+                javaProtoLibraryAspectProviders, JavaSourceJarsProvider.class));
 
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
@@ -104,7 +99,7 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
             .addNativeDeclaredProvider(javaInfo);
 
     if (ruleContext.getFragment(JavaConfiguration.class).jplPropagateCcLinkParamsStore()) {
-      result.addNativeDeclaredProvider(createCcLinkingInfo(ruleContext, ImmutableList.of()));
+      result.addProvider(createCcLinkingInfo(ruleContext, ImmutableList.of()));
     }
 
     return result.build();

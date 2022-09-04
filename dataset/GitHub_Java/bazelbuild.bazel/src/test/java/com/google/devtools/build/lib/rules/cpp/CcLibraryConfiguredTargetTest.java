@@ -489,7 +489,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(helloBinExe.getExecPathString()).endsWith("hello_bin.exe");
 
     assertThat(
-            artifactsToStrings(getOutputGroup(hello, CcLibrary.DYNAMIC_LIBRARY_OUTPUT_GROUP_NAME)))
+            artifactsToStrings(
+                getOutputGroup(hello, CcLinkingHelper.DYNAMIC_LIBRARY_OUTPUT_GROUP_NAME)))
         .containsExactly("bin hello/hello.dll", "bin hello/hello.if.lib");
   }
 
