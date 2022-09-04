@@ -10,6 +10,8 @@ import io.quarkus.builder.item.SimpleBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 
 /**
+ * Validation phase can be used to validate the deployment.
+ * <p>
  * An extension that needs to produce other build items during the "validation" phase should use this build item. The
  * build step should produce a {@link ValidationErrorBuildItem} or at least inject a {@link BuildProducer} for this build
  * item, otherwise it could be ignored or processed at the wrong time, e.g. after
@@ -41,6 +43,10 @@ public final class ValidationPhaseBuildItem extends SimpleBuildItem {
 
         public ValidationErrorBuildItem(Throwable... values) {
             this.values = Arrays.asList(values);
+        }
+
+        public ValidationErrorBuildItem(List<Throwable> values) {
+            this.values = values;
         }
 
         public List<Throwable> getValues() {
