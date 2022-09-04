@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.server.FailureDetails.BuildProgress.Code;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.time.Duration;
@@ -178,6 +179,7 @@ abstract class FileTransport implements BuildEventTransport {
       closeFuture.setException(
           new AbruptExitException(
               DetailedExitCode.of(
+                  ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
                   FailureDetail.newBuilder()
                       .setMessage(message)
                       .setBuildProgress(BuildProgress.newBuilder().setCode(getBuildProgressCode(e)))
