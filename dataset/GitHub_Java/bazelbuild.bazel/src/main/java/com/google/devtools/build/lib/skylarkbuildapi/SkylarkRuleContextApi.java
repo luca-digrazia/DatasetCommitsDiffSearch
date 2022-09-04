@@ -264,15 +264,10 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
   )
   public FileRootApi getGenfilesDirectory() throws EvalException;
 
-  @SkylarkCallable(
-    name = "outputs",
-    structField = true,
-    doc = OUTPUTS_DOC
-  )
+  @SkylarkCallable(structField = true, doc = OUTPUTS_DOC)
   public ClassObject outputs() throws EvalException;
 
   @SkylarkCallable(
-    name = "rule",
     structField = true,
     doc =
         "Returns rule attributes descriptor for the rule that aspect is applied to."
@@ -281,8 +276,8 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
   public SkylarkAttributesCollectionApi rule() throws EvalException;
 
   @SkylarkCallable(
-    name = "aspect_ids",
     structField = true,
+    name = "aspect_ids",
     doc =
         "Returns a list ids for all aspects applied to the target."
             + " Only available in aspect implementation functions."
@@ -290,28 +285,18 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
   public ImmutableList<String> aspectIds() throws EvalException;
 
   @SkylarkCallable(
-    name = "var",
     structField = true,
     doc = "Dictionary (String to String) of configuration variables."
   )
   public SkylarkDict<String, String> var() throws EvalException;
 
-  @SkylarkCallable(
-    name = "toolchains",
-    structField = true,
-    doc = "Toolchains required for this rule."
-  )
+  @SkylarkCallable(structField = true, doc = "Toolchains required for this rule.")
   public SkylarkIndexable toolchains() throws EvalException;
 
-  @SkylarkCallable(
-    name = "tokenize",
-    doc = "Splits a shell command to a list of tokens.",
-    documented = false
-  )
+  @SkylarkCallable(doc = "Splits a shell command to a list of tokens.", documented = false)
   public SkylarkList<String> tokenize(String optionString) throws FuncallException, EvalException;
 
   @SkylarkCallable(
-    name = "expand",
     doc =
         "Expands all references to labels embedded within a string for all files using a mapping "
             + "from definition labels (i.e. the label in the output type attribute) to files. "
@@ -381,15 +366,11 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
   )
   public FileApi newDirectory(String name, Object siblingArtifactUnchecked) throws EvalException;
 
-  @SkylarkCallable(
-    name = "check_placeholders",
-    documented = false
-  )
+  @SkylarkCallable(documented = false)
   public boolean checkPlaceholders(String template, SkylarkList<Object> allowedPlaceholders)
       throws EvalException;
 
   @SkylarkCallable(
-      name = "expand_make_variables",
       doc =
           "<b>Deprecated.</b> Use <a href=\"ctx.html#var\">ctx.var</a> to access the variables "
               + "instead.<br>Returns a string after expanding all references to \"Make "
