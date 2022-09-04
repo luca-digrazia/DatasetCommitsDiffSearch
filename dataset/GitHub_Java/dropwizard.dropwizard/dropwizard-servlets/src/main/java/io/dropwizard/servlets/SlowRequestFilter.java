@@ -1,6 +1,5 @@
 package io.dropwizard.servlets;
 
-import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +12,6 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
-import java.util.function.Supplier;
 
 import static io.dropwizard.servlets.Servlets.getFullUrl;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -24,10 +22,8 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  */
 @SuppressWarnings("UnusedDeclaration")
 public class SlowRequestFilter implements Filter {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SlowRequestFilter.class);
     private final long threshold;
-
-    private Supplier<Long> currentTimeProvider = System::nanoTime;
-    private Logger logger = LoggerFactory.getLogger(SlowRequestFilter.class);
 
     /**
      * Creates a filter which logs requests which take longer than 1 second.
@@ -45,16 +41,6 @@ public class SlowRequestFilter implements Filter {
         this.threshold = threshold.toNanoseconds();
     }
 
-    @VisibleForTesting
-    void setCurrentTimeProvider(Supplier<Long> currentTimeProvider) {
-        this.currentTimeProvider = currentTimeProvider;
-    }
-
-    @VisibleForTesting
-    void setLogger(Logger logger) {
-        this.logger = logger;
-    }
-
     @Override
     public void init(FilterConfig filterConfig) throws ServletException { /* unused */ }
 
@@ -66,14 +52,14 @@ public class SlowRequestFilter implements Filter {
                          ServletResponse response,
                          FilterChain chain) throws IOException, ServletException {
         final HttpServletRequest req = (HttpServletRequest) request;
-        final long startTime = currentTimeProvider.get();
+        final long startTime = System.nanoTime();
         try {
             chain.doFilter(request, response);
         } finally {
-            final long elapsedNS = currentTimeProvider.get() - startTime;
+            final long elapsedNS = System.nanoTime() - startTime;
             final long elapsedMS = NANOSECONDS.toMillis(elapsedNS);
             if (elapsedNS >= threshold) {
-                logger.warn("Slow request: {} {} ({}ms)",
+                LOGGER.warn("Slow request: {} {} ({}ms)",
                             req.getMethod(),
                             getFullUrl(req), elapsedMS);
             }
