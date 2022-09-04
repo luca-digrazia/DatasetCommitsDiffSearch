@@ -28,7 +28,6 @@ import javax.tools.Diagnostic.Kind;
 
 import org.androidannotations.helper.FileHelper;
 import org.androidannotations.logger.Level;
-import org.androidannotations.logger.formatter.FormatterFull;
 
 public class FileAppender extends Appender {
 
@@ -36,10 +35,6 @@ public class FileAppender extends Appender {
 
 	private File file;
 	private FileOutputStream outputStream;
-
-	public FileAppender() {
-		super(new FormatterFull());
-	}
 
 	@Override
 	public synchronized void open() {

@@ -15,43 +15,47 @@
  */
 package org.androidannotations.rclass;
 
-import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
-import javax.tools.Diagnostic.Kind;
 
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.Option;
+import org.androidannotations.helper.OptionsHelper;
+import org.androidannotations.logger.Logger;
+import org.androidannotations.logger.LoggerFactory;
 
 public class ProjectRClassFinder {
 
-	public static final String RESOURCE_PACKAGE_NAME_OPTION = "resourcePackageName";
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProjectRClassFinder.class);
 
 	private ProcessingEnvironment processingEnv;
+	private OptionsHelper optionsHelper;
 
 	public ProjectRClassFinder(ProcessingEnvironment processingEnv) {
 		this.processingEnv = processingEnv;
+		optionsHelper = new OptionsHelper(processingEnv);
 	}
 
 	public Option<IRClass> find(AndroidManifest manifest) {
-
 		Elements elementUtils = processingEnv.getElementUtils();
 		String rClass = getRClassPackageName(manifest) + ".R";
 		TypeElement rType = elementUtils.getTypeElement(rClass);
 
 		if (rType == null) {
-			Messager messager = processingEnv.getMessager();
-			messager.printMessage(Kind.ERROR, "The generated " + rClass + " class cannot be found");
+			LOGGER.error("The generated {} class cannot be found", rClass);
 			return Option.absent();
 		}
+
+		LOGGER.info("Found project R class: {}", rType.toString());
 
 		return Option.<IRClass> of(new RClass(rType));
 	}
 
 	public String getRClassPackageName(AndroidManifest manifest) {
-		if (processingEnv.getOptions().containsKey(RESOURCE_PACKAGE_NAME_OPTION)) {
-			return processingEnv.getOptions().get(RESOURCE_PACKAGE_NAME_OPTION);
+		String resourcePackageName = optionsHelper.getResourcePackageName();
+		if (resourcePackageName != null) {
+			return resourcePackageName;
 		} else {
 			return manifest.getApplicationPackage();
 		}

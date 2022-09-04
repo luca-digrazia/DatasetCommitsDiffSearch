@@ -116,7 +116,6 @@ public class AnnotationHandlers {
 		add(new OnActivityResultHandler(processingEnvironment));
 		add(new HierarchyViewerSupportHandler(processingEnvironment));
 		add(new WindowFeatureHandler(processingEnvironment));
-		add(new ReceiverHandler(processingEnvironment));
 
 		/* After injection methods must be after injections */
 		add(new AfterInjectHandler(processingEnvironment));
