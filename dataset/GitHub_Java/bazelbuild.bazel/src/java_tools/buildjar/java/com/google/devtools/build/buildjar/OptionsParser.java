@@ -17,7 +17,6 @@ package com.google.devtools.build.buildjar;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Splitter;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import java.io.File;
 import java.io.IOException;
@@ -80,6 +79,7 @@ public final class OptionsParser {
   private final List<String> classPath = new ArrayList<>();
   private final List<String> sourcePath = new ArrayList<>();
   private final List<String> bootClassPath = new ArrayList<>();
+  private final List<String> extClassPath = new ArrayList<>();
 
   private final List<String> processorPath = new ArrayList<>();
   private final List<String> processorNames = new ArrayList<>();
@@ -186,8 +186,7 @@ public final class OptionsParser {
           break;
         case "--extclasspath":
         case "--extdir":
-          // TODO(b/149114743): delete once Blaze stops passing the flag
-          collectFlagArguments(new ArrayList<>(), argQueue, "-");
+          collectFlagArguments(extClassPath, argQueue, "-");
           break;
         case "--output":
           outputJar = getArgument(argQueue, arg);
@@ -417,13 +416,12 @@ public final class OptionsParser {
     return bootClassPath;
   }
 
-  public List<String> getExtClassPath() {
-    // TODO(b/149114743): delete once Blaze stops accessing this in tests
-    return ImmutableList.of();
-  }
-
   public List<String> getSourcePath() {
     return sourcePath;
+  }
+
+  public List<String> getExtClassPath() {
+    return extClassPath;
   }
 
   public List<String> getProcessorPath() {
