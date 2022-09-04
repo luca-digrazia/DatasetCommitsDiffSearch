@@ -18,7 +18,6 @@ package com.googlecode.androidannotations.processing;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -30,7 +29,6 @@ import com.googlecode.androidannotations.generation.UiThreadDelayedInstruction;
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
-import com.sun.codemodel.JCodeModel;
 
 public class UiThreadDelayedProcessor implements ElementProcessor {
 
@@ -71,12 +69,6 @@ public class UiThreadDelayedProcessor implements ElementProcessor {
 		if (!memberInstructions.contains(handlerInstruction)) {
 			memberInstructions.add(handlerInstruction);
 		}
-	}
-
-	@Override
-	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) {
-		// TODO Auto-generated method stub
-		
 	}
 
 }

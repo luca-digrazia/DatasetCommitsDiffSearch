@@ -13,24 +13,20 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.googlecode.androidannotations.generation;
+package com.googlecode.androidannotations.annotations;
 
-import com.googlecode.androidannotations.model.Instruction;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-public class HandlerInstruction implements Instruction {
-
-	private static final String CODE = //
-	"" + //
-			"	private android.os.Handler handler_ = new android.os.Handler();\n" + //
-			"\n";
-
-	@Override
-	public String generate() {
-		return CODE;
-	}
-	
-	@Override
-	public boolean equals(Object obj) {
-		return obj instanceof HandlerInstruction;
-	}
+/**
+ * Should be used on method that must be run in the Ui thread, after the specified amount of time elapses. 
+ * 
+ * The annotation value is the delay (in milliseconds) until the method will be executed.
+ */
+@Retention(RetentionPolicy.SOURCE)
+@Target(ElementType.METHOD)
+public @interface UiThreadDelayed {
+	long value();
 }

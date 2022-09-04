@@ -1,7 +1,6 @@
 package com.googlecode.androidannotations.helloworldeclipse;
 
 import java.util.Date;
-import java.util.concurrent.TimeUnit;
 
 import android.app.Activity;
 import android.app.Notification;
@@ -55,15 +54,14 @@ public class MyActivity extends Activity {
 		}
 		String name = myEditText.getText().toString();
 		
-		someBackgroundWork(name, 5);
+		someBackgroundWork(name, 5000);
 		
 	}
 	
 	@Background
 	void someBackgroundWork(String name, long timeToDoSomeLongComputation) {
-		
 		try {
-			TimeUnit.SECONDS.sleep(timeToDoSomeLongComputation);
+			Thread.sleep(timeToDoSomeLongComputation);
 		} catch (InterruptedException e) {
 		}
 
