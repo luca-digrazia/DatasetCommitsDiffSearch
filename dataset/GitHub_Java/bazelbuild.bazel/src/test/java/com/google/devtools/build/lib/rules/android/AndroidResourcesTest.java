@@ -15,12 +15,12 @@ package com.google.devtools.build.lib.rules.android;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -28,10 +28,8 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
 import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -377,10 +375,6 @@ public class AndroidResourcesTest extends ResourceTestBase {
     MergedAndroidResources merged = makeMergedResources(ruleContext, AndroidAaptVersion.AAPT);
     ValidatedAndroidResources validated =
         merged.validate(AndroidDataContext.forNative(ruleContext), AndroidAaptVersion.AAPT);
-    Set<String> actionMnemonics =
-        ruleContext.getAnalysisEnvironment().getRegisteredActions().stream()
-            .map(ActionAnalysisMetadata::getMnemonic)
-            .collect(ImmutableSet.toImmutableSet());
 
     // Inherited values should be equal
     assertThat(merged).isEqualTo(new MergedAndroidResources(validated));
@@ -391,14 +385,12 @@ public class AndroidResourcesTest extends ResourceTestBase {
         /* inputs = */ ImmutableList.of(validated.getMergedResources(), validated.getManifest()),
         /* outputs = */ ImmutableList.of(
             validated.getRTxt(), validated.getJavaSourceJar(), validated.getApk()));
-    assertThat(actionMnemonics).contains("AndroidResourceValidator"); // aapt1 validation
 
     // aapt2 artifacts should not be generated
     assertThat(validated.getCompiledSymbols()).isNull();
     assertThat(validated.getAapt2RTxt()).isNull();
     assertThat(validated.getAapt2SourceJar()).isNull();
     assertThat(validated.getStaticLibrary()).isNull();
-    assertThat(actionMnemonics).doesNotContain("AndroidResourceLink"); // aapt2 validation
   }
 
   @Test
@@ -437,24 +429,6 @@ public class AndroidResourcesTest extends ResourceTestBase {
         /* inputs = */ ImmutableList.of(validated.getCompiledSymbols(), validated.getManifest()),
         /* outputs = */ ImmutableList.of(
             validated.getAapt2RTxt(), validated.getAapt2SourceJar(), validated.getStaticLibrary()));
-  }
-
-  @Test
-  public void testValidateNoAapt1() throws Exception {
-    useConfiguration("--incompatible_prohibit_aapt1");
-    RuleContext ruleContext = getRuleContext();
-
-    makeMergedResources(ruleContext, AndroidAaptVersion.AAPT2)
-        .validate(AndroidDataContext.forNative(ruleContext), AndroidAaptVersion.AAPT2);
-
-    Set<String> actionMnemonics =
-        ruleContext.getAnalysisEnvironment().getRegisteredActions().stream()
-            .map(ActionAnalysisMetadata::getMnemonic)
-            .collect(ImmutableSet.toImmutableSet());
-    // These are unfortunately the mnemonics used in Bazel; these should be changed once aapt1 is
-    // removed.
-    assertThat(actionMnemonics).contains("AndroidResourceLink"); // aapt2 validation
-    assertThat(actionMnemonics).doesNotContain("AndroidResourceValidator"); // aapt1 validation
   }
 
   @Test
@@ -533,32 +507,28 @@ public class AndroidResourcesTest extends ResourceTestBase {
   public void test_incompatibleProhibitAapt1_aaptVersionAapt_throwsAttributeError()
       throws Exception {
     useConfiguration("--incompatible_prohibit_aapt1");
-    AssertionError e =
-        MoreAsserts.assertThrows(
-            AssertionError.class,
-            () ->
-                getRuleContext(
-                    "android_binary",
-                    "aapt_version = 'aapt',",
-                    "manifest = 'AndroidManifest.xml',"));
-    assertThat(e).hasMessageThat().contains("aapt_version");
-    assertThat(e).hasMessageThat().contains("Attribute is no longer supported");
+    try {
+      getRuleContext(
+          "android_binary", "aapt_version = 'aapt',", "manifest = 'AndroidManifest.xml',");
+      fail("Expected AssertionError");
+    } catch (AssertionError e) {
+      assertThat(e).hasMessageThat().contains("aapt_version");
+      assertThat(e).hasMessageThat().contains("Attribute is no longer supported");
+    }
   }
 
   @Test
   public void test_incompatibleProhibitAapt1_aaptVersionAapt2_throwsAttributeError()
       throws Exception {
     useConfiguration("--incompatible_prohibit_aapt1");
-    AssertionError e =
-        MoreAsserts.assertThrows(
-            AssertionError.class,
-            () ->
-                getRuleContext(
-                    "android_binary",
-                    "aapt_version = 'aapt2',",
-                    "manifest = 'AndroidManifest.xml',"));
-    assertThat(e).hasMessageThat().contains("aapt_version");
-    assertThat(e).hasMessageThat().contains("Attribute is no longer supported");
+    try {
+      getRuleContext(
+          "android_binary", "aapt_version = 'aapt2',", "manifest = 'AndroidManifest.xml',");
+      fail("Expected AssertionError");
+    } catch (AssertionError e) {
+      assertThat(e).hasMessageThat().contains("aapt_version");
+      assertThat(e).hasMessageThat().contains("Attribute is no longer supported");
+    }
   }
 
   /**
