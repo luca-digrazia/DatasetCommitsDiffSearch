@@ -29,6 +29,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -152,6 +153,7 @@ import com.google.devtools.common.options.OptionsClassProvider;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -424,6 +426,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         new PostConfiguredTargetFunction(new BuildViewProvider(), ruleClassProvider));
     map.put(SkyFunctions.BUILD_CONFIGURATION,
         new BuildConfigurationFunction(directories, ruleClassProvider));
+    map.put(SkyFunctions.CONFIGURATION_COLLECTION, new ConfigurationCollectionFunction(
+        ruleClassProvider));
     map.put(SkyFunctions.CONFIGURATION_FRAGMENT, new ConfigurationFragmentFunction(
         configurationFragments, ruleClassProvider));
     map.put(SkyFunctions.WORKSPACE_NAME, new WorkspaceNameFunction());
@@ -646,11 +650,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public abstract void dropConfiguredTargets();
 
   /**
-   * Removes ConfigurationFragmentValues from the cache.
+   * Removes ConfigurationFragmentValuess and ConfigurationCollectionValues from the cache.
    */
   @VisibleForTesting
   public void invalidateConfigurationCollection() {
-    invalidate(SkyFunctionName.functionIsIn(ImmutableSet.of(SkyFunctions.CONFIGURATION_FRAGMENT)));
+    invalidate(SkyFunctionName.functionIsIn(ImmutableSet.of(SkyFunctions.CONFIGURATION_FRAGMENT,
+            SkyFunctions.CONFIGURATION_COLLECTION)));
   }
 
   /**
@@ -1067,6 +1072,38 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
+   * {@link #createConfigurations} implementation that creates the configurations statically.
+   */
+  private BuildConfigurationCollection createStaticConfigurations(
+      ExtendedEventHandler eventHandler,
+      BuildOptions buildOptions,
+      Set<String> multiCpu,
+      boolean keepGoing)
+      throws InvalidConfigurationException, InterruptedException {
+    SkyKey skyKey = ConfigurationCollectionValue.key(
+        buildOptions, ImmutableSortedSet.copyOf(multiCpu));
+    EvaluationResult<ConfigurationCollectionValue> result =
+        buildDriver.evaluate(Arrays.asList(skyKey), keepGoing, DEFAULT_THREAD_COUNT, eventHandler);
+    if (result.hasError()) {
+      ErrorInfo error = result.getError(skyKey);
+      Throwable e = error.getException();
+      // Wrap loading failed exceptions
+      if (e instanceof NoSuchThingException) {
+        e = new InvalidConfigurationException(e);
+      } else if (e == null && !Iterables.isEmpty(error.getCycleInfo())) {
+        getCyclesReporter().reportCycles(error.getCycleInfo(), skyKey, eventHandler);
+        e = new InvalidConfigurationException(
+            "cannot load build configuration because of this cycle");
+      }
+      Throwables.propagateIfInstanceOf(e, InvalidConfigurationException.class);
+      throw new IllegalStateException(
+          "Unknown error during ConfigurationCollectionValue evaluation", e);
+    }
+    ConfigurationCollectionValue configurationValue = result.get(skyKey);
+    return configurationValue.getConfigurationCollection();
+  }
+
+  /**
    * {@link #createConfigurations} implementation that creates the configurations dynamically.
    */
   private BuildConfigurationCollection createDynamicConfigurations(
@@ -1400,7 +1437,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         Throwables.throwIfInstanceOf(e, InvalidConfigurationException.class);
       }
       throw new IllegalStateException(
-          "Unknown error during configuration creation evaluation", e);
+          "Unknown error during ConfigurationCollectionValue evaluation", e);
     }
 
     // Prepare and return the results.
@@ -1571,7 +1608,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
-   * Returns a particular configured target after applying the given transition.
+   * Returns a particular configured target. If dynamic configurations are active, applies the given
+   * configuration transition.
    */
   @VisibleForTesting
   @Nullable
@@ -1580,19 +1618,35 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Label label,
       BuildConfiguration configuration,
       Attribute.Transition transition) {
+
+    if (configuration != null && !configuration.useDynamicConfigurations()
+        && transition != ConfigurationTransition.NONE) {
+      // It's illegal to apply this transition over a statically configured build. But C++ LIPO
+      // support works by applying a rule configurator for static configurations and a rule
+      // transition applier for dynamic configurations. Dynamically configured builds skip
+      // the configurator and this code makes statically configured builds skip the rule transition
+      // applier.
+      //
+      // This will all get a lot simpler once static configurations are removed entirely.
+      transition = ConfigurationTransition.NONE;
+    }
+
     if (memoizingEvaluator.getExistingValueForTesting(
         PrecomputedValue.WORKSPACE_STATUS_KEY.getKeyForTesting()) == null) {
       injectWorkspaceStatusData(label.getWorkspaceRoot());
     }
 
+    Dependency dep;
+    if (configuration == null) {
+      dep = Dependency.withNullConfiguration(label);
+    } else if (configuration.useDynamicConfigurations()) {
+      dep = Dependency.withTransitionAndAspects(label, transition, AspectCollection.EMPTY);
+    } else {
+      dep = Dependency.withConfiguration(label, configuration);
+    }
+
     return Iterables.getFirst(
-        getConfiguredTargets(
-            eventHandler,
-            configuration,
-            ImmutableList.of(configuration == null
-                ? Dependency.withNullConfiguration(label)
-                : Dependency.withTransitionAndAspects(label, transition, AspectCollection.EMPTY)),
-            false),
+        getConfiguredTargets(eventHandler, configuration, ImmutableList.of(dep), false),
         null);
   }
 

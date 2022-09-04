@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.auto.value.AutoValue;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -24,7 +23,6 @@ import java.io.Serializable;
 
 /** Singleton result of {@link CollectTargetsInPackageFunction}. */
 public class CollectTargetsInPackageValue implements SkyValue {
-  @AutoCodec
   public static final CollectTargetsInPackageValue INSTANCE = new CollectTargetsInPackageValue();
 
   private CollectTargetsInPackageValue() {}
@@ -40,10 +38,8 @@ public class CollectTargetsInPackageValue implements SkyValue {
   }
 
   /** {@link SkyKey} argument. */
-  @AutoCodec
   @AutoValue
   public abstract static class CollectTargetsInPackageKey implements Serializable {
-    @AutoCodec.Instantiator
     public static CollectTargetsInPackageKey create(
         PackageIdentifier packageId, FilteringPolicy filteringPolicy) {
       return new AutoValue_CollectTargetsInPackageValue_CollectTargetsInPackageKey(

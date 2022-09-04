@@ -16,10 +16,8 @@ package com.google.devtools.build.lib.cmdline;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -27,6 +25,7 @@ import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.devtools.build.lib.cmdline.LabelValidator.BadLabelException;
 import com.google.devtools.build.lib.cmdline.LabelValidator.PackageAndTarget;
 import com.google.devtools.build.lib.util.BatchCallback;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.util.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -901,7 +900,7 @@ public abstract class TargetPattern implements Serializable {
   // TargetParsingException.
   private static Label label(String label) throws TargetParsingException {
     try {
-      return Label.parseAbsolute(label, ImmutableMap.of());
+      return Label.parseAbsolute(label);
     } catch (LabelSyntaxException e) {
       throw new TargetParsingException("invalid target format: '"
           + StringUtilities.sanitizeControlChars(label) + "'; "
