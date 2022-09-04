@@ -13,7 +13,6 @@ import org.jboss.shamrock.codegen.BytecodeRecorder;
 import org.jboss.shamrock.core.ArchiveContext;
 import org.jboss.shamrock.core.ProcessorContext;
 import org.jboss.shamrock.core.ResourceProcessor;
-import org.jboss.shamrock.core.RuntimePriority;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
 public class ServletAnnotationProcessor implements ResourceProcessor {
@@ -27,16 +26,13 @@ public class ServletAnnotationProcessor implements ResourceProcessor {
 
     @Override
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception{
-
-        try (BytecodeRecorder context = processorContext.addDeploymentTask(RuntimePriority.UNDERTOW_CREATE_DEPLOYMENT)) {
-            UndertowDeploymentTemplate template = context.getMethodRecorder().getRecordingProxy(UndertowDeploymentTemplate.class);
-            template.createDeployment("test");
-        }
         final Index index = archiveContext.getIndex();
         List<AnnotationInstance> annotations = index.getAnnotations(WEB_SERVLET);
         if (annotations != null) {
-            try (BytecodeRecorder context = processorContext.addDeploymentTask(RuntimePriority.UNDERTOW_REGISTER_SERVLET)) {
+            try (BytecodeRecorder context = processorContext.addDeploymentTask(1)) {
                 UndertowDeploymentTemplate template = context.getMethodRecorder().getRecordingProxy(UndertowDeploymentTemplate.class);
+                template.createDeployment("test");
+
                 for (AnnotationInstance annotation : annotations) {
                     String name = annotation.value("name").asString();
                     template.registerServlet(null, name, annotation.target().asClass().toString());
@@ -45,12 +41,8 @@ public class ServletAnnotationProcessor implements ResourceProcessor {
                         template.addServletMapping(null, name, m);
                     }
                 }
+                template.deploy(null, null);
             }
-        }
-
-        try (BytecodeRecorder context = processorContext.addDeploymentTask(RuntimePriority.UNDERTOW_START)) {
-            UndertowDeploymentTemplate template = context.getMethodRecorder().getRecordingProxy(UndertowDeploymentTemplate.class);
-            template.deploy(null, null);
         }
     }
 
