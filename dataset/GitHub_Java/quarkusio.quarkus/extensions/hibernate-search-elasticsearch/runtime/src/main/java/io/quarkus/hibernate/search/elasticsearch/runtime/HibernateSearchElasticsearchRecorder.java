@@ -60,10 +60,10 @@ public class HibernateSearchElasticsearchRecorder {
                     EngineSettings.BACKGROUND_FAILURE_HANDLER,
                     buildTimeConfig.backgroundFailureHandler);
 
-            if (buildTimeConfig.additionalBackends.defaultBackend.isPresent()) {
+            if (buildTimeConfig.defaultBackend.isPresent()) {
                 // we have a named default backend
                 addConfig(propertyCollector, EngineSettings.DEFAULT_BACKEND,
-                        buildTimeConfig.additionalBackends.defaultBackend.get());
+                        buildTimeConfig.defaultBackend.get());
             } else if (buildTimeConfig.elasticsearch.version.isPresent()) {
                 // we use the default backend configuration
                 addConfig(propertyCollector, EngineSettings.DEFAULT_BACKEND,
@@ -73,7 +73,7 @@ public class HibernateSearchElasticsearchRecorder {
             contributeBackendBuildTimeProperties(propertyCollector, HibernateSearchElasticsearchRecorder.DEFAULT_BACKEND,
                     buildTimeConfig.elasticsearch);
 
-            for (Entry<String, ElasticsearchBackendBuildTimeConfig> backendEntry : buildTimeConfig.additionalBackends.backends
+            for (Entry<String, ElasticsearchBackendBuildTimeConfig> backendEntry : buildTimeConfig.additionalBackends
                     .entrySet()) {
                 contributeBackendBuildTimeProperties(propertyCollector, backendEntry.getKey(), backendEntry.getValue());
             }
@@ -103,8 +103,7 @@ public class HibernateSearchElasticsearchRecorder {
 
             contributeBackendRuntimeProperties(propertyCollector, DEFAULT_BACKEND, runtimeConfig.defaultBackend);
 
-            for (Entry<String, ElasticsearchBackendRuntimeConfig> backendEntry : runtimeConfig.additionalBackends.backends
-                    .entrySet()) {
+            for (Entry<String, ElasticsearchBackendRuntimeConfig> backendEntry : runtimeConfig.additionalBackends.entrySet()) {
                 contributeBackendRuntimeProperties(propertyCollector, backendEntry.getKey(), backendEntry.getValue());
             }
         }
