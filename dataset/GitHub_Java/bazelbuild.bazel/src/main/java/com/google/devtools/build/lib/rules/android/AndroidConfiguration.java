@@ -28,14 +28,18 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion.AndroidRobolectricTestDeprecationLevel;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.DynamicModeConverter;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.LibcTopLabelConverter;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -57,6 +61,9 @@ import javax.annotation.Nullable;
 )
 @Immutable
 public class AndroidConfiguration extends BuildConfiguration.Fragment {
+  public static final ObjectCodec<AndroidConfiguration> CODEC =
+      new AndroidConfiguration_AutoCodec();
+
   /**
    * Converter for {@link
    * com.google.devtools.build.lib.rules.android.AndroidConfiguration.ConfigurationDistinguisher}
@@ -260,6 +267,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   /** Android configuration options. */
   @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
   public static class Options extends FragmentOptions {
+    public static final ObjectCodec<Options> CODEC = new AndroidConfiguration_Options_AutoCodec();
+
     @Option(
       name = "Android configuration distinguisher",
       defaultValue = "MAIN",
@@ -488,10 +497,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      help =
-          "Whether to use incremental dexing for proguarded Android binaries by default.  "
-              + "Use incremental_dexing attribute to override default for a particular "
-              + "android_binary."
+      help = "Whether to use incremental dexing for proguarded Android binaries by default.  "
+          + "Use incremental_dexing attribute to override default for a particular android_binary."
     )
     public boolean incrementalDexingAfterProguardByDefault;
 
@@ -713,6 +720,32 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     public boolean useSingleJarApkBuilder;
 
     @Option(
+      name = "experimental_android_resource_filtering_method",
+      converter = ResourceFilterFactory.Converter.class,
+      defaultValue = "filter_in_analysis",
+      documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
+      effectTags = {
+        OptionEffectTag.CHANGES_INPUTS,
+        OptionEffectTag.LOADING_AND_ANALYSIS,
+        OptionEffectTag.LOSES_INCREMENTAL_STATE,
+      },
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help =
+          "Determines when resource filtering attributes, such as the android_binary "
+              + "'resource_configuration_filters' and 'densities' attributes, are applied. "
+              + "By default, bazel will 'filter_in_analysis'. The experimental "
+              + "'filter_in_analysis_with_dynamic_configuration' option also passes these options "
+              + "to the android_binary's dependencies, which also filter their internal resources "
+              + "in analysis, possibly making the build even faster (especially in systems that "
+              + "do not cache the results of those dependencies). When using aapt2, filtering is "
+              + "only performed in execution, and this setting does nothing."
+    )
+    // The ResourceFilterFactory object holds the filtering behavior as well as settings for which
+    // resources should be filtered. The filtering behavior is set from the command line, but the
+    // other settings default to empty and are set or modified via dynamic configuration.
+    public ResourceFilterFactory resourceFilterFactory;
+
+    @Option(
       name = "experimental_android_compress_java_resources",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -822,6 +855,11 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       host.allowAndroidLibraryDepsWithoutSrcs = allowAndroidLibraryDepsWithoutSrcs;
       return host;
     }
+
+    @Override
+    public ImmutableList<String> getDefaultsRules() {
+      return ImmutableList.of("android_tools_defaults_jar(name = 'android_jar')");
+    }
   }
 
   /** Configuration loader for the Android fragment. */
@@ -866,6 +904,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final AndroidManifestMerger manifestMerger;
   private final ApkSigningMethod apkSigningMethod;
   private final boolean useSingleJarApkBuilder;
+  private final ResourceFilterFactory resourceFilterFactory;
   private final boolean compressJavaResources;
   private final boolean exportsManifestDefault;
   private final AndroidAaptVersion androidAaptVersion;
@@ -903,6 +942,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.apkSigningMethod = options.apkSigningMethod;
     this.useSingleJarApkBuilder = options.useSingleJarApkBuilder;
     this.useRexToCompressDexFiles = options.useRexToCompressDexFiles;
+    this.resourceFilterFactory = options.resourceFilterFactory;
     this.compressJavaResources = options.compressJavaResources;
     this.exportsManifestDefault = options.exportsManifestDefault;
     this.androidAaptVersion = options.androidAaptVersion;
@@ -920,7 +960,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     if (incrementalDexingAfterProguardByDefault && incrementalDexingShardsAfterProguard == 0) {
       throw new InvalidConfigurationException(
           "--experimental_incremental_dexing_after_proguard_by_default requires "
-              + "--experimental_incremental_dexing_after_proguard to be at least 1");
+          + "--experimental_incremental_dexing_after_proguard to be at least 1");
     }
     if (desugarJava8Libs && !desugarJava8) {
       throw new InvalidConfigurationException(
@@ -953,6 +993,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       AndroidManifestMerger manifestMerger,
       ApkSigningMethod apkSigningMethod,
       boolean useSingleJarApkBuilder,
+      ResourceFilterFactory resourceFilterFactory,
       boolean compressJavaResources,
       boolean exportsManifestDefault,
       AndroidAaptVersion androidAaptVersion,
@@ -985,6 +1026,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.manifestMerger = manifestMerger;
     this.apkSigningMethod = apkSigningMethod;
     this.useSingleJarApkBuilder = useSingleJarApkBuilder;
+    this.resourceFilterFactory = resourceFilterFactory;
     this.compressJavaResources = compressJavaResources;
     this.exportsManifestDefault = exportsManifestDefault;
     this.androidAaptVersion = androidAaptVersion;
@@ -1109,6 +1151,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     return useSingleJarApkBuilder;
   }
 
+  public ResourceFilterFactory getResourceFilterFactory() {
+    return resourceFilterFactory;
+  }
+
   public boolean useParallelDex2Oat() {
     return useParallelDex2Oat;
   }
@@ -1148,6 +1194,26 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   @Override
   public String getOutputDirectoryName() {
-    return configurationDistinguisher.suffix;
+    // We expect this value to be null most of the time - it will only become non-null when a
+    // dynamically configured transition changes the configuration's resource filter object.
+    String resourceFilterSuffix = resourceFilterFactory.getOutputDirectorySuffix();
+
+    if (configurationDistinguisher.suffix == null) {
+      return resourceFilterSuffix;
+    }
+
+    if (resourceFilterSuffix == null) {
+      return configurationDistinguisher.suffix;
+    }
+
+    return configurationDistinguisher.suffix + "_" + resourceFilterSuffix;
+  }
+
+  @Nullable
+  @Override
+  public PatchTransition topLevelConfigurationHook(Target toTarget) {
+    return resourceFilterFactory.getTopLevelPatchTransition(
+        toTarget.getAssociatedRule().getRuleClass(),
+        AggregatingAttributeMapper.of(toTarget.getAssociatedRule()));
   }
 }
