@@ -244,7 +244,6 @@ public class ResteasyServerCommonProcessor {
 
         Map<DotName, ClassInfo> scannedResources = new HashMap<>();
         Set<DotName> pathInterfaces = new HashSet<>();
-        Set<DotName> pathAbstract = new HashSet<>();
         Map<DotName, ClassInfo> withoutDefaultCtor = new HashMap<>();
         for (AnnotationInstance annotation : allPaths) {
             if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
@@ -253,11 +252,7 @@ public class ResteasyServerCommonProcessor {
                     if (!withoutDefaultCtor.containsKey(clazz.name())) {
                         String className = clazz.name().toString();
                         if (!additionalPaths.contains(annotation)) { // scanned resources only contains real JAX-RS resources
-                            if (Modifier.isAbstract(clazz.flags())) {
-                                pathAbstract.add(clazz.name());
-                            } else {
-                                scannedResources.putIfAbsent(clazz.name(), clazz);
-                            }
+                            scannedResources.putIfAbsent(clazz.name(), clazz);
                         }
                         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, className));
 
@@ -278,21 +273,6 @@ public class ResteasyServerCommonProcessor {
                 String className = implementor.name().toString();
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, className));
                 scannedResources.putIfAbsent(implementor.name(), implementor);
-
-                if (!implementor.hasNoArgsConstructor()) {
-                    withoutDefaultCtor.put(implementor.name(), implementor);
-                }
-            }
-        }
-        // look for all implementations of abstract classes annotated @Path
-        for (final DotName cls : pathAbstract) {
-            final Collection<ClassInfo> implementors = index.getAllKnownSubclasses(cls);
-            for (final ClassInfo implementor : implementors) {
-                String className = implementor.name().toString();
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, className));
-                if (!Modifier.isAbstract(implementor.flags())) {
-                    scannedResources.putIfAbsent(implementor.name(), implementor);
-                }
 
                 if (!implementor.hasNoArgsConstructor()) {
                     withoutDefaultCtor.put(implementor.name(), implementor);
