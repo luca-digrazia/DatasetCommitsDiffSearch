@@ -22,11 +22,9 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
-import org.graylog2.cluster.ClusterConfigChangedEvent;
+import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.messageprocessors.MessageProcessor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.util.Collection;
@@ -44,10 +42,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class OrderedMessageProcessors implements Iterable<MessageProcessor> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(OrderedMessageProcessors.class);
-
     private final Set<MessageProcessor> processors;
-    private final ClusterConfigService clusterConfigService;
     private final AtomicReference<List<MessageProcessor>> sortedProcessors =
             new AtomicReference<>(Collections.emptyList());
     private Ordering<String> classNameOrdering;
@@ -55,41 +50,34 @@ public class OrderedMessageProcessors implements Iterable<MessageProcessor> {
     @Inject
     public OrderedMessageProcessors(Set<MessageProcessor> processors,
                                     ClusterConfigService clusterConfigService,
-                                    EventBus eventBus) {
+                                    @ClusterEventBus EventBus clusterEventBus) {
         this.processors = processors;
-        this.clusterConfigService = clusterConfigService;
-        eventBus.register(this);
+        clusterEventBus.register(this);
         // TODO by default sort on class name this is probably not the best idea, but for now works.
         this.classNameOrdering = Ordering.from(String.CASE_INSENSITIVE_ORDER);
 
-        // Initial sort.
-        sortProcessorChain();
+        // load existing order from cluster state
+        final MessageProcessorOrder order = clusterConfigService.get(MessageProcessorOrder.class);
+        sortProcessorChain(order);
     }
 
-    private void sortProcessorChain() {
-        final MessageProcessorsConfig config = clusterConfigService.get(MessageProcessorsConfig.class);
-
-        if (config != null) {
+    private void sortProcessorChain(MessageProcessorOrder order) {
+        if (order != null) {
             // if we have an explicit ordering use that (unknown last, partial ordering over the given list)
-            classNameOrdering = new ExplicitOrdering(config.processorOrder());
+            classNameOrdering = new ExplicitOrdering(order.classOrder());
         }
         final ImmutableList<MessageProcessor> sortedCopy =
                 classNameOrdering.onResultOf(mp -> mp.getClass().getCanonicalName()).immutableSortedCopy(processors);
 
         final Collection<MessageProcessor> enabledMessageProcessors =
                 Collections2.filter(sortedCopy,
-                                    mp -> config == null || !config.disabledProcessors().contains(mp.getClass().getCanonicalName()));
-        LOG.debug("New active message processors: {}", enabledMessageProcessors);
+                                    mp -> order == null || !order.disabledMessageProcessors().contains(mp.getClass().getCanonicalName()));
         sortedProcessors.set(ImmutableList.copyOf(enabledMessageProcessors));
     }
 
     @Subscribe
-    public void handleOrderingUpdate(ClusterConfigChangedEvent event) {
-        if (!MessageProcessorsConfig.class.getCanonicalName().equals(event.type())) {
-            return;
-        }
-
-        sortProcessorChain();
+    public void handleOrderingUpdate(MessageProcessorOrder order) {
+        sortProcessorChain(order);
     }
 
     @Override

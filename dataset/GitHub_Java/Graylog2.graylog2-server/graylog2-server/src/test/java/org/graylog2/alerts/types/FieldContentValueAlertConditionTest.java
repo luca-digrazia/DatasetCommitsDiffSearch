@@ -143,7 +143,7 @@ public class FieldContentValueAlertConditionTest extends AlertConditionTest {
         final Configuration configuration = mock(Configuration.class);
         final SearchResult searchResult = mock(SearchResult.class);
         final int alertCheckInterval = 42;
-        final RelativeRange relativeRange = RelativeRange.create(alertCheckInterval);
+        final RelativeRange relativeRange = new RelativeRange(alertCheckInterval);
 
         when(configuration.getAlertCheckInterval()).thenReturn(alertCheckInterval);
 
@@ -166,7 +166,7 @@ public class FieldContentValueAlertConditionTest extends AlertConditionTest {
                 mock(Configuration.class),
                 stream,
                 CONDITION_ID,
-                Tools.nowUTC(),
+                Tools.iso8601(),
                 STREAM_CREATOR,
                 parameters);
     }

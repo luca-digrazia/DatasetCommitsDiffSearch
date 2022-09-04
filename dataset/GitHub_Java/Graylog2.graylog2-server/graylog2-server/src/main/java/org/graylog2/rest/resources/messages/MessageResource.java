@@ -17,11 +17,11 @@
 package org.graylog2.rest.resources.messages;
 
 import com.codahale.metrics.annotation.Timed;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.elasticsearch.index.IndexNotFoundException;
@@ -126,7 +126,7 @@ public class MessageResource extends RestResource {
         try {
             return MessageTokens.create(messages.analyze(string, index));
         } catch (IndexNotFoundException e) {
-            final String message = "Index " + index + " does not exist.";
+            final String message = "Index " + index + "does not exist.";
             LOG.error(message, e);
             throw new NotFoundException(message);
         }

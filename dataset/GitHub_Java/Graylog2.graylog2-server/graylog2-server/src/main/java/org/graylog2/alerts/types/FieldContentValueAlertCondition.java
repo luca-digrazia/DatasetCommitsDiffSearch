@@ -52,6 +52,7 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
     private final Configuration configuration;
     private final String field;
     private final String value;
+    private List<Message> searchHits = Lists.newArrayList();
 
     public interface Factory {
         FieldContentValueAlertCondition createAlertCondition(Stream stream, String id, DateTime createdAt, @Assisted("userid") String creatorUserId, Map<String, Object> parameters);
@@ -86,7 +87,7 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
             SearchResult result = searches.search(
                     query,
                     filter,
-                    RelativeRange.create(configuration.getAlertCheckInterval()),
+                    new RelativeRange(configuration.getAlertCheckInterval()),
                     searchLimit,
                     0,
                     new Sorting("timestamp", Sorting.Direction.DESC)
@@ -97,6 +98,7 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
                 summaries = Lists.newArrayListWithCapacity(result.getResults().size());
                 for (ResultMessage resultMessage : result.getResults()) {
                     final Message msg = resultMessage.getMessage();
+                    searchHits.add(msg);
                     summaries.add(new MessageSummary(resultMessage.getIndex(), msg));
                 }
             } else {
@@ -129,5 +131,10 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
     @Override
     public String getDescription() {
         return "field: " + field + ", value: " + value;
+    }
+
+    @Override
+    public List<Message> getSearchHits() {
+        return Lists.newArrayList(searchHits);
     }
 }
