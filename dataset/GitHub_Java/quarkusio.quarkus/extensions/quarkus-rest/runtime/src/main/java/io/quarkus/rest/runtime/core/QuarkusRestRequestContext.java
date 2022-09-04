@@ -1,21 +1,22 @@
 package io.quarkus.rest.runtime.core;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 
+import javax.enterprise.event.Event;
 import javax.ws.rs.core.Cookie;
+import javax.ws.rs.core.GenericEntity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.PathSegment;
 import javax.ws.rs.core.Request;
@@ -25,15 +26,16 @@ import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ReaderInterceptor;
 import javax.ws.rs.ext.WriterInterceptor;
 
-import org.jboss.logging.Logger;
-
-import io.quarkus.arc.InjectableContext;
+import io.netty.channel.EventLoop;
+import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
+import io.quarkus.arc.impl.LazyValue;
 import io.quarkus.rest.runtime.core.serialization.EntityWriter;
-import io.quarkus.rest.runtime.handlers.RestHandler;
+import io.quarkus.rest.runtime.handlers.ServerRestHandler;
 import io.quarkus.rest.runtime.injection.QuarkusRestInjectionContext;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestAsyncResponse;
-import io.quarkus.rest.runtime.jaxrs.QuarkusRestContainerRequestContext;
+import io.quarkus.rest.runtime.jaxrs.QuarkusRestContainerRequestContextImpl;
+import io.quarkus.rest.runtime.jaxrs.QuarkusRestContainerResponseContextImpl;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestHttpHeaders;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestProviders;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestRequest;
@@ -43,39 +45,45 @@ import io.quarkus.rest.runtime.jaxrs.QuarkusRestUriInfo;
 import io.quarkus.rest.runtime.mapping.RuntimeResource;
 import io.quarkus.rest.runtime.mapping.URITemplate;
 import io.quarkus.rest.runtime.util.EmptyInputStream;
+import io.quarkus.rest.runtime.util.Encode;
 import io.quarkus.rest.runtime.util.PathSegmentImpl;
+import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
+import io.quarkus.vertx.http.runtime.security.QuarkusHttpUser;
+import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.net.impl.ConnectionBase;
 import io.vertx.ext.web.RoutingContext;
 
-public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRestInjectionContext {
-    private static final Logger log = Logger.getLogger(QuarkusRestRequestContext.class);
+public class QuarkusRestRequestContext extends AbstractQuarkusRestContext<QuarkusRestRequestContext, ServerRestHandler>
+        implements Closeable, QuarkusRestInjectionContext {
+
+    private static final LazyValue<Event<SecurityIdentity>> SECURITY_IDENTITY_EVENT = new LazyValue<>(
+            QuarkusRestRequestContext::createEvent);
+
     public static final Object[] EMPTY_ARRAY = new Object[0];
     private final QuarkusRestDeployment deployment;
     private final QuarkusRestProviders providers;
     private final RoutingContext context;
-    private final ManagedContext requestContext;
     private final CurrentVertxRequest currentVertxRequest;
-    private InjectableContext.ContextState currentRequestScope;
     /**
      * The parameters array, populated by handlers
      */
     private Object[] parameters;
     private RuntimeResource target;
-    private RestHandler[] handlers;
-    private RestHandler[] abortHandlerChain;
 
     /**
      * The parameter values extracted from the path.
-     *
+     * <p>
      * This is not a map, for two reasons. One is raw performance, as an array causes
      * less allocations and is generally faster. The other is that it is possible
      * that you can have equivalent templates with different names. This allows the
      * mapper to ignore the names, as everything is resolved in terms of indexes.
-     * 
+     * <p>
      * If there is only a single path param then it is stored directly into the field,
      * while multiple params this will be an array. This optimisation allows us to avoid
      * allocating anything in the common case that there is zero or one path param.
+     * <p>
+     * Note: those are decoded.
      */
     private Object pathParamValues;
 
@@ -88,22 +96,30 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
      * The result of the invocation
      */
     private Object result;
-    private boolean suspended = false;
-    private volatile boolean resetRequestContext = false;
-    private volatile boolean running = false;
-    private volatile Executor executor;
-    private int position;
-    private Throwable throwable;
+    /**
+     * The supplier of the actual response
+     */
+    private LazyResponse response;
+
     private QuarkusRestHttpHeaders httpHeaders;
     private Object requestEntity;
-    private Map<String, Object> properties;
     private Request request;
     private EntityWriter entityWriter;
-    private QuarkusRestContainerRequestContext containerRequestContext;
-    private String method;
+    private QuarkusRestContainerRequestContextImpl containerRequestContext;
+    private QuarkusRestContainerResponseContextImpl containerResponseContext;
+    private HttpServerResponse httpServerResponse; // store it as obtaining it from Vert.x isn't dirt cheap and it's done in a lot of places
+    private String method; // used to hold the explicitly set method performed by a ContainerRequestFilter
+    private String originalMethod; // store the original method as obtaining it from Vert.x isn't dirt cheap
+    // this is only set if we override the requestUri
     private String path;
+    // this is cached, but only if we override the requestUri
+    private String absoluteUri;
+    // this is only set if we override the requestUri
+    private String scheme;
+    // this is only set if we override the requestUri
+    private String authority;
     private String remaining;
-    private MediaType producesMediaType;
+    private EncodedMediaType responseContentType;
     private MediaType consumesMediaType;
 
     private Annotation[] methodAnnotations;
@@ -128,17 +144,17 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     private WriterInterceptor[] writerInterceptors;
 
     private SecurityContext securityContext;
+    private OutputStream outputStream;
+    private OutputStream underlyingOutputStream;
 
     public QuarkusRestRequestContext(QuarkusRestDeployment deployment, QuarkusRestProviders providers, RoutingContext context,
             ManagedContext requestContext,
-            CurrentVertxRequest currentVertxRequest, RestHandler[] handlerChain, RestHandler[] abortHandlerChain) {
+            CurrentVertxRequest currentVertxRequest, ServerRestHandler[] handlerChain, ServerRestHandler[] abortHandlerChain) {
+        super(handlerChain, abortHandlerChain, requestContext);
         this.deployment = deployment;
         this.providers = providers;
         this.context = context;
-        this.requestContext = requestContext;
         this.currentVertxRequest = currentVertxRequest;
-        this.handlers = handlerChain;
-        this.abortHandlerChain = abortHandlerChain;
         this.parameters = EMPTY_ARRAY;
     }
 
@@ -148,122 +164,6 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
 
     public QuarkusRestProviders getProviders() {
         return providers;
-    }
-
-    public void suspend() {
-        suspended = true;
-    }
-
-    public void resume() {
-        resume(null, null);
-    }
-
-    public synchronized void resume(Executor executor) {
-        resume(executor, null);
-    }
-
-    public synchronized void resume(Throwable throwable) {
-        resume(null, throwable);
-    }
-
-    public synchronized void resume(Executor executor, Throwable throwable) {
-        if (throwable != null) {
-            this.throwable = throwable;
-        }
-        if (running) {
-            this.executor = executor;
-            if (executor == null) {
-                suspended = false;
-            }
-        } else {
-            suspended = false;
-            resetRequestContext = true;
-            if (executor == null) {
-                ((ConnectionBase) context.request().connection()).getContext().nettyEventLoop().execute(this);
-            } else {
-                executor.execute(this);
-            }
-        }
-    }
-
-    @Override
-    public void run() {
-        running = true;
-        //if this is a blocking target we don't activate for the initial non-blocking part
-        //unless there are pre-mapping filters as these may require CDI
-        boolean activationRequired = target == null || (target.isBlocking() && executor == null) || resetRequestContext;
-        if (activationRequired) {
-            if (currentRequestScope == null) {
-                requestContext.activate();
-                currentVertxRequest.setCurrent(context, this);
-            } else {
-                requestContext.activate(currentRequestScope);
-            }
-            resetRequestContext = false;
-        }
-        try {
-            while (position < handlers.length) {
-                int pos = position;
-                position++; //increment before, as reset may reset it to zero
-                try {
-                    handlers[pos].handle(this);
-                    if (suspended) {
-                        Executor exec = null;
-                        synchronized (this) {
-                            if (this.executor != null) {
-                                //resume happened in the meantime
-                                suspended = false;
-                                exec = this.executor;
-                            } else if (suspended) {
-                                running = false;
-                                return;
-                            }
-                        }
-                        if (exec != null) {
-                            //outside sync block
-                            exec.execute(this);
-                            return;
-                        }
-                    }
-                } catch (Throwable t) {
-                    if (handlers == abortHandlerChain) {
-                        handleException(t);
-                        return;
-                    } else {
-                        invokeExceptionMapper(t);
-                        restart(abortHandlerChain);
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            handleException(t);
-            close();
-        } finally {
-            running = false;
-            if (activationRequired) {
-                if (position == handlers.length) {
-                    requestContext.terminate();
-                    close();
-                } else {
-                    currentRequestScope = requestContext.getState();
-                    requestContext.deactivate();
-                }
-            }
-        }
-    }
-
-    /**
-     * Restarts handler chain processing on a chain that does not target a specific resource
-     *
-     * Generally used to abort processing.
-     *
-     * @param newHandlerChain The new handler chain
-     */
-    public void restart(RestHandler[] newHandlerChain) {
-        this.handlers = newHandlerChain;
-        position = 0;
-        parameters = new Object[0];
-        target = null;
     }
 
     /**
@@ -302,6 +202,13 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
 
     public RoutingContext getContext() {
         return context;
+    }
+
+    public HttpServerResponse getHttpServerResponse() {
+        if (httpServerResponse == null) {
+            httpServerResponse = context.response();
+        }
+        return httpServerResponse;
     }
 
     public Object[] getParameters() {
@@ -373,8 +280,32 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return result;
     }
 
+    public Throwable getThrowable() {
+        return throwable;
+    }
+
+    public Object getResponseEntity() {
+        Object result = responseEntity();
+        if (result instanceof GenericEntity) {
+            return ((GenericEntity<?>) result).getEntity();
+        }
+        return result;
+    }
+
+    private Object responseEntity() {
+        if (response != null && response.isCreated()) {
+            return response.get().getEntity();
+        }
+        return result;
+    }
+
     public QuarkusRestRequestContext setResult(Object result) {
         this.result = result;
+        if (result instanceof Response) {
+            this.response = new LazyResponse.Existing((Response) result);
+        } else if (result instanceof GenericEntity) {
+            setGenericReturnType(((GenericEntity<?>) result).getType());
+        }
         return this;
     }
 
@@ -382,108 +313,48 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return target;
     }
 
-    public boolean isSuspended() {
-        return suspended;
+    public void mapExceptionIfPresent() {
+        // this is called from the abort chain, but we can abort because we have a Response, or because
+        // we got an exception
+        if (throwable != null) {
+            this.responseContentType = null;
+            setResult(deployment.getExceptionMapping().mapException(throwable, this));
+            // NOTE: keep the throwable around for close() AsyncResponse notification
+        }
     }
 
-    public QuarkusRestRequestContext setSuspended(boolean suspended) {
-        this.suspended = suspended;
-        return this;
-    }
-
-    public boolean isRunning() {
-        return running;
-    }
-
-    public QuarkusRestRequestContext setRunning(boolean running) {
-        this.running = running;
-        return this;
-    }
-
-    public Executor getExecutor() {
-        return executor;
-    }
-
-    public QuarkusRestRequestContext setExecutor(Executor executor) {
-        this.executor = executor;
-        return this;
-    }
-
-    public int getPosition() {
-        return position;
-    }
-
-    public QuarkusRestRequestContext setPosition(int position) {
-        this.position = position;
-        return this;
-    }
-
-    public RestHandler[] getHandlers() {
-        return handlers;
-    }
-
-    public Throwable getThrowable() {
-        return throwable;
-    }
-
-    /**
-     * ATM this can only be called by the InvocationHandler
-     */
-    public QuarkusRestRequestContext setThrowable(Throwable throwable) {
-        this.throwable = throwable;
-        return this;
-    }
-
-    private void invokeExceptionMapper(Throwable throwable) {
-        this.producesMediaType = null;
-        this.result = deployment.getExceptionMapping().mapException(throwable);
-    }
-
-    private void handleException(Throwable throwable) {
+    private void sendInternalError(Throwable throwable) {
         log.error("Request failed", throwable);
         context.response().setStatusCode(500).end();
+        close();
     }
 
     @Override
     public void close() {
-        //TODO: do we even have any resources to close?
-        // FIXME: probably move request context termination here, otherwise we can only terminate it from run()
+        try {
+            if (outputStream != null) {
+                outputStream.close();
+            }
+        } catch (IOException e) {
+            log.debug("Failed to close stream", e);
+        }
+        try {
+            if (underlyingOutputStream != null) {
+                underlyingOutputStream.close();
+            }
+        } catch (IOException e) {
+            log.debug("Failed to close stream", e);
+        }
+        super.close();
     }
 
-    public Response getResponse() {
-        return (Response) result;
+    public LazyResponse getResponse() {
+        return response;
     }
 
-    public Object getProperty(String name) {
-        if (properties == null) {
-            return null;
-        }
-        return properties.get(name);
-    }
-
-    public Collection<String> getPropertyNames() {
-        if (properties == null) {
-            return Collections.emptyList();
-        }
-        return Collections.unmodifiableSet(properties.keySet());
-    }
-
-    public void setProperty(String name, Object object) {
-        if (object == null) {
-            removeProperty(name);
-            return;
-        }
-        if (properties == null) {
-            properties = new HashMap<>();
-        }
-        properties.put(name, object);
-    }
-
-    public void removeProperty(String name) {
-        if (properties == null) {
-            return;
-        }
-        properties.remove(name);
+    public QuarkusRestRequestContext setResponse(LazyResponse response) {
+        this.response = response;
+        return this;
     }
 
     public Request getRequest() {
@@ -493,16 +364,26 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return request;
     }
 
-    public QuarkusRestContainerRequestContext getContainerRequestContext() {
+    public QuarkusRestContainerRequestContextImpl getContainerRequestContext() {
         if (containerRequestContext == null) {
-            containerRequestContext = new QuarkusRestContainerRequestContext(this);
+            containerRequestContext = new QuarkusRestContainerRequestContextImpl(this);
         }
         return containerRequestContext;
     }
 
+    public QuarkusRestContainerResponseContextImpl getContainerResponseContext() {
+        if (containerResponseContext == null) {
+            containerResponseContext = new QuarkusRestContainerResponseContextImpl(this);
+        }
+        return containerResponseContext;
+    }
+
     public String getMethod() {
         if (method == null) {
-            return context.request().rawMethod();
+            if (originalMethod != null) {
+                return originalMethod;
+            }
+            return originalMethod = context.request().rawMethod();
         }
         return method;
     }
@@ -519,11 +400,14 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return remaining;
     }
 
+    /**
+     * Returns the normalised non-decoded path excluding any prefix.
+     */
     public String getPathWithoutPrefix() {
         String path = getPath();
         if (path != null) {
             String prefix = deployment.getPrefix();
-            if (prefix != null && !prefix.isEmpty() && !prefix.equals("/")) {
+            if (!prefix.isEmpty()) {
                 // FIXME: can we really have paths that don't start with the prefix if there's a prefix?
                 if (path.startsWith(prefix)) {
                     return path.substring(prefix.length());
@@ -533,6 +417,9 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return path;
     }
 
+    /**
+     * Returns the normalised non-decoded path including any prefix.
+     */
     public String getPath() {
         if (path == null) {
             return context.normalisedPath();
@@ -540,17 +427,80 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return path;
     }
 
-    public QuarkusRestRequestContext setPath(String path) {
-        this.path = path;
+    public String getAbsoluteURI() {
+        // if we never changed the path we can use the vert.x URI
+        if (path == null)
+            return getContext().request().absoluteURI();
+        // Note: we could store our cache as normalised, but I'm not sure if the vertx one is normalised
+        if (absoluteUri == null) {
+            try {
+                absoluteUri = new URI(scheme, authority, path, null, null).toASCIIString();
+            } catch (URISyntaxException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return absoluteUri;
+    }
+
+    public String getScheme() {
+        if (scheme == null)
+            return getContext().request().scheme();
+        return scheme;
+    }
+
+    public String getAuthority() {
+        if (authority == null)
+            return getContext().request().host();
+        return authority;
+    }
+
+    public QuarkusRestRequestContext setRequestUri(URI requestURI) {
+        this.path = requestURI.getPath();
+        this.authority = requestURI.getRawAuthority();
+        this.scheme = requestURI.getScheme();
+        // FIXME: it's possible we may have to also update the query part
+        // invalidate those
+        this.uriInfo = null;
+        this.absoluteUri = null;
         return this;
     }
 
-    public MediaType getProducesMediaType() {
-        return producesMediaType;
+    /**
+     * Returns the current response content type. If a response has been set and has an
+     * explicit content type then this is used, otherwise it returns any content type
+     * that has been explicitly set.
+     */
+    public EncodedMediaType getResponseContentType() {
+        if (response != null) {
+            if (response.isCreated()) {
+                MediaType mediaType = response.get().getMediaType();
+                if (mediaType != null) {
+                    return new EncodedMediaType(mediaType);
+                }
+            }
+        }
+        return responseContentType;
     }
 
-    public QuarkusRestRequestContext setProducesMediaType(MediaType producesMediaType) {
-        this.producesMediaType = producesMediaType;
+    public MediaType getResponseContentMediaType() {
+        EncodedMediaType resp = getResponseContentType();
+        if (resp == null) {
+            return null;
+        }
+        return resp.mediaType;
+    }
+
+    public QuarkusRestRequestContext setResponseContentType(EncodedMediaType responseContentType) {
+        this.responseContentType = responseContentType;
+        return this;
+    }
+
+    public QuarkusRestRequestContext setResponseContentType(MediaType responseContentType) {
+        if (responseContentType == null) {
+            this.responseContentType = null;
+        } else {
+            this.responseContentType = new EncodedMediaType(responseContentType);
+        }
         return this;
     }
 
@@ -650,6 +600,30 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return this;
     }
 
+    protected void handleUnrecoverableError(Throwable throwable) {
+        QuarkusRestRequestContext.log.error("Request failed", throwable);
+        context.response().setStatusCode(500).end();
+        close();
+    }
+
+    protected void handleRequestScopeActivation() {
+        QuarkusHttpUser user = (QuarkusHttpUser) context.user();
+        if (user != null) {
+            QuarkusRestRequestContext.fireSecurityIdentity(user.getSecurityIdentity());
+        }
+        currentVertxRequest.setCurrent(context, this);
+    }
+
+    @Override
+    protected void restarted(boolean keepTarget) {
+        parameters = new Object[0];
+        target = null;
+        parameters = new Object[0];
+        if (!keepTarget) {
+            target = null;
+        }
+    }
+
     public void saveUriMatchState() {
         if (matchedURIs == null) {
             matchedURIs = new LinkedList<>();
@@ -663,7 +637,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
             //given that this method is likely to be called very infrequently it is better to have a small
             //cost here than a cost applied to every request
             int pos = classPath.stem.length();
-            String path = context.request().path();
+            String path = getPathWithoutPrefix();
             //we already know that this template matches, we just need to find the matched bit
             for (int i = 1; i < classPath.components.length; ++i) {
                 URITemplate.TemplateComponent segment = classPath.components[i];
@@ -685,6 +659,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
             }
             matchedURIs.add(new UriMatch(path.substring(1, pos), null, null));
         }
+        // FIXME: this may be better as context.normalisedPath() or getPath()
         String path = context.request().path();
         matchedURIs.add(0, new UriMatch(path.substring(1, path.length() - (remaining == null ? 0 : remaining.length())),
                 target, endpointInstance));
@@ -712,18 +687,9 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         this.sseEventSink = sseEventSink;
     }
 
-    public RestHandler[] getAbortHandlerChain() {
-        return abortHandlerChain;
-    }
-
-    public QuarkusRestRequestContext setAbortHandlerChain(RestHandler[] abortHandlerChain) {
-        this.abortHandlerChain = abortHandlerChain;
-        return this;
-    }
-
     /**
      * Return the path segments
-     *
+     * <p>
      * This is lazily initialized
      */
     public List<PathSegment> getPathSegments() {
@@ -781,19 +747,35 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     }
 
     @Override
-    public Object getQueryParameter(String name, boolean single) {
-        if (single)
-            return context.queryParams().get(name);
+    public Object getQueryParameter(String name, boolean single, boolean encoded) {
+        if (single) {
+            String val = context.queryParams().get(name);
+            if (encoded && val != null) {
+                val = Encode.encodeQueryParam(val);
+            }
+            return val;
+        }
         // empty collections must not be turned to null
-        return context.queryParam(name);
+        List<String> strings = context.queryParam(name);
+        if (encoded) {
+            List<String> newStrings = new ArrayList<>();
+            for (String i : strings) {
+                newStrings.add(Encode.encodeQueryParam(i));
+            }
+            return newStrings;
+        }
+        return strings;
     }
 
     @Override
-    public Object getMatrixParameter(String name, boolean single) {
+    public Object getMatrixParameter(String name, boolean single, boolean encoded) {
         if (single) {
             for (PathSegment i : getPathSegments()) {
                 String res = i.getMatrixParameters().getFirst(name);
                 if (res != null) {
+                    if (encoded) {
+                        return Encode.encodeQueryParam(res);
+                    }
                     return res;
                 }
             }
@@ -803,7 +785,13 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
             for (PathSegment i : getPathSegments()) {
                 List<String> res = i.getMatrixParameters().get(name);
                 if (res != null) {
-                    ret.addAll(res);
+                    if (encoded) {
+                        for (String j : res) {
+                            ret.add(Encode.encodeQueryParam(j));
+                        }
+                    } else {
+                        ret.addAll(res);
+                    }
                 }
             }
             // empty collections must not be turned to null
@@ -818,21 +806,38 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     }
 
     @Override
-    public Object getFormParameter(String name, boolean single) {
-        if (single)
-            return getContext().request().getFormAttribute(name);
-        // empty collections must not be turned to null
-        return getContext().request().formAttributes().getAll(name);
+    public Object getFormParameter(String name, boolean single, boolean encoded) {
+        if (single) {
+            String val = getContext().request().formAttributes().get(name);
+            if (encoded && val != null) {
+                val = Encode.encodeQueryParam(val);
+            }
+            return val;
+        }
+        List<String> strings = getContext().request().formAttributes().getAll(name);
+        if (encoded) {
+            List<String> newStrings = new ArrayList<>();
+            for (String i : strings) {
+                newStrings.add(Encode.encodeQueryParam(i));
+            }
+            return newStrings;
+        }
+        return strings;
+
     }
 
     @Override
-    public String getPathParameter(String name) {
+    public String getPathParameter(String name, boolean encoded) {
         // this is a slower version than getPathParam, but we can't actually bake path indices inside
         // BeanParam classes (which use thismethod ) because they can be used by multiple resources that would have different
         // indices
         Integer index = this.target.getPathParameterIndexes().get(name);
         // It's possible to inject a path param that's not defined, return null in this case
-        return index != null ? getPathParam(index) : null;
+        String value = index != null ? getPathParam(index) : null;
+        if (encoded && value != null) {
+            return Encode.encodeQueryParam(value);
+        }
+        return value;
     }
 
     public SecurityContext getSecurityContext() {
@@ -845,5 +850,37 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     public QuarkusRestRequestContext setSecurityContext(SecurityContext securityContext) {
         this.securityContext = securityContext;
         return this;
+    }
+
+    static void fireSecurityIdentity(SecurityIdentity identity) {
+        SECURITY_IDENTITY_EVENT.get().fire(identity);
+    }
+
+    static void clear() {
+        SECURITY_IDENTITY_EVENT.clear();
+    }
+
+    private static Event<SecurityIdentity> createEvent() {
+        return Arc.container().beanManager().getEvent().select(SecurityIdentity.class);
+    }
+
+    public void setOutputStream(OutputStream outputStream) {
+        this.outputStream = outputStream;
+    }
+
+    public OutputStream getOutputStream() {
+        return outputStream;
+    }
+
+    public OutputStream getOrCreateOutputStream() {
+        if (outputStream == null) {
+            return outputStream = underlyingOutputStream = new VertxOutputStream(this);
+        }
+        return outputStream;
+    }
+
+    @Override
+    protected EventLoop getEventLoop() {
+        return ((ConnectionBase) context.request().connection()).channel().eventLoop();
     }
 }

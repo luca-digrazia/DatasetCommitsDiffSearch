@@ -51,7 +51,6 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.PathSegment;
 import javax.ws.rs.core.Request;
-import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ContextResolver;
@@ -78,7 +77,6 @@ import io.quarkus.rest.RestHeader;
 import io.quarkus.rest.RestMatrix;
 import io.quarkus.rest.RestPath;
 import io.quarkus.rest.RestQuery;
-import io.quarkus.rest.SseElementType;
 import io.quarkus.rest.common.runtime.core.QuarkusRestContext;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
@@ -91,7 +89,6 @@ public final class QuarkusRestDotNames {
     public static final DotName URI_INFO = DotName.createSimple(UriInfo.class.getName());
     public static final DotName HTTP_HEADERS = DotName.createSimple(HttpHeaders.class.getName());
     public static final DotName REQUEST = DotName.createSimple(Request.class.getName());
-    public static final DotName RESPONSE = DotName.createSimple(Response.class.getName());
     public static final DotName SECURITY_CONTEXT = DotName.createSimple(SecurityContext.class.getName());
     public static final DotName PROVIDERS = DotName.createSimple(Providers.class.getName());
     public static final DotName RESOURCE_CONTEXT = DotName.createSimple(ResourceContext.class.getName());
@@ -103,7 +100,6 @@ public final class QuarkusRestDotNames {
     public static final DotName HTTP_SERVER_RESPONSE = DotName.createSimple(HttpServerResponse.class.getName());
     public static final DotName QUARKUS_REST_CONTEXT = DotName.createSimple(QuarkusRestContext.class.getName());
 
-    public static final DotName SSE_ELEMENT_TYPE = DotName.createSimple(SseElementType.class.getName());
     public static final DotName CONSUMES = DotName.createSimple(Consumes.class.getName());
     public static final DotName PRODUCES = DotName.createSimple(Produces.class.getName());
     public static final DotName PROVIDER = DotName.createSimple(Provider.class.getName());
@@ -204,8 +200,6 @@ public final class QuarkusRestDotNames {
             .createSimple(io.quarkus.rest.ContainerRequestFilter.class.getName());
     public static final DotName CUSTOM_CONTAINER_RESPONSE_FILTER = DotName
             .createSimple(io.quarkus.rest.ContainerResponseFilter.class.getName());
-    public static final DotName EXCEPTION_MAPPER_ANNOTATION = DotName
-            .createSimple(io.quarkus.rest.ExceptionMapper.class.getName());
 
     public static final DotName CONTAINER_REQUEST_CONTEXT = DotName.createSimple(ContainerRequestContext.class.getName());
     public static final DotName CONTAINER_RESPONSE_CONTEXT = DotName.createSimple(ContainerResponseContext.class.getName());

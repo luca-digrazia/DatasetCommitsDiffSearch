@@ -41,7 +41,6 @@ import static io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames.RE
 import static io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames.REST_QUERY_PARAM;
 import static io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames.SET;
 import static io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames.SORTED_SET;
-import static io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames.SSE_ELEMENT_TYPE;
 import static io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames.STRING;
 import static io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames.SUSPENDED;
 import static io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames.UNI;
@@ -180,7 +179,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
     private final AdditionalWriters additionalWriters;
     private final boolean hasRuntimeConverters;
     private final boolean defaultBlocking;
-    private final Map<DotName, Map<String, String>> classLevelExceptionMappers;
 
     protected EndpointIndexer(Builder<T, ?> builder) {
         this.index = builder.index;
@@ -197,7 +195,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
         this.additionalWriters = builder.additionalWriters;
         this.hasRuntimeConverters = builder.hasRuntimeConverters;
         this.defaultBlocking = builder.defaultBlocking;
-        this.classLevelExceptionMappers = builder.classLevelExceptionMappers;
     }
 
     public ResourceClass createEndpoints(ClassInfo classInfo) {
@@ -215,10 +212,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
                 clazz.setPath(path);
             }
             clazz.setFactory(recorder.factory(clazz.getClassName(), beanContainer));
-            Map<String, String> classLevelExceptionMappers = this.classLevelExceptionMappers.get(classInfo.name());
-            if (classLevelExceptionMappers != null) {
-                clazz.setClassLevelExceptionMappers(classLevelExceptionMappers);
-            }
             List<ResourceMethod> methods = createEndpoints(classInfo, classInfo, new HashSet<>(),
                     clazz.getPathParameters());
             clazz.getMethods().addAll(methods);
@@ -258,11 +251,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
         List<ResourceMethod> ret = new ArrayList<>();
         String[] classProduces = extractProducesConsumesValues(currentClassInfo.classAnnotation(PRODUCES));
         String[] classConsumes = extractProducesConsumesValues(currentClassInfo.classAnnotation(CONSUMES));
-        String classSseElementType = null;
-        AnnotationInstance classSseElementTypeAnnotation = currentClassInfo.classAnnotation(SSE_ELEMENT_TYPE);
-        if (classSseElementTypeAnnotation != null) {
-            classSseElementType = classSseElementTypeAnnotation.value().asString();
-        }
         Set<String> classNameBindings = NameBindingUtil.nameBindingNames(index, currentClassInfo);
 
         for (DotName httpMethod : httpAnnotationToMethod.keySet()) {
@@ -287,8 +275,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
                         methodPath = "/";
                     }
                     ResourceMethod method = createResourceMethod(currentClassInfo, actualEndpointInfo,
-                            classProduces, classConsumes, classNameBindings, httpMethod, info, methodPath, pathParameters,
-                            classSseElementType);
+                            classProduces, classConsumes, classNameBindings, httpMethod, info, methodPath, pathParameters);
 
                     ret.add(method);
                 }
@@ -316,7 +303,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
                     }
                     ResourceMethod method = createResourceMethod(currentClassInfo, actualEndpointInfo,
                             classProduces, classConsumes, classNameBindings, null, info, methodPath,
-                            pathParameters, classSseElementType);
+                            pathParameters);
                     ret.add(method);
                 }
             }
@@ -358,7 +345,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
     private ResourceMethod createResourceMethod(ClassInfo currentClassInfo, ClassInfo actualEndpointInfo,
             String[] classProduces, String[] classConsumes, Set<String> classNameBindings, DotName httpMethod, MethodInfo info,
             String methodPath,
-            Set<String> classPathParameters, String classSseElementType) {
+            Set<String> classPathParameters) {
         try {
             Set<String> pathParameters = new HashSet<>(classPathParameters);
             URLUtils.parsePathParameters(methodPath, pathParameters);
@@ -425,12 +412,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
 
             String[] produces = extractProducesConsumesValues(info.annotation(PRODUCES), classProduces);
             produces = applyDefaultProduces(produces, nonAsyncReturnType);
-
-            String sseElementType = classSseElementType;
-            AnnotationInstance sseElementTypeAnnotation = info.annotation(SSE_ELEMENT_TYPE);
-            if (sseElementTypeAnnotation != null) {
-                sseElementType = sseElementTypeAnnotation.value().asString();
-            }
             Set<String> nameBindingNames = nameBindingNames(info, classNameBindings);
             boolean blocking = defaultBlocking;
             AnnotationInstance blockingAnnotation = getInheritableAnnotation(info, BLOCKING);
@@ -463,7 +444,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
                     .setBlocking(blocking)
                     .setSuspended(suspended)
                     .setSse(sse)
-                    .setSseElementType(sseElementType)
                     .setFormParamRequired(formParamRequired)
                     .setCDIRequestScopeRequired(cdiRequestScopeRequired)
                     .setParameters(methodParameters)
@@ -950,7 +930,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
         private Map<String, InjectableBean> injectableBeans;
         private AdditionalWriters additionalWriters;
         private boolean hasRuntimeConverters;
-        private Map<DotName, Map<String, String>> classLevelExceptionMappers;
 
         public B setDefaultBlocking(boolean defaultBlocking) {
             this.defaultBlocking = defaultBlocking;
@@ -1021,11 +1000,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM
 
         public B setAdditionalWriters(AdditionalWriters additionalWriters) {
             this.additionalWriters = additionalWriters;
-            return (B) this;
-        }
-
-        public B setClassLevelExceptionMappers(Map<DotName, Map<String, String>> classLevelExceptionMappers) {
-            this.classLevelExceptionMappers = classLevelExceptionMappers;
             return (B) this;
         }
 
