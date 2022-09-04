@@ -175,8 +175,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
                 executableForRunfiles,
                 instrumentationMetadata,
                 javaArtifactsBuilder,
-                mainClass,
-                ruleContext.getConfiguration().isExperimentalJavaCoverage());
+                mainClass);
       }
     } else {
       filesBuilder.add(classJar);
@@ -263,8 +262,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
               jvmFlags,
               executableForRunfiles,
               mainClass,
-              originalMainClass,
-              filesBuilder,
               javaExecutable);
       if (!executableToRun.equals(executableForRunfiles)) {
         filesBuilder.add(executableToRun);
@@ -428,15 +425,11 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     JavaRuleOutputJarsProvider ruleOutputJarsProvider = ruleOutputJarsProviderBuilder.build();
 
     common.addTransitiveInfoProviders(builder, filesToBuild, classJar);
-
-    JavaGenJarsProvider javaGenJarsProvider =
-        common.createJavaGenJarsProvider(genClassJar, genSourceJar);
-    common.addJavaGenJarsProvider(builder, javaGenJarsProvider);
+    common.addGenJarsProvider(builder, genClassJar, genSourceJar);
 
     JavaInfo javaInfo = JavaInfo.Builder.create()
         .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
-        .addProvider(JavaGenJarsProvider.class, javaGenJarsProvider)
         .build();
 
     return builder
@@ -533,8 +526,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     builder.addTargets(runtimeDeps, RunfilesProvider.DEFAULT_RUNFILES);
     semantics.addDependenciesForRunfiles(ruleContext, builder);
 
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()
-        && !ruleContext.getConfiguration().isExperimentalJavaCoverage()) {
+    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
       Artifact instrumentedJar = javaArtifacts.getInstrumentedJar();
       if (instrumentedJar != null) {
         builder.addArtifact(instrumentedJar);

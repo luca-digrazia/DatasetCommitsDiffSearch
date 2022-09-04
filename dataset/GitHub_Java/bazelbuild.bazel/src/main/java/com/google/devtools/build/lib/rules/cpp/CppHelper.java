@@ -41,8 +41,6 @@ import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options.MakeVariableSource;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
@@ -150,20 +148,6 @@ public class CppHelper {
   }
 
   /**
-   * Returns true if this target should obtain c++ make variables from the toolchain instead of from
-   * the configuration.
-   */
-  public static boolean shouldUseToolchainForMakeVariables(RuleContext ruleContext) {
-    Label toolchainType = getToolchainTypeFromRuleClass(ruleContext);
-    return (ruleContext.getConfiguration().getOptions().get(Options.class).makeVariableSource
-            == MakeVariableSource.TOOLCHAIN)
-        && (ruleContext
-            .getFragment(PlatformConfiguration.class)
-            .getEnabledToolchainTypes()
-            .contains(toolchainType));
-  }
-
-  /**
    * Expands Make variables in a list of string and tokenizes the result. If the package feature
    * no_copts_tokenization is set, tokenize only items consisting of a single make variable.
    *
@@ -240,84 +224,6 @@ public class CppHelper {
       }
     }
     return result;
-  }
-
-  /**
-   * Returns the immutable list of linker options for fully statically linked outputs. Does not
-   * include command-line options passed via --linkopt or --linkopts.
-   *
-   * @param config the CppConfiguration for this build
-   * @param toolchain the c++ toolchain
-   * @param features default settings affecting this link
-   * @param sharedLib true if the output is a shared lib, false if it's an executable
-   */
-  public static ImmutableList<String> getFullyStaticLinkOptions(
-      CppConfiguration config,
-      CcToolchainProvider toolchain,
-      Iterable<String> features,
-      Boolean sharedLib) {
-    if (sharedLib) {
-      return toolchain.getSharedLibraryLinkOptions(
-          toolchain.getMostlyStaticLinkFlags(config.getCompilationMode(), config.getLipoMode()),
-          features);
-    } else {
-      return toolchain
-          .getFullyStaticLinkFlags(config.getCompilationMode(), config.getLipoMode())
-          .evaluate(features);
-    }
-  }
-
-  /**
-   * Returns the immutable list of linker options for mostly statically linked outputs. Does not
-   * include command-line options passed via --linkopt or --linkopts.
-   *
-   * @param config the CppConfiguration for this build
-   * @param toolchain the c++ toolchain
-   * @param features default settings affecting this link
-   * @param sharedLib true if the output is a shared lib, false if it's an executable
-   */
-  public static ImmutableList<String> getMostlyStaticLinkOptions(
-      CppConfiguration config,
-      CcToolchainProvider toolchain,
-      Iterable<String> features,
-      Boolean sharedLib) {
-    if (sharedLib) {
-      return toolchain.getSharedLibraryLinkOptions(
-          toolchain.supportsEmbeddedRuntimes()
-              ? toolchain.getMostlyStaticSharedLinkFlags(
-                  config.getCompilationMode(), config.getLipoMode())
-              : toolchain.getDynamicLinkFlags(config.getCompilationMode(), config.getLipoMode()),
-          features);
-    } else {
-      return toolchain
-          .getMostlyStaticLinkFlags(config.getCompilationMode(), config.getLipoMode())
-          .evaluate(features);
-    }
-  }
-
-  /**
-   * Returns the immutable list of linker options for artifacts that are not fully or mostly
-   * statically linked. Does not include command-line options passed via --linkopt or --linkopts.
-   *
-   * @param config the CppConfiguration for this build
-   * @param toolchain the c++ toolchain
-   * @param features default settings affecting this link
-   * @param sharedLib true if the output is a shared lib, false if it's an executable
-   */
-  public static ImmutableList<String> getDynamicLinkOptions(
-      CppConfiguration config,
-      CcToolchainProvider toolchain,
-      Iterable<String> features,
-      Boolean sharedLib) {
-    if (sharedLib) {
-      return toolchain.getSharedLibraryLinkOptions(
-          toolchain.getDynamicLinkFlags(config.getCompilationMode(), config.getLipoMode()),
-          features);
-    } else {
-      return toolchain
-          .getDynamicLinkFlags(config.getCompilationMode(), config.getLipoMode())
-          .evaluate(features);
-    }
   }
 
   /**
