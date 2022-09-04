@@ -228,34 +228,36 @@ public final class CppModuleMapAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
-    fp.addInt(privateHeaders.size());
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
+    f.addInt(privateHeaders.size());
     for (Artifact artifact : privateHeaders) {
-      fp.addPath(artifact.getExecPath());
+      f.addPath(artifact.getExecPath());
     }
-    fp.addInt(publicHeaders.size());
+    f.addInt(publicHeaders.size());
     for (Artifact artifact : publicHeaders) {
-      fp.addPath(artifact.getExecPath());
+      f.addPath(artifact.getExecPath());
     }
-    fp.addInt(dependencies.size());
+    f.addInt(dependencies.size());
     for (CppModuleMap dep : dependencies) {
-      fp.addPath(dep.getArtifact().getExecPath());
+      f.addPath(dep.getArtifact().getExecPath());
     }
-    fp.addInt(additionalExportedHeaders.size());
+    f.addInt(additionalExportedHeaders.size());
     for (PathFragment path : additionalExportedHeaders) {
-      fp.addPath(path);
+      f.addPath(path);
     }
-    fp.addPath(cppModuleMap.getArtifact().getExecPath());
+    f.addPath(cppModuleMap.getArtifact().getExecPath());
     Optional<Artifact> umbrellaHeader = cppModuleMap.getUmbrellaHeader();
     if (umbrellaHeader.isPresent()) {
-      fp.addPath(umbrellaHeader.get().getExecPath());
+      f.addPath(umbrellaHeader.get().getExecPath());
     }
-    fp.addString(cppModuleMap.getName());
-    fp.addBoolean(moduleMapHomeIsCwd);
-    fp.addBoolean(compiledModule);
-    fp.addBoolean(generateSubmodules);
-    fp.addBoolean(externDependencies);
+    f.addString(cppModuleMap.getName());
+    f.addBoolean(moduleMapHomeIsCwd);
+    f.addBoolean(compiledModule);
+    f.addBoolean(generateSubmodules);
+    f.addBoolean(externDependencies);
+    return f.hexDigestAndReset();
   }
 
   @VisibleForTesting
