@@ -168,15 +168,14 @@ public final class JavaCompilationHelper {
    *        (null if no sources will be generated).
    * @param outputDepsProto the compiler-generated jdeps file to create with the Action
    *        (null if not requested)
-   * @param instrumentationMetadataJar metadata file (null if no instrumentation is needed or if
-   * --experimental_java_coverage is true).
+   * @param outputMetadata metadata file (null if no instrumentation is needed).
    */
   public void createCompileAction(
       Artifact outputJar,
       Artifact manifestProtoOutput,
       @Nullable Artifact gensrcOutputJar,
       @Nullable Artifact outputDepsProto,
-      @Nullable Artifact instrumentationMetadataJar) {
+      @Nullable Artifact outputMetadata) {
 
     JavaTargetAttributes attributes = getAttributes();
 
@@ -197,7 +196,6 @@ public final class JavaCompilationHelper {
     }
 
     JavaCompileAction.Builder builder = createJavaCompileActionBuilder(semantics);
-    builder.setArtifactForExperimentalCoverage(maybeCreateExperimentalCoverageArtifact(outputJar));
     builder.setClasspathEntries(attributes.getCompileTimeClassPath());
     builder.setBootclasspathEntries(getBootclasspathOrDefault());
     builder.setSourcePathEntries(attributes.getSourcePath());
@@ -210,7 +208,7 @@ public final class JavaCompilationHelper {
     builder.setGensrcOutputJar(gensrcOutputJar);
     builder.setOutputDepsProto(outputDepsProto);
     builder.setAdditionalOutputs(attributes.getAdditionalOutputs());
-    builder.setMetadata(instrumentationMetadataJar);
+    builder.setMetadata(outputMetadata);
     builder.setInstrumentationJars(jacocoInstrumentation);
     builder.setSourceFiles(attributes.getSourceFiles());
     builder.addSourceJars(attributes.getSourceJars());
@@ -252,26 +250,6 @@ public final class JavaCompilationHelper {
     } else {
       return getBootClasspath();
     }
-  }
-
-  /**
-   * Creates an {@link Artifact} needed by {@code JacocoCoverageRunner} when
-   * {@code --experimental_java_coverage} is true.
-   *
-   * <p> The {@link Artifact} is created in the same directory as the given {@code compileJar} and
-   * has the suffix {@code -paths-for-coverage.txt}.
-   *
-   * <p> Returns {@code null} if {@code compileJar} should not be instrumented.
-   */
-  private Artifact maybeCreateExperimentalCoverageArtifact(Artifact compileJar) {
-    if (!shouldInstrumentJar() || !getConfiguration().isExperimentalJavaCoverage()) {
-      return null;
-    }
-    PathFragment packageRelativePath =
-        compileJar.getRootRelativePath().relativeTo(ruleContext.getPackageDirectory());
-    PathFragment path =
-        FileSystemUtils.replaceExtension(packageRelativePath, "-paths-for-coverage.txt");
-    return ruleContext.getPackageRelativeArtifact(path, compileJar.getRoot());
   }
 
   /**
@@ -321,10 +299,6 @@ public final class JavaCompilationHelper {
   @Nullable
   public Artifact createInstrumentationMetadata(Artifact outputJar,
       JavaCompilationArtifacts.Builder javaArtifactsBuilder) {
-    // In the experimental java coverage we don't create the .em jar for instrumentation.
-    if (getConfiguration().isExperimentalJavaCoverage()) {
-      return null;
-    }
     // If we need to instrument the jar, add additional output (the coverage metadata file) to the
     // JavaCompileAction.
     Artifact instrumentationMetadata = null;
@@ -608,28 +582,7 @@ public final class JavaCompilationHelper {
    * @param outputJar the Artifact to create with the Action
    * @param gensrcJar the generated sources jar Artifact that should be included with the
    *        sources in the output Artifact.  May be null.
-   * @param javaToolchainProvider is used by SingleJarActionBuilder to retrieve jvm options
-   * @param hostJavabaseInputs Artifacts required to invoke java executable in the SingleJar action
-   * @param hostJavaExecutable the jar executable of the SingleJar action
    */
-  public void createSourceJarAction(
-      Artifact outputJar,
-      @Nullable Artifact gensrcJar,
-      JavaToolchainProvider javaToolchainProvider,
-      NestedSet<Artifact> hostJavabaseInputs,
-      PathFragment hostJavaExecutable) {
-    JavaTargetAttributes attributes = getAttributes();
-    NestedSetBuilder<Artifact> resourceJars = NestedSetBuilder.stableOrder();
-    resourceJars.addAll(attributes.getSourceJars());
-    if (gensrcJar != null) {
-      resourceJars.add(gensrcJar);
-    }
-    SingleJarActionBuilder.createSourceJarAction(
-        ruleContext, semantics, attributes.getSourceFiles(),
-        resourceJars.build(), outputJar, javaToolchainProvider,
-        hostJavabaseInputs, hostJavaExecutable);
-  }
-
   public void createSourceJarAction(Artifact outputJar, @Nullable Artifact gensrcJar) {
     JavaTargetAttributes attributes = getAttributes();
     NestedSetBuilder<Artifact> resourceJars = NestedSetBuilder.stableOrder();
@@ -882,7 +835,7 @@ public final class JavaCompilationHelper {
    * prefix and removing the extension and replacing it by the given suffix.
    * The new artifact will have the same root as the given one.
    */
-  static Artifact derivedArtifact(
+  private static Artifact derivedArtifact(
       RuleContext ruleContext, Artifact artifact, String prefix, String suffix) {
     PathFragment path = artifact.getRootRelativePath();
     String basename = FileSystemUtils.removeExtension(path.getBaseName()) + suffix;
