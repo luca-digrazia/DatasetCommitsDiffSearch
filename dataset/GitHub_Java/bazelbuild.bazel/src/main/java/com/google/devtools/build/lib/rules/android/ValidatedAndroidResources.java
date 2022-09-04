@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.skylarkbuildapi.android.ValidatedAndroidDataApi;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -62,14 +63,15 @@ public class ValidatedAndroidResources extends MergedAndroidResources
    * </ul>
    */
   public static ValidatedAndroidResources validateFrom(
-      AndroidDataContext dataContext, MergedAndroidResources merged) throws InterruptedException {
+      AndroidDataContext dataContext, MergedAndroidResources merged, AndroidAaptVersion aaptVersion)
+      throws InterruptedException {
     Artifact rTxtOut = dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT);
     Artifact sourceJarOut =
         dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR);
     Artifact apkOut = dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_APK);
 
     BusyBoxActionBuilder.create(dataContext, "LINK_STATIC_LIBRARY")
-        .addAapt()
+        .addAapt(AndroidAaptVersion.AAPT2)
         .addInput("--libraries", dataContext.getSdk().getAndroidJar())
         .addInput("--compiled", merged.getCompiledSymbols())
         .addInput("--manifest", merged.getManifest())

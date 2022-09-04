@@ -29,6 +29,8 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.DynamicModeConverter;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.LibcTopLabelConverter;
@@ -40,6 +42,7 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import java.util.List;
+import javax.annotation.Nullable;
 
 /** Configuration fragment for Android rules. */
 @Immutable
@@ -182,12 +185,28 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   }
 
   /** Types of android manifest mergers. */
-  @Deprecated
   public enum AndroidAaptVersion {
+    /** @deprecated AAPT1 is no longer ever used in production. */
+    @Deprecated
+    AAPT,
     AAPT2;
 
-    public static AndroidAaptVersion chooseTargetAaptVersion(RuleContext ruleContext) {
-      return AAPT2;
+    @Nullable
+    public static AndroidAaptVersion chooseTargetAaptVersion(RuleContext ruleContext)
+        throws RuleErrorException {
+      if (ruleContext.isLegalFragment(AndroidConfiguration.class)) {
+        AndroidDataContext dataContext = AndroidDataContext.makeContext(ruleContext);
+        verifySdkHasAapt2(dataContext, ruleContext);
+        return AAPT2;
+      }
+      return null;
+    }
+
+    private static void verifySdkHasAapt2(
+        AndroidDataContext dataContext, RuleErrorConsumer errorConsumer) throws RuleErrorException {
+      if (dataContext.getSdk().getAapt2() == null) {
+        throw errorConsumer.throwWithRuleError("aapt2 not available from the android_sdk");
+      }
     }
   }
 
