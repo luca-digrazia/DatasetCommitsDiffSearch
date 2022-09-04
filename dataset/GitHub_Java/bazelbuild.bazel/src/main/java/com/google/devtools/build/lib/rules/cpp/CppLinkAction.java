@@ -43,11 +43,11 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.extra.CppLinkInfo;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
-import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
+import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -77,30 +77,25 @@ public final class CppLinkAction extends AbstractAction
    * artifact creation away.
    */
   public interface LinkArtifactFactory {
-    /** Create an artifact at the specified root-relative path in the bin directory. */
-    Artifact create(
-        ActionConstructionContext actionConstructionContext,
-        RepositoryName repositoryName,
-        BuildConfiguration configuration,
-        PathFragment rootRelativePath);
+    /**
+     * Create an artifact at the specified root-relative path in the bin directory.
+     */
+    Artifact create(RuleContext ruleContext, BuildConfiguration configuration,
+                    PathFragment rootRelativePath);
   }
 
   /**
    * An implementation of {@link LinkArtifactFactory} that can only create artifacts in the package
    * directory.
    */
-  public static final LinkArtifactFactory DEFAULT_ARTIFACT_FACTORY =
-      new LinkArtifactFactory() {
-        @Override
-        public Artifact create(
-            ActionConstructionContext actionConstructionContext,
-            RepositoryName repositoryName,
-            BuildConfiguration configuration,
-            PathFragment rootRelativePath) {
-          return actionConstructionContext.getDerivedArtifact(
-              rootRelativePath, configuration.getBinDirectory(repositoryName));
-        }
-      };
+  public static final LinkArtifactFactory DEFAULT_ARTIFACT_FACTORY = new LinkArtifactFactory() {
+    @Override
+    public Artifact create(RuleContext ruleContext, BuildConfiguration configuration,
+                           PathFragment rootRelativePath) {
+      return ruleContext.getDerivedArtifact(
+          rootRelativePath, configuration.getBinDirectory(ruleContext.getRule().getRepository()));
+    }
+  };
 
   private static final String LINK_GUID = "58ec78bd-1176-4e36-8143-439f656b181d";
   private static final String FAKE_LINK_GUID = "da36f819-5a15-43a9-8a45-e01b60e10c8b";
@@ -127,20 +122,22 @@ public final class CppLinkAction extends AbstractAction
 
   private final Iterable<Artifact> mandatoryInputs;
 
-  // Linking uses a lot of memory; estimate 1 MB per input file, min 1.5 Gib. It is vital to not
-  // underestimate too much here, because running too many concurrent links can thrash the machine
-  // to the point where it stops responding to keystrokes or mouse clicks. This is primarily a
-  // problem with memory consumption, not CPU or I/O usage.
+  // Linking uses a lot of memory; estimate 1 MB per input file, min 1.5 Gib.
+  // It is vital to not underestimate too much here,
+  // because running too many concurrent links can
+  // thrash the machine to the point where it stops
+  // responding to keystrokes or mouse clicks.
+  // CPU and IO do not scale similarly and still use the static minimum estimate.
   public static final ResourceSet LINK_RESOURCES_PER_INPUT =
-      ResourceSet.createWithRamCpu(1, 0);
+      ResourceSet.createWithRamCpuIo(1, 0, 0);
 
   // This defines the minimum of each resource that will be reserved.
   public static final ResourceSet MIN_STATIC_LINK_RESOURCES =
-      ResourceSet.createWithRamCpu(1536, 1);
+      ResourceSet.createWithRamCpuIo(1536, 1, 0.3);
 
   // Dynamic linking should be cheaper than static linking.
   public static final ResourceSet MIN_DYNAMIC_LINK_RESOURCES =
-      ResourceSet.createWithRamCpu(1024, 1);
+      ResourceSet.createWithRamCpuIo(1024, 0.3, 0.2);
 
   /**
    * Use {@link CppLinkActionBuilder} to create instances of this class. Also see there for the
@@ -499,15 +496,34 @@ public final class CppLinkAction extends AbstractAction
 
     final int inputSize = Iterables.size(getLinkCommandLine().getLinkerInputArtifacts());
 
-    return ResourceSet.createWithRamCpu(
-        Math.max(
-            inputSize * LINK_RESOURCES_PER_INPUT.getMemoryMb(), minLinkResources.getMemoryMb()),
-        Math.max(inputSize * LINK_RESOURCES_PER_INPUT.getCpuUsage(), minLinkResources.getCpuUsage())
+    return ResourceSet.createWithRamCpuIo(
+        Math.max(inputSize * LINK_RESOURCES_PER_INPUT.getMemoryMb(),
+            minLinkResources.getMemoryMb()),
+        Math.max(inputSize * LINK_RESOURCES_PER_INPUT.getCpuUsage(),
+            minLinkResources.getCpuUsage()),
+        Math.max(inputSize * LINK_RESOURCES_PER_INPUT.getIoUsage(),
+            minLinkResources.getIoUsage())
     );
   }
 
   @Override
   public Iterable<Artifact> getMandatoryInputs() {
     return mandatoryInputs;
+  }
+
+  /** Determines whether or not this link should output a symbol counts file. */
+  public static boolean enableSymbolsCounts(
+      CppConfiguration cppConfiguration,
+      boolean supportsGoldLinker,
+      boolean fake,
+      LinkTargetType linkType) {
+    return cppConfiguration.getSymbolCounts()
+        && supportsGoldLinker
+        && linkType == LinkTargetType.EXECUTABLE
+        && !fake;
+  }
+
+  public static PathFragment symbolCountsFileName(PathFragment binaryName) {
+    return binaryName.replaceName(binaryName.getBaseName() + ".sc");
   }
 }
