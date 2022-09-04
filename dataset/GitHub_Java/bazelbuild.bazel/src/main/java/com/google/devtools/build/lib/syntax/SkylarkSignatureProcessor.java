@@ -243,15 +243,15 @@ public class SkylarkSignatureProcessor {
           return defaultValue;
         }
         try (Mutability mutability = Mutability.create("initialization")) {
-          // Note that this Skylark thread ignores command line flags.
-          StarlarkThread thread =
-              StarlarkThread.builder(mutability)
+          // Note that this Skylark environment ignores command line flags.
+          Environment env =
+              Environment.builder(mutability)
                   .useDefaultSemantics()
-                  .setGlobals(StarlarkThread.CONSTANTS_ONLY)
-                  .setEventHandler(StarlarkThread.FAIL_FAST_HANDLER)
+                  .setGlobals(Environment.CONSTANTS_ONLY)
+                  .setEventHandler(Environment.FAIL_FAST_HANDLER)
                   .build()
                   .update("unbound", Runtime.UNBOUND);
-          defaultValue = StarlarkFile.eval(ParserInput.fromLines(paramDefaultValue), thread);
+          defaultValue = BuildFileAST.eval(ParserInput.fromLines(paramDefaultValue), env);
           defaultValueCache.put(paramDefaultValue, defaultValue);
           return defaultValue;
         }
@@ -269,7 +269,7 @@ public class SkylarkSignatureProcessor {
   public static ExtraArgKind[] getExtraArgs(SkylarkSignature annotation) {
     final int numExtraArgs =
         Booleans.countTrue(
-            annotation.useLocation(), annotation.useAst(), annotation.useStarlarkThread());
+            annotation.useLocation(), annotation.useAst(), annotation.useEnvironment());
     if (numExtraArgs == 0) {
       return null;
     }
@@ -281,7 +281,7 @@ public class SkylarkSignatureProcessor {
     if (annotation.useAst()) {
       extraArgs[i++] = ExtraArgKind.SYNTAX_TREE;
     }
-    if (annotation.useStarlarkThread()) {
+    if (annotation.useEnvironment()) {
       extraArgs[i++] = ExtraArgKind.ENVIRONMENT;
     }
     return extraArgs;

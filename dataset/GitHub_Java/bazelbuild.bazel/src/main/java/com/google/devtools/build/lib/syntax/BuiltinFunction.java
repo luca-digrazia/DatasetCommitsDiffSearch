@@ -21,8 +21,8 @@ import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
+import com.google.devtools.build.lib.syntax.Environment.LexicalFrame;
 import com.google.devtools.build.lib.syntax.SkylarkType.SkylarkFunctionType;
-import com.google.devtools.build.lib.syntax.StarlarkThread.LexicalFrame;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -75,25 +75,32 @@ public class BuiltinFunction extends BaseFunction {
   private boolean isRule;
 
   /** Create unconfigured (signature-less) function from its name */
-  protected BuiltinFunction(String name) {
+  public BuiltinFunction(String name) {
     super(name);
   }
 
   /** Creates a BuiltinFunction with the given name and signature */
-  protected BuiltinFunction(String name, FunctionSignature signature) {
+  public BuiltinFunction(String name, FunctionSignature signature) {
+    super(name, signature);
+    configure();
+  }
+
+  /** Creates a BuiltinFunction with the given name and signature with values */
+  public BuiltinFunction(String name,
+      FunctionSignature.WithValues<Object, SkylarkType> signature) {
     super(name, signature);
     configure();
   }
 
   /** Creates a BuiltinFunction with the given name and signature and extra arguments */
-  protected BuiltinFunction(String name, FunctionSignature signature, ExtraArgKind[] extraArgs) {
+  public BuiltinFunction(String name, FunctionSignature signature, ExtraArgKind[] extraArgs) {
     super(name, signature);
     this.extraArgs = extraArgs;
     configure();
   }
 
   /** Creates a BuiltinFunction with the given name, signature, extra arguments, and a rule flag */
-  protected BuiltinFunction(
+  public BuiltinFunction(
       String name, FunctionSignature signature, ExtraArgKind[] extraArgs, boolean isRule) {
     super(name, signature);
     this.extraArgs = extraArgs;
@@ -101,8 +108,16 @@ public class BuiltinFunction extends BaseFunction {
     configure();
   }
 
+  /** Creates a BuiltinFunction with the given name, signature with values, and extra arguments */
+  public BuiltinFunction(String name,
+      FunctionSignature.WithValues<Object, SkylarkType> signature, ExtraArgKind[] extraArgs) {
+    super(name, signature);
+    this.extraArgs = extraArgs;
+    configure();
+  }
+
   /** Creates a BuiltinFunction from the given name and a Factory */
-  protected BuiltinFunction(String name, Factory factory) {
+  public BuiltinFunction(String name, Factory factory) {
     super(name);
     configure(factory);
   }
@@ -118,9 +133,9 @@ public class BuiltinFunction extends BaseFunction {
 
   @Override
   @Nullable
-  public Object call(Object[] args, @Nullable FuncallExpression ast, StarlarkThread thread)
+  public Object call(Object[] args, @Nullable FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException {
-    Preconditions.checkNotNull(thread);
+    Preconditions.checkNotNull(env);
 
     // ast is null when called from Java (as there's no Skylark call site).
     Location loc = ast == null ? Location.BUILTIN : ast.getLocation();
@@ -139,7 +154,7 @@ public class BuiltinFunction extends BaseFunction {
             break;
 
           case ENVIRONMENT:
-            args[i] = thread;
+            args[i] = env;
             break;
         }
         i++;
@@ -149,8 +164,7 @@ public class BuiltinFunction extends BaseFunction {
     // Last but not least, actually make an inner call to the function with the resolved arguments.
     try (SilentCloseable c =
         Profiler.instance().profile(ProfilerTask.STARLARK_BUILTIN_FN, getName())) {
-      thread.enterScope(
-          this, SHARED_LEXICAL_FRAME_FOR_BUILTIN_FUNCTION_CALLS, ast, thread.getGlobals());
+      env.enterScope(this, SHARED_LEXICAL_FRAME_FOR_BUILTIN_FUNCTION_CALLS, ast, env.getGlobals());
       return invokeMethod.invoke(this, args);
     } catch (InvocationTargetException x) {
       Throwable e = x.getCause();
@@ -171,9 +185,7 @@ public class BuiltinFunction extends BaseFunction {
       for (int i = 0; i < args.length; i++) {
         if (args[i] != null && !types[i].isAssignableFrom(args[i].getClass())) {
           String paramName =
-              i < len
-                  ? signature.getSignature().getParameterNames().get(i)
-                  : extraArgs[i - len].name();
+              i < len ? signature.getSignature().getNames().get(i) : extraArgs[i - len].name();
           throw new EvalException(
               loc,
               String.format(
@@ -189,7 +201,7 @@ public class BuiltinFunction extends BaseFunction {
     } catch (IllegalAccessException e) {
       throw badCallException(loc, e, args);
     } finally {
-      thread.exitScope();
+      env.exitScope();
     }
   }
 
@@ -234,7 +246,7 @@ public class BuiltinFunction extends BaseFunction {
   protected void configure() {
     invokeMethod = findMethod("invoke");
 
-    int arguments = signature.getSignature().numParameters();
+    int arguments = signature.getSignature().getShape().getArguments();
     innerArgumentCount = arguments + (extraArgs == null ? 0 : extraArgs.length);
     Class<?>[] parameterTypes = invokeMethod.getParameterTypes();
     if (innerArgumentCount != parameterTypes.length) {
@@ -255,7 +267,7 @@ public class BuiltinFunction extends BaseFunction {
                   "fun %s(%s), param %s, enforcedType: %s (%s); parameterType: %s",
                   getName(),
                   signature,
-                  signature.getSignature().getParameterNames().get(i),
+                  signature.getSignature().getNames().get(i),
                   enforcedType,
                   enforcedType.getType(),
                   parameterType);
@@ -348,7 +360,7 @@ public class BuiltinFunction extends BaseFunction {
     }
 
     @Override
-    public Object call(Object[] args, @Nullable FuncallExpression ast, StarlarkThread thread)
+    public Object call(Object[] args, @Nullable FuncallExpression ast, Environment env)
         throws EvalException {
       throw new EvalException(null, "tried to invoke a Factory for function " + this);
     }

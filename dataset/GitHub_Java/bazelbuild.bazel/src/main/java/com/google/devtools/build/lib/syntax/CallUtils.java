@@ -23,6 +23,7 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.events.Location;
@@ -32,16 +33,18 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
-import com.google.devtools.build.lib.util.Pair;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /** Helper functions for implementing function calls. */
@@ -52,107 +55,180 @@ public final class CallUtils {
 
   private CallUtils() {} // uninstantiable
 
-  private static CacheValue getCacheValue(Class<?> cls, StarlarkSemantics semantics) {
-    if (cls == String.class) {
-      cls = StringModule.class;
+  /**
+   * Cache key for callable method lookup of skylark types. The key consists of the class of the
+   * skylark type, and a skylark semantics object. The semantics object is required as part of the
+   * key as certain methods of the class may be unavailable if certain semantics flags are flipped.
+   */
+  private static final class MethodDescriptorKey {
+    private final Class<?> clazz;
+    private final StarlarkSemantics semantics;
+
+    private MethodDescriptorKey(Class<?> clazz, StarlarkSemantics semantics) {
+      this.clazz = clazz;
+      this.semantics = semantics;
     }
-    try {
-      return cache.get(Pair.of(cls, semantics));
-    } catch (ExecutionException ex) {
-      throw new IllegalStateException("cache error", ex);
+
+    Class<?> getClazz() {
+      return clazz;
+    }
+
+    StarlarkSemantics getSemantics() {
+      return semantics;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      MethodDescriptorKey that = (MethodDescriptorKey) o;
+      return Objects.equals(clazz, that.clazz) && Objects.equals(semantics, that.semantics);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(clazz, semantics);
     }
   }
 
-  // Information derived from a SkylarkCallable-annotated class and a StarlarkSemantics.
-  private static class CacheValue {
-    @Nullable MethodDescriptor selfCall;
-    ImmutableMap<String, MethodDescriptor> fields; // sorted by Java method name
-    ImmutableMap<String, MethodDescriptor> methods; // sorted by Java method name
-  }
-
-  // A cache of information derived from a SkylarkCallable-annotated class and a StarlarkSemantics.
-  private static final LoadingCache<Pair<Class<?>, StarlarkSemantics>, CacheValue> cache =
+  private static final LoadingCache<MethodDescriptorKey, Optional<MethodDescriptor>> selfCallCache =
       CacheBuilder.newBuilder()
           .build(
-              new CacheLoader<Pair<Class<?>, StarlarkSemantics>, CacheValue>() {
+              new CacheLoader<MethodDescriptorKey, Optional<MethodDescriptor>>() {
                 @Override
-                public CacheValue load(Pair<Class<?>, StarlarkSemantics> key) throws Exception {
-                  Class<?> cls = key.first;
-                  StarlarkSemantics semantics = key.second;
-
-                  MethodDescriptor selfCall = null;
-                  ImmutableMap.Builder<String, MethodDescriptor> methods = ImmutableMap.builder();
-                  Map<String, MethodDescriptor> fields = new HashMap<>();
-
-                  // Sort methods by Java name, for determinism.
-                  Method[] classMethods = cls.getMethods();
-                  Arrays.sort(classMethods, Comparator.comparing(Method::getName));
-                  for (Method method : classMethods) {
+                public Optional<MethodDescriptor> load(MethodDescriptorKey key) throws Exception {
+                  Class<?> keyClass = key.getClazz();
+                  StarlarkSemantics semantics = key.getSemantics();
+                  MethodDescriptor returnValue = null;
+                  for (Method method : sortMethodArrayByMethodName(keyClass.getMethods())) {
                     // Synthetic methods lead to false multiple matches
                     if (method.isSynthetic()) {
                       continue;
                     }
-
-                    // annotated?
                     SkylarkCallable callable = SkylarkInterfaceUtils.getSkylarkCallable(method);
-                    if (callable == null) {
-                      continue;
-                    }
-
-                    // enabled by semantics?
-                    if (!semantics.isFeatureEnabledBasedOnTogglingFlags(
-                        callable.enableOnlyWithFlag(), callable.disableWithFlag())) {
-                      continue;
-                    }
-
-                    MethodDescriptor descriptor = MethodDescriptor.of(method, callable, semantics);
-
-                    // self-call method?
-                    if (callable.selfCall()) {
-                      if (selfCall != null) {
+                    if (callable != null && callable.selfCall()) {
+                      if (returnValue != null) {
                         throw new IllegalArgumentException(
                             String.format(
-                                "Class %s has two selfCall methods defined", cls.getName()));
+                                "Class %s has two selfCall methods defined", keyClass.getName()));
                       }
-                      selfCall = descriptor;
-                      continue;
-                    }
-
-                    // regular method
-                    methods.put(callable.name(), descriptor);
-
-                    // field method?
-                    if (descriptor.isStructField()
-                        && fields.put(callable.name(), descriptor) != null) {
-                      // TODO(b/72113542): Validate with annotation processor instead of at runtime.
-                      throw new IllegalArgumentException(
-                          String.format(
-                              "Class %s declares two structField methods named %s",
-                              cls.getName(), callable.name()));
+                      if (semantics.isFeatureEnabledBasedOnTogglingFlags(
+                          callable.enableOnlyWithFlag(), callable.disableWithFlag())) {
+                        returnValue = MethodDescriptor.of(method, callable, semantics);
+                      }
                     }
                   }
-
-                  CacheValue value = new CacheValue();
-                  value.selfCall = selfCall;
-                  value.methods = methods.build();
-                  value.fields = ImmutableMap.copyOf(fields);
-                  return value;
+                  return Optional.ofNullable(returnValue);
                 }
               });
 
+  private static final LoadingCache<MethodDescriptorKey, Map<String, MethodDescriptor>>
+      methodCache =
+          CacheBuilder.newBuilder()
+              .build(
+                  new CacheLoader<MethodDescriptorKey, Map<String, MethodDescriptor>>() {
+
+                    @Override
+                    public Map<String, MethodDescriptor> load(MethodDescriptorKey key)
+                        throws Exception {
+                      Class<?> keyClass = key.getClazz();
+                      StarlarkSemantics semantics = key.getSemantics();
+                      ImmutableMap.Builder<String, MethodDescriptor> methodMap =
+                          ImmutableMap.builder();
+                      for (Method method : sortMethodArrayByMethodName(keyClass.getMethods())) {
+                        // Synthetic methods lead to false multiple matches
+                        if (method.isSynthetic()) {
+                          continue;
+                        }
+                        SkylarkCallable callable = SkylarkInterfaceUtils.getSkylarkCallable(method);
+                        if (callable == null) {
+                          continue;
+                        }
+                        if (callable.selfCall()) {
+                          // Self-call java methods are not treated as methods of the skylark value.
+                          continue;
+                        }
+                        if (semantics.isFeatureEnabledBasedOnTogglingFlags(
+                            callable.enableOnlyWithFlag(), callable.disableWithFlag())) {
+                          methodMap.put(
+                              callable.name(), MethodDescriptor.of(method, callable, semantics));
+                        }
+                      }
+                      return methodMap.build();
+                    }
+                  });
+
+  private static final LoadingCache<MethodDescriptorKey, Map<String, MethodDescriptor>> fieldCache =
+      CacheBuilder.newBuilder()
+          .build(
+              new CacheLoader<MethodDescriptorKey, Map<String, MethodDescriptor>>() {
+
+                @Override
+                public Map<String, MethodDescriptor> load(MethodDescriptorKey key)
+                    throws Exception {
+                  ImmutableMap.Builder<String, MethodDescriptor> fieldMap = ImmutableMap.builder();
+                  HashSet<String> fieldNamesForCollisions = new HashSet<>();
+                  List<MethodDescriptor> fieldMethods =
+                      methodCache.get(key).values().stream()
+                          .filter(MethodDescriptor::isStructField)
+                          .collect(Collectors.toList());
+
+                  for (MethodDescriptor fieldMethod : fieldMethods) {
+                    String name = fieldMethod.getName();
+                    // TODO(b/72113542): Validate with annotation processor instead of at runtime.
+                    if (!fieldNamesForCollisions.add(name)) {
+                      throw new IllegalArgumentException(
+                          String.format(
+                              "Class %s has two structField methods named %s defined",
+                              key.getClazz().getName(), name));
+                    }
+                    fieldMap.put(name, fieldMethod);
+                  }
+                  return fieldMap.build();
+                }
+              });
+
+  // *args, **kwargs, location, ast, environment, skylark semantics
+  private static final int EXTRA_ARGS_COUNT = 6;
+
   /**
    * Returns a map of methods and corresponding SkylarkCallable annotations of the methods of the
-   * objClass class reachable from Skylark. Elements are sorted by Java method name (which is not
-   * necessarily the same as Starlark attribute name).
+   * classObj class reachable from Skylark.
    */
   public static ImmutableMap<Method, SkylarkCallable> collectSkylarkMethodsWithAnnotation(
-      Class<?> objClass) {
-    ImmutableMap.Builder<Method, SkylarkCallable> result = ImmutableMap.builder();
-    for (MethodDescriptor desc :
-        getCacheValue(objClass, StarlarkSemantics.DEFAULT_SEMANTICS).methods.values()) {
-      result.put(desc.getMethod(), desc.getAnnotation());
+      Class<?> classObj) {
+    ImmutableSortedMap.Builder<Method, SkylarkCallable> methodMap
+        = ImmutableSortedMap.orderedBy(Comparator.comparing(Object::toString));
+    for (Method method : sortMethodArrayByMethodName(classObj.getMethods())) {
+      // Synthetic methods lead to false multiple matches
+      if (!method.isSynthetic()) {
+        SkylarkCallable annotation = SkylarkInterfaceUtils.getSkylarkCallable(classObj, method);
+        if (annotation != null) {
+          methodMap.put(method, annotation);
+        }
+      }
     }
-    return result.build();
+    return methodMap.build();
+  }
+
+  /** Sort Method arrays by their name for a deterministic ordering */
+  private static Method[] sortMethodArrayByMethodName(Method[] methods) {
+    Arrays.sort(methods, Comparator.comparing(Method::getName));
+    return methods;
+  }
+
+  /**
+   * Returns either the class itself or, if the class is {@link String}, the proxy class
+   * containing all 'string' methods.
+   */
+  private static Class<?> getClassOrProxyClass(Class<?> clazz) {
+    return String.class.isAssignableFrom(clazz)
+        ? StringModule.class
+        : clazz;
   }
 
   /**
@@ -167,8 +243,14 @@ public final class CallUtils {
 
   /** Returns the Skylark callable Method of objClass with structField=true and the given name. */
   public static MethodDescriptor getStructField(
-      StarlarkSemantics semantics, Class<?> objClass, String name) {
-    return getCacheValue(objClass, semantics).fields.get(name);
+      StarlarkSemantics semantics, Class<?> objClass, String methodName) {
+    try {
+      return fieldCache
+          .get(new MethodDescriptorKey(getClassOrProxyClass(objClass), semantics))
+          .get(methodName);
+    } catch (ExecutionException e) {
+      throw new IllegalStateException("Method loading failed: " + e);
+    }
   }
 
   /**
@@ -183,7 +265,13 @@ public final class CallUtils {
 
   /** Returns the list of names of Skylark callable Methods of objClass with structField=true. */
   public static Set<String> getStructFieldNames(StarlarkSemantics semantics, Class<?> objClass) {
-    return getCacheValue(objClass, semantics).fields.keySet();
+    try {
+      return fieldCache
+          .get(new MethodDescriptorKey(getClassOrProxyClass(objClass), semantics))
+          .keySet();
+    } catch (ExecutionException e) {
+      throw new IllegalStateException("Method loading failed: " + e);
+    }
   }
 
   /**
@@ -199,7 +287,13 @@ public final class CallUtils {
   /** Returns the list of Skylark callable Methods of objClass with the given name. */
   public static MethodDescriptor getMethod(
       StarlarkSemantics semantics, Class<?> objClass, String methodName) {
-    return getCacheValue(objClass, semantics).methods.get(methodName);
+    try {
+      return methodCache
+          .get(new MethodDescriptorKey(getClassOrProxyClass(objClass), semantics))
+          .get(methodName);
+    } catch (ExecutionException e) {
+      throw new IllegalStateException("Method loading failed: " + e);
+    }
   }
 
   /**
@@ -218,26 +312,52 @@ public final class CallUtils {
    * objClass}.
    */
   public static Set<String> getMethodNames(StarlarkSemantics semantics, Class<?> objClass) {
-    return getCacheValue(objClass, semantics).methods.keySet();
+    try {
+      return methodCache
+          .get(new MethodDescriptorKey(getClassOrProxyClass(objClass), semantics))
+          .keySet();
+    } catch (ExecutionException e) {
+      throw new IllegalStateException("Method loading failed: " + e);
+    }
+  }
+
+  /**
+   * Returns true if the given class has a method annotated with {@link SkylarkCallable} with {@link
+   * SkylarkCallable#selfCall()} set to true.
+   */
+  public static boolean hasSelfCallMethod(StarlarkSemantics semantics, Class<?> objClass) {
+    try {
+      return selfCallCache.get(new MethodDescriptorKey(objClass, semantics)).isPresent();
+    } catch (ExecutionException e) {
+      throw new IllegalStateException("Method loading failed: " + e);
+    }
   }
 
   /**
    * Returns a {@link MethodDescriptor} object representing a function which calls the selfCall java
    * method of the given object (the {@link SkylarkCallable} method with {@link
-   * SkylarkCallable#selfCall()} set to true). Returns null if no such method exists.
+   * SkylarkCallable#selfCall()} set to true).
+   *
+   * @throws IllegalStateException if no such method exists for the object
    */
-  @Nullable
   public static MethodDescriptor getSelfCallMethodDescriptor(
-      StarlarkSemantics semantics, Class<?> objClass) {
-    return getCacheValue(objClass, semantics).selfCall;
+      StarlarkSemantics semantics, Object obj) {
+    try {
+      Optional<MethodDescriptor> selfCallDescriptor =
+          selfCallCache.get(new MethodDescriptorKey(obj.getClass(), semantics));
+      if (!selfCallDescriptor.isPresent()) {
+        throw new IllegalStateException("Class " + obj.getClass() + " has no selfCall method");
+      }
+      return selfCallDescriptor.get();
+    } catch (ExecutionException e) {
+      throw new IllegalStateException("Method loading failed: " + e);
+    }
   }
 
   /**
    * Returns a {@link BuiltinCallable} representing a {@link SkylarkCallable}-annotated instance
-   * method of a given object with the given Java method name.
+   * method of a given object with the given method name.
    */
-  // TODO(adonovan): replace with EvalUtils.getAttr, once the latter doesn't require
-  // a Thread and Location.
   public static BuiltinCallable getBuiltinCallable(Object obj, String methodName) {
     Class<?> objClass = obj.getClass();
     MethodDescriptor methodDescriptor = getMethod(objClass, methodName);
@@ -253,7 +373,7 @@ public final class CallUtils {
    * Invokes the given structField=true method and returns the result.
    *
    * <p>The given method must <b>not</b> require extra-interpreter parameters, such as {@link
-   * StarlarkThread}. This method throws {@link IllegalArgumentException} for violations.
+   * Environment}. This method throws {@link IllegalArgumentException} for violations.
    *
    * @param methodDescriptor the descriptor of the method to invoke
    * @param fieldName the name of the struct field
@@ -267,9 +387,10 @@ public final class CallUtils {
     Preconditions.checkArgument(
         methodDescriptor.isStructField(), "Can only be invoked on structField callables");
     Preconditions.checkArgument(
-        !methodDescriptor.isUseStarlarkThread()
+        !methodDescriptor.isUseEnvironment()
             || !methodDescriptor.isUseStarlarkSemantics()
-            || !methodDescriptor.isUseLocation(),
+            || !methodDescriptor.isUseLocation()
+            || !methodDescriptor.isUseContext(),
         "Cannot be invoked on structField callables with extra interpreter params");
     return methodDescriptor.call(obj, new Object[0], Location.BUILTIN, null);
   }
@@ -283,14 +404,14 @@ public final class CallUtils {
    * @param args a list of positional Starlark arguments
    * @param kwargs a map of keyword Starlark arguments; keys are the used keyword, and values are
    *     their corresponding values in the method call
-   * @param thread the Starlark thread for the call
+   * @param environment the current Starlark environment
    * @return the array of arguments which may be passed to {@link MethodDescriptor#call}
    * @throws EvalException if the given set of arguments are invalid for the given method. For
    *     example, if any arguments are of unexpected type, or not all mandatory parameters are
    *     specified by the user
    */
   static Object[] convertStarlarkArgumentsToJavaMethodArguments(
-      StarlarkThread thread,
+      Environment environment,
       FuncallExpression call,
       MethodDescriptor method,
       Class<?> objClass,
@@ -301,9 +422,7 @@ public final class CallUtils {
         "struct field methods should be handled by DotExpression separately");
 
     ImmutableList<ParamDescriptor> parameters = method.getParameters();
-    // *args, **kwargs, location, ast, thread, skylark semantics
-    final int extraArgsCount = 6;
-    List<Object> builder = new ArrayList<>(parameters.size() + extraArgsCount);
+    List<Object> builder = new ArrayList<>(parameters.size() + EXTRA_ARGS_COUNT);
     boolean acceptsExtraArgs = method.isAcceptsExtraArgs();
     boolean acceptsExtraKwargs = method.isAcceptsExtraKwargs();
 
@@ -405,18 +524,18 @@ public final class CallUtils {
         }
         extraKwargs = extraKwargsBuilder.build();
       } else {
-        throw unexpectedKeywordArgumentException(call, keys, method, objClass, thread);
+        throw unexpectedKeywordArgumentException(call, keys, method, objClass, environment);
       }
     }
 
-    // Then add any skylark-interpreter arguments (for example kwargs or the StarlarkThread).
+    // Then add any skylark-interpreter arguments (for example kwargs or the Environment).
     if (acceptsExtraArgs) {
       builder.add(Tuple.copyOf(extraArgs));
     }
     if (acceptsExtraKwargs) {
-      builder.add(SkylarkDict.copyOf(thread, extraKwargs));
+      builder.add(SkylarkDict.copyOf(environment, extraKwargs));
     }
-    appendExtraInterpreterArgs(builder, method, call, call.getLocation(), thread);
+    appendExtraInterpreterArgs(builder, method, call, call.getLocation(), environment);
 
     return builder.toArray();
   }
@@ -447,7 +566,7 @@ public final class CallUtils {
       Set<String> unexpectedKeywords,
       MethodDescriptor method,
       Class<?> objClass,
-      StarlarkThread thread) {
+      Environment env) {
     // Check if any of the unexpected keywords are for parameters which are disabled by the
     // current semantic flags. Throwing an error with information about the misconfigured
     // semantic flag is likely far more helpful.
@@ -455,7 +574,7 @@ public final class CallUtils {
       if (param.isDisabledInCurrentSemantics() && unexpectedKeywords.contains(param.getName())) {
         FlagIdentifier flagIdentifier = param.getFlagResponsibleForDisable();
         // If the flag is True, it must be a deprecation flag. Otherwise it's an experimental flag.
-        if (thread.getSemantics().flagValue(flagIdentifier)) {
+        if (env.getSemantics().flagValue(flagIdentifier)) {
           return new EvalException(
               call.getLocation(),
               String.format(
@@ -522,28 +641,25 @@ public final class CallUtils {
    * the caller to validate this invariant.
    */
   static List<Object> extraInterpreterArgs(
-      MethodDescriptor method,
-      @Nullable FuncallExpression ast,
-      Location loc,
-      StarlarkThread thread) {
+      MethodDescriptor method, @Nullable FuncallExpression ast, Location loc, Environment env) {
     List<Object> builder = new ArrayList<>();
-    appendExtraInterpreterArgs(builder, method, ast, loc, thread);
+    appendExtraInterpreterArgs(builder, method, ast, loc, env);
     return ImmutableList.copyOf(builder);
   }
 
   /**
    * Same as {@link #extraInterpreterArgs(MethodDescriptor, FuncallExpression, Location,
-   * StarlarkThread)} but appends args to a passed {@code builder} to avoid unnecessary allocations
-   * of intermediate instances.
+   * Environment)} but appends args to a passed {@code builder} to avoid unnecessary allocations of
+   * intermediate instances.
    *
-   * @see #extraInterpreterArgs(MethodDescriptor, FuncallExpression, Location, StarlarkThread)
+   * @see #extraInterpreterArgs(MethodDescriptor, FuncallExpression, Location, Environment)
    */
   private static void appendExtraInterpreterArgs(
       List<Object> builder,
       MethodDescriptor method,
       @Nullable FuncallExpression ast,
       Location loc,
-      StarlarkThread thread) {
+      Environment env) {
     if (method.isUseLocation()) {
       builder.add(loc);
     }
@@ -553,11 +669,14 @@ public final class CallUtils {
       }
       builder.add(ast);
     }
-    if (method.isUseStarlarkThread()) {
-      builder.add(thread);
+    if (method.isUseEnvironment()) {
+      builder.add(env);
     }
     if (method.isUseStarlarkSemantics()) {
-      builder.add(thread.getSemantics());
+      builder.add(env.getSemantics());
+    }
+    if (method.isUseContext()) {
+      builder.add(env.getStarlarkContext());
     }
   }
 
@@ -595,7 +714,7 @@ public final class CallUtils {
 
   /** Invoke object.method() and return the result. */
   static Object callMethod(
-      StarlarkThread thread,
+      Environment env,
       FuncallExpression call,
       Object object,
       ArrayList<Object> posargs,
@@ -605,7 +724,7 @@ public final class CallUtils {
       throws EvalException, InterruptedException {
     // Case 1: Object is a String. String is an unusual special case.
     if (object instanceof String) {
-      return callStringMethod(thread, call, (String) object, methodName, posargs, kwargs);
+      return callStringMethod(env, call, (String) object, methodName, posargs, kwargs);
     }
 
     // Case 2: Object is a Java object with a matching @SkylarkCallable method.
@@ -613,12 +732,12 @@ public final class CallUtils {
     // java method 'bar()', this avoids evaluating 'foo.bar' in isolation (which would require
     // creating a throwaway function-like object).
     MethodDescriptor methodDescriptor =
-        CallUtils.getMethod(thread.getSemantics(), object.getClass(), methodName);
+        CallUtils.getMethod(env.getSemantics(), object.getClass(), methodName);
     if (methodDescriptor != null && !methodDescriptor.isStructField()) {
       Object[] javaArguments =
           convertStarlarkArgumentsToJavaMethodArguments(
-              thread, call, methodDescriptor, object.getClass(), posargs, kwargs);
-      return methodDescriptor.call(object, javaArguments, call.getLocation(), thread);
+              env, call, methodDescriptor, object.getClass(), posargs, kwargs);
+      return methodDescriptor.call(object, javaArguments, call.getLocation(), env);
     }
 
     // Case 3: Object is a function registered with the BuiltinRegistry.
@@ -628,16 +747,16 @@ public final class CallUtils {
         Runtime.getBuiltinRegistry().getFunction(object.getClass(), methodName);
     if (legacyRuntimeFunction != null) {
       return callLegacyBuiltinRegistryFunction(
-          call, legacyRuntimeFunction, object, posargs, kwargs, thread);
+          call, legacyRuntimeFunction, object, posargs, kwargs, env);
     }
 
     // Case 4: All other cases. Evaluate "foo.bar" as a dot expression, then try to invoke it
     // as a callable.
-    Object functionObject = EvalUtils.getAttr(thread, dotLocation, object, methodName);
+    Object functionObject = EvalUtils.getAttr(env, dotLocation, object, methodName);
     if (functionObject == null) {
       throw missingMethodException(call, object.getClass(), methodName);
     } else {
-      return call(thread, call, functionObject, posargs, kwargs);
+      return call(env, call, functionObject, posargs, kwargs);
     }
   }
 
@@ -647,16 +766,16 @@ public final class CallUtils {
       Object object,
       ArrayList<Object> posargs,
       Map<String, Object> kwargs,
-      StarlarkThread thread)
+      Environment env)
       throws EvalException, InterruptedException {
     if (!isNamespace(object.getClass())) {
       posargs.add(0, object);
     }
-    return legacyRuntimeFunction.call(posargs, kwargs, call, thread);
+    return legacyRuntimeFunction.call(posargs, kwargs, call, env);
   }
 
   private static Object callStringMethod(
-      StarlarkThread thread,
+      Environment env,
       FuncallExpression call,
       String objValue,
       String methodName,
@@ -667,19 +786,19 @@ public final class CallUtils {
     // to StringModule, and thus need to include the actual string as a 'self' parameter.
     posargs.add(0, objValue);
 
-    MethodDescriptor method = getMethod(thread.getSemantics(), StringModule.class, methodName);
+    MethodDescriptor method = getMethod(env.getSemantics(), StringModule.class, methodName);
     if (method == null) {
       throw missingMethodException(call, StringModule.class, methodName);
     }
 
     Object[] javaArguments =
         convertStarlarkArgumentsToJavaMethodArguments(
-            thread, call, method, StringModule.class, posargs, kwargs);
-    return method.call(StringModule.INSTANCE, javaArguments, call.getLocation(), thread);
+            env, call, method, StringModule.class, posargs, kwargs);
+    return method.call(StringModule.INSTANCE, javaArguments, call.getLocation(), env);
   }
 
   static Object call(
-      StarlarkThread thread,
+      Environment env,
       FuncallExpression call,
       Object fn,
       ArrayList<Object> posargs,
@@ -688,19 +807,17 @@ public final class CallUtils {
 
     if (fn instanceof StarlarkCallable) {
       StarlarkCallable callable = (StarlarkCallable) fn;
-      return callable.call(posargs, ImmutableMap.copyOf(kwargs), call, thread);
-    }
-
-    MethodDescriptor selfCall = getSelfCallMethodDescriptor(thread.getSemantics(), fn.getClass());
-    if (selfCall != null) {
+      return callable.call(posargs, ImmutableMap.copyOf(kwargs), call, env);
+    } else if (hasSelfCallMethod(env.getSemantics(), fn.getClass())) {
+      MethodDescriptor descriptor = getSelfCallMethodDescriptor(env.getSemantics(), fn);
       Object[] javaArguments =
           convertStarlarkArgumentsToJavaMethodArguments(
-              thread, call, selfCall, fn.getClass(), posargs, kwargs);
-      return selfCall.call(fn, javaArguments, call.getLocation(), thread);
+              env, call, descriptor, fn.getClass(), posargs, kwargs);
+      return descriptor.call(fn, javaArguments, call.getLocation(), env);
+    } else {
+      throw new EvalException(
+          call.getLocation(), "'" + EvalUtils.getDataTypeName(fn) + "' object is not callable");
     }
-
-    throw new EvalException(
-        call.getLocation(), "'" + EvalUtils.getDataTypeName(fn) + "' object is not callable");
   }
 
 }
