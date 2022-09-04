@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.query2.engine.AbstractQueryTest.QueryHelper.ResultAndTargets;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ThreadSafeMutableSet;
+import com.google.devtools.build.lib.rules.java.JavaImplicitAttributes;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.Path;
@@ -103,12 +104,25 @@ public abstract class AbstractQueryTest<T> {
     return true;
   }
 
-  /** Partial query to filter out implicit dependencies. */
-  protected String getDependencyCorrection() {
-    return "";
+  protected static String getJdkLabel() {
+    return JavaImplicitAttributes.JDK_LABEL;
   }
 
-  /** Partial query to filter out implicit dependencies of genrules. */
+  protected static String getHostJdkLabel() {
+    return JavaImplicitAttributes.HOST_JDK_LABEL;
+  }
+
+  /** Partial query to filter out CC and Java implicit dependencies. */
+  protected String getDependencyCorrection() {
+    return TestConstants.CC_DEPENDENCY_CORRECTION
+        + " - deps("
+        + getJdkLabel()
+        + " + "
+        + getHostJdkLabel()
+        + ")";
+  }
+
+  /** Partial query to filter out implicit dependencies of GenRule rules. */
   protected String getDependencyCorrectionWithGen() {
     return getDependencyCorrection() + " - deps(" + GENRULE_SETUP + ")";
   }
