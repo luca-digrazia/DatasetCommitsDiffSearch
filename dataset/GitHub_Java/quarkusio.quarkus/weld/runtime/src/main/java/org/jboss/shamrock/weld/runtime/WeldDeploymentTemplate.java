@@ -5,6 +5,7 @@ import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.jar.JarFile;
@@ -13,12 +14,11 @@ import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.se.SeContainer;
 import javax.enterprise.inject.se.SeContainerInitializer;
 import javax.enterprise.inject.spi.Bean;
+import javax.enterprise.inject.spi.BeanManager;
 
 import org.jboss.shamrock.runtime.InjectionFactory;
 import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.RuntimeInjector;
-import org.jboss.weld.config.ConfigurationKey;
-import org.jboss.weld.config.ConfigurationKey.UnusedBeans;
 import org.jboss.weld.environment.se.Weld;
 
 public class WeldDeploymentTemplate {
@@ -49,13 +49,7 @@ public class WeldDeploymentTemplate {
         }
         urlCache.clear();
 
-        Weld weld = new Weld();
-        weld.disableDiscovery();
-        weld.skipShutdownHook();
-        // Remove unused beans after bootstrap
-        weld.property(ConfigurationKey.UNUSED_BEANS_EXCLUDE_TYPE.get(), UnusedBeans.ALL);
-        weld.property(ConfigurationKey.UNUSED_BEANS_EXCLUDE_ANNOTATION.get(), "javax\\.ws\\.rs.*|javax\\.servlet\\.annotation.*");
-        return weld;
+        return new Weld();
     }
 
     public void addClass(SeContainerInitializer initializer, Class<?> clazz) {
@@ -63,22 +57,26 @@ public class WeldDeploymentTemplate {
     }
 
     public SeContainer doBoot(SeContainerInitializer initializer) throws Exception {
-        SeContainer container = initializer.initialize();
-        // Force client proxy init to run
-        Set<Bean<?>> instance = container.getBeanManager().getBeans(Object.class);
+        SeContainer initialize = initializer.initialize();
+        //get all the beans, to force lazy init to run
+        Set<Bean<?>> instance = initialize.getBeanManager().getBeans(Object.class);
         for (Bean<?> bean : instance) {
-            if (container.getBeanManager().isNormalScope(bean.getScope())) {
-                container.getBeanManager().getReference(bean, Object.class, container.getBeanManager().createCreationalContext(bean));
+            if (initialize.getBeanManager().isNormalScope(bean.getScope())) {
+                initialize.getBeanManager().getReference(bean, Object.class, initialize.getBeanManager().createCreationalContext(bean));
             }
         }
-        return container;
+
+
+
+        return initialize;
     }
 
     public void setupInjection(SeContainer container) {
         RuntimeInjector.setFactory(new InjectionFactory() {
             @Override
             public <T> InjectionInstance<T> create(Class<T> type) {
-                Instance<T> instance = container.select(type);
+                BeanManager bm = container.getBeanManager();
+                Instance<T> instance = bm.createInstance().select(type);
                 if (instance.isResolvable()) {
                     return new InjectionInstance<T>() {
                         @Override
