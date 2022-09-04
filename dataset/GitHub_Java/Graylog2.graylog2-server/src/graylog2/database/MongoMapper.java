@@ -147,13 +147,10 @@ public class MongoMapper {
         if(db.getCollectionNames().contains("hosts")) {
             coll = db.getCollection("hosts");
         } else {
-            coll = db.createCollection("hosts", new BasicDBObject());
+            coll = db.createCollection("hosts", BasicDBObjectBuilder.start().add("capped", true).add("size", 5242880).get());
         }
 
         coll.ensureIndex(new BasicDBObject("name", 1));
-
-        // Truncate host collection.
-        coll.remove(new BasicDBObject());
         
         // Go trough every host and insert.
         for (Iterator<String> i = hosts.iterator(); i.hasNext( ); ) {
@@ -169,6 +166,7 @@ public class MongoMapper {
                 BasicDBObject doc = new BasicDBObject();
                 doc.put("host", host);
                 doc.put("message_count", messageCount);
+                doc.put("created_at", (int) (System.currentTimeMillis()/1000));
 
                 // Store document.
                 coll.insert(doc);
