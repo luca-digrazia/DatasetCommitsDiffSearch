@@ -56,8 +56,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -84,8 +82,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -156,8 +152,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -287,8 +281,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -339,8 +331,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "cc_toolchain(",
         "    name = 'a',",
         "    module_map = 'map',",
-        "    ar_files = 'ar-a',",
-        "    as_files = 'as-a',",
         "    cpu = 'cherry',",
         "    compiler_files = 'compile-a',",
         "    dwp_files = 'dwp-a',",
@@ -375,8 +365,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -417,8 +405,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -483,8 +469,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -620,8 +604,6 @@ public class CcToolchainTest extends BuildViewTestCase {
           "    name = 'b',",
           "    cpu = 'k8',",
           "    all_files = ':banana',",
-          "    ar_files = ':empty',",
-          "    as_files = ':empty',",
           "    compiler_files = ':empty',",
           "    dwp_files = ':empty',",
           "    linker_files = ':empty',",
@@ -669,8 +651,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'c',",
         "    module_map = 'map',",
         "    cpu = 'cherry',",
-        "    ar_files = 'ar-cherry',",
-        "    as_files = 'as-cherry',",
         "    compiler_files = 'compile-cherry',",
         "    dwp_files = 'dwp-cherry',",
         "    coverage_files = 'gcov-cherry',",
@@ -688,8 +668,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "cc_toolchain(",
         "    name = 'c',",
         "    cpu = 'cherry',",
-        "    ar_files = 'ar-cherry',",
-        "    as_files = 'as-cherry',",
         "    compiler_files = 'compile-cherry',",
         "    dwp_files = 'dwp-cherry',",
         "    linker_files = 'link-cherry',",
@@ -708,8 +686,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'c',",
         "    module_map = ':multiple-maps',",
         "    cpu = 'cherry',",
-        "    ar_files = 'ar-cherry',",
-        "    as_files = 'as-cherry',",
         "    compiler_files = 'compile-cherry',",
         "    dwp_files = 'dwp-cherry',",
         "    coverage_files = 'gcov-cherry',",
@@ -742,8 +718,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -774,8 +748,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -804,8 +776,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':banana',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -832,8 +802,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':empty',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -879,8 +847,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    name = 'b',",
         "    cpu = 'banana',",
         "    all_files = ':empty',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
         "    compiler_files = ':empty',",
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
@@ -911,24 +877,5 @@ public class CcToolchainTest extends BuildViewTestCase {
     CcToolchainProvider toolchainProvider =
         (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
     assertThat(toolchainProvider.getAbi()).isEqualTo("banana");
-  }
-
-  @Test
-  public void testSupportsDynamicLinkerCheckFeatures() throws Exception {
-    writeDummyCcToolchain();
-
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.DYNAMIC_LINKING_MODE_FEATURE);
-
-    // To make sure the toolchain doesn't define linking_mode_flags { mode: DYNAMIC } as that would
-    // also result in supportsDynamicLinker returning true
-    useConfiguration("--compiler=compiler_no_dyn_linker", "--cpu=k8");
-
-    ConfiguredTarget target = getConfiguredTarget("//a:b");
-    CcToolchainProvider toolchainProvider =
-        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
-
-    assertThat(toolchainProvider.supportsDynamicLinker()).isTrue();
   }
 }
