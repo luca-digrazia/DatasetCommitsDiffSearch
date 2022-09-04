@@ -15,152 +15,209 @@
 package com.google.devtools.build.lib.bazel.repository.skylark;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
+import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.AttributeValueSource;
+import com.google.devtools.build.lib.packages.BazelStarlarkContext;
+import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
-import com.google.devtools.build.lib.rules.SkylarkAttr.Descriptor;
-import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature.Param;
+import com.google.devtools.build.lib.packages.SkylarkExportable;
+import com.google.devtools.build.lib.packages.WorkspaceFactoryHelper;
+import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryModuleApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.BuiltinFunction;
+import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
-
+import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.Tuple;
 import java.util.Map;
 
 /**
- * The Skylark module containing the definition of {@code repository_rule} function to define a
- * skylark remote repository.
+ * The Starlark module containing the definition of {@code repository_rule} function to define a
+ * Starlark remote repository.
  */
-public class SkylarkRepositoryModule {
+public class SkylarkRepositoryModule implements RepositoryModuleApi {
 
-  @SkylarkSignature(
-    name = "repository_rule",
-    doc =
-        "Creates a new repository rule. Store it in a global value, so that it can be loaded and "
-            + "called from the WORKSPACE file.",
-    returnType = BaseFunction.class,
-    mandatoryPositionals = {
-      @Param(
-        name = "implementation",
-        type = BaseFunction.class,
-        doc =
-            "the function implementing this rule, has to have exactly one parameter: "
-                + "<code><a href=\"repository_ctx.html\">repository_ctx</a></code>. The function "
-                + "is called during loading phase for each instance of the rule."
-      )
-    },
-    optionalNamedOnly = {
-      @Param(
-        name = "attrs",
-        type = SkylarkDict.class,
-        noneable = true,
-        defaultValue = "None",
-        doc =
-            "dictionary to declare all the attributes of the rule. It maps from an attribute "
-                + "name to an attribute object (see <a href=\"attr.html\">attr</a> "
-                + "module). Attributes starting with <code>_</code> are private, and can be "
-                + "used to add an implicit dependency on a label to a file (a repository "
-                + "rule cannot depend on a generated artifact). The attribute "
-                + "<code>name</code> is implicitly added and must not be specified."
-      ),
-      @Param(
-        name = "local",
-        type = Boolean.class,
-        defaultValue = "False",
-        doc =
-            "Indicate that this rule fetches everything from the local system and should be "
-                + "reevaluated at every fetch."
-      )
-    },
-    useAst = true,
-    useEnvironment = true
-  )
-  private static final BuiltinFunction repositoryRule =
-      new BuiltinFunction("repository_rule") {
-        @SuppressWarnings({"rawtypes", "unused"})
-        // an Attribute.Builder instead of a Attribute.Builder<?> but it's OK.
-        public BaseFunction invoke(
-            BaseFunction implementation,
-            Object attrs,
-            Boolean local,
-            FuncallExpression ast,
-            com.google.devtools.build.lib.syntax.Environment funcallEnv)
-            throws EvalException {
-          funcallEnv.checkLoadingPhase("repository_rule", ast.getLocation());
-          // We'll set the name later, pass the empty string for now.
-          Builder builder = new Builder("", RuleClassType.WORKSPACE, true);
+  @Override
+  public StarlarkCallable repositoryRule(
+      StarlarkCallable implementation,
+      Object attrs,
+      Boolean local,
+      Sequence<?> environ, // <String> expected
+      Boolean configure,
+      Boolean remotable,
+      String doc,
+      StarlarkThread thread)
+      throws EvalException {
+    BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("repository_rule");
+    // We'll set the name later, pass the empty string for now.
+    RuleClass.Builder builder = new RuleClass.Builder("", RuleClassType.WORKSPACE, true);
 
-          if (attrs != Runtime.NONE) {
-            for (Map.Entry<String, Descriptor> attr :
-                castMap(attrs, String.class, Descriptor.class, "attrs").entrySet()) {
-              Descriptor attrDescriptor = attr.getValue();
-              String attrName =
-                  SkylarkRuleClassFunctions.attributeToNative(
-                      attr.getKey(),
-                      ast.getLocation(),
-                      attrDescriptor.getAttributeBuilder().hasLateBoundValue());
-              Attribute.Builder<?> attrBuilder = attrDescriptor.getAttributeBuilder();
-              builder.addOrOverrideAttribute(attrBuilder.build(attrName));
-            }
-          }
-          builder.addOrOverrideAttribute(attr("$local", BOOLEAN).defaultValue(local).build());
-          builder.setConfiguredTargetFunction(implementation);
-          builder.setRuleDefinitionEnvironment(funcallEnv);
-          builder.setWorkspaceOnly();
-          return new RepositoryRuleFunction(builder);
+    ImmutableList<StarlarkThread.CallStackEntry> callstack = thread.getCallStack();
+    builder.setCallStack(
+        callstack.subList(0, callstack.size() - 1)); // pop 'repository_rule' itself
+
+    builder.addAttribute(attr("$local", BOOLEAN).defaultValue(local).build());
+    builder.addAttribute(attr("$configure", BOOLEAN).defaultValue(configure).build());
+    if (thread.getSemantics().experimentalRepoRemoteExec()) {
+      builder.addAttribute(attr("$remotable", BOOLEAN).defaultValue(remotable).build());
+      BaseRuleClasses.execPropertiesAttribute(builder);
+    }
+    builder.addAttribute(attr("$environ", STRING_LIST).defaultValue(environ).build());
+    BaseRuleClasses.nameAttribute(builder);
+    BaseRuleClasses.commonCoreAndSkylarkAttributes(builder);
+    builder.add(attr("expect_failure", STRING));
+    if (attrs != Starlark.NONE) {
+      for (Map.Entry<String, Descriptor> attr :
+          castMap(attrs, String.class, Descriptor.class, "attrs").entrySet()) {
+        Descriptor attrDescriptor = attr.getValue();
+        AttributeValueSource source = attrDescriptor.getValueSource();
+        String attrName = source.convertToNativeName(attr.getKey());
+        if (builder.contains(attrName)) {
+          throw new EvalException(
+              null,
+              String.format(
+                  "There is already a built-in attribute '%s' which cannot be overridden",
+                  attrName));
         }
-      };
+        builder.addAttribute(attrDescriptor.build(attrName));
+      }
+    }
+    builder.setConfiguredTargetFunction(implementation);
+    builder.setRuleDefinitionEnvironmentLabelAndHashCode(
+        (Label) Module.ofInnermostEnclosingStarlarkFunction(thread).getLabel(),
+        thread.getTransitiveContentHashCode());
+    builder.setWorkspaceOnly();
+    return new RepositoryRuleFunction(builder, implementation);
+  }
 
-  private static final class RepositoryRuleFunction extends BaseFunction {
-    private final Builder builder;
+  // RepositoryRuleFunction is the result of repository_rule(...).
+  // It is a callable value; calling it yields a Rule instance.
+  private static final class RepositoryRuleFunction extends BaseFunction
+      implements SkylarkExportable {
+    private final RuleClass.Builder builder;
+    private final StarlarkCallable implementation;
+    private Label extensionLabel;
+    private String exportedName;
 
-    public RepositoryRuleFunction(Builder builder) {
-      super("repository_rule", FunctionSignature.KWARGS);
+    private RepositoryRuleFunction(RuleClass.Builder builder, StarlarkCallable implementation) {
       this.builder = builder;
+      this.implementation = implementation;
     }
 
     @Override
-    public Object call(
-        Object[] args, FuncallExpression ast, com.google.devtools.build.lib.syntax.Environment env)
+    public String getName() {
+      return "repository_rule";
+    }
+
+    @Override
+    public FunctionSignature getSignature() {
+      return FunctionSignature.KWARGS;
+    }
+
+    @Override
+    public void export(Label extensionLabel, String exportedName) {
+      this.extensionLabel = extensionLabel;
+      this.exportedName = exportedName;
+    }
+
+    @Override
+    public boolean isExported() {
+      return extensionLabel != null;
+    }
+
+    @Override
+    public void repr(Printer printer) {
+      if (exportedName == null) {
+        printer.append("<anonymous starlark repository rule>");
+      } else {
+        printer.append("<starlark repository rule " + extensionLabel + "%" + exportedName + ">");
+      }
+    }
+
+    @Override
+    public Object call(StarlarkThread thread, Tuple<Object> args, Dict<String, Object> kwargs)
         throws EvalException, InterruptedException {
-      String ruleClassName = ast.getFunction().getName();
-      try {
-        if (ruleClassName.startsWith("_")) {
-          throw new EvalException(
-              ast.getLocation(),
-              "Invalid rule class name '" + ruleClassName + "', cannot be private");
+      if (!args.isEmpty()) {
+        throw new EvalException(null, "unexpected positional arguments");
+      }
+      String ruleClassName;
+      // If the function ever got exported (the common case), we take the name
+      // it was exported to. Only in the not intended case of calling an unexported
+      // repository function through an exported macro, we fall back, for lack of
+      // alternatives, to the name in the local context.
+      // TODO(b/111199163): we probably should disallow the use of non-exported
+      // repository rules anyway.
+      if (isExported()) {
+        ruleClassName = exportedName;
+      } else {
+        // repository_rules should be subject to the same "exported" requirement
+        // as package rules, but sadly we forgot to add the necessary check and
+        // now many projects create and instantiate repository_rules without an
+        // intervening export; see b/111199163. An incompatible flag is required.
+        if (false) {
+          throw new EvalException(null, "attempt to instantiate a non-exported repository rule");
         }
-        RuleClass ruleClass = builder.build(ruleClassName);
-        PackageContext context = PackageFactory.getContext(env, ast);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> attributeValues = (Map<String, Object>) args[0];
-        return context
-            .getBuilder()
-            .externalPackageData()
-            .createAndAddRepositoryRule(
-                context.getBuilder(), ruleClass, null, attributeValues, ast);
+
+        // The historical workaround was a fragile hack to introspect on the call
+        // expression syntax, f() or x.f(), to find the name f, but we no longer
+        // have access to the call expression, so now we just create an ugly
+        // name from the function. See github.com/bazelbuild/bazel/issues/10441
+        ruleClassName = "unexported_" + implementation.getName();
+      }
+      try {
+        RuleClass ruleClass = builder.build(ruleClassName, ruleClassName);
+        PackageContext context = PackageFactory.getContext(thread);
+        Package.Builder packageBuilder = context.getBuilder();
+
+        // TODO(adonovan): is this cast safe? Check.
+        String name = (String) kwargs.get("name");
+        WorkspaceFactoryHelper.addMainRepoEntry(packageBuilder, name, thread.getSemantics());
+        WorkspaceFactoryHelper.addRepoMappings(packageBuilder, kwargs, name);
+        Rule rule =
+            WorkspaceFactoryHelper.createAndAddRepositoryRule(
+                context.getBuilder(),
+                ruleClass,
+                /*bindRuleClass=*/ null,
+                WorkspaceFactoryHelper.getFinalKwargs(kwargs),
+                thread.getSemantics(),
+                thread.getCallStack());
+        return rule;
       } catch (InvalidRuleException | NameConflictException | LabelSyntaxException e) {
-        throw new EvalException(ast.getLocation(), e.getMessage());
+        throw Starlark.errorf("%s", e.getMessage());
       }
     }
   }
 
-  static {
-    SkylarkSignatureProcessor.configureSkylarkFunctions(SkylarkRepositoryModule.class);
+  @Override
+  public void failWithIncompatibleUseCcConfigureFromRulesCc(StarlarkThread thread)
+      throws EvalException {
+    if (thread.getSemantics().incompatibleUseCcConfigureFromRulesCc()) {
+      throw Starlark.errorf(
+          "Incompatible flag "
+              + "--incompatible_use_cc_configure_from_rules_cc has been flipped. Please use "
+              + "cc_configure and related logic from https://github.com/bazelbuild/rules_cc. "
+              + "See https://github.com/bazelbuild/bazel/issues/10134 for details and migration "
+              + "instructions.");
+    }
   }
 }

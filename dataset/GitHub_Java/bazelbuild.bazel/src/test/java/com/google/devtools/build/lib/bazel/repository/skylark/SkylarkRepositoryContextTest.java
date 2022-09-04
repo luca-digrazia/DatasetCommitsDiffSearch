@@ -108,7 +108,8 @@ public final class SkylarkRepositoryContextTest {
     try (Mutability mu = Mutability.create("impl")) {
       StarlarkThread thread = StarlarkThread.builder(mu).useDefaultSemantics().build();
       Module module = thread.getGlobals();
-      return EvalUtils.exec(ParserInput.fromLines(lines), FileOptions.DEFAULT, module, thread);
+      return EvalUtils.execAndEvalOptionalFinalExpression(
+          ParserInput.fromLines(lines), FileOptions.DEFAULT, module, thread);
     } catch (Exception ex) { // SyntaxError | EvalException | InterruptedException
       throw new AssertionError("exec failed", ex);
     }
@@ -173,7 +174,7 @@ public final class SkylarkRepositoryContextTest {
     setUpContextForRule(
         ImmutableMap.of("name", name),
         ImmutableSet.of(),
-        StarlarkSemantics.DEFAULT,
+        StarlarkSemantics.DEFAULT_SEMANTICS,
         /* repoRemoteExecutor= */ null);
   }
 
@@ -182,7 +183,7 @@ public final class SkylarkRepositoryContextTest {
     setUpContextForRule(
         ImmutableMap.of("name", "test", "foo", "bar"),
         ImmutableSet.of(),
-        StarlarkSemantics.DEFAULT,
+        StarlarkSemantics.DEFAULT_SEMANTICS,
         /* repoRemoteExecutor= */ null,
         Attribute.attr("foo", Type.STRING).build());
 
@@ -280,7 +281,7 @@ public final class SkylarkRepositoryContextTest {
     setUpContextForRule(
         ImmutableMap.of("name", "test"),
         ImmutableSet.of(PathFragment.create("under_workspace")),
-        StarlarkSemantics.DEFAULT,
+        StarlarkSemantics.DEFAULT_SEMANTICS,
         /* repoRemoteExecutor= */ null);
     assertThat(context.delete(underWorkspace.toString(), thread)).isTrue();
   }
