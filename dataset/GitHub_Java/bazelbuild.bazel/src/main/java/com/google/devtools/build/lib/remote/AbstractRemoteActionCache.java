@@ -13,16 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote;
 
-import build.bazel.remote.execution.v2.Action;
-import build.bazel.remote.execution.v2.ActionResult;
-import build.bazel.remote.execution.v2.Command;
-import build.bazel.remote.execution.v2.Digest;
-import build.bazel.remote.execution.v2.Directory;
-import build.bazel.remote.execution.v2.DirectoryNode;
-import build.bazel.remote.execution.v2.FileNode;
-import build.bazel.remote.execution.v2.OutputDirectory;
-import build.bazel.remote.execution.v2.OutputFile;
-import build.bazel.remote.execution.v2.Tree;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.FutureCallback;
@@ -34,7 +24,6 @@ import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
-import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.Utils;
@@ -44,6 +33,16 @@ import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Symlinks;
+import com.google.devtools.remoteexecution.v1test.ActionResult;
+import com.google.devtools.remoteexecution.v1test.Command;
+import com.google.devtools.remoteexecution.v1test.Digest;
+import com.google.devtools.remoteexecution.v1test.Directory;
+import com.google.devtools.remoteexecution.v1test.DirectoryNode;
+import com.google.devtools.remoteexecution.v1test.FileNode;
+import com.google.devtools.remoteexecution.v1test.OutputDirectory;
+import com.google.devtools.remoteexecution.v1test.OutputFile;
+import com.google.devtools.remoteexecution.v1test.Tree;
+import com.google.protobuf.ByteString;
 import io.grpc.Context;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -67,10 +66,6 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
   static {
     ((SettableFuture<Void>) COMPLETED_SUCCESS).set(null);
     ((SettableFuture<byte[]>) EMPTY_BYTES).set(new byte[0]);
-  }
-
-  public static boolean causedByCacheMiss(RetryException t) {
-    return t.getCause() instanceof CacheNotFoundException;
   }
 
   protected final RemoteOptions options;
@@ -99,7 +94,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
    * documented that it cannot be used for remote execution.
    */
   public abstract void ensureInputsPresent(
-      TreeNodeRepository repository, Path execRoot, TreeNode root, Action action, Command command)
+      TreeNodeRepository repository, Path execRoot, TreeNode root, Command command)
       throws IOException, InterruptedException;
 
   /**
@@ -121,8 +116,6 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
    */
   abstract void upload(
       DigestUtil.ActionKey actionKey,
-      Action action,
-      Command command,
       Path execRoot,
       Collection<Path> files,
       FileOutErr outErr,
@@ -185,7 +178,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
       Path path = execRoot.getRelative(file.getPath());
       ListenableFuture<Void> download =
           retrier.executeAsync(
-              () -> ctx.call(() -> downloadFile(path, file.getDigest())));
+              () -> ctx.call(() -> downloadFile(path, file.getDigest(), file.getContent())));
       fileDownloads.add(new FuturePathBooleanTuple(download, path, file.getIsExecutable()));
     }
 
@@ -331,7 +324,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
       downloads.add(
           new FuturePathBooleanTuple(
               retrier.executeAsync(
-                  () -> ctx.call(() -> downloadFile(childPath, child.getDigest()))),
+                  () -> ctx.call(() -> downloadFile(childPath, child.getDigest(), null))),
               childPath,
               child.getIsExecutable()));
     }
@@ -356,12 +349,23 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
     return downloads;
   }
 
-  /** Download a file (that is not a directory). The content is fetched from the digest. */
-  public ListenableFuture<Void> downloadFile(Path path, Digest digest) throws IOException {
+  /**
+   * Download a file (that is not a directory). If the {@code content} is not given, the content is
+   * fetched from the digest.
+   */
+  public ListenableFuture<Void> downloadFile(Path path, Digest digest, @Nullable ByteString content)
+      throws IOException {
     Preconditions.checkNotNull(path.getParentDirectory()).createDirectoryAndParents();
     if (digest.getSizeBytes() == 0) {
       // Handle empty file locally.
       FileSystemUtils.writeContent(path, new byte[0]);
+      return COMPLETED_SUCCESS;
+    }
+
+    if (content != null && !content.isEmpty()) {
+      try (OutputStream stream = path.getOutputStream()) {
+        content.writeTo(stream);
+      }
       return COMPLETED_SUCCESS;
     }
 
@@ -480,19 +484,6 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
         } else {
           illegalOutput(file);
         }
-      }
-    }
-
-    /**
-     * Adds an action and command protos to upload. They need to be uploaded as part of the action
-     * result.
-     */
-    public void addAction(Action action, Command command) throws IOException {
-      for (byte[] blob : new byte[][]{action.toByteArray(), command.toByteArray()}) {
-        Digest digest = digestUtil.compute(blob);
-        Chunker chunker =
-            Chunker.builder(digestUtil).setInput(digest, blob).setChunkSize(blob.length).build();
-        digestToChunkers.put(digest, chunker);
       }
     }
 
