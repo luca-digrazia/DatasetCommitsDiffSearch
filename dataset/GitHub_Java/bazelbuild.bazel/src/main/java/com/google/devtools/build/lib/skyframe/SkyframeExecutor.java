@@ -82,7 +82,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiffForReconstruction;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -1931,7 +1930,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
     // Prepare the Skyframe inputs.
     // TODO(gregce): support trimmed configs.
-    ImmutableSortedSet<Class<? extends Fragment>> allFragments =
+    ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> allFragments =
         ruleClassProvider.getConfigurationFragments().stream()
             .map(factory -> factory.creates())
             .collect(
@@ -1989,14 +1988,15 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     ConfigurationsResult.Builder builder = ConfigurationsResult.newBuilder();
     Set<Dependency> depsToEvaluate = new HashSet<>();
 
-    ImmutableSortedSet<Class<? extends Fragment>> allFragments = null;
+    ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> allFragments = null;
     if (useUntrimmedConfigs(fromOptions)) {
       allFragments = ruleClassProvider.getAllFragments();
     }
 
     // Get the fragments needed for dynamic configuration nodes.
     final List<SkyKey> transitiveFragmentSkyKeys = new ArrayList<>();
-    Map<Label, ImmutableSortedSet<Class<? extends Fragment>>> fragmentsMap = new HashMap<>();
+    Map<Label, ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>>> fragmentsMap =
+        new HashMap<>();
     Set<Label> labelsWithErrors = new HashSet<>();
     for (Dependency key : keys) {
       if (key.hasExplicitConfiguration()) {
@@ -2038,7 +2038,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       if (labelsWithErrors.contains(key.getLabel()) || key.hasExplicitConfiguration()) {
         continue;
       }
-      ImmutableSortedSet<Class<? extends Fragment>> depFragments = fragmentsMap.get(key.getLabel());
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments =
+          fragmentsMap.get(key.getLabel());
       if (depFragments != null) {
         ConfigurationTransition transition = key.getTransition();
         if (transition == NullTransition.INSTANCE) {
@@ -2068,7 +2069,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       if (labelsWithErrors.contains(key.getLabel()) || key.hasExplicitConfiguration()) {
         continue;
       }
-      ImmutableSortedSet<Class<? extends Fragment>> depFragments = fragmentsMap.get(key.getLabel());
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments =
+          fragmentsMap.get(key.getLabel());
       if (depFragments != null) {
         if (key.getTransition() == NullTransition.INSTANCE) {
           builder.put(key, null);
@@ -2174,7 +2176,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   private BuildConfigurationValue.Key toConfigurationKey(
       PlatformMappingValue platformMappingValue,
-      ImmutableSortedSet<Class<? extends Fragment>> depFragments,
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments,
       BuildOptions toOption)
       throws InvalidConfigurationException {
     try {

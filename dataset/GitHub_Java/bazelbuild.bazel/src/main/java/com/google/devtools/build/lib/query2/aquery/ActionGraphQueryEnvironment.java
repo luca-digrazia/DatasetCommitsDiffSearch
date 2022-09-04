@@ -263,8 +263,7 @@ public class ActionGraphQueryEnvironment
   @Nullable
   @Override
   protected ConfiguredTargetValue getNullConfiguredTarget(Label label) throws InterruptedException {
-    return this.getConfiguredTargetValue(
-        ConfiguredTargetKey.of(label, /* configurationKey= */ null, false));
+    return this.getConfiguredTargetValue(ConfiguredTargetKey.of(label, /* configuration= */ null));
   }
 
   @Nullable
