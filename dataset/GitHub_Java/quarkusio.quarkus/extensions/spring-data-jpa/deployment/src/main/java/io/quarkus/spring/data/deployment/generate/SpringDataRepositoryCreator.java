@@ -163,7 +163,7 @@ public class SpringDataRepositoryCreator {
         for (String customImplClassName : customImplClassNames) {
             FieldCreator customClassField = repositoryImpl
                     .getFieldCreator("customImplClass" + (i + 1), customImplClassName)
-                    .setModifiers(Modifier.PROTECTED); // done to prevent warning during the build
+                    .setModifiers(Modifier.PRIVATE);
             customClassField.addAnnotation(Inject.class);
 
             customImplNameToFieldDescriptor.put(customImplClassName,

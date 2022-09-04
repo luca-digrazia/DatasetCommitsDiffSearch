@@ -9,7 +9,6 @@ import java.io.StringReader;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -18,7 +17,6 @@ import java.util.Map;
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
-import javax.json.JsonException;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonReader;
@@ -77,9 +75,8 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
     @Parameter(property = "bomVersion", defaultValue = "${project.version}")
     private String bomVersion;
 
-    /** file used for overrides - overridesFiles takes precedence over this file. **/
     @Parameter(property = "overridesFile", defaultValue = "${project.basedir}/src/main/resources/extensions-overrides.json")
-    private String overridesFile;
+    private File overridesFile;
 
     @Parameter(property = "outputFile", defaultValue = "${project.build.directory}/extensions.json")
     private File outputFile;
@@ -124,11 +121,26 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
             return;
         }
 
-        List<OverrideInfo> allOverrides = new ArrayList();
-        for (String path : overridesFile.split(",")) {
-            OverrideInfo overrideInfo = getOverrideInfo(new File(path.trim()));
-            if (overrideInfo != null) {
-                allOverrides.add(overrideInfo);
+        // Read the overrides file for the extensions (if it exists)
+        Map<String, JsonObject> extOverrides = new HashMap<>();
+        JsonObject theRest = null;
+        if (overridesFile.isFile()) {
+            info("Found overrides file %s", overridesFile);
+            try (JsonReader jsonReader = Json.createReader(new FileInputStream(overridesFile))) {
+                JsonObject overridesObject = jsonReader.readObject();
+                JsonArray extOverrideObjects = overridesObject.getJsonArray("extensions");
+                if (extOverrideObjects != null) {
+                    // Put the extension overrides into a map keyed to their GAV
+                    for (JsonValue val : extOverrideObjects) {
+                        JsonObject extOverrideObject = val.asJsonObject();
+                        String key = extensionId(extOverrideObject);
+                        extOverrides.put(key, extOverrideObject);
+                    }
+                }
+
+                theRest = overridesObject;
+            } catch (IOException e) {
+                throw new MojoExecutionException("Failed to read " + overridesFile, e);
             }
         }
 
@@ -154,11 +166,9 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
                 JsonObject extObject = processDependency(resolved.getArtifact());
                 if (extObject != null) {
                     String key = extensionId(extObject);
-                    for (OverrideInfo info : allOverrides) {
-                        JsonObject extOverride = info.getExtOverrides().get(key);
-                        if (extOverride != null) {
-                            extObject = mergeObject(extObject, extOverride);
-                        }
+                    JsonObject extOverride = extOverrides.get(key);
+                    if (extOverride != null) {
+                        extObject = mergeObject(extObject, extOverride);
                     }
                     extListJson.add(extObject);
                 }
@@ -187,21 +197,18 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         // And add the list of extensions
         platformJson.add("extensions", extListJson.build());
 
-        for (OverrideInfo info : allOverrides) {
+        if (theRest != null) {
+            theRest.forEach((key, item) -> {
+                // Ignore the two keys we are explicitly managing
+                // but then add anything else found.
+                // TODO: make a real merge if needed eventually.
+                if (!"bom".equals(key) && !"extensions".equals(key)) {
+                    platformJson.add(key, item);
 
-            if (info.getTheRest() != null) {
-                info.getTheRest().forEach((key, item) -> {
-                    // Ignore the two keys we are explicitly managing
-                    // but then add anything else found.
-                    // TODO: if multiple files the last one wins!
-                    // meaning effectively only "extensions" are merged, the rest are full overrides.
-                    // TODO: make a real merge if needed eventually.
-                    if (!"bom".equals(key) && !"extensions".equals(key)) {
-                        platformJson.add(key, item);
-                    }
-                });
-            }
+                }
+            });
         }
+
         // Write the JSON to the output file
         final File outputDir = outputFile.getParentFile();
         if (!outputDir.exists()) {
@@ -213,7 +220,7 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
                 .createWriterFactory(Collections.singletonMap(JsonGenerator.PRETTY_PRINTING, true));
         try (JsonWriter jsonWriter = jsonWriterFactory.createWriter(new FileOutputStream(outputFile))) {
             jsonWriter.writeObject(platformJson.build());
-        } catch (JsonException | IOException e) {
+        } catch (IOException e) {
             throw new MojoExecutionException("Failed to persist " + outputFile, e);
         }
         info("Extensions file written to %s", outputFile);
@@ -411,58 +418,4 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
 
     }
 
-    public OverrideInfo getOverrideInfo(File overridesFile) throws MojoExecutionException {
-        // Read the overrides file for the extensions (if it exists)
-        HashMap extOverrides = new HashMap<>();
-        JsonObject theRest = null;
-        if (overridesFile.isFile()) {
-            info("Found overrides file %s", overridesFile);
-            try (JsonReader jsonReader = Json.createReader(new FileInputStream(overridesFile))) {
-                JsonObject overridesObject = jsonReader.readObject();
-                JsonArray extOverrideObjects = overridesObject.getJsonArray("extensions");
-                if (extOverrideObjects != null) {
-                    // Put the extension overrides into a map keyed to their GAV
-                    for (JsonValue val : extOverrideObjects) {
-                        JsonObject extOverrideObject = val.asJsonObject();
-                        String key = extensionId(extOverrideObject);
-                        extOverrides.put(key, extOverrideObject);
-                    }
-                }
-
-                theRest = overridesObject;
-            } catch (IOException e) {
-                throw new MojoExecutionException("Failed to read " + overridesFile, e);
-            }
-            return new OverrideInfo(extOverrides, theRest);
-
-        } else {
-            throw new MojoExecutionException(overridesFile + " not found.");
-        }
-    }
-
-    private class OverrideInfo {
-        private Map<String, JsonObject> extOverrides;
-        private JsonObject theRest;
-
-        public OverrideInfo(Map<String, JsonObject> extOverrides, JsonObject theRest) {
-            this.extOverrides = extOverrides;
-            this.theRest = theRest;
-        }
-
-        public Map<String, JsonObject> getExtOverrides() {
-            return extOverrides;
-        }
-
-        public JsonObject getTheRest() {
-            return theRest;
-        }
-
-        public void setExtOverrides(Map<String, JsonObject> extOverrides) {
-            this.extOverrides = extOverrides;
-        }
-
-        public void setTheRest(JsonObject theRest) {
-            this.theRest = theRest;
-        }
-    }
 }
