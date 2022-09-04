@@ -106,8 +106,8 @@ public class StackedChartWidget extends ChartWidget {
                         series.field,
                         Searches.DateHistogramInterval.valueOf(interval.toString().toUpperCase()),
                         filter,
-                        timeRange,
-                        "cardinality".equalsIgnoreCase(series.statisticalFunction));
+                        timeRange
+                );
 
                 if (from == null) {
                     from = histogramResult.getHistogramBoundaries().getFrom();
