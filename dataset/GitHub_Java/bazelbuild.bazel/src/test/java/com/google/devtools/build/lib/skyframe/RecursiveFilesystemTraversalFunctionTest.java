@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBound
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
@@ -91,9 +90,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(rootDirectory, outputBase),
-            rootDirectory,
-            analysisMock.getProductName());
+            rootDirectory, outputBase, rootDirectory, analysisMock.getProductName());
     ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(
         pkgLocator, ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS, directories);
 
