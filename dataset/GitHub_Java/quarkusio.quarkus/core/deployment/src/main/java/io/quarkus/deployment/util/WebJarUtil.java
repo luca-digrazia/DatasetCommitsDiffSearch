@@ -45,7 +45,6 @@ public class WebJarUtil {
     private static final String TMP_DIR = System.getProperty("java.io.tmpdir");
     private static final String CUSTOM_MEDIA_FOLDER = "META-INF/branding/";
     private static final List<String> IGNORE_LIST = Arrays.asList("logo.png", "favicon.ico", "style.css");
-    private static final String SNAPSHOT_VERSION = "-SNAPSHOT";
 
     private WebJarUtil() {
     }
@@ -59,9 +58,8 @@ public class WebJarUtil {
 
         Path path = createResourcesDirectory(userApplication, resourcesArtifact);
 
-        // Clean if not in dev mode or if the resources jar is a snapshot version
-        if (!launchMode.getLaunchMode().equals(LaunchMode.DEVELOPMENT)
-                || resourcesArtifact.getVersion().contains(SNAPSHOT_VERSION)) {
+        // Clean on non dev mode
+        if (!launchMode.getLaunchMode().equals(LaunchMode.DEVELOPMENT)) {
             IoUtils.createOrEmptyDir(path);
         }
 
