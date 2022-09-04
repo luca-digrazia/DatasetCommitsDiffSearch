@@ -14,7 +14,6 @@
 
 package net.starlark.java.eval;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.sun.management.ThreadMXBean;
 import java.io.File;
@@ -62,19 +61,15 @@ import net.starlark.java.syntax.SyntaxError;
 public final class Benchmarks {
 
   private static final String HELP =
-      "Usage: Benchmarks [--help] [--filter regex] [--seconds float] [--iterations count]\n"
-          + "Runs Starlark benchmarks matching the filter for the specified approximate time or\n"
-          + "specified number of iterations, and reports various performance measures.\n"
-          + "The optional filter is a regular expression applied to the string FILE:FUNC,\n"
-          + "where FILE is the base name of the file and FUNC is the name of the function,\n"
-          + "for example 'bench_int.star:bench_add32'.\n";
+      "Usage: Benchmarks [--help] [--filter regex] [--seconds float]\n"
+          + "Runs Starlark benchmarks matching the filter for the specified (approximate) time,\n"
+          + "and reports various performance measures.";
 
   private static boolean ok = true;
 
   public static void main(String[] args) throws Exception {
     Pattern filter = null; // default: all
-    long budgetNanos = -1;
-    int iterations = -1;
+    long budgetNanos = 1_000_000_000;
 
     // parse flags
     int i;
@@ -110,32 +105,12 @@ public final class Benchmarks {
           fail("--seconds out of range");
         }
 
-      } else if (args[i].equals("--iterations")) {
-        if (++i == args.length) {
-          fail("--iterations needs an integer argument");
-        }
-        try {
-          iterations = Integer.parseInt(args[i]);
-        } catch (NumberFormatException e) {
-          fail("for --iterations, got '%s', want an integer number of iterations", args[i]);
-        }
-        if (iterations < 0) {
-          fail("--iterations out of range");
-        }
-
       } else {
         fail("unknown flag: %s", args[i]);
       }
     }
     if (i < args.length) {
       fail("unexpected arguments");
-    }
-
-    if (iterations >= 0 && budgetNanos >= 0) {
-      fail("cannot specify both --seconds and --iterations");
-    }
-    if (iterations < 0 && budgetNanos < 0) {
-      budgetNanos = 1_000_000_000;
     }
 
     // Read testdata/bench_* files.
@@ -145,8 +120,7 @@ public final class Benchmarks {
     }
     File testdata = new File(src, "test/java/net/starlark/java/eval/testdata");
     for (File file : testdata.listFiles()) {
-      String basename = file.getName();
-      if (!(basename.startsWith("bench_") && basename.endsWith(".star"))) {
+      if (!(file.getName().startsWith("bench_") && file.getName().endsWith(".star"))) {
         continue;
       }
 
@@ -185,9 +159,8 @@ public final class Benchmarks {
       TreeMap<String, StarlarkFunction> benchmarks = new TreeMap<>();
       for (Map.Entry<String, Object> e : module.getExportedGlobals().entrySet()) {
         if (e.getKey().startsWith("bench_") && e.getValue() instanceof StarlarkFunction) {
-          String name = e.getKey();
-          if (filter == null || filter.matcher(basename + ":" + name).find()) {
-            benchmarks.put(name, (StarlarkFunction) e.getValue());
+          if (filter == null || filter.matcher(e.getKey()).find()) {
+            benchmarks.put(e.getKey(), (StarlarkFunction) e.getValue());
           }
         }
       }
@@ -207,8 +180,8 @@ public final class Benchmarks {
       for (Map.Entry<String, StarlarkFunction> e : benchmarks.entrySet()) {
         String name = e.getKey();
         System.out.flush(); // help user identify a slow benchmark
-        Benchmark b = new Benchmark(name, e.getValue());
-        if (!run(b, budgetNanos, iterations)) {
+        Benchmark b = run(name, e.getValue(), budgetNanos);
+        if (b == null) {
           ok = false;
           continue;
         }
@@ -235,47 +208,49 @@ public final class Benchmarks {
   }
 
   // Runs benchmark function f for the specified time budget
-  // (which we may exceed by a factor of two) or number of iterations,
-  // exactly one of which must be nonnegative. Reports success.
-  private static boolean run(Benchmark b, long budgetNanos, int iterations) {
-    // Exactly one of the parameters must be specified.
-    Preconditions.checkState((budgetNanos >= 0) != (iterations >= 0));
-
+  // (which we may exceed by a factor of two).
+  private static Benchmark run(String name, StarlarkFunction f, long budgetNanos) {
     Mutability mu = Mutability.create("test");
     StarlarkThread thread = new StarlarkThread(mu, semantics);
 
-    // Run for a fixed number of iterations?
-    if (iterations >= 0) {
-      return b.runIterations(thread, iterations);
-    }
+    Benchmark b = new Benchmark();
 
-    // Run for a fixed amount of time (default behavior).
-    iterations = 1;
-    while (b.time < budgetNanos) {
-      if (!b.runIterations(thread, iterations)) {
-        return false;
-      }
-
-      // Keep doubling the number of iterations until we exceed the deadline.
-      // TODO(adonovan): opt: extrapolate and predict the number of iterations
-      // in the remaining time budget, being wary of extrapolation error.
-      iterations <<= 1;
-      if (iterations <= 0) { // overflow
+    // Keep doubling the number of iterations until we exceed the deadline.
+    // TODO(adonovan): opt: extrapolate and predict the number of iterations
+    // in the remaining time budget, being wary of extrapolation error.
+    for (b.n = 1; b.time < budgetNanos; b.n <<= 1) {
+      if (b.n <= 0) {
         System.err.printf(
-            "In %s: function is too fast; likely a loop over `range(b.n)` is missing\n", b.name);
-        return false;
+            "In %s: function is too fast; likely a loop over `range(b.n)` is missing\n", name);
+        return null;
+      }
+
+      try {
+        b.start(thread);
+        Starlark.fastcall(thread, f, new Object[] {b}, new Object[0]);
+        b.stop(thread);
+
+      } catch (EvalException ex) {
+        System.err.println(ex.getMessageWithStack());
+        return null;
+
+      } catch (
+          @SuppressWarnings("InterruptedExceptionSwallowed")
+          Throwable ex) {
+        // unhandled exception (incl. InterruptedException)
+        System.err.printf("In %s: %s\n", name, ex.getMessage());
+        ex.printStackTrace();
+        return null;
       }
     }
-    return true;
+
+    return b;
   }
 
   // The type of the parameter to each bench(b) function.
   // Provides n, the number of iterations.
   @StarlarkBuiltin(name = "Benchmark")
   private static class Benchmark implements StarlarkValue {
-
-    private final String name;
-    private final StarlarkFunction f;
 
     // The cast assumes we use the "Sun" JVM, which measures per-thread allocation and CPU.
     private final ThreadMXBean threadMX = (ThreadMXBean) ManagementFactory.getThreadMXBean();
@@ -295,34 +270,6 @@ public final class Benchmarks {
     private long alloc; // bytes allocated by this thread
     private long time; // wall time (ns)
     private long steps; // Starlark computation steps
-
-    private Benchmark(String name, StarlarkFunction f) {
-      this.name = name;
-      this.f = f;
-    }
-
-    // Runs n iterations of this benchmark and reports success.
-    private boolean runIterations(StarlarkThread thread, int n) {
-      this.n = n;
-      try {
-        start(thread);
-        Starlark.fastcall(thread, f, new Object[] {this}, new Object[0]);
-        stop(thread);
-
-      } catch (EvalException ex) {
-        System.err.println(ex.getMessageWithStack());
-        return false;
-
-      } catch (
-          @SuppressWarnings("InterruptedExceptionSwallowed")
-          Throwable ex) {
-        // unhandled exception (incl. InterruptedException)
-        System.err.printf("In %s: %s\n", name, ex.getMessage());
-        ex.printStackTrace();
-        return false;
-      }
-      return true;
-    }
 
     @StarlarkMethod(name = "n", doc = "Requested number of iterations.", structField = true)
     public int n() {
