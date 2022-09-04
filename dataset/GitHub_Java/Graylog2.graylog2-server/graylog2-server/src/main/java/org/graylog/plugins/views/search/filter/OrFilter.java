@@ -50,15 +50,8 @@ public abstract class OrFilter implements Filter {
                 .build();
     }
 
-    public abstract Builder toBuilder();
-
-    @Override
-    public Filter.Builder toGenericBuilder() {
-        return toBuilder();
-    }
-
     @AutoValue.Builder
-    public abstract static class Builder implements Filter.Builder {
+    public abstract static class Builder {
         @JsonProperty
         public abstract Builder type(String type);
 

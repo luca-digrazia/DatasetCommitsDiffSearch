@@ -23,16 +23,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
-import org.graylog.plugins.views.search.DerivedTimeRange;
 import org.graylog.plugins.views.search.Filter;
 import org.graylog.plugins.views.search.SearchType;
-import org.graylog.plugins.views.search.engine.BackendQuery;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.graylog.plugins.views.search.SearchType;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import static com.google.common.collect.ImmutableList.of;
 
@@ -79,8 +76,7 @@ public abstract class Pivot implements SearchType {
                 .type(NAME)
                 .rowGroups(of())
                 .columnGroups(of())
-                .sort(of())
-                .streams(Collections.emptySet());
+                .sort(of());
     }
 
     @AutoValue.Builder
@@ -89,8 +85,7 @@ public abstract class Pivot implements SearchType {
         @JsonCreator
         public static Builder createDefault() {
             return builder()
-                    .sort(Collections.emptyList())
-                    .streams(Collections.emptySet());
+                    .sort(Collections.emptyList());
         }
 
         @JsonProperty
@@ -116,18 +111,6 @@ public abstract class Pivot implements SearchType {
 
         @JsonProperty
         public abstract Builder filter(@Nullable Filter filter);
-
-        @JsonProperty
-        public Builder timerange(@Nullable TimeRange timerange) {
-            return timerange(timerange == null ? null : DerivedTimeRange.of(timerange));
-        }
-        public abstract Builder timerange(@Nullable DerivedTimeRange timerange);
-
-        @JsonProperty
-        public abstract Builder query(@Nullable BackendQuery query);
-
-        @JsonProperty
-        public abstract Builder streams(Set<String> streams);
 
         public abstract Pivot build();
     }

@@ -17,10 +17,11 @@
 package org.graylog.plugins.views.search.db;
 
 import org.graylog.plugins.views.search.Search;
+import org.graylog.plugins.views.search.db.SearchDbService;
+import org.graylog.plugins.views.search.db.SearchesCleanUpJob;
 import org.graylog.plugins.views.search.views.ViewDTO;
 import org.graylog.plugins.views.search.views.ViewService;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.joda.time.Duration;
 import org.junit.Before;
 import org.junit.Rule;
@@ -84,9 +85,9 @@ public class SearchesCleanUpJobTest {
         when(viewService.streamAll()).thenReturn(Stream.empty());
 
         final Search search1 = mock(Search.class);
-        when(search1.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardDays(1)));
+        when(search1.createdAt()).thenReturn(DateTime.now().minus(Duration.standardDays(1)));
         final Search search2 = mock(Search.class);
-        when(search2.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardHours(4)));
+        when(search2.createdAt()).thenReturn(DateTime.now().minus(Duration.standardHours(4)));
 
         when(searchDbService.streamAll()).thenReturn(Stream.of(search1, search2));
 
@@ -103,7 +104,7 @@ public class SearchesCleanUpJobTest {
         when(viewService.streamAll()).thenReturn(Stream.of(view));
 
         final Search search = mock(Search.class);
-        when(search.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardDays(30)));
+        when(search.createdAt()).thenReturn(DateTime.now().minus(Duration.standardDays(30)));
         when(search.id()).thenReturn(searchId);
 
         when(searchDbService.streamAll()).thenReturn(Stream.of(search));
@@ -121,14 +122,14 @@ public class SearchesCleanUpJobTest {
         when(viewService.streamAll()).thenReturn(Stream.of(view));
 
         final Search search1 = mock(Search.class);
-        when(search1.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardDays(30)));
+        when(search1.createdAt()).thenReturn(DateTime.now().minus(Duration.standardDays(30)));
         when(search1.id()).thenReturn(searchId);
 
         final Search search2 = mock(Search.class);
-        when(search2.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardHours(2)));
+        when(search2.createdAt()).thenReturn(DateTime.now().minus(Duration.standardHours(2)));
 
         final Search search3 = mock(Search.class);
-        when(search3.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardDays(30)));
+        when(search3.createdAt()).thenReturn(DateTime.now().minus(Duration.standardDays(30)));
         when(search3.id()).thenReturn("This search is expired and should be deleted");
 
         when(searchDbService.streamAll()).thenReturn(Stream.of(search1, search2, search3));
@@ -145,7 +146,7 @@ public class SearchesCleanUpJobTest {
         when(viewService.streamAll()).thenReturn(Stream.empty());
 
         final Search search = mock(Search.class);
-        when(search.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardDays(30)));
+        when(search.createdAt()).thenReturn(DateTime.now().minus(Duration.standardDays(30)));
         when(search.id()).thenReturn("This search is expired and should be deleted");
         when(searchDbService.streamAll()).thenReturn(Stream.of(search));
 

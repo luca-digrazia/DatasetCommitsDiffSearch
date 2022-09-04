@@ -41,7 +41,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -77,14 +76,9 @@ public class FieldTypesResource extends RestResource implements PluginRestResour
                     if (fieldTypes.size() == 1) {
                         return fieldTypes.iterator().next();
                     }
-
-                    final Set<String> distinctTypes = fieldTypes.stream()
+                    final String compoundFieldType = "compound(" + fieldTypes.stream()
                             .map(mappedFieldTypeDTO -> mappedFieldTypeDTO.type().type())
-                            .sorted()
-                            .collect(Collectors.toCollection(LinkedHashSet::new));
-                    final String compoundFieldType = distinctTypes.size() > 1
-                            ? distinctTypes.stream().collect(Collectors.joining(",", "compound(", ")"))
-                            : distinctTypes.stream().findFirst().orElse("unknown");
+                            .collect(Collectors.joining(",")) + ")";
                     final ImmutableSet<String> commonProperties = fieldTypes.stream()
                             .map(mappedFieldTypeDTO -> mappedFieldTypeDTO.type().properties())
                             .reduce((s1, s2) -> Sets.intersection(s1, s2).immutableCopy())
@@ -92,7 +86,6 @@ public class FieldTypesResource extends RestResource implements PluginRestResour
 
                     final ImmutableSet<String> properties = ImmutableSet.<String>builder().addAll(commonProperties).add(PROP_COMPOUND_TYPE).build();
                     return MappedFieldTypeDTO.create(fieldName, createType(compoundFieldType, properties));
-
                 })
                 .collect(Collectors.toSet());
 

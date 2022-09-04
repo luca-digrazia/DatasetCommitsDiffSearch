@@ -28,7 +28,6 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import org.graylog.plugins.views.search.views.PluginMetadataSummary;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -39,11 +38,8 @@ import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.function.Supplier;
 
 import static com.google.common.collect.ImmutableSet.of;
-import static java.util.stream.Collectors.toSet;
 
 @AutoValue
 @JsonAutoDetect
@@ -80,16 +76,6 @@ public abstract class Search {
     @JsonProperty(FIELD_CREATED_AT)
     public abstract DateTime createdAt();
 
-    @JsonIgnore
-    public Optional<Query> getQuery(String sourceQueryId) {
-        return Optional.ofNullable(queryIndex.get(sourceQueryId));
-    }
-
-    @JsonIgnore
-    public Optional<Parameter> getParameter(String parameterName) {
-        return Optional.ofNullable(parameterIndex.get(parameterName));
-    }
-
     public Search applyExecutionState(ObjectMapper objectMapper, Map<String, Object> executionState) {
         final Builder builder = toBuilder();
 
@@ -101,46 +87,29 @@ public abstract class Search {
                     .collect(ImmutableSet.toImmutableSet());
             builder.parameters(parameters);
         }
-        if (state.hasNonNull("queries") || state.hasNonNull("global_override")) {
-
+        if (state.hasNonNull("queries")) {
             final ImmutableSet<Query> queries = queries().stream()
-                    .map(query -> {
-                        final JsonNode queryOverride = state.hasNonNull("global_override")
-                                ? state.path("global_override")
-                                : state.path("queries").path(query.id());
-                        return query.applyExecutionState(objectMapper, queryOverride);
-                    })
+                    .map(query -> query.applyExecutionState(objectMapper, state.path("queries").path(query.id())))
                     .collect(ImmutableSet.toImmutableSet());
             builder.queries(queries);
         }
         return builder.build();
     }
 
-    public Search addStreamsToQueriesWithoutStreams(Supplier<ImmutableSet<String>> defaultStreamsSupplier) {
-        if (!hasQueriesWithoutStreams()) {
-            return this;
-        }
-        final Set<Query> withStreams = queries().stream().filter(Query::hasStreams).collect(toSet());
-        final Set<Query> withoutStreams = Sets.difference(queries(), withStreams);
-
-        final ImmutableSet<String> defaultStreams = defaultStreamsSupplier.get();
-        final Set<Query> withDefaultStreams = withoutStreams.stream()
-                .map(q -> q.addStreamsToFilter(defaultStreams))
-                .collect(toSet());
-
-        final ImmutableSet<Query> newQueries = Sets.union(withStreams, withDefaultStreams).immutableCopy();
-
-        return toBuilder().queries(newQueries).build();
-    }
-
-    private boolean hasQueriesWithoutStreams() {
-        return !queries().stream().allMatch(Query::hasStreams);
-    }
-
     public abstract Builder toBuilder();
 
     public static Builder builder() {
         return Builder.create().parameters(of()).queries(ImmutableSet.<Query>builder().build());
+    }
+
+    @JsonIgnore
+    public Optional<Query> getQuery(String sourceQueryId) {
+        return Optional.ofNullable(queryIndex.get(sourceQueryId));
+    }
+
+    @JsonIgnore
+    public Optional<Parameter> getParameter(String parameterName) {
+        return Optional.ofNullable(parameterIndex.get(parameterName));
     }
 
     @AutoValue.Builder

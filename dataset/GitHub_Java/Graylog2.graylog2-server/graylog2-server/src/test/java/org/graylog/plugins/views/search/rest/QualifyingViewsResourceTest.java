@@ -1,9 +1,23 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.search.rest;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.shiro.subject.Subject;
-import org.graylog.plugins.views.search.rest.EnterpriseSearchRestPermissions;
-import org.graylog.plugins.views.search.rest.QualifyingViewsResource;
 import org.graylog.plugins.views.search.views.QualifyingViewsService;
 import org.graylog.plugins.views.search.views.ViewParameterSummaryDTO;
 import org.graylog.plugins.views.search.views.sharing.AllUsersOfInstance;
@@ -86,10 +100,10 @@ public class QualifyingViewsResourceTest {
     public void returnsNoViewsIfNoneArePermitted() {
         final ViewParameterSummaryDTO view1 = mock(ViewParameterSummaryDTO.class);
         when(view1.id()).thenReturn("view1");
-        when(subject.isPermitted(EnterpriseSearchRestPermissions.VIEW_READ + ":view1")).thenReturn(false);
+        when(subject.isPermitted(ViewsRestPermissions.VIEW_READ + ":view1")).thenReturn(false);
         final ViewParameterSummaryDTO view2 = mock(ViewParameterSummaryDTO.class);
         when(view2.id()).thenReturn("view2");
-        when(subject.isPermitted(EnterpriseSearchRestPermissions.VIEW_READ + ":view2")).thenReturn(false);
+        when(subject.isPermitted(ViewsRestPermissions.VIEW_READ + ":view2")).thenReturn(false);
         when(qualifyingViewsService.forValue()).thenReturn(ImmutableList.of(view1, view2));
 
         final Collection<ViewParameterSummaryDTO> result = this.qualifyingViewsResource.forParameter();
@@ -101,10 +115,10 @@ public class QualifyingViewsResourceTest {
     public void returnsSomeViewsIfSomeArePermitted() {
         final ViewParameterSummaryDTO view1 = mock(ViewParameterSummaryDTO.class);
         when(view1.id()).thenReturn("view1");
-        when(subject.isPermitted(EnterpriseSearchRestPermissions.VIEW_READ + ":view1")).thenReturn(false);
+        when(subject.isPermitted(ViewsRestPermissions.VIEW_READ + ":view1")).thenReturn(false);
         final ViewParameterSummaryDTO view2 = mock(ViewParameterSummaryDTO.class);
         when(view2.id()).thenReturn("view2");
-        when(subject.isPermitted(EnterpriseSearchRestPermissions.VIEW_READ + ":view2")).thenReturn(true);
+        when(subject.isPermitted(ViewsRestPermissions.VIEW_READ + ":view2")).thenReturn(true);
         when(qualifyingViewsService.forValue()).thenReturn(ImmutableList.of(view1, view2));
 
         final Collection<ViewParameterSummaryDTO> result = this.qualifyingViewsResource.forParameter();
@@ -116,10 +130,10 @@ public class QualifyingViewsResourceTest {
     public void returnsAllViewsIfAllArePermitted() {
         final ViewParameterSummaryDTO view1 = mock(ViewParameterSummaryDTO.class);
         when(view1.id()).thenReturn("view1");
-        when(subject.isPermitted(EnterpriseSearchRestPermissions.VIEW_READ + ":view1")).thenReturn(true);
+        when(subject.isPermitted(ViewsRestPermissions.VIEW_READ + ":view1")).thenReturn(true);
         final ViewParameterSummaryDTO view2 = mock(ViewParameterSummaryDTO.class);
         when(view2.id()).thenReturn("view2");
-        when(subject.isPermitted(EnterpriseSearchRestPermissions.VIEW_READ + ":view2")).thenReturn(true);
+        when(subject.isPermitted(ViewsRestPermissions.VIEW_READ + ":view2")).thenReturn(true);
         when(qualifyingViewsService.forValue()).thenReturn(ImmutableList.of(view1, view2));
 
         final Collection<ViewParameterSummaryDTO> result = this.qualifyingViewsResource.forParameter();
@@ -131,10 +145,10 @@ public class QualifyingViewsResourceTest {
     public void returnsViewIfNotPermittedButSharedWithUser() {
         final ViewParameterSummaryDTO view1 = mock(ViewParameterSummaryDTO.class);
         when(view1.id()).thenReturn("view1");
-        when(subject.isPermitted(EnterpriseSearchRestPermissions.VIEW_READ + ":view1")).thenReturn(false);
+        when(subject.isPermitted(ViewsRestPermissions.VIEW_READ + ":view1")).thenReturn(false);
         final ViewParameterSummaryDTO view2 = mock(ViewParameterSummaryDTO.class);
         when(view2.id()).thenReturn("view2");
-        when(subject.isPermitted(EnterpriseSearchRestPermissions.VIEW_READ + ":view2")).thenReturn(false);
+        when(subject.isPermitted(ViewsRestPermissions.VIEW_READ + ":view2")).thenReturn(false);
         when(qualifyingViewsService.forValue()).thenReturn(ImmutableList.of(view1, view2));
         final ViewSharing allUsersOfInstance = AllUsersOfInstance.create("view1");
         when(viewSharingService.forView("view1")).thenReturn(Optional.of(allUsersOfInstance));

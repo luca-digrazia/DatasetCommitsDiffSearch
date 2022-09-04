@@ -41,14 +41,6 @@ public interface Filter {
     @JsonProperty("filters")
     Set<Filter> filters();
 
-    Builder toGenericBuilder();
-
-    interface Builder {
-        public abstract Builder filters(Set<Filter> filters);
-
-        public abstract Filter build();
-    }
-
     @JsonAutoDetect
     class Fallback implements Filter {
         @JsonProperty
@@ -84,11 +76,6 @@ public interface Filter {
         @Override
         public int hashCode() {
             return Objects.hash(type);
-        }
-
-        @Override
-        public Builder toGenericBuilder() {
-            return null;
         }
     }
 }

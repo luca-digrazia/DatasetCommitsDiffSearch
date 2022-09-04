@@ -22,28 +22,17 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import org.graylog.autovalue.WithBeanGetter;
-import org.graylog.plugins.views.search.engine.BackendQuery;
-import org.graylog2.contentpacks.ContentPackable;
-import org.graylog2.contentpacks.EntityDescriptorIds;
-import org.graylog2.contentpacks.model.entities.WidgetEntity;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 
 import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.Optional;
-import java.util.Set;
 
 @AutoValue
 @JsonDeserialize(builder = WidgetDTO.Builder.class)
 @WithBeanGetter
-public abstract class WidgetDTO implements ContentPackable<WidgetEntity> {
+public abstract class WidgetDTO {
     public static final String FIELD_ID = "id";
     public static final String FIELD_TYPE = "type";
     public static final String FIELD_FILTER = "filter";
     public static final String FIELD_CONFIG = "config";
-    public static final String FIELD_TIMERANGE = "timerange";
-    public static final String FIELD_QUERY = "query";
-    public static final String FIELD_STREAMS = "streams";
 
     @JsonProperty(FIELD_ID)
     public abstract String id();
@@ -55,21 +44,8 @@ public abstract class WidgetDTO implements ContentPackable<WidgetEntity> {
     @Nullable
     public abstract String filter();
 
-    @JsonProperty(FIELD_TIMERANGE)
-    public abstract Optional<TimeRange> timerange();
-
-    @JsonProperty(FIELD_QUERY)
-    public abstract Optional<BackendQuery> query();
-
-    @JsonProperty(FIELD_STREAMS)
-    public abstract Set<String> streams();
-
     @JsonProperty(FIELD_CONFIG)
     public abstract WidgetConfigDTO config();
-
-    public static Builder builder() {
-        return Builder.builder();
-    };
 
     @AutoValue.Builder
     public static abstract class Builder {
@@ -80,48 +56,22 @@ public abstract class WidgetDTO implements ContentPackable<WidgetEntity> {
         public abstract Builder type(String type);
 
         @JsonProperty(FIELD_FILTER)
-        public abstract Builder filter(@Nullable String filter);
-
-        @JsonProperty(FIELD_TIMERANGE)
-        public abstract Builder timerange(@Nullable TimeRange timerange);
-
-        @JsonProperty(FIELD_QUERY)
-        public abstract Builder query(@Nullable BackendQuery query);
-
-        @JsonProperty(FIELD_STREAMS)
-        public abstract Builder streams(Set<String> streams);
+        @Nullable
+        public abstract Builder filter(String filter);
 
         @JsonProperty(FIELD_CONFIG)
         @JsonTypeInfo(
                 use = JsonTypeInfo.Id.NAME,
                 include = JsonTypeInfo.As.EXTERNAL_PROPERTY,
                 property = WidgetDTO.FIELD_TYPE,
-                visible = true,
-                defaultImpl = UnknownWidgetConfigDTO.class)
+                visible = true)
         public abstract Builder config(WidgetConfigDTO config);
 
         public abstract WidgetDTO build();
 
         @JsonCreator
         static Builder builder() {
-            return new AutoValue_WidgetDTO.Builder().streams(Collections.emptySet());
+            return new AutoValue_WidgetDTO.Builder();
         }
-    }
-
-    @Override
-    public WidgetEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
-        final WidgetEntity.Builder builder = WidgetEntity.builder()
-                .id(this.id())
-                .config(this.config())
-                .filter(this.filter())
-                .streams(this.streams())
-                .type(this.type());
-        if (this.query().isPresent()) {
-            builder.query(this.query().get());
-        }
-        if (this.timerange().isPresent()) {
-            builder.timerange(this.timerange().get());
-        }
-        return builder.build();
     }
 }

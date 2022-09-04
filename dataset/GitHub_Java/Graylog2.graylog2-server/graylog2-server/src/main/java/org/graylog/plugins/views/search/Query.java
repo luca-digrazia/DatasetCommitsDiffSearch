@@ -32,7 +32,6 @@ import com.google.common.collect.Maps;
 import com.google.common.graph.Traverser;
 import org.graylog.plugins.views.search.engine.BackendQuery;
 import org.graylog.plugins.views.search.engine.EmptyTimeRange;
-import org.graylog.plugins.views.search.filter.AndFilter;
 import org.graylog.plugins.views.search.filter.StreamFilter;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.slf4j.Logger;
@@ -43,7 +42,6 @@ import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -89,14 +87,13 @@ public abstract class Query {
                 .searchTypes(of());
     }
 
-    Query applyExecutionState(ObjectMapper objectMapper, JsonNode state) {
+    public Query applyExecutionState(ObjectMapper objectMapper, JsonNode state) {
         if (state.isMissingNode()) {
             return this;
         }
         final boolean hasTimerange = state.hasNonNull("timerange");
-        final boolean hasQuery = state.hasNonNull("query");
         final boolean hasSearchTypes = state.hasNonNull("search_types");
-        if (hasTimerange || hasQuery || hasSearchTypes) {
+        if (hasTimerange || hasSearchTypes) {
             final Builder builder = toBuilder();
             if (hasTimerange) {
                 try {
@@ -106,11 +103,6 @@ public abstract class Query {
                 } catch (Exception e) {
                     LOG.error("Unable to deserialize execution state for time range", e);
                 }
-            }
-            if (hasQuery) {
-                final Object rawQuery = state.path("query");
-                final BackendQuery newQuery = objectMapper.convertValue(rawQuery, BackendQuery.class);
-                builder.query(newQuery);
             }
             if (hasSearchTypes) {
                 // copy all existing search types, we'll update them by id if necessary below
@@ -139,33 +131,15 @@ public abstract class Query {
     }
 
     public Set<String> usedStreamIds() {
-        return Optional.ofNullable(filter())
-                .map(optFilter -> {
-                    @SuppressWarnings("UnstableApiUsage") final Traverser<Filter> filterTraverser = Traverser.forTree(filter -> firstNonNull(filter.filters(), Collections.emptySet()));
-                    return StreamSupport.stream(filterTraverser.breadthFirst(optFilter).spliterator(), false)
-                            .filter(filter -> filter instanceof StreamFilter)
-                            .map(streamFilter -> ((StreamFilter) streamFilter).streamId())
-                            .filter(Objects::nonNull)
-                            .collect(Collectors.toSet());
-                })
-                .orElse(Collections.emptySet());
-    }
-
-    public boolean hasStreams() {
-        return !usedStreamIds().isEmpty();
-    }
-
-    Query addStreamsToFilter(ImmutableSet<String> streamIds) {
-        final Filter newFilter = addStreamsTo(filter(), streamIds);
-        return toBuilder().filter(newFilter).build();
-    }
-
-    private Filter addStreamsTo(Filter filter, Set<String> streamIds) {
-        final Filter streamIdFilter = StreamFilter.anyIdOf(streamIds.toArray(new String[]{}));
-        if (filter == null) {
-            return streamIdFilter;
+        if (filter() != null) {
+            final Traverser<Filter> filterTraverser = Traverser.forTree(filter -> firstNonNull(filter.filters(), Collections.emptySet()));
+            return StreamSupport.stream(filterTraverser.breadthFirst(filter()).spliterator(), false)
+                    .filter(filter -> filter instanceof StreamFilter)
+                    .map(streamFilter -> ((StreamFilter) streamFilter).streamId())
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
         }
-        return AndFilter.and(streamIdFilter, filter);
+        return Collections.emptySet();
     }
 
     @AutoValue.Builder

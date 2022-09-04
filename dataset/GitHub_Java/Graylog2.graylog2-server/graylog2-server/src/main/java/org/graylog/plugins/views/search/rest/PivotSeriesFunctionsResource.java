@@ -28,7 +28,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
 
-@Api(value = "Search/Functions")
+@Api(value = "Enterprise/Search/Functions", description = "Definitions for aggregation functions")
 @Path("/views/functions")
 @Produces(MediaType.APPLICATION_JSON)
 @RequiresAuthentication
