@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -48,6 +49,10 @@ import org.jboss.logging.Logger.Level;
 public class BeanDeployment {
 
     private static final Logger LOGGER = Logger.getLogger(BeanDeployment.class);
+
+    private static final int ANNOTATION = 0x00002000;
+
+    static final EnumSet<Type.Kind> CLASS_TYPES = EnumSet.of(Type.Kind.CLASS, Type.Kind.PARAMETERIZED_TYPE);
 
     private final BuildContextImpl buildContext;
 
@@ -168,7 +173,7 @@ public class BeanDeployment {
                 builder.additionalStereotypes, annotationStore);
         buildContextPut(Key.STEREOTYPES.asString(), Collections.unmodifiableMap(stereotypes));
 
-        this.transitiveInterceptorBindings = findTransitiveInterceptorBindings(interceptorBindings.keySet(),
+        this.transitiveInterceptorBindings = findTransitiveInterceptorBindigs(interceptorBindings.keySet(),
                 this.beanArchiveIndex,
                 new HashMap<>(), interceptorBindings, annotationStore);
 
@@ -581,7 +586,7 @@ public class BeanDeployment {
         return bindings;
     }
 
-    private static Map<DotName, Set<AnnotationInstance>> findTransitiveInterceptorBindings(Collection<DotName> initialBindings,
+    private static Map<DotName, Set<AnnotationInstance>> findTransitiveInterceptorBindigs(Collection<DotName> initialBindings,
             IndexView index,
             Map<DotName, Set<AnnotationInstance>> result, Map<DotName, ClassInfo> interceptorBindings,
             AnnotationStore annotationStore) {
@@ -733,7 +738,9 @@ public class BeanDeployment {
         for (ClassInfo beanClass : beanArchiveIndex.getKnownClasses()) {
 
             if (Modifier.isInterface(beanClass.flags()) || Modifier.isAbstract(beanClass.flags())
-                    || beanClass.isAnnotation() || beanClass.isEnum()) {
+            // Replace with ClassInfo#isAnnotation() and ClassInfo#isEnum() when using Jandex 2.1.4+
+                    || (beanClass.flags() & ANNOTATION) != 0
+                    || DotNames.ENUM.equals(beanClass.superName())) {
                 // Skip interfaces, abstract classes, annotations and enums
                 continue;
             }
@@ -773,9 +780,8 @@ public class BeanDeployment {
                 continue;
             }
 
-            if (annotationStore.hasAnnotation(beanClass, DotNames.INTERCEPTOR)
-                    || annotationStore.hasAnnotation(beanClass, DotNames.DECORATOR)) {
-                // Skip interceptors and decorators
+            if (annotationStore.hasAnnotation(beanClass, DotNames.INTERCEPTOR)) {
+                // Skip interceptors
                 continue;
             }
 

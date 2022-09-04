@@ -1,27 +1,36 @@
 package io.quarkus.arc.deployment;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
+import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.processor.AnnotationsTransformer;
+import io.quarkus.arc.processor.AnnotationsTransformer.TransformationContext;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.Transformation;
 import io.quarkus.arc.profile.IfBuildProfile;
 import io.quarkus.arc.profile.UnlessBuildProfile;
 import io.quarkus.arc.properties.IfBuildProperty;
+import io.quarkus.arc.properties.UnlessBuildProperty;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
@@ -35,41 +44,108 @@ public class BuildTimeEnabledProcessor {
     private static final DotName UNLESS_BUILD_PROFILE = DotName.createSimple(UnlessBuildProfile.class.getName());
 
     private static final DotName IF_BUILD_PROPERTY = DotName.createSimple(IfBuildProperty.class.getName());
+    private static final DotName UNLESS_BUILD_PROPERTY = DotName.createSimple(UnlessBuildProperty.class.getName());
 
     @BuildStep
-    void ifBuildProfile(CombinedIndexBuildItem index, BuildProducer<BuildTimeConditionBuildItem> producer) {
+    void ifBuildProfile(CombinedIndexBuildItem index, BuildProducer<BuildTimeConditionBuildItem> producer,
+            BuildProducer<PreAdditionalBeanBuildTimeConditionBuildItem> producerPreAdditionalBean) {
         Collection<AnnotationInstance> annotationInstances = index.getIndex().getAnnotations(IF_BUILD_PROFILE);
         for (AnnotationInstance instance : annotationInstances) {
             String profileOnInstance = instance.value().asString();
             boolean enabled = profileOnInstance.equals(ProfileManager.getActiveProfile());
             if (enabled) {
-                LOGGER.debug("Enabling " + instance + " since the profile value matches the active profile.");
+                LOGGER.debug("Enabling " + instance.target() + " since the profile value matches the active profile.");
             } else {
-                LOGGER.debug("Disabling " + instance + " since the profile value does not match the active profile.");
+                LOGGER.debug("Disabling " + instance.target() + " since the profile value does not match the active profile.");
             }
             producer.produce(new BuildTimeConditionBuildItem(instance.target(), enabled));
+            producerPreAdditionalBean.produce(new PreAdditionalBeanBuildTimeConditionBuildItem(instance.target(), enabled));
         }
     }
 
     @BuildStep
-    void unlessBuildProfile(CombinedIndexBuildItem index, BuildProducer<BuildTimeConditionBuildItem> producer) {
+    void unlessBuildProfile(CombinedIndexBuildItem index, BuildProducer<BuildTimeConditionBuildItem> producer,
+            BuildProducer<PreAdditionalBeanBuildTimeConditionBuildItem> producerPreAdditionalBean) {
         Collection<AnnotationInstance> annotationInstances = index.getIndex().getAnnotations(UNLESS_BUILD_PROFILE);
         for (AnnotationInstance instance : annotationInstances) {
             String profileOnInstance = instance.value().asString();
             boolean enabled = !profileOnInstance.equals(ProfileManager.getActiveProfile());
             if (enabled) {
-                LOGGER.debug("Enabling " + instance + " since the profile value does not match the active profile.");
+                LOGGER.debug("Enabling " + instance.target() + " since the profile value does not match the active profile.");
             } else {
-                LOGGER.debug("Disabling " + instance + " since the profile value matches the active profile.");
+                LOGGER.debug("Disabling " + instance.target() + " since the profile value matches the active profile.");
             }
             producer.produce(new BuildTimeConditionBuildItem(instance.target(), enabled));
+            producerPreAdditionalBean.produce(new PreAdditionalBeanBuildTimeConditionBuildItem(instance.target(), enabled));
         }
     }
 
     @BuildStep
     void ifBuildProperty(BeanArchiveIndexBuildItem index, BuildProducer<BuildTimeConditionBuildItem> producer) {
+        buildProperty(IF_BUILD_PROPERTY, new BiFunction<String, String, Boolean>() {
+            @Override
+            public Boolean apply(String stringValue, String expectedStringValue) {
+                return stringValue.equals(expectedStringValue);
+            }
+        }, index.getIndex(), new BiConsumer<AnnotationTarget, Boolean>() {
+            @Override
+            public void accept(AnnotationTarget target, Boolean enabled) {
+                producer.produce(new BuildTimeConditionBuildItem(target, enabled));
+            }
+        });
+    }
+
+    @BuildStep
+    void unlessBuildProperty(BeanArchiveIndexBuildItem index, BuildProducer<BuildTimeConditionBuildItem> producer) {
+        buildProperty(UNLESS_BUILD_PROPERTY, new BiFunction<String, String, Boolean>() {
+            @Override
+            public Boolean apply(String stringValue, String expectedStringValue) {
+                return !stringValue.equals(expectedStringValue);
+            }
+        }, index.getIndex(), new BiConsumer<AnnotationTarget, Boolean>() {
+            @Override
+            public void accept(AnnotationTarget target, Boolean enabled) {
+                producer.produce(new BuildTimeConditionBuildItem(target, enabled));
+            }
+        });
+    }
+
+    @BuildStep
+    void ifBuildPropertyPreAdditionalBean(CombinedIndexBuildItem index,
+            BuildProducer<PreAdditionalBeanBuildTimeConditionBuildItem> producer) {
+        buildProperty(IF_BUILD_PROPERTY, new BiFunction<String, String, Boolean>() {
+            @Override
+            public Boolean apply(String stringValue, String expectedStringValue) {
+                return stringValue.equals(expectedStringValue);
+            }
+        }, index.getIndex(), new BiConsumer<AnnotationTarget, Boolean>() {
+            @Override
+            public void accept(AnnotationTarget target, Boolean enabled) {
+                producer.produce(new PreAdditionalBeanBuildTimeConditionBuildItem(target, enabled));
+            }
+        });
+    }
+
+    @BuildStep
+    void unlessBuildPropertyPreAdditionalBean(CombinedIndexBuildItem index,
+            BuildProducer<PreAdditionalBeanBuildTimeConditionBuildItem> producer) {
+        buildProperty(UNLESS_BUILD_PROPERTY, new BiFunction<String, String, Boolean>() {
+            @Override
+            public Boolean apply(String stringValue, String expectedStringValue) {
+                return !stringValue.equals(expectedStringValue);
+            }
+        }, index.getIndex(), new BiConsumer<AnnotationTarget, Boolean>() {
+            @Override
+            public void accept(AnnotationTarget target, Boolean enabled) {
+                producer.produce(new PreAdditionalBeanBuildTimeConditionBuildItem(target, enabled));
+            }
+        });
+    }
+
+    void buildProperty(DotName annotationName, BiFunction<String, String, Boolean> testFun, IndexView index,
+            BiConsumer<AnnotationTarget, Boolean> producer) {
         Config config = ConfigProviderResolver.instance().getConfig();
-        Collection<AnnotationInstance> annotationInstances = index.getIndex().getAnnotations(IF_BUILD_PROPERTY);
+        Collection<AnnotationInstance> annotationInstances = index.getAnnotations(annotationName);
         for (AnnotationInstance instance : annotationInstances) {
             String propertyName = instance.value("name").asString();
             String expectedStringValue = instance.value("stringValue").asString();
@@ -79,27 +155,26 @@ public class BuildTimeEnabledProcessor {
             Optional<String> optionalValue = config.getOptionalValue(propertyName, String.class);
             boolean enabled;
             if (optionalValue.isPresent()) {
-                if (optionalValue.get().equals(expectedStringValue)) {
-                    LOGGER.debug("Enabling " + instance + " since the property value matches the expected one.");
+                if (testFun.apply(optionalValue.get(), expectedStringValue)) {
+                    LOGGER.debug("Enabling " + instance.target() + " since the property value matches the expected one.");
                     enabled = true;
                 } else {
-                    LOGGER.debug("Disabling " + instance
-                            + " since the property value does not match the expected one.");
+                    LOGGER.debug("Disabling " + instance.target()
+                            + " since the property value matches the specified value one.");
                     enabled = false;
                 }
             } else {
                 if (enableIfMissing) {
-                    LOGGER.debug("Enabling " + instance
+                    LOGGER.debug("Enabling " + instance.target()
                             + " since the property has not been set and 'enableIfMissing' is set to 'true'.");
                     enabled = true;
                 } else {
-                    LOGGER.debug("Disabling " + instance
+                    LOGGER.debug("Disabling " + instance.target()
                             + " since the property has not been set and 'enableIfMissing' is set to 'false'.");
                     enabled = false;
                 }
             }
-
-            producer.produce(new BuildTimeConditionBuildItem(instance.target(), enabled));
+            producer.accept(instance.target(), enabled);
         }
     }
 
@@ -138,11 +213,6 @@ public class BuildTimeEnabledProcessor {
 
         // the transformer just tries to match targets and then enables or disables the bean accordingly
         annotationsTransformer.produce(new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
-            @Override
-            public boolean appliesTo(AnnotationTarget.Kind kind) {
-                return kind == AnnotationTarget.Kind.METHOD || kind == AnnotationTarget.Kind.CLASS
-                        || kind == AnnotationTarget.Kind.FIELD;
-            }
 
             @Override
             public void transform(TransformationContext ctx) {
@@ -150,48 +220,59 @@ public class BuildTimeEnabledProcessor {
                 if (ctx.isClass()) {
                     DotName classDotName = target.asClass().name();
                     if (classTargets.containsKey(classDotName)) {
-                        transformBean(ctx.transform(), classTargets.get(classDotName));
+                        transformBean(target, ctx, classTargets.get(classDotName));
                     }
                 } else if (ctx.isMethod()) {
                     MethodInfo method = target.asMethod();
                     if (methodTargets.containsKey(method)) {
-                        transformBean(ctx.transform(), methodTargets.get(method));
+                        transformBean(target, ctx, methodTargets.get(method));
                     }
                 } else if (ctx.isField()) {
                     FieldInfo field = target.asField();
                     String uniqueFieldName = toUniqueString(field);
                     if (fieldTargets.containsKey(uniqueFieldName)) {
-                        transformBean(ctx.transform(), fieldTargets.get(uniqueFieldName));
+                        transformBean(target, ctx, fieldTargets.get(uniqueFieldName));
                     }
                 }
             }
         }));
     }
 
+    /**
+     * @param buildTimeConditions the build time conditions from which the excluded classes are extracted.
+     * @return an instance of {@link BuildExclusionsBuildItem} containing the set of classes
+     *         that have been annotated with unsuccessful build time conditions.
+     */
+    @BuildStep
+    BuildExclusionsBuildItem buildExclusions(List<PreAdditionalBeanBuildTimeConditionBuildItem> buildTimeConditions) {
+        final Map<Kind, Set<String>> map = buildTimeConditions.stream()
+                .filter(item -> !item.isEnabled())
+                .map(PreAdditionalBeanBuildTimeConditionBuildItem::getTarget)
+                .collect(
+                        Collectors.groupingBy(
+                                AnnotationTarget::kind,
+                                Collectors.mapping(BuildExclusionsBuildItem::targetMapper, Collectors.toSet())));
+        return new BuildExclusionsBuildItem(
+                map.getOrDefault(AnnotationTarget.Kind.CLASS, Collections.emptySet()),
+                map.getOrDefault(AnnotationTarget.Kind.METHOD, Collections.emptySet()),
+                map.getOrDefault(AnnotationTarget.Kind.FIELD, Collections.emptySet()));
+    }
+
     private String toUniqueString(FieldInfo field) {
         return field.declaringClass().name().toString() + "." + field.name();
     }
 
-    private void transformBean(Transformation transform, boolean enable) {
-        if (enable) {
-            enableBean(transform);
-        } else {
-            disableBean(transform);
+    private void transformBean(AnnotationTarget target, TransformationContext ctx, boolean enabled) {
+        if (!enabled) {
+            Transformation transform = ctx.transform();
+            if (target.kind() == Kind.CLASS) {
+                // Veto the class
+                transform.add(DotNames.VETOED);
+            } else {
+                // Veto the producer
+                transform.add(DotNames.VETOED_PRODUCER);
+            }
+            transform.done();
         }
-        transform.done();
-    }
-
-    private void enableBean(Transformation transform) {
-        transform.add(DotNames.ALTERNATIVE_PRIORITY,
-                createAlternativePriority());
-    }
-
-    private AnnotationValue createAlternativePriority() {
-        // use Integer.MAX_VALUE - 1 to avoid having conflicts with enabling beans via config
-        return AnnotationValue.createIntegerValue("value", Integer.MAX_VALUE - 1);
-    }
-
-    private void disableBean(Transformation transform) {
-        transform.add(DotNames.ALTERNATIVE);
     }
 }
