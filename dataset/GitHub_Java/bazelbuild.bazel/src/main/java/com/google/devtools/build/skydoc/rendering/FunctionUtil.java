@@ -17,6 +17,7 @@ package com.google.devtools.build.skydoc.rendering;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
@@ -102,32 +103,64 @@ public final class FunctionUtil {
   }
 
   private static List<FunctionParamInfo> parameterInfos(
-      StarlarkFunction fn, Map<String, String> parameterDoc) {
-    List<String> names = fn.getParameterNames();
-    int nparams = names.size();
-    int kwargsIndex = fn.hasKwargs() ? --nparams : -1;
-    int varargsIndex = fn.hasVarargs() ? --nparams : -1;
-    // Inv: nparams is number of regular parameters.
+      StarlarkFunction userDefinedFunction, Map<String, String> paramNameToDocMap) {
+    FunctionSignature signature = userDefinedFunction.getSignature();
+    ImmutableList.Builder<FunctionParamInfo> parameterInfos = ImmutableList.builder();
 
-    ImmutableList.Builder<FunctionParamInfo> infos = ImmutableList.builder();
-    for (int i = 0; i < names.size(); i++) {
-      String name = names.get(i);
-      FunctionParamInfo info;
-      if (i == varargsIndex) {
-        // *args
-        String doc = parameterDoc.getOrDefault("*" + name, "");
-        info = forSpecialParam(name, doc);
-      } else if (i == kwargsIndex) {
-        // **kwargs
-        String doc = parameterDoc.getOrDefault("**" + name, "");
-        info = forSpecialParam(name, doc);
-      } else {
-        // regular parameter
-        String doc = parameterDoc.getOrDefault(name, "");
-        info = forParam(name, doc, fn.getDefaultValue(i));
-      }
-      infos.add(info);
+    List<String> paramNames = signature.getParameterNames();
+    int numMandatoryParams = signature.numMandatoryPositionals();
+
+    int paramIndex;
+    // Mandatory parameters.
+    // Mandatory parameters must always come before optional parameters, so this counts
+    // down until all mandatory parameters have been exhausted, and then starts filling in
+    // the optional parameters accordingly.
+    for (paramIndex = 0; paramIndex < numMandatoryParams; paramIndex++) {
+      String paramName = paramNames.get(paramIndex);
+      String paramDoc = paramNameToDocMap.getOrDefault(paramName, "");
+      parameterInfos.add(forParam(paramName, paramDoc, /*default param*/ null));
     }
-    return infos.build();
+
+    // Parameters with defaults.
+    List<Object> defaultValues = userDefinedFunction.getDefaultValues();
+    if (defaultValues != null) {
+      for (Object element : defaultValues) {
+        String paramName = paramNames.get(paramIndex);
+        String paramDoc = "";
+        Object defaultParamValue = element;
+        if (paramNameToDocMap.containsKey(paramName)) {
+          paramDoc = paramNameToDocMap.get(paramName);
+        }
+        parameterInfos.add(forParam(paramName, paramDoc, defaultParamValue));
+        paramIndex++;
+      }
+    }
+
+    // *arg
+    if (signature.hasVarargs()) {
+      String paramName = paramNames.get(paramIndex);
+      String paramDoc = "";
+      if (paramNameToDocMap.containsKey(paramName)) {
+        paramDoc = paramNameToDocMap.get(paramName);
+      } else if (paramNameToDocMap.containsKey("*" + paramName)) {
+        paramDoc = paramNameToDocMap.get("*" + paramName);
+      }
+      parameterInfos.add(forSpecialParam(paramName, paramDoc));
+      paramIndex++;
+    }
+
+    // **kwargs
+    if (signature.hasKwargs()) {
+      String paramName = paramNames.get(paramIndex);
+      String paramDoc = "";
+      if (paramNameToDocMap.containsKey(paramName)) {
+        paramDoc = paramNameToDocMap.get(paramName);
+      } else if (paramNameToDocMap.containsKey("**" + paramName)) {
+        paramDoc = paramNameToDocMap.get("**" + paramName);
+      }
+      parameterInfos.add(forSpecialParam(paramName, paramDoc));
+      paramIndex++;
+    }
+    return parameterInfos.build();
   }
 }
