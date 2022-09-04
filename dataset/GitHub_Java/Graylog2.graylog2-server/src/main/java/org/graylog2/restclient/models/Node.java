@@ -393,11 +393,6 @@ public class Node extends ClusterEntity {
         return systemInfo.codename;
     }
 
-    public String getTimezone() {
-        requireSystemInfo();
-        return systemInfo.timezone;
-    }
-
     public String getPid() {
         requireJVMInfo();
         return jvmInfo.getPid();
