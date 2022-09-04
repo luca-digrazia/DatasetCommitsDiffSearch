@@ -1,4 +1,6 @@
 /**
+ * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,14 +15,15 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.plugin.lifecycles.Lifecycle;
-import org.graylog2.plugin.lifecycles.LoadBalancerStatus;
+import org.graylog2.lifecycles.Lifecycle;
+import org.graylog2.lifecycles.LoadBalancerStatus;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.documentation.annotations.ApiParam;
@@ -48,7 +51,7 @@ public class LoadBalancerStatusResource extends RestResource{
     @ApiOperation(value = "Get status of this graylog2-server node for load balancers. " +
             "Returns either ALIVE with HTTP 200 or DEAD with HTTP 503.")
     public Response status() {
-        LoadBalancerStatus lbStatus = serverStatus.getLifecycle().getLoadbalancerStatus();
+        LoadBalancerStatus lbStatus = core.getLifecycle().getLoadbalancerStatus();
 
         Response.Status status = lbStatus.equals(LoadBalancerStatus.ALIVE)
                 ? Response.Status.OK : Response.Status.SERVICE_UNAVAILABLE;
@@ -76,10 +79,10 @@ public class LoadBalancerStatusResource extends RestResource{
 
         switch (lbStatus) {
             case DEAD:
-                serverStatus.setLifecycle(Lifecycle.OVERRIDE_LB_DEAD);
+                core.setLifecycle(Lifecycle.OVERRIDE_LB_DEAD);
                 break;
             case ALIVE:
-                serverStatus.setLifecycle(Lifecycle.OVERRIDE_LB_ALIVE);
+                core.setLifecycle(Lifecycle.OVERRIDE_LB_ALIVE);
                 break;
         }
 
