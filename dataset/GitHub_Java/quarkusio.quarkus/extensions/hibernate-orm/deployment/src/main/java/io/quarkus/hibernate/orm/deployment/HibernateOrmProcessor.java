@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.hibernate.orm.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
@@ -60,7 +76,7 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
+import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
@@ -103,8 +119,8 @@ public final class HibernateOrmProcessor {
     HibernateOrmConfig hibernateConfig;
 
     @BuildStep
-    HotDeploymentWatchedFileBuildItem configFile() {
-        return new HotDeploymentWatchedFileBuildItem("META-INF/persistence.xml");
+    HotDeploymentConfigFileBuildItem configFile() {
+        return new HotDeploymentConfigFileBuildItem("META-INF/persistence.xml");
     }
 
     @SuppressWarnings("unchecked")
@@ -121,7 +137,7 @@ public final class HibernateOrmProcessor {
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorProducer,
             BuildProducer<SubstrateResourceBuildItem> resourceProducer,
-            BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeploymentProducer,
+            BuildProducer<HotDeploymentConfigFileBuildItem> hotDeploymentProducer,
             BuildProducer<SystemPropertyBuildItem> systemPropertyProducer,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<JpaEntitiesBuildItem> domainObjectsProducer,
@@ -334,7 +350,7 @@ public final class HibernateOrmProcessor {
     private void handleHibernateORMWithNoPersistenceXml(
             List<ParsedPersistenceXmlDescriptor> descriptors,
             BuildProducer<SubstrateResourceBuildItem> resourceProducer,
-            BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeploymentProducer,
+            BuildProducer<HotDeploymentConfigFileBuildItem> hotDeploymentProducer,
             BuildProducer<SystemPropertyBuildItem> systemProperty,
             ArchiveRootBuildItem root,
             Optional<DataSourceDriverBuildItem> driverBuildItem,
@@ -425,13 +441,13 @@ public final class HibernateOrmProcessor {
                         .ofNullable(applicationArchivesBuildItem.getRootArchive().getChildPath(importFile));
 
                 // we enroll for hot deployment even if the file does not exist
-                hotDeploymentProducer.produce(new HotDeploymentWatchedFileBuildItem(importFile));
+                hotDeploymentProducer.produce(new HotDeploymentConfigFileBuildItem(importFile));
 
                 // enlist resource if present
                 loadScriptPath
                         .filter(path -> !Files.isDirectory(path))
                         .ifPresent(path -> {
-                            String resourceAsString = root.getArchiveRoot().relativize(loadScriptPath.get()).toString();
+                            String resourceAsString = root.getPath().relativize(loadScriptPath.get()).toString();
                             resourceProducer.produce(new SubstrateResourceBuildItem(resourceAsString));
                             desc.getProperties().setProperty(AvailableSettings.HBM2DDL_IMPORT_FILES, importFile);
                         });
