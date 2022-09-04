@@ -3,7 +3,6 @@
 package com.facebook.stetho.inspector.network;
 
 import android.os.SystemClock;
-import com.facebook.stetho.common.LogRedirector;
 import com.facebook.stetho.common.Utf8Charset;
 import com.facebook.stetho.inspector.console.CLog;
 import com.facebook.stetho.inspector.protocol.module.Console;
@@ -27,8 +26,6 @@ import java.util.ArrayList;
  * implementation will be automatically wired up to them.
  */
 public class NetworkEventReporterImpl implements NetworkEventReporter {
-  private static final String TAG = "RealNetworkEventReporter";
-
   @Nullable
   private ResourceTypeHelper mResourceTypeHelper;
 
@@ -94,12 +91,7 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       params.timestamp = stethoNow() / 1000.0;
       params.initiator = initiatorJSON;
       params.redirectResponse = null;
-
-      // Type is now required as of at least WebKit Inspector rev @188492.  If you don't send
-      // it, Chrome will refuse to draw the row in the Network tab until the response is
-      // received (providing the type).  This delay is very noticable on slow networks.
       params.type = Page.ResourceType.OTHER;
-
       peerManager.sendNotificationToPeers("Network.requestWillBeSent", params);
     }
   }
@@ -232,7 +224,6 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       failedParams.requestId = requestId;
       failedParams.timestamp = stethoNow() / 1000.0;
       failedParams.errorText = errorText;
-      failedParams.type = Page.ResourceType.OTHER;
       peerManager.sendNotificationToPeers("Network.loadingFailed", failedParams);
     }
   }
