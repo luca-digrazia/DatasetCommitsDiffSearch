@@ -33,7 +33,14 @@ public class BundlesApiController extends AuthenticatedController {
     }
 
     public Result create() {
-        String path = getRefererPath();
+        String path;
+        try {
+            URL parser = new URL(request().getHeader(REFERER));
+            path = parser.getPath();
+        } catch (MalformedURLException e) {
+            path = "/";
+        }
+
         MultipartFormData body = request().body().asMultipartFormData();
         FilePart bundle = body.getFile("bundle");
         if (bundle != null) {
@@ -66,15 +73,6 @@ public class BundlesApiController extends AuthenticatedController {
         } catch (Exception e) {
             flash("error", "Could not apply bundle: " + e);
         }
-        return redirect(getRefererPath());
-    }
-
-    private String getRefererPath() {
-        try {
-            URL parser = new URL(request().getHeader(REFERER));
-            return parser.getPath();
-        } catch (MalformedURLException e) {
-            return "/";
-        }
+        return redirect("/");
     }
 }
