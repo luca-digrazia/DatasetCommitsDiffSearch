@@ -14,39 +14,52 @@
 
 package com.google.devtools.build.lib.worker;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.sandbox.SymlinkedExecRoot;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
+import com.google.common.flogger.GoogleLogger;
+import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
+import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
+import java.util.Set;
 
-/** A {@link Worker} that runs inside a sandboxed execution root. */
-final class SandboxedWorker extends Worker {
-  private final Path workDir;
-  private final SymlinkedExecRoot symlinkedExecRoot;
+/** A {@link SingleplexWorker} that runs inside a sandboxed execution root. */
+final class SandboxedWorker extends SingleplexWorker {
+  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private final WorkerExecRoot workerExecRoot;
 
   SandboxedWorker(WorkerKey workerKey, int workerId, Path workDir, Path logFile) {
     super(workerKey, workerId, workDir, logFile);
-    this.workDir = workDir;
-    this.symlinkedExecRoot = new SymlinkedExecRoot(workDir);
+    workerExecRoot = new WorkerExecRoot(workDir);
   }
 
   @Override
-  void destroy() throws IOException {
+  public boolean isSandboxed() {
+    return true;
+  }
+
+  @Override
+  public void prepareExecution(
+      SandboxInputs inputFiles, SandboxOutputs outputs, Set<PathFragment> workerFiles)
+      throws IOException {
+    workerExecRoot.createFileSystem(workerFiles, inputFiles, outputs);
+
+    super.prepareExecution(inputFiles, outputs, workerFiles);
+  }
+
+  @Override
+  public void finishExecution(Path execRoot, SandboxOutputs outputs) throws IOException {
+    super.finishExecution(execRoot, outputs);
+
+    workerExecRoot.copyOutputs(execRoot, outputs);
+  }
+
+  @Override
+  void destroy() {
     super.destroy();
-    if (symlinkedExecRoot != null) {
-      FileSystemUtils.deleteTree(workDir);
+    try {
+      workDir.deleteTree();
+    } catch (IOException e) {
+      logger.atWarning().withCause(e).log("Caught IOException while deleting workdir.");
     }
-  }
-
-  @Override
-  public void prepareExecution(WorkerKey key) throws IOException {
-    symlinkedExecRoot.createFileSystem(
-        key.getInputFiles(), key.getOutputFiles(), ImmutableSet.<Path>of());
-  }
-
-  @Override
-  public void finishExecution(WorkerKey key) throws IOException {
-    symlinkedExecRoot.copyOutputs(key.getExecRoot(), key.getOutputFiles());
   }
 }
