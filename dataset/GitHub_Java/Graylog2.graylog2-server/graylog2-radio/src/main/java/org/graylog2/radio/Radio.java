@@ -30,7 +30,6 @@ import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.internal.scanning.PackageNamesScanner;
 import org.graylog2.inputs.BasicCache;
 import org.graylog2.inputs.Cache;
-import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Tools;
@@ -75,8 +74,6 @@ public class Radio implements InputHost {
     private MetricRegistry metricRegistry;
     private Configuration configuration;
 
-    private GELFChunkManager gelfChunkManager;
-
     private static final int SCHEDULED_THREADS_POOL_SIZE = 10;
     private ScheduledExecutorService scheduler;
 
@@ -110,9 +107,6 @@ public class Radio implements InputHost {
 
         NodeId id = new NodeId(configuration.getNodeIdFile());
         this.nodeId = id.readOrGenerate();
-
-        gelfChunkManager = new GELFChunkManager(this);
-        gelfChunkManager.start();
 
         inputCache = new BasicCache();
         processBuffer = new ProcessBuffer(this, inputCache);
@@ -237,8 +231,8 @@ public class Radio implements InputHost {
     }
 
     @Override
-    public GELFChunkManager getGELFChunkManager() {
-        return this.gelfChunkManager;
+    public Object getGELFChunkManager() {
+        return null;
     }
 
     @Override
