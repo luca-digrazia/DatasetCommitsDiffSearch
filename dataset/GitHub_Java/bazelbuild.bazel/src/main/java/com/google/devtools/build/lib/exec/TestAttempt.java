@@ -219,11 +219,11 @@ public class TestAttempt implements BuildEventWithOrderConstraint {
     builder.setTestAttemptDurationMillis(durationMillis);
     builder.addAllWarning(testWarnings);
     for (Pair<String, Path> file : files) {
-      String uri = pathConverter.apply(file.getSecond());
-      if (uri != null) {
-        builder.addTestActionOutput(
-            BuildEventStreamProtos.File.newBuilder().setName(file.getFirst()).setUri(uri).build());
-      }
+      builder.addTestActionOutput(
+          BuildEventStreamProtos.File.newBuilder()
+              .setName(file.getFirst())
+              .setUri(pathConverter.apply(file.getSecond()))
+              .build());
     }
     return builder.build();
   }

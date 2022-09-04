@@ -83,9 +83,7 @@ class NamedArtifactGroup implements BuildEvent {
       }
       String name = artifact.getRootRelativePathString();
       String uri = pathConverter.apply(artifact.getPath());
-      if (uri != null) {
-        builder.addFiles(BuildEventStreamProtos.File.newBuilder().setName(name).setUri(uri));
-      }
+      builder.addFiles(BuildEventStreamProtos.File.newBuilder().setName(name).setUri(uri));
     }
     for (NestedSetView<Artifact> child : view.transitives()) {
       builder.addFileSets(namer.apply(child.identifier()));

@@ -62,14 +62,11 @@ public class BuildToolLogs implements BuildEventWithOrderConstraint {
               .build());
     }
     for (Pair<String, Path> logFile : logFiles) {
-      String uri = converters.pathConverter().apply(logFile.getSecond());
-      if (uri != null) {
-        toolLogs.addLog(
-            BuildEventStreamProtos.File.newBuilder()
-                .setName(logFile.getFirst())
-                .setUri(uri)
-                .build());
-      }
+      toolLogs.addLog(
+          BuildEventStreamProtos.File.newBuilder()
+              .setName(logFile.getFirst())
+              .setUri(converters.pathConverter().apply(logFile.getSecond()))
+              .build());
     }
     return GenericBuildEvent.protoChaining(this).setBuildToolLogs(toolLogs.build()).build();
   }

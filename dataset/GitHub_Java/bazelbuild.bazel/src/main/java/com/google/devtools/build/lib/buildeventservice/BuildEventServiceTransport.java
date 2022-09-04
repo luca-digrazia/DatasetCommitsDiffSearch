@@ -404,11 +404,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
           publishBuildFinishedEvent(result);
         }
       } finally {
-        try {
-          besClient.shutdown();
-        } finally {
-          artifactUploader.shutdown();
-        }
+        besClient.shutdown();
       }
       return null;
     }

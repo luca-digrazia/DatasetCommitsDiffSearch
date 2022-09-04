@@ -511,16 +511,12 @@ public class TestSummary implements Comparable<TestSummary>, BuildEventWithOrder
             .setTotalNumCached(getNumCached())
             .setTotalRunCount(totalRuns());
     for (Path path : getFailedLogs()) {
-      String uri = pathConverter.apply(path);
-      if (uri != null) {
-        summaryBuilder.addFailed(BuildEventStreamProtos.File.newBuilder().setUri(uri).build());
-      }
+      summaryBuilder.addFailed(
+          BuildEventStreamProtos.File.newBuilder().setUri(pathConverter.apply(path)).build());
     }
     for (Path path : getPassedLogs()) {
-      String uri = pathConverter.apply(path);
-      if (uri != null) {
-        summaryBuilder.addPassed(BuildEventStreamProtos.File.newBuilder().setUri(uri).build());
-      }
+      summaryBuilder.addPassed(
+          BuildEventStreamProtos.File.newBuilder().setUri(pathConverter.apply(path)).build());
     }
     return GenericBuildEvent.protoChaining(this).setTestSummary(summaryBuilder.build()).build();
   }

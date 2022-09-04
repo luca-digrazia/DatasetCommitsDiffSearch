@@ -144,18 +144,18 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
       actionBuilder.setExitCode(exception.getExitCode().getNumericExitCode());
     }
     if (stdout != null) {
-      String uri = pathConverter.apply(stdout);
-      if (uri != null) {
-        actionBuilder.setStdout(
-            BuildEventStreamProtos.File.newBuilder().setName("stdout").setUri(uri).build());
-      }
+      actionBuilder.setStdout(
+          BuildEventStreamProtos.File.newBuilder()
+          .setName("stdout")
+          .setUri(pathConverter.apply(stdout))
+          .build());
     }
     if (stderr != null) {
-      String uri = pathConverter.apply(stderr);
-      if (uri != null) {
-        actionBuilder.setStderr(
-            BuildEventStreamProtos.File.newBuilder().setName("stderr").setUri(uri).build());
-      }
+      actionBuilder.setStderr(
+          BuildEventStreamProtos.File.newBuilder()
+          .setName("stderr")
+          .setUri(pathConverter.apply(stderr))
+          .build());
     }
     if (action.getOwner() != null && action.getOwner().getLabel() != null) {
       actionBuilder.setLabel(action.getOwner().getLabel().toString());
@@ -168,11 +168,10 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
       actionBuilder.setConfiguration(configuration.getEventId().asStreamProto().getConfiguration());
     }
     if (exception == null) {
-      String uri = pathConverter.apply(action.getPrimaryOutput().getPath());
-      if (uri != null) {
-        actionBuilder.setPrimaryOutput(
-            BuildEventStreamProtos.File.newBuilder().setUri(uri).build());
-      }
+      actionBuilder.setPrimaryOutput(
+          BuildEventStreamProtos.File.newBuilder()
+              .setUri(pathConverter.apply(action.getPrimaryOutput().getPath()))
+              .build());
     }
     try {
       if (action instanceof CommandAction) {

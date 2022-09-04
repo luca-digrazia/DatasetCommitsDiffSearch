@@ -274,9 +274,7 @@ public final class TargetCompleteEvent
     for (Artifact artifact : artifacts) {
       String name = artifactNameFunction.apply(artifact);
       String uri = converters.pathConverter().apply(artifact.getPath());
-      if (uri != null) {
-        builder.addImportantOutput(File.newBuilder().setName(name).setUri(uri).build());
-      }
+      builder.addImportantOutput(File.newBuilder().setName(name).setUri(uri).build());
     }
   }
 
