@@ -17,6 +17,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -215,8 +216,8 @@ public class LibrariesToLinkCollector {
   }
 
   private Pair<Boolean, Boolean> addLinkerInputs(
-      ImmutableSet.Builder<String> librarySearchDirectories,
-      ImmutableSet.Builder<String> rpathEntries,
+      Builder<String> librarySearchDirectories,
+      Builder<String> rpathEntries,
       SequenceBuilder librariesToLink) {
     boolean includeSolibDir = false;
     boolean includeToolchainLibrariesSolibDir = false;
