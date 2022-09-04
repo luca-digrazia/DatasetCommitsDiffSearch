@@ -8,48 +8,43 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assume.assumeTrue;
 
 public class LoggingFactoryPrintErrorMessagesTest {
 
     @Rule
     public final TemporaryFolder tempDir = new TemporaryFolder();
 
-    File folderWithoutWritePermission;
-    File folderWithWritePermission;
-
     LoggingFactory factory;
-    LoggerContext loggerContext;
+    ByteArrayOutputStream output;
 
     @Before
     public void setUp() throws Exception {
-        folderWithoutWritePermission = tempDir.newFolder("folder-without-write-permission");
-        folderWithoutWritePermission.setWritable(false);
-
-        folderWithWritePermission = tempDir.newFolder("folder-with-write-permission");
-
-        loggerContext = new LoggerContext();
-        factory = new LoggingFactory(loggerContext);
+        output = new ByteArrayOutputStream();
+        factory = new LoggingFactory(new LoggerContext(), new PrintStream(output));
     }
 
     @After
     public void tearDown() throws Exception {
-        loggerContext.stop();
+        factory.stop();
     }
 
-    private void configureLoggingFactoryWithFileAppender(File file){
+    private void configureLoggingFactoryWithFileAppender(File file) {
         factory.setAppenders(singletonList(newFileAppenderFactory(file)));
     }
 
-    private AppenderFactory newFileAppenderFactory(File file){
+    private AppenderFactory newFileAppenderFactory(File file) {
         FileAppenderFactory fileAppenderFactory = new FileAppenderFactory();
 
         fileAppenderFactory.setCurrentLogFilename(file.toString() + File.separator + "my-log-file.log");
@@ -58,36 +53,53 @@ public class LoggingFactoryPrintErrorMessagesTest {
         return fileAppenderFactory;
     }
 
-    private String configureAndCaptureSystemOut() throws UnsupportedEncodingException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
+    private String configureAndGetOutputWrittenToErrorStream() throws UnsupportedEncodingException {
+        factory.configure(new MetricRegistry(), "logger-test");
 
-        try {
-            StatusPrinter.setPrintStream(new PrintStream(out));
-            factory.configure(new MetricRegistry(), "logger-test");
-        }finally {
-            StatusPrinter.setPrintStream(System.out);
-        }
+        return output.toString(StandardCharsets.UTF_8.name());
+    }
 
-        return out.toString(StandardCharsets.UTF_8.name());
+    @Test
+    public void testWhenUsingDefaultConstructor_SystemErrIsSet() throws Exception {
+        PrintStream configurationErrorsStream = new LoggingFactory().configurationErrorsStream;
+
+        assertThat(configurationErrorsStream).isSameAs(System.err);
+    }
+
+    @Test
+    public void testWhenUsingDefaultConstructor_StaticILoggerFactoryIsSet() throws Exception {
+        LoggerContext loggerContext = new LoggingFactory().loggerContext;
+
+        assertThat(loggerContext).isSameAs(LoggerFactory.getILoggerFactory());
     }
 
     @Test
     public void testWhenFileAppenderDoesNotHaveWritePermissionToFolder_PrintsErrorMessageToConsole() throws Exception {
-        File file = folderWithoutWritePermission;
+        File folderWithoutWritePermission = tempDir.newFolder("folder-without-write-permission");
+        assumeTrue(folderWithoutWritePermission.setWritable(false));
 
-        configureLoggingFactoryWithFileAppender(file);
+        configureLoggingFactoryWithFileAppender(folderWithoutWritePermission);
 
-        assertThat(file.canWrite()).isFalse();
-        assertThat(configureAndCaptureSystemOut()).contains(file.toString());
+        assertThat(folderWithoutWritePermission.canWrite()).isFalse();
+        assertThat(configureAndGetOutputWrittenToErrorStream()).contains(folderWithoutWritePermission.toString());
     }
 
     @Test
     public void testWhenSettingUpLoggingWithValidConfiguration_NoErrorMessageIsPrintedToConsole() throws Exception {
-        File file = folderWithWritePermission;
+        File folderWithWritePermission = tempDir.newFolder("folder-with-write-permission");
 
-        configureLoggingFactoryWithFileAppender(file);
+        configureLoggingFactoryWithFileAppender(folderWithWritePermission);
 
-        assertThat(file.canWrite()).isTrue();
-        assertThat(configureAndCaptureSystemOut()).isEmpty();
+        assertThat(folderWithWritePermission.canWrite()).isTrue();
+        assertThat(configureAndGetOutputWrittenToErrorStream()).isEmpty();
+    }
+
+    @Test
+    public void testLogbackStatusPrinterPrintStreamIsRestoredToSystemOut() throws Exception {
+        Field field = StatusPrinter.class.getDeclaredField("ps");
+        field.setAccessible(true);
+
+        PrintStream out = (PrintStream) field.get(null);
+        assertThat(out).isSameAs(System.out);
     }
 }
