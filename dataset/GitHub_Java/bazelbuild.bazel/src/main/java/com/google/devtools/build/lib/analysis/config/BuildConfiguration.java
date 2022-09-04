@@ -792,7 +792,7 @@ public class BuildConfiguration implements BuildEvent {
 
     @Option(
       name = "experimental_skyframe_native_filesets",
-      defaultValue = "true",
+      defaultValue = "false",
       category = "experimental",
       documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
       effectTags = { OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION },
@@ -800,7 +800,8 @@ public class BuildConfiguration implements BuildEvent {
       help =
           "If true, Blaze will use the skyframe-native implementation of the Fileset rule."
               + " This offers improved performance in incremental builds of Filesets as well as"
-              + " correct incremental behavior."
+              + " correct incremental behavior, but is not yet stable. The default is false,"
+              + " meaning Blaze uses the legacy impelementation of Fileset."
     )
     public boolean skyframeNativeFileset;
 
