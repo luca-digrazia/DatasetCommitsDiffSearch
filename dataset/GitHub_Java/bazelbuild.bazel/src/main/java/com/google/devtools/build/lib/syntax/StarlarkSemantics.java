@@ -60,7 +60,6 @@ public abstract class StarlarkSemantics {
     EXPERIMENTAL_STARLARK_UNUSED_INPUTS_LIST(
         StarlarkSemantics::experimentalStarlarkUnusedInputsList),
     EXPERIMENTAL_CC_SHARED_LIBRARY(StarlarkSemantics::experimentalCcSharedLibrary),
-    EXPERIMENTAL_REPO_REMOTE_EXEC(StarlarkSemantics::experimentalRepoRemoteExec),
     INCOMPATIBLE_DISABLE_DEPSET_INPUTS(StarlarkSemantics::incompatibleDisableDepsetItems),
     INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT(StarlarkSemantics::incompatibleNoOutputAttrDefault),
     INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM(StarlarkSemantics::incompatibleNoRuleOutputsParam),
@@ -150,8 +149,6 @@ public abstract class StarlarkSemantics {
   public abstract boolean experimentalStarlarkUnusedInputsList();
 
   public abstract boolean experimentalCcSharedLibrary();
-
-  public abstract boolean experimentalRepoRemoteExec();
 
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
 
@@ -254,7 +251,6 @@ public abstract class StarlarkSemantics {
           .experimentalStarlarkConfigTransitions(true)
           .experimentalStarlarkUnusedInputsList(true)
           .experimentalCcSharedLibrary(false)
-          .experimentalRepoRemoteExec(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
           .incompatibleDepsetUnion(true)
           .incompatibleDisableTargetProviderFields(false)
@@ -313,8 +309,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder experimentalStarlarkUnusedInputsList(boolean value);
 
     public abstract Builder experimentalCcSharedLibrary(boolean value);
-
-    public abstract Builder experimentalRepoRemoteExec(boolean value);
 
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 

@@ -779,7 +779,7 @@ final class StringModule implements SkylarkValue {
         result.add(line);
       }
     }
-    return StarlarkList.immutableCopyOf(result);
+    return Sequence.createImmutable(result);
   }
 
   @SkylarkCallable(
@@ -967,7 +967,7 @@ final class StringModule implements SkylarkValue {
     for (char c : self.toCharArray()) {
       builder.add(String.valueOf(c));
     }
-    return StarlarkList.immutableCopyOf(builder.build());
+    return Sequence.createImmutable(builder.build());
   }
 
   @SkylarkCallable(
