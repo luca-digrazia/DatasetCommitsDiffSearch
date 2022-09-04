@@ -15,18 +15,17 @@
 package com.google.devtools.build.lib.skylarkbuildapi.apple;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkAspectApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SplitTransitionProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StarlarkAspectApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StarlarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleStaticLibraryInfoApi.AppleStaticLibraryInfoProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
-import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -34,24 +33,22 @@ import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /** Interface for a module with useful functions for creating apple-related rule implementations. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "apple_common",
     doc = "Functions for Starlark to access internals of the apple rule implementations.")
 public interface AppleCommonApi<
         FileApiT extends FileApi,
-        ConstraintValueT extends ConstraintValueInfoApi,
-        StarlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
         ObjcProviderApiT extends ObjcProviderApi<?>,
         XcodeConfigInfoApiT extends XcodeConfigInfoApi<?, ?>,
         ApplePlatformApiT extends ApplePlatformApi>
     extends StarlarkValue {
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "apple_toolchain",
       doc = "Utilities for resolving items from the apple toolchain.")
   AppleToolchainApi<?> getAppleToolchain();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "platform_type",
       doc =
           "An enum-like struct that contains the following fields corresponding to Apple platform "
@@ -65,7 +62,7 @@ public interface AppleCommonApi<
       structField = true)
   StructApi getPlatformTypeStruct();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "platform",
       doc =
           "An enum-like struct that contains the following fields corresponding to Apple "
@@ -83,7 +80,7 @@ public interface AppleCommonApi<
       structField = true)
   StructApi getPlatformStruct();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "XcodeProperties",
       doc =
           "The constructor/key for the <code>XcodeVersionProperties</code> provider.<p>"
@@ -96,15 +93,15 @@ public interface AppleCommonApi<
       structField = true)
   ProviderApi getXcodeVersionPropertiesConstructor();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "XcodeVersionConfig",
       doc = "The constructor/key for the <code>XcodeVersionConfig</code> provider.",
       structField = true)
   ProviderApi getXcodeVersionConfigConstructor();
 
-  @StarlarkMethod(
-      // TODO(b/63899207): This currently does not match ObjcProvider.STARLARK_NAME as it requires
-      // a migration of existing Starlark rules.
+  @SkylarkCallable(
+      // TODO(b/63899207): This currently does not match ObjcProvider.SKYLARK_NAME as it requires
+      // a migration of existing skylark rules.
       name = "Objc",
       doc =
           "The constructor/key for the <code>Objc</code> provider.<p>"
@@ -117,7 +114,7 @@ public interface AppleCommonApi<
       structField = true)
   ProviderApi getObjcProviderConstructor();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "AppleDynamicFramework",
       doc =
           "The constructor/key for the <code>AppleDynamicFramework</code> provider.<p>"
@@ -130,7 +127,7 @@ public interface AppleCommonApi<
       structField = true)
   ProviderApi getAppleDynamicFrameworkConstructor();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "AppleDylibBinary",
       doc =
           "The constructor/key for the <code>AppleDylibBinary</code> provider.<p>If a target"
@@ -142,7 +139,7 @@ public interface AppleCommonApi<
       structField = true)
   ProviderApi getAppleDylibBinaryConstructor();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "AppleExecutableBinary",
       doc =
           "The constructor/key for the <code>AppleExecutableBinary</code> provider.<p>"
@@ -155,7 +152,7 @@ public interface AppleCommonApi<
       structField = true)
   ProviderApi getAppleExecutableBinaryConstructor();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "AppleStaticLibrary",
       doc =
           "The constructor/key for the <code>AppleStaticLibrary</code> provider.<p>"
@@ -168,7 +165,7 @@ public interface AppleCommonApi<
       structField = true)
   AppleStaticLibraryInfoProvider<?, ?> getAppleStaticLibraryProvider();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "AppleDebugOutputs",
       doc =
           "The constructor/key for the <code>AppleDebugOutputs</code> provider.<p>If a target"
@@ -180,7 +177,7 @@ public interface AppleCommonApi<
       structField = true)
   ProviderApi getAppleDebugOutputsConstructor();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "AppleLoadableBundleBinary",
       doc =
           "The constructor/key for the <code>AppleLoadableBundleBinary</code> provider.<p>"
@@ -193,7 +190,7 @@ public interface AppleCommonApi<
       structField = true)
   ProviderApi getAppleLoadableBundleBinaryConstructor();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "apple_host_system_env",
       doc =
           "Returns a <a href='dict.html'>dict</a> of environment variables that should be set "
@@ -210,7 +207,7 @@ public interface AppleCommonApi<
       })
   ImmutableMap<String, String> getAppleHostSystemEnv(XcodeConfigInfoApiT xcodeConfig);
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "target_apple_env",
       doc =
           "Returns a <code>dict</code> of environment variables that should be set for actions "
@@ -234,7 +231,7 @@ public interface AppleCommonApi<
   ImmutableMap<String, String> getTargetAppleEnvironment(
       XcodeConfigInfoApiT xcodeConfig, ApplePlatformApiT platform);
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "multi_arch_split",
       doc =
           "A configuration transition for rule attributes to build dependencies in one or more"
@@ -255,7 +252,7 @@ public interface AppleCommonApi<
       structField = true)
   SplitTransitionProviderApi getMultiArchSplitProvider();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "new_objc_provider",
       doc = "Creates a new ObjcProvider instance.",
       parameters = {
@@ -274,11 +271,11 @@ public interface AppleCommonApi<
               defaultValue = "{}",
               doc = "Dictionary of arguments."),
       useStarlarkThread = true)
-  // This method is registered statically for Starlark, and never called directly.
+  // This method is registered statically for skylark, and never called directly.
   ObjcProviderApi<?> newObjcProvider(Boolean usesSwift, Dict<?, ?> kwargs, StarlarkThread thread)
       throws EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "new_dynamic_framework_provider",
       doc = "Creates a new AppleDynamicFramework provider instance.",
       parameters = {
@@ -328,7 +325,7 @@ public interface AppleCommonApi<
       Object dynamicFrameworkFiles)
       throws EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "link_multi_arch_binary",
       doc =
           "Links a (potentially multi-architecture) binary targeting Apple platforms. This "
@@ -340,7 +337,7 @@ public interface AppleCommonApi<
       parameters = {
         @Param(
             name = "ctx",
-            type = StarlarkRuleContextApi.class,
+            type = SkylarkRuleContextApi.class,
             named = true,
             positional = false,
             doc = "The Starlark rule context."),
@@ -364,13 +361,13 @@ public interface AppleCommonApi<
       useStarlarkThread = true)
   // TODO(b/70937317): Iterate on, improve, and solidify this API.
   StructApi linkMultiArchBinary(
-      StarlarkRuleContextT starlarkRuleContext,
+      SkylarkRuleContextApi skylarkRuleContext,
       Sequence<?> extraLinkopts, // <String> expected.
       Sequence<?> extraLinkInputs, // <? extends FileApi> expected.
       StarlarkThread thread)
       throws EvalException, InterruptedException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "dotted_version",
       doc = "Creates a new <a href=\"DottedVersion.html\">DottedVersion</a> instance.",
       parameters = {
@@ -381,11 +378,11 @@ public interface AppleCommonApi<
       })
   DottedVersionApi<?> dottedVersion(String version) throws EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "objc_proto_aspect",
       doc =
           "objc_proto_aspect gathers the proto dependencies of the attached rule target,and"
               + " propagates the proto values of its dependencies through the ObjcProto provider.",
       structField = true)
-  StarlarkAspectApi getObjcProtoAspect();
+  SkylarkAspectApi getObjcProtoAspect();
 }
