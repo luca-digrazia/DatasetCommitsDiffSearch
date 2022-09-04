@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -43,7 +45,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
 import com.google.devtools.build.lib.syntax.Type;
@@ -356,7 +358,7 @@ public class JavaCommon {
    *
    * @see JavaNativeLibraryProvider
    */
-  protected NestedSet<LibraryToLink> collectTransitiveJavaNativeLibraries() {
+  protected NestedSet<LibraryToLinkWrapper> collectTransitiveJavaNativeLibraries() {
     NativeLibraryNestedSetBuilder builder = new NativeLibraryNestedSetBuilder();
     builder.addJavaTargets(targetsTreatedAsDeps(ClasspathType.BOTH));
 
@@ -432,27 +434,26 @@ public class JavaCommon {
   /** Returns the per-package configured javacopts. */
   public static ImmutableList<String> computePerPackageJavacOpts(
       RuleContext ruleContext, JavaToolchainProvider toolchain) {
-    // Do not use streams here as they create excessive garbage.
-    ImmutableList.Builder<String> result = ImmutableList.builder();
-    for (JavaPackageConfigurationProvider provider : toolchain.packageConfiguration()) {
-      if (provider.matches(ruleContext.getLabel())) {
-        result.addAll(provider.javacopts());
-      }
-    }
-    return result.build();
+    return computePerPackageConfiguration(ruleContext, toolchain).stream()
+        .flatMap(p -> p.javacopts().stream())
+        .collect(toImmutableList());
   }
 
   /** Returns the per-package configured runfiles. */
   public static NestedSet<Artifact> computePerPackageData(
       RuleContext ruleContext, JavaToolchainProvider toolchain) {
-    // Do not use streams here as they create excessive garbage.
     NestedSetBuilder<Artifact> data = NestedSetBuilder.naiveLinkOrder();
-    for (JavaPackageConfigurationProvider provider : toolchain.packageConfiguration()) {
-      if (provider.matches(ruleContext.getLabel())) {
-        data.addTransitive(provider.data());
-      }
-    }
+    computePerPackageConfiguration(ruleContext, toolchain).stream()
+        .map(JavaPackageConfigurationProvider::data)
+        .forEach(data::addTransitive);
     return data.build();
+  }
+
+  private static ImmutableList<JavaPackageConfigurationProvider> computePerPackageConfiguration(
+      RuleContext ruleContext, JavaToolchainProvider toolchain) {
+    return toolchain.packageConfiguration().stream()
+        .filter(p -> p.matches(ruleContext.getLabel()))
+        .collect(toImmutableList());
   }
 
   public static PathFragment getHostJavaExecutable(RuleContext ruleContext) {

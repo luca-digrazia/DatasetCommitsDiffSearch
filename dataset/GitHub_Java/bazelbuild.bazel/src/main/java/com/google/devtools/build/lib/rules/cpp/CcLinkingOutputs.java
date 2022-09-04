@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSetMultimap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingOutputsApi;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import javax.annotation.Nullable;
@@ -27,13 +28,13 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi<Artifact> {
 
   public static final CcLinkingOutputs EMPTY = new Builder().build();
 
-  @Nullable private final LibraryToLink libraryToLink;
+  @Nullable private final LibraryToLinkWrapper libraryToLink;
 
   private final ImmutableList<LtoBackendArtifacts> allLtoArtifacts;
   private final ImmutableList<Artifact> linkActionInputs;
 
   private CcLinkingOutputs(
-      LibraryToLink libraryToLink,
+      LibraryToLinkWrapper libraryToLink,
       ImmutableList<LtoBackendArtifacts> allLtoArtifacts,
       ImmutableList<Artifact> linkActionInputs) {
     this.libraryToLink = libraryToLink;
@@ -43,7 +44,7 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi<Artifact> {
 
   @Override
   @Nullable
-  public LibraryToLink getLibraryToLink() {
+  public LibraryToLinkWrapper getLibraryToLink() {
     return libraryToLink;
   }
 
@@ -63,11 +64,11 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi<Artifact> {
    * Gathers up a map from library identifiers to sets of LibraryToLink which share that library
    * identifier.
    */
-  public static ImmutableSetMultimap<String, LinkerInputs.LibraryToLink> getLibrariesByIdentifier(
-      Iterable<LinkerInputs.LibraryToLink> inputs) {
-    ImmutableSetMultimap.Builder<String, LinkerInputs.LibraryToLink> result =
+  public static ImmutableSetMultimap<String, LibraryToLink> getLibrariesByIdentifier(
+      Iterable<LibraryToLink> inputs) {
+    ImmutableSetMultimap.Builder<String, LibraryToLink> result =
         new ImmutableSetMultimap.Builder<>();
-    for (LinkerInputs.LibraryToLink library : inputs) {
+    for (LibraryToLink library : inputs) {
       Preconditions.checkNotNull(library.getLibraryIdentifier());
       result.put(library.getLibraryIdentifier(), library);
     }
@@ -96,7 +97,7 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi<Artifact> {
   }
 
   public static final class Builder {
-    private LibraryToLink libraryToLink;
+    private LibraryToLinkWrapper libraryToLink;
 
     // TODO(plf): Return a list of debug artifacts instead of lto back end artifacts and in that
     // same list return the .pdb file for Windows.
@@ -108,7 +109,7 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi<Artifact> {
       return new CcLinkingOutputs(libraryToLink, allLtoArtifacts.build(), linkActionInputs.build());
     }
 
-    public Builder setLibraryToLink(LibraryToLink libraryToLink) {
+    public Builder setLibraryToLink(LibraryToLinkWrapper libraryToLink) {
       this.libraryToLink = libraryToLink;
       return this;
     }

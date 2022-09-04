@@ -730,7 +730,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                 .build())
         .addUserLinkFlags(
             NestedSetBuilder.<LinkOptions>linkOrder()
-                .add(LinkOptions.of(userLinkflags.build(), ruleContext.getSymbolGenerator()))
+                .add(new LinkOptions(userLinkflags.build()))
                 .build());
 
     CcInfo ccInfoWithoutExtraLinkTimeLibraries =
@@ -1031,8 +1031,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ccCompilationContext.getVirtualToOriginalHeaders());
 
     NestedSet<Artifact> headerTokens =
-        CcCompilationHelper.collectHeaderTokens(
-            ruleContext, cppConfiguration, ccCompilationOutputs);
+        CcCompilationHelper.collectHeaderTokens(ruleContext, ccCompilationOutputs);
     NestedSet<Artifact> filesToCompile =
         ccCompilationOutputs.getFilesToCompile(
             cppConfiguration.processHeadersInDependencies(),

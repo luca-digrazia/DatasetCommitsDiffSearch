@@ -362,11 +362,7 @@ public final class CcLinkingHelper {
       CcCompilationContext ccCompilationContext) {
     NestedSetBuilder<Linkstamp> linkstampBuilder = NestedSetBuilder.stableOrder();
     for (Artifact linkstamp : linkstamps.build()) {
-      linkstampBuilder.add(
-          new Linkstamp(
-              linkstamp,
-              ccCompilationContext.getDeclaredIncludeSrcs(),
-              ruleContext.getActionKeyContext()));
+      linkstampBuilder.add(new Linkstamp(linkstamp, ccCompilationContext.getDeclaredIncludeSrcs()));
     }
     CcLinkingContext ccLinkingContext = CcLinkingContext.EMPTY;
     if (!neverlink) {
@@ -378,9 +374,7 @@ public final class CcLinkingHelper {
                   linkopts.isEmpty()
                       ? NestedSetBuilder.emptySet(Order.LINK_ORDER)
                       : NestedSetBuilder.create(
-                          Order.LINK_ORDER,
-                          CcLinkingContext.LinkOptions.of(
-                              linkopts, ruleContext.getSymbolGenerator())))
+                          Order.LINK_ORDER, CcLinkingContext.LinkOptions.of(linkopts)))
               .addLibraries(
                   NestedSetBuilder.<LibraryToLinkWrapper>linkOrder()
                       .addAll(libraryToLinkWrappers)

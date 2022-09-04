@@ -15,28 +15,24 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Joiner;
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.SolibLibraryToLink;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkWrapperApi;
 import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.ListIterator;
@@ -131,57 +127,35 @@ public abstract class LibraryToLinkWrapper implements LibraryToLinkWrapperApi<Ar
   public static class CcLinkingContext implements CcLinkingContextApi {
     public static final CcLinkingContext EMPTY = CcLinkingContext.builder().build();
 
-    /** A list of link options contributed by a single configured target/aspect. */
+    /**
+     * A list of link options contributed by a single configured target.
+     *
+     * <p><b>WARNING:</b> Do not implement {@code #equals()} in the obvious way. This class must be
+     * checked for equality by object identity because otherwise if two configured targets
+     * contribute the same link options, they will be de-duplicated, which is not the desirable
+     * behavior.
+     */
+    @AutoCodec
     @Immutable
     public static final class LinkOptions {
       private final ImmutableList<String> linkOptions;
-      private final Object symbolForEquality;
 
-      private LinkOptions(Iterable<String> linkOptions, Object symbolForEquality) {
+      @VisibleForSerialization
+      LinkOptions(Iterable<String> linkOptions) {
         this.linkOptions = ImmutableList.copyOf(linkOptions);
-        this.symbolForEquality = Preconditions.checkNotNull(symbolForEquality);
       }
 
       public ImmutableList<String> get() {
         return linkOptions;
       }
 
-      public static LinkOptions of(
-          Iterable<String> linkOptions, SymbolGenerator<?> symbolGenerator) {
-        return new LinkOptions(linkOptions, symbolGenerator.generate());
-      }
-
-      @Override
-      public int hashCode() {
-        // Symbol is sufficient for equality check.
-        return symbolForEquality.hashCode();
-      }
-
-      @Override
-      public boolean equals(Object obj) {
-        if (this == obj) {
-          return true;
-        }
-        if (!(obj instanceof LinkOptions)) {
-          return false;
-        }
-        LinkOptions that = (LinkOptions) obj;
-        if (!this.symbolForEquality.equals(that.symbolForEquality)) {
-          return false;
-        }
-        if (this.linkOptions.equals(that.linkOptions)) {
-          return true;
-        }
-        BugReport.sendBugReport(
-            new IllegalStateException(
-                "Unexpected inequality with equal symbols: " + this + ", " + that),
-            ImmutableList.of());
-        return false;
+      public static LinkOptions of(Iterable<String> linkOptions) {
+        return new LinkOptions(linkOptions);
       }
 
       @Override
       public String toString() {
-        return '[' + Joiner.on(",").join(linkOptions) + "] (owner: " + symbolForEquality;
+        return '[' + Joiner.on(",").join(linkOptions) + ']';
       }
     }
 
@@ -191,23 +165,15 @@ public abstract class LibraryToLinkWrapper implements LibraryToLinkWrapperApi<Ar
      * <p>This object is required because linkstamp files may include other headers which will have
      * to be provided during compilation.
      */
+    @AutoCodec
     public static final class Linkstamp {
       private final Artifact artifact;
       private final NestedSet<Artifact> declaredIncludeSrcs;
-      private final byte[] nestedDigest;
 
-      // TODO(janakr): if action key context is not available, the digest can be computed lazily,
-      // only if we are doing an equality comparison and artifacts are equal. That should never
-      // happen, so doing an expensive digest should be ok then.
-      Linkstamp(
-          Artifact artifact,
-          NestedSet<Artifact> declaredIncludeSrcs,
-          ActionKeyContext actionKeyContext) {
+      @VisibleForSerialization
+      Linkstamp(Artifact artifact, NestedSet<Artifact> declaredIncludeSrcs) {
         this.artifact = Preconditions.checkNotNull(artifact);
         this.declaredIncludeSrcs = Preconditions.checkNotNull(declaredIncludeSrcs);
-        Fingerprint fp = new Fingerprint();
-        actionKeyContext.addNestedSetToFingerprint(fp, this.declaredIncludeSrcs);
-        nestedDigest = fp.digestAndReset();
       }
 
       /** Returns the linkstamp artifact. */
@@ -222,8 +188,7 @@ public abstract class LibraryToLinkWrapper implements LibraryToLinkWrapperApi<Ar
 
       @Override
       public int hashCode() {
-        // Artifact should be enough to disambiguate basically all the time.
-        return artifact.hashCode();
+        return java.util.Objects.hash(artifact, declaredIncludeSrcs);
       }
 
       @Override
@@ -236,7 +201,7 @@ public abstract class LibraryToLinkWrapper implements LibraryToLinkWrapperApi<Ar
         }
         Linkstamp other = (Linkstamp) obj;
         return artifact.equals(other.artifact)
-            && Arrays.equals(this.nestedDigest, other.nestedDigest);
+            && declaredIncludeSrcs.equals(other.declaredIncludeSrcs);
       }
     }
 
@@ -452,16 +417,6 @@ public abstract class LibraryToLinkWrapper implements LibraryToLinkWrapperApi<Ar
           userLinkFlags.shallowHashCode(),
           linkstamps.shallowHashCode(),
           nonCodeInputs.shallowHashCode());
-    }
-
-    @Override
-    public String toString() {
-      return MoreObjects.toStringHelper(this)
-          .add("userLinkFlags", userLinkFlags)
-          .add("linkstamps", linkstamps)
-          .add("libraries", libraries)
-          .add("nonCodeInputs", nonCodeInputs)
-          .toString();
     }
   }
 

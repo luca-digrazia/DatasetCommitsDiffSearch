@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.StaticallyLinkedMarkerProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
@@ -519,20 +518,17 @@ public class CppHelper {
    * Creates a CppModuleMap object for pure c++ builds. The module map artifact becomes a candidate
    * input to a CppCompileAction.
    */
-  public static CppModuleMap createDefaultCppModuleMap(
-      ActionConstructionContext actionConstructionContext,
-      BuildConfiguration configuration,
-      Label label,
-      String suffix) {
+  public static CppModuleMap createDefaultCppModuleMap(RuleContext ruleContext, String suffix) {
     // Create the module map artifact as a genfile.
     Artifact mapFile =
-        actionConstructionContext.getPackageRelativeArtifact(
-            PathFragment.create(
-                label.getName()
-                    + suffix
-                    + Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions())),
-            configuration.getGenfilesDirectory(label.getPackageIdentifier().getRepository()));
-    return new CppModuleMap(mapFile, label.toString());
+        ruleContext.getPackageRelativeArtifact(
+            ruleContext.getLabel().getName()
+                + suffix
+                + Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions()),
+            ruleContext
+                .getConfiguration()
+                .getGenfilesDirectory(ruleContext.getRule().getRepository()));
+    return new CppModuleMap(mapFile, ruleContext.getLabel().toString());
   }
 
   /**
@@ -623,9 +619,8 @@ public class CppHelper {
 
   /** Returns the FDO build subtype. */
   public static String getFdoBuildStamp(
-      CppConfiguration cppConfiguration,
-      FdoContext fdoContext,
-      FeatureConfiguration featureConfiguration) {
+      RuleContext ruleContext, FdoContext fdoContext, FeatureConfiguration featureConfiguration) {
+    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     FdoContext.BranchFdoProfile branchFdoProfile = fdoContext.getBranchFdoProfile();
     if (branchFdoProfile != null) {
 
@@ -703,15 +698,11 @@ public class CppHelper {
     }
   }
 
-  static Artifact getCompileOutputArtifact(
-      ActionConstructionContext actionConstructionContext,
-      Label label,
-      String outputName,
+  static Artifact getCompileOutputArtifact(RuleContext ruleContext, String outputName,
       BuildConfiguration config) {
-    PathFragment objectDir = getObjDirectory(label);
-    return actionConstructionContext.getDerivedArtifact(
-        objectDir.getRelative(outputName),
-        config.getBinDirectory(label.getPackageIdentifier().getRepository()));
+    PathFragment objectDir = getObjDirectory(ruleContext.getLabel());
+    return ruleContext.getDerivedArtifact(objectDir.getRelative(outputName),
+        config.getBinDirectory(ruleContext.getRule().getRepository()));
   }
 
   /** Returns the corresponding compiled TreeArtifact given the source TreeArtifact. */
@@ -724,7 +715,7 @@ public class CppHelper {
   }
 
   public static String getArtifactNameForCategory(
-      RuleErrorConsumer ruleErrorConsumer,
+      RuleContext ruleContext,
       CcToolchainProvider toolchain,
       ArtifactCategory category,
       String outputName)
@@ -732,25 +723,24 @@ public class CppHelper {
     try {
       return toolchain.getFeatures().getArtifactNameForCategory(category, outputName);
     } catch (EvalException e) {
-      ruleErrorConsumer.throwWithRuleError(e.getMessage());
+      ruleContext.throwWithRuleError(e.getMessage());
       throw new IllegalStateException("Should not be reached");
     }
   }
 
   static String getDotdFileName(
-      RuleErrorConsumer ruleErrorConsumer,
+      RuleContext ruleContext,
       CcToolchainProvider toolchain,
       ArtifactCategory outputCategory,
       String outputName)
       throws RuleErrorException {
-    String baseName =
-        outputCategory == ArtifactCategory.OBJECT_FILE
-                || outputCategory == ArtifactCategory.PROCESSED_HEADER
-            ? outputName
-            : getArtifactNameForCategory(ruleErrorConsumer, toolchain, outputCategory, outputName);
+    String baseName = outputCategory == ArtifactCategory.OBJECT_FILE
+        || outputCategory == ArtifactCategory.PROCESSED_HEADER
+        ? outputName
+        : getArtifactNameForCategory(ruleContext, toolchain, outputCategory, outputName);
 
     return getArtifactNameForCategory(
-        ruleErrorConsumer, toolchain, ArtifactCategory.INCLUDED_FILE_LIST, baseName);
+        ruleContext, toolchain, ArtifactCategory.INCLUDED_FILE_LIST, baseName);
   }
 
   /**
@@ -853,12 +843,11 @@ public class CppHelper {
     return new CcNativeLibraryProvider(result.build());
   }
 
-  public static void checkProtoLibrariesInDeps(
-      RuleErrorConsumer ruleErrorConsumer, Iterable<TransitiveInfoCollection> deps) {
+  public static void checkProtoLibrariesInDeps(RuleContext ruleContext,
+      Iterable<TransitiveInfoCollection> deps) {
     for (TransitiveInfoCollection dep : deps) {
       if (dep.get(ProtoInfo.PROVIDER) != null && dep.get(CcInfo.PROVIDER) == null) {
-        ruleErrorConsumer.attributeError(
-            "deps",
+        ruleContext.attributeError("deps",
             String.format("proto_library '%s' does not produce output for C++", dep.getLabel()));
       }
     }

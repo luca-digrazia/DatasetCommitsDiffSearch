@@ -207,7 +207,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(getFilesToBuild(hello)).containsExactly(archive, implSharedObject,
         implInterfaceSharedObject);
     assertThat(
-            LibraryToLink.getDynamicLibrariesForLinking(
+            LibraryToLinkWrapper.getDynamicLibrariesForLinking(
                 hello.getProvider(CcNativeLibraryProvider.class).getTransitiveCcNativeLibraries()))
         .containsExactly(implInterfaceSharedObjectLink);
     assertThat(
@@ -273,7 +273,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         getSharedArtifact("_solib_" + cpu + "/libhello_Slibhello.so", hello);
     assertThat(getFilesToBuild(hello)).containsExactly(archive, sharedObject, implSharedObject);
     assertThat(
-            LibraryToLink.getDynamicLibrariesForLinking(
+            LibraryToLinkWrapper.getDynamicLibrariesForLinking(
                 hello.getProvider(CcNativeLibraryProvider.class).getTransitiveCcNativeLibraries()))
         .containsExactly(sharedObjectLink);
     assertThat(
@@ -1230,17 +1230,12 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(flags).containsNoneOf("-fastbuild", "-opt");
   }
 
-  private List<String> getHostAndTargetFlags(boolean useHost, boolean isDisabledByFlag)
-      throws Exception {
+  private List<String> getHostAndTargetFlags(boolean useHost) throws Exception {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(mockToolsConfig, MockCcSupport.HOST_AND_NONHOST_CONFIGURATION);
     scratch.overwriteFile("mode/BUILD", "cc_library(name = 'a', srcs = ['a.cc'])");
-    useConfiguration(
-        "--cpu=k8",
-        isDisabledByFlag
-            ? "--incompatible_dont_enable_host_nonhost_crosstool_features"
-            : "--noincompatible_dont_enable_host_nonhost_crosstool_features");
+    useConfiguration("--cpu=k8");
     ConfiguredTarget target;
     String objectPath;
     if (useHost) {
@@ -1260,25 +1255,12 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testHostAndNonHostFeatures() throws Exception {
     List<String> flags;
 
-    flags = getHostAndTargetFlags(/* useHost= */ true, /* isDisabledByFlag= */ false);
+    flags = getHostAndTargetFlags(true);
     assertThat(flags).contains("-host");
     assertThat(flags).doesNotContain("-nonhost");
 
-    flags = getHostAndTargetFlags(/* useHost= */ false, /* isDisabledByFlag= */ false);
+    flags = getHostAndTargetFlags(false);
     assertThat(flags).contains("-nonhost");
-    assertThat(flags).doesNotContain("-host");
-  }
-
-  @Test
-  public void testHostAndNonHostFeaturesDisabledByTheFlag() throws Exception {
-    List<String> flags;
-
-    flags = getHostAndTargetFlags(/* useHost= */ true, /* isDisabledByFlag= */ true);
-    assertThat(flags).doesNotContain("-host");
-    assertThat(flags).doesNotContain("-nonhost");
-
-    flags = getHostAndTargetFlags(/* useHost= */ false, /* isDisabledByFlag= */ true);
-    assertThat(flags).doesNotContain("-nonhost");
     assertThat(flags).doesNotContain("-host");
   }
 
@@ -1396,7 +1378,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget target =
         scratchConfiguredTarget("a", "foo", "cc_library(name = 'foo', srcs = ['foo.cc'])");
 
-    LibraryToLink library =
+    LibraryToLinkWrapper library =
         Iterables.getOnlyElement(target.get(CcInfo.PROVIDER).getCcLinkingContext().getLibraries());
     Artifact libraryToUse = library.getPicStaticLibrary();
     if (libraryToUse == null) {
@@ -1413,7 +1395,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget target =
         scratchConfiguredTarget("a", "foo", "cc_library(name = 'foo', srcs = ['libfoo.so'])");
 
-    LibraryToLink library =
+    LibraryToLinkWrapper library =
         Iterables.getOnlyElement(target.get(CcInfo.PROVIDER).getCcLinkingContext().getLibraries());
     assertThat(library.getStaticLibrary()).isNull();
     assertThat(artifactsToStrings(ImmutableList.of(library.getResolvedSymlinkDynamicLibrary())))

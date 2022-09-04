@@ -22,21 +22,21 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingOutputs;
 import com.google.devtools.build.lib.rules.cpp.CcNativeLibraryProvider;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper;
 import com.google.devtools.build.lib.util.FileType;
 
 /** A builder that helps construct nested sets of native libraries. */
 public final class NativeLibraryNestedSetBuilder {
 
-  private final NestedSetBuilder<LibraryToLink> builder = NestedSetBuilder.linkOrder();
+  private final NestedSetBuilder<LibraryToLinkWrapper> builder = NestedSetBuilder.linkOrder();
 
   /** Build a nested set of native libraries. */
-  public NestedSet<LibraryToLink> build() {
+  public NestedSet<LibraryToLinkWrapper> build() {
     return builder.build();
   }
 
   /** Include specified artifacts as native libraries in the nested set. */
-  public NativeLibraryNestedSetBuilder addAll(Iterable<LibraryToLink> deps) {
+  public NativeLibraryNestedSetBuilder addAll(Iterable<LibraryToLinkWrapper> deps) {
     builder.addAll(deps);
     return this;
   }
@@ -92,10 +92,9 @@ public final class NativeLibraryNestedSetBuilder {
   private void addTarget(TransitiveInfoCollection dep) {
     for (Artifact artifact :
         FileType.filterList(
-            dep.getProvider(FileProvider.class).getFilesToBuild().toList(),
-            CppFileTypes.SHARED_LIBRARY)) {
+            dep.getProvider(FileProvider.class).getFilesToBuild(), CppFileTypes.SHARED_LIBRARY)) {
       builder.add(
-          LibraryToLink.builder()
+          LibraryToLinkWrapper.builder()
               .setLibraryIdentifier(CcLinkingOutputs.libraryIdentifierOf(artifact))
               .setDynamicLibrary(artifact)
               .build());

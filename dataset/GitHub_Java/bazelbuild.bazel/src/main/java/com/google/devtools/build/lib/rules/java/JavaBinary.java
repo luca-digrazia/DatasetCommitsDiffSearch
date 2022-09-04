@@ -315,7 +315,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     SingleJarActionBuilder.createSourceJarAction(
         ruleContext,
         semantics,
-        NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
+        ImmutableList.of(),
         transitiveSourceJars,
         ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_DEPLOY_SOURCE_JAR));
 

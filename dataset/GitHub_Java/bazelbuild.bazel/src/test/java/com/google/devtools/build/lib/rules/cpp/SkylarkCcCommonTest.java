@@ -1315,8 +1315,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     scratch.file("tools/build_defs/cc/BUILD", "");
     scratch.file(
         "tools/build_defs/cc/rule.bzl",
-        "top_linking_context_smoke = cc_common.create_linking_context(libraries_to_link=[],",
-        "   user_link_flags=['-first_flag', '-second_flag'])",
         "def _create(ctx, feature_configuration, static_library, pic_static_library,",
         "  dynamic_library, interface_library, alwayslink):",
         "  return cc_common.create_library_to_link(",
@@ -4675,35 +4673,5 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     useConfiguration("--incompatible_enable_cc_toolchain_resolution");
 
     assertThat(toolchainResolutionEnabled()).isTrue();
-  }
-
-  @Test
-  public void testWrongExtensionThrowsError() throws Exception {
-    setUpCcLinkingContextTest();
-    scratch.file(
-        "foo/BUILD",
-        "load('//tools/build_defs/cc:rule.bzl', 'crule')",
-        "cc_binary(name='bin',",
-        "   deps = [':a'],",
-        ")",
-        "crule(name='a',",
-        "   static_library = 'a.o',",
-        "   pic_static_library = 'a.pic.o',",
-        "   dynamic_library = 'a.ifso',",
-        "   interface_library = 'a.so',",
-        ")");
-    AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:bin"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains("'a.o' does not have any of the allowed extensions .a, .lib or .pic.a");
-    assertThat(e)
-        .hasMessageThat()
-        .contains("'a.pic.o' does not have any of the allowed extensions .a, .lib or .pic.a");
-    assertThat(e)
-        .hasMessageThat()
-        .contains("'a.ifso' does not have any of the allowed extensions .so, .dylib or .dll");
-    assertThat(e)
-        .hasMessageThat()
-        .contains("'a.so' does not have any of the allowed extensions .ifso, .tbd or .lib");
   }
 }
