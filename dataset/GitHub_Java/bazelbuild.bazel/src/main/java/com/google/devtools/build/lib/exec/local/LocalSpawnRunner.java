@@ -19,7 +19,6 @@ import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ResourceManager;
@@ -37,6 +36,7 @@ import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.util.NetUtil;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -131,15 +130,15 @@ public final class LocalSpawnRunner implements SpawnRunner {
   }
 
   private static Path createActionTemp(Path execRoot) throws IOException {
-    String idStr =
-        // Make the name unique among other executor threads.
-        Long.toHexString(Thread.currentThread().getId())
-            + "_"
-            // Make the name unique among other temp directories that this thread has ever created.
-            // On Windows, file and directory deletion is asynchronous, meaning the previous temp
-            // directory name isn't immediately available for the next action that this thread runs.
-            // See https://github.com/bazelbuild/bazel/issues/4035
-            + Long.toHexString(ThreadLocalRandom.current().nextLong());
+    // Use this executor thread's ID as the directory name's suffix.
+    // The ID is safe for the following reasons:
+    // - being a thread ID, it's guaranteed to be unique among other action executor threads
+    // - this thread will only execute one action at a time, so there's no risk of concurrently
+    //   running actions using the same temp directory.
+    // The next action that this thread executes can reuse the temp directory name. The only caveat
+    // is, if {@link #start} fails to delete directory after the action is done, the next
+    // action will see stale files in its temp directory.
+    String idStr = Long.toHexString(Thread.currentThread().getId());
     Path result = execRoot.getRelative("tmp" + idStr);
     if (!result.exists() && !result.createDirectory()) {
       throw new IOException(String.format("Could not create temp directory '%s'", result));
@@ -239,7 +238,7 @@ public final class LocalSpawnRunner implements SpawnRunner {
             ("Action type " + actionType + " is not allowed to run locally due to regex filter: "
                 + localExecutionOptions.allowedLocalAction + "\n").getBytes(UTF_8));
         return new SpawnResult.Builder()
-            .setStatus(Status.EXECUTION_DENIED)
+            .setStatus(Status.LOCAL_ACTION_NOT_ALLOWED)
             .setExitCode(LOCAL_EXEC_ERROR)
             .setExecutorHostname(hostName)
             .build();
@@ -322,14 +321,11 @@ public final class LocalSpawnRunner implements SpawnRunner {
         boolean wasTimeout =
             result.getTerminationStatus().timedOut()
                 || (useProcessWrapper && wasTimeout(policy.getTimeout(), wallTime));
+        Status status = wasTimeout ? Status.TIMEOUT : Status.SUCCESS;
         int exitCode =
-            wasTimeout
+            status == Status.TIMEOUT
                 ? POSIX_TIMEOUT_EXIT_CODE
                 : result.getTerminationStatus().getRawExitCode();
-        Status status =
-            wasTimeout
-                ? Status.TIMEOUT
-                : (exitCode == 0 ? Status.SUCCESS : Status.NON_ZERO_EXIT);
         return new SpawnResult.Builder()
             .setStatus(status)
             .setExitCode(exitCode)
