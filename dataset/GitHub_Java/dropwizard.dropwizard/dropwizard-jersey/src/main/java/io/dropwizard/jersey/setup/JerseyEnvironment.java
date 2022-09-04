@@ -93,8 +93,7 @@ public class JerseyEnvironment {
      * @param name the name of the Jersey property
      * @see org.glassfish.jersey.server.ResourceConfig
      */
-    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
-    @Nullable
+    @SuppressWarnings("unchecked")
     public <T> T getProperty(String name) {
         return (T) config.getProperties().get(name);
     }
@@ -109,7 +108,7 @@ public class JerseyEnvironment {
             normalizedUrlPattern += "/";
         }
         if (!normalizedUrlPattern.endsWith("*")) {
-            normalizedUrlPattern += "*";
+            normalizedUrlPattern+= "*";
         }
         config.setUrlPattern(normalizedUrlPattern);
     }

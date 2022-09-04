@@ -4,7 +4,6 @@ import io.dropwizard.Configuration;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.jersey.setup.JerseyContainerHolder;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
-import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.setup.Environment;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.ThreadPool;
@@ -37,7 +36,6 @@ public class AbstractServerFactoryTest {
     @Before
     public void before() {
         when(environment.jersey()).thenReturn(jerseyEnvironment);
-        when(environment.getApplicationContext()).thenReturn(new MutableServletContextHandler());
     }
 
     @Test
@@ -85,10 +83,5 @@ public class AbstractServerFactoryTest {
                                   environment.metrics());
             return server;
         }
-
-		@Override
-		public void configure(Environment environment) {
-			// left blank intentionally
-		}
     }
 }

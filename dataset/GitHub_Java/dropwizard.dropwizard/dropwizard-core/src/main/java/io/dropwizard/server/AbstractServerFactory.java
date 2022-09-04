@@ -11,6 +11,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.io.Resources;
 import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
 import io.dropwizard.jersey.errors.LoggingExceptionMapper;
@@ -23,10 +24,10 @@ import io.dropwizard.jersey.validation.JerseyViolationExceptionMapper;
 import io.dropwizard.jetty.GzipHandlerFactory;
 import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.jetty.NonblockingServletHolder;
+import io.dropwizard.jetty.RequestLogFactory;
+import io.dropwizard.jetty.Slf4jRequestLogFactory;
 import io.dropwizard.jetty.ServerPushFilterFactory;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
-import io.dropwizard.request.logging.LogbackAccessRequestLogFactory;
-import io.dropwizard.request.logging.RequestLogFactory;
 import io.dropwizard.servlets.ThreadNameFilter;
 import io.dropwizard.util.Duration;
 import io.dropwizard.validation.MinDuration;
@@ -53,7 +54,6 @@ import javax.validation.constraints.NotNull;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.regex.Pattern;
@@ -209,7 +209,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
 
     @Valid
     @NotNull
-    private RequestLogFactory requestLog = new LogbackAccessRequestLogFactory();
+    private RequestLogFactory requestLog = new Slf4jRequestLogFactory();
 
     @Valid
     @NotNull
@@ -250,14 +250,12 @@ public abstract class AbstractServerFactory implements ServerFactory {
 
     private Boolean registerDefaultExceptionMappers = Boolean.TRUE;
 
-    private Boolean detailedJsonProcessingExceptionMapper = Boolean.FALSE;
-
     private Duration shutdownGracePeriod = Duration.seconds(30);
 
     @NotNull
     private Set<String> allowedMethods = AllowedMethodsFilter.DEFAULT_ALLOWED_METHODS;
 
-    private Optional<String> jerseyRootPath = Optional.empty();
+    private Optional<String> jerseyRootPath = Optional.absent();
 
     @JsonIgnore
     @ValidationMethod(message = "must have a smaller minThreads than maxThreads")
@@ -423,14 +421,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
         this.registerDefaultExceptionMappers = registerDefaultExceptionMappers;
     }
 
-    public Boolean getDetailedJsonProcessingExceptionMapper() {
-        return detailedJsonProcessingExceptionMapper;
-    }
-
-    public void setDetailedJsonProcessingExceptionMapper(Boolean detailedJsonProcessingExceptionMapper) {
-        this.detailedJsonProcessingExceptionMapper = detailedJsonProcessingExceptionMapper;
-    }
-
     @JsonProperty
     public Duration getShutdownGracePeriod() {
         return shutdownGracePeriod;
@@ -458,7 +448,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
 
     @JsonProperty("rootPath")
     public void setJerseyRootPath(String jerseyRootPath) {
-        this.jerseyRootPath = Optional.ofNullable(jerseyRootPath);
+        this.jerseyRootPath = Optional.fromNullable(jerseyRootPath);
     }
 
     protected Handler createAdminServlet(Server server,
@@ -507,7 +497,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
                 jersey.register(new LoggingExceptionMapper<Throwable>() {
                 });
                 jersey.register(new JerseyViolationExceptionMapper());
-                jersey.register(new JsonProcessingExceptionMapper(detailedJsonProcessingExceptionMapper));
+                jersey.register(new JsonProcessingExceptionMapper());
                 jersey.register(new EarlyEofExceptionMapper());
             }
             handler.addServlet(new NonblockingServletHolder(jerseyContainer), jersey.getUrlPattern());

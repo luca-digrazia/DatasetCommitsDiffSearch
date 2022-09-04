@@ -1,7 +1,7 @@
 package io.dropwizard.jersey.setup;
 
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -13,17 +13,17 @@ public class JerseyEnvironmentTest {
     private final JerseyEnvironment jerseyEnvironment = new JerseyEnvironment(holder, config);
 
     @Test
-    void urlPatternEndsWithSlashStar() {
+    public void urlPatternEndsWithSlashStar() {
         assertPatternEndsWithSlashStar("/missing/slash/star");
     }
 
     @Test
-    void urlPatternEndsWithStar() {
+    public void urlPatternEndsWithStar() {
         assertPatternEndsWithSlashStar("/missing/star/");
     }
 
     @Test
-    void urlPatternSuffixNoop() {
+    public void urlPatternSuffixNoop() {
         String slashStarPath = "/slash/star/*";
         jerseyEnvironment.setUrlPattern(slashStarPath);
         assertThat(jerseyEnvironment.getUrlPattern()).isEqualTo(slashStarPath);
