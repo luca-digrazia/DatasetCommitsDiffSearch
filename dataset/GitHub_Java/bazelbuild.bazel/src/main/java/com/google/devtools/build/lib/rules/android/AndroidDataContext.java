@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
@@ -117,11 +116,5 @@ public class AndroidDataContext {
 
   public AndroidConfiguration getAndroidConfig() {
     return actionConstructionContext.getConfiguration().getFragment(AndroidConfiguration.class);
-  }
-
-  /** Indicates whether Busybox actions should be passed the "--debug" flag */
-  public boolean useDebug() {
-    return getActionConstructionContext().getConfiguration().getCompilationMode()
-        != CompilationMode.OPT;
   }
 }
