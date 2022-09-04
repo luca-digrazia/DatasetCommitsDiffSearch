@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,14 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.regression;
 
-import smile.base.rbf.RBF;
+import smile.base.RBF;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.QR;
 import smile.math.rbf.RadialBasisFunction;
 
 /**
@@ -73,7 +75,7 @@ import smile.math.rbf.RadialBasisFunction;
  * @author Haifeng Li
  */
 public class RBFNetwork<T> implements Regression<T> {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * The linear weights.
@@ -82,22 +84,17 @@ public class RBFNetwork<T> implements Regression<T> {
     /**
      * The radial basis functions.
      */
-    private RBF<T>[] rbf;
+    private RBF[] rbf;
     /**
      * True to fit a normalized RBF network.
      */
     private boolean normalized;
 
     /**
-     * Constructor.
-     * @param rbf the radial basis functions.
-     * @param w the weights of RBFs.
-     * @param normalized True if this is a normalized RBF network.
+     * Private constructor.
      */
-    public RBFNetwork(RBF<T>[] rbf, double[] w, boolean normalized) {
-        this.rbf = rbf;
-        this.w = w;
-        this.normalized = normalized;
+    private RBFNetwork() {
+
     }
 
     /**
@@ -106,8 +103,8 @@ public class RBFNetwork<T> implements Regression<T> {
      * @param y the response variable.
      * @param rbf the radial basis functions.
      */
-    public static <T> RBFNetwork<T> fit(T[] x, double[] y, RBF<T>[] rbf) {
-        return fit(x, y, rbf, false);
+    public static <T> RBFNetwork<T> fit(T[] x, double[] y, RBF[] rbf) {
+        return fit(x, y, rbf);
     }
 
     /**
@@ -117,7 +114,7 @@ public class RBFNetwork<T> implements Regression<T> {
      * @param rbf the radial basis functions.
      * @param normalized true for the normalized RBF network.
      */
-    public static <T> RBFNetwork<T> fit(T[] x, double[] y, RBF<T>[] rbf, boolean normalized) {
+    public static <T> RBFNetwork<T> fit(T[] x, double[] y, RBF[] rbf, boolean normalized) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
@@ -125,7 +122,7 @@ public class RBFNetwork<T> implements Regression<T> {
         int n = x.length;
         int m = rbf.length;
 
-        Matrix G = new Matrix(n, m);
+        DenseMatrix G = Matrix.zeros(n, m);
         double[] b = new double[n];
         for (int i = 0; i < n; i++) {
             double sum = 0.0;
@@ -142,15 +139,15 @@ public class RBFNetwork<T> implements Regression<T> {
             }
         }
 
-        Matrix.QR qr = G.qr();
-        double[] w = qr.solve(b);
+        RBFNetwork model = new RBFNetwork();
+        model.rbf = rbf;
+        model.normalized = normalized;
 
-        return new RBFNetwork<>(rbf, w, normalized);
-    }
+        model.w = new double[m];
+        QR qr = G.qr();
+        qr.solve(b, model.w);
 
-    /** Returns true if the model is  normalized. */
-    public boolean isNormalized() {
-        return normalized;
+        return model;
     }
 
     @Override

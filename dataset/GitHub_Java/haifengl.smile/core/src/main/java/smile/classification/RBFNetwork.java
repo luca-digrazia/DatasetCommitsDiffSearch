@@ -17,8 +17,10 @@
 
 package smile.classification;
 
-import smile.base.rbf.RBF;
+import java.util.Arrays;
+import smile.base.RBF;
 import smile.math.MathEx;
+import smile.math.distance.Metric;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.QR;
@@ -85,12 +87,12 @@ import smile.math.rbf.RadialBasisFunction;
  * 
  * @see RadialBasisFunction
  * @see SVM
- * @see MLP
+ * @see NeuralNetwork
  * 
  * @author Haifeng Li
  */
 public class RBFNetwork<T> implements Classifier<T> {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * The number of classes.
@@ -103,41 +105,17 @@ public class RBFNetwork<T> implements Classifier<T> {
     /**
      * The radial basis function.
      */
-    private RBF<T>[] rbf;
+    private RBF[] rbf;
     /**
      * True to fit a normalized RBF network.
      */
     private boolean normalized;
-    /**
-     * The class label encoder.
-     */
-    private ClassLabel labels;
 
     /**
-     * Constructor.
-     * @param k the number of classes.
-     * @param rbf the radial basis functions.
-     * @param w the weights of RBFs.
-     * @param normalized True if this is a normalized RBF network.
+     * Private constructor.
      */
-    public RBFNetwork(int k, RBF<T>[] rbf, DenseMatrix w, boolean normalized) {
-        this(k, rbf, w, normalized, ClassLabel.of(k));
-    }
+    private RBFNetwork() {
 
-    /**
-     * Constructor.
-     * @param k the number of classes.
-     * @param rbf the radial basis functions.
-     * @param w the weights of RBFs.
-     * @param normalized True if this is a normalized RBF network.
-     * @param labels class labels
-     */
-    public RBFNetwork(int k, RBF<T>[] rbf, DenseMatrix w, boolean normalized, ClassLabel labels) {
-        this.k = k;
-        this.rbf = rbf;
-        this.w = w;
-        this.normalized = normalized;
-        this.labels = labels;
     }
 
     /**
@@ -147,7 +125,7 @@ public class RBFNetwork<T> implements Classifier<T> {
      * @param y training labels in [0, k), where k is the number of classes.
      * @param rbf the radial basis functions.
      */
-    public static <T> RBFNetwork<T> fit(T[] x, int[] y, RBF<T>[] rbf) {
+    public static <T> RBFNetwork<T> fit(T[] x, int[] y, RBF[] rbf) {
         return fit(x, y, rbf, false);
     }
 
@@ -159,13 +137,30 @@ public class RBFNetwork<T> implements Classifier<T> {
      * @param rbf the radial basis functions.
      * @param normalized true for the normalized RBF network.
      */
-    public static <T> RBFNetwork<T> fit(T[] x, int[] y, RBF<T>[] rbf, boolean normalized) {
+    public static <T> RBFNetwork<T> fit(T[] x, int[] y, RBF[] rbf, boolean normalized) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
 
-        ClassLabel.Result codec = ClassLabel.fit(y);
-        int k = codec.k;
+        // class label set.
+        int[] labels = MathEx.unique(y);
+        Arrays.sort(labels);
+        
+        for (int i = 0; i < labels.length; i++) {
+            if (labels[i] < 0) {
+                throw new IllegalArgumentException("Negative class label: " + labels[i]); 
+            }
+            
+            if (i > 0 && labels[i] - labels[i-1] > 1) {
+                throw new IllegalArgumentException("Missing class: " + (labels[i-1]+1));
+            }
+        }
+
+        int k = labels.length;
+        if (k < 2) {
+            throw new IllegalArgumentException("Only one class.");            
+        }
+
         int n = x.length;
         int m = rbf.length;
 
@@ -182,21 +177,24 @@ public class RBFNetwork<T> implements Classifier<T> {
             G.set(i, m, 1);
 
             if (normalized) {
-                b.set(i, codec.y[i], sum);
+                b.set(i, y[i], sum);
             } else {
-                b.set(i, codec.y[i], 1);
+                b.set(i, y[i], 1);
             }
         }
 
         QR qr = G.qr();
         qr.solve(b);
 
-        return new RBFNetwork<>(k, rbf, b.submat(0, 0, m+1, k), normalized, codec.labels);
-    }
+        RBFNetwork model = new RBFNetwork();
+        model.k = k;
+        model.rbf = rbf;
+        model.normalized = normalized;
 
-    /** Returns true if the model is  normalized. */
-    public boolean isNormalized() {
-        return normalized;
+        model.w = Matrix.zeros(m+1, k);
+        b.submat(0, 0, m, k-1);
+
+        return model;
     }
 
     @Override
@@ -211,6 +209,6 @@ public class RBFNetwork<T> implements Classifier<T> {
         double[] sumw = new double[k];
         w.atx(f, sumw);
 
-        return labels.label(MathEx.whichMax(sumw));
+        return MathEx.whichMax(sumw);
     }
 }
