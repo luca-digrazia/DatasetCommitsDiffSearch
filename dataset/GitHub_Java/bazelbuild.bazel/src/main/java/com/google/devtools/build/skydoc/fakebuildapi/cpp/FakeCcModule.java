@@ -234,9 +234,9 @@ public class FakeCcModule
       Object frameworkIncludes,
       Object defines,
       Object localDefines,
-      Sequence<?> directTextualHdrs,
-      Sequence<?> directPublicHdrs,
-      Sequence<?> directPrivateHdrs,
+      Object textualHdrs,
+      Object modularPublicHdrs,
+      Object modularPrivateHdrs,
       Object purpose,
       StarlarkThread thread)
       throws EvalException {

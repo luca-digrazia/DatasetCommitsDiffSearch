@@ -121,12 +121,9 @@ public interface BazelCcModuleApi<
             name = "textual_hdrs",
             positional = false,
             named = true,
-            allowedTypes = {
-              @ParamType(type = Sequence.class, generic1 = FileApi.class),
-              @ParamType(type = Depset.class)
-            },
             documented = false,
-            defaultValue = "[]"),
+            allowedTypes = {@ParamType(type = Sequence.class, generic1 = FileApi.class)},
+            defaultValue = "unbound"),
         @Param(
             name = "additional_exported_hdrs",
             positional = false,

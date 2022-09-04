@@ -905,7 +905,11 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testParamFileLinkVariables() throws Exception {
-    AnalysisMock.get().ccSupport().setupCcToolchainConfig(mockToolsConfig);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder().withFeatures(CppRuleClasses.DO_NOT_SPLIT_LINKING_CMDLINE));
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_LINK_EXECUTABLE,
