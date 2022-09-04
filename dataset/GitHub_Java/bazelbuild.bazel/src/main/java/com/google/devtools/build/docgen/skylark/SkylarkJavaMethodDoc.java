@@ -42,9 +42,11 @@ public final class SkylarkJavaMethodDoc extends SkylarkMethodDoc {
         : callable.name();
     this.method = method;
     this.callable = callable;
-    this.params =
-        SkylarkDocUtils.determineParams(
-            this, callable.parameters(), callable.extraPositionals(), callable.extraKeywords());
+    ImmutableList.Builder<SkylarkParamDoc> paramsBuilder = ImmutableList.builder();
+    for (Param param : callable.parameters()) {
+      paramsBuilder.add(new SkylarkParamDoc(this, param));
+    }
+    this.params = paramsBuilder.build();
   }
 
   public Method getMethod() {
