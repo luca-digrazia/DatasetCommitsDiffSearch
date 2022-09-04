@@ -134,7 +134,6 @@ public class DetailPlayer extends AppCompatActivity {
                 .setRotateViewAuto(false)
                 //仅仅横屏旋转，不变直
                 //.setOnlyRotateLand(true)
-                .setRotateWithSystem(true)
                 .setLockLand(true)
                 .setAutoFullWithSize(true)
                 .setShowFullAnimation(false)
@@ -272,7 +271,7 @@ public class DetailPlayer extends AppCompatActivity {
         super.onConfigurationChanged(newConfig);
         //如果旋转了就全屏
         if (isPlay && !isPause) {
-            detailPlayer.onConfigurationChanged(this, newConfig, orientationUtils, true, true);
+            detailPlayer.onConfigurationChanged(this, newConfig, needRotateSystem() ? orientationUtils : null, true, true);
         }
     }
 
