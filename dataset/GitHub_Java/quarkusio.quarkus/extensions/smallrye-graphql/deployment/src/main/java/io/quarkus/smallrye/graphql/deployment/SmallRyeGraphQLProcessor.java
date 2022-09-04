@@ -44,6 +44,7 @@ import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
 import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
+import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.deployment.util.WebJarUtil;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
@@ -81,6 +82,7 @@ import io.vertx.ext.web.RoutingContext;
 public class SmallRyeGraphQLProcessor {
     private static final Logger LOG = Logger.getLogger(SmallRyeGraphQLProcessor.class);
     private static final String SCHEMA_PATH = "/schema.graphql";
+    private static final String SPI_PATH = "META-INF/services/";
 
     // For Service integration
     private static final String SERVICE_NOT_AVAILABLE_WARNING = "The %s property is true, but the %s extension is not present. SmallRye GraphQL %s will be disabled.";
@@ -145,10 +147,21 @@ public class SmallRyeGraphQLProcessor {
     @BuildStep
     void registerNativeImageResources(BuildProducer<ServiceProviderBuildItem> serviceProvider) throws IOException {
         // Lookup Service (We use the one from the CDI Module)
-        serviceProvider.produce(ServiceProviderBuildItem.allProvidersFromClassPath(LookupService.class.getName()));
+        String lookupService = SPI_PATH + LookupService.class.getName();
+        Set<String> lookupImplementations = ServiceUtil.classNamesNamedIn(Thread.currentThread().getContextClassLoader(),
+                lookupService);
+        serviceProvider.produce(
+                new ServiceProviderBuildItem(LookupService.class.getName(), lookupImplementations.toArray(new String[0])));
 
         // Eventing Service (We use the one from the CDI Module)
-        serviceProvider.produce(ServiceProviderBuildItem.allProvidersFromClassPath(EventingService.class.getName()));
+        String eventingService = SPI_PATH + EventingService.class.getName();
+        Set<String> eventingServiceImplementations = ServiceUtil.classNamesNamedIn(
+                Thread.currentThread().getContextClassLoader(),
+                eventingService);
+        for (String eventingServiceImplementation : eventingServiceImplementations) {
+            serviceProvider.produce(
+                    new ServiceProviderBuildItem(EventingService.class.getName(), eventingServiceImplementation));
+        }
     }
 
     @Record(ExecutionTime.STATIC_INIT)

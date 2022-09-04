@@ -163,15 +163,14 @@ class SmallRyeHealthProcessor {
         if (launchMode.getLaunchMode().isDevOrTest()) {
             String basePath = nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath);
             displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem(basePath));
-            String subcontextBasePath = adjustSubcontextBasePath(basePath);
             displayableEndpoints
-                    .produce(new NotFoundPageDisplayableEndpointBuildItem(subcontextBasePath + healthConfig.livenessPath));
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(basePath + healthConfig.livenessPath));
             displayableEndpoints
-                    .produce(new NotFoundPageDisplayableEndpointBuildItem(subcontextBasePath + healthConfig.readinessPath));
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(basePath + healthConfig.readinessPath));
             displayableEndpoints
-                    .produce(new NotFoundPageDisplayableEndpointBuildItem(subcontextBasePath + healthConfig.groupPath));
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(basePath + healthConfig.groupPath));
             displayableEndpoints
-                    .produce(new NotFoundPageDisplayableEndpointBuildItem(subcontextBasePath + healthConfig.wellnessPath));
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(basePath + healthConfig.wellnessPath));
         }
 
         // Discover the beans annotated with @Health, @Liveness, @Readiness, @HealthGroup,
@@ -226,11 +225,9 @@ class SmallRyeHealthProcessor {
                 .nonApplicationRoute()
                 .build());
 
-        String subcontextBasePath = adjustSubcontextBasePath(healthConfig.rootPath);
-
         // Register the liveness handler
         routes.produce(new RouteBuildItem.Builder()
-                .route(subcontextBasePath + healthConfig.livenessPath)
+                .route(healthConfig.rootPath + healthConfig.livenessPath)
                 .handler(new SmallRyeLivenessHandler())
                 .blockingRoute()
                 .nonApplicationRoute()
@@ -238,7 +235,7 @@ class SmallRyeHealthProcessor {
 
         // Register the readiness handler
         routes.produce(new RouteBuildItem.Builder()
-                .route(subcontextBasePath + healthConfig.readinessPath)
+                .route(healthConfig.rootPath + healthConfig.readinessPath)
                 .handler(new SmallRyeReadinessHandler())
                 .blockingRoute()
                 .nonApplicationRoute()
@@ -259,7 +256,7 @@ class SmallRyeHealthProcessor {
 
         // Register the health group handlers
         routes.produce(new RouteBuildItem.Builder()
-                .route(subcontextBasePath + healthConfig.groupPath)
+                .route(healthConfig.rootPath + healthConfig.groupPath)
                 .handler(new SmallRyeHealthGroupHandler())
                 .blockingRoute()
                 .nonApplicationRoute()
@@ -268,7 +265,7 @@ class SmallRyeHealthProcessor {
         SmallRyeIndividualHealthGroupHandler handler = new SmallRyeIndividualHealthGroupHandler();
         for (String healthGroup : healthGroups) {
             routes.produce(new RouteBuildItem.Builder()
-                    .route(subcontextBasePath + healthConfig.groupPath + "/" + healthGroup)
+                    .route(healthConfig.rootPath + healthConfig.groupPath + "/" + healthGroup)
                     .handler(handler)
                     .blockingRoute()
                     .nonApplicationRoute()
@@ -277,7 +274,7 @@ class SmallRyeHealthProcessor {
 
         // Register the wellness handler
         routes.produce(new RouteBuildItem.Builder()
-                .route(subcontextBasePath + healthConfig.wellnessPath)
+                .route(healthConfig.rootPath + healthConfig.wellnessPath)
                 .handler(new SmallRyeWellnessHandler())
                 .blockingRoute()
                 .nonApplicationRoute()
@@ -295,10 +292,9 @@ class SmallRyeHealthProcessor {
         // Add to OpenAPI if OpenAPI is available
         if (capabilities.isPresent(Capability.SMALLRYE_OPENAPI)) {
             String basePath = httpRootPath.adjustPath(nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath));
-            String subcontextBasePath = adjustSubcontextBasePath(basePath);
             HealthOpenAPIFilter filter = new HealthOpenAPIFilter(basePath,
-                    subcontextBasePath + healthConfig.livenessPath,
-                    subcontextBasePath + healthConfig.readinessPath);
+                    basePath + healthConfig.livenessPath,
+                    basePath + healthConfig.readinessPath);
             openAPIProducer.produce(new AddToOpenAPIDefinitionBuildItem(filter));
         }
     }
@@ -332,16 +328,14 @@ class SmallRyeHealthProcessor {
             BuildProducer<KubernetesHealthLivenessPathBuildItem> livenessPathItemProducer,
             BuildProducer<KubernetesHealthReadinessPathBuildItem> readinessPathItemProducer) {
 
-        String subcontextBasePath = adjustSubcontextBasePath(healthConfig.rootPath);
-
         livenessPathItemProducer.produce(
                 new KubernetesHealthLivenessPathBuildItem(
                         httpConfig
-                                .adjustPath(frameworkRootPath.adjustPath(subcontextBasePath + healthConfig.livenessPath))));
+                                .adjustPath(frameworkRootPath.adjustPath(healthConfig.rootPath + healthConfig.livenessPath))));
         readinessPathItemProducer.produce(
                 new KubernetesHealthReadinessPathBuildItem(
                         httpConfig
-                                .adjustPath(frameworkRootPath.adjustPath(subcontextBasePath + healthConfig.readinessPath))));
+                                .adjustPath(frameworkRootPath.adjustPath(healthConfig.rootPath + healthConfig.readinessPath))));
     }
 
     @BuildStep
@@ -396,6 +390,7 @@ class SmallRyeHealthProcessor {
     }
 
     // UI
+
     @BuildStep
     void registerUiExtension(
             BuildProducer<GeneratedResourceBuildItem> generatedResourceProducer,
@@ -503,9 +498,5 @@ class SmallRyeHealthProcessor {
 
     private static boolean shouldInclude(LaunchModeBuildItem launchMode, SmallRyeHealthConfig healthConfig) {
         return launchMode.getLaunchMode().isDevOrTest() || healthConfig.ui.alwaysInclude;
-    }
-
-    private String adjustSubcontextBasePath(String basePath) {
-        return basePath.equals("/") ? "" : basePath;
     }
 }
