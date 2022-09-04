@@ -417,6 +417,7 @@ class Desugar {
               ? new CoreLibrarySupport(
                   rewriter,
                   loader,
+                  store,
                   options.rewriteCoreLibraryPrefixes,
                   options.emulateCoreLibraryInterfaces,
                   options.retargetCoreLibraryMembers,
@@ -626,9 +627,6 @@ class Desugar {
       @Nullable CoreLibrarySupport coreLibrarySupport)
       throws IOException {
     // Write out any classes we generated along the way
-    if (coreLibrarySupport != null) {
-      coreLibrarySupport.makeDispatchHelpers(store);
-    }
     ImmutableMap<String, ClassNode> generatedClasses = store.drain();
     checkState(
         generatedClasses.isEmpty() || (allowDefaultMethods && outputJava7),
