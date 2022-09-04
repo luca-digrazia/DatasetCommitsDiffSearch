@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures;
@@ -66,7 +67,7 @@ class ObjcVariablesExtension implements VariablesExtension {
   private final Set<String> frameworkNames;
   private final ImmutableList<String> libraryNames;
   private final ImmutableSet<Artifact> forceLoadArtifacts;
-  private final ImmutableList<String> attributeLinkopts;
+  private final NestedSet<String> attributeLinkopts;
   private final ImmutableSet<VariableCategory> activeVariableCategories;
 
   private ObjcVariablesExtension(
@@ -79,7 +80,7 @@ class ObjcVariablesExtension implements VariablesExtension {
       Set<String> frameworkNames,
       ImmutableList<String> libraryNames,
       ImmutableSet<Artifact> forceLoadArtifacts,
-      ImmutableList<String> attributeLinkopts,
+      NestedSet<String> attributeLinkopts,
       ImmutableSet<VariableCategory> activeVariableCategories) {
     this.ruleContext = ruleContext;
     this.objcProvider = objcProvider;
@@ -203,7 +204,7 @@ class ObjcVariablesExtension implements VariablesExtension {
     private Set<String> frameworkNames;
     private ImmutableSet<Artifact> forceLoadArtifacts;
     private ImmutableList<String> libraryNames;
-    private ImmutableList<String> attributeLinkopts;
+    private NestedSet<String> attributeLinkopts;
     
     private final ImmutableSet.Builder<VariableCategory> activeVariableCategoriesBuilder =
         ImmutableSet.builder();
@@ -263,7 +264,7 @@ class ObjcVariablesExtension implements VariablesExtension {
     }
     
     /** Sets linkopts arising from rule attributes. */
-    public Builder setAttributeLinkopts(ImmutableList<String> attributeLinkopts) {
+    public Builder setAttributeLinkopts(NestedSet<String> attributeLinkopts) {
       this.attributeLinkopts = Preconditions.checkNotNull(attributeLinkopts);
       return this;
     }
