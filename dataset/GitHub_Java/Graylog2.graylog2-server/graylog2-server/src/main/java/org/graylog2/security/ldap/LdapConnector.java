@@ -58,10 +58,6 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 public class LdapConnector {
     private static final Logger LOG = LoggerFactory.getLogger(LdapConnector.class);
 
-    private static final String ATTRIBUTE_UNIQUE_MEMBER = "uniqueMember";
-    private static final String ATTRIBUTE_MEMBER = "member";
-    private static final String ATTRIBUTE_MEMBER_UID = "memberUid";
-
     private final int connectionTimeout;
 
     @Inject
@@ -132,7 +128,7 @@ public class LdapConnector {
             entryCursor = connection.search(searchBase,
                                             filter,
                                             SearchScope.SUBTREE,
-                                            groupIdAttribute, displayNameAttribute, "dn", "uid", "userPrincipalName", "mail", "rfc822Mailbox", "memberOf", "isMemberOf");
+                                            groupIdAttribute, displayNameAttribute, "dn", "userPrincipalName", "mail", "rfc822Mailbox", "memberOf");
             final Iterator<Entry> it = entryCursor.iterator();
             if (it.hasNext()) {
                 final Entry e = it.next();
@@ -151,8 +147,7 @@ public class LdapConnector {
                     if (attribute.isHumanReadable()) {
                         ldapEntry.put(attribute.getId(), Joiner.on(", ").join(attribute.iterator()));
                     }
-                    // ActiveDirectory (memberOf) and Sun Directory Server (isMemberOf)
-                    if ("memberOf".equalsIgnoreCase(attribute.getId()) || "isMemberOf".equalsIgnoreCase(attribute.getId())) {
+                    if ("memberOf".equalsIgnoreCase(attribute.getId())) {
                         for (Value<?> group : attribute) {
                             groupDns.add(group.getString());
                         }
@@ -197,7 +192,7 @@ public class LdapConnector {
                                                groupSearchBase,
                                                groupSearchPattern,
                                                groupIdAttribute,
-                                               ldapEntry
+                                               ldapEntry.getDn()
                 ));
                 LOG.trace("LDAP search found entry for DN {} with search filter {}: {}",
                           ldapEntry.getDn(),
@@ -220,7 +215,7 @@ public class LdapConnector {
                                   String groupSearchBase,
                                   String groupSearchPattern,
                                   String groupIdAttribute,
-                                  @Nullable LdapEntry ldapEntry) {
+                                  String dn) {
         final Set<String> groups = Sets.newHashSet();
 
         EntryCursor groupSearch = null;
@@ -229,7 +224,7 @@ public class LdapConnector {
                     groupSearchBase,
                     groupSearchPattern,
                     SearchScope.SUBTREE,
-                    "objectClass", ATTRIBUTE_UNIQUE_MEMBER, ATTRIBUTE_MEMBER, ATTRIBUTE_MEMBER_UID, groupIdAttribute);
+                    "objectClass", "uniqueMember", "member", groupIdAttribute);
             LOG.trace("LDAP search for groups: {} starting at {}", groupSearchPattern, groupSearchBase);
             for (Entry e : groupSearch) {
                 if (LOG.isTraceEnabled()) {
@@ -240,48 +235,27 @@ public class LdapConnector {
                     continue;
                 }
                 final String groupId = e.get(groupIdAttribute).getString();
-                if (ldapEntry == null) {
+                if (dn == null) {
                     // no membership lookup possible (we have no user), simply collect the found group names
                     groups.add(groupId);
                 } else {
                     // test if the given dn parameter is actually member of any of the found groups
                     String memberAttribute;
                     if (e.hasObjectClass("groupOfUniqueNames")) {
-                        memberAttribute = ATTRIBUTE_UNIQUE_MEMBER;
+                        memberAttribute = "uniqueMember";
                     } else if (e.hasObjectClass("groupOfNames") || e.hasObjectClass("group")) {
-                        memberAttribute = ATTRIBUTE_MEMBER;
-                    } else if (e.hasObjectClass("posixGroup")) {
-                        memberAttribute = ATTRIBUTE_MEMBER_UID;
+                        memberAttribute = "member";
                     } else {
-                        // Trying auto detection of the member attribute. This should be configurable!
-                        if (e.containsAttribute(ATTRIBUTE_UNIQUE_MEMBER)) {
-                            memberAttribute = ATTRIBUTE_UNIQUE_MEMBER;
-                        } else if (e.containsAttribute(ATTRIBUTE_MEMBER_UID)) {
-                            memberAttribute = ATTRIBUTE_MEMBER_UID;
-                        } else {
-                            memberAttribute = ATTRIBUTE_MEMBER;
-                        }
                         LOG.warn(
-                                "Unable to auto-detect the LDAP group object class, assuming '{}' is the correct attribute.",
-                                memberAttribute);
+                                "Unable to auto-detect the LDAP group object class, assuming 'member' is the correct attribute.");
+                        memberAttribute = "member";
                     }
                     final Attribute members = e.get(memberAttribute);
                     if (members != null) {
-                        final String dn = ldapEntry.getDn();
-                        final String uid = ldapEntry.get("uid");
-
                         for (Value<?> member : members) {
                             LOG.trace("DN {} == {} member?", dn, member.getString());
                             if (dn.equalsIgnoreCase(member.getString())) {
                                 groups.add(groupId);
-                            } else {
-                                // The posixGroup object class is using the memberUid attribute for group members.
-                                // Since the memberUid attribute takes uid values instead of dn values, we have to
-                                // check against the uid attribute of the user.
-                                if (!isNullOrEmpty(uid) && uid.equalsIgnoreCase(member.getString())) {
-                                    LOG.trace("UID {} == {} member?", uid, member.getString());
-                                    groups.add(groupId);
-                                }
                             }
                         }
                     }
