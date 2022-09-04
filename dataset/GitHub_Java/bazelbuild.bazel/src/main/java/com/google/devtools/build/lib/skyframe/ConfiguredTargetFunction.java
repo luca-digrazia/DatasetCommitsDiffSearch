@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
+import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId.ConfigurationId;
 import com.google.devtools.build.lib.causes.AnalysisFailedCause;
@@ -214,6 +215,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       return null;
     }
     PackageValue packageValue = (PackageValue) packageAndMaybeConfigurationValues.get(packageKey);
+    if (label.equals(labelWithUndonePackageToDiagnoseBug)) {
+      logger.atInfo().log("Retrieved values %s for %s", packageAndMaybeConfigurationValues, key);
+    }
     if (configurationKeyMaybe != null) {
       configuration =
           ((BuildConfigurationValue) packageAndMaybeConfigurationValues.get(configurationKeyMaybe))
@@ -311,6 +315,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           ImmutableSet<Label> execConstraintLabels = getExecutionPlatformConstraints(rule);
           unloadedToolchainContext =
               new ToolchainResolver(env, configuredTargetKey.getConfigurationKey())
+                  .setTargetDescription(rule.toString())
                   .setRequiredToolchainTypes(requiredToolchains)
                   .setExecConstraintLabels(execConstraintLabels)
                   .resolve();
@@ -349,12 +354,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       // Load the requested toolchains into the ToolchainContext, now that we have dependencies.
       ResolvedToolchainContext toolchainContext = null;
       if (unloadedToolchainContext != null) {
-        String targetDescription = target.toString();
         toolchainContext =
-            ResolvedToolchainContext.load(
-                unloadedToolchainContext,
-                targetDescription,
-                depValueMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));
+            unloadedToolchainContext.load(depValueMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));
       }
 
       ConfiguredTargetValue ans =
@@ -716,12 +717,27 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               } else {
                 pkgValue = (PackageValue) packageResult.get();
                 if (pkgValue == null) {
+                  logger.atInfo().log("Missing package: %s for (%s %s)", packageKey, dep, key);
                   // In a race, the getValuesOrThrow call above may have retrieved the package
-                  // before it was done but the configured target after it was done. Since
-                  // SkyFunctionEnvironment may cache absent values, re-requesting it on this
-                  // evaluation may be useless, just treat it as missing.
-                  missedValues = true;
-                  continue;
+                  // before it was done but the configured target after it was done. However, the
+                  // configured target being done implies that the package is now done, so we can
+                  // retrieve it from the graph.
+                  pkgValue = (PackageValue) env.getValue(packageKey);
+                  if (pkgValue == null) {
+                    BugReport.sendBugReport(
+                        new IllegalStateException(
+                            "Package should have been loaded during dep resolution: "
+                                + dep
+                                + ", ("
+                                + depValue
+                                + ", "
+                                + packageResult
+                                + ", "
+                                + ctgValue
+                                + ")"));
+                    missedValues = true;
+                    continue;
+                  }
                 }
               }
             } else {
@@ -936,4 +952,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       super(e, Transience.PERSISTENT);
     }
   }
+
+  // TODO(b/128541100): remove when bug is fixed.
+  public static Label labelWithUndonePackageToDiagnoseBug = null;
 }
