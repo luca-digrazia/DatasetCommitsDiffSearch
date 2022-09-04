@@ -180,7 +180,6 @@ public final class PackageFactory {
   // so WorkspaceFactory can add an extra top-level builtin.
   public PackageFactory(
       RuleClassProvider ruleClassProvider,
-      ForkJoinPool executorForGlobbing,
       Iterable<EnvironmentExtension> environmentExtensions,
       String version,
       PackageSettings packageSettings,
@@ -189,7 +188,7 @@ public final class PackageFactory {
     this.ruleFactory = new RuleFactory(ruleClassProvider);
     this.ruleFunctions = buildRuleFunctions(ruleFactory);
     this.ruleClassProvider = ruleClassProvider;
-    this.executor = executorForGlobbing;
+    setGlobbingThreads(100);
     this.environmentExtensions = ImmutableList.copyOf(environmentExtensions);
     this.packageArguments = createPackageArguments();
     this.nativeModuleBindingsForBuild =
@@ -207,33 +206,11 @@ public final class PackageFactory {
     this.syscalls = Preconditions.checkNotNull(syscalls);
   }
 
-  /**
-   * Sets the max number of threads to use for globbing.
-   *
-   * <p>Internally there is a {@link ForkJoinPool} used for globbing. If the specified {@code
-   * globbingThreads} does not match the previous value (initial value is 100), then we {@link
-   * ForkJoinPool#shutdown()} the old {@link ForkJoinPool} instance and make a new one.
-   */
+  /** Sets the max number of threads to use for globbing. */
   public void setGlobbingThreads(int globbingThreads) {
-    if (executor == null) {
-      executor = makeForkJoinPool(globbingThreads);
-      return;
+    if (executor == null || executor.getParallelism() != globbingThreads) {
+      executor = NamedForkJoinPool.newNamedPool("globbing pool", globbingThreads);
     }
-    if (executor.getParallelism() == globbingThreads) {
-      return;
-    }
-    // We don't use ForkJoinPool#shutdownNow since it has a performance bug. See
-    // http://b/33482341#comment13.
-    executor.shutdown();
-    executor = makeForkJoinPool(globbingThreads);
-  }
-
-  public static ForkJoinPool makeDefaultSizedForkJoinPoolForGlobbing() {
-    return makeForkJoinPool(/*globbingThreads=*/ 100);
-  }
-
-  private static ForkJoinPool makeForkJoinPool(int globbingThreads) {
-    return NamedForkJoinPool.newNamedPool("globbing pool", globbingThreads);
   }
 
   /**
@@ -337,26 +314,27 @@ public final class PackageFactory {
       public Object call(StarlarkThread thread, Tuple<Object> args, Dict<String, Object> kwargs)
           throws EvalException {
         if (!args.isEmpty()) {
-          throw new EvalException("unexpected positional arguments");
+          throw new EvalException(null, "unexpected positional arguments");
         }
         Package.Builder pkgBuilder = getContext(thread).pkgBuilder;
 
         // Validate parameter list
         if (pkgBuilder.isPackageFunctionUsed()) {
-          throw new EvalException("'package' can only be used once per BUILD file");
+          throw new EvalException(null, "'package' can only be used once per BUILD file");
         }
         pkgBuilder.setPackageFunctionUsed();
 
         // Each supplied argument must name a PackageArgument.
         if (kwargs.isEmpty()) {
-          throw new EvalException("at least one argument must be given to the 'package' function");
+          throw new EvalException(
+              null, "at least one argument must be given to the 'package' function");
         }
         Location loc = thread.getCallerLocation();
         for (Map.Entry<String, Object> kwarg : kwargs.entrySet()) {
           String name = kwarg.getKey();
           PackageArgument<?> pkgarg = packageArguments.get(name);
           if (pkgarg == null) {
-            throw new EvalException("unexpected keyword argument: " + name);
+            throw new EvalException(null, "unexpected keyword argument: " + name);
           }
           pkgarg.convertAndProcess(pkgBuilder, loc, kwarg.getValue());
         }
@@ -416,7 +394,7 @@ public final class PackageFactory {
             thread.getSemantics(),
             thread.getCallStack());
       } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
-        throw new EvalException(e);
+        throw new EvalException(null, e.getMessage());
       }
       return Starlark.NONE;
     }
@@ -892,7 +870,7 @@ public final class PackageFactory {
       try {
         EvalUtils.exec(file, module, thread);
       } catch (EvalException ex) {
-        pkgContext.eventHandler.handle(Event.error(null, ex.getMessageWithStack()));
+        pkgContext.eventHandler.handle(Event.error(ex.getLocation(), ex.getMessage()));
         return false;
       }
 

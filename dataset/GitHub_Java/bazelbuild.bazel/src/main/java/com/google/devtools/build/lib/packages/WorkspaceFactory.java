@@ -194,7 +194,7 @@ public class WorkspaceFactory {
       try {
         EvalUtils.exec(file, module, thread);
       } catch (EvalException ex) {
-        localReporter.handle(Event.error(null, ex.getMessageWithStack()));
+        localReporter.handle(Event.error(ex.getLocation(), ex.getMessage()));
       }
     }
 
@@ -285,7 +285,7 @@ public class WorkspaceFactory {
       public Object call(StarlarkThread thread, Tuple<Object> args, Dict<String, Object> kwargs)
           throws EvalException, InterruptedException {
         if (!args.isEmpty()) {
-          throw new EvalException("unexpected positional arguments");
+          throw new EvalException(null, "unexpected positional arguments");
         }
         try {
           Package.Builder builder = PackageFactory.getContext(thread).pkgBuilder;
@@ -316,6 +316,7 @@ public class WorkspaceFactory {
                   thread.getCallStack());
           if (!WorkspaceGlobals.isLegalWorkspaceName(rule.getName())) {
             throw new EvalException(
+                null,
                 rule
                     + "'s name field must be a legal workspace name;"
                     + " workspace names may contain only A-Z, a-z, 0-9, '-', '_' and '.'");
@@ -323,7 +324,7 @@ public class WorkspaceFactory {
         } catch (RuleFactory.InvalidRuleException
             | Package.NameConflictException
             | LabelSyntaxException e) {
-          throw new EvalException(e);
+          throw new EvalException(null, e.getMessage());
         }
         return Starlark.NONE;
       }
