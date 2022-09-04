@@ -48,7 +48,6 @@ import play.mvc.Http;
 import javax.inject.Inject;
 import java.io.IOException;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 public class ClusterService {
@@ -93,7 +92,7 @@ public class ClusterService {
     }
 
     public void deleteNotification(Notification.Type type) throws APIException, IOException {
-        api.path(routes.NotificationsResource().deleteNotification(type.toString().toLowerCase(Locale.ENGLISH)))
+        api.path(routes.NotificationsResource().deleteNotification(type.toString().toLowerCase()))
                 .expect(204)
                 .execute();
     }
