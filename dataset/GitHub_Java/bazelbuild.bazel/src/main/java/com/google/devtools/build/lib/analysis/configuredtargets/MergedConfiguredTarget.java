@@ -26,11 +26,11 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.Provider.Key;
 import com.google.devtools.build.lib.skylarkbuildapi.ActionApi;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -95,8 +95,8 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   @Override
-  protected Info rawGetSkylarkProvider(Provider.Key providerKey) {
-    Info provider = providers.get(providerKey);
+  protected InfoInterface rawGetSkylarkProvider(Provider.Key providerKey) {
+    InfoInterface provider = providers.get(providerKey);
     if (provider == null) {
       provider = base.get(providerKey);
     }
@@ -181,7 +181,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
           if (base.get(key) != null || aspectProviders.contains(key)) {
             throw new DuplicateException("Provider " + key + " provided twice");
           }
-          aspectProviders.put((Info) providers.getProviderInstanceAt(i));
+          aspectProviders.put((InfoInterface) providers.getProviderInstanceAt(i));
         }
       }
     }
@@ -225,7 +225,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("<merged target " + getLabel() + ">");
   }
 
