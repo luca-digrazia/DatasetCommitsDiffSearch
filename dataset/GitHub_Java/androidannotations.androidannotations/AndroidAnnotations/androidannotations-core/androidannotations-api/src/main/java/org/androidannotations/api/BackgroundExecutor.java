@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -426,7 +426,7 @@ public final class BackgroundExecutor {
 					if (next != null) {
 						if (next.remainingDelay != 0) {
 							/* the delay may not have elapsed yet */
-							next.remainingDelay = Math.max(0L, next.targetTimeMillis - System.currentTimeMillis());
+							next.remainingDelay = Math.max(0L, targetTimeMillis - System.currentTimeMillis());
 						}
 						/* a task having the same serial was queued, execute it */
 						BackgroundExecutor.execute(next);
