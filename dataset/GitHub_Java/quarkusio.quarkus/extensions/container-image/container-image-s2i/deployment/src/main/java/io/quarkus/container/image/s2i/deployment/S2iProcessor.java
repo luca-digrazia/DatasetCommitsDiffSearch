@@ -4,10 +4,8 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -22,7 +20,6 @@ import io.dekorate.deps.kubernetes.api.model.HasMetadata;
 import io.dekorate.deps.kubernetes.api.model.KubernetesList;
 import io.dekorate.deps.kubernetes.api.model.Secret;
 import io.dekorate.deps.kubernetes.client.KubernetesClient;
-import io.dekorate.deps.okhttp3.internal.http2.StreamResetException;
 import io.dekorate.deps.openshift.api.model.Build;
 import io.dekorate.deps.openshift.api.model.BuildConfig;
 import io.dekorate.deps.openshift.api.model.ImageStream;
@@ -51,7 +48,6 @@ import io.quarkus.deployment.pkg.builditem.JarBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.deployment.pkg.steps.NativeBuild;
-import io.quarkus.deployment.util.ExecUtil;
 import io.quarkus.kubernetes.client.spi.KubernetesClientBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesCommandBuildItem;
 
@@ -181,16 +177,7 @@ public class S2iProcessor {
             Path output,
             Path... additional) {
 
-        File tar;
-        try {
-            File original = Packaging.packageFile(output, additional);
-            //Let's rename the archive and give it a more descriptive name, as it may appear in the logs.
-            tar = Files.createTempFile("quarkus-", "-s2i").toFile();
-            Files.move(original.toPath(), tar.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        } catch (Exception e) {
-            throw new RuntimeException("Error creating the s2i binary build archive.", e);
-        }
-
+        File tar = Packaging.packageFile(output, additional);
         KubernetesClient client = Clients.fromConfig(kubernetesClient.getClient().getConfiguration());
         KubernetesList kubernetesList = Serialization
                 .unmarshalAsList(new ByteArrayInputStream(openshiftManifests.getData()));
@@ -243,30 +230,15 @@ public class S2iProcessor {
      * @param binaryFile The binary file.
      */
     private static void s2iBuild(OpenShiftClient client, BuildConfig buildConfig, File binaryFile, S2iConfig s2iConfig) {
-        Build build;
-        try {
-            build = client.buildConfigs().withName(buildConfig.getMetadata().getName()).instantiateBinary()
-                    .withTimeoutInMillis(s2iConfig.buildTimeout.toMillis()).fromFile(binaryFile);
-        } catch (Exception e) {
-            if (e.getCause() instanceof StreamResetException) {
-                LOG.warn("Stream was reset while building. Falling back to building with the 'oc' binary.");
-                if (!ExecUtil.exec("oc", "start-build", buildConfig.getMetadata().getName(), "--from-archive",
-                        binaryFile.toPath().toAbsolutePath().toString())) {
-                    throw s2iException(e);
-                }
-                return;
-            } else {
-                throw s2iException(e);
-            }
-        }
-
+        Build build = client.buildConfigs().withName(buildConfig.getMetadata().getName()).instantiateBinary()
+                .withTimeoutInMillis(s2iConfig.buildTimeout.toMillis()).fromFile(binaryFile);
         try (BufferedReader reader = new BufferedReader(
                 client.builds().withName(build.getMetadata().getName()).getLogReader())) {
             for (String line = reader.readLine(); line != null; line = reader.readLine()) {
                 System.out.println(line);
             }
         } catch (IOException e) {
-            throw s2iException(e);
+            s2iException(e);
         }
     }
 
