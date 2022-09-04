@@ -22,6 +22,7 @@ package models;
 import com.google.inject.Inject;
 import lib.APIException;
 import lib.ApiClient;
+import lib.ServerNodes;
 import models.api.responses.NodeSummaryResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,7 @@ public class NodeService {
         NodeSummaryResponse r;
         try {
             r = api.get(NodeSummaryResponse.class)
+                    .node(ServerNodes.any())
                     .path("/system/cluster/nodes/{0}", nodeId)
                     .execute();
             return nodeFactory.fromSummaryResponse(r);
