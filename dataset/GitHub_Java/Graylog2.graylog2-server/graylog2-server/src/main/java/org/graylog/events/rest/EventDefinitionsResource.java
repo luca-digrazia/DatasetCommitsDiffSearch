@@ -24,7 +24,6 @@ import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog.events.audit.EventsAuditEventTypes;
-import org.graylog.events.context.EventDefinitionContextService;
 import org.graylog.events.processor.DBEventDefinitionService;
 import org.graylog.events.processor.EventDefinitionDto;
 import org.graylog.events.processor.EventDefinitionHandler;
@@ -66,7 +65,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -86,18 +84,15 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
 
     private final DBEventDefinitionService dbService;
     private final EventDefinitionHandler eventDefinitionHandler;
-    private final EventDefinitionContextService contextService;
     private final EventProcessorEngine engine;
     private final SearchQueryParser searchQueryParser;
 
     @Inject
     public EventDefinitionsResource(DBEventDefinitionService dbService,
                                     EventDefinitionHandler eventDefinitionHandler,
-                                    EventDefinitionContextService contextService,
                                     EventProcessorEngine engine) {
         this.dbService = dbService;
         this.eventDefinitionHandler = eventDefinitionHandler;
-        this.contextService = contextService;
         this.engine = engine;
         this.searchQueryParser = new SearchQueryParser(EventDefinitionDto.FIELD_TITLE, SEARCH_FIELD_MAPPING);
     }
@@ -110,9 +105,8 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
         final SearchQuery searchQuery = searchQueryParser.parse(query);
         final PaginatedList<EventDefinitionDto> result = dbService.searchPaginated(searchQuery, event -> {
             return isPermitted(RestPermissions.EVENT_DEFINITIONS_READ, event.id());
-        }, "title", page, perPage);
-        final ImmutableMap<String, Object> context = contextService.contextFor(result.delegate());
-        return PaginatedResponse.create("event_definitions", result, query, context);
+            }, "title", page, perPage);
+        return PaginatedResponse.create("event_definitions", result, query);
     }
 
     @GET
@@ -124,34 +118,19 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
                 .orElseThrow(() -> new NotFoundException("Event definition <" + definitionId + "> doesn't exist"));
     }
 
-    @GET
-    @Path("{definitionId}/with-context")
-    @ApiOperation("Get an event definition")
-    public Map<String, Object> getWithContext(@ApiParam(name = "definitionId") @PathParam("definitionId") @NotBlank String definitionId) {
-        checkPermission(RestPermissions.EVENT_DEFINITIONS_READ, definitionId);
-        return dbService.get(definitionId)
-                .map(evenDefinition -> ImmutableMap.of(
-                        "event_definition", evenDefinition,
-                        "context", contextService.contextFor(evenDefinition)
-                ))
-                .orElseThrow(() -> new NotFoundException("Event definition <" + definitionId + "> doesn't exist"));
-    }
-
     @POST
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Create new event definition")
     @AuditEvent(type = EventsAuditEventTypes.EVENT_DEFINITION_CREATE)
     @RequiresPermissions(RestPermissions.EVENT_DEFINITIONS_CREATE)
-    public Response create(@ApiParam("schedule") @QueryParam("schedule") @DefaultValue("true") boolean schedule,
-                           @ApiParam(name = "JSON Body") EventDefinitionDto dto) {
+    public Response create(@ApiParam(name = "JSON Body") EventDefinitionDto dto) {
         checkEventDefinitionPermissions(dto, "create");
 
         final ValidationResult result = dto.validate();
         if (result.failed()) {
             return Response.status(Response.Status.BAD_REQUEST).entity(result).build();
         }
-        final EventDefinitionDto entity = schedule ? eventDefinitionHandler.create(dto) : eventDefinitionHandler.createWithoutSchedule(dto);
-        return Response.ok().entity(entity).build();
+        return Response.ok().entity(eventDefinitionHandler.create(dto)).build();
     }
 
     @PUT
@@ -159,7 +138,6 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
     @ApiOperation("Update existing event definition")
     @AuditEvent(type = EventsAuditEventTypes.EVENT_DEFINITION_UPDATE)
     public Response update(@ApiParam(name = "definitionId") @PathParam("definitionId") @NotBlank String definitionId,
-                           @ApiParam("schedule") @QueryParam("schedule") @DefaultValue("true") boolean schedule,
                            @ApiParam(name = "JSON Body") EventDefinitionDto dto) {
         checkPermission(RestPermissions.EVENT_DEFINITIONS_EDIT, definitionId);
         checkEventDefinitionPermissions(dto, "update");
@@ -174,7 +152,7 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
         if (result.failed()) {
             return Response.status(Response.Status.BAD_REQUEST).entity(result).build();
         }
-        return Response.ok().entity(eventDefinitionHandler.update(dto, schedule)).build();
+        return Response.ok().entity(eventDefinitionHandler.update(dto)).build();
     }
 
     @DELETE
@@ -184,26 +162,6 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
     public void delete(@ApiParam(name = "definitionId") @PathParam("definitionId") @NotBlank String definitionId) {
         checkPermission(RestPermissions.EVENT_DEFINITIONS_DELETE, definitionId);
         eventDefinitionHandler.delete(definitionId);
-    }
-
-    @PUT
-    @Path("{definitionId}/schedule")
-    @Consumes(MediaType.WILDCARD)
-    @ApiOperation("Enable event definition")
-    @AuditEvent(type = EventsAuditEventTypes.EVENT_DEFINITION_UPDATE)
-    public void schedule(@ApiParam(name = "definitionId") @PathParam("definitionId") @NotBlank String definitionId) {
-        checkPermission(RestPermissions.EVENT_DEFINITIONS_EDIT, definitionId);
-        eventDefinitionHandler.schedule(definitionId);
-    }
-
-    @PUT
-    @Path("{definitionId}/unschedule")
-    @Consumes(MediaType.WILDCARD)
-    @ApiOperation("Disable event definition")
-    @AuditEvent(type = EventsAuditEventTypes.EVENT_DEFINITION_UPDATE)
-    public void unschedule(@ApiParam(name = "definitionId") @PathParam("definitionId") @NotBlank String definitionId) {
-        checkPermission(RestPermissions.EVENT_DEFINITIONS_EDIT, definitionId);
-        eventDefinitionHandler.unschedule(definitionId);
     }
 
     @POST
@@ -236,8 +194,8 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
 
     private void checkEventDefinitionPermissions(EventDefinitionDto dto, String action) {
         final Set<String> missingPermissions = dto.requiredPermissions().stream()
-                .filter(permission -> !isPermitted(permission))
-                .collect(Collectors.toSet());
+            .filter(permission -> !isPermitted(permission))
+            .collect(Collectors.toSet());
 
         if (!missingPermissions.isEmpty()) {
             LOG.info("Not authorized to {} event definition. User <{}> is missing permissions: {}", action, getSubject().getPrincipal(), missingPermissions);

@@ -17,36 +17,31 @@
 package org.graylog2.rest.resources.alarmcallbacks;
 
 import com.codahale.metrics.annotation.Timed;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
+import com.google.common.collect.Lists;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.alarmcallbacks.AlarmCallbackHistory;
 import org.graylog2.alarmcallbacks.AlarmCallbackHistoryService;
+import org.graylog2.database.NotFoundException;
 import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackHistoryListSummary;
 import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackHistorySummary;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
-import java.util.ArrayList;
 import java.util.List;
 
 @RequiresAuthentication
-@Api(value = "AlarmCallbacks", description = "Manage stream alarm callback histories")
+@Api(value = "AlarmCallbackHistories", description = "Manage stream legacy alarm callback histories")
 @Path("/streams/{streamid}/alerts/{alertId}/history")
 public class AlarmCallbackHistoryResource extends RestResource {
-    private static final Logger LOG = LoggerFactory.getLogger(AlarmCallbackHistoryResource.class);
-
     private final AlarmCallbackHistoryService alarmCallbackHistoryService;
 
     @Inject
@@ -61,19 +56,15 @@ public class AlarmCallbackHistoryResource extends RestResource {
     public AlarmCallbackHistoryListSummary getForAlert(@ApiParam(name = "streamid", value = "The id of the stream whose alarm callbacks history we want.", required = true)
                                                        @PathParam("streamid") String streamid,
                                                        @ApiParam(name = "alertId", value = "The id of the alert whose callback history we want.", required = true)
-                                                       @PathParam("alertId") String alertId,
-                                                       @ApiParam(name = "skip", value = "The number of elements to skip (offset).", required = true)
-                                                       @QueryParam("skip") @DefaultValue("0") int skip,
-                                                       @ApiParam(name = "limit", value = "The maximum number of elements to return.", required = true)
-                                                       @QueryParam("limit") @DefaultValue("0") int limit) {
+                                                       @PathParam("alertId") String alertId) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 
-        final List<AlarmCallbackHistory> historyList = this.alarmCallbackHistoryService.getForAlertId(alertId, skip, limit);
+        final List<AlarmCallbackHistory> historyList = this.alarmCallbackHistoryService.getForAlertId(alertId);
 
-        final List<AlarmCallbackHistorySummary> historySummaryList = new ArrayList<>(historyList.size());
+        final List<AlarmCallbackHistorySummary> historySummaryList = Lists.newArrayListWithCapacity(historyList.size());
         for (AlarmCallbackHistory alarmCallbackHistory : historyList) {
             historySummaryList.add(AlarmCallbackHistorySummary.create(alarmCallbackHistory.id(),
-                    alarmCallbackHistory.alarmcallbackConfigurationId(),
+                    alarmCallbackHistory.alarmcallbackConfiguration(),
                     alarmCallbackHistory.alertId(),
                     alarmCallbackHistory.alertConditionId(),
                     alarmCallbackHistory.result(),
