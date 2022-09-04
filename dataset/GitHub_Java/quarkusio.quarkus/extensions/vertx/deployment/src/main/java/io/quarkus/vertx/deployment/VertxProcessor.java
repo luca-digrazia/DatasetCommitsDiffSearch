@@ -19,7 +19,6 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
-import io.quarkus.arc.deployment.CustomScopeAnnotationsBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
@@ -28,6 +27,7 @@ import io.quarkus.arc.processor.AnnotationStore;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BuildExtension;
+import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -49,6 +49,7 @@ import io.quarkus.vertx.ConsumeEvent;
 import io.quarkus.vertx.core.deployment.CoreVertxBuildItem;
 import io.quarkus.vertx.runtime.VertxProducer;
 import io.quarkus.vertx.runtime.VertxRecorder;
+import io.vertx.reactivex.core.AbstractVerticle;
 
 class VertxProcessor {
 
@@ -70,7 +71,7 @@ class VertxProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    VertxBuildItem build(CoreVertxBuildItem vertx, VertxRecorder recorder, BeanContainerBuildItem beanContainer,
+    VertxBuildItem build(CoreVertxBuildItem internalVertx, VertxRecorder recorder, BeanContainerBuildItem beanContainer,
             List<EventConsumerBusinessMethodItem> messageConsumerBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
             AnnotationProxyBuildItem annotationProxy, LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdown,
@@ -94,11 +95,11 @@ class VertxProcessor {
                     recorderContext.classProxy(messageCodecItem.getCodec()));
         }
 
-        recorder.configureVertx(vertx.getVertx(), messageConsumerConfigurations,
+        recorder.configureVertx(internalVertx.getVertx(), messageConsumerConfigurations,
                 launchMode.getLaunchMode(),
                 shutdown, codecByClass);
         serviceStart.produce(new ServiceStartBuildItem("vertx"));
-        return new VertxBuildItem(recorder.forceStart(vertx.getVertx()));
+        return new VertxBuildItem(recorder.forceStart(internalVertx.getVertx()));
     }
 
     @BuildStep
@@ -134,7 +135,7 @@ class VertxProcessor {
     }
 
     @BuildStep
-    AnnotationsTransformerBuildItem annotationTransformer(CustomScopeAnnotationsBuildItem scopes) {
+    AnnotationsTransformerBuildItem annotationTransformer() {
         return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
 
             @Override
@@ -144,7 +145,7 @@ class VertxProcessor {
 
             @Override
             public void transform(TransformationContext context) {
-                if (!scopes.isScopeIn(context.getAnnotations())
+                if (!BuiltinScope.isIn(context.getAnnotations())
                         && context.getTarget().asClass().annotations().containsKey(CONSUME_EVENT)) {
                     // Class with no built-in scope annotation but with a method annotated with @ConsumeMessage
                     LOGGER.debugf(
@@ -157,17 +158,10 @@ class VertxProcessor {
     }
 
     @BuildStep
-    void registerVerticleClasses(CombinedIndexBuildItem indexBuildItem,
+    void registerRxVerticleClasses(CombinedIndexBuildItem indexBuildItem,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
-        // RX Verticles
         for (ClassInfo ci : indexBuildItem.getIndex()
-                .getAllKnownSubclasses(DotName.createSimple(io.vertx.reactivex.core.AbstractVerticle.class.getName()))) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ci.toString()));
-        }
-
-        // Mutiny Verticles
-        for (ClassInfo ci : indexBuildItem.getIndex()
-                .getAllKnownSubclasses(DotName.createSimple(io.smallrye.mutiny.vertx.core.AbstractVerticle.class.getName()))) {
+                .getAllKnownSubclasses(DotName.createSimple(AbstractVerticle.class.getName()))) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ci.toString()));
         }
     }
