@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.FileValue;
@@ -28,7 +27,6 @@ import com.google.devtools.build.lib.packages.ErrorDeterminingRepositoryExceptio
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.RepositoryFetchException;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.repository.ExternalPackageHelper;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -40,6 +38,7 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
@@ -57,25 +56,21 @@ public class PackageLookupFunction implements SkyFunction {
 
   private final AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages;
   private final CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy;
-  private final ImmutableList<BuildFileName> buildFilesByPriority;
-  private final ExternalPackageHelper externalPackageHelper;
+  private final List<BuildFileName> buildFilesByPriority;
 
   public PackageLookupFunction(
       AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
-      ImmutableList<BuildFileName> buildFilesByPriority,
-      ExternalPackageHelper externalPackageHelper) {
+      List<BuildFileName> buildFilesByPriority) {
     this.deletedPackages = deletedPackages;
     this.crossRepositoryLabelViolationStrategy = crossRepositoryLabelViolationStrategy;
     this.buildFilesByPriority = buildFilesByPriority;
-    this.externalPackageHelper = externalPackageHelper;
   }
 
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws PackageLookupFunctionException, InterruptedException {
     PathPackageLocator pkgLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
-    StarlarkSemantics semantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
 
     PackageIdentifier packageKey = (PackageIdentifier) skyKey.argument();
 
@@ -92,22 +87,18 @@ public class PackageLookupFunction implements SkyFunction {
 
     if (!packageKey.getRepository().isMain()) {
       return computeExternalPackageLookupValue(skyKey, env, packageKey);
-    }
-
-    if (packageKey.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER)) {
-      return semantics.experimentalDisableExternalPackage()
-          ? PackageLookupValue.NO_BUILD_FILE_VALUE
-          : computeWorkspacePackageLookupValue(env);
+    } else if (packageKey.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER)) {
+      return computeWorkspacePackageLookupValue(env, pkgLocator.getPathEntries());
     }
 
     // Check .bazelignore file under main repository.
-    IgnoredPackagePrefixesValue ignoredPatternsValue =
-        (IgnoredPackagePrefixesValue) env.getValue(IgnoredPackagePrefixesValue.key());
-    if (ignoredPatternsValue == null) {
+    BlacklistedPackagePrefixesValue blacklistedPatternsValue =
+        (BlacklistedPackagePrefixesValue) env.getValue(BlacklistedPackagePrefixesValue.key());
+    if (blacklistedPatternsValue == null) {
       return null;
     }
 
-    if (isPackageIgnored(packageKey, ignoredPatternsValue)) {
+    if (isPackageIgnored(packageKey, blacklistedPatternsValue)) {
       return PackageLookupValue.DELETED_PACKAGE_VALUE;
     }
 
@@ -203,6 +194,30 @@ public class PackageLookupFunction implements SkyFunction {
 
   private PackageLookupValue getPackageLookupValue(
       Environment env,
+      ImmutableList<Root> packagePathEntries,
+      PackageIdentifier packageIdentifier,
+      BuildFileName buildFileName)
+      throws PackageLookupFunctionException, InterruptedException {
+
+    // TODO(bazel-team): The following is O(n^2) on the number of elements on the package path due
+    // to having restart the SkyFunction after every new dependency. However, if we try to batch
+    // the missing value keys, more dependencies than necessary will be declared. This wart can be
+    // fixed once we have nicer continuation support [skyframe-loading]
+    for (Root packagePathEntry : packagePathEntries) {
+      PackageLookupValue result =
+          getPackageLookupValue(env, packagePathEntry, packageIdentifier, buildFileName);
+      if (result == null) {
+        return null;
+      }
+      if (result != PackageLookupValue.NO_BUILD_FILE_VALUE) {
+        return result;
+      }
+    }
+    return PackageLookupValue.NO_BUILD_FILE_VALUE;
+  }
+
+  private PackageLookupValue getPackageLookupValue(
+      Environment env,
       Root packagePathEntry,
       PackageIdentifier packageIdentifier,
       BuildFileName buildFileName)
@@ -246,7 +261,8 @@ public class PackageLookupFunction implements SkyFunction {
         // There is a repository mismatch, this is an error.
         // The correct package path is the one originally given, minus the part that is the local
         // repository.
-        PathFragment pathToRequestedPackage = packageIdentifier.getSourceRoot();
+        PathFragment pathToRequestedPackage =
+            packageIdentifier.getExecPath(starlarkSemantics.experimentalSiblingRepositoryLayout());
         PathFragment localRepositoryPath = localRepository.getPath();
         if (localRepositoryPath.isAbsolute()) {
           // We need the package path to also be absolute.
@@ -280,9 +296,9 @@ public class PackageLookupFunction implements SkyFunction {
   }
 
   private static boolean isPackageIgnored(
-      PackageIdentifier id, IgnoredPackagePrefixesValue ignoredPatternsValue) {
+      PackageIdentifier id, BlacklistedPackagePrefixesValue blacklistedPatternsValue) {
     PathFragment packageFragment = id.getPackageFragment();
-    for (PathFragment pattern : ignoredPatternsValue.getPatterns()) {
+    for (PathFragment pattern : blacklistedPatternsValue.getPatterns()) {
       if (packageFragment.startsWith(pattern)) {
         return true;
       }
@@ -290,29 +306,51 @@ public class PackageLookupFunction implements SkyFunction {
     return false;
   }
 
-  private PackageLookupValue computeWorkspacePackageLookupValue(Environment env)
-      throws InterruptedException {
-    RootedPath workspaceFile = externalPackageHelper.findWorkspaceFile(env);
-    if (env.valuesMissing()) {
+  private PackageLookupValue computeWorkspacePackageLookupValue(
+      Environment env, ImmutableList<Root> packagePathEntries)
+      throws PackageLookupFunctionException, InterruptedException {
+    PackageLookupValue resultForWorkspaceDotBazel =
+        getPackageLookupValue(
+            env,
+            packagePathEntries,
+            LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
+            BuildFileName.WORKSPACE_DOT_BAZEL);
+    if (resultForWorkspaceDotBazel == null) {
       return null;
     }
-
-    if (workspaceFile == null) {
-      return PackageLookupValue.NO_BUILD_FILE_VALUE;
-    } else {
-      BuildFileName filename = null;
-      for (BuildFileName candidate : BuildFileName.values()) {
-        if (workspaceFile.getRootRelativePath().equals(candidate.getFilenameFragment())) {
-          filename = candidate;
-          break;
-        }
-      }
-
-      // Otherwise ExternalPackageUtil.findWorkspaceFile() returned something whose name is not in
-      // BuildFileName
-      Verify.verify(filename != null);
-      return PackageLookupValue.success(workspaceFile.getRoot(), filename);
+    if (resultForWorkspaceDotBazel.packageExists()) {
+      return resultForWorkspaceDotBazel;
     }
+    PackageLookupValue resultForWorkspace =
+        getPackageLookupValue(
+            env,
+            packagePathEntries,
+            LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
+            BuildFileName.WORKSPACE);
+    if (resultForWorkspace == null) {
+      return null;
+    }
+    if (resultForWorkspace.packageExists()) {
+      return resultForWorkspace;
+    }
+    // Fall back on the last package path entry if there were any and nothing else worked.
+    // TODO(kchodorow): get rid of this, the semantics are wrong (successful package lookup should
+    // mean the package exists). a bunch of tests need to be rewritten first though.
+    if (packagePathEntries.isEmpty()) {
+      return PackageLookupValue.NO_BUILD_FILE_VALUE;
+    }
+    Root lastPackagePath = packagePathEntries.get(packagePathEntries.size() - 1);
+    FileValue lastPackagePackagePathFileValue =
+        getFileValue(
+            RootedPath.toRootedPath(lastPackagePath, PathFragment.EMPTY_FRAGMENT),
+            env,
+            LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER);
+    if (lastPackagePackagePathFileValue == null) {
+      return null;
+    }
+    return lastPackagePackagePathFileValue.exists()
+        ? PackageLookupValue.success(lastPackagePath, BuildFileName.WORKSPACE)
+        : PackageLookupValue.NO_BUILD_FILE_VALUE;
   }
 
   /**
@@ -346,14 +384,14 @@ public class PackageLookupFunction implements SkyFunction {
     }
 
     // Check .bazelignore file after fetching the external repository.
-    IgnoredPackagePrefixesValue ignoredPatternsValue =
-        (IgnoredPackagePrefixesValue)
-            env.getValue(IgnoredPackagePrefixesValue.key(id.getRepository()));
-    if (ignoredPatternsValue == null) {
+    BlacklistedPackagePrefixesValue blacklistedPatternsValue =
+        (BlacklistedPackagePrefixesValue)
+            env.getValue(BlacklistedPackagePrefixesValue.key(id.getRepository()));
+    if (blacklistedPatternsValue == null) {
       return null;
     }
 
-    if (isPackageIgnored(id, ignoredPatternsValue)) {
+    if (isPackageIgnored(id, blacklistedPatternsValue)) {
       return PackageLookupValue.DELETED_PACKAGE_VALUE;
     }
 

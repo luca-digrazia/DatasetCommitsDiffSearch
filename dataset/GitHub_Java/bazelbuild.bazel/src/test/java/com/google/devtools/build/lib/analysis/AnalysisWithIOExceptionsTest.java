@@ -13,14 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import static org.junit.Assert.fail;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
-import com.google.devtools.build.lib.util.BlazeClock;
+import com.google.devtools.build.lib.clock.BlazeClock;
+import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.IOException;
 import java.util.function.Function;
@@ -31,22 +31,20 @@ import org.junit.runners.JUnit4;
 /** {@link AnalysisTestCase} with custom filesystem that can throw on stat if desired. */
 @RunWith(JUnit4.class)
 public class AnalysisWithIOExceptionsTest extends AnalysisTestCase {
-  private static final String FS_ROOT = "/fsg";
-
   private static final Function<Path, String> NULL_FUNCTION = (path) -> null;
 
   private Function<Path, String> crashMessage = NULL_FUNCTION;
 
   @Override
   protected FileSystem createFileSystem() {
-    return new InMemoryFileSystem(BlazeClock.instance(), PathFragment.create(FS_ROOT)) {
+    return new InMemoryFileSystem(BlazeClock.instance()) {
       @Override
-      public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
+      public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
         String crash = crashMessage.apply(path);
         if (crash != null) {
           throw new IOException(crash);
         }
-        return super.stat(path, followSymlinks);
+        return super.statIfFound(path, followSymlinks);
       }
     };
   }
@@ -57,10 +55,16 @@ public class AnalysisWithIOExceptionsTest extends AnalysisTestCase {
     scratch.file("a/BUILD", "sh_library(name = 'a', srcs = glob(['a.sh']))");
     crashMessage = path -> path.toString().contains("a.sh") ? "bork" : null;
     reporter.removeHandler(failFastHandler);
-    try {
-      update("//b:b");
-      fail("Expected failure");
-    } catch (ViewCreationFailedException expected) {
-    }
+    assertThrows(ViewCreationFailedException.class, () -> update("//b:b"));
+  }
+
+  @Test
+  public void testWorkspaceError() throws IOException {
+    scratch.file("a/BUILD");
+    crashMessage = path -> path.toString().contains("WORKSPACE") ? "bork" : null;
+    reporter.removeHandler(failFastHandler);
+    assertThrows(
+        TargetParsingException.class,
+        () -> update(new FlagBuilder().with(Flag.KEEP_GOING), "//a:a"));
   }
 }
