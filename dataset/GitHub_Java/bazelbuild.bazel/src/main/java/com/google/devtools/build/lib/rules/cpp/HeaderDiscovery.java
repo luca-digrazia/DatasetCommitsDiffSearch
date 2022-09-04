@@ -14,123 +14,159 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
+import com.google.devtools.build.lib.cmdline.LabelConstants;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
-import com.google.devtools.build.lib.rules.cpp.CppCompileAction.SpecialInputsHandler;
-import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 
-/** Manages the process of obtaining inputs used in a compilation from .d files. */
-public class HeaderDiscovery {
+/**
+ * HeaderDiscovery checks whether all header files that a compile action uses are actually declared
+ * as inputs.
+ *
+ * <p>Tree artifacts: a tree artifact with path P causes any header file prefixed by P to be
+ * accepted. Testing whether a used header file is prefixed by any tree artifact is linear search,
+ * but the result is cached. If all files in a tree artifact are at the root of the artifact, the
+ * entire check is performed by hash lookups.
+ */
+final class HeaderDiscovery {
 
-  private final Action action;
-  private final Artifact sourceFile;
-  private final DotdFile dotdFile;
-
-  private final SpecialInputsHandler specialInputsHandler;
-  private final boolean shouldValidateInclusions;
-
-  private final DependencySet depSet;
-  private final List<Path> permittedSystemIncludePrefixes;
-  private final Map<PathFragment, Artifact> allowedDerivedInputsMap;
-
-  /**
-   * Creates a HeaderDiscover instance
-   *
-   * @param action the action instance requiring header discovery
-   * @param sourceFile the source file for the compile
-   * @param dotdFile the .d file used for header discovery
-   * @param specialInputsHandler the SpecialInputsHandler for the build
-   * @param shouldValidateInclusions true if include validation should be performed
-   */
-  public HeaderDiscovery(
-      Action action,
-      Artifact sourceFile,
-      DotdFile dotdFile,
-      SpecialInputsHandler specialInputsHandler,
-      boolean shouldValidateInclusions,
-      DependencySet depSet,
-      List<Path> permittedSystemIncludePrefixes,
-      Map<PathFragment, Artifact> allowedDerivedInputsMap) {
-    this.action = Preconditions.checkNotNull(action);
-    this.sourceFile = Preconditions.checkNotNull(sourceFile);
-    this.dotdFile = Preconditions.checkNotNull(dotdFile);
-    this.specialInputsHandler = specialInputsHandler;
-    this.shouldValidateInclusions = shouldValidateInclusions;
-    this.depSet = depSet;
-    this.permittedSystemIncludePrefixes = permittedSystemIncludePrefixes;
-    this.allowedDerivedInputsMap = allowedDerivedInputsMap;
+  /** Indicates if a compile should perform dotd pruning. */
+  public enum DotdPruningMode {
+    USE,
+    DO_NOT_USE
   }
+
+  private HeaderDiscovery() {}
 
   /**
    * Returns a collection with additional input artifacts relevant to the action by reading the
-   * dynamically-discovered dependency information from the .d file after the action has run.
+   * dynamically-discovered dependency information from the parsed dependency set after the action
+   * has run.
    *
    * <p>Artifacts are considered inputs but not "mandatory" inputs.
    *
    * @throws ActionExecutionException iff the .d is missing (when required), malformed, or has
    *     unresolvable included artifacts.
    */
-  @VisibleForTesting
-  @ThreadCompatible
-  public NestedSet<Artifact> discoverInputsFromDotdFiles(
-      Path execRoot, ArtifactResolver artifactResolver) throws ActionExecutionException {
-    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
-    if (dotdFile == null) {
-      return inputs.build();
+  static NestedSet<Artifact> discoverInputsFromDependencies(
+      Action action,
+      Artifact sourceFile,
+      boolean shouldValidateInclusions,
+      Collection<Path> dependencies,
+      List<Path> permittedSystemIncludePrefixes,
+      NestedSet<Artifact> allowedDerivedInputs,
+      Path execRoot,
+      ArtifactResolver artifactResolver,
+      boolean siblingRepositoryLayout)
+      throws ActionExecutionException {
+    Map<PathFragment, Artifact> regularDerivedArtifacts = new HashMap<>();
+    Map<PathFragment, SpecialArtifact> treeArtifacts = new HashMap<>();
+    for (Artifact a : allowedDerivedInputs.toList()) {
+      if (a.isSourceArtifact()) {
+        continue;
+      }
+      // We may encounter duplicate keys in the derived inputs if two artifacts have different
+      // owners. Just use the first one. The two artifacts must be generated by equivalent
+      // (shareable) actions in order to have not generated a conflict in Bazel. If on an
+      // incremental build one changes without the other one changing, then if their paths remain
+      // the same, that will trigger an action conflict and fail the build. If one path changes,
+      // then this action will be re-analyzed, and will execute in Skyframe. It can legitimately get
+      // an action cache hit in that case, since even if it previously depended on the artifact
+      // whose path changed, that is not taken into account by the action cache, and it will get an
+      // action cache hit using the remaining un-renamed artifact.
+      if (a.isTreeArtifact()) {
+        treeArtifacts.putIfAbsent(a.getExecPath(), (SpecialArtifact) a);
+      } else {
+        regularDerivedArtifacts.putIfAbsent(a.getExecPath(), a);
+      }
     }
-    List<Path> systemIncludePrefixes = permittedSystemIncludePrefixes;
+
+    return runDiscovery(
+        action,
+        sourceFile,
+        shouldValidateInclusions,
+        dependencies,
+        permittedSystemIncludePrefixes,
+        regularDerivedArtifacts,
+        treeArtifacts,
+        execRoot,
+        artifactResolver,
+        siblingRepositoryLayout);
+  }
+
+  private static NestedSet<Artifact> runDiscovery(
+      Action action,
+      Artifact sourceFile,
+      boolean shouldValidateInclusions,
+      Collection<Path> dependencies,
+      List<Path> permittedSystemIncludePrefixes,
+      Map<PathFragment, Artifact> regularDerivedArtifacts,
+      Map<PathFragment, SpecialArtifact> treeArtifacts,
+      Path execRoot,
+      ArtifactResolver artifactResolver,
+      boolean siblingRepositoryLayout)
+      throws ActionExecutionException {
+    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
 
     // Check inclusions.
     IncludeProblems problems = new IncludeProblems();
-    for (Path execPath : depSet.getDependencies()) {
-      // Module .pcm files are generated and thus aren't declared inputs.
-      if (execPath.getBaseName().endsWith(".pcm")) {
-        continue;
-      }
+    for (Path execPath : dependencies) {
       PathFragment execPathFragment = execPath.asFragment();
       if (execPathFragment.isAbsolute()) {
         // Absolute includes from system paths are ignored.
-        if (FileSystemUtils.startsWithAny(execPath, systemIncludePrefixes)) {
+        if (FileSystemUtils.startsWithAny(execPath, permittedSystemIncludePrefixes)) {
           continue;
         }
-        // Since gcc is given only relative paths on the command line,
-        // non-system include paths here should never be absolute. If they
-        // are, it's probably due to a non-hermetic #include, & we should stop
-        // the build with an error.
+        // Since gcc is given only relative paths on the command line, non-system include paths here
+        // should never be absolute. If they are, it's probably due to a non-hermetic #include, and
+        // we should stop the build with an error.
         if (execPath.startsWith(execRoot)) {
           execPathFragment = execPath.relativeTo(execRoot); // funky but tolerable path
+        } else if (siblingRepositoryLayout && execPath.startsWith(execRoot.getParentDirectory())) {
+          // for --experimental_sibling_repository_layout
+          execPathFragment =
+              LabelConstants.EXPERIMENTAL_EXTERNAL_PATH_PREFIX.getRelative(
+                  execPath.relativeTo(execRoot.getParentDirectory()));
         } else {
           problems.add(execPathFragment.getPathString());
           continue;
         }
       }
-      Artifact artifact = allowedDerivedInputsMap.get(execPathFragment);
+      Artifact artifact = regularDerivedArtifacts.get(execPathFragment);
       if (artifact == null) {
-        artifact = artifactResolver.resolveSourceArtifact(execPathFragment);
+        RepositoryName repository =
+            PackageIdentifier.discoverFromExecPath(execPathFragment, false, siblingRepositoryLayout)
+                .getRepository();
+        artifact = artifactResolver.resolveSourceArtifact(execPathFragment, repository);
       }
       if (artifact != null) {
-        inputs.add(artifact);
-        // In some cases, execution backends need extra files for each included file. Add them
-        // to the set of actual inputs.
-        if (specialInputsHandler != null) {
-          inputs.addAll(specialInputsHandler.getInputsForIncludedFile(artifact, artifactResolver));
+        // We don't need to add the sourceFile itself as it is a mandatory input.
+        if (!artifact.equals(sourceFile)) {
+          inputs.add(artifact);
         }
+        continue;
+      }
+
+      SpecialArtifact treeArtifact = findOwningTreeArtifact(execPathFragment, treeArtifacts);
+      if (treeArtifact != null) {
+        inputs.add(treeArtifact);
       } else {
-        // Abort if we see files that we can't resolve, likely caused by
-        // undeclared includes or illegal include constructs.
+        // Record a problem if we see files that we can't resolve, likely caused by undeclared
+        // includes or illegal include constructs.
         problems.add(execPathFragment.getPathString());
       }
     }
@@ -140,77 +176,21 @@ public class HeaderDiscovery {
     return inputs.build();
   }
 
-  /** A Builder for HeaderDiscovery */
-  public static class Builder {
-    private Action action;
-    private Artifact sourceFile;
-    private DotdFile dotdFile;
-    private SpecialInputsHandler specialInputsHandler;
-    private boolean shouldValidateInclusions = false;
-
-    private DependencySet depSet;
-    private List<Path> permittedSystemIncludePrefixes;
-    private Map<PathFragment, Artifact> allowedDerivedInputsMap;
-
-    /** Sets the action for which to discover inputs. */
-    public Builder setAction(Action action) {
-      this.action = action;
-      return this;
+  @Nullable
+  private static SpecialArtifact findOwningTreeArtifact(
+      PathFragment execPath, Map<PathFragment, SpecialArtifact> treeArtifacts) {
+    // Check the map for the exec path's parent directory first. If the exec path matches a direct
+    // child of a tree artifact (a common case), we can skip the full iteration below.
+    PathFragment dir = execPath.getParentDirectory();
+    SpecialArtifact tree = treeArtifacts.get(dir);
+    if (tree != null) {
+      return tree;
     }
 
-    /** Sets the source file for which to discover inputs. */
-    public Builder setSourceFile(Artifact sourceFile) {
-      this.sourceFile = sourceFile;
-      return this;
-    }
-
-    /** Sets the dotd file to be used to discover inputs. */
-    public Builder setDotdFile(DotdFile dotdFile) {
-      this.dotdFile = dotdFile;
-      return this;
-    }
-
-    /** Sets the SpecialInputsHandler for inputs to this build. */
-    public Builder setSpecialInputsHandler(SpecialInputsHandler specialInputsHandler) {
-      this.specialInputsHandler = specialInputsHandler;
-      return this;
-    }
-
-    /** Sets that this compile should validate inclusions against the dotd file. */
-    public Builder shouldValidateInclusions() {
-      this.shouldValidateInclusions = true;
-      return this;
-    }
-
-    /** Sets the DependencySet capturing used headers by this compile. */
-    public Builder setDependencySet(DependencySet depSet) {
-      this.depSet = depSet;
-      return this;
-    }
-
-    /** Sets prefixes of allowed absolute inclusions */
-    public Builder setPermittedSystemIncludePrefixes(List<Path> systemIncludePrefixes) {
-      this.permittedSystemIncludePrefixes = systemIncludePrefixes;
-      return this;
-    }
-
-    /** Sets permitted inputs to the build */
-    public Builder setAllowedDerivedinputsMap(Map<PathFragment, Artifact> allowedDerivedInputsMap) {
-      this.allowedDerivedInputsMap = allowedDerivedInputsMap;
-      return this;
-    }
-
-    /** Creates a CppHeaderDiscovery instance. */
-    public HeaderDiscovery build() {
-      return new HeaderDiscovery(
-          action,
-          sourceFile,
-          dotdFile,
-          specialInputsHandler,
-          shouldValidateInclusions,
-          depSet,
-          permittedSystemIncludePrefixes,
-          allowedDerivedInputsMap);
-    }
+    // Search for any tree artifact that encloses the exec path.
+    return treeArtifacts.values().stream()
+        .filter(a -> dir.startsWith(a.getExecPath()))
+        .findAny()
+        .orElse(null);
   }
 }

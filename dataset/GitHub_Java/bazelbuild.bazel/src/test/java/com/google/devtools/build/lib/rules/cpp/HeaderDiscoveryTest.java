@@ -14,18 +14,21 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
-import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -35,30 +38,14 @@ import org.junit.runners.JUnit4;
 
 /** Test. */
 @RunWith(JUnit4.class)
-public class HeaderDiscoveryTest {
+public final class HeaderDiscoveryTest {
+  private static final String DERIVED_SEGMENT = "derived";
 
-  private final FileSystem fs = new InMemoryFileSystem();
+  private final FileSystem fs = new InMemoryFileSystem(DigestHashFunction.SHA256);
   private final Path execRoot = fs.getPath("/execroot");
-  private final Path derivedRoot = execRoot.getRelative("derived");
-  private final ArtifactRoot artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, derivedRoot);
-
-  /**
-   * Test that an included header is satisfied (=doesn't cause an error) if it provided by a tree
-   * artifact.
-   */
-  @Test
-  public void treeArtifactInclusionCheck() throws Exception {
-    ArtifactResolver artifactResolver = mock(ArtifactResolver.class);
-
-    checkHeaderInclusion(
-        artifactResolver,
-        ImmutableList.of(
-            derivedRoot.getRelative("tree_artifact/foo.h"),
-            derivedRoot.getRelative("tree_artifact/subdir/foo.h")),
-        ImmutableList.of(treeArtifact(derivedRoot.getRelative("tree_artifact"))));
-
-    // Implicitly check that there are no exceptions thrown.
-  }
+  private final Path derivedRoot = execRoot.getChild(DERIVED_SEGMENT);
+  private final ArtifactRoot artifactRoot =
+      ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, DERIVED_SEGMENT);
 
   @Test
   public void errorsWhenMissingHeaders() {
@@ -72,30 +59,32 @@ public class HeaderDiscoveryTest {
                 ImmutableList.of(
                     derivedRoot.getRelative("tree_artifact1/foo.h"),
                     derivedRoot.getRelative("tree_artifact1/subdir/foo.h")),
-                ImmutableList.of(treeArtifact(derivedRoot.getRelative("tree_artifact2")))));
+                NestedSetBuilder.create(
+                    Order.STABLE_ORDER, treeArtifact(derivedRoot.getRelative("tree_artifact2")))));
   }
 
-  private NestedSet<Artifact> checkHeaderInclusion(
+  private void checkHeaderInclusion(
       ArtifactResolver artifactResolver,
       ImmutableList<Path> dependencies,
-      ImmutableList<Artifact> includedHeaders)
+      NestedSet<Artifact> includedHeaders)
       throws ActionExecutionException {
-    return new HeaderDiscovery.Builder()
-        .shouldValidateInclusions()
-        .setAction(new ActionsTestUtil.NullAction())
-        .setPermittedSystemIncludePrefixes(ImmutableList.of())
-        .setSourceFile(new Artifact(derivedRoot.getRelative("foo.cc"), artifactRoot))
-        .setDependencies(dependencies)
-        .setAllowedDerivedinputs(includedHeaders)
-        .build()
-        .discoverInputsFromDependencies(execRoot, artifactResolver);
+    HeaderDiscovery.discoverInputsFromDependencies(
+        new ActionsTestUtil.NullAction(),
+        ActionsTestUtil.createArtifact(artifactRoot, derivedRoot.getRelative("foo.cc")),
+        /*shouldValidateInclusions=*/ true,
+        dependencies,
+        /*permittedSystemIncludePrefixes=*/ ImmutableList.of(),
+        includedHeaders,
+        execRoot,
+        artifactResolver,
+        /*siblingRepositoryLayout=*/ false);
   }
 
   private SpecialArtifact treeArtifact(Path path) {
     return new SpecialArtifact(
         artifactRoot,
         artifactRoot.getExecPath().getRelative(artifactRoot.getRoot().relativize(path)),
-        ArtifactOwner.NullArtifactOwner.INSTANCE,
+        ActionsTestUtil.NULL_ARTIFACT_OWNER,
         Artifact.SpecialArtifactType.TREE);
   }
 }
