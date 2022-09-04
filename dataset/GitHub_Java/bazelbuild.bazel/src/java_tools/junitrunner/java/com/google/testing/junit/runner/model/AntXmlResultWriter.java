@@ -14,16 +14,14 @@
 
 package com.google.testing.junit.runner.model;
 
-import com.google.common.base.Optional;
-import com.google.common.base.Strings;
-import com.google.common.collect.Iterables;
-
-import org.joda.time.Interval;
-
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.Map.Entry;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import javax.annotation.Nullable;
+import javax.inject.Inject;
 
 /**
  * Writes the JUnit test nodes and their results into Ant-JUnit XML. Ant-JUnit XML is not a
@@ -34,6 +32,14 @@ import java.util.Map.Entry;
 public final class AntXmlResultWriter implements XmlResultWriter {
   private static final String JUNIT_ELEMENT_TESTSUITES = "testsuites";
   private static final String JUNIT_ELEMENT_TESTSUITE = "testsuite";
+  private static final String JUNIT_ELEMENT_TESTSUITE_PROPERTIES = "properties";
+  private static final String JUNIT_ELEMENT_TESTSUITE_SYSTEM_OUT = "system-out";
+  private static final String JUNIT_ELEMENT_TESTSUITE_SYSTEM_ERR = "system-err";
+  private static final String JUNIT_ELEMENT_PROPERTY = "property";
+  private static final String JUNIT_ELEMENT_TESTCASE = "testcase";
+  private static final String JUNIT_ELEMENT_FAILURE = "failure";
+  private static final String JUNIT_ELEMENT_SKIPPED = "skipped";
+
   private static final String JUNIT_ATTR_TESTSUITE_ERRORS = "errors";
   private static final String JUNIT_ATTR_TESTSUITE_FAILURES = "failures";
   private static final String JUNIT_ATTR_TESTSUITE_HOSTNAME = "hostname";
@@ -43,14 +49,8 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   private static final String JUNIT_ATTR_TESTSUITE_TIMESTAMP = "timestamp";
   private static final String JUNIT_ATTR_TESTSUITE_ID = "id";
   private static final String JUNIT_ATTR_TESTSUITE_PACKAGE = "package";
-  private static final String JUNIT_ATTR_TESTSUITE_PROPERTIES = "properties";
-  private static final String JUNIT_ATTR_TESTSUITE_SYSTEM_OUT = "system-out";
-  private static final String JUNIT_ATTR_TESTSUITE_SYSTEM_ERR = "system-err";
-  private static final String JUNIT_ELEMENT_PROPERTY = "property";
   private static final String JUNIT_ATTR_PROPERTY_NAME = "name";
   private static final String JUNIT_ATTR_PROPERTY_VALUE = "value";
-  private static final String JUNIT_ELEMENT_TESTCASE = "testcase";
-  private static final String JUNIT_ELEMENT_FAILURE = "failure";
   private static final String JUNIT_ATTR_FAILURE_MESSAGE = "message";
   private static final String JUNIT_ATTR_FAILURE_TYPE = "type";
   private static final String JUNIT_ATTR_TESTCASE_NAME = "name";
@@ -59,6 +59,10 @@ public final class AntXmlResultWriter implements XmlResultWriter {
 
   private int testSuiteId;
 
+  @Inject
+  public AntXmlResultWriter() {}
+
+  @Override
   public void writeTestSuites(XmlWriter writer, TestResult result) throws IOException {
     testSuiteId = 0;
     writer.startDocument();
@@ -73,7 +77,12 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   private void writeTestSuite(XmlWriter writer, TestResult result,
       Iterable<Throwable> parentFailures)
       throws IOException {
-    parentFailures = Iterables.concat(parentFailures, result.getFailures());
+    List<Throwable> allFailures = new ArrayList<>();
+    for (Throwable failure : parentFailures) {
+      allFailures.add(failure);
+    }
+    allFailures.addAll(result.getFailures());
+    parentFailures = allFailures;
 
     writer.startElement(JUNIT_ELEMENT_TESTSUITE);
 
@@ -92,8 +101,8 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   }
 
   private void writeTestSuiteProperties(XmlWriter writer, TestResult result) throws IOException {
-    writer.startElement(JUNIT_ATTR_TESTSUITE_PROPERTIES);
-    for (Entry<String, String> entry : result.getProperties().entrySet()) {
+    writer.startElement(JUNIT_ELEMENT_TESTSUITE_PROPERTIES);
+    for (Map.Entry<String, String> entry : result.getProperties().entrySet()) {
       writer.startElement(JUNIT_ELEMENT_PROPERTY);
       writer.writeAttribute(JUNIT_ATTR_PROPERTY_NAME, entry.getKey());
       writer.writeAttribute(JUNIT_ATTR_PROPERTY_VALUE, entry.getValue());
@@ -105,6 +114,9 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   private void writeTestCases(XmlWriter writer, TestResult result,
       Iterable<Throwable> parentFailures) throws IOException {
     for (TestResult child : result.getChildResults()) {
+      if (child.getStatus().equals(TestResult.Status.FILTERED)) {
+        continue;
+      }
       if (child.getChildResults().isEmpty()) {
         writeTestCase(writer, child, parentFailures);
       }
@@ -112,10 +124,10 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   }
 
   private void writeTestSuiteOutput(XmlWriter writer) throws IOException {
-    writer.startElement(JUNIT_ATTR_TESTSUITE_SYSTEM_OUT);
+    writer.startElement(JUNIT_ELEMENT_TESTSUITE_SYSTEM_OUT);
     // TODO(bazel-team) - where to get this from?
     writer.endElement();
-    writer.startElement(JUNIT_ATTR_TESTSUITE_SYSTEM_ERR);
+    writer.startElement(JUNIT_ELEMENT_TESTSUITE_SYSTEM_ERR);
     // TODO(bazel-team) - where to get this from?
     writer.endElement();
   }
@@ -138,32 +150,48 @@ public final class AntXmlResultWriter implements XmlResultWriter {
     writer.writeAttribute(JUNIT_ATTR_TESTSUITE_ID, this.testSuiteId++);
   }
 
-  private static String getFormattedRunTime(Optional<Interval> runTimeInterval) {
-    return !runTimeInterval.isPresent() ? "0.0"
-        : String.valueOf(runTimeInterval.get().toDurationMillis() / 1000.0D);
+  private static String getFormattedRunTime(@Nullable TestInterval runTimeInterval) {
+    return runTimeInterval == null ? "0.0"
+        : String.valueOf(runTimeInterval.toDurationMillis() / 1000.0D);
   }
 
-  private static String getFormattedTimestamp(Optional<Interval> runTimeInterval) {
-    return !runTimeInterval.isPresent() ? "" : runTimeInterval.get().getStart().toString();
+  private static String getFormattedTimestamp(@Nullable TestInterval runTimeInterval) {
+    return runTimeInterval == null ? "" : runTimeInterval.startInstantToString();
   }
 
   private void writeTestCase(XmlWriter writer, TestResult result,
       Iterable<Throwable> parentFailures)
       throws IOException {
     writer.startElement(JUNIT_ELEMENT_TESTCASE);
-
-    for (Throwable failure : Iterables.concat(parentFailures, result.getFailures())) {
-      writer.startElement(JUNIT_ELEMENT_FAILURE);
-      writer.writeAttribute(JUNIT_ATTR_FAILURE_MESSAGE, Strings.nullToEmpty(failure.getMessage()));
-      writer.writeAttribute(JUNIT_ATTR_FAILURE_TYPE, failure.getClass().getName());
-      writer.writeCharacters(formatStackTrace(failure));
-      writer.endElement();
-    }
-
     writer.writeAttribute(JUNIT_ATTR_TESTCASE_NAME, result.getName());
     writer.writeAttribute(JUNIT_ATTR_TESTCASE_CLASSNAME, result.getClassName());
     writer.writeAttribute(JUNIT_ATTR_TESTCASE_TIME, getFormattedRunTime(
-        result.getRunTimeInterval()));
+            result.getRunTimeInterval()));
+
+    for (Throwable failure : parentFailures) {
+      writeThrowableToXmlWriter(writer, failure);
+    }
+
+    for (Throwable failure : result.getFailures()) {
+      writeThrowableToXmlWriter(writer, failure);
+    }
+
+    if (result.getStatus().equals(TestResult.Status.SKIPPED)
+        || result.getStatus().equals(TestResult.Status.SUPPRESSED)) {
+      writer.startElement(JUNIT_ELEMENT_SKIPPED);
+      writer.endElement();
+    }
+
+    writer.endElement();
+  }
+
+  private static void writeThrowableToXmlWriter(XmlWriter writer, Throwable failure)
+      throws IOException {
+    writer.startElement(JUNIT_ELEMENT_FAILURE);
+    writer.writeAttribute(
+        JUNIT_ATTR_FAILURE_MESSAGE, (failure.getMessage() == null) ? "" : failure.getMessage());
+    writer.writeAttribute(JUNIT_ATTR_FAILURE_TYPE, failure.getClass().getName());
+    writer.writeCharacters(formatStackTrace(failure));
     writer.endElement();
   }
 
