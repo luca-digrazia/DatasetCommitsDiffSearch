@@ -45,12 +45,9 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -79,7 +76,7 @@ abstract class FileTransport implements BuildEventTransport {
     this.uploader = uploader;
     this.options = options;
     this.exitFunc = exitFunc;
-    this.writer = new SequentialWriter(path, this::serializeEvent, exitFunc, uploader);
+    this.writer = new SequentialWriter(path, this::serializeEvent, exitFunc);
   }
 
   @ThreadSafe
@@ -91,10 +88,8 @@ abstract class FileTransport implements BuildEventTransport {
 
     private final Thread writerThread;
     @VisibleForTesting OutputStream out;
-    @VisibleForTesting static final Duration FLUSH_INTERVAL = Duration.ofMillis(250);
     private final Function<BuildEventStreamProtos.BuildEvent, byte[]> serializeFunc;
     private final Consumer<AbruptExitException> exitFunc;
-    private final BuildEventArtifactUploader uploader;
 
     @VisibleForTesting
     final BlockingQueue<ListenableFuture<BuildEventStreamProtos.BuildEvent>> pendingWrites =
@@ -105,8 +100,7 @@ abstract class FileTransport implements BuildEventTransport {
     SequentialWriter(
         String path,
         Function<BuildEventStreamProtos.BuildEvent, byte[]> serializeFunc,
-        Consumer<AbruptExitException> exitFunc,
-        BuildEventArtifactUploader uploader) {
+        Consumer<AbruptExitException> exitFunc) {
       try {
         this.out = new BufferedOutputStream(new FileOutputStream(path));
       } catch (FileNotFoundException e) {
@@ -121,7 +115,6 @@ abstract class FileTransport implements BuildEventTransport {
       this.writerThread = new Thread(this);
       this.serializeFunc = serializeFunc;
       this.exitFunc = exitFunc;
-      this.uploader = uploader;
       writerThread.start();
     }
 
@@ -129,20 +122,10 @@ abstract class FileTransport implements BuildEventTransport {
     public void run() {
       ListenableFuture<BuildEventStreamProtos.BuildEvent> buildEventF;
       try {
-        Instant prevFlush = Instant.now();
-        while ((buildEventF = pendingWrites.poll(FLUSH_INTERVAL.toMillis(), TimeUnit.MILLISECONDS))
-            != CLOSE) {
-          if (buildEventF != null) {
-            BuildEventStreamProtos.BuildEvent buildEvent = buildEventF.get();
-            byte[] serialized = serializeFunc.apply(buildEvent);
-            out.write(serialized);
-          }
-          Instant now = Instant.now();
-          if (buildEventF == null || now.compareTo(prevFlush.plus(FLUSH_INTERVAL)) > 0) {
-            // Some users, e.g. Tulsi, expect prompt BEP stream flushes for interactive use.
-            out.flush();
-            prevFlush = now;
-          }
+        while ((buildEventF = pendingWrites.take()) != CLOSE) {
+          BuildEventStreamProtos.BuildEvent buildEvent = buildEventF.get();
+          byte[] serialized = serializeFunc.apply(buildEvent);
+          out.write(serialized);
         }
       } catch (Exception e) {
         exitFunc.accept(
@@ -152,12 +135,8 @@ abstract class FileTransport implements BuildEventTransport {
         logger.log(Level.SEVERE, "Failed to write BEP events to file.", e);
       } finally {
         try {
-          try {
-            out.flush();
-            out.close();
-          } finally {
-            uploader.shutdown();
-          }
+          out.flush();
+          out.close();
         } catch (IOException e) {
           logger.log(Level.SEVERE, "Failed to close BEP file output stream.", e);
         }

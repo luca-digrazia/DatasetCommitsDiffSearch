@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.buildeventstream.transports;
 
-import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
@@ -32,14 +31,13 @@ import java.util.function.Consumer;
  */
 public final class BinaryFormatFileTransport extends FileTransport {
 
-  public BinaryFormatFileTransport(
+  BinaryFormatFileTransport(
       String path,
       BuildEventProtocolOptions options,
       BuildEventArtifactUploader uploader,
-      Consumer<AbruptExitException> exitFunc,
-      ArtifactGroupNamer namer)
+      Consumer<AbruptExitException> exitFunc)
       throws IOException {
-    super(path, options, uploader, exitFunc, namer);
+    super(path, options, uploader, exitFunc);
   }
 
   @Override

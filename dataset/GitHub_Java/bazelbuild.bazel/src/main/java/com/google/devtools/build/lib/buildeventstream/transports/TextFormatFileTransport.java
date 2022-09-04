@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.buildeventstream.transports;
 
 import com.google.common.base.Charsets;
-import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
@@ -32,14 +31,13 @@ import java.util.function.Consumer;
  * <p>This class is used for debugging.
  */
 public final class TextFormatFileTransport extends FileTransport {
-  public TextFormatFileTransport(
+  TextFormatFileTransport(
       String path,
       BuildEventProtocolOptions options,
       BuildEventArtifactUploader uploader,
-      Consumer<AbruptExitException> exitFunc,
-      ArtifactGroupNamer namer)
+      Consumer<AbruptExitException> exitFunc)
       throws IOException {
-    super(path, options, uploader, exitFunc, namer);
+    super(path, options, uploader, exitFunc);
   }
 
   @Override

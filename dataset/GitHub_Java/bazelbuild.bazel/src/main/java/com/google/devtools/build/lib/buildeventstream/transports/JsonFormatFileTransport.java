@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.buildeventstream.transports;
 
 import com.google.common.base.Charsets;
-import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
@@ -31,14 +30,13 @@ import java.util.function.Consumer;
  * representation of the events to a file.
  */
 public final class JsonFormatFileTransport extends FileTransport {
-  public JsonFormatFileTransport(
+  JsonFormatFileTransport(
       String path,
       BuildEventProtocolOptions options,
       BuildEventArtifactUploader uploader,
-      Consumer<AbruptExitException> exitFunc,
-      ArtifactGroupNamer namer)
+      Consumer<AbruptExitException> exitFunc)
       throws IOException {
-    super(path, options, uploader, exitFunc, namer);
+    super(path, options, uploader, exitFunc);
   }
 
   @Override
