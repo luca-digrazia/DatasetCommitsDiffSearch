@@ -1,5 +1,7 @@
 package io.dropwizard.jersey.optional;
 
+import io.dropwizard.jersey.DefaultValueUtils;
+
 import javax.annotation.Nullable;
 import javax.inject.Singleton;
 import javax.ws.rs.ext.ParamConverter;
@@ -47,7 +49,7 @@ public class OptionalDoubleParamConverterProvider implements ParamConverterProvi
             try {
                 final double d = Double.parseDouble(value);
                 return OptionalDouble.of(d);
-            } catch (NumberFormatException e) {
+            } catch (NullPointerException | NumberFormatException e) {
                 if (defaultValue != null) {
                     // If an invalid default value is specified, we want to fail fast.
                     // This is the same behavior as DropWizard 1.3.x and matches Jersey's handling of @DefaultValue for Double.
@@ -56,7 +58,7 @@ public class OptionalDoubleParamConverterProvider implements ParamConverterProvi
                     }
                     // In order to fall back to use a default value for an empty query param, we must return null here.
                     // This preserves backwards compatibility with DropWizard 1.3.x handling of empty query params.
-                    if (value.isEmpty()) {
+                    if (value == null || value.isEmpty()) {
                         return null;
                     }
                 }
