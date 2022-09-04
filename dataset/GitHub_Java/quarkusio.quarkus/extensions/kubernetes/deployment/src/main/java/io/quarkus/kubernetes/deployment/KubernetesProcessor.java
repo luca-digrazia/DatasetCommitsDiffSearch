@@ -1,6 +1,5 @@
 package io.quarkus.kubernetes.deployment;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.file.Files;
@@ -12,38 +11,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import javax.inject.Inject;
-
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.dekorate.Session;
 import io.dekorate.SessionWriter;
 import io.dekorate.kubernetes.annotation.KubernetesApplication;
 import io.dekorate.kubernetes.generator.DefaultKubernetesApplicationGenerator;
 import io.dekorate.processor.SimpleFileWriter;
-import io.dekorate.project.FileProjectFactory;
 import io.dekorate.project.Project;
-import io.dekorate.utils.Maps;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.GeneratedFileSystemResourceBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesHealthLivenessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesHealthReadinessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
 
 class KubernetesProcessor {
 
-    private static final String PROPERTY_PREFIX = "dekorate";
-
     @Inject
-    BuildProducer<GeneratedFileSystemResourceBuildItem> generatedResourceProducer;
+    BuildProducer<GeneratedResourceBuildItem> generatedResourceProducer;
 
     @Inject
     BuildProducer<FeatureBuildItem> featureProducer;
@@ -72,17 +62,10 @@ class KubernetesProcessor {
             throw new RuntimeException("Unable to setup environment for generating Kubernetes resources", e);
         }
 
-        Config config = ConfigProvider.getConfig();
-        Map<String, Object> configAsMap = StreamSupport.stream(config.getPropertyNames().spliterator(), false)
-                .filter(k -> k.startsWith(PROPERTY_PREFIX))
-                .collect(Collectors.toMap(k -> k, k -> config.getValue(k, String.class)));
-
         final SessionWriter sessionWriter = new SimpleFileWriter(root, false);
-        Project project = FileProjectFactory.create(new File("."));
-        sessionWriter.setProject(project);
+        sessionWriter.setProject(new Project());
         final Session session = Session.getSession();
         session.setWriter(sessionWriter);
-        session.feed(Maps.fromProperties(configAsMap));
 
         final Map<String, Integer> ports = verifyPorts(kubernetesPortBuildItems);
         enableKubernetes(applicationInfo,
@@ -94,14 +77,10 @@ class KubernetesProcessor {
         // write the generated resources to the filesystem
         final Map<String, String> generatedResourcesMap = session.close();
         for (Map.Entry<String, String> resourceEntry : generatedResourcesMap.entrySet()) {
-            String relativePath = resourceEntry.getKey().replace(root.toAbsolutePath() + "/", "kubernetes/");
-            if (relativePath.startsWith("kubernetes/.")) { // ignore some of Dekorate's internal files
-                continue;
-            }
             generatedResourceProducer.produce(
-                    new GeneratedFileSystemResourceBuildItem(
+                    new GeneratedResourceBuildItem(
                             // we need to make sure we are only passing the relative path to the build item
-                            relativePath,
+                            resourceEntry.getKey().replace(root.toAbsolutePath() + "/", "META-INF/kubernetes/"),
                             resourceEntry.getValue().getBytes("UTF-8")));
         }
 
