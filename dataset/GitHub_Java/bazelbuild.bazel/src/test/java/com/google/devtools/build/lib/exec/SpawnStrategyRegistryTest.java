@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.exec;
 
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.DynamicStrategyRegistry.DynamicMode;
-import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
@@ -34,6 +33,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.util.FakeOwner;
+import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.RegexFilter;
 import javax.annotation.Nullable;
 import org.junit.Test;
@@ -53,7 +53,7 @@ public class SpawnStrategyRegistryTest {
   public void testRegistration() throws Exception {
     NoopStrategy strategy = new NoopStrategy("");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy, "foo")
             .setDefaultStrategies(ImmutableList.of("foo"))
             .build();
@@ -70,7 +70,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy1 = new NoopStrategy("1");
     NoopStrategy strategy2 = new NoopStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .addMnemonicFilter("mnem", ImmutableList.of("bar", "foo"))
@@ -88,7 +88,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy1 = new NoopStrategy("1");
     NoopStrategy strategy2 = new NoopStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "foo")
             .addMnemonicFilter("mnem", ImmutableList.of("foo"))
@@ -106,7 +106,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy1 = new NoopStrategy("1");
     NoopStrategy strategy2 = new NoopStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .addDescriptionFilter(ELLO_MATCHER, ImmutableList.of("bar", "foo"))
@@ -120,28 +120,11 @@ public class SpawnStrategyRegistryTest {
   }
 
   @Test
-  public void testFilterNoMatch() throws Exception {
-    NoopStrategy strategy = new NoopStrategy("");
-    SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
-            .registerStrategy(strategy, "foo")
-            .addMnemonicFilter("mnem", ImmutableList.of("foo"))
-            .setDefaultStrategies(ImmutableList.of())
-            .build();
-
-    assertThat(
-            strategyRegistry.getStrategies(
-                createSpawnWithMnemonicAndDescription("other", ""),
-                SpawnStrategyRegistryTest::noopEventHandler))
-        .isEmpty();
-  }
-
-  @Test
   public void testDescriptionHasPrecedenceOverMnemonic() throws Exception {
     NoopStrategy strategy1 = new NoopStrategy("1");
     NoopStrategy strategy2 = new NoopStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .addMnemonicFilter("mnem", ImmutableList.of("foo"))
@@ -160,7 +143,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy1 = new NoopStrategy("1");
     NoopStrategy strategy2 = new NoopStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .addMnemonicFilter("mnem", ImmutableList.of("foo"))
@@ -179,7 +162,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy1 = new NoopStrategy("1");
     NoopStrategy strategy2 = new NoopStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .addDescriptionFilter(ELLO_MATCHER, ImmutableList.of("foo"))
@@ -196,34 +179,12 @@ public class SpawnStrategyRegistryTest {
   }
 
   @Test
-  public void testMultipleDescriptionFilterLegacy() throws Exception {
-    NoopStrategy strategy1 = new NoopStrategy("1");
-    NoopStrategy strategy2 = new NoopStrategy("2");
-    SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
-            .registerStrategy(strategy1, "foo")
-            .registerStrategy(strategy2, "bar")
-            .addDescriptionFilter(ELLO_MATCHER, ImmutableList.of("foo"))
-            .addDescriptionFilter(
-                new RegexFilter(ImmutableList.of("ll"), ImmutableList.of()),
-                ImmutableList.of("bar"))
-            .useLegacyDescriptionFilterPrecedence()
-            .build();
-
-    assertThat(
-            strategyRegistry.getStrategies(
-                createSpawnWithMnemonicAndDescription("", "hello"),
-                SpawnStrategyRegistryTest::noopEventHandler))
-        .containsExactly(strategy1);
-  }
-
-  @Test
   public void testMultipleDefaultStrategies() throws Exception {
     NoopStrategy strategy1 = new NoopStrategy("1");
     NoopStrategy strategy2 = new NoopStrategy("2");
     NoopStrategy strategy3 = new NoopStrategy("3");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .registerStrategy(strategy3, "baz")
@@ -243,7 +204,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy2 = new NoopStrategy("2");
     NoopStrategy strategy3 = new NoopStrategy("3");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .registerStrategy(strategy3, "baz")
@@ -269,7 +230,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy1 = new NoopStrategy("1");
     NoopStrategy strategy2 = new NoopStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .build();
@@ -287,7 +248,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy2 = new NoopStrategy("2");
     NoopStrategy strategy3 = new NoopStrategy("3");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .registerStrategy(strategy3, "foo")
@@ -303,11 +264,11 @@ public class SpawnStrategyRegistryTest {
   @Test
   public void testMnemonicStrategyNotPresent() {
     NoopStrategy strategy1 = new NoopStrategy("1");
-    ExecutorInitException exception =
+    AbruptExitException exception =
         assertThrows(
-            ExecutorInitException.class,
+            AbruptExitException.class,
             () ->
-                new SpawnStrategyRegistry.Builder()
+                SpawnStrategyRegistry.builder()
                     .registerStrategy(strategy1, "foo")
                     .addMnemonicFilter("mnem", ImmutableList.of("bar", "foo"))
                     .build());
@@ -318,11 +279,11 @@ public class SpawnStrategyRegistryTest {
   @Test
   public void testDescriptionStrategyNotPresent() {
     NoopStrategy strategy1 = new NoopStrategy("1");
-    ExecutorInitException exception =
+    AbruptExitException exception =
         assertThrows(
-            ExecutorInitException.class,
+            AbruptExitException.class,
             () ->
-                new SpawnStrategyRegistry.Builder()
+                SpawnStrategyRegistry.builder()
                     .registerStrategy(strategy1, "foo")
                     .addDescriptionFilter(ELLO_MATCHER, ImmutableList.of("bar", "foo"))
                     .build());
@@ -333,11 +294,11 @@ public class SpawnStrategyRegistryTest {
   @Test
   public void testDefaultStrategyNotPresent() {
     NoopStrategy strategy1 = new NoopStrategy("1");
-    ExecutorInitException exception =
+    AbruptExitException exception =
         assertThrows(
-            ExecutorInitException.class,
+            AbruptExitException.class,
             () ->
-                new SpawnStrategyRegistry.Builder()
+                SpawnStrategyRegistry.builder()
                     .registerStrategy(strategy1, "foo")
                     .setDefaultStrategies(ImmutableList.of("bar"))
                     .build());
@@ -350,7 +311,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy1 = new NoopSandboxedStrategy("1");
     NoopStrategy strategy2 = new NoopSandboxedStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .addDynamicLocalStrategiesByMnemonic("mnem", ImmutableList.of("bar"))
@@ -370,11 +331,11 @@ public class SpawnStrategyRegistryTest {
   @Test
   public void testDynamicStrategyNotPresent() {
     NoopStrategy strategy1 = new NoopSandboxedStrategy("1");
-    ExecutorInitException exception =
+    AbruptExitException exception =
         assertThrows(
-            ExecutorInitException.class,
+            AbruptExitException.class,
             () ->
-                new SpawnStrategyRegistry.Builder()
+                SpawnStrategyRegistry.builder()
                     .registerStrategy(strategy1, "foo")
                     .addDynamicLocalStrategiesByMnemonic("mnem", ImmutableList.of("bar"))
                     .build());
@@ -385,11 +346,11 @@ public class SpawnStrategyRegistryTest {
   @Test
   public void testDynamicStrategyNotSandboxed() {
     NoopStrategy strategy1 = new NoopStrategy("1");
-    ExecutorInitException exception =
+    AbruptExitException exception =
         assertThrows(
-            ExecutorInitException.class,
+            AbruptExitException.class,
             () ->
-                new SpawnStrategyRegistry.Builder()
+                SpawnStrategyRegistry.builder()
                     .registerStrategy(strategy1, "foo")
                     .addDynamicLocalStrategiesByMnemonic("mnem", ImmutableList.of("foo"))
                     .build());
@@ -402,7 +363,7 @@ public class SpawnStrategyRegistryTest {
     NoopAbstractStrategy strategy1 = new NoopAbstractStrategy("1");
     NoopAbstractStrategy strategy2 = new NoopAbstractStrategy("2");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "foo")
             .registerStrategy(strategy2, "bar")
             .setRemoteLocalFallbackStrategyIdentifier("bar")
@@ -414,11 +375,11 @@ public class SpawnStrategyRegistryTest {
   @Test
   public void testRemoteLocalFallbackNotPresent() {
     NoopStrategy strategy1 = new NoopStrategy("1");
-    ExecutorInitException exception =
+    AbruptExitException exception =
         assertThrows(
-            ExecutorInitException.class,
+            AbruptExitException.class,
             () ->
-                new SpawnStrategyRegistry.Builder()
+                SpawnStrategyRegistry.builder()
                     .registerStrategy(strategy1, "foo")
                     .setRemoteLocalFallbackStrategyIdentifier("bar")
                     .build());
@@ -430,7 +391,7 @@ public class SpawnStrategyRegistryTest {
   public void testRemoteLocalFallbackNotRegistered() throws Exception {
     NoopStrategy strategy1 = new NoopStrategy("1");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder().registerStrategy(strategy1, "foo").build();
+        SpawnStrategyRegistry.builder().registerStrategy(strategy1, "foo").build();
 
     assertThat(strategyRegistry.getRemoteLocalFallbackStrategy()).isNull();
   }
@@ -447,7 +408,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy8 = new NoopStrategy("8");
     NoopStrategy strategy9 = new NoopStrategy("9");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "1")
             .registerStrategy(strategy2, "2")
             .registerStrategy(strategy3, "3")
@@ -490,7 +451,7 @@ public class SpawnStrategyRegistryTest {
     NoopStrategy strategy6 = new NoopSandboxedStrategy("6");
     NoopStrategy strategy7 = new NoopStrategy("7");
     SpawnStrategyRegistry strategyRegistry =
-        new SpawnStrategyRegistry.Builder()
+        SpawnStrategyRegistry.builder()
             .registerStrategy(strategy1, "1") // no notification: regular strategies are separate
             .registerStrategy(strategy2, "2") // no notification: regular strategies are separate
             .registerStrategy(strategy3, "3") // no notification: regular strategies are separate
@@ -522,7 +483,7 @@ public class SpawnStrategyRegistryTest {
 
   private Spawn createSpawnWithMnemonicAndDescription(String mnemonic, String description) {
     return new SimpleSpawn(
-        new FakeOwner(mnemonic, description),
+        new FakeOwner(mnemonic, description, "//dummy:label"),
         ImmutableList.of(),
         ImmutableMap.of(),
         ImmutableMap.of(),
@@ -573,7 +534,7 @@ public class SpawnStrategyRegistryTest {
     public ImmutableList<SpawnResult> exec(
         Spawn spawn,
         ActionExecutionContext actionExecutionContext,
-        @Nullable StopConcurrentSpawns stopConcurrentSpawns) {
+        @Nullable SandboxedSpawnStrategy.StopConcurrentSpawns stopConcurrentSpawns) {
       throw new UnsupportedOperationException();
     }
   }
@@ -584,7 +545,7 @@ public class SpawnStrategyRegistryTest {
     private int usedCalled = 0;
 
     public NoopAbstractStrategy(String name) {
-      super(null, null);
+      super(null, null, /*verboseFailures=*/ true);
       this.name = name;
     }
 
