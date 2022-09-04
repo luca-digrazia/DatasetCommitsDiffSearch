@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,12 @@ final class FormatParser {
 
   private static final ImmutableSet<Character> ILLEGAL_IN_FIELD =
       ImmutableSet.of('.', '[', ']', ',');
+
+  private final Location location;
+
+  FormatParser(Location location) {
+    this.location = location;
+  }
 
   /**
    * Formats the given input string by using the given arguments
@@ -108,7 +115,7 @@ final class FormatParser {
         int index = parsePositional(key, history);
 
         if (index < 0 || index >= args.size()) {
-          throw Starlark.errorf("No replacement found for index %d", index);
+          fail("No replacement found for index " + index);
         }
 
         value = args.get(index);
@@ -131,7 +138,7 @@ final class FormatParser {
 
   private Object getKwarg(Map<String, Object> kwargs, String key) throws EvalException {
     if (!kwargs.containsKey(key)) {
-      throw Starlark.errorf("Missing argument '%s'", key);
+      fail("Missing argument '" + key + "'");
     }
 
     return kwargs.get(key);
@@ -149,7 +156,7 @@ final class FormatParser {
       throws EvalException {
     if (!has(chars, pos + 1, '}')) {
       // Invalid brace outside replacement field
-      throw Starlark.errorf("Found '}' without matching '{'");
+      fail("Found '}' without matching '{'");
     }
 
     // Escaped brace -> output and move to char after right brace
@@ -188,9 +195,9 @@ final class FormatParser {
         break;
       } else {
         if (current == '{') {
-          throw Starlark.errorf("Nested replacement fields are not supported");
+          fail("Nested replacement fields are not supported");
         } else if (ILLEGAL_IN_FIELD.contains(current)) {
-          throw Starlark.errorf("Invalid character '%s' inside replacement field", current);
+          fail("Invalid character '" + current + "' inside replacement field");
         }
 
         result.append(current);
@@ -198,7 +205,7 @@ final class FormatParser {
     }
 
     if (!foundClosingBrace) {
-      throw Starlark.errorf("Found '{' without matching '}'");
+      fail("Found '{' without matching '}'");
     }
 
     return result.toString();
@@ -226,10 +233,19 @@ final class FormatParser {
         history.setManualPositional(); // Only register if the conversion succeeds
       }
     } catch (MixedTypeException mte) {
-      throw Starlark.errorf("%s", mte.getMessage());
+      fail(mte.getMessage());
     }
 
     return result;
+  }
+
+  /**
+   * Throws an exception with the specified error message
+   *
+   * @param msg The message to be thrown
+   */
+  private void fail(String msg) throws EvalException {
+    throw new EvalException(location, msg);
   }
 
   /**

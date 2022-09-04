@@ -15,14 +15,15 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.UnmodifiableIterator;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import java.util.AbstractList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
@@ -50,88 +51,34 @@ import java.util.NoSuchElementException;
             + "range(10)[::2]  # range(0, 10, 2)\n"
             + "range(10)[3:0:-1]  # range(3, 0, -1)</pre>"
             + "Ranges are immutable, as in Python 3.")
-@Immutable
-final class RangeList extends AbstractList<Integer> implements Sequence<Integer> {
+final class RangeList extends SkylarkList<Integer> {
 
-  private final int start;
-  private final int stop;
   private final int step;
-  private final int size; // (derived)
+  private final int start;
 
-  RangeList(int start, int stop, int step) {
-    Preconditions.checkArgument(step != 0);
-
-    this.start = start;
-    this.stop = stop;
-    this.step = step;
-
-    // compute size.
-    // Python version:
-    // https://github.com/python/cpython/blob/09bb918a61031377d720f1a0fa1fe53c962791b6/Objects/rangeobject.c#L144
-    int low; // [low,high) is a half-open interval
-    int high;
-    if (step > 0) {
-      low = start;
-      high = stop;
-    } else {
-      low = stop;
-      high = start;
-      step = -step;
-    }
-    if (low >= high) {
-      this.size = 0;
-    } else {
-      int diff = high - low - 1;
-      this.size = diff / step + 1;
-    }
-  }
-
-  @Override
-  public Integer get(int index) {
-    if (index < 0 || index >= size()) {
-      throw new ArrayIndexOutOfBoundsException(index + ":" + this);
-    }
+  private static int computeItem(int start, int step, int index) {
     return start + step * index;
   }
 
-  @Override
-  public int size() {
-    return size;
-  }
+  /** Provides access to range elements based on their index. */
+  private static class RangeListView extends AbstractList<Integer> {
 
-  @Override
-  public int hashCode() {
-    return 7873 ^ (5557 * start) ^ (3251 * step) ^ (1091 * size);
-  }
+    /** Iterator for increasing/decreasing sequences. */
+    private static class RangeListIterator extends UnmodifiableIterator<Integer> {
+      private final int stop;
+      private final int step;
 
-  @Override
-  public boolean equals(Object other) {
-    if (!(other instanceof RangeList)) {
-      return false;
-    }
-    RangeList that = (RangeList) other;
+      private int cursor;
 
-    // Two RangeLists compare equal if they denote the same sequence.
-    if (this.size != that.size) {
-      return false; // sequences differ in length
-    }
-    if (this.size == 0) {
-      return true; // both sequences are empty
-    }
-    if (this.start != that.start) {
-      return false; // first element differs
-    }
-    return this.size == 1 || this.step == that.step;
-  }
-
-  @Override
-  public Iterator<Integer> iterator() {
-    return new UnmodifiableIterator<Integer>() {
-      int cursor = start;
+      private RangeListIterator(int start, int stop, int step) {
+        this.cursor = start;
+        this.stop = stop;
+        this.step = step;
+      }
 
       @Override
       public boolean hasNext() {
-        return (step > 0) ? (cursor < stop) : (cursor > stop);
+        return (step > 0) ? cursor < stop : cursor > stop;
       }
 
       @Override
@@ -143,32 +90,144 @@ final class RangeList extends AbstractList<Integer> implements Sequence<Integer>
         cursor += step;
         return current;
       }
-    };
+    }
+
+    /**
+     * @return The size of the range specified by {@code start}, {@code stop} and {@code step}.
+     *     Python version:
+     *     https://github.com/python/cpython/blob/09bb918a61031377d720f1a0fa1fe53c962791b6/Objects/rangeobject.c#L144
+     */
+    private static int computeSize(int start, int stop, int step) {
+      // low and high represent bounds of the interval with only one of the sides being open.
+      int low;
+      int high;
+      if (step > 0) {
+        low = start;
+        high = stop;
+      } else {
+        low = stop;
+        high = start;
+        step = -step;
+      }
+      if (low >= high) {
+        return 0;
+      }
+
+      int diff = high - low - 1;
+      return diff / step + 1;
+    }
+
+    private final int start;
+    private final int stop;
+    private final int step;
+    private final int size;
+
+    private RangeListView(int start, int stop, int step) {
+      this.start = start;
+      this.stop = stop;
+      this.step = step;
+      this.size = computeSize(start, stop, step);
+    }
+
+    @Override
+    public Integer get(int index) {
+      if (index < 0 || index >= size()) {
+        throw new ArrayIndexOutOfBoundsException(index);
+      }
+      return computeItem(start, step, index);
+    }
+
+    @Override
+    public int size() {
+      return size;
+    }
+
+    /**
+     * Returns an iterator optimized for traversing range elements, since it's the most frequent
+     * operation for which ranges are used.
+     */
+    @Override
+    public Iterator<Integer> iterator() {
+      return new RangeListIterator(start, stop, step);
+    }
+
+    /** @return the start of the range. */
+    public int getStart() {
+      return start;
+    }
+
+    /** @return the stop element (next after the last one) of the range. */
+    public int getStop() {
+      return stop;
+    }
+
+    /** @return the step between each element of the range. */
+    public int getStep() {
+      return step;
+    }
+  }
+
+  private final RangeListView contents;
+
+  private RangeList(int start, int stop, int step) {
+    this.step = step;
+    this.start = start;
+    this.contents = new RangeListView(start, stop, step);
   }
 
   @Override
-  public Sequence<Integer> getSlice(
+  public boolean isTuple() {
+    return false;
+  }
+
+  @Override
+  public ImmutableList<Integer> getImmutableList() {
+    return ImmutableList.copyOf(contents);
+  }
+
+  @Override
+  public SkylarkList<Integer> getSlice(
       Object start, Object end, Object step, Location loc, Mutability mutability)
       throws EvalException {
     Slice slice = Slice.from(size(), start, end, step, loc);
     int substep = slice.step * this.step;
-    // TODO(adonovan): why no bounds check here?
-    int substart = getNoCheck(slice.start);
-    int substop = getNoCheck(slice.stop);
-    return new RangeList(substart, substop, substep);
+    int substart = computeItem(this.start, this.step, slice.start);
+    int substop = computeItem(this.start, this.step, slice.stop);
+    return RangeList.of(substart, substop, substep);
   }
 
-  private int getNoCheck(int i) {
-    return start + step * i;
+  @Override
+  public SkylarkList<Integer> repeat(int times, Mutability mutability) {
+    throw new UnsupportedOperationException("Ranges do not support repetition.");
+  }
+
+  @Override
+  protected List<Integer> getContentsUnsafe() {
+    return contents;
+  }
+
+  @Override
+  public Mutability mutability() {
+    return Mutability.IMMUTABLE;
   }
 
   @Override
   public void repr(SkylarkPrinter printer) {
-    if (step == 1) {
-      printer.format("range(%d, %d)", start, stop);
+    if (contents.getStep() == 1) {
+      printer.format("range(%d, %d)", contents.getStart(), contents.getStop());
     } else {
-      printer.format("range(%d, %d, %d)", start, stop, step);
+      printer.format(
+          "range(%d, %d, %d)", contents.getStart(), contents.getStop(), contents.getStep());
     }
+  }
+
+  /**
+   * @return A half-opened range defined by its starting value (inclusive), stop value (exclusive)
+   *     and a step from previous value to the next one.
+   */
+  static RangeList of(int start, int stop, int step) {
+    Preconditions.checkArgument(step != 0);
+    return new RangeList(start, stop, step);
   }
 
   /**
@@ -202,7 +261,7 @@ final class RangeList extends AbstractList<Integer> implements Sequence<Integer>
       int stop;
       int step;
 
-      if (stepObj == Starlark.NONE) {
+      if (stepObj == Runtime.NONE) {
         step = 1;
       } else if (stepObj instanceof Integer) {
         step = (Integer) stepObj;
@@ -224,7 +283,7 @@ final class RangeList extends AbstractList<Integer> implements Sequence<Integer>
         upper = length;
       }
 
-      if (startObj == Starlark.NONE) {
+      if (startObj == Runtime.NONE) {
         start = step < 0 ? upper : lower;
       } else if (startObj instanceof Integer) {
         start = (Integer) startObj;
@@ -238,7 +297,7 @@ final class RangeList extends AbstractList<Integer> implements Sequence<Integer>
         throw new EvalException(
             loc, String.format("slice start must be an integer, not '%s'", startObj));
       }
-      if (endObj == Starlark.NONE) {
+      if (endObj == Runtime.NONE) {
         stop = step < 0 ? lower : upper;
       } else if (endObj instanceof Integer) {
         stop = (Integer) endObj;
