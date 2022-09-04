@@ -160,7 +160,6 @@ public class AndroidResourceParsingActionBuilder {
     // Create the spawn action.
     ruleContext.registerAction(
         spawnActionBuilder
-            .useDefaultShellEnvironment()
             .addTransitiveInputs(inputs.build())
             .addOutputs(ImmutableList.of(output))
             .setCommandLine(builder.build())
@@ -196,7 +195,6 @@ public class AndroidResourceParsingActionBuilder {
       ruleContext.registerAction(
           new SpawnAction.Builder()
               .useParameterFile(ParameterFileType.UNQUOTED)
-              .useDefaultShellEnvironment()
               .addTransitiveInputs(inputs.build())
               .addOutputs(ImmutableList.copyOf(outs))
               .setCommandLine(flatFileBuilder.build())

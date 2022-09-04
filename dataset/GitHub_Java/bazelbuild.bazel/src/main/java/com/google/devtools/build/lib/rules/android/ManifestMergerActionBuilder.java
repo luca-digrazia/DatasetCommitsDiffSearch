@@ -146,7 +146,6 @@ public class ManifestMergerActionBuilder {
 
     ruleContext.registerAction(
         this.spawnActionBuilder
-            .useDefaultShellEnvironment()
             .addTransitiveInputs(inputs.build())
             .addOutputs(outputs.build())
             .setCommandLine(builder.build())

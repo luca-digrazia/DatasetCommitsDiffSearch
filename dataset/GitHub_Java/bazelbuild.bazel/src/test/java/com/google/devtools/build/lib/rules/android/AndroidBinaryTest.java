@@ -24,7 +24,6 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.google.common.eventbus.EventBus;
 import com.google.common.truth.Truth;
 import com.google.devtools.build.lib.actions.Action;
@@ -666,11 +665,28 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   private void actualSignerToolTests(String apkSigningMethod, String signV1, String signV2)
       throws Exception {
+    scratch.file(
+        "sdk/BUILD",
+        "android_sdk(",
+        "    name = 'sdk',",
+        "    aapt = 'aapt',",
+        "    adb = 'adb',",
+        "    aidl = 'aidl',",
+        "    android_jar = 'android.jar',",
+        "    annotations_jar = 'annotations_jar',",
+        "    apksigner = 'apksigner',",
+        "    dx = 'dx',",
+        "    framework_aidl = 'framework_aidl',",
+        "    main_dex_classes = 'main_dex_classes',",
+        "    main_dex_list_creator = 'main_dex_list_creator',",
+        "    proguard = 'proguard',",
+        "    shrinked_android_jar = 'shrinked_android_jar',",
+        "    zipalign = 'zipalign')");
     scratch.file("java/com/google/android/hello/BUILD",
         "android_binary(name = 'hello',",
         "               srcs = ['Foo.java'],",
         "               manifest = 'AndroidManifest.xml',)");
-    useConfiguration("--apk_signing_method=" + apkSigningMethod);
+    useConfiguration("--android_sdk=//sdk:sdk", "--apk_signing_method=" + apkSigningMethod);
     ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android/hello:hello");
 
     Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(getFilesToBuild(binary));
@@ -678,22 +694,32 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     SpawnAction unsignedApkAction = (SpawnAction) actionsTestUtil()
         .getActionForArtifactEndingWith(artifacts, "/hello_unsigned.apk");
     assertThat(
-            Streams.stream(unsignedApkAction.getInputs())
-                .map(Artifact::getFilename)
-                .anyMatch("SingleJar_deploy.jar"::equals))
+            Iterables.any(
+                unsignedApkAction.getInputs(),
+                new Predicate<Artifact>() {
+                  @Override
+                  public boolean apply(Artifact artifact) {
+                    return artifact.getFilename().equals("SingleJar_deploy.jar");
+                  }
+                }))
         .isTrue();
     SpawnAction compressedUnsignedApkAction = (SpawnAction) actionsTestUtil()
         .getActionForArtifactEndingWith(artifacts, "compressed_hello_unsigned.apk");
     assertThat(
-            Streams.stream(compressedUnsignedApkAction.getInputs())
-                .map(Artifact::getFilename)
-                .anyMatch("SingleJar_deploy.jar"::equals))
+            Iterables.any(
+                compressedUnsignedApkAction.getInputs(),
+                new Predicate<Artifact>() {
+                  @Override
+                  public boolean apply(Artifact artifact) {
+                    return artifact.getFilename().equals("SingleJar_deploy.jar");
+                  }
+                }))
         .isTrue();
     SpawnAction zipalignAction = (SpawnAction) actionsTestUtil()
         .getActionForArtifactEndingWith(artifacts, "zipaligned_hello.apk");
-    assertThat(zipalignAction.getCommandFilename()).endsWith("zipalign");
+    assertThat(zipalignAction.getCommandFilename()).endsWith("sdk/zipalign");
     Artifact a = ActionsTestUtil.getFirstArtifactEndingWith(artifacts, "hello.apk");
-    assertThat(getGeneratingSpawnAction(a).getCommandFilename()).endsWith("ApkSignerBinary");
+    assertThat(getGeneratingSpawnAction(a).getCommandFilename()).endsWith("sdk/apksigner");
     List<String> args = getGeneratingSpawnActionArgs(a);
 
     assertThat(flagValue("--v1-signing-enabled", args)).isEqualTo(signV1);
@@ -870,13 +896,12 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         actionsTestUtil().artifactClosureOf(getFilesToBuild(b1)), "b1_deploy.jar");
     List<String> b1Inputs = ActionsTestUtil.prettyArtifactNames(b1DeployAction.getInputs());
 
-    assertThat(b1Inputs).containsNoneOf(
-        "java/com/google/android/neversayneveragain/libl1.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/libl2.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/libl3.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/libl4.jar_desugared.jar");
+    assertThat(b1Inputs).containsNoneOf("java/com/google/android/neversayneveragain/libl1.jar",
+        "java/com/google/android/neversayneveragain/libl2.jar",
+        "java/com/google/android/neversayneveragain/libl3.jar",
+        "java/com/google/android/neversayneveragain/libl4.jar");
     assertThat(b1Inputs).contains(
-        "java/com/google/android/neversayneveragain/libb1.jar_desugared.jar");
+        "java/com/google/android/neversayneveragain/libb1.jar");
 
     ConfiguredTarget b2 = getConfiguredTarget("//java/com/google/android/neversayneveragain:b2");
     Action b2DeployAction = actionsTestUtil().getActionForArtifactEndingWith(
@@ -884,25 +909,23 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     List<String> b2Inputs = ActionsTestUtil.prettyArtifactNames(b2DeployAction.getInputs());
 
     assertThat(b2Inputs).containsNoneOf(
-        "java/com/google/android/neversayneveragain/libl1.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/libl2.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/libl4.jar_desugared.jar");
+        "java/com/google/android/neversayneveragain/libl1.jar",
+        "java/com/google/android/neversayneveragain/libl2.jar",
+        "java/com/google/android/neversayneveragain/libl4.jar");
     assertThat(b2Inputs).containsAllOf(
-        "java/com/google/android/neversayneveragain/_dx/l3/libl3.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/libb2.jar_desugared.jar");
+        "java/com/google/android/neversayneveragain/libl3.jar",
+        "java/com/google/android/neversayneveragain/libb2.jar");
 
     ConfiguredTarget b3 = getConfiguredTarget("//java/com/google/android/neversayneveragain:b3");
     Action b3DeployAction = actionsTestUtil().getActionForArtifactEndingWith(
         actionsTestUtil().artifactClosureOf(getFilesToBuild(b3)), "b3_deploy.jar");
     List<String> b3Inputs = ActionsTestUtil.prettyArtifactNames(b3DeployAction.getInputs());
 
-    assertThat(b3Inputs).containsAllOf(
-        "java/com/google/android/neversayneveragain/_dx/l1/libl1.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/_dx/l3/libl3.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/_dx/l4/libl4.jar_desugared.jar",
-        "java/com/google/android/neversayneveragain/libb3.jar_desugared.jar");
-    assertThat(b3Inputs)
-        .doesNotContain("java/com/google/android/neversayneveragain/libl2.jar_desugared.jar");
+    assertThat(b3Inputs).containsAllOf("java/com/google/android/neversayneveragain/libl1.jar",
+        "java/com/google/android/neversayneveragain/libl3.jar",
+        "java/com/google/android/neversayneveragain/libl4.jar",
+        "java/com/google/android/neversayneveragain/libb3.jar");
+    assertThat(b3Inputs).doesNotContain("java/com/google/android/neversayneveragain/libl2.jar");
   }
 
   @Test
@@ -1556,24 +1579,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testFilterResourcesPseudolocalesPropagated() throws Exception {
-    String dir = "java/r/android";
-    ConfiguredTarget binary =
-        scratchConfiguredTarget(
-            dir,
-            "bin",
-            "android_binary(name = 'bin',",
-            "  resource_files = glob(['res/**']),",
-            "  resource_configuration_filters = ['en', 'en-rXA', 'ar-rXB'],",
-            "  manifest = 'AndroidManifest.xml')");
-
-    List<String> resourceProcessingArgs =
-        getGeneratingSpawnActionArgs(getResourceContainer(binary).getRTxt());
-
-    assertThat(resourceProcessingArgs).containsAllOf("--resourceConfigs", "ar-rXB,en,en-rXA");
-  }
-
-  @Test
   public void testThrowOnResourceConflictFlagGetsPropagated() throws Exception {
     scratch.file(
         "java/r/android/BUILD",
@@ -1727,16 +1732,15 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     Action deployJarAction =
         getGeneratingAction(
             getFileConfiguredTarget("//java/r/android:bin_deploy.jar").getArtifact());
-    List<String> inputs = ActionsTestUtil.baseArtifactNames(deployJarAction.getInputs());
+    List<String> inputs = ActionsTestUtil.prettyArtifactNames(deployJarAction.getInputs());
 
     assertThat(inputs)
         .containsAllOf(
-            "libsublib.jar_desugared.jar",
-            "liblib.jar_desugared.jar",
-            "libbin.jar_desugared.jar",
-            "bin_resources.jar_desugared.jar");
-    assertThat(inputs)
-        .containsNoneOf("lib_resources.jar_desugared.jar", "sublib_resources.jar_desugared.jar");
+            dir + "libsublib.jar",
+            dir + "liblib.jar",
+            dir + "libbin.jar",
+            dir + "bin_resources.jar");
+    assertThat(inputs).containsNoneOf(dir + "lib_resources.jar", dir + "sublib_resources.jar");
   }
 
   @Test
@@ -1767,16 +1771,16 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     Action deployJarAction =
         getGeneratingAction(
             getFileConfiguredTarget("//java/r/android:bin_deploy.jar").getArtifact());
-    List<String> inputs = ActionsTestUtil.baseArtifactNames(deployJarAction.getInputs());
+    List<String> inputs = ActionsTestUtil.prettyArtifactNames(deployJarAction.getInputs());
 
     assertThat(inputs)
         .containsAllOf(
-            "libsublib.jar_desugared.jar",
-            "liblib.jar_desugared.jar",
-            "libbin.jar_desugared.jar",
-            "bin_resources.jar_desugared.jar",
-            "lib_resources.jar_desugared.jar",
-            "sublib_resources.jar_desugared.jar");
+            dir + "libsublib.jar",
+            dir + "liblib.jar",
+            dir + "libbin.jar",
+            dir + "bin_resources.jar",
+            dir + "lib_resources.jar",
+            dir + "sublib_resources.jar");
   }
 
   @Test
@@ -2085,21 +2089,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    multidex='legacy',",
         "    manifest='AndroidManifest.xml')");
 
-    internalTestDexShardStructure(MultidexMode.LEGACY, false, "_desugared.jar");
-  }
-
-  @Test
-  public void testDexShardingNativeStructure_withNoDesugaring() throws Exception {
-    useConfiguration("--noexperimental_desugar_for_android", "--noincremental_dexing");
-    scratch.file("java/a/BUILD",
-        "android_binary(",
-        "    name='a',",
-        "    srcs=['A.java'],",
-        "    dex_shards=2,",
-        "    multidex='native',",
-        "    manifest='AndroidManifest.xml')");
-
-    internalTestDexShardStructure(MultidexMode.NATIVE, false, "");
+    internalTestDexShardStructure(MultidexMode.LEGACY, false, "");
   }
 
   @Test
@@ -2113,12 +2103,26 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    multidex='native',",
         "    manifest='AndroidManifest.xml')");
 
+    internalTestDexShardStructure(MultidexMode.NATIVE, false, "");
+  }
+
+  @Test
+  public void testDexShardingNativeStructure_withDesugaring() throws Exception {
+    useConfiguration("--experimental_desugar_for_android", "--noincremental_dexing");
+
+    scratch.file("java/a/BUILD",
+        "android_binary(",
+        "    name='a',",
+        "    srcs=['A.java'],",
+        "    dex_shards=2,",
+        "    multidex='native',",
+        "    manifest='AndroidManifest.xml')");
+
     internalTestDexShardStructure(MultidexMode.NATIVE, false, "_desugared.jar");
   }
 
   @Test
-  public void testDexShardingLegacyAndProguardStructure_withNoDesugaring() throws Exception {
-    useConfiguration("--noexperimental_desugar_for_android");
+  public void testDexShardingLegacyAndProguardStructure() throws Exception {
     scratch.file("java/a/BUILD",
         "android_binary(",
         "    name='a',",
@@ -2132,7 +2136,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testDexShardingLegacyAndProguardStructure() throws Exception {
+  public void testDexShardingLegacyAndProguardStructure_withDesugaring() throws Exception {
+    useConfiguration("--experimental_desugar_for_android");
     scratch.file("java/a/BUILD",
         "android_binary(",
         "    name='a',",
@@ -3016,10 +3021,10 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   @Test
   public void testFeatureFlagPolicyMustContainRuleToUseFeatureFlags() throws Exception {
     reporter.removeHandler(failFastHandler); // expecting an error
-    scratch.overwriteFile(
-        "tools/whitelists/config_feature_flag/BUILD",
+    scratch.file(
+        "policy/BUILD",
         "package_group(",
-        "    name = 'config_feature_flag',",
+        "    name = 'feature_flag_users',",
         "    packages = ['//flag'])");
     scratch.file(
         "flag/BUILD",
@@ -3039,19 +3044,22 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    '//flag:flag': 'right',",
         "  }",
         ")");
+    useConfiguration(
+        "--experimental_dynamic_configs=notrim",
+        "--feature_control_policy=config_feature_flag=//policy:feature_flag_users");
     assertThat(getConfiguredTarget("//java/com/google/android/foo:foo")).isNull();
     assertContainsEvent(
-        "in feature_flags attribute of android_binary rule //java/com/google/android/foo:foo: "
-            + "the feature_flags attribute is not available in package "
-            + "'java/com/google/android/foo'");
+        "in android_binary rule //java/com/google/android/foo:foo: the feature_flags attribute is "
+            + "not available in package 'java/com/google/android/foo' according to policy "
+            + "'//policy:feature_flag_users'");
   }
 
   @Test
   public void testFeatureFlagPolicyDoesNotBlockRuleIfInPolicy() throws Exception {
-    scratch.overwriteFile(
-        "tools/whitelists/config_feature_flag/BUILD",
+    scratch.file(
+        "policy/BUILD",
         "package_group(",
-        "    name = 'config_feature_flag',",
+        "    name = 'feature_flag_users',",
         "    packages = ['//flag', '//java/com/google/android/foo'])");
     scratch.file(
         "flag/BUILD",
@@ -3071,16 +3079,19 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    '//flag:flag': 'right',",
         "  }",
         ")");
+    useConfiguration(
+        "--experimental_dynamic_configs=notrim",
+        "--feature_control_policy=config_feature_flag=//policy:feature_flag_users");
     assertThat(getConfiguredTarget("//java/com/google/android/foo:foo")).isNotNull();
     assertNoEvents();
   }
 
   @Test
   public void testFeatureFlagPolicyDoesNotBlockRuleIfFlagValuesNotUsed() throws Exception {
-    scratch.overwriteFile(
-        "tools/whitelists/config_feature_flag/BUILD",
+    scratch.file(
+        "policy/BUILD",
         "package_group(",
-        "    name = 'config_feature_flag',",
+        "    name = 'feature_flag_users',",
         "    packages = ['//flag'])");
     scratch.file("flag/BUILD");
     scratch.file(
@@ -3090,6 +3101,9 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "  manifest = 'AndroidManifest.xml',",
         "  srcs = [':FooFlags.java'],",
         ")");
+    useConfiguration(
+        "--experimental_dynamic_configs=notrim",
+        "--feature_control_policy=config_feature_flag=//policy:feature_flag_users");
     assertThat(getConfiguredTarget("//java/com/google/android/foo:foo")).isNotNull();
     assertNoEvents();
   }
