@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -121,16 +120,12 @@ public abstract class MockCcSupport {
               && !pathString.startsWith("tools/cpp/build_interface_so")
               && !(pathString.contains("/internal/_middlemen") && basename.contains("crosstool"))
               && !pathString.startsWith("_bin/build_interface_so")
-              && !pathString.endsWith(".cppmap")
-              && !pathString.startsWith("tools/cpp/grep-includes");
+              && !pathString.endsWith(".cppmap");
         }
       };
 
   /** This feature will prevent bazel from patching the crosstool. */
   public static final String NO_LEGACY_FEATURES_FEATURE = "feature { name: 'no_legacy_features' }";
-
-  public static final String DYNAMIC_LINKING_MODE_FEATURE =
-      "feature { name: '" + CppRuleClasses.DYNAMIC_LINKING_MODE + "'}";
 
   /** Feature expected by the C++ rules when pic build is requested */
   public static final String PIC_FEATURE =
@@ -320,8 +315,10 @@ public abstract class MockCcSupport {
           + "    expand_if_all_available: 'thinlto_param_file'"
           + "    action: 'c++-link-executable'"
           + "    action: 'c++-link-dynamic-library'"
-          + "    action: 'c++-link-nodeps-dynamic-library'"
           + "    action: 'c++-link-static-library'"
+          + "    action: 'c++-link-alwayslink-static-library'"
+          + "    action: 'c++-link-pic-static-library'"
+          + "    action: 'c++-link-alwayslink-pic-static-library'"
           + "    flag_group {"
           + "      flag: 'thinlto_param_file=%{thinlto_param_file}'"
           + "    }"
@@ -403,7 +400,6 @@ public abstract class MockCcSupport {
           + "    action: 'c++-compile'"
           + "    action: 'c++-link-interface-dynamic-library'"
           + "    action: 'c++-link-dynamic-library'"
-          + "    action: 'c++-link-nodeps-dynamic-library'"
           + "    action: 'c++-link-executable'"
           + "    flag_group {"
           + "      flag: 'fdo_instrument_option'"
@@ -475,9 +471,6 @@ public abstract class MockCcSupport {
       emptyActionConfigFor(LinkTargetType.EXECUTABLE.getActionName());
 
   public static final String EMPTY_DYNAMIC_LIBRARY_ACTION_CONFIG =
-      emptyActionConfigFor(LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName());
-
-  public static final String EMPTY_TRANSITIVE_DYNAMIC_LIBRARY_ACTION_CONFIG =
       emptyActionConfigFor(LinkTargetType.DYNAMIC_LIBRARY.getActionName());
 
   public static final String EMPTY_STATIC_LIBRARY_ACTION_CONFIG =
@@ -709,16 +702,13 @@ public abstract class MockCcSupport {
         "filegroup(",
         "    name = 'link_dynamic_library',",
         "    srcs = ['link_dynamic_library.sh'],",
-        ")",
-        "exports_files(['grep-includes'])");
+        ")");
     if (config.isRealFileSystem()) {
       config.linkTool("tools/cpp/link_dynamic_library.sh");
       config.linkTool("tools/cpp/build_interface_so");
-      config.linkTool("tools/cpp/grep-includes");
     } else {
       config.create("tools/cpp/link_dynamic_library.sh", "");
       config.create("tools/cpp/build_interface_so", "");
-      config.create("tools/cpp/grep-includes", "");
     }
   }
 
