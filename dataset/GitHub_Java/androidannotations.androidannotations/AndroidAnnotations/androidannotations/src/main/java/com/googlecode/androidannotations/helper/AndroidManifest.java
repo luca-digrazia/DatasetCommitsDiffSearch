@@ -5,26 +5,22 @@ import java.util.List;
 
 public class AndroidManifest {
 
-    private final String applicationPackage;
-    private final List<String> activityQualifiedNames;
-    private final List<String> applicationClassNames;
+	private final String applicationPackage;
+	private final List<String> activityValidQualifiedNames;
+    private final List<String> applicationClassValidNames;
 
-    public AndroidManifest(String applicationPackage, List<String> applicationClassNames, List<String> activityQualifiedNames) {
-        this.applicationPackage = applicationPackage;
-        this.applicationClassNames = applicationClassNames;
-        this.activityQualifiedNames = activityQualifiedNames;
-    }
+	public AndroidManifest(String applicationPackage, List<String> applicationClassValidNames, List<String> activityValidQualifiedNames) {
+		this.applicationPackage = applicationPackage;
+        this.applicationClassValidNames = applicationClassValidNames;
+		this.activityValidQualifiedNames = activityValidQualifiedNames;
+	}
 
-    public String getApplicationPackage() {
-        return applicationPackage;
-    }
+	public String getApplicationPackage() {
+		return applicationPackage;
+	}
 
-    public List<String> getActivityQualifiedNames() {
-        return Collections.unmodifiableList(activityQualifiedNames);
-    }
-
-    public List<String> getApplicationClassNames() {
-        return Collections.unmodifiableList(applicationClassNames);
-    }
+	public List<String> getActivityValidQualifiedNames() {
+		return Collections.unmodifiableList(activityValidQualifiedNames);
+	}
 
 }

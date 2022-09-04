@@ -3,12 +3,12 @@ package com.googlecode.androidannotations.helper;
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
 import javax.xml.parsers.DocumentBuilder;
@@ -113,24 +113,14 @@ public class AndroidManifestFinder {
 
         NodeList applicationNodes = documentElement.getElementsByTagName("application");
 
-        List<String> applicationQualifiedNames = new ArrayList<String>();
-
+        List<String> applicationValidQualifiedNames = new ArrayList<String>();
+        
         for (int i = 0; i < applicationNodes.getLength(); i++) {
             Node applicationNode = applicationNodes.item(i);
             Node nameAttribute = applicationNode.getAttributes().getNamedItem("android:name");
-
-            String qualifiedName = manifestNameToValidQualifiedName(applicationPackage, nameAttribute);
-
-            if (qualifiedName != null) {
-                applicationQualifiedNames.add(qualifiedName);
-            } else {
-                Messager messager = processingEnv.getMessager();
-                if (nameAttribute != null) {
-                    messager.printMessage(Kind.NOTE, String.format("A class application declared in the AndroidManifest.xml cannot be found in the compile path: [%s]", nameAttribute.getNodeValue()));
-                }
-            }
+            applicationValidQualifiedNames.addAll(manifestNameToValidQualifiedNames(applicationPackage, nameAttribute));
         }
-
+        
         NodeList activityNodes = documentElement.getElementsByTagName("activity");
 
         List<String> activityQualifiedNames = new ArrayList<String>();
@@ -138,59 +128,36 @@ public class AndroidManifestFinder {
         for (int i = 0; i < activityNodes.getLength(); i++) {
             Node activityNode = activityNodes.item(i);
             Node nameAttribute = activityNode.getAttributes().getNamedItem("android:name");
-
-            String qualifiedName = manifestNameToValidQualifiedName(applicationPackage, nameAttribute);
-
-            if (qualifiedName != null) {
-                activityQualifiedNames.add(qualifiedName);
-            } else {
-                Messager messager = processingEnv.getMessager();
-                if (nameAttribute != null) {
-                    messager.printMessage(Kind.NOTE, String.format("A class activity declared in the AndroidManifest.xml cannot be found in the compile path: [%s]", nameAttribute.getNodeValue()));
-                } else {
-                    messager.printMessage(Kind.NOTE, String.format("The %d activity node in the AndroidManifest.xml has no android:name attribute", i));
-                }
-            }
+            activityQualifiedNames.addAll(manifestNameToValidQualifiedNames(applicationPackage, nameAttribute));
+            
         }
 
-        return new AndroidManifest(applicationPackage, applicationQualifiedNames, activityQualifiedNames);
+        return new AndroidManifest(applicationPackage, applicationValidQualifiedNames, activityQualifiedNames);
     }
 
-    private String manifestNameToValidQualifiedName(String applicationPackage, Node nameAttribute) {
+    private List<String> manifestNameToValidQualifiedNames(String applicationPackage, Node nameAttribute) {
         if (nameAttribute != null) {
+            List<String> activityValidQualifiedNames = new ArrayList<String>();
             String activityName = nameAttribute.getNodeValue();
+            String activityQualifiedName;
             if (activityName.startsWith(applicationPackage)) {
-                return returnClassIfExistsOrNull(activityName);
+                activityQualifiedName = activityName;
             } else {
                 if (activityName.startsWith(".")) {
-                    return returnClassIfExistsOrNull(applicationPackage + activityName);
+                    activityQualifiedName = applicationPackage + activityName;
                 } else {
-                    if (classOrModelClassExists(activityName)) {
-                        return activityName;
-                    } else {
-                        return returnClassIfExistsOrNull(applicationPackage + "." + activityName);
-                    }
+                    // Sometimes it's a full name, sometimes a relative
+                    // name. So we must add both, just in case.
+                    // relative name
+                    activityQualifiedName = applicationPackage + "." + activityName;
+                    // full name
+                    activityValidQualifiedNames.add(activityName);
                 }
             }
+            activityValidQualifiedNames.add(activityQualifiedName);
+            return activityValidQualifiedNames;
         } else {
-            return null;
-        }
-    }
-
-    private boolean classOrModelClassExists(String className) {
-        Elements elementUtils = processingEnv.getElementUtils();
-
-        if (className.endsWith("_")) {
-            className = className.substring(0, className.length() - 1);
-        }
-        return elementUtils.getTypeElement(className) != null;
-    }
-
-    private String returnClassIfExistsOrNull(String className) {
-        if (classOrModelClassExists(className)) {
-            return className;
-        } else {
-            return null;
+            return Collections.emptyList();
         }
     }
 

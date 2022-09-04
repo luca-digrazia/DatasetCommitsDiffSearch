@@ -18,7 +18,6 @@ package com.googlecode.androidannotations;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.List;
 import java.util.Set;
 
 import javax.annotation.processing.Messager;
@@ -28,7 +27,6 @@ import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 
 import com.googlecode.androidannotations.annotationprocessor.AnnotatedAbstractProcessor;
@@ -212,7 +210,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
         AnnotationElementsHolder extractedModel = extractAnnotations(annotations, roundEnv);
 
         AndroidManifest androidManifest = extractAndroidManifest();
-        
+
         IRClass rClass = findRClasses(androidManifest);
 
         AndroidSystemServices androidSystemServices = new AndroidSystemServices();
