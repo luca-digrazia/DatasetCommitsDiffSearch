@@ -23,6 +23,7 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
+import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -282,17 +283,36 @@ public final class CommandHelper {
   }
 
   private static Pair<List<String>, Artifact> buildCommandLineMaybeWithScriptFile(
-      RuleContext ruleContext, String command, CommandConstructor constructor) {
+      RuleContext ruleContext, String command, String scriptPostFix, PathFragment shellPath) {
     List<String> argv;
     Artifact scriptFileArtifact = null;
     if (command.length() <= maxCommandLength) {
-      argv = constructor.asExecArgv(command);
+      argv = buildCommandLineSimpleArgv(command, shellPath);
     } else {
       // Use script file.
-      scriptFileArtifact = constructor.commandAsScript(ruleContext, command);
-      argv = constructor.asExecArgv(scriptFileArtifact);
+      scriptFileArtifact = buildCommandLineArtifact(ruleContext, command, scriptPostFix);
+      argv = buildCommandLineArgvWithArtifact(scriptFileArtifact, shellPath);
     }
     return Pair.of(argv, scriptFileArtifact);
+  }
+
+  private static ImmutableList<String> buildCommandLineArgvWithArtifact(Artifact scriptFileArtifact,
+      PathFragment shellPath) {
+    return ImmutableList.of(shellPath.getPathString(), scriptFileArtifact.getExecPathString());
+  }
+
+  private static Artifact buildCommandLineArtifact(RuleContext ruleContext, String command,
+      String scriptPostFix) {
+    String scriptFileName = ruleContext.getTarget().getName() + scriptPostFix;
+    String scriptFileContents = "#!/bin/bash\n" + command;
+    Artifact scriptFileArtifact = FileWriteAction.createFile(
+        ruleContext, scriptFileName, scriptFileContents, /*executable=*/true);
+    return scriptFileArtifact;
+  }
+
+  private static ImmutableList<String> buildCommandLineSimpleArgv(String command,
+      PathFragment shellPath) {
+    return ImmutableList.of(shellPath.getPathString(), "-c", command);
   }
 
   /**
@@ -304,24 +324,49 @@ public final class CommandHelper {
    * this method does nothing and returns null.
    */
   @Nullable
-  public static Artifact commandHelperScriptMaybe(
-      RuleContext ruleCtx, String command, CommandConstructor constructor) {
+  public static Artifact shellCommandHelperScriptMaybe(
+      RuleContext ruleCtx,
+      String command,
+      String scriptPostFix,
+      Map<String, String> executionInfo) {
     if (command.length() <= maxCommandLength) {
       return null;
     } else {
-      return constructor.commandAsScript(ruleCtx, command);
+      return buildCommandLineArtifact(ruleCtx, command, scriptPostFix);
     }
+  }
+
+  /**
+   * Builds the set of command-line arguments. Creates a bash script if the command line is longer
+   * than the allowed maximum {@link #maxCommandLength}. Fixes up the input artifact list with the
+   * created bash script when required.
+   */
+  public List<String> buildCommandLine(
+      PathFragment shExecutable,
+      String command,
+      NestedSetBuilder<Artifact> inputs,
+      String scriptPostFix) {
+    return buildCommandLine(
+        shExecutable, command, inputs, scriptPostFix, ImmutableMap.<String, String>of());
   }
 
   /**
    * Builds the set of command-line arguments using the specified shell path. Creates a bash script
    * if the command line is longer than the allowed maximum {@link #maxCommandLength}. Fixes up the
    * input artifact list with the created bash script when required.
+   *
+   * @param executionInfo an execution info map of the action associated with the command line to be
+   *     built.
    */
   public List<String> buildCommandLine(
-      String command, NestedSetBuilder<Artifact> inputs, CommandConstructor constructor) {
+      PathFragment shExecutable,
+      String command,
+      NestedSetBuilder<Artifact> inputs,
+      String scriptPostFix,
+      Map<String, String> executionInfo) {
     Pair<List<String>, Artifact> argvAndScriptFile =
-        buildCommandLineMaybeWithScriptFile(ruleContext, command, constructor);
+        buildCommandLineMaybeWithScriptFile(
+            ruleContext, command, scriptPostFix, shellPath(executionInfo, shExecutable));
     if (argvAndScriptFile.second != null) {
       inputs.add(argvAndScriptFile.second);
     }
@@ -334,9 +379,14 @@ public final class CommandHelper {
    * created bash script when required.
    */
   public List<String> buildCommandLine(
-      String command, List<Artifact> inputs, CommandConstructor constructor) {
+      PathFragment shExecutable,
+      String command,
+      List<Artifact> inputs,
+      String scriptPostFix,
+      Map<String, String> executionInfo) {
     Pair<List<String>, Artifact> argvAndScriptFile =
-        buildCommandLineMaybeWithScriptFile(ruleContext, command, constructor);
+        buildCommandLineMaybeWithScriptFile(
+            ruleContext, command, scriptPostFix, shellPath(executionInfo, shExecutable));
     if (argvAndScriptFile.second != null) {
       inputs.add(argvAndScriptFile.second);
     }
@@ -344,16 +394,10 @@ public final class CommandHelper {
   }
 
   /** Returns the path to the shell for an action with the given execution requirements. */
-  private static PathFragment shellPath(
-      Map<String, String> executionInfo, PathFragment shExecutable) {
+  private PathFragment shellPath(Map<String, String> executionInfo, PathFragment shExecutable) {
     // Use vanilla /bin/bash for actions running on mac machines.
     return executionInfo.containsKey(ExecutionRequirements.REQUIRES_DARWIN)
         ? PathFragment.create("/bin/bash")
         : shExecutable;
-  }
-
-  public static BashCommandConstructor buildBashCommandConstructor(
-      Map<String, String> executionInfo, PathFragment shExecutable, String scriptPostFix) {
-    return new BashCommandConstructor(shellPath(executionInfo, shExecutable), scriptPostFix);
   }
 }

@@ -695,6 +695,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
 
   @Test
   public void testCreateStarlarkActionArgumentsWithUnusedInputsList() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_starlark_unused_inputs_list=True");
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
         ruleContext,
@@ -710,7 +711,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertThat(action.getUnusedInputsList()).isPresent();
     assertThat(action.getUnusedInputsList().get().getFilename()).isEqualTo("a.txt");
     assertThat(action.discoversInputs()).isTrue();
-    assertThat(action.isShareable()).isFalse();
   }
 
   @Test
@@ -1925,8 +1925,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   @Test
   public void testAbstractActionInterface() throws Exception {
     setSkylarkSemanticsOptions(
-        "--incompatible_disallow_struct_provider_syntax=false",
-        "--incompatible_no_rule_outputs_param=false");
+        "--incompatible_disallow_struct_provider_syntax=false");
     scratch.file("test/rules.bzl",
         "def _undertest_impl(ctx):",
         "  out1 = ctx.outputs.out1",
@@ -1970,8 +1969,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   @Test
   public void testCreatedActions() throws Exception {
     setSkylarkSemanticsOptions(
-        "--incompatible_disallow_struct_provider_syntax=false",
-        "--incompatible_no_rule_outputs_param=false");
+        "--incompatible_disallow_struct_provider_syntax=false");
     // createRuleContext() gives us the context for a rule upon entry into its analysis function.
     // But we need to inspect the result of calling created_actions() after the rule context has
     // been modified by creating actions. So we'll call created_actions() from within the analysis
@@ -2054,8 +2052,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   @Test
   public void testRunShellUsesHelperScriptForLongCommand() throws Exception {
     setSkylarkSemanticsOptions(
-        "--incompatible_disallow_struct_provider_syntax=false",
-        "--incompatible_no_rule_outputs_param=false");
+        "--incompatible_disallow_struct_provider_syntax=false");
     // createRuleContext() gives us the context for a rule upon entry into its analysis function.
     // But we need to inspect the result of calling created_actions() after the rule context has
     // been modified by creating actions. So we'll call created_actions() from within the analysis
