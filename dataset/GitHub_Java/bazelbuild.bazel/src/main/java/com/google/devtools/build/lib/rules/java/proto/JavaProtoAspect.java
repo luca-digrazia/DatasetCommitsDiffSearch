@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictEx
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -80,14 +79,15 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
       @Nullable String jacocoLabel,
       RpcSupport rpcSupport,
       String defaultSpeedProtoToolchainLabel,
-      RuleDefinitionEnvironment env) {
+      LabelLateBoundDefault<JavaConfiguration> hostJdkAttribute,
+      LabelLateBoundDefault<JavaConfiguration> javaToolchainAttribute) {
     this.javaSemantics = Preconditions.checkNotNull(javaSemantics);
     this.jacocoLabel = jacocoLabel;
     this.rpcSupport = Preconditions.checkNotNull(rpcSupport);
     this.defaultSpeedProtoToolchainLabel =
         Preconditions.checkNotNull(defaultSpeedProtoToolchainLabel);
-    this.hostJdkAttribute = JavaSemantics.hostJdkAttribute(env);
-    this.javaToolchainAttribute = JavaSemantics.javaToolchainAttribute(env);
+    this.hostJdkAttribute = Preconditions.checkNotNull(hostJdkAttribute);
+    this.javaToolchainAttribute = Preconditions.checkNotNull(javaToolchainAttribute);
   }
 
   @Override
