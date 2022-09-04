@@ -42,7 +42,7 @@ public class ActivityWithInnerEnhancedClasses extends Activity {
 	}
 
 	@EBean
-	protected static class InnerBean {
+	public static class InnerBean {
 
 	}
 
