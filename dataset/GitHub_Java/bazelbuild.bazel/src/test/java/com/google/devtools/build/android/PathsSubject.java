@@ -96,7 +96,7 @@ public class PathsSubject extends Subject<PathsSubject, Path> {
             .map(ZipEntry::getName)
             .map(n -> n.replaceAll(PATH_NORMALIZER, "$1/$3"))
             .collect(Collectors.toSet()))
-        .containsExactly(Arrays.asList(paths));
+        .containsExactly(paths);
   }
 
   void containsNoArchivedFilesIn(String... paths) throws IOException {

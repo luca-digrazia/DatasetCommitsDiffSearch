@@ -147,9 +147,7 @@ public class ResourceCompiler {
       final String filename = interpolateAapt2Filename(qualifiers, file.getFileName().toString());
 
       final List<Path> results = new ArrayList<>();
-      if (qualifiers.asFolderType().equals(ResourceFolderType.VALUES)
-          || (qualifiers.asFolderType().equals(ResourceFolderType.RAW)
-              && file.getFileName().toString().endsWith(".xml"))) {
+      if (qualifiers.asFolderType().equals(ResourceFolderType.VALUES)) {
         extractAttributes(directoryName, filename, results);
       }
 

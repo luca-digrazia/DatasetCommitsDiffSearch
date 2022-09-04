@@ -60,7 +60,7 @@ public class Aapt2ResourcePackagingAction {
   private static Options options;
 
   public static void main(String[] args) throws Exception {
-    InMemoryProfiler profiler = InMemoryProfiler.createAndStart("setup");
+    Profiler profiler = LoggingProfiler.createAndStart("setup");
     OptionsParser optionsParser =
         OptionsParser.newOptionsParser(Options.class, Aapt2ConfigOptions.class);
     optionsParser.enableParamsFileSupport(
@@ -97,14 +97,8 @@ public class Aapt2ResourcePackagingAction {
           AndroidResourceMerger.mergeData(
                   ParsedAndroidData.from(options.primaryData),
                   options.primaryData.getManifest(),
-                  ImmutableList.<SerializedAndroidData>builder()
-                      .addAll(options.directData)
-                      .addAll(options.directAssets)
-                      .build(),
-                  ImmutableList.<SerializedAndroidData>builder()
-                      .addAll(options.transitiveData)
-                      .addAll(options.transitiveAssets)
-                      .build(),
+                  options.directData,
+                  options.transitiveData,
                   mergedResources,
                   mergedAssets,
                   null /* cruncher. Aapt2 automatically chooses to crunch or not. */,
@@ -163,14 +157,10 @@ public class Aapt2ResourcePackagingAction {
                 .map(DependencyAndroidData::getCompiledSymbols)
                 .collect(toList());
 
-      List<Path> assetDirs =
-          concat(
-                  options.transitiveData.stream(),
-                  options.transitiveAssets.stream(),
-                  options.directData.stream(),
-                  options.directAssets.stream())
-              .flatMap(dep -> dep.assetDirs.stream())
-              .collect(toList());
+        List<Path> assetDirs =
+            concat(options.transitiveData.stream(), options.directData.stream())
+                .flatMap(dep -> dep.assetDirs.stream())
+                .collect(toList());
         assetDirs.addAll(options.primaryData.assetDirs);
 
       final PackagedResources packagedResources =
