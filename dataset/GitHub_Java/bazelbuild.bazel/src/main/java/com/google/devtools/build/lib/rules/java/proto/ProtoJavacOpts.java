@@ -16,11 +16,12 @@ package com.google.devtools.build.lib.rules.java.proto;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 
-/** Helper class to centralize Javac flags handling. */
+/**
+ * Helper class to centralize Javac flags handling.
+ */
 public class ProtoJavacOpts {
 
   /**
@@ -28,9 +29,8 @@ public class ProtoJavacOpts {
    *
    * <p>See java_toolchain.compatible_javacopts for the javacopts required for protos.
    */
-  public static ImmutableList<String> constructJavacOpts(
-      RuleContext ruleContext, Label toolchainType) {
-    return constructJavacOpts(ruleContext, JavaToolchainProvider.from(ruleContext, toolchainType));
+  public static ImmutableList<String> constructJavacOpts(RuleContext ruleContext) {
+    return constructJavacOpts(ruleContext, JavaToolchainProvider.from(ruleContext));
   }
 
   /**
