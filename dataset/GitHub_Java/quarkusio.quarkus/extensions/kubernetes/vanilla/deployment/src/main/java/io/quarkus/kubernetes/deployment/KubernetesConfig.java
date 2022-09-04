@@ -33,18 +33,6 @@ public class KubernetesConfig implements PlatformConfiguration {
     Optional<String> version;
 
     /**
-     * The namespace the generated resources should belong to.
-     * If not value is set, then the 'namespace' field will not be
-     * added to the 'metadata' section of the generated manifests.
-     * This in turn means that when the manifests are applied to a cluster,
-     * the namespace will be resolved from the current Kubernetes context
-     * (see https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#context
-     * for more details).
-     */
-    @ConfigItem
-    Optional<String> namespace;
-
-    /**
      * Custom labels to add to all resources
      */
     @ConfigItem
@@ -214,22 +202,10 @@ public class KubernetesConfig implements PlatformConfiguration {
     Optional<List<String>> deploymentTarget;
 
     /**
-     * The host aliases
-     */
-    @ConfigItem(name = "hostaliases")
-    Map<String, HostAliasConfig> hostAliases;
-
-    /**
      * If true, a Kubernetes Ingress will be created
      */
     @ConfigItem
     boolean expose;
-
-    /**
-     * If true, the 'app.kubernetes.io/version' label will be part of the selectors of Service and Deployment
-     */
-    @ConfigItem(defaultValue = "true")
-    boolean addVersionToLabelSelectors;
 
     public Optional<String> getPartOf() {
         return partOf;
@@ -241,10 +217,6 @@ public class KubernetesConfig implements PlatformConfiguration {
 
     public Optional<String> getVersion() {
         return version;
-    }
-
-    public Optional<String> getNamespace() {
-        return namespace;
     }
 
     public Map<String, String> getLabels() {
@@ -331,10 +303,6 @@ public class KubernetesConfig implements PlatformConfiguration {
         return serviceType;
     }
 
-    public OptionalInt getNodePort() {
-        return this.nodePort;
-    }
-
     public ImagePullPolicy getImagePullPolicy() {
         return imagePullPolicy;
     }
@@ -389,10 +357,6 @@ public class KubernetesConfig implements PlatformConfiguration {
 
     public Map<String, ContainerConfig> getSidecars() {
         return sidecars;
-    }
-
-    public Map<String, HostAliasConfig> getHostAliases() {
-        return hostAliases;
     }
 
     @Override

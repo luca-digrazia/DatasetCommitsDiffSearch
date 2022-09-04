@@ -33,77 +33,6 @@ public class OidcTenantConfig {
     public ApplicationType applicationType;
 
     /**
-     * The base URL of the OpenID Connect (OIDC) server, for example, 'https://host:port/auth'.
-     * OIDC discovery endpoint will be called by default by appending a '.well-known/openid-configuration' path to this URL.
-     * Note if you work with Keycloak OIDC server, make sure the base URL is in the following format:
-     * 'https://host:port/auth/realms/{realm}' where '{realm}' has to be replaced by the name of the Keycloak realm.
-     */
-    @ConfigItem
-    public Optional<String> authServerUrl = Optional.empty();
-
-    /**
-     * Enables OIDC discovery.
-     * If the discovery is disabled then the following properties must be configured:
-     * - 'authorization-path' and 'token-path' for the 'web-app' applications
-     * - 'jwks-path' or 'introspection-path' for both the 'web-app' and 'service' applications
-     * <p>
-     * 'web-app' applications may also have 'user-info-path' and 'end-session-path' properties configured.
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean discoveryEnabled = true;
-
-    /**
-     * Relative path of the OIDC authorization endpoint which authenticates the users.
-     * This property must be set for the 'web-app' applications if OIDC discovery is disabled.
-     * This property will be ignored if the discovery is enabled.
-     */
-    @ConfigItem
-    public Optional<String> authorizationPath = Optional.empty();
-
-    /**
-     * Relative path of the OIDC token endpoint which issues ID, access and refresh tokens.
-     * This property must be set for the 'web-app' applications if OIDC discovery is disabled.
-     * This property will be ignored if the discovery is enabled.
-     */
-    @ConfigItem
-    public Optional<String> tokenPath = Optional.empty();
-
-    /**
-     * Relative path of the OIDC userinfo endpoint.
-     * This property must only be set for the 'web-app' applications if OIDC discovery is disabled
-     * and 'authentication.user-info-required' property is enabled.
-     * This property will be ignored if the discovery is enabled.
-     */
-    @ConfigItem
-    public Optional<String> userInfoPath = Optional.empty();
-
-    /**
-     * Relative path of the OIDC RFC7662 introspection endpoint which can introspect both opaque and JWT tokens.
-     * This property must be set if OIDC discovery is disabled and 1) the opaque bearer access tokens have to be verified
-     * or 2) JWT tokens have to be verified while the cached JWK verification set with no matching JWK is being refreshed.
-     * This property will be ignored if the discovery is enabled.
-     */
-    @ConfigItem
-    public Optional<String> introspectionPath = Optional.empty();
-
-    /**
-     * Relative path of the OIDC JWKS endpoint which returns a JSON Web Key Verification Set.
-     * This property should be set if OIDC discovery is disabled and the local JWT verification is required.
-     * This property will be ignored if the discovery is enabled.
-     */
-    @ConfigItem
-    public Optional<String> jwksPath = Optional.empty();
-
-    /**
-     * Relative path of the OIDC end_session_endpoint.
-     * This property must be set if OIDC discovery is disabled and RP Initiated Logout support for the 'web-app' applications is
-     * required.
-     * This property will be ignored if the discovery is enabled.
-     */
-    @ConfigItem
-    public Optional<String> endSessionPath = Optional.empty();
-
-    /**
      * The maximum amount of time the adapter will try connecting to the currently unavailable OIDC server for.
      * For example, setting it to '20S' will let the adapter keep requesting the connection for up to 20 seconds.
      */
@@ -111,8 +40,34 @@ public class OidcTenantConfig {
     public Optional<Duration> connectionDelay = Optional.empty();
 
     /**
+     * The base URL of the OpenID Connect (OIDC) server, for example, 'https://host:port/auth'.
+     * OIDC discovery endpoint will be called by appending a '/.well-known/openid-configuration' path segment to this URL.
+     * Note if you work with Keycloak OIDC server, make sure the base URL is in the following format:
+     * 'https://host:port/auth/realms/{realm}' where '{realm}' has to be replaced by the name of the Keycloak realm.
+     */
+    @ConfigItem
+    public Optional<String> authServerUrl = Optional.empty();
+
+    /**
+     * Relative path of the RFC7662 introspection service.
+     */
+
+    @ConfigItem
+    public Optional<String> introspectionPath = Optional.empty();
+
+    /**
+     * Relative path of the OIDC service returning a JWK set.
+     */
+    @ConfigItem
+    public Optional<String> jwksPath = Optional.empty();
+
+    /**
+     * Relative path of the OIDC end_session_endpoint.
+     */
+    @ConfigItem
+    public Optional<String> endSessionPath = Optional.empty();
+    /**
      * Public key for the local JWT token verification.
-     * OIDC server connection will not be created when this property is set.
      */
     @ConfigItem
     public Optional<String> publicKey = Optional.empty();
@@ -245,30 +200,6 @@ public class OidcTenantConfig {
         this.authServerUrl = Optional.of(authServerUrl);
     }
 
-    public Optional<String> getAuthorizationPath() {
-        return authorizationPath;
-    }
-
-    public void setAuthorizationPath(String authorizationPath) {
-        this.authorizationPath = Optional.of(authorizationPath);
-    }
-
-    public Optional<String> getTokenPath() {
-        return tokenPath;
-    }
-
-    public void setTokenPath(String tokenPath) {
-        this.tokenPath = Optional.of(tokenPath);
-    }
-
-    public Optional<String> getUserInfoPath() {
-        return userInfoPath;
-    }
-
-    public void setUserInfoPath(String userInfoPath) {
-        this.userInfoPath = Optional.of(userInfoPath);
-    }
-
     public Optional<String> getIntrospectionPath() {
         return introspectionPath;
     }
@@ -347,22 +278,6 @@ public class OidcTenantConfig {
 
     public void setTenantId(String tenantId) {
         this.tenantId = Optional.of(tenantId);
-    }
-
-    public boolean isTenantEnabled() {
-        return tenantEnabled;
-    }
-
-    public void setTenantEnabled(boolean enabled) {
-        this.tenantEnabled = enabled;
-    }
-
-    public boolean isDiscoveryEnabled() {
-        return discoveryEnabled;
-    }
-
-    public void setDiscoveryEnabled(boolean enabled) {
-        this.discoveryEnabled = enabled;
     }
 
     public Proxy getProxy() {
@@ -544,12 +459,6 @@ public class OidcTenantConfig {
         @ConfigItem
         public Optional<String> roleClaimSeparator = Optional.empty();
 
-        /**
-         * Source of the principal roles.
-         */
-        @ConfigItem
-        public Optional<Source> source = Optional.empty();
-
         public Optional<String> getRoleClaimPath() {
             return roleClaimPath;
         }
@@ -564,33 +473,6 @@ public class OidcTenantConfig {
 
         public void setRoleClaimSeparator(String roleClaimSeparator) {
             this.roleClaimSeparator = Optional.of(roleClaimSeparator);
-        }
-
-        public Optional<Source> getSource() {
-            return source;
-        }
-
-        public void setSource(Source source) {
-            this.source = Optional.of(source);
-        }
-
-        // Source of the principal roles
-        public static enum Source {
-            /**
-             * ID Token - the default value for the 'web-app' applications.
-             */
-            idtoken,
-
-            /**
-             * Access Token - the default and only supported value for the 'service' applications;
-             * can also be used as the source of roles for the 'web-app' applications.
-             */
-            accesstoken,
-
-            /**
-             * User Info - only supported for the "web-app" applications
-             */
-            userinfo
         }
     }
 
@@ -626,15 +508,6 @@ public class OidcTenantConfig {
         public boolean removeRedirectParameters = true;
 
         /**
-         * Both ID and access tokens are verified as part of the authorization code flow and every time
-         * these tokens are retrieved from the user session. One should disable the access token verification if
-         * it is only meant to be propagated to the downstream services.
-         * Note the ID token will always be verified.
-         */
-        @ConfigItem(defaultValue = "true")
-        public boolean verifyAccessToken = true;
-
-        /**
          * Force 'https' as the 'redirect_uri' parameter scheme when running behind an SSL terminating reverse proxy.
          * This property, if enabled, will also affect the logout `post_logout_redirect_uri` and the local redirect requests.
          */
@@ -659,12 +532,6 @@ public class OidcTenantConfig {
          */
         @ConfigItem
         public Optional<String> cookiePath = Optional.empty();
-
-        /**
-         * If this property is set to 'true' then an OIDC UserInfo endpoint will be called
-         */
-        @ConfigItem(defaultValue = "false")
-        public boolean userInfoRequired;
 
         public Optional<String> getRedirectPath() {
             return redirectPath;
@@ -712,30 +579,6 @@ public class OidcTenantConfig {
 
         public void setCookiePath(String cookiePath) {
             this.cookiePath = Optional.of(cookiePath);
-        }
-
-        public boolean isUserInfoRequired() {
-            return userInfoRequired;
-        }
-
-        public void setUserInfoRequired(boolean userInfoRequired) {
-            this.userInfoRequired = userInfoRequired;
-        }
-
-        public boolean isRemoveRedirectParameters() {
-            return removeRedirectParameters;
-        }
-
-        public void setRemoveRedirectParameters(boolean removeRedirectParameters) {
-            this.removeRedirectParameters = removeRedirectParameters;
-        }
-
-        public boolean isVerifyAccessToken() {
-            return verifyAccessToken;
-        }
-
-        public void setVerifyAccessToken(boolean verifyAccessToken) {
-            this.verifyAccessToken = verifyAccessToken;
         }
     }
 

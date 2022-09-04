@@ -4,6 +4,7 @@ package io.quarkus.kubernetes.deployment;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import io.dekorate.kubernetes.annotation.ImagePullPolicy;
 import io.dekorate.kubernetes.annotation.ServiceType;
@@ -14,10 +15,10 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 public class OpenshiftConfig implements PlatformConfiguration {
 
     /**
-     * The group of the application.
+     * The name of the group this component belongs too
      */
-    @ConfigItem(defaultValue = "${quarkus.container-image.group}")
-    Optional<String> group;
+    @ConfigItem
+    Optional<String> partOf;
 
     /**
      * The name of the application. This value will be used for naming Kubernetes
@@ -45,10 +46,12 @@ public class OpenshiftConfig implements PlatformConfiguration {
     Map<String, String> annotations;
 
     /**
-     * Environment variables to add to all containers
+     * Whether or not to add the build timestamp to the Kubernetes annotations
+     * This is a very useful way to have manifests of successive builds of the same
+     * application differ - thus ensuring that Kubernetes will apply the updated resources
      */
-    @ConfigItem
-    Map<String, EnvConfig> envVars;
+    @ConfigItem(defaultValue = "true")
+    boolean addBuildTimestamp;
 
     /**
      * Working directory
@@ -89,15 +92,27 @@ public class OpenshiftConfig implements PlatformConfiguration {
     Map<String, PortConfig> ports;
 
     /**
+     * The number of desired pods
+     */
+    @ConfigItem(defaultValue = "1")
+    Integer replicas;
+
+    /**
      * The type of service that will be generated for the application
      */
     @ConfigItem(defaultValue = "ClusterIP")
     ServiceType serviceType;
 
     /**
+     * The nodePort to set when serviceType is set to nodePort
+     */
+    @ConfigItem
+    OptionalInt nodePort;
+
+    /**
      * Image pull policy
      */
-    @ConfigItem(defaultValue = "IfNotPresent")
+    @ConfigItem(defaultValue = "Always")
     ImagePullPolicy imagePullPolicy;
 
     /**
@@ -110,13 +125,13 @@ public class OpenshiftConfig implements PlatformConfiguration {
      * The liveness probe
      */
     @ConfigItem
-    Optional<ProbeConfig> livenessProbe;
+    ProbeConfig livenessProbe;
 
     /**
      * The readiness probe
      */
     @ConfigItem
-    Optional<ProbeConfig> readinessProbe;
+    ProbeConfig readinessProbe;
 
     /**
      * Volume mounts
@@ -178,8 +193,14 @@ public class OpenshiftConfig implements PlatformConfiguration {
     @ConfigItem
     Map<String, ContainerConfig> containers;
 
-    public Optional<String> getGroup() {
-        return group;
+    /**
+     * If true, an Openshift Route will be created
+     */
+    @ConfigItem
+    boolean expose;
+
+    public Optional<String> getPartOf() {
+        return partOf;
     }
 
     public Optional<String> getName() {
@@ -198,8 +219,9 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return annotations;
     }
 
-    public Map<String, EnvConfig> getEnvVars() {
-        return envVars;
+    @Override
+    public boolean isAddBuildTimestamp() {
+        return addBuildTimestamp;
     }
 
     public Optional<String> getWorkingDir() {
@@ -222,6 +244,10 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return host;
     }
 
+    public Integer getReplicas() {
+        return replicas;
+    }
+
     public Map<String, PortConfig> getPorts() {
         return ports;
     }
@@ -238,11 +264,11 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return imagePullSecrets;
     }
 
-    public Optional<ProbeConfig> getLivenessProbe() {
+    public ProbeConfig getLivenessProbe() {
         return livenessProbe;
     }
 
-    public Optional<ProbeConfig> getReadinessProbe() {
+    public ProbeConfig getReadinessProbe() {
         return readinessProbe;
     }
 
@@ -282,8 +308,51 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return initContainers;
     }
 
-    public Map<String, ContainerConfig> getContainers() {
+    public Map<String, ContainerConfig> getSidecars() {
         return containers;
     }
 
+    @Override
+    public boolean isExpose() {
+        return false;
+    }
+
+    @Override
+    public String getTargetPlatformName() {
+        return Constants.OPENSHIFT;
+    }
+
+    /**
+     * Environment variables to add to all containers using the old syntax.
+     *
+     * @deprecated Use {@link #env} instead using the new syntax as follows:
+     *             <ul>
+     *             <li>{@code quarkus.kubernetes.env-vars.foo.field=fieldName} becomes
+     *             {@code quarkus.kubernetes.env.fields.foo=fieldName}</li>
+     *             <li>{@code quarkus.kubernetes.env-vars.envvar.value=value} becomes
+     *             {@code quarkus.kubernetes.env.vars.envvar=value}</li>
+     *             <li>{@code quarkus.kubernetes.env-vars.bar.configmap=configName} becomes
+     *             {@code quarkus.kubernetes.env.configmaps=configName}</li>
+     *             <li>{@code quarkus.kubernetes.env-vars.baz.secret=secretName} becomes
+     *             {@code quarkus.kubernetes.env.secrets=secretName}</li>
+     *             </ul>
+     */
+    @ConfigItem
+    @Deprecated
+    Map<String, EnvConfig> envVars;
+
+    /**
+     * Environment variables to add to all containers.
+     */
+    @ConfigItem
+    EnvVarsConfig env;
+
+    @Deprecated
+    public Map<String, EnvConfig> getEnvVars() {
+        return envVars;
+    }
+
+    public EnvVarsConfig getEnv() {
+        return env;
+    }
 }

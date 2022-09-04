@@ -70,7 +70,7 @@ public class NettyHttpClientConfig {
      * <p>
      * Currently has no effect if `quarkus.<amazon-service>.async-client.use-idle-connection-reaper` is false.
      */
-    @ConfigItem(defaultValue = "5S")
+    @ConfigItem(defaultValue = "60S")
     public Duration connectionMaxIdleTime;
 
     /**
@@ -109,16 +109,10 @@ public class NettyHttpClientConfig {
     public NettyProxyConfiguration proxy;
 
     /**
-     * TLS Key Managers provider configuration
+     * TLS Managers provider configuration
      */
     @ConfigItem
-    public TlsKeyManagersProviderConfig tlsKeyManagersProvider;
-
-    /**
-     * TLS Trust Managers provider configuration
-     */
-    @ConfigItem
-    public TlsTrustManagersProviderConfig tlsTrustManagersProvider;
+    public TlsManagersProviderConfig tlsManagersProvider;
 
     /**
      * Netty event loop configuration override
