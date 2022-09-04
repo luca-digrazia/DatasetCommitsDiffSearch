@@ -52,7 +52,7 @@ import org.graylog2.periodical.MessageCountWriterThread;
 public final class Main {
 
     private static final Logger LOG = Logger.getLogger(Main.class);
-    private static final String GRAYLOG2_VERSION = "0.9.6-PREVIEW";
+    private static final String GRAYLOG2_VERSION = "0.9.5";
     
     public static RulesEngine drools = null;
     

@@ -41,7 +41,7 @@ import org.json.simple.JSONValue;
  *
  * Stores/indexes log messages in ElasticSearch.
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class Indexer {
 
@@ -57,19 +57,25 @@ public class Indexer {
      * 
      * http://www.elasticsearch.org/guide/reference/api/admin-indices-indices-exists.html
      */
-    public static boolean indexExists() throws IOException {
-        URL url = new URL(Indexer.buildIndexURL());
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("HEAD");
-        if (conn.getResponseCode() == 200) {
-            return true;
-        } else {
-            if (conn.getResponseCode() != 404) {
-                LOG.warn("Indexer response code was not 200 or 404, but " + conn.getResponseCode());
+    public static boolean indexExists() {
+        try {
+            URL url = new URL(Indexer.buildIndexURL());
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("HEAD");
+            if (conn.getResponseCode() == 200) {
+                return true;
+            } else {
+                if (conn.getResponseCode() != 404) {
+                    LOG.warn("Indexer response code was not 200 or 404, but " + conn.getResponseCode());
+                }
+                
+                return false;
             }
-
-            return false;
+        } catch (IOException e) {
+            LOG.warn("IO error when trying to check if index exists: " + e.getMessage(), e);
         }
+
+        return false;
     }
 
     /**
@@ -78,21 +84,27 @@ public class Indexer {
      * http://www.elasticsearch.org/guide/reference/api/admin-indices-create-index.html
      * http://www.elasticsearch.org/guide/reference/mapping
      */
-    public static boolean createIndex() throws IOException {
-        URL url = new URL(Indexer.buildIndexURL());
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setDoOutput(true);
-        conn.setRequestMethod("POST");
-        OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream());
-        // Write Mapping.
-        writer.write(JSONValue.toJSONString(Mapping.get()));
-        writer.close();
-        if (conn.getResponseCode() == 200) {
-            return true;
-        } else {
-            LOG.warn("Response code of create index operation was not 201, but " + conn.getResponseCode());
-            return false;
+    public static boolean createIndex() {
+        try {
+            URL url = new URL(Indexer.buildIndexURL());
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setDoOutput(true);
+            conn.setRequestMethod("POST");
+            OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream());
+            // Write Mapping.
+            writer.write(JSONValue.toJSONString(Mapping.get()));
+            writer.close();
+            if (conn.getResponseCode() == 200) {
+                return true;
+            } else {
+                LOG.warn("Response code of create index operation was not 201, but " + conn.getResponseCode());
+                return false;
+            }
+        } catch (IOException e) {
+            LOG.warn("IO error when trying to create index: " + e.getMessage(), e);
         }
+
+        return false;
     }
 
     /**
