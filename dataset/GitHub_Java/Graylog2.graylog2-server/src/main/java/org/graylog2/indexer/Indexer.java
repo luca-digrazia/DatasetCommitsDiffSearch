@@ -21,20 +21,19 @@
 package org.graylog2.indexer;
 
 import org.apache.log4j.Logger;
-import org.graylog2.Main;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.json.simple.JSONValue;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
+import org.graylog2.Main;
 
 /**
  * Indexer.java: Sep 05, 2011 9:13:03 PM
- * <p/>
+ *
  * Stores/indexes log messages in ElasticSearch.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -47,23 +46,20 @@ public class Indexer {
 
     public static final String INDEX = "graylog2";
     public static final String TYPE = "message";
-
+    
     /**
-     * Checks if the index for Graylog2 exists
-     * <p/>
-     * See <a href="http://www.elasticsearch.org/guide/reference/api/admin-indices-indices-exists.html">elasticsearch Indices Exists API</a> for details.
-     *
-     * @return {@literal true} if the index for Graylog2 exists, {@literal false} otherwise
-     * @throws IOException if elasticsearch server couldn't be reached
+     * Checks if the index exists.
+     * 
+     * http://www.elasticsearch.org/guide/reference/api/admin-indices-indices-exists.html
      */
     public static boolean indexExists() throws IOException {
         URL url = new URL(Indexer.buildIndexURL());
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("HEAD");
-        if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+        if (conn.getResponseCode() == 200) {
             return true;
         } else {
-            if (conn.getResponseCode() != HttpURLConnection.HTTP_NOT_FOUND) {
+            if (conn.getResponseCode() != 404) {
                 LOG.warn("Indexer response code was not 200 or 404, but " + conn.getResponseCode());
             }
 
@@ -72,103 +68,72 @@ public class Indexer {
     }
 
     /**
-     * Creates the index for Graylog2 including the mapping
-     * <p/>
-     * <a href="http://www.elasticsearch.org/guide/reference/api/admin-indices-create-index.html">Create Index API</a> and
-     * <a href="http://www.elasticsearch.org/guide/reference/mapping">elasticsearch Mapping</a>
+     * Creates the index including the mapping.
      *
-     * @return {@literal true} if the index for Graylog2 could be created, {@literal false} otherwise
-     * @throws IOException if elasticsearch server couldn't be reached
+     * http://www.elasticsearch.org/guide/reference/api/admin-indices-create-index.html
+     * http://www.elasticsearch.org/guide/reference/mapping
      */
     public static boolean createIndex() throws IOException {
-
-        Writer writer = null;
         URL url = new URL(Indexer.buildIndexURL());
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setDoOutput(true);
         conn.setRequestMethod("POST");
-
-        try {
-            writer = new OutputStreamWriter(conn.getOutputStream());
-
-            // Write Mapping.
-            writer.write(JSONValue.toJSONString(Mapping.get()));
-
-            if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
-                return true;
-            } else {
-                LOG.warn("Response code of create index operation was not 200, but " + conn.getResponseCode());
-                return false;
-            }
-        } finally {
-            if (null != writer) {
-                writer.close();
-            }
+        OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream());
+        // Write Mapping.
+        writer.write(JSONValue.toJSONString(Mapping.get()));
+        writer.close();
+        if (conn.getResponseCode() == 200) {
+            return true;
+        } else {
+            LOG.warn("Response code of create index operation was not 200, but " + conn.getResponseCode());
+            return false;
         }
     }
 
     /**
      * Bulk-indexes/persists messages to ElasticSearch.
-     * <p/>
-     * See <a href="http://www.elasticsearch.org/guide/reference/api/bulk.html">elasticsearch Bulk API</a> for details
+     * http://www.elasticsearch.org/guide/reference/api/bulk.html
      *
-     * @param messages The messages to index
-     * @return {@literal true} if the messages were successfully indexed, {@literal false} otherwise
+     * @param message The message to index.
+     * @return
      */
     public static boolean bulkIndex(List<GELFMessage> messages) {
-
         if (messages.isEmpty()) {
             return true;
         }
+        
+        StringBuilder batchFactory = new StringBuilder();
 
-        Writer writer = null;
-        int responseCode = 0;
+        for (GELFMessage message : messages) {
+            batchFactory.append("{\"index\":{\"_index\":\"");
+            batchFactory.append(INDEX);
+            batchFactory.append("\",\"_type\":\"");
+            batchFactory.append(TYPE);
+            batchFactory.append("\"}}\n");
+            batchFactory.append(JSONValue.toJSONString(message.toElasticSearchObject()));
+            batchFactory.append("\n");
+        }
 
         try {
             URL url = new URL(buildElasticSearchURL() + "_bulk");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setDoOutput(true);
             conn.setRequestMethod("POST");
-
-            writer = new OutputStreamWriter(conn.getOutputStream());
-            writer.write(getJSONfromGELFMessages(messages));
-            writer.flush();
-
-            responseCode = conn.getResponseCode();
-        } catch (IOException e) {
-            LOG.warn("IO error when trying to index messages", e);
-        } finally {
-            if (null != writer) {
-                try {
-                    writer.close();
-                } catch (IOException e) {
-                    LOG.error("Couldn't close output stream", e);
-                }
+            OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream());
+            writer.write(batchFactory.toString());
+            writer.close();
+            if (conn.getResponseCode() == 200) {
+                return true;
+            } else {
+                LOG.warn("Indexer response code was not 200, but " + conn.getResponseCode());
+                return false; 
             }
+        } catch (IOException e) {
+            LOG.warn("IO error when trying to index messages: " + e.getMessage(), e);
         }
 
-        if (responseCode == HttpURLConnection.HTTP_OK) {
-            return true;
-        } else {
-            LOG.warn("Indexer response code was not 200, but " + responseCode);
-            return false;
-        }
-    }
-
-    private static String getJSONfromGELFMessages(List<GELFMessage> messages) {
-        StringBuilder sb = new StringBuilder();
-
-        for (GELFMessage message : messages) {
-            sb.append("{\"index\":{\"_index\":\"");
-            sb.append(INDEX);
-            sb.append("\",\"_type\":\"");
-            sb.append(TYPE);
-            sb.append("\"}}\n");
-            sb.append(JSONValue.toJSONString(message.toElasticSearchObject()));
-            sb.append("\n");
-        }
-
-        return sb.toString();
+        // Not reached.
+        return false;
     }
 
     private static String buildElasticSearchURL() {
