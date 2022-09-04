@@ -74,7 +74,7 @@ final class AndroidNdkCrosstoolsR15 {
       // unified headers sysroot, from ndk15 and up
       toolchainBuilder.addCxxBuiltinIncludeDirectory(
           ndkPaths.createBuiltinSysroot() + "/usr/include");
-      toolchainBuilder.addUnfilteredCxxFlag(
+      toolchainBuilder.addCompilerFlag(
           "-isystem%ndk%/usr/include".replace("%ndk%", ndkPaths.createBuiltinSysroot()));
 
       toolchains.add(toolchainBuilder.build());

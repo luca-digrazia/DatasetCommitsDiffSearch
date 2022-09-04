@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkPaths;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.Builder;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationMode;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationModeFlags;
 
@@ -37,7 +38,7 @@ final class MipsCrosstools {
     this.clangVersion = clangVersion;
   }
 
-  ImmutableList<CToolchain.Builder> createCrosstools() {
+  ImmutableList<Builder> createCrosstools() {
     return ImmutableList.of(createMips64Toolchain(), createMipsToolchain());
   }
 
