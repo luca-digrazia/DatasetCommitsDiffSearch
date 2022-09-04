@@ -10,8 +10,8 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.SeekBar;
 
-import com.danikula.videocache.HttpProxyCacheServer;
 import com.example.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.model.GSYVideoModel;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
@@ -27,12 +27,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import tv.danmaku.ijk.media.player.IjkLibLoader;
+import static com.example.gsyvideoplayer.exo.GSYExo2MediaPlayer.POSITION_DISCONTINUITY;
+
 
 /**
  * Created by guoshuyu on 2018/5/16.
  * 自定义View支持exo的list数据，实现无缝切换效果
- *
  * 这是一种思路，通过自定义后GSYExo2MediaPlayer内部，通过ConcatenatingMediaSource实现列表播放
  * 诸如此类，还可以实现AdsMediaSource等
  */
@@ -62,8 +62,8 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
     /**
      * 设置播放URL
      *
-     * @param url           播放url
-     * @param position      需要播放的位置
+     * @param url      播放url
+     * @param position 需要播放的位置
      * @return
      */
     public boolean setUp(List<GSYVideoModel> url, int position) {
@@ -73,9 +73,9 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
     /**
      * 设置播放URL
      *
-     * @param url           播放url
-     * @param position      需要播放的位置
-     * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
+     * @param url       播放url
+     * @param position  需要播放的位置
+     * @param cachePath 缓存路径，如果是M3U8或者HLS，请设置为false
      * @return
      */
     public boolean setUp(List<GSYVideoModel> url, int position, File cachePath) {
@@ -85,24 +85,24 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
     /**
      * 设置播放URL
      *
-     * @param url           播放url
-     * @param position      需要播放的位置
-     * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
-     * @param mapHeadData   http header
+     * @param url         播放url
+     * @param position    需要播放的位置
+     * @param cachePath   缓存路径，如果是M3U8或者HLS，请设置为false
+     * @param mapHeadData http header
      * @return
      */
-    public boolean setUp(List<GSYVideoModel> url,  int position, File cachePath, Map<String, String> mapHeadData) {
+    public boolean setUp(List<GSYVideoModel> url, int position, File cachePath, Map<String, String> mapHeadData) {
         return setUp(url, position, cachePath, mapHeadData, true);
     }
 
     /**
      * 设置播放URL
      *
-     * @param url           播放url
-     * @param position      需要播放的位置
-     * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
-     * @param mapHeadData   http header
-     * @param changeState   切换的时候释放surface
+     * @param url         播放url
+     * @param position    需要播放的位置
+     * @param cachePath   缓存路径，如果是M3U8或者HLS，请设置为false
+     * @param mapHeadData http header
+     * @param changeState 切换的时候释放surface
      * @return
      */
     protected boolean setUp(List<GSYVideoModel> url, int position, File cachePath, Map<String, String> mapHeadData, boolean changeState) {
@@ -127,6 +127,7 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
         st.mPlayPosition = sf.mPlayPosition;
         st.mUriList = sf.mUriList;
         st.mExoCache = sf.mExoCache;
+        st.mTitle = sf.mTitle;
     }
 
     @Override
@@ -153,6 +154,7 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
         super.resolveNormalVideoShow(oldF, vp, gsyVideoPlayer);
     }
 
+
     @Override
     protected void startPrepare() {
         if (getGSYVideoManager().listener() != null) {
@@ -166,7 +168,11 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
         getGSYVideoManager().setPlayTag(mPlayTag);
         getGSYVideoManager().setPlayPosition(mPlayPosition);
         mAudioManager.requestAudioFocus(onAudioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-        ((Activity) getActivityContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        try {
+            ((Activity) getActivityContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         mBackUpPlayingBufferState = -1;
 
         //prepare通过list初始化
@@ -179,7 +185,7 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
             Debuger.printfError("********************** urls isEmpty . Do you know why ? **********************");
         }
 
-        ((GSYExoVideoManager)getGSYVideoManager()).prepare(urls, (mMapHeadData == null) ? new HashMap<String, String>() : mMapHeadData, mLooping, mSpeed, mExoCache);
+        ((GSYExoVideoManager) getGSYVideoManager()).prepare(urls, (mMapHeadData == null) ? new HashMap<String, String>() : mMapHeadData, mPlayPosition, mLooping, mSpeed, mExoCache, mCachePath, mOverrideExtension);
 
         setStateAndUi(CURRENT_STATE_PREPAREING);
     }
@@ -216,14 +222,100 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
         this.mExoCache = exoCache;
     }
 
-    /**********以下重载GSYVideoPlayer的GSYVideoViewBridge相关实现***********/
-
-    public void setIjkLibLoader(IjkLibLoader libLoader) {
-        GSYExoVideoManager.setIjkLibLoader(libLoader);
+    @Override
+    public void onStopTrackingTouch(SeekBar seekBar) {
+        if (mVideoAllCallBack != null && isCurrentMediaListener()) {
+            if (isIfCurrentIsFullscreen()) {
+                Debuger.printfLog("onClickSeekbarFullscreen");
+                mVideoAllCallBack.onClickSeekbarFullscreen(mOriginUrl, mTitle, this);
+            } else {
+                Debuger.printfLog("onClickSeekbar");
+                mVideoAllCallBack.onClickSeekbar(mOriginUrl, mTitle, this);
+            }
+        }
+        if (getGSYVideoManager() != null && mHadPlay) {
+            /**增加这个可以实现拖动后重新播放*/
+            if(!isInPlayingState()) {
+                setStateAndUi(CURRENT_STATE_PLAYING);
+                addTextureView();
+            }
+            try {
+                int time = seekBar.getProgress() * getDuration() / 100;
+                getGSYVideoManager().seekTo(time);
+            } catch (Exception e) {
+                Debuger.printfWarning(e.toString());
+            }
+        }
+        mHadSeekTouch = false;
     }
 
     @Override
+    public void onAutoCompletion() {
+        setStateAndUi(CURRENT_STATE_AUTO_COMPLETE);
+
+        mSaveChangeViewTIme = 0;
+        mCurrentPosition = 0;
+
+        if (mTextureViewContainer.getChildCount() > 0) {
+            mTextureViewContainer.removeAllViews();
+        }
+
+        if (!mIfCurrentIsFullscreen)
+            getGSYVideoManager().setLastListener(null);
+        mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
+        if (mContext instanceof Activity) {
+            try {
+                ((Activity) mContext).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        releaseNetWorkState();
+
+        if (mVideoAllCallBack != null && isCurrentMediaListener()) {
+            Debuger.printfLog("onAutoComplete");
+            mVideoAllCallBack.onAutoComplete(mOriginUrl, mTitle, this);
+        }
+    }
+
+    @Override
+    public void onCompletion() {
+        //make me normal first
+        setStateAndUi(CURRENT_STATE_NORMAL);
+
+        mSaveChangeViewTIme = 0;
+        mCurrentPosition = 0;
+
+        if (mTextureViewContainer.getChildCount() > 0) {
+            mTextureViewContainer.removeAllViews();
+        }
+
+        if (!mIfCurrentIsFullscreen) {
+            getGSYVideoManager().setListener(null);
+            getGSYVideoManager().setLastListener(null);
+        }
+        getGSYVideoManager().setCurrentVideoHeight(0);
+        getGSYVideoManager().setCurrentVideoWidth(0);
+
+        mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
+        if (mContext instanceof Activity) {
+            try {
+                ((Activity) mContext).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        releaseNetWorkState();
+    }
+
+
+
+    /**********以下重载GSYVideoPlayer的GSYVideoViewBridge相关实现***********/
+
+    @Override
     public GSYVideoViewBridge getGSYVideoManager() {
+        GSYExoVideoManager.instance().initContext(getContext().getApplicationContext());
         return GSYExoVideoManager.instance();
     }
 
@@ -237,14 +329,6 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
         GSYExoVideoManager.releaseAllVideos();
     }
 
-    /**
-     * 不支持边播边缓存，也就不存在proxy
-     */
-    @Override
-    protected HttpProxyCacheServer getProxy(Context context, File file) {
-        return null;
-    }
-
     @Override
     protected int getFullId() {
         return GSYExoVideoManager.FULLSCREEN_ID;
@@ -255,5 +339,22 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
         return GSYExoVideoManager.SMALL_ID;
     }
 
+    @Override
+    public void onInfo(int what, int extra) {
+        if (what == POSITION_DISCONTINUITY) {
+            int window = ((GSYExo2MediaPlayer) getGSYVideoManager().getPlayer().getMediaPlayer()).getCurrentWindowIndex();
+            mPlayPosition = window;
+            GSYVideoModel gsyVideoModel = mUriList.get(window);
+            if (!TextUtils.isEmpty(gsyVideoModel.getTitle())) {
+                mTitleTextView.setText(gsyVideoModel.getTitle());
+            }
+        } else {
+            super.onInfo(what, extra);
+        }
+    }
 
+
+    public void nextUI() {
+        resetProgressAndTime();
+    }
 }
