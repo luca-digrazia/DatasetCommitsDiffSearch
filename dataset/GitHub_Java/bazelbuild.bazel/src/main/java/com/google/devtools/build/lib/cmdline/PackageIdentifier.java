@@ -20,6 +20,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.Serializable;
 import java.util.Objects;
@@ -34,7 +36,8 @@ import javax.annotation.concurrent.Immutable;
  */
 @AutoCodec
 @Immutable
-public final class PackageIdentifier implements Comparable<PackageIdentifier>, Serializable {
+public final class PackageIdentifier
+    implements Comparable<PackageIdentifier>, Serializable, SkylarkValue {
   private static final Interner<PackageIdentifier> INTERNER = BlazeInterners.newWeakInterner();
 
   public static PackageIdentifier create(String repository, PathFragment pkgName)
@@ -231,5 +234,10 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
         .compare(repository.toString(), that.repository.toString())
         .compare(pkgName, that.pkgName)
         .result();
+  }
+
+  @Override
+  public void repr(SkylarkPrinter printer) {
+    printer.repr(toString());
   }
 }

@@ -19,15 +19,12 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 import com.google.devtools.build.lib.bazel.repository.RepositoryOrderEvent;
-import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryFunction;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.ResolvedEvent;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
@@ -41,6 +38,7 @@ import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.skyframe.WorkspaceFileValue;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -52,19 +50,12 @@ import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingResult;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /** Syncs all repositories specified in the workspace file */
 @Command(
     name = SyncCommand.NAME,
-    options = {
-      PackageCacheOptions.class,
-      KeepGoingOption.class,
-      LoadingPhaseThreadsOption.class,
-      SyncOptions.class
-    },
+    options = {PackageCacheOptions.class, KeepGoingOption.class, LoadingPhaseThreadsOption.class},
     help = "resource:sync.txt",
     shortDescription = "Syncs all repositories specified in the workspace file",
     allowResidue = false)
@@ -72,7 +63,7 @@ public final class SyncCommand implements BlazeCommand {
   public static final String NAME = "sync";
 
   static final ImmutableSet<String> WHITELISTED_NATIVE_RULES =
-      ImmutableSet.of("local_repository", "new_local_repository", "local_config_platform");
+      ImmutableSet.<String>of("local_repository", "new_local_repository");
 
   @Override
   public void editOptions(OptionsParser optionsParser) {}
@@ -98,23 +89,13 @@ public final class SyncCommand implements BlazeCommand {
                   true,
                   true,
                   env.getCommandId().toString()));
-      env.setupPackageCache(options);
+      env.setupPackageCache(options, env.getRuntime().getDefaultsPackageContent());
       SkyframeExecutor skyframeExecutor = env.getSkyframeExecutor();
-
-      SyncOptions syncOptions = options.getOptions(SyncOptions.class);
-      if (syncOptions.configure) {
-        skyframeExecutor.injectExtraPrecomputedValues(
-            ImmutableList.of(
-                PrecomputedValue.injected(
-                    RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_CONFIGURING,
-                    env.getCommandId().toString())));
-      } else {
-        skyframeExecutor.injectExtraPrecomputedValues(
-            ImmutableList.of(
-                PrecomputedValue.injected(
-                    RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-                    env.getCommandId().toString())));
-      }
+      skyframeExecutor.injectExtraPrecomputedValues(
+          ImmutableList.of(
+              PrecomputedValue.injected(
+                  RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
+                  env.getCommandId().toString())));
 
       // Obtain the key for the top-level WORKSPACE file
       SkyKey packageLookupKey = PackageLookupValue.key(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER);
@@ -164,15 +145,6 @@ public final class SyncCommand implements BlazeCommand {
         }
         workspace = fileValue.next();
       }
-      env.getReporter()
-          .post(
-              genericArgsCall(
-                  "register_toolchains", fileValue.getPackage().getRegisteredToolchains()));
-      env.getReporter()
-          .post(
-              genericArgsCall(
-                  "register_execution_platforms",
-                  fileValue.getPackage().getRegisteredExecutionPlatforms()));
       env.getReporter().post(new RepositoryOrderEvent(repositoryOrder.build()));
 
       // take all skylark workspace rules and get their values
@@ -184,7 +156,7 @@ public final class SyncCommand implements BlazeCommand {
           // fetch anyway. So the only task remaining is to record the use of "bind" for whoever
           // collects resolved information.
           env.getReporter().post(resolveBind(rule));
-        } else if (shouldSync(rule, syncOptions.configure)) {
+        } else if (shouldSync(rule)) {
           // TODO(aehlig): avoid the detour of serializing and then parsing the repository name
           try {
             repositoriesToFetch.add(
@@ -225,15 +197,10 @@ public final class SyncCommand implements BlazeCommand {
     return BlazeCommandResult.exitCode(exitCode);
   }
 
-  private static boolean shouldSync(Rule rule, boolean configure) {
+  private static boolean shouldSync(Rule rule) {
     if (!rule.getRuleClassObject().getWorkspaceOnly()) {
       // We should only sync workspace rules
       return false;
-    }
-    if (configure) {
-      // If this is only a configure run, only sync Starlark rules that
-      // declare themselves as configure-like.
-      return SkylarkRepositoryFunction.isConfigureRule(rule);
     }
     if (rule.getRuleClassObject().isSkylark()) {
       // Skylark rules are all whitelisted
@@ -242,14 +209,14 @@ public final class SyncCommand implements BlazeCommand {
     return WHITELISTED_NATIVE_RULES.contains(rule.getRuleClassObject().getName());
   }
 
-  private static ResolvedEvent resolveBind(Rule rule) {
+  private ResolvedEvent resolveBind(Rule rule) {
     String name = rule.getName();
-    Label actual = (Label) rule.getAttributeContainer().getAttr("actual");
+    Object actual = rule.getAttributeContainer().getAttr("actual");
     String nativeCommand =
         "bind(name = "
             + Printer.getPrinter().repr(name)
             + ", actual = "
-            + Printer.getPrinter().repr(actual.getCanonicalForm())
+            + Printer.getWorkspacePrettyPrinter().repr(actual)
             + ")";
 
     return new ResolvedEvent() {
@@ -265,49 +232,6 @@ public final class SyncCommand implements BlazeCommand {
             .put(
                 ResolvedHashesFunction.ORIGINAL_ATTRIBUTES,
                 ImmutableMap.<String, Object>of("name", name, "actual", actual))
-            .put(ResolvedHashesFunction.NATIVE, nativeCommand)
-            .build();
-      }
-    };
-  }
-
-  private static ResolvedEvent genericArgsCall(String ruleName, List<String> args) {
-    // For the name attribute we are in a slightly tricky situation, as the ResolvedEvents are
-    // designed for external repositories and hence are indexted by their unique
-    // names. Technically, however, things like the list of toolchains are not associated with any
-    // external repository (but still a workspace command); so we take a name that syntactially can
-    // never be the name of a repository, as it starts with a '//'.
-    String name = "//external/" + ruleName;
-    StringBuilder nativeCommandBuilder = new StringBuilder().append(ruleName).append("(");
-    nativeCommandBuilder.append(
-        args.stream()
-            .map(arg -> Printer.getPrinter().repr(arg).toString())
-            .collect(Collectors.joining(", ")));
-    nativeCommandBuilder.append(")");
-    String nativeCommand = nativeCommandBuilder.toString();
-
-    return new ResolvedEvent() {
-      @Override
-      public String getName() {
-        return name;
-      }
-
-      @Override
-      public Object getResolvedInformation() {
-        return ImmutableMap.<String, Object>builder()
-            .put(ResolvedHashesFunction.ORIGINAL_RULE_CLASS, ruleName)
-            .put(
-                ResolvedHashesFunction.ORIGINAL_ATTRIBUTES,
-                // The original attributes are a bit of a problem, as the arguments to
-                // the rule do not at all look like those of a repository rule:
-                // they're all positional, and, in particular, there is no keyword argument
-                // called "name". A lot of uses of the resolved file, however, blindly assume
-                // that "name" is always part of the original arguments; so we provide our
-                // fake name here as well, and the actual arguments under the keyword "*args",
-                // which hopefully reminds everyone inspecting the file of the actual syntax of
-                // that rule. Note that the original arguments are always ignored when bazel uses
-                // a resolved file instead of a workspace file.
-                ImmutableMap.<String, Object>of("name", name, "*args", args))
             .put(ResolvedHashesFunction.NATIVE, nativeCommand)
             .build();
       }

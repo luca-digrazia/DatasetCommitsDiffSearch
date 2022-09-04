@@ -92,7 +92,7 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
 
     // Load the configured target for each, and get the declared execution platforms providers.
     ImmutableList<ConfiguredTargetKey> registeredExecutionPlatformKeys =
-        configureRegisteredExecutionPlatforms(env, configuration, platformLabels);
+        configureRegisteredExecutionPlatforms(env, configuration, targetPatterns, platformLabels);
     if (env.valuesMissing()) {
       return null;
     }
@@ -122,6 +122,7 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
   private ImmutableList<ConfiguredTargetKey> configureRegisteredExecutionPlatforms(
       Environment env,
       BuildConfiguration configuration,
+      ImmutableList<String> targetPatterns,
       List<Label> labels)
       throws InterruptedException, RegisteredExecutionPlatformsFunctionException {
 
@@ -147,13 +148,20 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
             ((ConfiguredTargetValue) valueOrException.get()).getConfiguredTarget();
         PlatformInfo platformInfo = PlatformProviderUtils.platform(target);
         if (platformInfo == null) {
-          throw new RegisteredExecutionPlatformsFunctionException(
-              new InvalidPlatformException(platformLabel), Transience.PERSISTENT);
+          if (TargetPatternUtil.isTargetExplicit(targetPatterns, platformLabel)) {
+            // Only report an error if the label was explicitly requested.
+            throw new RegisteredExecutionPlatformsFunctionException(
+                new InvalidPlatformException(platformLabel), Transience.PERSISTENT);
+          }
+          continue;
         }
         validPlatformKeys.add(platformKey);
       } catch (ConfiguredValueCreationException e) {
-        throw new RegisteredExecutionPlatformsFunctionException(
-            new InvalidPlatformException(platformLabel, e), Transience.PERSISTENT);
+        if (TargetPatternUtil.isTargetExplicit(targetPatterns, platformLabel)) {
+          // Only report an error if the label was explicitly requested.
+          throw new RegisteredExecutionPlatformsFunctionException(
+              new InvalidPlatformException(platformLabel, e), Transience.PERSISTENT);
+        }
       }
     }
 

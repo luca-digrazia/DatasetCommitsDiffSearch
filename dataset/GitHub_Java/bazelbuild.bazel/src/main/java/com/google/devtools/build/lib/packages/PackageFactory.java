@@ -63,7 +63,6 @@ import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -362,7 +361,7 @@ public final class PackageFactory {
       return this;
     }
 
-    public abstract PackageFactory build(RuleClassProvider ruleClassProvider, FileSystem fs);
+    public abstract PackageFactory build(RuleClassProvider ruleClassProvider);
   }
 
   @VisibleForTesting

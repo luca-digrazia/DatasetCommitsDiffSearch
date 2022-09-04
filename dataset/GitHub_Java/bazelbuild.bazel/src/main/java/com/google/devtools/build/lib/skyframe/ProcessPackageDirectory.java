@@ -17,7 +17,6 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
@@ -39,18 +38,18 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
  * Processes a directory that may contain a package and subdirectories for the benefit of processes
  * that traverse directories recursively, looking for packages.
  */
-public final class ProcessPackageDirectory {
+public class ProcessPackageDirectory {
   private static final String SENTINEL_FILE_NAME_FOR_NOT_TRAVERSING_SYMLINKS =
       "DONT_FOLLOW_SYMLINKS_WHEN_TRAVERSING_THIS_DIRECTORY_VIA_A_RECURSIVE_TARGET_PATTERN";
 
-  /** Produces a {@link SkyKey} for the recursive traversal into the specified subdirectory. */
-  public interface SkyKeyTransformer {
+  interface SkyKeyTransformer {
     SkyKey makeSkyKey(
         RepositoryName repository,
         RootedPath subdirectory,
@@ -60,8 +59,7 @@ public final class ProcessPackageDirectory {
   private final BlazeDirectories directories;
   private final SkyKeyTransformer skyKeyTransformer;
 
-  public ProcessPackageDirectory(
-      BlazeDirectories directories, SkyKeyTransformer skyKeyTransformer) {
+  ProcessPackageDirectory(BlazeDirectories directories, SkyKeyTransformer skyKeyTransformer) {
     this.directories = directories;
     this.skyKeyTransformer = skyKeyTransformer;
   }
@@ -72,11 +70,11 @@ public final class ProcessPackageDirectory {
    * ProcessPackageDirectoryResult}, or {@code null} if required dependencies were missing.
    */
   @Nullable
-  public ProcessPackageDirectoryResult getPackageExistenceAndSubdirDeps(
+  ProcessPackageDirectoryResult getPackageExistenceAndSubdirDeps(
       RootedPath rootedPath,
       RepositoryName repositoryName,
-      ImmutableSet<PathFragment> excludedPaths,
-      SkyFunction.Environment env)
+      SkyFunction.Environment env,
+      Set<PathFragment> excludedPaths)
       throws InterruptedException {
     PathFragment rootRelativePath = rootedPath.getRootRelativePath();
 
@@ -164,16 +162,14 @@ public final class ProcessPackageDirectory {
     }
     return new ProcessPackageDirectoryResult(
         pkgLookupValue.packageExists() && pkgLookupValue.getRoot().equals(rootedPath.getRoot()),
-        getSubdirDeps(dirListingValue, rootedPath, repositoryName, excludedPaths),
-        /** additionalValuesToAggregate= */
-        ImmutableMap.of());
+        getSubdirDeps(dirListingValue, rootedPath, repositoryName, excludedPaths));
   }
 
   private Iterable<SkyKey> getSubdirDeps(
       DirectoryListingValue dirListingValue,
       RootedPath rootedPath,
       RepositoryName repositoryName,
-      ImmutableSet<PathFragment> excludedPaths) {
+      Set<PathFragment> excludedPaths) {
     Root root = rootedPath.getRoot();
     PathFragment rootRelativePath = rootedPath.getRootRelativePath();
     boolean followSymlinks = shouldFollowSymlinksWhenTraversing(dirListingValue.getDirents());
@@ -202,34 +198,32 @@ public final class ProcessPackageDirectory {
         continue;
       }
 
+      // If we have an excluded path that isn't below this subdirectory, we shouldn't pass that
+      // excluded path to our evaluation of the subdirectory, because the exclusion can't
+      // possibly match anything beneath the subdirectory.
+      //
+      // For example, if we're currently evaluating directory "a", are looking at its subdirectory
+      // "a/b", and we have an excluded path "a/c/d", there's no need to pass the excluded path
+      // "a/c/d" to our evaluation of "a/b".
+      //
+      // This strategy should help to get more skyframe sharing. Consider the example above. A
+      // subsequent request of "a/b/...", without any excluded paths, will be a cache hit.
+      //
+      // TODO(bazel-team): Replace the excludedPaths set with a trie or a SortedSet for better
+      // efficiency.
+      ImmutableSet<PathFragment> excludedSubdirectoriesBeneathThisSubdirectory =
+          excludedPaths
+              .stream()
+              .filter(pathFragment -> pathFragment.startsWith(subdirectory))
+              .collect(toImmutableSet());
+      RootedPath subdirectoryRootedPath = RootedPath.toRootedPath(root, subdirectory);
       childDeps.add(
           skyKeyTransformer.makeSkyKey(
               repositoryName,
-              RootedPath.toRootedPath(root, subdirectory),
-              getExcludedSubdirectoriesBeneathSubdirectory(subdirectory, excludedPaths)));
+              subdirectoryRootedPath,
+              excludedSubdirectoriesBeneathThisSubdirectory));
     }
     return childDeps;
-  }
-
-  /**
-   * Returns the 'excludedPaths' set to use when recursing below this subdirectory. If we have an
-   * excluded path that isn't below this subdirectory, we shouldn't pass that excluded path to our
-   * evaluation of the subdirectory, because the exclusion can't possibly match anything beneath the
-   * subdirectory.
-   *
-   * <p>For example, if we're currently evaluating directory "a", are looking at its subdirectory
-   * "a/b", and we have an excluded path "a/c/d", there's no need to pass the excluded path "a/c/d"
-   * to our evaluation of "a/b". This strategy should help to get more skyframe sharing. In our
-   * example, a subsequent request of "a/b/...", without any excluded paths, will be a cache hit.
-   *
-   * <p>TODO(bazel-team): Replace the excludedPaths set with a trie or a SortedSet for better
-   * efficiency.
-   */
-  public static ImmutableSet<PathFragment> getExcludedSubdirectoriesBeneathSubdirectory(
-      PathFragment subdirectory, ImmutableSet<PathFragment> excludedPaths) {
-    return excludedPaths.stream()
-        .filter(pathFragment -> pathFragment.startsWith(subdirectory))
-        .collect(toImmutableSet());
   }
 
   private static ProcessPackageDirectoryResult reportErrorAndReturn(

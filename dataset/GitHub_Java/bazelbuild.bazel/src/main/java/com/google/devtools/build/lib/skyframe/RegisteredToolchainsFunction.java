@@ -86,7 +86,7 @@ public class RegisteredToolchainsFunction implements SkyFunction {
 
     // Load the configured target for each, and get the declared toolchain providers.
     ImmutableList<DeclaredToolchainInfo> registeredToolchains =
-        configureRegisteredToolchains(env, configuration, toolchainLabels);
+        configureRegisteredToolchains(env, configuration, targetPatterns, toolchainLabels);
     if (env.valuesMissing()) {
       return null;
     }
@@ -124,6 +124,7 @@ public class RegisteredToolchainsFunction implements SkyFunction {
   private ImmutableList<DeclaredToolchainInfo> configureRegisteredToolchains(
       Environment env,
       BuildConfiguration configuration,
+      ImmutableList<String> targetPatterns,
       List<Label> labels)
       throws InterruptedException, RegisteredToolchainsFunctionException {
     ImmutableList<SkyKey> keys =
@@ -150,13 +151,20 @@ public class RegisteredToolchainsFunction implements SkyFunction {
         DeclaredToolchainInfo toolchainInfo = target.getProvider(DeclaredToolchainInfo.class);
 
         if (toolchainInfo == null) {
-          throw new RegisteredToolchainsFunctionException(
-              new InvalidToolchainLabelException(toolchainLabel), Transience.PERSISTENT);
+          if (TargetPatternUtil.isTargetExplicit(targetPatterns, toolchainLabel)) {
+            // Only report an error if the label was explicitly requested.
+            throw new RegisteredToolchainsFunctionException(
+                new InvalidToolchainLabelException(toolchainLabel), Transience.PERSISTENT);
+          }
+          continue;
         }
         toolchains.add(toolchainInfo);
       } catch (ConfiguredValueCreationException e) {
-        throw new RegisteredToolchainsFunctionException(
-            new InvalidToolchainLabelException(toolchainLabel, e), Transience.PERSISTENT);
+        if (TargetPatternUtil.isTargetExplicit(targetPatterns, toolchainLabel)) {
+          // Only report an error if the label was explicitly requested.
+          throw new RegisteredToolchainsFunctionException(
+              new InvalidToolchainLabelException(toolchainLabel, e), Transience.PERSISTENT);
+        }
       }
     }
 

@@ -92,6 +92,7 @@ import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainRule;
 import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
+import com.google.devtools.build.lib.rules.python.PythonOptions;
 import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
 import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.rules.test.TestingSupportRules;
@@ -291,8 +292,10 @@ public class BazelRuleClassProvider {
         public void init(ConfiguredRuleClassProvider.Builder builder) {
           String toolsRepository = checkNotNull(builder.getToolsRepository());
 
-          builder.addConfigurationFragment(new AndroidConfiguration.Loader());
-          builder.addConfigurationFragment(new AndroidLocalTestConfiguration.Loader());
+          builder.addConfig(AndroidConfiguration.Options.class, new AndroidConfiguration.Loader());
+          builder.addConfig(
+              AndroidLocalTestConfiguration.Options.class,
+              new AndroidLocalTestConfiguration.Loader());
 
           AndroidNeverlinkAspect androidNeverlinkAspect = new AndroidNeverlinkAspect();
           DexArchiveAspect dexArchiveAspect = new DexArchiveAspect(toolsRepository);
@@ -348,8 +351,9 @@ public class BazelRuleClassProvider {
       new RuleSet() {
         @Override
         public void init(ConfiguredRuleClassProvider.Builder builder) {
-          builder.addConfigurationFragment(new PythonConfigurationLoader());
-          builder.addConfigurationFragment(new BazelPythonConfiguration.Loader());
+          builder.addConfig(PythonOptions.class, new PythonConfigurationLoader());
+          builder.addConfig(
+              BazelPythonConfiguration.Options.class, new BazelPythonConfiguration.Loader());
 
           builder.addRuleDefinition(new BazelPyRuleClasses.PyBaseRule());
           builder.addRuleDefinition(new BazelPyRuleClasses.PyBinaryBaseRule());
@@ -382,14 +386,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AndroidSdkRepositoryRule());
           builder.addRuleDefinition(new AndroidNdkRepositoryRule());
           builder.addRuleDefinition(new LocalConfigPlatformRule());
-
-          try {
-            builder.addWorkspaceFilePrefix(
-                ResourceFileLoader.loadResource(
-                    LocalConfigPlatformRule.class, "local_config_platform.WORKSPACE"));
-          } catch (IOException e) {
-            throw new IllegalStateException(e);
-          }
         }
 
         @Override

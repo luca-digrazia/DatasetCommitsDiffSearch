@@ -447,24 +447,17 @@ public final class Label
         + name;
   }
 
-  /** Return the name of the repository label refers to without the leading `at` symbol. */
-  @SkylarkCallable(
-      name = "workspace_name",
-      structField = true,
-      doc =
-          "The repository part of this label. For isntance, "
-              + "<pre class=language-python>Label(\"@foo//bar:baz\").workspace_name"
-              + " == \"foo\"</pre>")
-  public String getWorkspaceName() {
-    return packageIdentifier.getRepository().strippedName();
-  }
-
   /**
    * Renders this label in canonical form, except with labels in the main and default repositories
    * conflated.
    */
   public String getDefaultCanonicalForm() {
-    String repository = packageIdentifier.getRepository().getDefaultCanonicalForm();
+    String repository;
+    if (packageIdentifier.getRepository().isMain()) {
+      repository = "";
+    } else {
+      repository = packageIdentifier.getRepository().getName();
+    }
     return repository + "//" + packageIdentifier.getPackageFragment() + ":" + name;
   }
 

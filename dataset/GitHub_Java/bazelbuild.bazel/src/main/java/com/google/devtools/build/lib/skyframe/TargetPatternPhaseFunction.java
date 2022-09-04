@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
 import com.google.devtools.build.lib.pkgcache.ParsingFailedEvent;
 import com.google.devtools.build.lib.pkgcache.TargetParsingCompleteEvent;
+import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue.TargetPatternPhaseKey;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
@@ -347,12 +348,10 @@ final class TargetPatternPhaseFunction implements SkyFunction {
         .filter(TargetUtils.tagFilter(options.getBuildTargetFilter()))
         .build();
     if (options.getCompileOneDependency()) {
-      EnvironmentBackedRecursivePackageProvider environmentBackedRecursivePackageProvider =
-          new EnvironmentBackedRecursivePackageProvider(env);
+      TargetProvider targetProvider = new EnvironmentBackedRecursivePackageProvider(env);
       try {
-        result =
-            new CompileOneDependencyTransformer(environmentBackedRecursivePackageProvider)
-                .transformCompileOneDependency(env.getListener(), result);
+        return new CompileOneDependencyTransformer(targetProvider)
+            .transformCompileOneDependency(env.getListener(), result);
       } catch (MissingDepException e) {
         return null;
       } catch (TargetParsingException e) {
@@ -364,9 +363,6 @@ final class TargetPatternPhaseFunction implements SkyFunction {
         }
         env.getListener().handle(Event.error(e.getMessage()));
         return ResolvedTargets.failed();
-      }
-      if (environmentBackedRecursivePackageProvider.encounteredPackageErrors()) {
-        result = ResolvedTargets.<Target>builder().merge(result).setError().build();
       }
     }
     return result;

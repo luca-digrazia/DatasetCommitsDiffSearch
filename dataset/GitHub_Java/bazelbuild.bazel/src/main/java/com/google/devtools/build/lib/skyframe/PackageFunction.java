@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.LegacyGlobber;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
@@ -614,7 +613,8 @@ public class PackageFunction implements SkyFunction {
         // Inlining calls to SkylarkImportLookupFunction
         for (SkyKey importLookupKey : importLookupKeys) {
           SkyValue skyValue =
-              skylarkImportLookupFunctionForInlining.computeWithInlineCalls(importLookupKey, env);
+              skylarkImportLookupFunctionForInlining.computeWithInlineCalls(
+                  importLookupKey, env, importLookupKeys.size());
           if (skyValue == null) {
             Preconditions.checkState(
                 env.valuesMissing(), "no starlark import value for %s", importLookupKey);

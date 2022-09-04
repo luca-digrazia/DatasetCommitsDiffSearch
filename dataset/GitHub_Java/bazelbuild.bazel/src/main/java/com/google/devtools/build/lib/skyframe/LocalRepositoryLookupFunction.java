@@ -29,10 +29,9 @@ import com.google.devtools.build.lib.packages.ErrorDeterminingRepositoryExceptio
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.skyframe.PackageFunction.PackageFunctionException;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -85,7 +84,10 @@ public class LocalRepositoryLookupFunction implements SkyFunction {
     }
 
     // If we haven't found a repository yet, check the parent directory.
-    return env.getValue(LocalRepositoryLookupValue.key(directory.getParentDirectory()));
+    RootedPath parentDirectory =
+        RootedPath.toRootedPath(
+            directory.getRoot(), directory.getRootRelativePath().getParentDirectory());
+    return env.getValue(LocalRepositoryLookupValue.key(parentDirectory));
   }
 
   private Optional<Boolean> maybeGetWorkspaceFileExistence(Environment env, RootedPath directory)

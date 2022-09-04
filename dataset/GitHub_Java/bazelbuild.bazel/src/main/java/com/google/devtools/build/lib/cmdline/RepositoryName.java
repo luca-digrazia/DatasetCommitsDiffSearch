@@ -19,10 +19,10 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.util.StringUtilities;
-import com.google.devtools.build.lib.vfs.OsPathPolicy;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -196,14 +196,6 @@ public final class RepositoryName implements Serializable {
   }
 
   /**
-   * Returns the repository name without the leading "{@literal @}". For the default repository,
-   * returns "".
-   */
-  public static String stripName(String repoName) {
-    return repoName.startsWith("@") ? repoName.substring(1) : repoName;
-  }
-
-  /**
    * Returns if this is the default repository, that is, {@link #name} is "".
    */
   public boolean isDefault() {
@@ -223,14 +215,6 @@ public final class RepositoryName implements Serializable {
   // TODO(bazel-team): Use this over toString()- easier to track its usage.
   public String getName() {
     return name;
-  }
-
-  /**
-   * Returns the repository name, except that the main repo is conflated with the default repo
-   * ({@code "@"} becomes the empty string).
-   */
-  public String getDefaultCanonicalForm() {
-    return isMain() ? "" : getName();
   }
 
   /**
@@ -278,11 +262,18 @@ public final class RepositoryName implements Serializable {
     if (!(object instanceof RepositoryName)) {
       return false;
     }
-    return OsPathPolicy.getFilePathOs().equals(name, ((RepositoryName) object).name);
+
+    if (OS.getCurrent() == OS.WINDOWS) {
+      return name.toLowerCase().equals(((RepositoryName) object).name.toLowerCase());
+    }
+    return name.equals(((RepositoryName) object).name);
   }
 
   @Override
   public int hashCode() {
-    return OsPathPolicy.getFilePathOs().hash(name);
+    if (OS.getCurrent() == OS.WINDOWS) {
+      return name.toLowerCase().hashCode();
+    }
+    return name.hashCode();
   }
 }
