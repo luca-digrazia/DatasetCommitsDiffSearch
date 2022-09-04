@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import java.io.IOException;
-import java.util.concurrent.ForkJoinPool;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -37,8 +36,8 @@ import org.junit.runners.JUnit4;
 /**
  * Simple tests for {@link BazelPackageLoader}.
  *
- * <p>Bazel's unit and integration tests do consistency checks with {@link BazelPackageLoader} under
- * the covers, so we get pretty exhaustive correctness tests for free.
+ * <p>Bazel's unit and integration tests do sanity checks with {@link BazelPackageLoader} under the
+ * covers, so we get pretty exhaustive correctness tests for free.
  */
 @RunWith(JUnit4.class)
 public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
@@ -92,35 +91,24 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
         "def maybe(repo_rule, name, **kwargs):",
         "  if name not in native.existing_rules():",
         "    repo_rule(name = name, **kwargs)");
-    FileSystemUtils.writeIsoLatin1(tools.getRelative("tools/jdk/BUILD"));
-    FileSystemUtils.writeIsoLatin1(
-        tools.getRelative("tools/jdk/local_java_repository.bzl"),
-        "def local_java_repository(**kwargs):",
-        "  pass");
   }
 
   private void fetchExternalRepo(RepositoryName externalRepo) {
-    try (PackageLoader pkgLoaderForFetch =
-        newPackageLoaderBuilder(root).setFetchForTesting().useDefaultStarlarkSemantics().build()) {
-      // Load the package '' in this repo. This package may or may not exist; we don't care since we
-      // merely need the side-effects of the 'fetch' work.
-      PackageIdentifier pkgId = PackageIdentifier.create(externalRepo, PathFragment.create(""));
-      try {
-        pkgLoaderForFetch.loadPackage(pkgId);
-      } catch (NoSuchPackageException | InterruptedException e) {
-        // Doesn't matter; see above comment.
-      }
+    PackageLoader pkgLoaderForFetch =
+        newPackageLoaderBuilder(root).setFetchForTesting().useDefaultStarlarkSemantics().build();
+    // Load the package '' in this repo. This package may or may not exist; we don't care since we
+    // merely need the side-effects of the 'fetch' work.
+    PackageIdentifier pkgId = PackageIdentifier.create(externalRepo, PathFragment.create(""));
+    try {
+      pkgLoaderForFetch.loadPackage(pkgId);
+    } catch (NoSuchPackageException | InterruptedException e) {
+      // Doesn't matter; see above comment.
     }
   }
 
   @Override
   protected BazelPackageLoader.Builder newPackageLoaderBuilder(Root workspaceDir) {
     return BazelPackageLoader.builder(workspaceDir, installBase, outputBase);
-  }
-
-  @Override
-  protected ForkJoinPool extractLegacyGlobbingForkJoinPool(PackageLoader packageLoader) {
-    return ((BazelPackageLoader) packageLoader).forkJoinPoolForLegacyGlobbing;
   }
 
   @Test
@@ -131,11 +119,9 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
     RepositoryName rRepoName = RepositoryName.create("@r");
     fetchExternalRepo(rRepoName);
 
+    PackageLoader pkgLoader = newPackageLoader();
     PackageIdentifier pkgId = PackageIdentifier.create(rRepoName, PathFragment.create("good"));
-    Package goodPkg;
-    try (PackageLoader pkgLoader = newPackageLoader()) {
-      goodPkg = pkgLoader.loadPackage(pkgId);
-    }
+    Package goodPkg = pkgLoader.loadPackage(pkgId);
     assertThat(goodPkg.containsErrors()).isFalse();
     assertThat(goodPkg.getTarget("good").getAssociatedRule().getRuleClass())
         .isEqualTo("sh_library");
@@ -152,12 +138,10 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
     RepositoryName rRepoName = RepositoryName.create("@r");
     fetchExternalRepo(rRepoName);
 
+    PackageLoader pkgLoader = newPackageLoader();
     PackageIdentifier pkgId =
         PackageIdentifier.create(rRepoName, PathFragment.create(""));
-    Package goodPkg;
-    try (PackageLoader pkgLoader = newPackageLoader()) {
-      goodPkg = pkgLoader.loadPackage(pkgId);
-    }
+    Package goodPkg = pkgLoader.loadPackage(pkgId);
     assertThat(goodPkg.containsErrors()).isFalse();
     assertThat(goodPkg.getTarget("good").getAssociatedRule().getRuleClass())
         .isEqualTo("sh_library");
@@ -170,11 +154,9 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
     file("a/sub/a.txt");
     file("a/sub/BUILD.bazel");
 
+    PackageLoader pkgLoader = newPackageLoader();
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("a"));
-    Package aPkg;
-    try (PackageLoader pkgLoader = newPackageLoader()) {
-      aPkg = pkgLoader.loadPackage(pkgId);
-    }
+    Package aPkg = pkgLoader.loadPackage(pkgId);
     assertThat(aPkg.containsErrors()).isFalse();
     assertThrows(NoSuchTargetException.class, () -> aPkg.getTarget("sub/a.txt"));
     assertNoEvents(handler.getEvents());
