@@ -14,50 +14,60 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import javax.annotation.Nullable;
 
-/** Parser is a recursive-descent parser for Starlark. */
+/**
+ * Recursive descent parser for LL(2) BUILD language. Loosely based on Python 2 grammar. See
+ * https://docs.python.org/2/reference/grammar.html
+ */
+// TODO(adonovan): break syntax->event.Event dependency.
+@VisibleForTesting
 final class Parser {
 
   /** Combines the parser result into a single value object. */
   static final class ParseResult {
-    // Maps char offsets in the file to Locations.
-    final FileLocations locs;
-
     /** The statements (rules, basically) from the parsed file. */
     final List<Statement> statements;
 
     /** The comments from the parsed file. */
     final List<Comment> comments;
 
+    /** Represents every statement in the file. */
+    final Lexer.LexerLocation location;
+
     // Errors encountered during scanning or parsing.
     // These lists are ultimately owned by StarlarkFile.
-    final List<SyntaxError> errors;
+    final List<Event> errors;
+    final List<Event> stringEscapeEvents;
 
     ParseResult(
-        FileLocations locs,
         List<Statement> statements,
         List<Comment> comments,
-        List<SyntaxError> errors) {
-      this.locs = locs;
+        Lexer.LexerLocation location,
+        List<Event> errors,
+        List<Event> stringEscapeEvents) {
       // No need to copy here; when the object is created, the parser instance is just about to go
       // out of scope and be garbage collected.
       this.statements = Preconditions.checkNotNull(statements);
       this.comments = Preconditions.checkNotNull(comments);
+      this.location = location;
       this.errors = errors;
+      this.stringEscapeEvents = stringEscapeEvents;
     }
   }
 
@@ -94,13 +104,12 @@ final class Parser {
           TokenKind.SLASH);
 
   /** Current lookahead token. May be mutated by the parser. */
-  private final Lexer token; // token.kind is a prettier alias for lexer.kind
+  private Token token;
 
   private static final boolean DEBUGGING = false;
 
   private final Lexer lexer;
-  private final FileLocations locs;
-  private final List<SyntaxError> errors;
+  private final List<Event> errors;
 
   // TODO(adonovan): opt: compute this by subtraction.
   private static final Map<TokenKind, TokenKind> augmentedAssignments =
@@ -149,11 +158,9 @@ final class Parser {
   // Intern string literals, as some files contain many literals for the same string.
   private final Map<String, String> stringInterner = new HashMap<>();
 
-  private Parser(Lexer lexer, List<SyntaxError> errors) {
+  private Parser(Lexer lexer, List<Event> errors) {
     this.lexer = lexer;
-    this.locs = lexer.locs;
     this.errors = errors;
-    this.token = lexer;
     nextToken();
   }
 
@@ -162,30 +169,39 @@ final class Parser {
     return prev != null ? prev : s;
   }
 
-  // Returns a token's string form as used in error messages.
-  private static String tokenString(TokenKind kind, @Nullable Object value) {
-    return kind == TokenKind.STRING
-        ? "\"" + value + "\"" // TODO(adonovan): do proper quotation
-        : value == null ? kind.toString() : value.toString();
+  private static Lexer.LexerLocation locationFromStatements(
+      Lexer lexer, List<Statement> statements) {
+    int start = 0;
+    int end = 0;
+    if (!statements.isEmpty()) {
+      start = statements.get(0).getStartOffset();
+      end = Iterables.getLast(statements).getEndOffset();
+    }
+    return lexer.createLocation(start, end);
   }
 
   // Main entry point for parsing a file.
-  static ParseResult parseFile(ParserInput input, FileOptions options) {
-    List<SyntaxError> errors = new ArrayList<>();
-    Lexer lexer = new Lexer(input, options, errors);
+  static ParseResult parseFile(ParserInput input) {
+    List<Event> errors = new ArrayList<>();
+    Lexer lexer = new Lexer(input, errors);
     Parser parser = new Parser(lexer, errors);
     List<Statement> statements;
     try (SilentCloseable c =
         Profiler.instance().profile(ProfilerTask.STARLARK_PARSER, input.getFile())) {
       statements = parser.parseFileInput();
     }
-    return new ParseResult(lexer.locs, statements, lexer.getComments(), errors);
+    return new ParseResult(
+        statements,
+        lexer.getComments(),
+        locationFromStatements(lexer, statements),
+        errors,
+        lexer.getStringEscapeEvents());
   }
 
-  // stmt = simple_stmt
-  //      | def_stmt
-  //      | for_stmt
-  //      | if_stmt
+  // stmt ::= simple_stmt
+  //        | def_stmt
+  //        | for_stmt
+  //        | if_stmt
   private void parseStatement(List<Statement> list) {
     if (token.kind == TokenKind.DEF) {
       list.add(parseDefStatement());
@@ -199,10 +215,9 @@ final class Parser {
   }
 
   /** Parses an expression, possibly followed by newline tokens. */
-  static Expression parseExpression(ParserInput input, FileOptions options)
-      throws SyntaxError.Exception {
-    List<SyntaxError> errors = new ArrayList<>();
-    Lexer lexer = new Lexer(input, options, errors);
+  static Expression parseExpression(ParserInput input) throws SyntaxError {
+    List<Event> errors = new ArrayList<>();
+    Lexer lexer = new Lexer(input, errors);
     Parser parser = new Parser(lexer, errors);
     Expression result = parser.parseExpression();
     while (parser.token.kind == TokenKind.NEWLINE) {
@@ -210,73 +225,82 @@ final class Parser {
     }
     parser.expect(TokenKind.EOF);
     if (!errors.isEmpty()) {
-      throw new SyntaxError.Exception(errors);
+      throw new SyntaxError(errors);
     }
     return result;
   }
 
-  // Equivalent to 'testlist' rule in Python grammar. It can parse every kind of
-  // expression. In many cases, we need to use parseTest to avoid ambiguity:
-  //   e.g. fct(x, y)  vs  fct((x, y))
-  //
-  // A trailing comma is disallowed in an unparenthesized tuple.
-  // This prevents bugs where a one-element tuple is surprisingly created:
-  //   e.g. foo = f(x),
   private Expression parseExpression() {
-    Expression e = parseTest();
-    if (token.kind != TokenKind.COMMA) {
-      return e;
-    }
-
-    // unparenthesized tuple
-    List<Expression> elems = new ArrayList<>();
-    elems.add(e);
-    parseExprList(elems, /*trailingCommaAllowed=*/ false);
-    return new ListExpression(locs, /*isTuple=*/ true, -1, elems, -1);
+    return parseExpression(false);
   }
 
-  private void reportError(int offset, String message) {
+  // Equivalent to 'testlist' rule in Python grammar. It can parse every kind of
+  // expression. In many cases, we need to use parseNonTupleExpression to avoid ambiguity:
+  //   e.g. fct(x, y)  vs  fct((x, y))
+  //
+  // Tuples can have a trailing comma only when insideParens is true. This prevents bugs
+  // where a one-element tuple is surprisingly created:
+  //   e.g.  foo = f(x),
+  private Expression parseExpression(boolean insideParens) {
+    int start = token.left;
+    Expression expression = parseNonTupleExpression();
+    if (token.kind != TokenKind.COMMA) {
+      return expression;
+    }
+
+    // It's a tuple
+    List<Expression> tuple = parseExprList(insideParens);
+    tuple.add(0, expression); // add the first expression to the front of the tuple
+    return setLocation(
+        new ListExpression(/*isTuple=*/ true, tuple), start, Iterables.getLast(tuple));
+  }
+
+  private void reportError(Location location, String message) {
     errorsCount++;
     // Limit the number of reported errors to avoid spamming output.
     if (errorsCount <= 5) {
-      Location location = locs.getLocation(offset);
-      errors.add(new SyntaxError(location, message));
+      errors.add(Event.error(location, message));
     }
   }
 
   private void syntaxError(String message) {
     if (!recoveryMode) {
-      String msg =
-          token.kind == TokenKind.INDENT
-              ? "indentation error"
-              : "syntax error at '" + tokenString(token.kind, token.value) + "': " + message;
-      reportError(token.left, msg);
+      String msg = token.kind == TokenKind.INDENT
+          ? "indentation error"
+          : "syntax error at '" + token + "': " + message;
+      reportError(lexer.createLocation(token.left, token.right), msg);
       recoveryMode = true;
     }
   }
 
-  // Consumes the current token and returns its position, like nextToken.
-  // Reports a syntax error if the new token is not of the expected kind.
-  private int expect(TokenKind kind) {
-    if (token.kind != kind) {
+  /**
+   * Consumes the current token. If it is not of the specified (expected)
+   * kind, reports a syntax error.
+   */
+  private boolean expect(TokenKind kind) {
+    boolean expected = token.kind == kind;
+    if (!expected) {
       syntaxError("expected " + kind);
     }
-    return nextToken();
+    nextToken();
+    return expected;
   }
 
-  // Like expect, but stops recovery mode if the token was expected.
-  private int expectAndRecover(TokenKind kind) {
-    if (token.kind != kind) {
-      syntaxError("expected " + kind);
-    } else {
+  /**
+   * Same as expect, but stop the recovery mode if the token was expected.
+   */
+  private void expectAndRecover(TokenKind kind) {
+    if (expect(kind)) {
       recoveryMode = false;
     }
-    return nextToken();
   }
 
-  // Consumes tokens past the first token belonging to terminatingTokens.
-  // It returns the end offset of the terminating token.
-  // TODO(adonovan): always used with makeErrorExpression. Combine and simplify.
+  /**
+   * Consume tokens past the first token that has a kind that is in the set of
+   * terminatingTokens.
+   * @param terminatingTokens
+   * @return the end offset of the terminating token.
+   */
   private int syncPast(EnumSet<TokenKind> terminatingTokens) {
     Preconditions.checkState(terminatingTokens.contains(TokenKind.EOF));
     while (!terminatingTokens.contains(token.kind)) {
@@ -350,114 +374,119 @@ final class Parser {
         error = "keyword '" + token.kind + "' not supported";
         break;
     }
-    reportError(token.left, error);
+    reportError(lexer.createLocation(token.left, token.right), error);
   }
 
-  private int nextToken() {
-    int prev = token.left;
-    if (token.kind != TokenKind.EOF) {
-      lexer.nextToken();
+  private void nextToken() {
+    if (token == null || token.kind != TokenKind.EOF) {
+      token = lexer.nextToken();
     }
     checkForbiddenKeywords();
-    // TODO(adonovan): move this to lexer so we see the first token too.
     if (DEBUGGING) {
-      System.err.print(tokenString(token.kind, token.value));
+      System.err.print(token);
     }
-    return prev;
   }
 
-  // Returns an "Identifier" whose content is the input from start to end.
   private Identifier makeErrorExpression(int start, int end) {
     // It's tempting to define a dedicated BadExpression type,
     // but it is convenient for parseIdent to return an Identifier
     // even when it fails.
-    return new Identifier(locs, lexer.bufferSlice(start, end), start);
+    return setLocation(Identifier.of("$error$"), start, end);
   }
 
+  // Convenience wrapper method around Node.setLocation
+  private <NodeT extends Node> NodeT setLocation(NodeT node, int startOffset, int endOffset) {
+    return Node.setLocation(lexer.createLocation(startOffset, endOffset), node);
+  }
 
-  // arg = IDENTIFIER '=' test
-  //     | expr
-  //     | *args
-  //     | **kwargs
+  // Convenience method that uses end offset from the last node.
+  private <NodeT extends Node> NodeT setLocation(NodeT node, int startOffset, Node lastNode) {
+    Preconditions.checkNotNull(lastNode, "can't extract end offset from a null node");
+    return setLocation(node, startOffset, lastNode.getEndOffset());
+  }
+
+  // arg ::= IDENTIFIER '=' nontupleexpr
+  //       | expr
+  //       | *args
+  //       | **kwargs
   private Argument parseArgument() {
+    final int start = token.left;
     Expression expr;
-
     // parse **expr
     if (token.kind == TokenKind.STAR_STAR) {
-      int starStarOffset = nextToken();
-      expr = parseTest();
-      return new Argument.StarStar(locs, starStarOffset, expr);
+      nextToken();
+      expr = parseNonTupleExpression();
+      return setLocation(new Argument.StarStar(expr), start, expr);
     }
-
     // parse *expr
     if (token.kind == TokenKind.STAR) {
-      int starOffset = nextToken();
-      expr = parseTest();
-      return new Argument.Star(locs, starOffset, expr);
+      nextToken();
+      expr = parseNonTupleExpression();
+      return setLocation(new Argument.Star(expr), start, expr);
     }
 
-    // IDENTIFIER  or  IDENTIFIER = test
-    expr = parseTest();
+    expr = parseNonTupleExpression();
     if (expr instanceof Identifier) {
-      Identifier id = (Identifier) expr;
       // parse a named argument
       if (token.kind == TokenKind.EQUALS) {
         nextToken();
-        Expression arg = parseTest();
-        return new Argument.Keyword(locs, id, arg);
+        Expression val = parseNonTupleExpression();
+        return setLocation(new Argument.Keyword(((Identifier) expr), val), start, val);
       }
     }
 
     // parse a positional argument
-    return new Argument.Positional(locs, expr);
+    return setLocation(new Argument.Positional(expr), start, expr);
   }
 
-  // arg = IDENTIFIER '=' test
-  //     | IDENTIFIER
+  // arg ::= IDENTIFIER '=' nontupleexpr
+  //       | IDENTIFIER
   private Parameter parseFunctionParameter() {
-    // **kwargs
-    if (token.kind == TokenKind.STAR_STAR) {
-      int starStarOffset = nextToken();
-      Identifier id = parseIdent();
-      return new Parameter.StarStar(locs, starStarOffset, id);
-    }
-
-    // * or *args
-    if (token.kind == TokenKind.STAR) {
-      int starOffset = nextToken();
+    int start = token.left;
+    if (token.kind == TokenKind.STAR_STAR) { // kwarg
+      nextToken();
+      Identifier ident = parseIdent();
+      return setLocation(new Parameter.StarStar(ident), start, ident);
+    } else if (token.kind == TokenKind.STAR) { // stararg
+      int end = token.right;
+      nextToken();
       if (token.kind == TokenKind.IDENTIFIER) {
-        Identifier id = parseIdent();
-        return new Parameter.Star(locs, starOffset, id);
+        Identifier ident = parseIdent();
+        return setLocation(new Parameter.Star(ident), start, ident);
+      } else {
+        return setLocation(new Parameter.Star(null), start, end);
       }
-      return new Parameter.Star(locs, starOffset, null);
+    } else {
+      Identifier ident = parseIdent();
+      if (token.kind == TokenKind.EQUALS) { // there's a default value
+        nextToken();
+        Expression expr = parseNonTupleExpression();
+        return setLocation(new Parameter.Optional(ident, expr), start, expr);
+      } else {
+        return setLocation(new Parameter.Mandatory(ident), start, ident);
+      }
     }
-
-    // name=default
-    Identifier id = parseIdent();
-    if (token.kind == TokenKind.EQUALS) {
-      nextToken(); // TODO: save token pos?
-      Expression expr = parseTest();
-      return new Parameter.Optional(locs, id, expr);
-    }
-
-    // name
-    return new Parameter.Mandatory(locs, id);
   }
 
-  // call_suffix = '(' arg_list? ')'
-  private Expression parseCallSuffix(Expression fn) {
+  // call_suffix ::= '(' arg_list? ')'
+  private Expression parseCallSuffix(int start, Expression function) {
     ImmutableList<Argument> args = ImmutableList.of();
-    int lparenOffset = expect(TokenKind.LPAREN);
-    if (token.kind != TokenKind.RPAREN) {
+    expect(TokenKind.LPAREN);
+    int end;
+    if (token.kind == TokenKind.RPAREN) {
+      end = token.right;
+      nextToken(); // RPAREN
+    } else {
       args = parseArguments(); // (includes optional trailing comma)
+      end = token.right;
+      expect(TokenKind.RPAREN);
     }
-    int rparenOffset = expect(TokenKind.RPAREN);
-    return new CallExpression(locs, fn, locs.getLocation(lparenOffset), args, rparenOffset);
+    return setLocation(new CallExpression(function, args), start, end);
   }
 
   // Parse a list of call arguments.
   //
-  // arg_list = ( (arg ',')* arg ','? )?
+  // arg_list ::= ( (arg ',')* arg ','? )?
   private ImmutableList<Argument> parseArguments() {
     boolean hasArgs = false;
     boolean hasStarStar = false;
@@ -473,7 +502,9 @@ final class Parser {
       }
       if (hasStarStar) {
         // TODO(adonovan): move this to validation pass too.
-        reportError(token.left, "unexpected tokens after **kwargs argument");
+        reportError(
+            lexer.createLocation(token.left, token.right),
+            "unexpected tokens after **kwargs argument");
         break;
       }
       Argument arg = parseArgument();
@@ -515,64 +546,66 @@ final class Parser {
     }
 
     Argument arg = arguments.get(i);
+    Location loc = arg.getStartLocation();
     if (arg instanceof Argument.Positional) {
-      reportError(
-          arg.getStartOffset(),
-          "positional argument is misplaced (positional arguments come first)");
+      reportError(loc, "positional argument is misplaced (positional arguments come first)");
       return;
     }
 
     if (arg instanceof Argument.Keyword) {
       reportError(
-          arg.getStartOffset(),
+          loc,
           "keyword argument is misplaced (keyword arguments must be before any *arg or **kwarg)");
       return;
     }
 
     if (i < len && arg instanceof Argument.Star) {
-      reportError(arg.getStartOffset(), "*arg argument is misplaced");
+      reportError(loc, "*arg argument is misplaced");
       return;
     }
 
     if (i < len && arg instanceof Argument.StarStar) {
-      reportError(arg.getStartOffset(), "**kwarg argument is misplaced (there can be only one)");
+      reportError(loc, "**kwarg argument is misplaced (there can be only one)");
       return;
     }
   }
 
-  // selector_suffix = '.' IDENTIFIER
-  private Expression parseSelectorSuffix(Expression e) {
-    int dotOffset = expect(TokenKind.DOT);
+  // selector_suffix ::= '.' IDENTIFIER
+  private Expression parseSelectorSuffix(int start, Expression receiver) {
+    expect(TokenKind.DOT);
     if (token.kind == TokenKind.IDENTIFIER) {
-      Identifier id = parseIdent();
-      return new DotExpression(locs, e, dotOffset, id);
+      Identifier ident = parseIdent();
+      return setLocation(new DotExpression(receiver, ident), start, ident);
+    } else {
+      syntaxError("expected identifier after dot");
+      int end = syncTo(EXPR_TERMINATOR_SET);
+      return makeErrorExpression(start, end);
     }
-
-    syntaxError("expected identifier after dot");
-    syncTo(EXPR_TERMINATOR_SET);
-    return e;
   }
 
   // expr_list parses a comma-separated list of expression. It assumes that the
   // first expression was already parsed, so it starts with a comma.
   // It is used to parse tuples and list elements.
-  //
-  // expr_list = ( ',' expr )* ','?
-  private void parseExprList(List<Expression> list, boolean trailingCommaAllowed) {
+  // expr_list ::= ( ',' expr )* ','?
+  private List<Expression> parseExprList(boolean trailingColonAllowed) {
+    List<Expression> list = new ArrayList<>();
     //  terminating tokens for an expression list
     while (token.kind == TokenKind.COMMA) {
       expect(TokenKind.COMMA);
       if (EXPR_LIST_TERMINATOR_SET.contains(token.kind)) {
-        if (!trailingCommaAllowed) {
-          reportError(token.left, "Trailing comma is allowed only in parenthesized tuples.");
+        if (!trailingColonAllowed) {
+          reportError(
+              lexer.createLocation(token.left, token.right),
+              "Trailing comma is allowed only in parenthesized tuples.");
         }
         break;
       }
-      list.add(parseTest());
+      list.add(parseNonTupleExpression());
     }
+    return list;
   }
 
-  // dict_entry_list = ( (dict_entry ',')* dict_entry ','? )?
+  // dict_entry_list ::= ( (dict_entry ',')* dict_entry ','? )?
   private List<DictExpression.Entry> parseDictEntryList() {
     List<DictExpression.Entry> list = new ArrayList<>();
     // the terminating token for a dict entry list
@@ -587,103 +620,101 @@ final class Parser {
     return list;
   }
 
-  // dict_entry = test ':' test
+  // dict_entry ::= nontupleexpr ':' nontupleexpr
   private DictExpression.Entry parseDictEntry() {
-    Expression key = parseTest();
-    int colonOffset = expect(TokenKind.COLON);
-    Expression value = parseTest();
-    return new DictExpression.Entry(locs, key, colonOffset, value);
+    int start = token.left;
+    Expression key = parseNonTupleExpression();
+    expect(TokenKind.COLON);
+    Expression value = parseNonTupleExpression();
+    return setLocation(new DictExpression.Entry(key, value), start, value);
   }
 
-  // expr = STRING
+  /**
+   * Parse a String literal value, e.g. "str".
+   */
   private StringLiteral parseStringLiteral() {
     Preconditions.checkState(token.kind == TokenKind.STRING);
+    int end = token.right;
     StringLiteral literal =
-        new StringLiteral(locs, token.left, intern((String) token.value), token.right);
+        setLocation(new StringLiteral(intern((String) token.value)), token.left, end);
     nextToken();
     if (token.kind == TokenKind.STRING) {
-      reportError(token.left, "Implicit string concatenation is forbidden, use the + operator");
+      reportError(lexer.createLocation(end, token.left),
+          "Implicit string concatenation is forbidden, use the + operator");
     }
     return literal;
   }
 
-  //  primary = INTEGER
-  //          | STRING
-  //          | IDENTIFIER
-  //          | list_expression
-  //          | '(' ')'                    // a tuple with zero elements
-  //          | '(' expr ')'               // a parenthesized expression
-  //          | dict_expression
-  //          | '-' primary_with_suffix
+  //  primary ::= INTEGER
+  //            | STRING
+  //            | IDENTIFIER
+  //            | list_expression
+  //            | '(' ')'                    // a tuple with zero elements
+  //            | '(' expr ')'               // a parenthesized expression
+  //            | dict_expression
+  //            | '-' primary_with_suffix
   private Expression parsePrimary() {
+    int start = token.left;
     switch (token.kind) {
       case INT:
         {
-          IntegerLiteral literal =
-              new IntegerLiteral(locs, token.raw, token.left, (Integer) token.value);
+          IntegerLiteral literal = new IntegerLiteral((Integer) token.value);
+          setLocation(literal, start, token.right);
           nextToken();
           return literal;
         }
-
       case STRING:
         return parseStringLiteral();
-
       case IDENTIFIER:
         return parseIdent();
-
-      case LBRACKET: // [...]
+      case LBRACKET: // it's a list
         return parseListMaker();
-
-      case LBRACE: // {...}
+      case LBRACE: // it's a dictionary
         return parseDictExpression();
-
       case LPAREN:
         {
-          int lparenOffset = nextToken();
-
-          // empty tuple: ()
+          nextToken();
+          // check for the empty tuple literal
           if (token.kind == TokenKind.RPAREN) {
-            int rparen = nextToken();
-            return new ListExpression(
-                locs, /*isTuple=*/ true, lparenOffset, ImmutableList.of(), rparen);
+            ListExpression tuple = new ListExpression(/*isTuple=*/ true, ImmutableList.of());
+            setLocation(tuple, start, token.right);
+            nextToken();
+            return tuple;
           }
-
-          Expression e = parseTest();
-
-          // parenthesized expression: (e)
-          // TODO(adonovan): materialize paren expressions (for fidelity).
+          // parse the first expression
+          Expression expression = parseExpression(true);
+          setLocation(expression, start, token.right);
           if (token.kind == TokenKind.RPAREN) {
             nextToken();
-            return e;
+            return expression;
           }
-
-          // non-empty tuple: (e,) or (e, ..., e)
-          if (token.kind == TokenKind.COMMA) {
-            List<Expression> elems = new ArrayList<>();
-            elems.add(e);
-            parseExprList(elems, /*trailingCommaAllowed=*/ true);
-            int rparenOffset = expect(TokenKind.RPAREN);
-            return new ListExpression(locs, /*isTuple=*/ true, lparenOffset, elems, rparenOffset);
-          }
-
           expect(TokenKind.RPAREN);
           int end = syncTo(EXPR_TERMINATOR_SET);
-          return makeErrorExpression(lparenOffset, end);
+          return makeErrorExpression(start, end);
         }
-
       case MINUS:
+        {
+          nextToken();
+          Expression expr = parsePrimaryWithSuffix();
+          UnaryOperatorExpression minus = new UnaryOperatorExpression(TokenKind.MINUS, expr);
+          return setLocation(minus, start, expr);
+        }
       case PLUS:
+        {
+          nextToken();
+          Expression expr = parsePrimaryWithSuffix();
+          UnaryOperatorExpression plus = new UnaryOperatorExpression(TokenKind.PLUS, expr);
+          return setLocation(plus, start, expr);
+        }
       case TILDE:
         {
-          TokenKind op = token.kind;
-          int offset = nextToken();
-          Expression x = parsePrimaryWithSuffix();
-          return new UnaryOperatorExpression(locs, op, offset, x);
+          nextToken();
+          Expression expr = parsePrimaryWithSuffix();
+          UnaryOperatorExpression tilde = new UnaryOperatorExpression(TokenKind.TILDE, expr);
+          return setLocation(tilde, start, expr);
         }
-
       default:
         {
-          int start = token.left;
           syntaxError("expected expression");
           int end = syncTo(EXPR_TERMINATOR_SET);
           return makeErrorExpression(start, end);
@@ -691,185 +722,203 @@ final class Parser {
     }
   }
 
-  // primary_with_suffix = primary (selector_suffix | slice_suffix | call_suffix)*
+  // primary_with_suffix ::= primary (selector_suffix | substring_suffix | call_suffix)*
   private Expression parsePrimaryWithSuffix() {
-    Expression e = parsePrimary();
+    int start = token.left;
+    Expression receiver = parsePrimary();
     while (true) {
       if (token.kind == TokenKind.DOT) {
-        e = parseSelectorSuffix(e);
+        receiver = parseSelectorSuffix(start, receiver);
       } else if (token.kind == TokenKind.LBRACKET) {
-        e = parseSliceSuffix(e);
+        receiver = parseSubstringSuffix(start, receiver);
       } else if (token.kind == TokenKind.LPAREN) {
-        e = parseCallSuffix(e);
+        receiver = parseCallSuffix(start, receiver);
       } else {
-        return e;
+        break;
       }
     }
+    return receiver;
   }
 
-  // slice_suffix = '[' expr? ':' expr?  ':' expr? ']'
-  //              | '[' expr? ':' expr? ']'
-  //              | '[' expr ']'
-  private Expression parseSliceSuffix(Expression e) {
-    int lbracketOffset = expect(TokenKind.LBRACKET);
-    Expression start = null;
-    Expression end = null;
-    Expression step = null;
+  // substring_suffix ::= '[' expression? ':' expression?  ':' expression? ']'
+  //                    | '[' expression? ':' expression? ']'
+  //                    | '[' expression ']'
+  private Expression parseSubstringSuffix(int start, Expression receiver) {
+    Expression startExpr;
 
-    if (token.kind != TokenKind.COLON) {
-      start = parseExpression();
-
-      // index x[i]
-      if (token.kind == TokenKind.RBRACKET) {
-        int rbracketOffset = expect(TokenKind.RBRACKET);
-        return new IndexExpression(locs, e, lbracketOffset, start, rbracketOffset);
-      }
+    expect(TokenKind.LBRACKET);
+    if (token.kind == TokenKind.COLON) {
+      startExpr = null;
+    } else {
+      startExpr = parseExpression();
     }
-
-    // slice or substring x[i:j] or x[i:j:k]
-    expect(TokenKind.COLON);
-    if (token.kind != TokenKind.COLON && token.kind != TokenKind.RBRACKET) {
-      end = parseTest();
+    // This is an index/key access
+    if (token.kind == TokenKind.RBRACKET) {
+      Expression expr = setLocation(new IndexExpression(receiver, startExpr), start, token.right);
+      expect(TokenKind.RBRACKET);
+      return expr;
     }
+    // This is a slice (or substring)
+    Expression endExpr = parseSliceArgument();
+    Expression stepExpr = parseSliceArgument();
+    Expression expr =
+        setLocation(
+            new SliceExpression(receiver, startExpr, endExpr, stepExpr), start, token.right);
+    expect(TokenKind.RBRACKET);
+    return expr;
+  }
+
+  /**
+   * Parses {@code [':' [expr]]} which can either be the end or the step argument of a slice
+   * operation. If no such expression is found, this method returns null.
+   */
+  private @Nullable Expression parseSliceArgument() {
+    // There has to be a colon before any end or slice argument.
+    // However, if the next token thereafter is another colon or a right bracket, no argument value
+    // was specified.
     if (token.kind == TokenKind.COLON) {
       expect(TokenKind.COLON);
-      if (token.kind != TokenKind.RBRACKET) {
-        step = parseTest();
+      if (token.kind != TokenKind.COLON && token.kind != TokenKind.RBRACKET) {
+        return parseNonTupleExpression();
       }
     }
-    int rbracketOffset = expect(TokenKind.RBRACKET);
-    return new SliceExpression(locs, e, lbracketOffset, start, end, step, rbracketOffset);
+    return null;
   }
 
   // Equivalent to 'exprlist' rule in Python grammar.
-  // loop_variables = primary_with_suffix ( ',' primary_with_suffix )* ','?
+  // loop_variables ::= primary_with_suffix ( ',' primary_with_suffix )* ','?
   private Expression parseForLoopVariables() {
     // We cannot reuse parseExpression because it would parse the 'in' operator.
     // e.g.  "for i in e: pass"  -> we want to parse only "i" here.
+    int start = token.left;
     Expression e1 = parsePrimaryWithSuffix();
     if (token.kind != TokenKind.COMMA) {
       return e1;
     }
 
-    // unparenthesized tuple
-    List<Expression> elems = new ArrayList<>();
-    elems.add(e1);
+    // It's a tuple
+    List<Expression> tuple = new ArrayList<>();
+    tuple.add(e1);
     while (token.kind == TokenKind.COMMA) {
       expect(TokenKind.COMMA);
       if (EXPR_LIST_TERMINATOR_SET.contains(token.kind)) {
         break;
       }
-      elems.add(parsePrimaryWithSuffix());
+      tuple.add(parsePrimaryWithSuffix());
     }
-    return new ListExpression(locs, /*isTuple=*/ true, -1, elems, -1);
+    return setLocation(
+        new ListExpression(/*isTuple=*/ true, tuple), start, Iterables.getLast(tuple));
   }
 
-  // comprehension_suffix = 'FOR' loop_variables 'IN' expr comprehension_suffix
-  //                      | 'IF' expr comprehension_suffix
-  //                      | ']' | '}'
-  private Expression parseComprehensionSuffix(int loffset, Node body, TokenKind closingBracket) {
+  // comprehension_suffix ::= 'FOR' loop_variables 'IN' expr comprehension_suffix
+  //                        | 'IF' expr comprehension_suffix
+  //                        | ']' | '}'
+  private Expression parseComprehensionSuffix(Node body, TokenKind closingBracket, int offset) {
     ImmutableList.Builder<Comprehension.Clause> clauses = ImmutableList.builder();
     while (true) {
       if (token.kind == TokenKind.FOR) {
-        int forOffset = nextToken();
+        nextToken();
         Expression vars = parseForLoopVariables();
         expect(TokenKind.IN);
         // The expression cannot be a ternary expression ('x if y else z') due to
         // conflicts in Python grammar ('if' is used by the comprehension).
-        Expression seq = parseTest(0);
-        clauses.add(new Comprehension.For(locs, forOffset, vars, seq));
+        Expression seq = parseNonTupleExpression(0);
+        clauses.add(new Comprehension.For(vars, seq));
       } else if (token.kind == TokenKind.IF) {
-        int ifOffset = nextToken();
+        nextToken();
         // [x for x in li if 1, 2]  # parse error
         // [x for x in li if (1, 2)]  # ok
-        Expression cond = parseTest(0);
-        clauses.add(new Comprehension.If(locs, ifOffset, cond));
+        Expression cond = parseNonTupleExpression(0);
+        clauses.add(new Comprehension.If(cond));
       } else if (token.kind == closingBracket) {
         break;
       } else {
         syntaxError("expected '" + closingBracket + "', 'for' or 'if'");
-        int end = syncPast(LIST_TERMINATOR_SET);
-        return makeErrorExpression(loffset, end);
+        syncPast(LIST_TERMINATOR_SET);
+        return makeErrorExpression(offset, token.right);
       }
     }
-
     boolean isDict = closingBracket == TokenKind.RBRACE;
-    int roffset = expect(closingBracket);
-    return new Comprehension(locs, isDict, loffset, body, clauses.build(), roffset);
+    Comprehension comp = new Comprehension(isDict, body, clauses.build());
+    setLocation(comp, offset, token.right);
+    nextToken();
+    return comp;
   }
 
-  // list_maker = '[' ']'
-  //            | '[' expr ']'
-  //            | '[' expr expr_list ']'
-  //            | '[' expr comprehension_suffix ']'
+  // list_maker ::= '[' ']'
+  //               |'[' expr ']'
+  //               |'[' expr expr_list ']'
+  //               |'[' expr comprehension_suffix ']'
   private Expression parseListMaker() {
-    int lbracketOffset = expect(TokenKind.LBRACKET);
+    int start = token.left;
+    expect(TokenKind.LBRACKET);
     if (token.kind == TokenKind.RBRACKET) { // empty List
-      int rbracketOffset = nextToken();
-      return new ListExpression(
-          locs, /*isTuple=*/ false, lbracketOffset, ImmutableList.of(), rbracketOffset);
+      ListExpression list = new ListExpression(/*isTuple=*/ false, ImmutableList.of());
+      setLocation(list, start, token.right);
+      nextToken();
+      return list;
     }
-
-    Expression expression = parseTest();
+    Expression expression = parseNonTupleExpression();
+    Preconditions.checkNotNull(expression,
+        "null element in list in AST at %s:%s", token.left, token.right);
     switch (token.kind) {
-      case RBRACKET:
-        // [e], singleton list
+      case RBRACKET: // singleton list
         {
-          int rbracketOffset = nextToken();
-          return new ListExpression(
-              locs,
-              /*isTuple=*/ false,
-              lbracketOffset,
-              ImmutableList.of(expression),
-              rbracketOffset);
+          ListExpression list =
+              new ListExpression(/*isTuple=*/ false, ImmutableList.of(expression));
+          setLocation(list, start, token.right);
+          nextToken();
+          return list;
         }
-
       case FOR:
-        // [e for x in y], list comprehension
-        return parseComprehensionSuffix(lbracketOffset, expression, TokenKind.RBRACKET);
-
+        { // list comprehension
+          return parseComprehensionSuffix(expression, TokenKind.RBRACKET, start);
+        }
       case COMMA:
-        // [e, ...], list expression
         {
-          List<Expression> elems = new ArrayList<>();
-          elems.add(expression);
-          parseExprList(elems, /*trailingCommaAllowed=*/ true);
+          List<Expression> elems = parseExprList(true);
+          Preconditions.checkState(
+              !elems.contains(null),
+              "null element in list in AST at %s:%s",
+              token.left,
+              token.right);
+          elems.add(0, expression); // TODO(adonovan): opt: don't do this
           if (token.kind == TokenKind.RBRACKET) {
-            int rbracketOffset = nextToken();
-            return new ListExpression(
-                locs, /*isTuple=*/ false, lbracketOffset, elems, rbracketOffset);
+            ListExpression list = new ListExpression(/*isTuple=*/ false, elems);
+            setLocation(list, start, token.right);
+            nextToken();
+            return list;
           }
-
           expect(TokenKind.RBRACKET);
           int end = syncPast(LIST_TERMINATOR_SET);
-          return makeErrorExpression(lbracketOffset, end);
+          return makeErrorExpression(start, end);
         }
-
       default:
         {
           syntaxError("expected ',', 'for' or ']'");
           int end = syncPast(LIST_TERMINATOR_SET);
-          return makeErrorExpression(lbracketOffset, end);
+          return makeErrorExpression(start, end);
         }
     }
   }
 
-  // dict_expression = '{' '}'
-  //                 | '{' dict_entry_list '}'
-  //                 | '{' dict_entry comprehension_suffix '}'
+  // dict_expression ::= '{' '}'
+  //                    |'{' dict_entry_list '}'
+  //                    |'{' dict_entry comprehension_suffix '}'
   private Expression parseDictExpression() {
-    int lbraceOffset = expect(TokenKind.LBRACE);
+    int start = token.left;
+    expect(TokenKind.LBRACE);
     if (token.kind == TokenKind.RBRACE) { // empty Dict
-      int rbraceOffset = nextToken();
-      return new DictExpression(locs, lbraceOffset, ImmutableList.of(), rbraceOffset);
+      DictExpression literal = new DictExpression(ImmutableList.of());
+      setLocation(literal, start, token.right);
+      nextToken();
+      return literal;
     }
-
     DictExpression.Entry entry = parseDictEntry();
     if (token.kind == TokenKind.FOR) {
       // Dict comprehension
-      return parseComprehensionSuffix(lbraceOffset, entry, TokenKind.RBRACE);
+      return parseComprehensionSuffix(entry, TokenKind.RBRACE, start);
     }
-
     List<DictExpression.Entry> entries = new ArrayList<>();
     entries.add(entry);
     if (token.kind == TokenKind.COMMA) {
@@ -877,33 +926,34 @@ final class Parser {
       entries.addAll(parseDictEntryList());
     }
     if (token.kind == TokenKind.RBRACE) {
-      int rbraceOffset = nextToken();
-      return new DictExpression(locs, lbraceOffset, entries, rbraceOffset);
+      DictExpression dict = new DictExpression(entries);
+      setLocation(dict, start, token.right);
+      nextToken();
+      return dict;
     }
-
     expect(TokenKind.RBRACE);
     int end = syncPast(DICT_TERMINATOR_SET);
-    return makeErrorExpression(lbraceOffset, end);
+    return makeErrorExpression(start, end);
   }
 
   private Identifier parseIdent() {
     if (token.kind != TokenKind.IDENTIFIER) {
-      int start = token.left;
-      int end = expect(TokenKind.IDENTIFIER);
-      return makeErrorExpression(start, end);
+      expect(TokenKind.IDENTIFIER);
+      return makeErrorExpression(token.left, token.right);
     }
-
-    String name = (String) token.value;
-    int offset = nextToken();
-    return new Identifier(locs, name, offset);
+    Identifier ident = Identifier.of(((String) token.value));
+    setLocation(ident, token.left, token.right);
+    nextToken();
+    return ident;
   }
 
-  // binop_expression = binop_expression OP binop_expression
-  //                  | parsePrimaryWithSuffix
+  // binop_expression ::= binop_expression OP binop_expression
+  //                    | parsePrimaryWithSuffix
   // This function takes care of precedence between operators (see operatorPrecedence for
   // the order), and it assumes left-to-right associativity.
   private Expression parseBinOpExpression(int prec) {
-    Expression x = parseTest(prec + 1);
+    int start = token.left;
+    Expression expr = parseNonTupleExpression(prec + 1);
     // The loop is not strictly needed, but it prevents risks of stack overflow. Depth is
     // limited to number of different precedence levels (operatorPrecedence.size()).
     TokenKind lastOp = null;
@@ -920,21 +970,22 @@ final class Parser {
 
       TokenKind op = token.kind;
       if (!operatorPrecedence.get(prec).contains(op)) {
-        return x;
+        return expr;
       }
 
       // Operator '==' and other operators of the same precedence (e.g. '<', 'in')
       // are not associative.
       if (lastOp != null && operatorPrecedence.get(prec).contains(TokenKind.EQUALS_EQUALS)) {
         reportError(
-            token.left,
+            lexer.createLocation(token.left, token.right),
             String.format(
                 "Operator '%s' is not associative with operator '%s'. Use parens.", lastOp, op));
       }
 
-      int opOffset = nextToken();
-      Expression y = parseTest(prec + 1);
-      x = optimizeBinOpExpression(x, op, opOffset, y);
+      nextToken();
+      Expression secondary = parseNonTupleExpression(prec + 1);
+      expr = optimizeBinOpExpression(expr, op, secondary);
+      setLocation(expr, start, secondary);
       lastOp = op;
     }
   }
@@ -942,38 +993,39 @@ final class Parser {
   // Optimize binary expressions.
   // string literal + string literal can be concatenated into one string literal
   // so we don't have to do the expensive string concatenation at runtime.
-  private Expression optimizeBinOpExpression(
-      Expression x, TokenKind op, int opOffset, Expression y) {
-    if (op == TokenKind.PLUS && x instanceof StringLiteral && y instanceof StringLiteral) {
-      return new StringLiteral(
-          locs,
-          x.getStartOffset(),
-          intern(((StringLiteral) x).getValue() + ((StringLiteral) y).getValue()),
-          y.getEndOffset());
+  private Expression optimizeBinOpExpression(Expression x, TokenKind op, Expression y) {
+    if (op == TokenKind.PLUS) {
+      if (x instanceof StringLiteral && y instanceof StringLiteral) {
+        StringLiteral left = (StringLiteral) x;
+        StringLiteral right = (StringLiteral) y;
+        return new StringLiteral(intern(left.getValue() + right.getValue()));
+      }
     }
-    return new BinaryOperatorExpression(locs, x, op, opOffset, y);
+    return new BinaryOperatorExpression(x, op, y);
   }
 
-  // Parses a non-tuple expression ("test" in Python terminology).
-  private Expression parseTest() {
+  // Equivalent to 'test' rule in Python grammar.
+  private Expression parseNonTupleExpression() {
     int start = token.left;
-    Expression expr = parseTest(0);
+    Expression expr = parseNonTupleExpression(0);
     if (token.kind == TokenKind.IF) {
       nextToken();
-      Expression condition = parseTest(0);
+      Expression condition = parseNonTupleExpression(0);
       if (token.kind == TokenKind.ELSE) {
         nextToken();
-        Expression elseClause = parseTest();
-        return new ConditionalExpression(locs, expr, condition, elseClause);
+        Expression elseClause = parseNonTupleExpression();
+        return setLocation(new ConditionalExpression(expr, condition, elseClause),
+            start, elseClause);
       } else {
-        reportError(start, "missing else clause in conditional expression or semicolon before if");
+        reportError(lexer.createLocation(start, token.left),
+            "missing else clause in conditional expression or semicolon before if");
         return expr; // Try to recover from error: drop the if and the expression after it. Ouch.
       }
     }
     return expr;
   }
 
-  private Expression parseTest(int prec) {
+  private Expression parseNonTupleExpression(int prec) {
     if (prec >= operatorPrecedence.size()) {
       return parsePrimaryWithSuffix();
     }
@@ -983,14 +1035,16 @@ final class Parser {
     return parseBinOpExpression(prec);
   }
 
-  // not_expr = 'not' expr
+  // not_expr :== 'not' expr
   private Expression parseNotExpression(int prec) {
-    int notOffset = expect(TokenKind.NOT);
-    Expression x = parseTest(prec);
-    return new UnaryOperatorExpression(locs, TokenKind.NOT, notOffset, x);
+    int start = token.left;
+    expect(TokenKind.NOT);
+    Expression expression = parseNonTupleExpression(prec);
+    UnaryOperatorExpression not = new UnaryOperatorExpression(TokenKind.NOT, expression);
+    return setLocation(not, start, expression);
   }
 
-  // file_input = ('\n' | stmt)* EOF
+  // file_input ::= ('\n' | stmt)* EOF
   private List<Statement> parseFileInput() {
     List<Statement> list =  new ArrayList<>();
     while (token.kind != TokenKind.EOF) {
@@ -1010,19 +1064,19 @@ final class Parser {
 
   // load '(' STRING (COMMA [IDENTIFIER EQUALS] STRING)+ COMMA? ')'
   private Statement parseLoadStatement() {
-    int loadOffset = expect(TokenKind.LOAD);
+    int start = token.left;
+    expect(TokenKind.LOAD);
     expect(TokenKind.LPAREN);
     if (token.kind != TokenKind.STRING) {
-      // error: module is not a string literal.
-      StringLiteral module = new StringLiteral(locs, token.left, "", token.right);
+      StringLiteral module = setLocation(new StringLiteral(""), token.left, token.right);
       expect(TokenKind.STRING);
-      return new LoadStatement(locs, loadOffset, module, ImmutableList.of(), token.right);
+      return setLocation(new LoadStatement(module, ImmutableList.of()), start, token.right);
     }
 
-    StringLiteral module = parseStringLiteral();
+    StringLiteral importString = parseStringLiteral();
     if (token.kind == TokenKind.RPAREN) {
       syntaxError("expected at least one symbol to load");
-      return new LoadStatement(locs, loadOffset, module, ImmutableList.of(), token.right);
+      return setLocation(new LoadStatement(importString, ImmutableList.of()), start, token.right);
     }
     expect(TokenKind.COMMA);
 
@@ -1038,8 +1092,10 @@ final class Parser {
       parseLoadSymbol(bindings);
     }
 
-    int rparen = expect(TokenKind.RPAREN);
-    return new LoadStatement(locs, loadOffset, module, bindings.build(), rparen);
+    LoadStatement stmt =
+        setLocation(new LoadStatement(importString, bindings.build()), start, token.right);
+    expect(TokenKind.RPAREN);
+    return stmt;
   }
 
   /**
@@ -1056,8 +1112,7 @@ final class Parser {
     }
 
     String name = (String) token.value;
-    int nameOffset = token.left + (token.kind == TokenKind.STRING ? 1 : 0);
-    Identifier local = new Identifier(locs, name, nameOffset);
+    Identifier local = setLocation(Identifier.of(name), token.left, token.right);
 
     Identifier original;
     if (token.kind == TokenKind.STRING) {
@@ -1065,22 +1120,19 @@ final class Parser {
       original = local;
     } else {
       // load(..., local = "orig")
-      // The name "orig" is morally an identifier but, for legacy reasons (specifically,
-      // a partial implementation of Starlark embedded in a Python interpreter used by
-      // tests of Blaze), it must be a quoted string literal.
       expect(TokenKind.IDENTIFIER);
       expect(TokenKind.EQUALS);
       if (token.kind != TokenKind.STRING) {
         syntaxError("expected string");
         return;
       }
-      original = new Identifier(locs, (String) token.value, token.left + 1);
+      original = setLocation(Identifier.of((String) token.value), token.left, token.right);
     }
     nextToken();
     symbols.add(new LoadStatement.Binding(local, original));
   }
 
-  // simple_stmt = small_stmt (';' small_stmt)* ';'? NEWLINE
+  // simple_stmt ::= small_stmt (';' small_stmt)* ';'? NEWLINE
   private void parseSimpleStatement(List<Statement> list) {
     list.add(parseSmallStatement());
 
@@ -1094,32 +1146,25 @@ final class Parser {
     expectAndRecover(TokenKind.NEWLINE);
   }
 
-  //     small_stmt = assign_stmt
-  //                | expr
-  //                | load_stmt
-  //                | return_stmt
-  //                | BREAK | CONTINUE | PASS
-  //
-  //     assign_stmt = expr ('=' | augassign) expr
-  //
-  //     augassign = '+=' | '-=' | '*=' | '/=' | '%=' | '//=' | '&=' | '|=' | '^=' |'<<=' | '>>='
+  //     small_stmt ::= assign_stmt
+  //                  | expr
+  //                  | load_stmt
+  //                  | return_stmt
+  //                  | BREAK | CONTINUE | PASS
+  //     assign_stmt ::= expr ('=' | augassign) expr
+  //     augassign ::= '+=' | '-=' | '*=' | '/=' | '%=' | '//=' | '&=' | '|=' | '^=' |'<<=' | '>>='
   private Statement parseSmallStatement() {
-    // return
+    int start = token.left;
     if (token.kind == TokenKind.RETURN) {
       return parseReturnStatement();
-    }
-
-    // control flow
-    if (token.kind == TokenKind.BREAK
+    } else if (token.kind == TokenKind.BREAK
         || token.kind == TokenKind.CONTINUE
         || token.kind == TokenKind.PASS) {
       TokenKind kind = token.kind;
-      int offset = nextToken();
-      return new FlowStatement(locs, kind, offset);
-    }
-
-    // load
-    if (token.kind == TokenKind.LOAD) {
+      int end = token.right;
+      expect(kind);
+      return setLocation(new FlowStatement(kind), start, end);
+    } else if (token.kind == TokenKind.LOAD) {
       return parseLoadStatement();
     }
 
@@ -1128,29 +1173,32 @@ final class Parser {
     // lhs = rhs  or  lhs += rhs
     TokenKind op = augmentedAssignments.get(token.kind);
     if (token.kind == TokenKind.EQUALS || op != null) {
-      int opOffset = nextToken();
+      nextToken();
       Expression rhs = parseExpression();
-      // op == null for ordinary assignment. TODO(adonovan): represent as EQUALS.
-      return new AssignmentStatement(locs, lhs, op, opOffset, rhs);
+      // op == null for ordinary assignment.
+      return setLocation(new AssignmentStatement(lhs, op, rhs), start, rhs);
     } else {
-      return new ExpressionStatement(locs, lhs);
+      return setLocation(new ExpressionStatement(lhs), start, lhs);
     }
   }
 
-  // if_stmt = IF expr ':' suite [ELIF expr ':' suite]* [ELSE ':' suite]?
+  // if_stmt ::= IF expr ':' suite [ELIF expr ':' suite]* [ELSE ':' suite]?
   private IfStatement parseIfStatement() {
-    int ifOffset = expect(TokenKind.IF);
-    Expression cond = parseTest();
+    List<Integer> startOffsets = new ArrayList<>();
+    startOffsets.add(token.left);
+    expect(TokenKind.IF);
+    Expression cond = parseNonTupleExpression();
     expect(TokenKind.COLON);
     List<Statement> body = parseSuite();
-    IfStatement ifStmt = new IfStatement(locs, TokenKind.IF, ifOffset, cond, body);
+    IfStatement ifStmt = new IfStatement(TokenKind.IF, cond, body);
     IfStatement tail = ifStmt;
     while (token.kind == TokenKind.ELIF) {
-      int elifOffset = expect(TokenKind.ELIF);
-      cond = parseTest();
+      startOffsets.add(token.left);
+      expect(TokenKind.ELIF);
+      cond = parseNonTupleExpression();
       expect(TokenKind.COLON);
       body = parseSuite();
-      IfStatement elif = new IfStatement(locs, TokenKind.ELIF, elifOffset, cond, body);
+      IfStatement elif = new IfStatement(TokenKind.ELIF, cond, body);
       tail.setElseBlock(ImmutableList.of(elif));
       tail = elif;
     }
@@ -1160,128 +1208,60 @@ final class Parser {
       body = parseSuite();
       tail.setElseBlock(body);
     }
+
+    // Because locations are allocated and stored redundantly rather
+    // than computed on demand from token offsets in the tree, we must
+    // wait till the end of the chain, after all setElseBlock calls,
+    // before setting the end location of each IfStatement.
+    // Body may be empty after a parse error.
+    int end = (body.isEmpty() ? tail.getCondition() : Iterables.getLast(body)).getEndOffset();
+    IfStatement s = ifStmt;
+    setLocation(s, startOffsets.get(0), end);
+    for (int i = 1; i < startOffsets.size(); i++) {
+      s = (IfStatement) s.elseBlock.get(0);
+      setLocation(s, startOffsets.get(i), end);
+    }
+
     return ifStmt;
   }
 
-  // for_stmt = FOR IDENTIFIER IN expr ':' suite
+  // for_stmt ::= FOR IDENTIFIER IN expr ':' suite
   private ForStatement parseForStatement() {
-    int forOffset = expect(TokenKind.FOR);
+    int start = token.left;
+    expect(TokenKind.FOR);
     Expression lhs = parseForLoopVariables();
     expect(TokenKind.IN);
     Expression collection = parseExpression();
     expect(TokenKind.COLON);
     List<Statement> block = parseSuite();
-    return new ForStatement(locs, forOffset, lhs, collection, block);
+    ForStatement stmt = new ForStatement(lhs, collection, block);
+    int end = block.isEmpty() ? token.left : Iterables.getLast(block).getEndOffset();
+    return setLocation(stmt, start, end);
   }
 
-  // def_stmt = DEF IDENTIFIER '(' arguments ')' ':' suite
+  // def_stmt ::= DEF IDENTIFIER '(' arguments ')' ':' suite
   private DefStatement parseDefStatement() {
-    int defOffset = expect(TokenKind.DEF);
+    int start = token.left;
+    expect(TokenKind.DEF);
     Identifier ident = parseIdent();
     expect(TokenKind.LPAREN);
     ImmutableList<Parameter> params = parseParameters();
 
-    // TODO(adonovan): inline and simplify createSignature.
     FunctionSignature signature;
     try {
-      signature = createSignature(params);
-    } catch (SignatureException e) {
-      reportError(e.parameter.getStartOffset(), e.getMessage());
+      signature = FunctionSignature.fromParameters(params);
+    } catch (FunctionSignature.SignatureException e) {
+      reportError(e.getParameter().getStartLocation(), e.getMessage());
       // bogus empty signature
-      signature = FunctionSignature.NOARGS;
+      signature = FunctionSignature.of();
     }
 
     expect(TokenKind.RPAREN);
     expect(TokenKind.COLON);
     ImmutableList<Statement> block = ImmutableList.copyOf(parseSuite());
-    return new DefStatement(locs, defOffset, ident, params, signature, block);
-  }
-
-  private static class SignatureException extends Exception {
-    final Parameter parameter;
-
-    /** SignatureException from a message and a Parameter */
-    SignatureException(String message, Parameter parameter) {
-      super(message);
-      this.parameter = parameter;
-    }
-  }
-
-  /** Convert a list of Parameter into a FunctionSignature. */
-  private static FunctionSignature createSignature(List<Parameter> parameters)
-      throws SignatureException {
-    int mandatoryPositionals = 0;
-    int optionalPositionals = 0;
-    int mandatoryNamedOnly = 0;
-    int optionalNamedOnly = 0;
-    boolean hasStarStar = false;
-    boolean hasStar = false;
-    @Nullable String star = null;
-    @Nullable String starStar = null;
-    ArrayList<String> params = new ArrayList<>();
-    // optional named-only parameters are kept aside to be spliced after the mandatory ones.
-    ArrayList<String> optionalNamedOnlyParams = new ArrayList<>();
-    boolean defaultRequired = false; // true after mandatory positionals and before star.
-    Set<String> paramNameSet = new HashSet<>(); // set of names, to avoid duplicates
-
-    for (Parameter param : parameters) {
-      if (hasStarStar) {
-        throw new SignatureException("illegal parameter after star-star parameter", param);
-      }
-      @Nullable String name = param.getName();
-      if (param.getName() != null) {
-        if (paramNameSet.contains(name)) {
-          // TODO(adonovan): this should be a validation error, not a parse error.
-          throw new SignatureException("duplicate parameter name in function definition", param);
-        }
-        paramNameSet.add(name);
-      }
-      if (param instanceof Parameter.StarStar) {
-        hasStarStar = true;
-        starStar = name;
-      } else if (param instanceof Parameter.Star) {
-        if (hasStar) {
-          throw new SignatureException("duplicate star parameter in function definition", param);
-        }
-        hasStar = true;
-        defaultRequired = false;
-        if (param.getName() != null) {
-          star = name;
-        }
-      } else if (hasStar && param instanceof Parameter.Optional) {
-        optionalNamedOnly++;
-        optionalNamedOnlyParams.add(name);
-      } else {
-        params.add(name);
-        if (param instanceof Parameter.Optional) {
-          optionalPositionals++;
-          defaultRequired = true;
-        } else if (hasStar) {
-          mandatoryNamedOnly++;
-        } else if (defaultRequired) {
-          throw new SignatureException(
-              "a mandatory positional parameter must not follow an optional parameter", param);
-        } else {
-          mandatoryPositionals++;
-        }
-      }
-    }
-    params.addAll(optionalNamedOnlyParams);
-
-    if (star != null) {
-      params.add(star);
-    }
-    if (starStar != null) {
-      params.add(starStar);
-    }
-    return FunctionSignature.create(
-        mandatoryPositionals,
-        optionalPositionals,
-        mandatoryNamedOnly,
-        optionalNamedOnly,
-        star != null,
-        starStar != null,
-        ImmutableList.copyOf(params));
+    DefStatement stmt = new DefStatement(ident, params, signature, block);
+    int end = block.isEmpty() ? token.left : Iterables.getLast(block).getEndOffset();
+    return setLocation(stmt, start, end);
   }
 
   // Parse a list of function parameters.
@@ -1304,7 +1284,7 @@ final class Parser {
       }
       if (hasStarStar) {
         // TODO(adonovan): move this to validation pass too.
-        reportError(token.left, "unexpected tokens after kwarg");
+        reportError(lexer.createLocation(token.left, token.right), "unexpected tokens after kwarg");
         break;
       }
 
@@ -1319,14 +1299,15 @@ final class Parser {
   }
 
   // suite is typically what follows a colon (e.g. after def or for).
-  // suite = simple_stmt
-  //       | NEWLINE INDENT stmt+ OUTDENT
+  // suite ::= simple_stmt
+  //         | NEWLINE INDENT stmt+ OUTDENT
   private List<Statement> parseSuite() {
     List<Statement> list = new ArrayList<>();
     if (token.kind == TokenKind.NEWLINE) {
       expect(TokenKind.NEWLINE);
       if (token.kind != TokenKind.INDENT) {
-        reportError(token.left, "expected an indented block");
+        reportError(lexer.createLocation(token.left, token.right),
+                    "expected an indented block");
         return list;
       }
       expect(TokenKind.INDENT);
@@ -1340,14 +1321,18 @@ final class Parser {
     return list;
   }
 
-  // return_stmt = RETURN [expr]
+  // return_stmt ::= RETURN [expr]
   private ReturnStatement parseReturnStatement() {
-    int returnOffset = expect(TokenKind.RETURN);
+    int start = token.left;
+    int end = token.right;
+    expect(TokenKind.RETURN);
 
-    Expression result = null;
+    Expression expression = null;
     if (!STATEMENT_TERMINATOR_SET.contains(token.kind)) {
-      result = parseExpression();
+      expression = parseExpression();
+      end = expression.getEndOffset();
     }
-    return new ReturnStatement(locs, returnOffset, result);
+    return setLocation(new ReturnStatement(expression), start, end);
   }
+
 }
