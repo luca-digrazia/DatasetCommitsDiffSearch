@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigurationTransitionApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.BaseFunction;
@@ -92,8 +91,7 @@ public abstract class StarlarkDefinedConfigTransition implements ConfigurationTr
    * @throws InterruptedException if evaluating the transition is interrupted
    */
   public abstract ImmutableList<Map<String, Object>> getChangedSettings(
-      Map<String, Object> previousSettings, StructImpl attributeMap)
-      throws EvalException, InterruptedException;
+      Map<String, Object> previousSettings) throws EvalException, InterruptedException;
 
   public static StarlarkDefinedConfigTransition newRegularTransition(
       BaseFunction impl,
@@ -124,7 +122,7 @@ public abstract class StarlarkDefinedConfigTransition implements ConfigurationTr
 
     @Override
     public ImmutableList<Map<String, Object>> getChangedSettings(
-        Map<String, Object> previousSettings, StructImpl attributeMapper) {
+        Map<String, Object> previousSettings) {
       return ImmutableList.of(changedSettings);
     }
 
@@ -158,23 +156,12 @@ public abstract class StarlarkDefinedConfigTransition implements ConfigurationTr
 
     @Override
     public ImmutableList<Map<String, Object>> getChangedSettings(
-        Map<String, Object> previousSettings, StructImpl attributeMapper)
-        throws EvalException, InterruptedException {
+        Map<String, Object> previousSettings) throws EvalException, InterruptedException {
       Object result;
       try {
-        result = evalFunction(impl, ImmutableList.of(previousSettings, attributeMapper));
+        result = evalFunction(impl, previousSettings);
       } catch (EvalException e) {
-        // TODO(b/121134880): Still support the one-param syntax since we have users using that.
-        // Deprecate when this API will stop changing.
-        if (e.getMessage().contains("too many (2) positional arguments in call to")) {
-          try {
-            result = evalFunction(impl, ImmutableList.of(previousSettings));
-          } catch (EvalException e2) {
-            throw new EvalException(impl.getLocation(), e2.getMessage());
-          }
-        } else {
-          throw new EvalException(impl.getLocation(), e.getMessage());
-        }
+        throw new EvalException(impl.getLocation(), e.getMessage());
       }
 
       if (!(result instanceof SkylarkDict<?, ?>)) {
@@ -222,7 +209,7 @@ public abstract class StarlarkDefinedConfigTransition implements ConfigurationTr
     }
 
     /** Evaluate the input function with the given argument, and return the return value. */
-    private Object evalFunction(BaseFunction function, ImmutableList<Object> args)
+    private Object evalFunction(BaseFunction function, Object arg)
         throws InterruptedException, EvalException {
       try (Mutability mutability = Mutability.create("eval_transition_function")) {
         Environment env =
@@ -231,7 +218,7 @@ public abstract class StarlarkDefinedConfigTransition implements ConfigurationTr
                 .setEventHandler(eventHandler)
                 .build();
 
-        return function.call(args, ImmutableMap.of(), null, env);
+        return function.call(ImmutableList.of(arg), ImmutableMap.of(), null, env);
       }
     }
   }

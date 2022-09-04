@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.packages;
 
-import static com.google.devtools.build.lib.packages.Attribute.ANY_RULE;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
@@ -617,9 +616,6 @@ public class RuleClass {
      */
     public static final String SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME = "build_setting_default";
 
-    public static final String BUILD_SETTING_DEFAULT_NONCONFIGURABLE =
-        "Build setting defaults are referenced during analysis.";
-
     /** List of required attributes for normal rules, name and type. */
     public static final ImmutableList<Attribute> REQUIRED_ATTRIBUTES_FOR_NORMAL_RULES =
         ImmutableList.of(attr("tags", Type.STRING_LIST).build());
@@ -781,15 +777,17 @@ public class RuleClass {
                 .nonconfigurable("Used in toolchain resolution")
                 .value(ImmutableList.of()));
       }
+      if (skylark) {
+        assertRuleClassProperStarlarkDefinedTransitionUsage();
+      }
       if (buildSetting != null) {
         Type<?> type = buildSetting.getType();
         Attribute.Builder<?> attrBuilder =
             attr(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, type)
-                .nonconfigurable(BUILD_SETTING_DEFAULT_NONCONFIGURABLE)
+                .nonconfigurable("Build setting defaults are referenced during analysis.")
                 .mandatory();
         if (BuildType.isLabelType(type)) {
           attrBuilder.allowedFileTypes(FileTypeSet.ANY_FILE);
-          attrBuilder.allowedRuleClasses(ANY_RULE);
         }
         this.add(attrBuilder);
       }
@@ -848,6 +846,35 @@ public class RuleClass {
           "Concrete Starlark rule classes can't have null labels: %s %s",
           ruleDefinitionEnvironmentLabel,
           type);
+    }
+
+    private void assertRuleClassProperStarlarkDefinedTransitionUsage() {
+      boolean hasStarlarkDefinedTransition = false;
+      boolean hasAnalysisTestTransitionAttribute = false;
+      for (Attribute attribute : attributes.values()) {
+        hasStarlarkDefinedTransition |= attribute.hasStarlarkDefinedTransition();
+        hasAnalysisTestTransitionAttribute |= attribute.hasAnalysisTestTransition();
+      }
+
+      if (hasAnalysisTestTransitionAttribute) {
+        Preconditions.checkState(
+            isAnalysisTest,
+            "Only rule definitions with analysis_test=True may have attributes with "
+                + "analysis_test_transition transitions");
+      }
+      if (hasStarlarkDefinedTransition) {
+        Preconditions.checkState(
+            hasFunctionTransitionWhitelist,
+            "Use of function based split transition without whitelist: %s %s",
+            ruleDefinitionEnvironmentLabel,
+            type);
+      } else {
+        Preconditions.checkState(
+            !hasFunctionTransitionWhitelist,
+            "Unused function based split transition whitelist: %s %s",
+            ruleDefinitionEnvironmentLabel,
+            type);
+      }
     }
 
       /**
@@ -1155,10 +1182,6 @@ public class RuleClass {
       return this;
     }
 
-    public Label getRuleDefinitionEnvironmentLabel() {
-      return this.ruleDefinitionEnvironmentLabel;
-    }
-
     /**
      * Removes an attribute with the same name from this rule class.
      *
@@ -1187,10 +1210,6 @@ public class RuleClass {
       return this;
     }
 
-    public boolean isAnalysisTest() {
-      return this.isAnalysisTest;
-    }
-
     /**
      * This rule class has the _whitelist_function_transition attribute.  Intended only for Skylark
      * rules.
@@ -1198,10 +1217,6 @@ public class RuleClass {
     public <TYPE> Builder setHasFunctionTransitionWhitelist() {
       this.hasFunctionTransitionWhitelist = true;
       return this;
-    }
-
-    public RuleClassType getType() {
-      return this.type;
     }
 
     /**

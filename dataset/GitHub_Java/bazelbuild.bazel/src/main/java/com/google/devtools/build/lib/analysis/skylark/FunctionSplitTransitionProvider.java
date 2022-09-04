@@ -14,11 +14,9 @@
 
 package com.google.devtools.build.lib.analysis.skylark;
 
-import static com.google.devtools.build.lib.analysis.skylark.SkylarkAttributesCollection.ERROR_MESSAGE_FOR_NO_ATTR;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -29,38 +27,29 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
-import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransitionProvider;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
-import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.packages.StructProvider;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.lang.reflect.Field;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
 /**
  * This class implements a split transition provider that takes a Skylark transition function as
- * input. The transition function takes a settings argument, which is a dictionary containing the
- * current option values. It either returns a dictionary mapping option name to new option value
+ * input.  The transition function takes a settings argument, which is a dictionary containing the
+ * current option values.  It either returns a dictionary mapping option name to new option value
  * (for a patch transition), or a dictionary of such dictionaries (for a split transition).
  *
- * <p>TODO(bazel-team): Consider allowing dependency-typed attributes to actually return providers
- * instead of just labels (see {@link SkylarkAttributesCollection#addAttribute}).
+ * Currently the implementation ignores the attributes provided by the containing function.
  */
 public class FunctionSplitTransitionProvider implements SplitTransitionProvider {
 
@@ -75,30 +64,15 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
 
   @Override
   public SplitTransition apply(AttributeMap attributeMap) {
-    return new FunctionSplitTransition(starlarkDefinedConfigTransition, attributeMap);
+    return new FunctionSplitTransition(starlarkDefinedConfigTransition);
   }
 
   private static class FunctionSplitTransition implements SplitTransition {
     private final StarlarkDefinedConfigTransition starlarkDefinedConfigTransition;
-    private final StructImpl attrObject;
 
-    FunctionSplitTransition(
-        StarlarkDefinedConfigTransition starlarkDefinedConfigTransition,
-        AttributeMap attributeMap) {
-      Preconditions.checkArgument(attributeMap instanceof ConfiguredAttributeMapper);
+    public FunctionSplitTransition(
+        StarlarkDefinedConfigTransition starlarkDefinedConfigTransition) {
       this.starlarkDefinedConfigTransition = starlarkDefinedConfigTransition;
-
-      ConfiguredAttributeMapper configuredAttributeMapper =
-          (ConfiguredAttributeMapper) attributeMap;
-      LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
-      for (String attribute : attributeMap.getAttributeNames()) {
-        Object val =
-            configuredAttributeMapper.get(attribute, attributeMap.getAttributeType(attribute));
-        attributes.put(
-            Attribute.getSkylarkName(attribute),
-            val == null ? Runtime.NONE : SkylarkType.convertToSkylark(val, (Environment) null));
-      }
-      attrObject = StructProvider.STRUCT.create(attributes, ERROR_MESSAGE_FOR_NO_ATTR);
     }
 
     @Override
@@ -113,7 +87,7 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
         ImmutableList.Builder<BuildOptions> splitBuildOptions = ImmutableList.builder();
 
         ImmutableList<Map<String, Object>> transitions =
-            starlarkDefinedConfigTransition.getChangedSettings(settings, attrObject);
+            starlarkDefinedConfigTransition.getChangedSettings(settings);
         // TODO(juliexxia): Validate that the output values correctly match the output types.
         validateFunctionOutputs(transitions, starlarkDefinedConfigTransition.getOutputs());
 

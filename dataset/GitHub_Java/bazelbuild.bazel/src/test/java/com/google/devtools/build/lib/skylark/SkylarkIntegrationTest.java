@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skylark;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.analysis.OutputGroupInfo.INTERNAL_SUFFIX;
-import static com.google.devtools.build.lib.packages.FunctionSplitTransitionWhitelist.WHITELIST_ATTRIBUTE_NAME;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
@@ -33,7 +32,7 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
 import com.google.devtools.build.lib.analysis.test.AnalysisTestResultInfo;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -676,7 +675,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
 
     assertThat(target.getLabel().toString()).isEqualTo("//test/skylark:cr");
-    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
+    InstrumentedFilesProvider provider = target.getProvider(InstrumentedFilesProvider.class);
     assertWithMessage("InstrumentedFilesProvider should be set.").that(provider).isNotNull();
     assertThat(ActionsTestUtil.baseArtifactNames(provider.getInstrumentedFiles())).isEmpty();
   }
@@ -708,7 +707,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
 
     assertThat(target.getLabel().toString()).isEqualTo("//test/skylark:cr");
-    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
+    InstrumentedFilesProvider provider = target.getProvider(InstrumentedFilesProvider.class);
     assertWithMessage("InstrumentedFilesProvider should be set.").that(provider).isNotNull();
     assertThat(ActionsTestUtil.baseArtifactNames(provider.getInstrumentedFiles()))
         .containsExactly("a.txt", "A.java");
@@ -1082,9 +1081,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:r");
-    assertContainsEvent(
-        "parameter 'default' is deprecated and will be removed soon. It may be "
-            + "temporarily re-enabled by setting --incompatible_no_output_attr_default=false");
+    assertContainsEvent("'default' is no longer a supported parameter for attr.output");
   }
 
   @Test
@@ -1132,9 +1129,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:r");
-    assertContainsEvent(
-        "parameter 'default' is deprecated and will be removed soon. It may be "
-            + "temporarily re-enabled by setting --incompatible_no_output_attr_default=false");
+    assertContainsEvent("'default' is no longer a supported parameter for attr.output_list");
   }
 
   @Test
@@ -1726,7 +1721,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "test/skylark/BUILD",
         "load('//test/skylark:macro.bzl', 'x')",
         "pass", // syntax error
-        "print(1 // (5 - x)"); // division by 0
+        "print(1 / (5 - x)"); // division by 0
 
     // Make sure that evaluation continues and load() succeeds, despite a syntax
     // error in the file.
@@ -2057,6 +2052,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testAnalysisFailureInfo() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
+
     scratch.file(
         "test/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -2071,7 +2068,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "",
         "custom_rule(name = 'r')");
 
-    useConfiguration("--allow_analysis_failures=true");
+    useConfiguration("--experimental_allow_analysis_failures=true");
 
     ConfiguredTarget target = getConfiguredTarget("//test:r");
     AnalysisFailureInfo info =
@@ -2083,6 +2080,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testTestResultInfo() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
+
     scratch.file(
         "test/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -2104,7 +2103,53 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testTestResultInfoWithoutFlag() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=false");
+
+    scratch.file(
+        "test/extension.bzl",
+        "def custom_rule_impl(ctx):",
+        "  return [AnalysisTestResultInfo(success = True, message = 'message contents')]",
+        "",
+        "custom_rule = rule(implementation = custom_rule_impl)");
+
+    scratch.file(
+        "test/BUILD",
+        "load('//test:extension.bzl', 'custom_rule')",
+        "",
+        "custom_rule(name = 'r')");
+
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test:r");
+    assertContainsEvent(
+        "AnalysisTestResultInfo is experimental and thus unavailable with the current flags. "
+            + "It may be enabled by setting --experimental_analysis_testing_improvements");
+  }
+
+  @Test
+  public void testAnalysisTestRuleWithoutFlag() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=false");
+
+    scratch.file(
+        "test/extension.bzl",
+        "def custom_rule_impl(ctx):",
+        "  return []",
+        "",
+        "custom_test = rule(implementation = custom_rule_impl, analysis_test = True)");
+
+    scratch.file(
+        "test/BUILD", "load('//test:extension.bzl', 'custom_test')", "", "custom_test(name = 'r')");
+
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test:r");
+    assertContainsEvent(
+        "analysis_test parameter is experimental and not available for general use");
+  }
+
+  @Test
   public void testAnalysisTestRuleWithActionRegistration() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
+
     scratch.file(
         "test/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -2125,6 +2170,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testAnalysisTestRuleWithFlag() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
+
     scratch.file(
         "test/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -2146,6 +2193,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testAnalysisTestTransitionOnAnalysisTest() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
     useConfiguration("--experimental_strict_java_deps=OFF");
 
     scratch.file(
@@ -2197,6 +2245,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testAnalysisTestTransitionOnNonAnalysisTest() throws Exception {
+    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
+
     scratch.file(
         "test/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -2330,6 +2380,10 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testAnalysisTestCannotDependOnAnalysisTest() throws Exception {
+    setSkylarkSemanticsOptions(
+        "--experimental_analysis_testing_improvements=true",
+        "--experimental_starlark_config_transitions=true");
+
     scratch.file(
         "test/extension.bzl",
         "",
@@ -2393,6 +2447,9 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   private void setupAnalysisTestDepsLimitTest(int limit, int dependencyChainSize) throws Exception {
+    setSkylarkSemanticsOptions(
+        "--experimental_analysis_testing_improvements=true",
+        "--experimental_starlark_config_transitions=true");
     useConfiguration("--analysis_testing_deps_limit=" + limit);
 
     scratch.file(
@@ -2433,180 +2490,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "",
         "outer_rule_test(name = 'r', dep = ':inner0')",
         dependingRulesChain.toString());
-  }
-
-  @Test
-  public void testBadWhitelistTransition_onNonLabelAttr() throws Exception {
-    scratch.file(
-        "test/rules.bzl",
-        "def _impl(ctx):",
-        "    return []",
-        "",
-        "my_rule = rule(_impl, attrs = {'"
-            + WHITELIST_ATTRIBUTE_NAME
-            + "':attr.string(default = 'blah')})");
-    scratch.file("test/BUILD", "load('//test:rules.bzl', 'my_rule')", "my_rule(name = 'my_rule')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:my_rule");
-    assertContainsEvent("_whitelist_function_transition attribute must be a label type");
-  }
-
-  @Test
-  public void testBadWhitelistTransition_noDefaultValue() throws Exception {
-    scratch.file(
-        "test/rules.bzl",
-        "def _impl(ctx):",
-        "    return []",
-        "",
-        "my_rule = rule(_impl, attrs = {'" + WHITELIST_ATTRIBUTE_NAME + "':attr.label()})");
-    scratch.file("test/BUILD", "load('//test:rules.bzl', 'my_rule')", "my_rule(name = 'my_rule')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:my_rule");
-    assertContainsEvent("_whitelist_function_transition attribute must have a default value");
-  }
-
-  @Test
-  public void testBadWhitelistTransition_wrongDefaultValue() throws Exception {
-    scratch.file(
-        "test/rules.bzl",
-        "def _impl(ctx):",
-        "    return []",
-        "",
-        "my_rule = rule(_impl, attrs = {'"
-            + WHITELIST_ATTRIBUTE_NAME
-            + "':attr.label(default = Label('//test:my_other_rule'))})");
-    scratch.file(
-        "test/BUILD",
-        "load('//test:rules.bzl', 'my_rule')",
-        "my_rule(name = 'my_rule')",
-        "my_rule(name = 'my_other_rule')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:my_rule");
-    assertContainsEvent(
-        "_whitelist_function_transition attribute does not have the expected value");
-  }
-
-  @Test
-  public void testBadAnalysisTestRule_notAnalysisTest() throws Exception {
-    scratch.file(
-        "test/extension.bzl",
-        "",
-        "def outer_rule_impl(ctx):",
-        "  return [AnalysisTestResultInfo(success = True, message = 'message contents')]",
-        "def dep_rule_impl(ctx):",
-        "  return []",
-        "",
-        "my_transition = analysis_test_transition(",
-        "    settings = {",
-        "        '//command_line_option:experimental_strict_java_deps' : 'WARN' }",
-        ")",
-        "dep_rule = rule(",
-        "  implementation = dep_rule_impl,",
-        "  attrs = {'dep':  attr.label()}",
-        ")",
-        "outer_rule = rule(",
-        "  implementation = outer_rule_impl,",
-        "# analysis_test = True,",
-        "  fragments = ['java'],",
-        "  attrs = {",
-        "    'dep':  attr.label(cfg = my_transition),",
-        "  })");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:extension.bzl', 'dep_rule', 'outer_rule_test')",
-        "",
-        "outer_rule(name = 'r', dep = ':inner')",
-        "dep_rule(name = 'inner')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:outer_rule");
-    assertContainsEvent(
-        "Only rule definitions with analysis_test=True may have attributes with "
-            + "analysis_test_transition transitions");
-  }
-
-  @Test
-  public void testBadWhitelistTransition_noWhitelist() throws Exception {
-    scratch.file(
-        "tools/whitelists/function_transition_whitelist/BUILD",
-        "package_group(",
-        "    name = 'function_transition_whitelist',",
-        "    packages = [",
-        "        '//test/...',",
-        "    ],",
-        ")");
-    scratch.file(
-        "test/rules.bzl",
-        "def transition_func(settings):",
-        "  return {'t0': {'//command_line_option:cpu': 'k8'}}",
-        "my_transition = transition(implementation = transition_func, inputs = [],",
-        "  outputs = ['//command_line_option:cpu'])",
-        "def _my_rule_impl(ctx): ",
-        "  return []",
-        "my_rule = rule(",
-        "  implementation = _my_rule_impl,",
-        "  attrs = {",
-        "    'dep':  attr.label(cfg = my_transition),",
-        "#   '_whitelist_function_transition': attr.label(",
-        "#       default = '//tools/whitelists/function_transition_whitelist',",
-        "#   ),",
-        "  })",
-        "def _simple_rule_impl(ctx):",
-        "  return []",
-        "simple_rule = rule(_simple_rule_impl)");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:rules.bzl', 'my_rule', 'simple_rule')",
-        "my_rule(name = 'my_rule', dep = ':dep')",
-        "simple_rule(name = 'dep')");
-    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:my_rule");
-    assertContainsEvent("Use of function-based split transition without whitelist");
-  }
-
-  @Test
-  public void testBadWhitelistTransition_whitelistNoCfg() throws Exception {
-    scratch.file(
-        "tools/whitelists/function_transition_whitelist/BUILD",
-        "package_group(",
-        "    name = 'function_transition_whitelist',",
-        "    packages = [",
-        "        '//test/...',",
-        "    ],",
-        ")");
-    scratch.file(
-        "test/rules.bzl",
-        "def _my_rule_impl(ctx): ",
-        "  return []",
-        "my_rule = rule(",
-        "  implementation = _my_rule_impl,",
-        "  attrs = {",
-        "#   'dep':  attr.label(cfg = my_transition),",
-        "    '_whitelist_function_transition': attr.label(",
-        "        default = '//tools/whitelists/function_transition_whitelist',",
-        "    ),",
-        "  })",
-        "def _simple_rule_impl(ctx):",
-        "  return []",
-        "simple_rule = rule(_simple_rule_impl)");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:rules.bzl', 'my_rule', 'simple_rule')",
-        "my_rule(name = 'my_rule', dep = ':dep')",
-        "simple_rule(name = 'dep')");
-    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:my_rule");
-    assertContainsEvent("Unused function-based split transition whitelist");
   }
 
   /**
