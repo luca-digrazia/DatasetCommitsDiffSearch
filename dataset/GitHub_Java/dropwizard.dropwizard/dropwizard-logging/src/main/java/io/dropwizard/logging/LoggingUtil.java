@@ -38,7 +38,7 @@ public class LoggingUtil {
     public static LoggerContext getLoggerContext() {
         final long startTime = System.nanoTime();
         while (true) {
-            final ILoggerFactory iLoggerFactory = LoggerFactory.getILoggerFactory();
+            ILoggerFactory iLoggerFactory = LoggerFactory.getILoggerFactory();
             if (iLoggerFactory instanceof LoggerContext) {
                 return (LoggerContext) iLoggerFactory;
             }
