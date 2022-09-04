@@ -20,11 +20,12 @@ import com.shuyu.gsyvideoplayer.render.view.GSYVideoGLView;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
-import com.transitionseverywhere.TransitionManager;
 
 
 import java.io.File;
 import java.util.Map;
+
+import androidx.transition.TransitionManager;
 
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getActionBarHeight;
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getStatusBarHeight;
@@ -65,6 +66,10 @@ public class GSYVideoHelper {
      * 选择工具类
      */
     private OrientationUtils mOrientationUtils;
+    /**
+     * 可配置旋转 OrientationUtils
+     */
+    private OrientationOption mOrientationOption;
     /**
      * 播放配置
      */
@@ -134,7 +139,7 @@ public class GSYVideoHelper {
         mGsyVideoPlayer.getFullscreenButton().setImageResource(mGsyVideoPlayer.getShrinkImageRes());
         mGsyVideoPlayer.getBackButton().setVisibility(View.VISIBLE);
         //设置旋转
-        mOrientationUtils = new OrientationUtils((Activity) mContext, mGsyVideoPlayer);
+        mOrientationUtils = new OrientationUtils((Activity) mContext, mGsyVideoPlayer, mOrientationOption);
         mOrientationUtils.setEnable(mVideoOptionBuilder.isRotateViewAuto());
         mGsyVideoPlayer.getBackButton().setOnClickListener(new View.OnClickListener() {
             @Override
@@ -247,6 +252,7 @@ public class GSYVideoHelper {
                 mGsyVideoPlayer.getFullscreenButton().setImageResource(mGsyVideoPlayer.getEnlargeImageRes());
                 mGsyVideoPlayer.getBackButton().setVisibility(View.GONE);
                 mGsyVideoPlayer.setIfCurrentIsFullscreen(false);
+                mGsyVideoPlayer.restartTimerTask();
                 if (mVideoOptionBuilder.getVideoAllCallBack() != null) {
                     Debuger.printfLog("onQuitFullscreen");
                     mVideoOptionBuilder.getVideoAllCallBack().onQuitFullscreen(mVideoOptionBuilder.getUrl(), mVideoOptionBuilder.getVideoTitle(), mGsyVideoPlayer);
@@ -318,6 +324,7 @@ public class GSYVideoHelper {
             }
         }
         mGsyVideoPlayer.setIfCurrentIsFullscreen(true);
+        mGsyVideoPlayer.restartTimerTask();
         if (mVideoOptionBuilder.getVideoAllCallBack() != null) {
             Debuger.printfLog("onEnterFullscreen");
             mVideoOptionBuilder.getVideoAllCallBack().onEnterFullscreen(mVideoOptionBuilder.getUrl(), mVideoOptionBuilder.getVideoTitle(), mGsyVideoPlayer);
@@ -513,6 +520,13 @@ public class GSYVideoHelper {
      */
     public void setFullViewContainer(ViewGroup fullViewContainer) {
         this.mFullViewContainer = fullViewContainer;
+    }
+
+    /**
+     * 可配置旋转 OrientationUtils
+     */
+    public void setOrientationOption(OrientationOption orientationOption) {
+        this.mOrientationOption = orientationOption;
     }
 
     /**

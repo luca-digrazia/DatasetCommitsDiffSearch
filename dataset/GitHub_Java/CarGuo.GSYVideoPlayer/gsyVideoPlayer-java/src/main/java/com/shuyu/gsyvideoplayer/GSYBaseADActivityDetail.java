@@ -130,9 +130,6 @@ public abstract class GSYBaseADActivityDetail<T extends GSYBaseVideoPlayer, R ex
             mADOrientationUtils.releaseListener();
     }
 
-    /**
-     * orientationUtils 和  detailPlayer.onConfigurationChanged 方法是用于触发屏幕旋转的
-     */
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         //如果旋转了就全屏
@@ -140,13 +137,12 @@ public abstract class GSYBaseADActivityDetail<T extends GSYBaseVideoPlayer, R ex
         if (!isPause && getGSYADVideoPlayer().getVisibility() == View.VISIBLE) {
             if (isADStarted()) {
                 isPlay = false;
-                getGSYADVideoPlayer().getCurrentPlayer().onConfigurationChanged(this, newConfig, isNeedRotateWithSystem() ? mADOrientationUtils : null, hideActionBarWhenFull(), hideStatusBarWhenFull());
+                getGSYADVideoPlayer().getCurrentPlayer().onConfigurationChanged(this, newConfig, mADOrientationUtils, hideActionBarWhenFull(), hideStatusBarWhenFull());
             }
         }
         super.onConfigurationChanged(newConfig);
         isPlay = backUpIsPlay;
     }
-
 
     @Override
     public void onStartPrepared(String url, Object... objects) {
@@ -171,11 +167,6 @@ public abstract class GSYBaseADActivityDetail<T extends GSYBaseVideoPlayer, R ex
 
     @Override
     public void clickForFullScreen() {
-
-    }
-
-    @Override
-    public void onComplete(String url, Object... objects) {
 
     }
 
@@ -213,7 +204,6 @@ public abstract class GSYBaseADActivityDetail<T extends GSYBaseVideoPlayer, R ex
     public OrientationOption getOrientationOption() {
         return null;
     }
-
 
     public abstract R getGSYADVideoPlayer();
 
