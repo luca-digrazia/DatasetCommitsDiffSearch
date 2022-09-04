@@ -5,9 +5,12 @@ import java.util.Comparator;
 import io.quarkus.annotation.processor.Constants;
 
 public enum ConfigPhase implements Comparable<ConfigPhase> {
-    RUN_TIME("The configuration is overridable at runtime", Constants.CONFIG_PHASE_RUNTIME_ILLUSTRATION),
-    BUILD_TIME("The configuration is not overridable at runtime", Constants.CONFIG_PHASE_BUILD_TIME_ILLUSTRATION),
-    BUILD_AND_RUN_TIME_FIXED("The configuration is not overridable at runtime", Constants.CONFIG_PHASE_BUILD_TIME_ILLUSTRATION);
+    RUN_TIME("The configuration is overridable at runtime", "", "RunTime"),
+    BOOTSTRAP("The configuration is used to bootstrap runtime Config Sources and is overridable at runtime",
+            "", "Bootstrap"),
+    BUILD_TIME("The configuration is not overridable at runtime", Constants.CONFIG_PHASE_BUILD_TIME_ILLUSTRATION, "BuildTime"),
+    BUILD_AND_RUN_TIME_FIXED("The configuration is not overridable at runtime", Constants.CONFIG_PHASE_BUILD_TIME_ILLUSTRATION,
+            "BuildTime");
 
     static final Comparator<ConfigPhase> COMPARATOR = new Comparator<ConfigPhase>() {
         /**
@@ -36,6 +39,14 @@ public enum ConfigPhase implements Comparable<ConfigPhase> {
                             return -1;
                     }
                 }
+                case BOOTSTRAP: {
+                    switch (secondPhase) {
+                        case BOOTSTRAP:
+                            return 0;
+                        default:
+                            return 1;
+                    }
+                }
                 case RUN_TIME: {
                     switch (secondPhase) {
                         case RUN_TIME:
@@ -52,10 +63,12 @@ public enum ConfigPhase implements Comparable<ConfigPhase> {
 
     private String description;
     private String illustration;
+    private String configSuffix;
 
-    ConfigPhase(String description, String illustration) {
+    ConfigPhase(String description, String illustration, String configSuffix) {
         this.description = description;
         this.illustration = illustration;
+        this.configSuffix = configSuffix;
     }
 
     @Override
@@ -63,10 +76,15 @@ public enum ConfigPhase implements Comparable<ConfigPhase> {
         return "ConfigPhase{" +
                 "description='" + description + '\'' +
                 ", illustration='" + illustration + '\'' +
+                ", configSuffix='" + configSuffix + '\'' +
                 '}';
     }
 
     public String getIllustration() {
         return illustration;
+    }
+
+    public String getConfigSuffix() {
+        return configSuffix;
     }
 }

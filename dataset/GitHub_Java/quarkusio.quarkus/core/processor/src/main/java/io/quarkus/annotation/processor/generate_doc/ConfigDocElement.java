@@ -12,8 +12,6 @@ public interface ConfigDocElement {
 
     boolean isWithinAMap();
 
-    String getTopLevelGrouping();
-
     /**
      *
      * Map config will be at the end of generated doc.
