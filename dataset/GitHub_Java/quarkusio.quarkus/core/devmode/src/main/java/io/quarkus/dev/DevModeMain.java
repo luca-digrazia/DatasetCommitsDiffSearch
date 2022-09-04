@@ -22,14 +22,12 @@ import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.concurrent.locks.LockSupport;
-import java.util.logging.Handler;
 
 import org.jboss.logging.Logger;
 
 import io.quarkus.runner.RuntimeRunner;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.Timing;
-import io.quarkus.runtime.logging.InitialConfigurator;
 import io.smallrye.config.SmallRyeConfigProviderResolver;
 
 /**
@@ -114,11 +112,6 @@ public class DevModeMain {
         } catch (Throwable t) {
             deploymentProblem = t;
             log.error("Failed to start quarkus", t);
-
-            // if the log handler is not activated, activate it with a default configuration to flush the messages
-            if (!InitialConfigurator.DELAYED_HANDLER.isActivated()) {
-                InitialConfigurator.DELAYED_HANDLER.setHandlers(new Handler[] { InitialConfigurator.createDefaultHandler() });
-            }
         }
     }
 
