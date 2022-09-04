@@ -61,6 +61,7 @@ import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OS;
@@ -276,7 +277,7 @@ public class BazelJavaSemantics implements JavaSemantics {
       String coverageStartClass,
       NestedSetBuilder<Artifact> filesBuilder,
       String javaExecutable) {
-    Preconditions.checkState(ruleContext.getConfiguration().hasFragment(JavaConfiguration.class));
+    Preconditions.checkState(ruleContext.getConfiguration().hasFragment(Jvm.class));
 
     Preconditions.checkNotNull(jvmFlags);
     Preconditions.checkNotNull(executable);
@@ -794,10 +795,9 @@ public class BazelJavaSemantics implements JavaSemantics {
   @Override
   public PathFragment getDefaultJavaResourcePath(PathFragment path) {
     // Look for src/.../resources to match Maven repository structure.
-    List<String> segments = path.getSegments();
-    for (int i = 0; i < segments.size() - 2; ++i) {
-      if (segments.get(i).equals("src") && segments.get(i + 2).equals("resources")) {
-        return path.subFragment(i + 3);
+    for (int i = 0; i < path.segmentCount() - 2; ++i) {
+      if (path.getSegment(i).equals("src") && path.getSegment(i + 2).equals("resources")) {
+        return path.subFragment(i + 3, path.segmentCount());
       }
     }
     PathFragment javaPath = JavaUtil.getJavaPath(path);
