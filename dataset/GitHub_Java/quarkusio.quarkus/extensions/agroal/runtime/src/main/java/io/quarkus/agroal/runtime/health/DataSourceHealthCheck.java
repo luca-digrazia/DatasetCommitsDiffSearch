@@ -22,7 +22,7 @@ import io.quarkus.arc.Arc;
 @ApplicationScoped
 public class DataSourceHealthCheck implements HealthCheck {
     private static final String DEFAULT_DS = "__default__";
-    private final Map<String, DataSource> dataSources = new HashMap<>();
+    private Map<String, DataSource> dataSources = new HashMap<>();
 
     @PostConstruct
     protected void init() {
