@@ -24,10 +24,10 @@ import com.google.common.io.Files;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteBufferFragment;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.DeclarationConsumer;
-import com.google.devtools.build.lib.bazel.rules.ninja.file.FileFragment;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
-import com.google.devtools.build.lib.bazel.rules.ninja.file.NinjaSeparatorFinder;
+import com.google.devtools.build.lib.bazel.rules.ninja.file.NinjaSeparatorPredicate;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.ParallelFileProcessing;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.ParallelFileProcessing.BlockParameters;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
@@ -102,12 +102,12 @@ public class ParallelFileProcessingTest {
       long[] parallel =
           nTimesAvg(
               () -> {
-                List<List<FileFragment>> list = Lists.newArrayList();
+                List<List<ByteBufferFragment>> list = Lists.newArrayList();
                 Supplier<DeclarationConsumer> factory =
                     () -> {
-                      List<FileFragment> inner = Lists.newArrayList();
+                      List<ByteBufferFragment> inner = Lists.newArrayList();
                       list.add(inner);
-                      return fragment -> inner.add(fragment);
+                      return inner::add;
                     };
                 parseFile(file, factory, null);
                 assertThat(list).isNotEmpty();
@@ -144,7 +144,7 @@ public class ParallelFileProcessingTest {
           parameters != null ? parameters : new BlockParameters(file.length()),
           factory,
           service,
-          NinjaSeparatorFinder.INSTANCE);
+          NinjaSeparatorPredicate.INSTANCE);
     } finally {
       ExecutorUtil.interruptibleShutdown(service);
     }
@@ -183,10 +183,11 @@ public class ParallelFileProcessingTest {
       throws IOException, GenericParsingException, InterruptedException {
     File file = writeTestFile(limit);
     try {
+      // todo set parse block size
       List<String> lines = Collections.synchronizedList(Lists.newArrayListWithCapacity(limit));
       parseFile(
           file,
-          () -> fragment -> lines.add(fragment.toString()),
+          () -> s -> lines.add(s.toString()),
           new BlockParameters(file.length()).setReadBlockSize(blockSize));
       // Copy to non-synchronized list for check
       assertNumbers(limit, Lists.newArrayList(lines));
