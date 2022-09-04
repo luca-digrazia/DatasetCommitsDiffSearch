@@ -65,8 +65,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.graylog2.plugin.Tools.bytesToHex;
 
 public class KafkaJournal extends AbstractIdleService implements Journal {
@@ -384,13 +382,13 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
         // /* don't call */ logManager.startup();
 
         // flush dirty logs regularly
-        scheduler.scheduleAtFixedRate(new DirtyLogFlusher(), TimeUnit.SECONDS.toMillis(30), logManager.flushCheckMs(), MILLISECONDS);
+        scheduler.scheduleAtFixedRate(new DirtyLogFlusher(), TimeUnit.SECONDS.toMillis(30), logManager.flushCheckMs(), TimeUnit.MILLISECONDS);
 
         // write recovery checkpoint files
-        scheduler.scheduleAtFixedRate(new RecoveryCheckpointFlusher(), TimeUnit.SECONDS.toMillis(30), logManager.flushCheckpointMs(), MILLISECONDS);
+        scheduler.scheduleAtFixedRate(new RecoveryCheckpointFlusher(), TimeUnit.SECONDS.toMillis(30), logManager.flushCheckpointMs(), TimeUnit.MILLISECONDS);
 
         // custom log retention cleaner
-        scheduler.scheduleAtFixedRate(new LogRetentionCleaner(), TimeUnit.SECONDS.toMillis(30), logManager.retentionCheckMs(), MILLISECONDS);
+        scheduler.scheduleAtFixedRate(new LogRetentionCleaner(), TimeUnit.SECONDS.toMillis(30), logManager.retentionCheckMs(), TimeUnit.MILLISECONDS);
 
         // regularly write the currently committed read offset to disk
         scheduler.scheduleAtFixedRate(offsetFlusher, 1, 1, TimeUnit.SECONDS); // TODO make configurable
@@ -442,40 +440,31 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
                     total += cleanupExpiredSegments(kafkaLog) + cleanupSegmentsToMaintainSize(kafkaLog);
                 }
 
-                log.debug("Log cleanup completed. {} files deleted in {} seconds", total, NANOSECONDS.toSeconds(ctx.stop()));
+                log.debug("Log cleanup completed. {} files deleted in {} seconds", total, TimeUnit.NANOSECONDS.toSeconds(ctx.stop()));
             } catch (Exception e) {
                 log.error("Unable to delete expired segments. Will try again.", e);
             }
         }
 
-        private int cleanupExpiredSegments(final Log kafkaLog) {
+        private int cleanupSegmentsToMaintainSize(final Log kafkaLog) {
             return kafkaLog.deleteOldSegments(new AbstractFunction1<LogSegment, Object>() {
                 @Override
                 public Object apply(LogSegment segment) {
-                    final long segmentAge = TIME.milliseconds() - segment.lastModified();
-                    final boolean shouldDelete = segmentAge > kafkaLog.config().retentionMs();
-                    if (shouldDelete) {
-                        log.debug("[time] Removing segment with age {}s, older than then maximum retention age {}s",
-                                  MILLISECONDS.toSeconds(segmentAge), MILLISECONDS.toSeconds(kafkaLog.config().retentionMs()));
-                    }
-                    return shouldDelete;
+                    return (TIME.milliseconds() - segment.lastModified() > kafkaLog.config().retentionMs());
                 }
             });
         }
 
-        private int cleanupSegmentsToMaintainSize(Log kafkaLog) {
-            final long retentionSize = kafkaLog.config().retentionSize();
-            if (retentionSize < 0 || kafkaLog.size() < retentionSize) {
+        private int cleanupExpiredSegments(Log kafkaLog) {
+            if (kafkaLog.config().retentionSize() < 0 || kafkaLog.size() < kafkaLog.config().retentionSize()) {
                 return 0;
             }
-            final long[] diff = {kafkaLog.size() - retentionSize};
+            final long[] diff = {kafkaLog.size() - kafkaLog.config().retentionSize()};
             kafkaLog.deleteOldSegments(new AbstractFunction1<LogSegment, Object>() { // sigh scala
                 @Override
                 public Object apply(LogSegment segment) {
                     if(diff[0] - segment.size() >= 0) {
                         diff[0] -= segment.size();
-                        log.debug("[size] Removing segment starting at offset {}, size {} bytes, to shrink log to new size {}, target size {}",
-                                  segment.baseOffset(), segment.size(), diff[0], retentionSize);
                         return true;
                     } else {
                         return false;
