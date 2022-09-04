@@ -9,6 +9,9 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.TextView;
 
+import com.facebook.stetho.common.LogUtil;
+import com.facebook.stetho.common.Util;
+import com.facebook.stetho.inspector.elements.ChainedDescriptor;
 import com.facebook.stetho.inspector.elements.DOMProvider;
 import com.facebook.stetho.inspector.elements.Descriptor;
 import com.facebook.stetho.inspector.elements.DescriptorMap;
@@ -16,18 +19,17 @@ import com.facebook.stetho.inspector.elements.NodeDescriptor;
 import com.facebook.stetho.inspector.elements.ObjectDescriptor;
 
 final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
+  private final Application mApplication;
   private final DescriptorMap mDescriptorMap;
-  private final AndroidDOMRoot mDOMRoot;
   private final ViewHighlighter mHighlighter;
   private Listener mListener;
 
   public AndroidDOMProvider(Application application) {
-    mDOMRoot = new AndroidDOMRoot(application);
+    mApplication = application;
 
     mDescriptorMap = new DescriptorMap()
         .beginInit()
         .register(Activity.class, new ActivityDescriptor())
-        .register(AndroidDOMRoot.class, mDOMRoot)
         .register(Application.class, new ApplicationDescriptor());
     FragmentDescriptor.register(mDescriptorMap)
         .register(Object.class, new ObjectDescriptor())
@@ -54,7 +56,7 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
 
   @Override
   public Object getRootElement() {
-    return mDOMRoot;
+    return mApplication;
   }
 
   @Override

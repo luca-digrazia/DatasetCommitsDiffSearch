@@ -1,11 +1,4 @@
-/*
- * Copyright (c) 2014-present, Facebook, Inc.
- * All rights reserved.
- *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.common;
 
@@ -16,6 +9,8 @@ import java.lang.reflect.Method;
 import javax.annotation.Nullable;
 
 public final class ReflectionUtil {
+  private static final Object[] sEmptyArray = new Object[0];
+
   private ReflectionUtil() {
   }
 
@@ -40,6 +35,32 @@ public final class ReflectionUtil {
           theClass);
 
       return null;
+    }
+  }
+
+  public static Method getMethod(Class<?> theClass, String methodName) {
+    try {
+      return theClass.getMethod(methodName);
+    } catch (NoSuchMethodException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Nullable
+  public static Method tryGetMethod(Class<?> theClass, String methodName) {
+    try {
+      return theClass.getMethod(methodName);
+    } catch (NoSuchMethodException e) {
+      return null;
+    }
+  }
+
+  @Nullable
+  public static Object invokeMethod(Method method, @Nullable Object target) {
+    try {
+      return method.invoke(target, sEmptyArray);
+    } catch (IllegalAccessException | InvocationTargetException e) {
+      throw new RuntimeException(e);
     }
   }
 

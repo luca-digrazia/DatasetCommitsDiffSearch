@@ -2,7 +2,6 @@
 
 package com.facebook.stetho.common.android;
 
-import android.content.res.Resources;
 import android.view.View;
 
 import javax.annotation.Nullable;
@@ -12,8 +11,6 @@ public interface FragmentAccessor {
 
   @Nullable
   public Object getFragmentManager(Object fragment);
-
-  public Resources getResources(Object fragment);
 
   public int getId(Object fragment);
 

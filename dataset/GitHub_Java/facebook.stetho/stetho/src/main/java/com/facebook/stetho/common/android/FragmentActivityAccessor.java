@@ -1,11 +1,4 @@
-/*
- * Copyright (c) 2014-present, Facebook, Inc.
- * All rights reserved.
- *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.common.android;
 
@@ -13,9 +6,10 @@ import android.app.Activity;
 
 import javax.annotation.Nullable;
 
-public interface FragmentActivityAccessor<
-    FRAGMENT_ACTIVITY extends Activity,
-    FRAGMENT_MANAGER> {
+public interface FragmentActivityAccessor {
   @Nullable
-  public FRAGMENT_MANAGER getFragmentManager(FRAGMENT_ACTIVITY activity);
+  public Object getFragmentManager(Activity fragmentActivity);
+
+  @Nullable
+  public Object getSupportFragmentManager(Activity fragmentActivity);
 }

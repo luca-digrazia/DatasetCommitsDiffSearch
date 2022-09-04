@@ -4,6 +4,7 @@ package com.facebook.stetho.inspector.elements.android;
 
 import android.annotation.TargetApi;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
