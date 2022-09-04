@@ -140,10 +140,6 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
                 LOG.warn("Timeout reached. Not waiting any longer for writer threads to complete.");
             }
             
-            if (server.isStatsMode()) {
-                server.getBenchmarkCounter().add(buffer.size());
-            }
-            
             buffer.clear();
         }
 
