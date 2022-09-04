@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
+import com.google.devtools.build.lib.analysis.util.TestAspects.BaseRule;
 import com.google.devtools.build.lib.analysis.util.TestAspects.DummyRuleFactory;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -45,7 +46,6 @@ import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
-import com.google.devtools.build.lib.rules.test.TestConfiguration;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -120,23 +120,6 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
     }
   }
 
-  /** Base rule that depends on the test configuration fragment. */
-  private static class TestBaseRule implements RuleDefinition {
-    @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
-      return builder.requiresConfigurationFragments(TestConfiguration.class).build();
-    }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("test_base")
-          .factoryClass(DummyRuleFactory.class)
-          .ancestors(TestAspects.BaseRule.class)
-          .build();
-    }
-  }
-
   /** A rule with an empty split transition on an attribute. */
   private static class EmptySplitRule implements RuleDefinition {
     @Override
@@ -154,7 +137,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
       return RuleDefinition.Metadata.builder()
           .name("empty_split")
           .factoryClass(DummyRuleFactory.class)
-          .ancestors(TestBaseRule.class)
+          .ancestors(BaseRule.class)
           .build();
     }
   }
@@ -182,7 +165,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
       return RuleDefinition.Metadata.builder()
           .name("attribute_transition")
           .factoryClass(DummyRuleFactory.class)
-          .ancestors(TestBaseRule.class)
+          .ancestors(BaseRule.class)
           .build();
     }
   }
@@ -199,7 +182,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
       return RuleDefinition.Metadata.builder()
           .name("rule_class_transition")
           .factoryClass(DummyRuleFactory.class)
-          .ancestors(TestBaseRule.class)
+          .ancestors(BaseRule.class)
           .build();
     }
   }
@@ -214,7 +197,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
     @Override
     public BuildOptions apply(BuildOptions options) {
       BuildOptions result = options.clone();
-      result.get(TestConfiguration.TestOptions.class).testFilter = "SET BY PATCH FACTORY: " + value;
+      result.get(BuildConfiguration.Options.class).testFilter = "SET BY PATCH FACTORY: " + value;
       return result;
     }
 
@@ -258,7 +241,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
       return RuleDefinition.Metadata.builder()
           .name("uses_rule_transition_factory")
           .factoryClass(DummyRuleFactory.class)
-          .ancestors(TestBaseRule.class)
+          .ancestors(BaseRule.class)
           .build();
     }
   }
@@ -266,10 +249,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   @Test
   public void testRuleClassTransition() throws Exception {
     setRulesAvailableInTests(
-        new TestAspects.BaseRule(),
-        new TestBaseRule(),
-        new AttributeTransitionRule(),
-        new RuleClassTransitionRule());
+        new TestAspects.BaseRule(), new AttributeTransitionRule(), new RuleClassTransitionRule());
     scratch.file("a/BUILD",
         "attribute_transition(",
         "   name='attribute',",
@@ -284,10 +264,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   @Test
   public void testNonConflictingAttributeAndRuleClassTransitions() throws Exception {
     setRulesAvailableInTests(
-        new TestAspects.BaseRule(),
-        new TestBaseRule(),
-        new AttributeTransitionRule(),
-        new RuleClassTransitionRule());
+        new TestAspects.BaseRule(), new AttributeTransitionRule(), new RuleClassTransitionRule());
     scratch.file("a/BUILD",
         "attribute_transition(",
         "   name='attribute',",
@@ -303,10 +280,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   @Test
   public void testConflictingAttributeAndRuleClassTransitions() throws Exception {
     setRulesAvailableInTests(
-        new TestAspects.BaseRule(),
-        new TestBaseRule(),
-        new AttributeTransitionRule(),
-        new RuleClassTransitionRule());
+        new TestAspects.BaseRule(), new AttributeTransitionRule(), new RuleClassTransitionRule());
     scratch.file("a/BUILD",
         "attribute_transition(",
         "   name='attribute',",
@@ -321,10 +295,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   @Test
   public void testEmptySplitDoesNotSuppressRuleClassTransition() throws Exception {
     setRulesAvailableInTests(
-        new TestAspects.BaseRule(),
-        new TestBaseRule(),
-        new EmptySplitRule(),
-        new RuleClassTransitionRule());
+        new TestAspects.BaseRule(), new EmptySplitRule(), new RuleClassTransitionRule());
     scratch.file(
         "a/BUILD",
         "empty_split(",
@@ -339,8 +310,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
 
   @Test
   public void testTopLevelRuleClassTransition() throws Exception {
-    setRulesAvailableInTests(
-        new TestAspects.BaseRule(), new TestBaseRule(), new RuleClassTransitionRule());
+    setRulesAvailableInTests(new TestAspects.BaseRule(), new RuleClassTransitionRule());
     scratch.file(
         "a/BUILD",
         "rule_class_transition(",
@@ -354,10 +324,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   @Test
   public void testTopLevelRuleClassTransitionAndNoTransition() throws Exception {
     setRulesAvailableInTests(
-        new TestAspects.BaseRule(),
-        new TestBaseRule(),
-        new RuleClassTransitionRule(),
-        new TestAspects.SimpleRule());
+        new TestAspects.BaseRule(), new RuleClassTransitionRule(), new TestAspects.SimpleRule());
     scratch.file(
         "a/BUILD",
         "rule_class_transition(",
@@ -374,7 +341,6 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
       throws Exception {
     setRulesAvailableInTests(
         new TestAspects.BaseRule(),
-        new TestBaseRule(),
         new AttributeTransitionRule(),
         new UsesRuleTransitionFactoryRule());
     useConfiguration("--test_filter=SET ON COMMAND LINE: original and best");
@@ -390,15 +356,13 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
         ")");
     List<ConfiguredTarget> deps = getConfiguredDeps("//a:top", "without_transition");
     BuildConfiguration config = Iterables.getOnlyElement(deps).getConfiguration();
-    assertThat(config.getFragment(TestConfiguration.class).getTestFilter())
-        .isEqualTo("SET BY PATCH FACTORY: funkiest");
+    assertThat(config.getTestFilter()).isEqualTo("SET BY PATCH FACTORY: funkiest");
   }
 
   @Test
   public void ruleTransitionFactoryCanReturnNullToCauseNoTransition() throws Exception {
     setRulesAvailableInTests(
         new TestAspects.BaseRule(),
-        new TestBaseRule(),
         new AttributeTransitionRule(),
         new UsesRuleTransitionFactoryRule());
     useConfiguration("--test_filter=SET ON COMMAND LINE: original and best");
@@ -414,14 +378,12 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
         ")");
     List<ConfiguredTarget> deps = getConfiguredDeps("//a:top", "without_transition");
     BuildConfiguration config = Iterables.getOnlyElement(deps).getConfiguration();
-    assertThat(config.getFragment(TestConfiguration.class).getTestFilter())
-        .isEqualTo("SET ON COMMAND LINE: original and best");
+    assertThat(config.getTestFilter()).isEqualTo("SET ON COMMAND LINE: original and best");
   }
 
   @Test
   public void topLevelRuleTransitionFactoryUsesNonconfigurableAttributes() throws Exception {
-    setRulesAvailableInTests(
-        new TestAspects.BaseRule(), new TestBaseRule(), new UsesRuleTransitionFactoryRule());
+    setRulesAvailableInTests(new TestAspects.BaseRule(), new UsesRuleTransitionFactoryRule());
     useConfiguration("--test_filter=SET ON COMMAND LINE: original and best");
     scratch.file(
         "a/BUILD",
@@ -430,14 +392,13 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
         "   sets_test_filter_to='Maximum Dance',",
         ")");
     ConfiguredTarget target = Iterables.getOnlyElement(update("//a:factory").getTargetsToBuild());
-    assertThat(target.getConfiguration().getFragment(TestConfiguration.class).getTestFilter())
+    assertThat(target.getConfiguration().getTestFilter())
         .isEqualTo("SET BY PATCH FACTORY: Maximum Dance");
   }
 
   @Test
   public void topLevelRuleTransitionFactoryCanReturnNullInTesting() throws Exception {
-    setRulesAvailableInTests(
-        new TestAspects.BaseRule(), new TestBaseRule(), new UsesRuleTransitionFactoryRule());
+    setRulesAvailableInTests(new TestAspects.BaseRule(), new UsesRuleTransitionFactoryRule());
     useConfiguration("--test_filter=SET ON COMMAND LINE: original and best");
     scratch.file(
         "a/BUILD",
@@ -450,21 +411,20 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
         reporter,
         Label.parseAbsoluteUnchecked("@//a:factory"),
         getTargetConfiguration(true));
-    assertThat(target.getConfiguration().getFragment(TestConfiguration.class).getTestFilter())
+    assertThat(target.getConfiguration().getTestFilter())
         .isEqualTo("SET ON COMMAND LINE: original and best");
   }
 
   /**
-   * Returns a custom {@link PatchTransition} with the given value added to {@link
-   * TestConfiguration.TestOptions#testFilter}.
+   * Returns a custom {@link PatchTransition} with the given value added to
+   * {@link BuildConfiguration.Options#testFilter}.
    */
   private static PatchTransition newPatchTransition(final String value) {
     return new PatchTransition() {
       @Override
       public BuildOptions apply(BuildOptions options) {
         BuildOptions toOptions = options.clone();
-        TestConfiguration.TestOptions baseOptions =
-            toOptions.get(TestConfiguration.TestOptions.class);
+        BuildConfiguration.Options baseOptions = toOptions.get(BuildConfiguration.Options.class);
         baseOptions.testFilter = (nullToEmpty(baseOptions.testFilter)) + value;
         return toOptions;
       }
@@ -477,9 +437,9 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   }
 
   /**
-   * Returns a custom {@link Attribute.SplitTransition} that splits {@link
-   * TestConfiguration.TestOptions#testFilter} down two paths: {@code += prefix + "1"} and {@code +=
-   * prefix + "2"}.
+   * Returns a custom {@link Attribute.SplitTransition} that splits
+   * {@link BuildConfiguration.Options#testFilter} down two paths: {@code += prefix + "1"}
+   * and {@code += prefix + "2"}.
    */
   private static Attribute.SplitTransition<BuildOptions> newSplitTransition(final String prefix) {
     return new Attribute.SplitTransition<BuildOptions>() {
@@ -488,8 +448,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
         ImmutableList.Builder<BuildOptions> result = ImmutableList.builder();
         for (int index = 1; index <= 2; index++) {
           BuildOptions toOptions = buildOptions.clone();
-          TestConfiguration.TestOptions baseOptions =
-              toOptions.get(TestConfiguration.TestOptions.class);
+          BuildConfiguration.Options baseOptions = toOptions.get(BuildConfiguration.Options.class);
           baseOptions.testFilter =
               (baseOptions.testFilter == null ? "" : baseOptions.testFilter) + prefix + index;
           result.add(toOptions);
@@ -505,8 +464,8 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   }
 
   /**
-   * Returns the value of {@link TestConfiguration.TestOptions#testFilter} in the output {@link
-   * BuildOptions} the given transition applier returns in its current state.
+   * Returns the value of {@link BuildConfiguration.Options#testFilter} in the output
+   * {@link BuildOptions} the given transition applier returns in its current state.
    */
   private List<String> getTestFilterOptionValue(BuildConfiguration.TransitionApplier applier)
       throws Exception {
@@ -516,7 +475,7 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
     for (BuildOptions toOptions : ConfiguredTargetFunction.getDynamicTransitionOptions(
         getTargetConfiguration().getOptions(), dep.getTransition(),
         ruleClassProvider.getAllFragments(), ruleClassProvider, false)) {
-      outValues.add(toOptions.get(TestConfiguration.TestOptions.class).testFilter);
+      outValues.add(toOptions.get(BuildConfiguration.Options.class).testFilter);
     }
     return outValues.build();
   }
@@ -574,8 +533,8 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   }
 
   /**
-   * Returns a new {@link Attribute.Configurator} that appends a given value to {@link
-   * TestConfiguration.TestOptions#testFilter}.
+   * Returns a new {@link Attribute.Configurator} that appends a given value to
+   * {@link BuildConfiguration.Options#testFilter}.
    */
   private static Attribute.Configurator<BuildOptions> newAttributeWithStaticConfigurator(
       final String value) {
@@ -606,21 +565,18 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   }
 
   /**
-   * Returns an {@link Attribute.Configurator} that repeats the existing value of {@link
-   * TestConfiguration.TestOptions#testFilter}, plus a signature suffix.
+   * Returns an {@link Attribute.Configurator} that repeats the existing
+   * value of {@link BuildConfiguration.Options#testFilter}, plus a signature suffix.
    */
   private static final Attribute.Configurator<BuildOptions> ATTRIBUTE_WITH_REPEATING_CONFIGURATOR =
-      (Attribute.Configurator<BuildOptions>)
-          newAttributeWithConfigurator(
-                  new Attribute.Configurator<BuildOptions>() {
-                    @Override
-                    public Attribute.Transition apply(BuildOptions fromOptions) {
-                      return newPatchTransition(
-                          fromOptions.get(TestConfiguration.TestOptions.class).testFilter
-                              + " (attr)");
-                    }
-                  })
-              .getConfigurator();
+      (Attribute.Configurator<BuildOptions>) newAttributeWithConfigurator(
+          new Attribute.Configurator<BuildOptions>() {
+            @Override
+            public Attribute.Transition apply(BuildOptions fromOptions) {
+              return newPatchTransition(
+                  fromOptions.get(BuildConfiguration.Options.class).testFilter + " (attr)");
+            }
+          }).getConfigurator();
 
   @Test
   public void splitTransitionThenAttributeConfigurator() throws Exception {
@@ -641,43 +597,30 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
     assertThat(getTestFilterOptionValue(applier)).containsExactly("from attr 1 from attr 2");
   }
 
-  /** Sets {@link TestConfiguration.TestOptions#testFilter} to the rule class of the given rule. */
+  /**
+   * Sets {@link BuildConfiguration.Options#testFilter} to the rule class of the given rule.
+   */
   private static final RuleTransitionFactory RULE_BASED_TEST_FILTER =
       rule ->
-          (PatchTransition)
-              buildOptions -> {
-                BuildOptions toOptions = buildOptions.clone();
-                toOptions.get(TestConfiguration.TestOptions.class).testFilter = rule.getRuleClass();
-                return toOptions;
-              };
+          (PatchTransition) buildOptions -> {
+            BuildOptions toOptions = buildOptions.clone();
+            toOptions.get(BuildConfiguration.Options.class).testFilter = rule.getRuleClass();
+            return toOptions;
+          };
 
-  private static final RuleDefinition RULE_WITH_OUTGOING_TRANSITION =
-      (MockRule)
-          () ->
-              MockRule.define(
-                  "change_deps",
-                  (builder, env) ->
-                      builder
-                          .add(MockRule.DEPS_ATTRIBUTE)
-                          .requiresConfigurationFragments(TestConfiguration.class)
-                          .depsCfg(RULE_BASED_TEST_FILTER));
+  private static final RuleDefinition RULE_WITH_OUTGOING_TRANSITION = (MockRule) () ->
+      MockRule.define(
+          "change_deps",
+          (builder, env) ->
+            builder
+                .add(MockRule.DEPS_ATTRIBUTE)
+                .depsCfg(RULE_BASED_TEST_FILTER));
 
   @Test
   public void outgoingRuleTransition() throws Exception {
-    setRulesAvailableInTests(
-        RULE_WITH_OUTGOING_TRANSITION,
-        (MockRule)
-            () ->
-                MockRule.define(
-                    "foo_rule",
-                    (builder, env) ->
-                        builder.requiresConfigurationFragments(TestConfiguration.class)),
-        (MockRule)
-            () ->
-                MockRule.define(
-                    "bar_rule",
-                    (builder, env) ->
-                        builder.requiresConfigurationFragments(TestConfiguration.class)));
+    setRulesAvailableInTests(RULE_WITH_OUTGOING_TRANSITION,
+        (MockRule) () -> MockRule.define("foo_rule"),
+        (MockRule) () -> MockRule.define("bar_rule"));
     scratch.file("outgoing/BUILD",
         "foo_rule(",
         "    name = 'foolib')",
@@ -688,15 +631,9 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
         "    deps  = [':foolib', ':barlib'])");
 
     List<ConfiguredTarget> deps = getConfiguredDeps("//outgoing:bin", "deps");
-    ImmutableMap<String, String> depLabelToTestFilterString =
-        ImmutableMap.of(
-            deps.get(0).getLabel().toString(),
-                deps.get(0).getConfiguration().getFragment(TestConfiguration.class).getTestFilter(),
-            deps.get(1).getLabel().toString(),
-                deps.get(1)
-                    .getConfiguration()
-                    .getFragment(TestConfiguration.class)
-                    .getTestFilter());
+    ImmutableMap<String, String> depLabelToTestFilterString = ImmutableMap.of(
+        deps.get(0).getLabel().toString(), deps.get(0).getConfiguration().getTestFilter(),
+        deps.get(1).getLabel().toString(), deps.get(1).getConfiguration().getTestFilter());
 
     assertThat(depLabelToTestFilterString).containsExactly(
         "//outgoing:foolib", "foo_rule",
