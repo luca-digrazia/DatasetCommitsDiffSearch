@@ -75,7 +75,7 @@ public class Cli {
 
     private void addCommand(Command command) {
         commands.put(command.getName(), command);
-        parser.addSubparsers().help("available commands");
+        parser.addSubparsers().help("Available commands");
         final Subparser subparser = parser.addSubparsers().addParser(command.getName());
         command.configure(subparser);
         subparser.description(command.getDescription())
