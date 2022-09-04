@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -63,22 +64,23 @@ class LambdaClassMaker {
     return result;
   }
 
-  private Path findOnlyUnprocessed(String pathPrefix) throws IOException {
-    // pathPrefix is an internal class name prefix containing '/', but paths obtained on Windows
-    // will not contain '/' and searches will fail.  So, construct an absolute path from the given
-    // string and use its string representation to find the file we need regardless of host
-    // system's file system
-    final String rootPathPrefixStr = rootDirectory.resolve(pathPrefix).toString();
-
+  private Path findOnlyUnprocessed(final String pathPrefix) throws IOException {
     // TODO(kmb): Investigate making this faster in the case of many lambdas
     // TODO(bazel-team): This could be much nicer with lambdas
     try (Stream<Path> results =
         Files.walk(rootDirectory)
+            .map(
+                new Function<Path, Path>() {
+                  @Override
+                  public Path apply(Path path) {
+                    return rootDirectory.relativize(path);
+                  }
+                })
             .filter(
                 new Predicate<Path>() {
                   @Override
                   public boolean test(Path path) {
-                    return path.toString().startsWith(rootPathPrefixStr)
+                    return path.toString().startsWith(pathPrefix)
                         && !generatedClasses.containsKey(path);
                   }
                 })) {
