@@ -21,9 +21,6 @@ import java.net.UnknownHostException;
 public class ExceptionUtils {
 
     public static Throwable getRootCause(Throwable t) {
-        if (t == null) {
-            return null;
-        }
         Throwable rootCause = t;
         Throwable cause = rootCause.getCause();
         while (cause != null && cause != rootCause) {
@@ -34,9 +31,6 @@ public class ExceptionUtils {
     }
 
     public static String formatMessageCause(Throwable t) {
-        if (t == null) {
-            return "Unknown cause";
-        }
         final StringBuilder causeMessage = new StringBuilder();
 
         // UnknownHostException has only the hostname as error message, we need to add some
