@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.BazelCcModuleApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcCompilationContextApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcCompilationOutputsApi;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcDebugInfoContextApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcLinkingContextApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcLinkingOutputsApi;
@@ -59,8 +58,7 @@ public class FakeCcModule
         LibraryToLinkApi<FileApi>,
         CcLinkingContextApi<FileApi>,
         CcToolchainVariablesApi,
-        CcToolchainConfigInfoApi,
-        CcDebugInfoContextApi> {
+        CcToolchainConfigInfoApi> {
 
   @Override
   public ProviderApi getCcToolchainProvider() {
@@ -333,18 +331,6 @@ public class FakeCcModule
   @Override
   public CcCompilationOutputsApi<FileApi> mergeCcCompilationOutputsFromStarlark(
       Sequence<?> compilationOutputs) {
-    return null;
-  }
-
-  @Override
-  public CcDebugInfoContextApi createCcDebugInfoFromStarlark(
-      CcCompilationOutputsApi<FileApi> compilationOutputs, StarlarkThread thread) {
-    return null;
-  }
-
-  @Override
-  public CcDebugInfoContextApi mergeCcDebugInfoFromStarlark(
-      Sequence<?> debugInfos, StarlarkThread thread) {
     return null;
   }
 }

@@ -186,13 +186,13 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
         if (type.getLabelClass() != LabelClass.OUTPUT) {
           continue;
         }
-        StarlarkList.Builder<Artifact> artifactsBuilder = StarlarkList.builder();
+        ImmutableList.Builder<Artifact> artifactsBuilder = ImmutableList.builder();
         for (OutputFile outputFile : ruleContext.getRule().getOutputFileMap().get(attrName)) {
           Artifact artifact = ruleContext.createOutputArtifact(outputFile);
           artifactsBuilder.add(artifact);
           artifactLabelMapBuilder.put(artifact, outputFile.getLabel());
         }
-        StarlarkList<Artifact> artifacts = artifactsBuilder.buildImmutable();
+        ImmutableList<Artifact> artifacts = artifactsBuilder.build();
 
         if (type == BuildType.OUTPUT) {
           if (artifacts.size() == 1) {
@@ -201,7 +201,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
             outputs.addOutput(attrName, Starlark.NONE);
           }
         } else if (type == BuildType.OUTPUT_LIST) {
-          outputs.addOutput(attrName, artifacts);
+          outputs.addOutput(attrName, StarlarkList.immutableCopyOf(artifacts));
         } else {
           throw new IllegalArgumentException(
               "Type of " + attrName + "(" + type + ") is not output type ");

@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.starlark.util.BazelEvaluationTestCase;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import javax.annotation.Nullable;
+import net.starlark.java.eval.ClassObject;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Module;
@@ -62,7 +63,6 @@ import net.starlark.java.eval.Mutability;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.eval.Structure;
 import net.starlark.java.eval.Tuple;
 import net.starlark.java.syntax.ParserInput;
 import net.starlark.java.syntax.Program;
@@ -81,7 +81,8 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
   private final BazelEvaluationTestCase ev = new BazelEvaluationTestCase();
 
   private StarlarkRuleContext createRuleContext(String label) throws Exception {
-    return new StarlarkRuleContext(getRuleContextForStarlark(getConfiguredTarget(label)), null);
+    return new StarlarkRuleContext(
+        getRuleContextForStarlark(getConfiguredTarget(label)), null, getStarlarkSemantics());
   }
 
   @Override
@@ -1194,14 +1195,14 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
   public void testStructCreation() throws Exception {
     // TODO(fwe): cannot be handled by current testing suite
     ev.exec("x = struct(a = 1, b = 2)");
-    assertThat(ev.lookup("x")).isInstanceOf(Structure.class);
+    assertThat(ev.lookup("x")).isInstanceOf(ClassObject.class);
   }
 
   @Test
   public void testStructFields() throws Exception {
     // TODO(fwe): cannot be handled by current testing suite
     ev.exec("x = struct(a = 1, b = 2)");
-    Structure x = (Structure) ev.lookup("x");
+    ClassObject x = (ClassObject) ev.lookup("x");
     assertThat(x.getValue("a")).isEqualTo(StarlarkInt.of(1));
     assertThat(x.getValue("b")).isEqualTo(StarlarkInt.of(2));
 
@@ -1408,15 +1409,13 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
                 StarlarkList.<Object>of(
                     mu,
                     StructProvider.STRUCT.create(
-                        ImmutableMap.<String, Object>of("x", dictOf(mu, 1, 1)), "no field '%s'"),
+                        ImmutableMap.<String, Object>of(
+                            "x", Dict.<Object, Object>of(mu, StarlarkInt.of(1), StarlarkInt.of(1))),
+                        "no field '%s'"),
                     Tuple.of()),
             "b", Tuple.of(),
-            "c", dictOf(mu, 2, 2)),
+            "c", Dict.<Object, Object>of(mu, StarlarkInt.of(2), StarlarkInt.of(2))),
         "no field '%s'");
-  }
-
-  private static Dict<Object, Object> dictOf(@Nullable Mutability mu, int k, int v) {
-    return Dict.<Object, Object>builder().put(StarlarkInt.of(k), StarlarkInt.of(v)).build(mu);
   }
 
   @Test

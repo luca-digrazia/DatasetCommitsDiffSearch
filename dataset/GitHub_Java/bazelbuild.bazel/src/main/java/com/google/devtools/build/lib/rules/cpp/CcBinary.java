@@ -152,13 +152,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     private final CcInfo ccInfo;
 
     public CcLauncherInfo(CcInfo ccInfo, CcCompilationOutputs ccCompilationOutputs) {
+      super(PROVIDER);
       this.ccInfo = ccInfo;
       this.ccCompilationOutputs = ccCompilationOutputs;
-    }
-
-    @Override
-    public Provider getProvider() {
-      return PROVIDER;
     }
 
     public CcCompilationOutputs getCcCompilationOutputs(RuleContext ruleContext) {
@@ -1049,26 +1045,23 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   private static NestedSet<Artifact> createDynamicLibrariesCopyActions(
       RuleContext ruleContext, Iterable<Artifact> dynamicLibrariesForRuntime) {
     NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
-    for (Artifact lib : dynamicLibrariesForRuntime) {
+    for (Artifact target : dynamicLibrariesForRuntime) {
       // If the binary and the DLL don't belong to the same package or the DLL is a source file,
       // we should copy the DLL to the binary's directory.
       if (!ruleContext
               .getLabel()
               .getPackageIdentifier()
-              .equals(lib.getOwner().getPackageIdentifier())
-          || lib.isSourceArtifact()) {
-        String targetName = ruleContext.getTarget().getName();
-        PathFragment targetSubDir = PathFragment.create(targetName).getParentDirectory();
+              .equals(target.getOwner().getPackageIdentifier())
+          || target.isSourceArtifact()) {
         // SymlinkAction on file is actually copy on Windows.
-        Artifact copy = ruleContext.getBinArtifact(targetSubDir.getRelative(lib.getFilename()));
-        ruleContext.registerAction(
-            SymlinkAction.toArtifact(
-                ruleContext.getActionOwner(), lib, copy, "Copying Execution Dynamic Library"));
+        Artifact copy = ruleContext.getBinArtifact(target.getFilename());
+        ruleContext.registerAction(SymlinkAction.toArtifact(
+            ruleContext.getActionOwner(), target, copy, "Copying Execution Dynamic Library"));
         result.add(copy);
       } else {
-        // If the library is already in the same directory as the binary, we don't need to copy it,
+        // If the target is already in the same directory as the binary, we don't need to copy it,
         // but we still add it the result.
-        result.add(lib);
+        result.add(target);
       }
     }
     return result.build();
@@ -1179,7 +1172,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(
             CcInfo.builder().setCcCompilationContext(ccCompilationContext).build())
-        .addNativeDeclaredProvider(
+        .addProvider(
+            CcNativeLibraryProvider.class,
             new CcNativeLibraryProvider(collectTransitiveCcNativeLibraries(ruleContext, libraries)))
         .addNativeDeclaredProvider(instrumentedFilesProvider)
         .addOutputGroup(OutputGroupInfo.VALIDATION, headerTokens)
@@ -1193,7 +1187,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     NestedSetBuilder<LibraryToLink> builder = NestedSetBuilder.linkOrder();
     builder.addAll(libraries);
     for (CcNativeLibraryProvider dep :
-        ruleContext.getPrerequisites("deps", CcNativeLibraryProvider.PROVIDER)) {
+        ruleContext.getPrerequisites("deps", CcNativeLibraryProvider.class)) {
       builder.addTransitive(dep.getTransitiveCcNativeLibraries());
     }
     return builder.build();
@@ -1305,6 +1299,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           return null;
         }
 
+        @SuppressWarnings("rawtypes")
         NestedSet<Tuple> dynamicDeps =
             Depset.noneableCast(dynamicDepsField, Tuple.class, "dynamic_deps");
 

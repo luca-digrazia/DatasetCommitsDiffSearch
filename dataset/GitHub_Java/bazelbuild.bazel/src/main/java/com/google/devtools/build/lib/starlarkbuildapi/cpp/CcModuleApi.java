@@ -644,7 +644,7 @@ public interface CcModuleApi<
 
   @StarlarkMethod(
       name = "create_linker_input",
-      doc = "Creates a <code>LinkerInput</code>.",
+      doc = "Creates a <code>LinkingContext</code>.",
       useStarlarkThread = true,
       parameters = {
         @Param(

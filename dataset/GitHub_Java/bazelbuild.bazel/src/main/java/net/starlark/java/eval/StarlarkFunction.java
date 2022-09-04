@@ -261,7 +261,7 @@ public final class StarlarkFunction implements StarlarkCallable {
       } else if (kwargs != null) {
         // residual keyword argument
         int sz = kwargs.size();
-        kwargs.putEntry(keyword, value);
+        kwargs.put(keyword, value, null);
         if (kwargs.size() == sz) {
           throw Starlark.errorf(
               "%s() got multiple values for keyword argument '%s'", getName(), keyword);

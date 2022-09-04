@@ -48,8 +48,7 @@ public interface BazelCcModuleApi<
         LibraryToLinkT extends LibraryToLinkApi<FileT>,
         LinkingContextT extends CcLinkingContextApi<FileT>,
         CcToolchainVariablesT extends CcToolchainVariablesApi,
-        CcToolchainConfigInfoT extends CcToolchainConfigInfoApi,
-        DebugContextT extends CcDebugInfoContextApi>
+        CcToolchainConfigInfoT extends CcToolchainConfigInfoApi>
     extends CcModuleApi<
         StarlarkActionFactoryT,
         FileT,
@@ -63,8 +62,7 @@ public interface BazelCcModuleApi<
         ConstraintValueT,
         StarlarkRuleContextT,
         CcToolchainConfigInfoT,
-        CompilationOutputsT,
-        DebugContextT> {
+        CompilationOutputsT> {
 
   @StarlarkMethod(
       name = "compile",
