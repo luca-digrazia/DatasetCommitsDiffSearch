@@ -74,12 +74,6 @@ class MailTemplateInstanceImpl implements MailTemplate.MailTemplateInstance {
     }
 
     @Override
-    public MailTemplateInstance replyTo(String... replyTo) {
-        this.mail.setReplyTo(replyTo);
-        return this;
-    }
-
-    @Override
     public MailTemplateInstance bounceAddress(String bounceAddress) {
         this.mail.setBounceAddress(bounceAddress);
         return this;
@@ -94,12 +88,6 @@ class MailTemplateInstanceImpl implements MailTemplate.MailTemplateInstance {
     @Override
     public MailTemplateInstance data(String key, Object value) {
         this.data.put(key, value);
-        return this;
-    }
-
-    @Override
-    public MailTemplateInstance setAttribute(String key, Object value) {
-        this.templateInstance.setAttribute(key, value);
         return this;
     }
 
