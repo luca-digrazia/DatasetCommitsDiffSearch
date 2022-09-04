@@ -28,8 +28,6 @@ import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
@@ -53,11 +51,11 @@ class ArtifactFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws ArtifactFunctionException, InterruptedException {
-    Artifact artifact = ArtifactSkyKey.artifact(skyKey);
-    boolean isMandatory = ArtifactSkyKey.isMandatory(skyKey);
+    ArtifactSkyKey artifactSkyKey = (ArtifactSkyKey) skyKey.argument();
+    Artifact artifact = artifactSkyKey.getArtifact();
     if (artifact.isSourceArtifact()) {
       try {
-        return createSourceValue(artifact, isMandatory, env);
+        return createSourceValue(artifact, artifactSkyKey.isMandatory(), env);
       } catch (MissingInputFileException e) {
         // The error is not necessarily truly transient, but we mark it as such because we have
         // the above side effect of posting an event to the EventBus. Importantly, that event
@@ -279,19 +277,18 @@ class ArtifactFunction implements SkyFunction {
       throws InterruptedException {
     // This artifact aggregates other artifacts. Keep track of them so callers can find them.
     ImmutableList.Builder<Pair<Artifact, FileArtifactValue>> inputs = ImmutableList.builder();
-    for (Map.Entry<SkyKey, SkyValue> entry : env.getValues(action.getInputs()).entrySet()) {
+    for (Map.Entry<SkyKey, SkyValue> entry :
+        env.getValues(ArtifactSkyKey.mandatoryKeys(action.getInputs())).entrySet()) {
       Artifact input = ArtifactSkyKey.artifact(entry.getKey());
       SkyValue inputValue = entry.getValue();
       Preconditions.checkNotNull(inputValue, "%s has null dep %s", artifact, input);
-      if (inputValue instanceof FileArtifactValue) {
-        inputs.add(Pair.of(input, (FileArtifactValue) inputValue));
-      } else if (inputValue instanceof TreeArtifactValue) {
-        inputs.add(Pair.of(input, ((TreeArtifactValue) inputValue).getSelfData()));
-      } else {
+      if (!(inputValue instanceof FileArtifactValue)) {
         // We do not recurse in aggregating middleman artifacts.
         Preconditions.checkState(!(inputValue instanceof AggregatingArtifactValue),
             "%s %s %s", artifact, action, inputValue);
+        continue;
       }
+      inputs.add(Pair.of(input, (FileArtifactValue) inputValue));
     }
     return (action.getActionType() == MiddlemanType.AGGREGATING_MIDDLEMAN)
         ? new AggregatingArtifactValue(inputs.build(), value)
@@ -315,7 +312,7 @@ class ArtifactFunction implements SkyFunction {
 
   @Override
   public String extractTag(SkyKey skyKey) {
-    return Label.print(ArtifactSkyKey.artifact(skyKey).getOwner());
+    return Label.print(((ArtifactSkyKey) skyKey.argument()).getArtifact().getOwner());
   }
 
   @VisibleForTesting

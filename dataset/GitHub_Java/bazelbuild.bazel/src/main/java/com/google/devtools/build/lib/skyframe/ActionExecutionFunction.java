@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.rules.cpp.IncludeScannable;
 import com.google.devtools.build.lib.skyframe.InputArtifactData.MutableInputArtifactData;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -386,7 +385,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     }
     // This may be recreated if we discover inputs.
     ActionMetadataHandler metadataHandler = new ActionMetadataHandler(state.inputArtifactData,
-        action.getOutputs(), tsgm.get(), pathResolver(state.actionFileSystem));
+        action.getOutputs(), tsgm.get());
     long actionStartTime = BlazeClock.nanoTime();
     // We only need to check the action cache if we haven't done it on a previous run.
     if (!state.hasCheckedActionCache()) {
@@ -463,8 +462,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
             new PerActionFileCache(state.inputArtifactData, /*missingArtifactsAllowed=*/ false);
       }
       metadataHandler =
-          new ActionMetadataHandler(state.inputArtifactData, action.getOutputs(), tsgm.get(),
-              pathResolver(state.actionFileSystem));
+          new ActionMetadataHandler(state.inputArtifactData, action.getOutputs(), tsgm.get());
       // Set the MetadataHandler to accept output information.
       metadataHandler.discardOutputMetadata();
     }
@@ -537,31 +535,13 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         // markOmitted is only called for remote execution, and this code only gets executed for
         // local execution.
         metadataHandler =
-            new ActionMetadataHandler(state.inputArtifactData, action.getOutputs(), tsgm.get(),
-                pathResolver(state.actionFileSystem));
+            new ActionMetadataHandler(state.inputArtifactData, action.getOutputs(), tsgm.get());
       }
     }
     Preconditions.checkState(!env.valuesMissing(), action);
     skyframeActionExecutor.afterExecution(
         action, metadataHandler, state.token, clientEnv, actionLookupData);
     return state.value;
-  }
-
-  private ArtifactPathResolver pathResolver(ActionFileSystem actionFileSystem) {
-    if (actionFileSystem != null) {
-      return new ArtifactPathResolver() {
-        @Override
-        public Path toPath(Artifact artifact) {
-          return actionFileSystem.getPath(artifact.getPath().getPathString());
-        }
-
-        @Override
-        public Root transformRoot(Root root) {
-          return Root.toFileSystem(root, actionFileSystem);
-        }
-      };
-    }
-    return ArtifactPathResolver.IDENTITY;
   }
 
   private static final Function<Artifact, SkyKey> TO_NONMANDATORY_SKYKEY =
@@ -723,7 +703,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       } catch (MissingInputFileException e) {
         missingCount++;
         if (input.getOwner() != null) {
-          rootCauses.add(new LabelCause(input.getOwner(), e.getMessage()));
+          rootCauses.add(new LabelCause(input.getOwner()));
         }
       } catch (ActionExecutionException e) {
         actionFailures++;
