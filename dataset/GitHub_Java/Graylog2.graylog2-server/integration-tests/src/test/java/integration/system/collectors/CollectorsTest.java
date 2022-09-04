@@ -66,8 +66,7 @@ public class CollectorsTest extends BaseRestTest {
                     .assertThat().body("collectors", notNullValue());
     }
 
-    // TODO: reenable after #1273 has been fixed.
-    //@Test
+    @Test
     @RequiresAuthentication
     public void testGetCollector() throws Exception {
         given().when()

@@ -32,14 +32,12 @@ public class SystemTest extends BaseRestTest {
                     .get("/system")
                 .then()
                     .body(".", containsAllKeys(
-                            "cluster_id",
                             "codename",
                             "facility",
                             "hostname",
                             "is_processing",
                             "lb_status",
                             "lifecycle",
-                            "operating_system",
                             "server_id",
                             "started_at",
                             "timezone",
