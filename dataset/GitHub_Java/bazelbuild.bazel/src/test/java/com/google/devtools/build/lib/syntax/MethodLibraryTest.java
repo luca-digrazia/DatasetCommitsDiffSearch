@@ -89,8 +89,9 @@ public class MethodLibraryTest extends EvaluationTestCase {
   @Test
   public void testMinWithDifferentTypes() throws Exception {
     new BothModesTest()
-        .testIfExactError("Cannot compare int with string", "min(1, '2', True)")
-        .testIfExactError("Cannot compare int with string", "min([1, '2', True])");
+        .testStatement("min(1, '2', True)", true)
+        .testStatement("min([1, '2', True])", true)
+        .testStatement("min(None, 1, 'test')", Runtime.NONE);
   }
 
   @Test
@@ -142,8 +143,9 @@ public class MethodLibraryTest extends EvaluationTestCase {
   @Test
   public void testMaxWithDifferentTypes() throws Exception {
     new BothModesTest()
-        .testIfExactError("Cannot compare int with string", "max(1, '2', True)")
-        .testIfExactError("Cannot compare int with string", "max([1, '2', True])");
+        .testStatement("max(1, '2', True)", "2")
+        .testStatement("max([1, '2', True])", "2")
+        .testStatement("max(None, 1, 'test')", "test");
   }
 
   @Test
@@ -353,15 +355,15 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testIfErrorContains(
             "Traceback (most recent call last):"
                 + LINE_SEPARATOR
-                + "\tFile \"\", line 8"
+                + "\tFile \"<unknown>\", line 8"
                 + LINE_SEPARATOR
                 + "\t\tfoo()"
                 + LINE_SEPARATOR
-                + "\tFile \"\", line 2, in foo"
+                + "\tFile \"<unknown>\", line 2, in foo"
                 + LINE_SEPARATOR
                 + "\t\tbar(1)"
                 + LINE_SEPARATOR
-                + "\tFile \"\", line 7, in bar"
+                + "\tFile \"<unknown>\", line 7, in bar"
                 + LINE_SEPARATOR
                 + "\t\t'test'.index(x)",
             "def foo():",
@@ -378,11 +380,11 @@ public class MethodLibraryTest extends EvaluationTestCase {
   public void testStackTraceWithIf() throws Exception {
     new SkylarkTest()
         .testIfErrorContains(
-            "File \"\", line 5"
+            "File \"<unknown>\", line 5"
                 + LINE_SEPARATOR
                 + "\t\tfoo()"
                 + LINE_SEPARATOR
-                + "\tFile \"\", line 3, in foo"
+                + "\tFile \"<unknown>\", line 3, in foo"
                 + LINE_SEPARATOR
                 + "\t\ts[0]",
             "def foo():",
@@ -411,15 +413,15 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testIfExactError(
             "Traceback (most recent call last):"
                 + LINE_SEPARATOR
-                + "\tFile \"\", line 6"
+                + "\tFile \"<unknown>\", line 6"
                 + LINE_SEPARATOR
                 + "\t\tfoo()"
                 + LINE_SEPARATOR
-                + "\tFile \"\", line 2, in foo"
+                + "\tFile \"<unknown>\", line 2, in foo"
                 + LINE_SEPARATOR
                 + "\t\tbar(1)"
                 + LINE_SEPARATOR
-                + "\tFile \"\", line 5, in bar"
+                + "\tFile \"<unknown>\", line 5, in bar"
                 + LINE_SEPARATOR
                 + "\t\t'test'.index(x)"
                 + LINE_SEPARATOR
@@ -1103,9 +1105,9 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testEval("sorted([[1], [], [2], [1, 2]])", "[[], [1], [1, 2], [2]]")
         .testEval("sorted([True, False, True])", "[False, True, True]")
         .testEval("sorted(['a','x','b','z'])", "[\"a\", \"b\", \"x\", \"z\"]")
+        .testEval("sorted([sorted, sorted])", "[sorted, sorted]")
         .testEval("sorted({1: True, 5: True, 4: False})", "[1, 4, 5]")
-        .testEval("sorted(depset([1, 5, 4]))", "[1, 4, 5]")
-        .testIfExactError("Cannot compare function with function", "sorted([sorted, sorted])");
+        .testEval("sorted(depset([1, 5, 4]))", "[1, 4, 5]");
   }
 
   @Test
