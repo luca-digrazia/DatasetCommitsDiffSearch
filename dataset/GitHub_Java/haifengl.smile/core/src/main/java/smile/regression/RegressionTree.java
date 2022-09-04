@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.regression;
 
@@ -28,11 +28,10 @@ import smile.data.measure.NominalScale;
 import smile.data.type.StructField;
 import smile.data.type.StructType;
 import smile.data.vector.BaseVector;
-import smile.feature.SHAP;
 import smile.math.MathEx;
 
 /**
- * Regression tree. A classification/regression tree can be learned by
+ * Decision tree for regression. A decision tree can be learned by
  * splitting the training set into subsets based on an attribute value
  * test. This process is repeated on each derived subset in a recursive
  * manner called recursive partitioning.
@@ -77,7 +76,7 @@ import smile.math.MathEx;
  * @see GradientTreeBoost
  * @see RandomForest
  */
-public class RegressionTree extends CART implements Regression<Tuple>, DataFrameRegression, SHAP<Tuple> {
+public class RegressionTree extends CART implements Regression<Tuple>, DataFrameRegression {
     private static final long serialVersionUID = 2L;
 
     /** The dependent variable. */
@@ -331,200 +330,5 @@ public class RegressionTree extends CART implements Regression<Tuple>, DataFrame
     @Override
     public StructType schema() {
         return schema;
-    }
-
-    /**
-     * The path of unique features we have split
-     * on so far during SHAP recursive traverse.
-     */
-    private class Path {
-        /** The feature index. */
-        int[] d;
-        /**
-         * The fraction of zero paths (where this feature is not
-         * in the non-zero index set S) that flow through this path.
-         */
-        double[] z;
-        /**
-         * The fraction of one paths (where this feature is
-         * in the non-zero index set S) that flow through this path.
-         */
-        double[] o;
-        /**
-         * The proportion of sets of a given cardinality that are present.
-         */
-        double[] w;
-
-        /**
-         * Constructor.
-         */
-        Path(int[] d, double[] z, double[] o, double[] w) {
-            this.d = d;
-            this.z = z;
-            this.o = o;
-            this.w = w;
-        }
-
-        /**
-         * Return a copy with new length.
-         */
-        Path copy(int len) {
-            // Arrays.copyOf will truncate or pad with zeros.
-            return new Path(
-                    Arrays.copyOf(d, len),
-                    Arrays.copyOf(z, len),
-                    Arrays.copyOf(o, len),
-                    Arrays.copyOf(w, len));
-        }
-
-        /** Returns the length of path. */
-        int length() {
-            return d.length;
-        }
-
-        /**
-         * To keep track of each possible subset size during the recursion,
-         * grows all these subsets according to a given fraction of ones and
-         * zeros.
-         */
-        Path extend(double pz, double po, int pi) {
-            int l = length();
-            Path m = copy(l + 1);
-            m.d[l] = pi;
-            m.z[l] = pz;
-            m.o[l] = po;
-            m.w[l] = l == 0 ? 1 : 0;
-
-            for (int i = l; --i > 0;) {
-                m.w[i] += po * m.w[i-1] * i / l;
-                m.w[i-1] = pz * m.w[i-1] * (l - i) / l;
-            }
-
-            return m;
-        }
-
-        /**
-         * Undo previous extensions when we split on the same feature twice,
-         * and undo each extension of the path inside a leaf to compute
-         * weights for each feature in the path.
-         */
-        Path unwind(int i) {
-            int l = length();
-            Path m = copy(l - 1);
-
-            double n = w[l - 1];
-            for (int j = l - 1; j-- > 0;) {
-                if (m.o[i] != 0) {
-                    double t = m.w[j];
-                    m.w[j] = n * l / (j * m.o[j]);
-                    n = t - m.w[j] * m.z[i] * (l - j - 1) / l;
-                } else {
-                    m.w[j] = (m.w[j] * l) / (m.z[i] * (l - j - 1));
-                }
-            }
-
-            for (int j = i; j < l-1; j++) {
-                m.d[j] = d[j+1];
-                m.z[j] = z[j+1];
-                m.o[j] = o[j+1];
-            }
-
-            return m;
-        }
-    }
-
-    @Override
-    public double[] shap(Tuple x) {
-        double[] phi = new double[schema.length()];
-        Path m = new Path(new int[0], new double[0], new double[0], new double[0]);
-        recurse(phi, x, root, m, 1, 1, 0);
-        return phi;
-    }
-
-    /**
-     * determine what the total permutation weight would be if we unwound a previous extension in the tree path
-     *
-     * @param pz the fraction of zero paths (where this feature is not in the set S) that flow through this branch
-     * @param po  the fraction of one paths (where this feature is in the set S) that flow through this branch
-     * @param pi       hold the proportion of sets of a given cardinality that are present
-     * @param unique_depth   new depth deep down the tree
-     * @param path_index     indexing for which is to unwind path value
-     * @param offsetDepth    indexing support sub-range operation
-     * @return the total permutation weight would be if we unwound a previous extension in the tree path
-     */
-    private double unwound(double[] pz, double[] po,
-                           double[] pi, int unique_depth, int path_index,
-                           int offsetDepth) {
-
-        double one_fraction = po[path_index + offsetDepth];
-        double zero_fraction = pz[path_index + offsetDepth];
-        double next_one_portion = pi[path_index + offsetDepth];
-        double total = 0;
-
-        double uniquePathPlus1 = (unique_depth + 1.0);
-        int startIdx = unique_depth - 1;
-        for (int i = startIdx; i > -1; i--) {
-            if (one_fraction != 0) {
-                double tmp = next_one_portion * uniquePathPlus1 / ((i + 1.0) * one_fraction);
-                total += tmp;
-                next_one_portion = pi[i + offsetDepth] - tmp * zero_fraction * ((unique_depth - i + 0.0) / uniquePathPlus1);
-            } else {
-                double numerator = pi[i + offsetDepth] / zero_fraction;
-                double denominator = (unique_depth - i + 0.0) / uniquePathPlus1;
-                total += (numerator / denominator);
-            }
-        }
-
-        return total;
-    }
-
-    /**
-     * Recursively keep track of what proportion of all possible subsets
-     * flow down into each of the leaves of the tree.
-     */
-    private void recurse(double[] phi, Tuple x, Node node, Path m, double pz, double po, int pi) {
-        m = m.extend(pz, po, pi);
-        int l = m.length();
-
-        if (node instanceof InternalNode) {
-            Node h, c;
-            int dj;
-            InternalNode split = (InternalNode) node;
-            dj = split.feature();
-            if (split.branch(x)) {
-                h = split.trueChild();
-                c = split.falseChild();
-            } else {
-                h = split.falseChild();
-                c = split.trueChild();
-            }
-
-            int rh = h.size();
-            int rc = c.size();
-            int rj = node.size();
-
-            double iz = 1.0;
-            double io = 1.0;
-            int k = 0;
-            for (; k < l; k++) {
-                if (m.d[k] == dj) break;
-            }
-
-            if (k < l) {
-                iz = m.z[k];
-                io = m.o[k];
-                m = m.unwind(k);
-            }
-
-            recurse(phi, x, h, m, iz * rh / rj, io, dj);
-            recurse(phi, x, c, m, iz * rc / rj, 0, dj);
-        } else {
-            double vj = ((RegressionNode) node).output();
-            for (int i = 1; i < l; i++) {
-                double w = MathEx.sum(m.unwind(i).w);
-                int mi = m.d[i];
-                phi[mi] += w * (m.o[i] - m.z[i]) * vj;
-            }
-        }
     }
 }
