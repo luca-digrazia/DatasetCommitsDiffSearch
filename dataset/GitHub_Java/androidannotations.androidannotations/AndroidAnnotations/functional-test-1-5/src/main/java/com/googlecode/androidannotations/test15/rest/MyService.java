@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -42,14 +42,6 @@ public interface MyService {
 	@Accept(MediaType.APPLICATION_JSON)
 	EventList getEvents(String location, int year);
 
-	@Get("/events/{year}/{location}")
-	@Accept(MediaType.APPLICATION_JSON)
-	Event[] getEventsArray(String location, int year);
-
-	@Get("/events/{year}/{location}")
-	@Accept(MediaType.APPLICATION_JSON)
-	Event[][] getEventsArrayOfArrays(String location, int year);
-
 	// The response can be a ResponseEntity<T>
 	@Get("/events/{year}/{location}")
 	/*
@@ -57,12 +49,6 @@ public interface MyService {
 	 * since it's a RuntimeException), but nothing else.
 	 */
 	ResponseEntity<EventList> getEvents2(String location, int year) throws RestClientException;
-
-	@Get("/events/{year}/{location}")
-	ResponseEntity<Event[]> getEventsArray2(String location, int year) throws RestClientException;
-
-	@Get("/events/{year}/{location}")
-	ResponseEntity<Event[][]> getEventsArrayOfArrays2(String location, int year) throws RestClientException;
 
 	// There should be max 1 parameter that is not mapped to an attribute. This
 	// parameter will be used as the post entity.
@@ -75,19 +61,19 @@ public interface MyService {
 
 	@Post("/events/")
 	ResponseEntity<Event> addEvent2(Event event);
-
+	
 	/**
 	 * Output different then input
 	 */
 	@Post("/events/")
 	ResponseEntity<String> addEvent3(Event event);
-
+	
 	/**
 	 * Output different then input
 	 */
 	@Post("/events/")
 	String addEvent4(Event event);
-
+	
 	@Post("/events/")
 	void addEvent5(Event event);
 
@@ -110,8 +96,6 @@ public interface MyService {
 
 	// if you need to add some configuration to the Spring RestTemplate.
 	RestTemplate getRestTemplate();
-
+	
 	void setRestTemplate(RestTemplate restTemplate);
-
-	void setRootUrl(String test);
 }

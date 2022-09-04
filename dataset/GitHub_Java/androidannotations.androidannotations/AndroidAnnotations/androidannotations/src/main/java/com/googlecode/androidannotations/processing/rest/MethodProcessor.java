@@ -72,11 +72,8 @@ public abstract class MethodProcessor implements ElementProcessor {
 		// exchange method call
 		JInvocation restCall = JExpr.invoke(holder.restTemplateField, "exchange");
 
-		// concat root url + suffix
-		JInvocation concatCall = JExpr.invoke(holder.rootUrlField, "concat");
-
-	    // add url param
-	    restCall.arg(concatCall.arg(JExpr.lit(methodHolder.getUrlSuffix())));
+		// add url param
+		restCall.arg(methodHolder.getUrl());
 
 		JClass httpMethod = holder.refClass(ProcessorConstants.HTTP_METHOD);
 		// add method type param
