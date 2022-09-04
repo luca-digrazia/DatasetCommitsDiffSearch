@@ -140,6 +140,11 @@ public class InputImpl extends PersistedImpl implements Input {
     }
 
     @Override
+    public String getInputId() {
+        return (String) fields.get(MessageInput.FIELD_INPUT_ID);
+    }
+
+    @Override
     public Boolean isGlobal() {
         final Object global = fields.get(MessageInput.FIELD_GLOBAL);
         if (global instanceof Boolean) {
