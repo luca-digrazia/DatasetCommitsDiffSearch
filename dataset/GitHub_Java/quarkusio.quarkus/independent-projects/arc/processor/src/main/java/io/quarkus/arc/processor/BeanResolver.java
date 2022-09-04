@@ -9,6 +9,7 @@ import static org.jboss.jandex.Type.Kind.WILDCARD_TYPE;
 
 import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -26,7 +27,8 @@ import org.jboss.jandex.TypeVariable;
 import org.jboss.jandex.WildcardType;
 
 /**
- * Implements type-safe resolution rules.
+ *
+ * @author Martin Kouba
  */
 class BeanResolver {
 
@@ -43,19 +45,13 @@ class BeanResolver {
         this.assignableFromMap = new ConcurrentHashMap<>();
         this.assignableFromMapFunction = name -> {
             Set<DotName> assignables = new HashSet<>();
-            for (ClassInfo subclass : beanDeployment.getBeanArchiveIndex().getAllKnownSubclasses(name)) {
+            Collection<ClassInfo> subclasses = beanDeployment.getIndex().getAllKnownSubclasses(name);
+            for (ClassInfo subclass : subclasses) {
                 assignables.add(subclass.name());
             }
-            for (ClassInfo implementor : beanDeployment.getBeanArchiveIndex().getAllKnownImplementors(name)) {
+            Collection<ClassInfo> implementors = beanDeployment.getIndex().getAllKnownImplementors(name);
+            for (ClassInfo implementor : implementors) {
                 assignables.add(implementor.name());
-            }
-            if (beanDeployment.hasApplicationIndex()) {
-                for (ClassInfo subclass : beanDeployment.getApplicationIndex().getAllKnownSubclasses(name)) {
-                    assignables.add(subclass.name());
-                }
-                for (ClassInfo implementor : beanDeployment.getApplicationIndex().getAllKnownImplementors(name)) {
-                    assignables.add(implementor.name());
-                }
             }
             return assignables;
         };
