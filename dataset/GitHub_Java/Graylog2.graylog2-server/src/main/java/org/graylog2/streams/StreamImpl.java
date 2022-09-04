@@ -222,10 +222,6 @@ public class StreamImpl implements Stream {
         return outputs.get(className);
     }
     
-    public boolean hasConfiguredOutputs(String typeClass) {
-        return !getOutputConfigurations(typeClass).isEmpty();
-    }
-    
     @Override
     public ObjectId getId() {
         return id;
