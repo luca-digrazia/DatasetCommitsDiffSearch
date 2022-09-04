@@ -17,11 +17,11 @@
 package org.graylog2.rest.resources.search;
 
 import com.codahale.metrics.annotation.Timed;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.glassfish.jersey.server.ChunkedOutput;
@@ -29,16 +29,16 @@ import org.graylog2.indexer.results.ScrollResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.SearchesConfig;
 import org.graylog2.indexer.searches.Sorting;
+import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
+import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
+import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.cluster.ClusterConfigService;
-import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
-import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
-import org.graylog2.rest.MoreMediaTypes;
 import org.graylog2.rest.models.search.responses.FieldStatsResult;
 import org.graylog2.rest.models.search.responses.HistogramResult;
 import org.graylog2.rest.models.search.responses.TermsResult;
 import org.graylog2.rest.models.search.responses.TermsStatsResult;
 import org.graylog2.rest.resources.search.responses.SearchResponse;
+import org.graylog2.shared.rest.AdditionalMediaType;
 import org.graylog2.shared.security.RestPermissions;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
@@ -51,7 +51,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 import java.util.List;
 import java.util.Locale;
 
@@ -113,7 +112,7 @@ public class AbsoluteSearchResource extends SearchResource {
     @ApiOperation(value = "Message search with absolute timerange.",
             notes = "Search for messages using an absolute timerange, specified as from/to " +
                     "with format yyyy-MM-ddTHH:mm:ss.SSSZ (e.g. 2014-01-23T15:34:49.000Z) or yyyy-MM-dd HH:mm:ss.")
-    @Produces(MoreMediaTypes.TEXT_CSV)
+    @Produces(AdditionalMediaType.TEXT_CSV)
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Invalid timerange parameters provided.")
     })
@@ -134,37 +133,16 @@ public class AbsoluteSearchResource extends SearchResource {
         try {
             final ScrollResult scroll = searches
                     .scroll(query, timeRange, limit, offset, fieldList, filter);
-            return buildChunkedOutput(scroll, limit);
+            final ChunkedOutput<ScrollResult.ScrollChunk> output = new ChunkedOutput<>(ScrollResult.ScrollChunk.class);
+
+            LOG.debug("[{}] Scroll result contains a total of {} messages", scroll.getQueryHash(), scroll.totalHits());
+            Runnable scrollIterationAction = createScrollChunkProducer(scroll, output, limit);
+            // TODO use a shared executor for async responses here instead of a single thread that's not limited
+            new Thread(scrollIterationAction).start();
+            return output;
         } catch (SearchPhaseExecutionException e) {
             throw createRequestExceptionForParseFailure(query, e);
         }
-    }
-
-    @GET
-    @Path("/export")
-    @Timed
-    @ApiOperation(value = "Export message search with absolute timerange.",
-            notes = "Search for messages using an absolute timerange, specified as from/to " +
-                    "with format yyyy-MM-ddTHH:mm:ss.SSSZ (e.g. 2014-01-23T15:34:49.000Z) or yyyy-MM-dd HH:mm:ss.")
-    @Produces(MoreMediaTypes.TEXT_CSV)
-    @ApiResponses(value = {
-            @ApiResponse(code = 400, message = "Invalid timerange parameters provided.")
-    })
-    public Response exportSearchAbsoluteChunked(
-            @ApiParam(name = "query", value = "Query (Lucene syntax)", required = true)
-            @QueryParam("query") @NotEmpty String query,
-            @ApiParam(name = "from", value = "Timerange start. See description for date format", required = true) @QueryParam("from") String from,
-            @ApiParam(name = "to", value = "Timerange end. See description for date format", required = true) @QueryParam("to") String to,
-            @ApiParam(name = "limit", value = "Maximum number of messages to return.", required = false) @QueryParam("limit") int limit,
-            @ApiParam(name = "offset", value = "Offset", required = false) @QueryParam("offset") int offset,
-            @ApiParam(name = "filter", value = "Filter", required = false) @QueryParam("filter") String filter,
-            @ApiParam(name = "fields", value = "Comma separated list of fields to return", required = true) @QueryParam("fields") String fields) {
-        checkSearchPermission(filter, RestPermissions.SEARCHES_ABSOLUTE);
-        final String filename = "graylog-search-result-absolute-" + from + "-" + to + ".csv";
-        return Response
-            .ok(searchAbsoluteChunked(query, from, to, limit, offset, filter, fields))
-            .header("Content-Disposition", "attachment; filename=" + filename)
-            .build();
     }
 
     @GET
