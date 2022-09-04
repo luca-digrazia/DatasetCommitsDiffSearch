@@ -17,62 +17,48 @@ package org.androidannotations.test15;
 
 import java.util.ArrayList;
 
-import org.androidannotations.annotations.EActivity;
+import org.androidannotations.annotations.EFragment;
 import org.androidannotations.annotations.OnActivityResult;
 import org.androidannotations.annotations.Result;
 
-import android.app.Activity;
+import android.app.Fragment;
 import android.content.Intent;
 import android.net.Uri;
 
-@EActivity(R.layout.views_injected)
-public class AwaitingResultActivity extends Activity {
+@EFragment(R.layout.views_injected)
+public class AwaitingResultFragment extends Fragment {
 
-	static final int FIRST_REQUEST = 11;
-	static final int SECOND_REQUEST = 22;
-	static final int THIRD_REQUEST = 33;
-	static final int FORTH_REQUEST = 44;
-	boolean onResultCalled = false;
-	boolean onResultWithDataCalled = false;
-	boolean onActivityResultWithResultCodeAndDataCalled = false;
-	boolean onActivityResultWithDataAndResultCodeCalled = false;
-	boolean onResultWithIntResultCodeCalled = false;
-	boolean onResultWithIntegerResultCodeCalled = false;
-	boolean onResultWithResultExtraCodeCalled = false;
+	private static final int FIRST_REQUEST = 11;
+	private static final int SECOND_REQUEST = 22;
+	private static final int THIRD_REQUEST = 33;
+	private static final int FORTH_REQUEST = 44;
 
 	@OnActivityResult(FIRST_REQUEST)
 	void onResult() {
-		onResultCalled = true;
 	}
 
 	@OnActivityResult(SECOND_REQUEST)
 	void onResultWithData(Intent intentData) {
-		onResultWithDataCalled = true;
 	}
 
 	@OnActivityResult(SECOND_REQUEST)
 	void onActivityResultWithResultCodeAndData(int result, Intent intentData) {
-		onActivityResultWithResultCodeAndDataCalled = true;
 	}
 
 	@OnActivityResult(SECOND_REQUEST)
 	void onActivityResultWithDataAndResultCode(Intent intentData, int result) {
-		onActivityResultWithDataAndResultCodeCalled = true;
 	}
 
 	@OnActivityResult(THIRD_REQUEST)
 	void onResultWithIntResultCode(int resultCode) {
-		onResultWithIntResultCodeCalled = true;
 	}
 
 	@OnActivityResult(THIRD_REQUEST)
 	void onResultWithIntegerResultCode(Integer resultCodeInteger) {
-		onResultWithIntegerResultCodeCalled = true;
 	}
 
 	@OnActivityResult(FORTH_REQUEST)
 	void onResultWithResultExtra(int resultCode, @Result("value") int i, @Result String s, @Result Uri uri,
 	        @Result ArrayList<Uri> uris, @Result String[] strings) {
-		onResultWithResultExtraCodeCalled = true;
 	}
 }

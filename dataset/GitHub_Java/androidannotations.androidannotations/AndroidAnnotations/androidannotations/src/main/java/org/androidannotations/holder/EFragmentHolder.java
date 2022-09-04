@@ -126,7 +126,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	private void setFragmentBuilder() throws JClassAlreadyExistsException {
 		fragmentBuilderClass = generatedClass._class(PUBLIC | STATIC, "FragmentBuilder_");
 		JClass superClass = refClass(org.androidannotations.api.builder.FragmentBuilder.class);
-		superClass = superClass.narrow(fragmentBuilderClass, getAnnotatedClass());
+		superClass = superClass.narrow(fragmentBuilderClass);
 		fragmentBuilderClass._extends(superClass);
 		fragmentArgumentsBuilderField = ref("args");
 		setFragmentBuilderBuild();
@@ -135,7 +135,6 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	private void setFragmentBuilderBuild() {
 		JMethod method = fragmentBuilderClass.method(PUBLIC, generatedClass._extends(), "build");
-		method.annotate(Override.class);
 		JBlock body = method.body();
 
 		JVar fragment = body.decl(generatedClass, "fragment_", _new(generatedClass));
@@ -436,8 +435,13 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JFieldVar getIntentFilterField(String[] actions, String[] dataSchemes) {
-		return receiverRegistrationHolder.getIntentFilterField(actions, dataSchemes);
+	public JVar getOnActivityResultExtras() {
+		return onActivityResultHolder.getResultExtras();
+	}
+
+	@Override
+	public JFieldVar getIntentFilterField(String[] actions) {
+		return receiverRegistrationHolder.getIntentFilterField(actions);
 	}
 
 	@Override
