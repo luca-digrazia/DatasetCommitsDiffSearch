@@ -13,6 +13,7 @@ import java.util.Map;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.credentials.CredentialsProvider;
 import io.quarkus.credentials.runtime.CredentialsProviderFinder;
 import io.quarkus.datasource.runtime.DataSourceRuntimeConfig;
@@ -34,7 +35,7 @@ public class PgPoolRecorder {
 
     private static final Logger log = Logger.getLogger(PgPoolRecorder.class);
 
-    public RuntimeValue<PgPool> configurePgPool(RuntimeValue<Vertx> vertx,
+    public RuntimeValue<PgPool> configurePgPool(RuntimeValue<Vertx> vertx, BeanContainer container,
             DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactivePostgreSQLConfig dataSourceReactivePostgreSQLConfig,
@@ -53,6 +54,9 @@ public class PgPoolRecorder {
                     legacyDataSourcesRuntimeConfig.defaultDataSource, legacyDataSourceReactivePostgreSQLConfig);
         }
 
+        PgPoolProducer producer = container.instance(PgPoolProducer.class);
+        producer.initialize(pgPool);
+
         shutdown.addShutdownTask(pgPool::close);
         return new RuntimeValue<>(pgPool);
     }
@@ -64,10 +68,6 @@ public class PgPoolRecorder {
                 dataSourceReactivePostgreSQLConfig);
         PgConnectOptions pgConnectOptions = toPgConnectOptions(dataSourceRuntimeConfig, dataSourceReactiveRuntimeConfig,
                 dataSourceReactivePostgreSQLConfig);
-        if (dataSourceReactiveRuntimeConfig.threadLocal.isPresent() &&
-                dataSourceReactiveRuntimeConfig.threadLocal.get()) {
-            return new ThreadLocalPgPool(vertx, pgConnectOptions, poolOptions);
-        }
         return PgPool.pool(vertx, pgConnectOptions, poolOptions);
     }
 

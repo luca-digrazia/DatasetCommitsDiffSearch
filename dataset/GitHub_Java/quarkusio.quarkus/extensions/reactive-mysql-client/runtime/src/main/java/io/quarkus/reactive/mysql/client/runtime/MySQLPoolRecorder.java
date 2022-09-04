@@ -13,6 +13,7 @@ import java.util.Map;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.credentials.CredentialsProvider;
 import io.quarkus.credentials.runtime.CredentialsProviderFinder;
 import io.quarkus.datasource.runtime.DataSourceRuntimeConfig;
@@ -34,7 +35,7 @@ public class MySQLPoolRecorder {
 
     private static final Logger log = Logger.getLogger(MySQLPoolRecorder.class);
 
-    public RuntimeValue<MySQLPool> configureMySQLPool(RuntimeValue<Vertx> vertx,
+    public RuntimeValue<MySQLPool> configureMySQLPool(RuntimeValue<Vertx> vertx, BeanContainer container,
             DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactiveMySQLConfig dataSourceReactiveMySQLConfig,
@@ -53,6 +54,9 @@ public class MySQLPoolRecorder {
                     legacyDataSourcesRuntimeConfig.defaultDataSource, legacyDataSourceReactiveMySQLConfig);
         }
 
+        MySQLPoolProducer producer = container.instance(MySQLPoolProducer.class);
+        producer.initialize(mysqlPool);
+
         shutdown.addShutdownTask(mysqlPool::close);
         return new RuntimeValue<>(mysqlPool);
     }
@@ -64,10 +68,6 @@ public class MySQLPoolRecorder {
                 dataSourceReactiveMySQLConfig);
         MySQLConnectOptions mysqlConnectOptions = toMySQLConnectOptions(dataSourceRuntimeConfig,
                 dataSourceReactiveRuntimeConfig, dataSourceReactiveMySQLConfig);
-        if (dataSourceReactiveRuntimeConfig.threadLocal.isPresent() &&
-                dataSourceReactiveRuntimeConfig.threadLocal.get()) {
-            return new ThreadLocalMySQLPool(vertx, mysqlConnectOptions, poolOptions);
-        }
         return MySQLPool.pool(vertx, mysqlConnectOptions, poolOptions);
     }
 
