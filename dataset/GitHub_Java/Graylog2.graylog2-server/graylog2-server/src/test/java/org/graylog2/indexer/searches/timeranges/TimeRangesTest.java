@@ -17,7 +17,6 @@
 package org.graylog2.indexer.searches.timeranges;
 
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -42,7 +41,7 @@ public class TimeRangesTest {
 
             @Override
             public DateTime getFrom() {
-                return DateTime.now(DateTimeZone.UTC);
+                return DateTime.now();
             }
 
             @Override
@@ -68,14 +67,14 @@ public class TimeRangesTest {
 
             @Override
             public DateTime getTo() {
-                return DateTime.now(DateTimeZone.UTC);
+                return DateTime.now();
             }
         })).isEqualTo(0);
     }
 
     @Test
     public void toSecondsReturnsCorrectNumberOfSeconds() throws Exception {
-        DateTime from = DateTime.now(DateTimeZone.UTC);
+        DateTime from = DateTime.now();
         DateTime to = from.plusMinutes(5);
 
         assertThat(TimeRanges.toSeconds(new AbsoluteRange(from, to))).isEqualTo(300);
