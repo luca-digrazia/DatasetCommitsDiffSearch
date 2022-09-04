@@ -81,11 +81,8 @@ public class SubclassGenerator extends AbstractGenerator {
      *
      * @param annotationLiterals
      * @param applicationClassPredicate
-     * @param generateSources
      */
-    public SubclassGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate,
-            boolean generateSources) {
-        super(generateSources);
+    public SubclassGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate) {
         this.applicationClassPredicate = applicationClassPredicate;
         this.annotationLiterals = annotationLiterals;
     }
@@ -98,8 +95,7 @@ public class SubclassGenerator extends AbstractGenerator {
      */
     Collection<Resource> generate(BeanInfo bean, String beanClassName, ReflectionRegistration reflectionRegistration) {
 
-        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()),
-                generateSources);
+        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()));
 
         Type providerType = bean.getProviderType();
         ClassInfo providerClass = getClassByName(bean.getDeployment().getIndex(), providerType.name());
