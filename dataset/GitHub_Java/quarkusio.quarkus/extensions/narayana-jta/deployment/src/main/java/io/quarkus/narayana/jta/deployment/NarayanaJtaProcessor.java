@@ -11,9 +11,6 @@ import javax.transaction.TransactionScoped;
 import com.arjuna.ats.arjuna.common.ObjectStoreEnvironmentBean;
 import com.arjuna.ats.internal.arjuna.coordinator.CheckedActionFactoryImple;
 import com.arjuna.ats.internal.arjuna.objectstore.ShadowNoFileLockStore;
-import com.arjuna.ats.internal.arjuna.utils.SocketProcessId;
-import com.arjuna.ats.internal.jta.recovery.arjunacore.CommitMarkableResourceRecordRecoveryModule;
-import com.arjuna.ats.internal.jta.recovery.arjunacore.RecoverConnectableAtomicAction;
 import com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionManagerImple;
 import com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionSynchronizationRegistryImple;
 import com.arjuna.ats.internal.jta.transaction.arjunacore.UserTransactionImple;
@@ -21,19 +18,19 @@ import com.arjuna.ats.jta.common.JTAEnvironmentBean;
 import com.arjuna.common.util.propertyservice.PropertiesFactory;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.ContextRegistrationPhaseBuildItem;
-import io.quarkus.arc.deployment.ContextRegistrationPhaseBuildItem.ContextConfiguratorBuildItem;
-import io.quarkus.arc.deployment.CustomScopeBuildItem;
+import io.quarkus.arc.deployment.ContextRegistrarBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.arc.processor.ContextRegistrar;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.IsTest;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
@@ -62,32 +59,30 @@ class NarayanaJtaProcessor {
     }
 
     @BuildStep
+    CapabilityBuildItem capability() {
+        return new CapabilityBuildItem(Capability.TRANSACTIONS);
+    }
+
+    @BuildStep
     @Record(RUNTIME_INIT)
     public void build(NarayanaJtaRecorder recorder,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<RuntimeInitializedClassBuildItem> runtimeInit,
             BuildProducer<FeatureBuildItem> feature,
-            TransactionManagerConfiguration transactions, ShutdownContextBuildItem shutdownContextBuildItem) {
-        recorder.handleShutdown(shutdownContextBuildItem);
+            TransactionManagerConfiguration transactions) {
         feature.produce(new FeatureBuildItem(Feature.NARAYANA_JTA));
         additionalBeans.produce(new AdditionalBeanBuildItem(NarayanaJtaProducers.class));
         additionalBeans.produce(new AdditionalBeanBuildItem(CDIDelegatingTransactionManager.class));
-
         runtimeInit.produce(new RuntimeInitializedClassBuildItem(
                 "com.arjuna.ats.internal.jta.resources.arjunacore.CommitMarkableResourceRecord"));
-        runtimeInit.produce(new RuntimeInitializedClassBuildItem(SocketProcessId.class.getName()));
-        runtimeInit.produce(new RuntimeInitializedClassBuildItem(CommitMarkableResourceRecordRecoveryModule.class.getName()));
-        runtimeInit.produce(new RuntimeInitializedClassBuildItem(RecoverConnectableAtomicAction.class.getName()));
-
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, JTAEnvironmentBean.class.getName(),
                 UserTransactionImple.class.getName(),
                 CheckedActionFactoryImple.class.getName(),
                 TransactionManagerImple.class.getName(),
                 TransactionSynchronizationRegistryImple.class.getName(),
                 ObjectStoreEnvironmentBean.class.getName(),
-                ShadowNoFileLockStore.class.getName(),
-                SocketProcessId.class.getName()));
+                ShadowNoFileLockStore.class.getName()));
 
         AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder();
         builder.addBeanClass(TransactionalInterceptorSupports.class);
@@ -110,7 +105,6 @@ class NarayanaJtaProcessor {
         recorder.disableTransactionStatusManager();
         recorder.setNodeName(transactions);
         recorder.setDefaultTimeout(transactions);
-        recorder.setConfig(transactions);
     }
 
     @BuildStep(onlyIf = IsTest.class)
@@ -132,14 +126,15 @@ class NarayanaJtaProcessor {
     }
 
     @BuildStep
-    public ContextConfiguratorBuildItem transactionContext(ContextRegistrationPhaseBuildItem contextRegistrationPhase) {
-        return new ContextConfiguratorBuildItem(contextRegistrationPhase.getContext()
-                .configure(TransactionScoped.class).normal().contextClass(TransactionContext.class));
-    }
+    public void transactionContext(
+            BuildProducer<ContextRegistrarBuildItem> contextRegistry) {
 
-    @BuildStep
-    public CustomScopeBuildItem registerScope() {
-        return new CustomScopeBuildItem(TransactionScoped.class);
+        contextRegistry.produce(new ContextRegistrarBuildItem(new ContextRegistrar() {
+            @Override
+            public void register(RegistrationContext registrationContext) {
+                registrationContext.configure(TransactionScoped.class).normal().contextClass(TransactionContext.class).done();
+            }
+        }, TransactionScoped.class));
     }
 
     @BuildStep

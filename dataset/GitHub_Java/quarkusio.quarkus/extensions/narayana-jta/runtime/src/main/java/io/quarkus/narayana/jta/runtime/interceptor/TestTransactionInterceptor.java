@@ -7,7 +7,6 @@ import java.util.ServiceLoader;
 import javax.inject.Inject;
 import javax.interceptor.AroundInvoke;
 import javax.interceptor.InvocationContext;
-import javax.transaction.Status;
 import javax.transaction.UserTransaction;
 
 import io.quarkus.narayana.jta.runtime.test.TestTransactionCallback;
@@ -29,14 +28,6 @@ public class TestTransactionInterceptor {
 
     @AroundInvoke
     public Object intercept(InvocationContext context) throws Exception {
-        // do nothing in case there is already a transaction (e.g. self-intercepted non-private non-test method in test class)
-        // w/o this check userTransaction.begin() would fail because there is already a tx associated with the current thread
-        if (userTransaction.getStatus() != Status.STATUS_NO_TRANSACTION) {
-            return context.proceed();
-        }
-
-        // an exception from proceed() has to be captured to avoid shadowing it in finally() with a exception from rollback()
-        Throwable caught = null;
         try {
             userTransaction.begin();
             for (TestTransactionCallback i : CALLBACKS) {
@@ -47,19 +38,9 @@ public class TestTransactionInterceptor {
                 i.preRollback();
             }
             return result;
-        } catch (Exception | Error e) { // note: "Error" shall mainly address AssertionError
-            caught = e;
-            throw e;
         } finally {
-            if (caught == null) {
-                userTransaction.rollback();
-            } else {
-                try {
-                    userTransaction.rollback();
-                } catch (Exception e) {
-                    caught.addSuppressed(e);
-                }
-            }
+            userTransaction.rollback();
         }
     }
+
 }
