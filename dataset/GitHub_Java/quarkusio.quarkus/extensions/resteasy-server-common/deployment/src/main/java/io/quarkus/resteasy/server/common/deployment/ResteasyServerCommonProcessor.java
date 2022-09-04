@@ -16,8 +16,6 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
-import javax.servlet.DispatcherType;
-
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationTarget.Kind;
@@ -47,14 +45,12 @@ import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.AutoInjectAnnotationBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
-import io.quarkus.arc.deployment.CustomScopeAnnotationsBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassNameExclusion;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.Transformation;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
@@ -70,13 +66,11 @@ import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
 import io.quarkus.resteasy.common.deployment.ResteasyCommonProcessor.ResteasyCommonConfig;
 import io.quarkus.resteasy.common.deployment.ResteasyDotNames;
 import io.quarkus.resteasy.common.runtime.QuarkusInjectorFactory;
-import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceDefiningAnnotationBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodParamAnnotations;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
-import io.quarkus.undertow.deployment.FilterBuildItem;
 
 /**
  * Processor that builds the RESTEasy server configuration.
@@ -141,13 +135,6 @@ public class ResteasyServerCommonProcessor {
          */
         @ConfigItem(defaultValue = "/")
         String path;
-
-        /**
-         * Whether or not JAX-RS metrics should be enabled if the Metrics capability is present and Vert.x is being used.
-         */
-        @ConfigItem(name = "metrics.enabled", defaultValue = "false")
-        public boolean metricsEnabled;
-
     }
 
     @BuildStep
@@ -378,8 +365,7 @@ public class ResteasyServerCommonProcessor {
     @BuildStep
     void processPathInterfaceImplementors(CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<UnremovableBeanBuildItem> unremovableBeans,
-            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            CustomScopeAnnotationsBuildItem scopes) {
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
         // NOTE: we cannot process @Path interface implementors within the ResteasyServerCommonProcessor.build() method because of build cycles
         IndexView index = combinedIndexBuildItem.getIndex();
         Set<DotName> pathInterfaces = new HashSet<>();
@@ -403,8 +389,8 @@ public class ResteasyServerCommonProcessor {
                     .setDefaultScope(resteasyConfig.singletonResources ? BuiltinScope.SINGLETON.getName() : null)
                     .setUnremovable();
             for (ClassInfo implementor : pathInterfaceImplementors) {
-                if (scopes.isScopeDeclaredOn(implementor)) {
-                    // It has a scope defined - just mark it as unremovable
+                if (BuiltinScope.isDeclaredOn(implementor)) {
+                    // It has a built-in scope - just mark it as unremovable
                     unremovableBeans
                             .produce(new UnremovableBeanBuildItem(new BeanClassNameExclusion(implementor.name().toString())));
                 } else {
@@ -424,33 +410,6 @@ public class ResteasyServerCommonProcessor {
         beanDefiningAnnotations
                 .produce(new BeanDefiningAnnotationBuildItem(ResteasyDotNames.APPLICATION_PATH,
                         BuiltinScope.SINGLETON.getName()));
-    }
-
-    @BuildStep
-    void enableMetrics(ResteasyConfig buildConfig,
-            BuildProducer<ResteasyJaxrsProviderBuildItem> jaxRsProviders,
-            BuildProducer<FilterBuildItem> servletFilters,
-            Capabilities capabilities) {
-        if (buildConfig.metricsEnabled && capabilities.isCapabilityPresent(Capabilities.METRICS)) {
-            if (capabilities.isCapabilityPresent(Capabilities.SERVLET)) {
-                // if running with servlet, use the MetricsFilter implementation from SmallRye
-                jaxRsProviders.produce(
-                        new ResteasyJaxrsProviderBuildItem("io.smallrye.metrics.jaxrs.JaxRsMetricsFilter"));
-                servletFilters.produce(
-                        FilterBuildItem.builder("metricsFilter", "io.smallrye.metrics.jaxrs.JaxRsMetricsServletFilter")
-                                .setAsyncSupported(true)
-                                .addFilterUrlMapping("*", DispatcherType.FORWARD)
-                                .addFilterUrlMapping("*", DispatcherType.INCLUDE)
-                                .addFilterUrlMapping("*", DispatcherType.REQUEST)
-                                .addFilterUrlMapping("*", DispatcherType.ASYNC)
-                                .addFilterUrlMapping("*", DispatcherType.ERROR)
-                                .build());
-            } else {
-                // if running with vert.x, use the MetricsFilter implementation from Quarkus codebase
-                jaxRsProviders.produce(
-                        new ResteasyJaxrsProviderBuildItem("io.quarkus.smallrye.metrics.runtime.QuarkusJaxRsMetricsFilter"));
-            }
-        }
     }
 
     private boolean hasAutoInjectAnnotation(Set<DotName> autoInjectAnnotationNames, ClassInfo clazz) {
