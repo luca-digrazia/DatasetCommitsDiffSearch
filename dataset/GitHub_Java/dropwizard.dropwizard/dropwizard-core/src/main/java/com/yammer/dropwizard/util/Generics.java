@@ -2,7 +2,6 @@ package com.yammer.dropwizard.util;
 
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -12,16 +11,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public class Generics {
     private Generics() { /* singleton */ }
-
-    /**
-     * Finds the type parameter for the given class.
-     *
-     * @param klass    a parameterized class
-     * @return the class's type parameter
-     */
-    public static Class<?> getTypeParameter(Class<?> klass) {
-        return getTypeParameter(klass, Object.class);
-    }
 
     /**
      * Finds the type parameter for the given class which is assignable to the bound class.
@@ -46,15 +35,9 @@ public class Generics {
             // should typically have one of type parameters (first one) that matches:
             for (Type param : ((ParameterizedType) t).getActualTypeArguments()) {
                 if (param instanceof Class<?>) {
-                    final Class<T> cls = determineClass(bound, param);
-                    if (cls != null) { return cls; }
-                }
-                else if (param instanceof TypeVariable) {
-                    for (Type paramBound : ((TypeVariable) param).getBounds()) {
-                        if (paramBound instanceof Class<?>) {
-                            final Class<T> cls = determineClass(bound, paramBound);
-                            if (cls != null) { return cls; }
-                        }
+                    final Class<?> cls = (Class<?>) param;
+                    if (bound.isAssignableFrom(cls)) {
+                        return (Class<T>) cls;
                     }
                 }
             }
@@ -62,14 +45,13 @@ public class Generics {
         throw new IllegalStateException("Cannot figure out type parameterization for " + klass.getName());
     }
 
-    private static <T> Class<T> determineClass(Class<? super T> bound, Type candidate) {
-        if (candidate instanceof Class<?>) {
-            final Class<?> cls = (Class<?>) candidate;
-            if (bound.isAssignableFrom(cls)) {
-                return (Class<T>) cls;
-            }
-        }
-
-        return null;
+    /**
+     * Finds the type parameter for the given class.
+     *
+     * @param klass    a parameterized class
+     * @return the class's type parameter
+     */
+    public static Class<?> getTypeParameter(Class<?> klass) {
+        return getTypeParameter(klass, Object.class);
     }
 }
