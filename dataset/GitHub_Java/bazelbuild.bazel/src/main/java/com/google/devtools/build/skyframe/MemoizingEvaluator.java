@@ -46,7 +46,7 @@ public interface MemoizingEvaluator {
    * missing.
    */
   <T extends SkyValue> EvaluationResult<T> evaluate(
-      Iterable<? extends SkyKey> roots,
+      Iterable<SkyKey> roots,
       Version version,
       boolean keepGoing,
       int numThreads,
