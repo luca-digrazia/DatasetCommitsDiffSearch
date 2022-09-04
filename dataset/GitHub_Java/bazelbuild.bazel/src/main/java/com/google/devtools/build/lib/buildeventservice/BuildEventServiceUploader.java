@@ -24,6 +24,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -42,6 +43,7 @@ import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceC
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildCompletingEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
@@ -54,6 +56,7 @@ import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Sleeper;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.v1.BuildStatus.Result;
 import com.google.devtools.build.v1.PublishBuildToolEventStreamRequest;
 import com.google.devtools.build.v1.PublishLifecycleEventRequest;
@@ -64,9 +67,10 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
 import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
@@ -144,9 +148,6 @@ public final class BuildEventServiceUploader implements Runnable {
   @GuardedBy("lock")
   private boolean interruptCausedByTimeout;
 
-  @GuardedBy("lock")
-  private boolean interruptCausedByCancel;
-
   private StreamContext streamContext;
 
   private BuildEventServiceUploader(
@@ -183,7 +184,7 @@ public final class BuildEventServiceUploader implements Runnable {
     // This needs to happen outside a synchronized block as it may trigger
     // stdout/stderr and lead to a deadlock. See b/109725432
     ListenableFuture<PathConverter> localFileUploadFuture =
-        localFileUploader.uploadReferencedLocalFiles(event.referencedLocalFiles());
+        uploadReferencedLocalFiles(event.referencedLocalFiles());
 
     synchronized (lock) {
       if (closeFuture != null) {
@@ -238,34 +239,22 @@ public final class BuildEventServiceUploader implements Runnable {
     }
   }
 
-  private void closeOnTimeout() {
-    synchronized (lock) {
-      interruptCausedByTimeout = true;
-      closeNow();
-    }
-  }
-
-  void closeOnCancel() {
-    synchronized (lock) {
-      interruptCausedByCancel = true;
-      closeNow();
-    }
-  }
-
   /** Stops the upload immediately. Enqueued events that have not been sent yet will be lost. */
-  private void closeNow() {
+  private void closeOnTimeout() {
     synchronized (lock) {
       if (uploadThread != null) {
         if (uploadThread.isInterrupted()) {
           return;
         }
+
+        interruptCausedByTimeout = true;
         uploadThread.interrupt();
       }
     }
   }
 
   private void logAndExitAbruptly(String message, ExitCode exitCode, Throwable cause) {
-    checkState(!exitCode.equals(ExitCode.SUCCESS));
+    checkState(exitCode != ExitCode.SUCCESS);
     logger.info(message);
     abruptExitCallback.accept(new AbruptExitException(message, exitCode, cause));
   }
@@ -302,14 +291,11 @@ public final class BuildEventServiceUploader implements Runnable {
         logger.info("Aborting the BES upload due to having received an interrupt");
         synchronized (lock) {
           Preconditions.checkState(
-              interruptCausedByTimeout || interruptCausedByCancel,
-              "Unexpected interrupt on BES uploader thread");
-          if (interruptCausedByTimeout) {
-            logAndExitAbruptly(
-                "The Build Event Protocol upload timed out",
-                ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
-                e);
-          }
+              interruptCausedByTimeout, "Unexpected interrupt on BES uploader thread");
+          logAndExitAbruptly(
+              "The Build Event Protocol upload timed out",
+              ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
+              e);
         }
       } finally {
         // TODO(buchgr): Due to b/113035235 exitFunc needs to be called before the close future
@@ -388,7 +374,7 @@ public final class BuildEventServiceUploader implements Runnable {
     // Every build event sent to the server needs to be acknowledged by it. This queue stores
     // the build events that have been sent and still have to be acknowledged by the server.
     // The build events are stored in the order they were sent.
-    Deque<SendBuildEventCommand> ackQueue = new ArrayDeque<>();
+    ConcurrentLinkedDeque<SendBuildEventCommand> ackQueue = new ConcurrentLinkedDeque<>();
     boolean lastEventSent = false;
     int acksReceived = 0;
     int retryAttempt = 0;
@@ -477,7 +463,7 @@ public final class BuildEventServiceUploader implements Runnable {
                           expected.getSequenceNumber(), actualSeqNum);
                   logger.info(message);
                   streamContext.abortStream(Status.FAILED_PRECONDITION.withDescription(message));
-                }
+              }
               } else {
                 String message =
                     String.format(
@@ -619,6 +605,18 @@ public final class BuildEventServiceUploader implements Runnable {
 
     // All retry attempts failed
     throw cause;
+  }
+
+  private ListenableFuture<PathConverter> uploadReferencedLocalFiles(
+      Collection<LocalFile> localFiles) {
+    Map<Path, LocalFile> localFileMap = Maps.newHashMapWithExpectedSize(localFiles.size());
+    for (LocalFile localFile : localFiles) {
+      // It is possible for targets to have duplicate artifacts (same path but different owners)
+      // in their output groups. Since they didn't trigger an artifact conflict they are the
+      // same file, so just skip either one
+      localFileMap.putIfAbsent(localFile.path, localFile);
+    }
+    return localFileUploader.upload(localFileMap);
   }
 
   private void ensureUploadThreadStarted() {
