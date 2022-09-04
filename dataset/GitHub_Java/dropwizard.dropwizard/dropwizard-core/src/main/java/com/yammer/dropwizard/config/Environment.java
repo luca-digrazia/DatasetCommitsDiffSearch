@@ -6,13 +6,13 @@ import com.sun.jersey.api.core.ResourceConfig;
 import com.sun.jersey.core.reflection.AnnotatedMethod;
 import com.sun.jersey.core.reflection.MethodList;
 import com.sun.jersey.core.spi.scanning.PackageNamesScanner;
-import com.sun.jersey.spi.container.servlet.ServletContainer;
+import com.yammer.dropwizard.AbstractService;
 import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
 import com.yammer.dropwizard.jetty.JettyManaged;
 import com.yammer.dropwizard.jetty.NonblockingServletHolder;
-import com.yammer.dropwizard.json.ObjectMapperFactory;
 import com.yammer.dropwizard.lifecycle.ExecutorServiceManager;
 import com.yammer.dropwizard.lifecycle.Managed;
+import com.yammer.dropwizard.logging.Log;
 import com.yammer.dropwizard.tasks.GarbageCollectionTask;
 import com.yammer.dropwizard.tasks.Task;
 import com.yammer.metrics.core.HealthCheck;
@@ -23,12 +23,12 @@ import org.eclipse.jetty.util.component.AbstractLifeCycle;
 import org.eclipse.jetty.util.component.AggregateLifeCycle;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.resource.Resource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.io.IOException;
 
 import javax.annotation.Nullable;
 import javax.servlet.Filter;
 import javax.servlet.Servlet;
+import javax.servlet.http.HttpServlet;
 import javax.ws.rs.HttpMethod;
 import javax.ws.rs.Path;
 import javax.ws.rs.ext.Provider;
@@ -49,10 +49,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * A Dropwizard service's environment.
  */
 public class Environment extends AbstractLifeCycle {
-    private static final Logger LOGGER = LoggerFactory.getLogger(Environment.class);
+    private static final Log LOG = Log.forClass(Environment.class);
 
-    private final String name;
-    private final Configuration configuration;
+    private final AbstractService<?> service;
     private final DropwizardResourceConfig config;
     private final ImmutableSet.Builder<HealthCheck> healthChecks;
     private final ImmutableMap.Builder<String, ServletHolder> servlets;
@@ -62,24 +61,16 @@ public class Environment extends AbstractLifeCycle {
     private final ImmutableSet.Builder<String> protectedTargets;
     private Resource baseResource;
     private final AggregateLifeCycle lifeCycle;
-    private final ObjectMapperFactory objectMapperFactory;
     private SessionHandler sessionHandler;
-    private ServletContainer jerseyServletContainer;
-
 
     /**
      * Creates a new environment.
      *
-     * @param name                the name of the service
-     * @param configuration       the service's {@link Configuration}
-     * @param objectMapperFactory the {@link ObjectMapperFactory} for the service
+     * @param service          the service
+     * @param configuration    the service's {@link com.yammer.dropwizard.config.Configuration}
      */
-    public Environment(String name,
-                       Configuration configuration,
-                       ObjectMapperFactory objectMapperFactory) {
-        this.name = name;
-        this.configuration = configuration;
-        this.objectMapperFactory = objectMapperFactory;
+    public <T extends Configuration> Environment(AbstractService<T> service, T configuration) {
+        this.service = service;
         this.config = new DropwizardResourceConfig(false) {
             @Override
             public void validate() {
@@ -100,7 +91,11 @@ public class Environment extends AbstractLifeCycle {
         this.baseResource = Resource.newClassPathResource(".");
         this.protectedTargets = ImmutableSet.builder();
         this.lifeCycle = new AggregateLifeCycle();
-        this.jerseyServletContainer = new ServletContainer(config);
+        
+        final HttpServlet jerseyContainer = service.getJerseyContainer(config, configuration);
+        if (jerseyContainer != null) {
+            addServlet(jerseyContainer, configuration.getHttpConfiguration().getRootPath()).setInitOrder(Integer.MAX_VALUE);
+        }
         addTask(new GarbageCollectionTask());
     }
 
@@ -203,14 +198,14 @@ public class Environment extends AbstractLifeCycle {
      *
      * @param servlet       the servlet instance
      * @param urlPattern    the URL pattern for requests that should be handled by {@code servlet}
-     * @return a {@link ServletBuilder} instance allowing for further configuration
+     * @return a {@link ServletConfiguration} instance allowing for further configuration
      */
-    public ServletBuilder addServlet(Servlet servlet,
+    public ServletConfiguration addServlet(Servlet servlet,
                                            String urlPattern) {
         final ServletHolder holder = new NonblockingServletHolder(checkNotNull(servlet));
-        final ServletBuilder servletConfig = new ServletBuilder(holder, servlets);
-        servletConfig.addUrlPattern(checkNotNull(urlPattern));
-        return servletConfig;
+        final ServletConfiguration configuration = new ServletConfiguration(holder, servlets);
+        configuration.addUrlPattern(checkNotNull(urlPattern));
+        return configuration;
     }
 
     /**
@@ -219,14 +214,14 @@ public class Environment extends AbstractLifeCycle {
      * @param klass         the servlet class
      * @param urlPattern    the URL pattern for requests that should be handled by instances of
      *                      {@code klass}
-     * @return a {@link ServletBuilder} instance allowing for further configuration
+     * @return a {@link ServletConfiguration} instance allowing for further configuration
      */
-    public ServletBuilder addServlet(Class<? extends Servlet> klass,
+    public ServletConfiguration addServlet(Class<? extends Servlet> klass,
                                            String urlPattern) {
         final ServletHolder holder = new ServletHolder(checkNotNull(klass));
-        final ServletBuilder servletConfig = new ServletBuilder(holder, servlets);
-        servletConfig.addUrlPattern(checkNotNull(urlPattern));
-        return servletConfig;
+        final ServletConfiguration configuration = new ServletConfiguration(holder, servlets);
+        configuration.addUrlPattern(checkNotNull(urlPattern));
+        return configuration;
     }
 
     /**
@@ -234,14 +229,14 @@ public class Environment extends AbstractLifeCycle {
      *
      * @param filter        the filter instance
      * @param urlPattern    the URL pattern for requests that should be handled by {@code filter}
-     * @return a {@link FilterBuilder} instance allowing for further configuration
+     * @return a {@link FilterConfiguration} instance allowing for further configuration
      */
-    public FilterBuilder addFilter(Filter filter,
+    public FilterConfiguration addFilter(Filter filter,
                                          String urlPattern) {
         final FilterHolder holder = new FilterHolder(checkNotNull(filter));
-        final FilterBuilder filterConfig = new FilterBuilder(holder, filters);
-        filterConfig.addUrlPattern(checkNotNull(urlPattern));
-        return filterConfig;
+        final FilterConfiguration configuration = new FilterConfiguration(holder, filters);
+        configuration.addUrlPattern(checkNotNull(urlPattern));
+        return configuration;
     }
 
     /**
@@ -250,14 +245,14 @@ public class Environment extends AbstractLifeCycle {
      * @param klass         the filter class
      * @param urlPattern    the URL pattern for requests that should be handled by instances of
      *                      {@code klass}
-     * @return a {@link FilterBuilder} instance allowing for further configuration
+     * @return a {@link FilterConfiguration} instance allowing for further configuration
      */
-    public FilterBuilder addFilter(Class<? extends Filter> klass,
+    public FilterConfiguration addFilter(Class<? extends Filter> klass,
                                          String urlPattern) {
         final FilterHolder holder = new FilterHolder(checkNotNull(klass));
-        final FilterBuilder filterConfig = new FilterBuilder(holder, filters);
-        filterConfig.addUrlPattern(checkNotNull(urlPattern));
-        return filterConfig;
+        final FilterConfiguration configuration = new FilterConfiguration(holder, filters);
+        configuration.addUrlPattern(checkNotNull(urlPattern));
+        return configuration;
     }
 
     /**
@@ -292,7 +287,7 @@ public class Environment extends AbstractLifeCycle {
         protectedTargets.add(checkNotNull(target));
     }
 
-    public void setBaseResource(Resource baseResource) {
+    public void setBaseResource(Resource baseResource) throws IOException {
         this.baseResource = baseResource;
     }
 
@@ -327,7 +322,8 @@ public class Environment extends AbstractLifeCycle {
      * @param value    the value of the Jersey property
      * @see ResourceConfig
      */
-    public void setJerseyProperty(String name, @Nullable Object value) {
+    public void setJerseyProperty(String name,
+                                  @Nullable Object value) {
         config.getProperties().put(checkNotNull(name), value);
     }
 
@@ -396,9 +392,6 @@ public class Environment extends AbstractLifeCycle {
     }
 
     ImmutableMap<String, ServletHolder> getServlets() {
-        addServlet(jerseyServletContainer,
-                   configuration.getHttpConfiguration()
-                                .getRootPath()).setInitOrder(Integer.MAX_VALUE);
         return servlets.build();
     }
 
@@ -421,18 +414,18 @@ public class Environment extends AbstractLifeCycle {
     ImmutableSet<EventListener> getServletListeners() {
         return servletListeners.build();
     }
-
+    
     private void logManagedObjects() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
         for (Object bean : lifeCycle.getBeans()) {
             builder.add(bean.toString());
         }
-        LOGGER.debug("managed objects = {}", builder.build());
+        LOG.debug("managed objects = {}", builder.build());
     }
 
     private void logHealthChecks() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
-        for (HealthCheck healthCheck : healthChecks.build()) {
+        for (final HealthCheck healthCheck : healthChecks.build()) {
             final String canonicalName = healthCheck.getClass().getCanonicalName();
             if (canonicalName == null) {
                 builder.add(String.format("%s(\"%s\")", HealthCheck.class.getCanonicalName(), healthCheck.getName()));
@@ -440,7 +433,7 @@ public class Environment extends AbstractLifeCycle {
                 builder.add(canonicalName);
             }
         }
-        LOGGER.debug("health checks = {}", builder.build());
+        LOG.debug("health checks = {}", builder.build());
     }
 
     private void logResources() {
@@ -458,7 +451,7 @@ public class Environment extends AbstractLifeCycle {
             }
         }
 
-        LOGGER.debug("resources = {}", builder.build());
+        LOG.debug("resources = {}", builder.build());
     }
 
     private void logProviders() {
@@ -476,7 +469,7 @@ public class Environment extends AbstractLifeCycle {
             }
         }
 
-        LOGGER.debug("providers = {}", builder.build());
+        LOG.debug("providers = {}", builder.build());
     }
 
     private void logEndpoints() {
@@ -498,72 +491,50 @@ public class Environment extends AbstractLifeCycle {
             final String path = klass.getAnnotation(Path.class).value();
             final ImmutableList.Builder<String> endpoints = ImmutableList.builder();
             for (AnnotatedMethod method : annotatedMethods(klass)) {
-                String rootPath = configuration.getHttpConfiguration().getRootPath();
-                if (rootPath.endsWith("/*")) {
-                    rootPath = rootPath.substring(0, rootPath.length()-2);
-                }
-                final StringBuilder pathBuilder = new StringBuilder()
-                        .append(rootPath)
-                        .append(path);
+                String methodPath = "";
                 if (method.isAnnotationPresent(Path.class)) {
-                    final String methodPath = method.getAnnotation(Path.class).value();
+                    methodPath = method.getAnnotation(Path.class).value();
                     if (!methodPath.startsWith("/") && !path.endsWith("/")) {
-                        pathBuilder.append('/');
+                        methodPath = "/" + methodPath;
                     }
-                    pathBuilder.append(methodPath);
                 }
                 for (HttpMethod verb : method.getMetaMethodAnnotations(HttpMethod.class)) {
                     endpoints.add(String.format("    %-7s %s (%s)",
                                                 verb.value(),
-                                                pathBuilder.toString(),
+                                                path + methodPath,
                                                 klass.getCanonicalName()));
                 }
             }
 
-            for (String line : Ordering.natural().sortedCopy(endpoints.build())) {
+            for (String line : Ordering.natural()
+                                       .sortedCopy(endpoints.build())) {
                 stringBuilder.append(line).append('\n');
             }
         }
 
-        LOGGER.info(stringBuilder.toString());
+        LOG.info(stringBuilder.toString());
     }
 
     private void logTasks() {
         final StringBuilder stringBuilder = new StringBuilder(1024).append("\n\n");
-
+        
         for (Task task : tasks.build()) {
             stringBuilder.append(String.format("    %-7s /tasks/%s (%s)\n",
                                                "POST", task.getName(), task.getClass().getCanonicalName()));
         }
-
-        LOGGER.info("tasks = {}", stringBuilder.toString());
+        
+        LOG.info("tasks = {}", stringBuilder.toString());
     }
 
     private MethodList annotatedMethods(Class<?> resource) {
         return new MethodList(resource, true).hasMetaAnnotation(HttpMethod.class);
     }
 
+    public AbstractService<?> getService() {
+        return service;
+    }
+
     public SessionHandler getSessionHandler() {
         return sessionHandler;
-    }
-
-    public ObjectMapperFactory getObjectMapperFactory() {
-        return objectMapperFactory;
-    }
-
-    public ResourceConfig getJerseyResourceConfig() {
-        return config;
-    }
-
-    public ServletContainer getJerseyServletContainer() {
-        return jerseyServletContainer;
-    }
-
-    public void setJerseyServletContainer(ServletContainer jerseyServletContainer) {
-        this.jerseyServletContainer = checkNotNull(jerseyServletContainer);
-    }
-
-    public String getName() {
-        return name;
     }
 }
