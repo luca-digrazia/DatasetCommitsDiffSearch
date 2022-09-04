@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.skyframe.serialization.SerializationContext
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.util.SpellChecker;
+import com.google.devtools.build.lib.vfs.Canonicalizer;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -66,8 +67,6 @@ import javax.annotation.Nullable;
  * as such. Note, however, that some member variables exposed via the public interface are not
  * strictly immutable, so until their types are guaranteed immutable we're not applying the
  * {@code @Immutable} annotation here.
- *
- * <p>When changing this class, make sure to make corresponding changes to serialization!
  */
 @SuppressWarnings("JavaLangClash")
 public class Package {
@@ -223,7 +222,7 @@ public class Package {
   protected Package(PackageIdentifier packageId, String runfilesPrefix) {
     this.packageIdentifier = packageId;
     this.workspaceName = runfilesPrefix;
-    this.nameFragment = packageId.getPackageFragment();
+    this.nameFragment = Canonicalizer.fragments().intern(packageId.getPackageFragment());
     this.name = nameFragment.getPathString();
   }
 
