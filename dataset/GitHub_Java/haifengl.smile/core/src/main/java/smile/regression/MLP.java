@@ -26,7 +26,6 @@ import smile.base.mlp.*;
 import smile.math.Scaler;
 import smile.math.MathEx;
 import smile.math.TimeFunction;
-import smile.util.Strings;
 
 /**
  * Fully connected multilayer perceptron neural network for regression.
@@ -44,7 +43,6 @@ import smile.util.Strings;
  */
  public class MLP extends MultilayerPerceptron implements Regression<double[]> {
     private static final long serialVersionUID = 2L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MLP.class);
 
     /** The scaling function of output values. */
     private final Scaler scaler;
@@ -148,7 +146,7 @@ import smile.util.Strings;
         }
 
         String activation = prop.getProperty("smile.mlp.activation", "ReLU");
-        List<LayerBuilder> layers = Arrays.stream(prop.getProperty("smile.mlp.layers", "100").split("\\|"))
+        List<LayerBuilder> layers = Arrays.stream(prop.getProperty("smile.mlp.layers", "100").split(","))
                 .mapToInt(Integer::parseInt)
                 .mapToObj(nodes -> Layer.builder(activation, nodes))
                 .collect(Collectors.toList());
@@ -179,7 +177,6 @@ import smile.util.Strings;
         double[][] batchx = new double[batch][];
         double[] batchy = new double[batch];
         for (int epoch = 1; epoch <= epochs; epoch++) {
-            logger.info("{} epoch", Strings.ordinal(epoch));
             int[] permutation = MathEx.permutate(x.length);
             for (int i = 0; i < x.length; i += batch) {
                 for (int j = 0; j < batch; j++) {
