@@ -23,8 +23,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.skyframe.Differencer.Diff;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DeletingInvalidationState;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DirtyingInvalidationState;
@@ -193,10 +191,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
               numThreads,
               progressReceiver,
               graphInconsistencyReceiver);
-      EvaluationResult<T> result;
-      try (SilentCloseable c = Profiler.instance().profile("ParallelEvaluator.eval")) {
-        result = evaluator.eval(roots);
-      }
+      EvaluationResult<T> result = evaluator.eval(roots);
       return EvaluationResult.<T>builder()
           .mergeFrom(result)
           .setWalkableGraph(new DelegatingWalkableGraph(graph))
