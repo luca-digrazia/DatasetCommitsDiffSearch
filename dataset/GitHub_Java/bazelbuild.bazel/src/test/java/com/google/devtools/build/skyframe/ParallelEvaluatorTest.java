@@ -601,9 +601,12 @@ public class ParallelEvaluatorTest {
     SkyKey topKey = GraphTester.toSkyKey("top");
     tester.getOrCreate(topKey).addDependency(catastropheKey).setComputedValue(CONCATENATE);
     EvaluationResult<StringValue> result = eval(keepGoing, topKey, otherKey);
-    ErrorInfo error = result.getError(topKey);
-    assertThat(error.getRootCauses()).containsExactly(catastropheKey);
-    if (keepGoing) {
+    if (!keepGoing) {
+      ErrorInfo error = result.getError(topKey);
+      assertThat(error.getRootCauses()).containsExactly(catastropheKey);
+    } else {
+      assertThat(result.hasError()).isTrue();
+      assertThat(result.errorMap()).isEmpty();
       assertThat(result.getCatastrophe()).isSameAs(catastrophe);
     }
   }
