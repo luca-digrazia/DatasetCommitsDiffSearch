@@ -432,11 +432,13 @@ class ApiClientImpl implements ApiClient {
             ensureExpectedResponseCodes();
 
             try {
+                // TODO implement streaming responses
                 Response response = requestBuilder.execute().get(timeoutValue, timeoutUnit);
 
                 target.touch();
                 return handleResponse(request, response);
             } catch (InterruptedException e) {
+                // TODO
                 target.markFailure();
             } catch (MalformedURLException e) {
                 LOG.error("Malformed URL", e);
@@ -450,6 +452,7 @@ class ApiClientImpl implements ApiClient {
                 LOG.error("REST call failed", rootCause(e));
                 throw new APIException(request, e);
             } catch (IOException e) {
+                // TODO
                 LOG.error("unhandled IOException", rootCause(e));
                 target.markFailure();
                 throw e;
@@ -722,6 +725,7 @@ class ApiClientImpl implements ApiClient {
                 builtUrl = uriBuilder.build();
                 return builtUrl.toURL();
             } catch (MalformedURLException e) {
+                // TODO handle this properly
                 LOG.error("Could not build target URL", e);
                 throw new RuntimeException(e);
             }
@@ -798,6 +802,7 @@ class ApiClientImpl implements ApiClient {
                 LOG.error("Malformed URL", e);
                 throw new RuntimeException("Malformed URL.", e);
             } catch (IOException e) {
+                // TODO
                 LOG.error("unhandled IOException", rootCause(e));
                 target.markFailure();
                 throw e;
