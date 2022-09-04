@@ -16,10 +16,11 @@
  */
 package org.graylog2.restclient.models;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import org.graylog2.restclient.models.api.responses.BufferSummaryResponse;
 import org.graylog2.restclient.models.api.responses.BuffersResponse;
+
+import static org.graylog2.restclient.lib.Tools.firstNonNull;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -34,11 +35,11 @@ public class BufferInfo {
     }
 
     public BufferSummaryResponse getInputBuffer() {
-        return MoreObjects.firstNonNull(inputBuffer, BufferSummaryResponse.EMPTY);
+        return firstNonNull(BufferSummaryResponse.EMPTY, inputBuffer);
     }
 
     public BufferSummaryResponse getOutputBuffer() {
-        return MoreObjects.firstNonNull(outputBuffer, BufferSummaryResponse.EMPTY);
+        return firstNonNull(BufferSummaryResponse.EMPTY, outputBuffer);
     }
 
     public static BufferInfo buildEmpty() {

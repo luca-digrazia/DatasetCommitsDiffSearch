@@ -21,12 +21,12 @@ import com.google.common.collect.Maps;
 import com.google.common.net.MediaType;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.rest.models.system.inputs.requests.InputLaunchRequest;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.DateTools;
 import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.metrics.Metric;
+import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
 import org.graylog2.restclient.models.api.responses.BufferClassesResponse;
 import org.graylog2.restclient.models.api.responses.BuffersResponse;
 import org.graylog2.restclient.models.api.responses.JournalInfo;
@@ -132,7 +132,7 @@ public class Node extends ClusterEntity {
     public BufferInfo getBufferInfo() {
         try {
             return new BufferInfo(
-                    api.path(routes.BuffersResource().utilization(), BuffersResponse.class)
+                    api.path(routes.BufferResource().utilization(), BuffersResponse.class)
                             .node(this)
                             .execute());
         } catch (Exception e) {
@@ -143,7 +143,7 @@ public class Node extends ClusterEntity {
 
     public BufferClassesResponse getBufferClasses() {
         try {
-            return api.path(routes.BuffersResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
+            return api.path(routes.BufferResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
         } catch (Exception e) {
             LOG.error("Unable to read buffer class names from node " + this, e);
         }
@@ -235,8 +235,12 @@ public class Node extends ClusterEntity {
         return inputs().total;
     }
 
-    public InputLaunchResponse updateInput(String inputId, String title, String type, boolean global, Map<String, Object> configuration, String node) {
-        final InputLaunchRequest request = InputLaunchRequest.create(title, type, global, configuration, node);
+    public InputLaunchResponse updateInput(String inputId, String title, String type, boolean global, Map<String, Object> configuration) {
+        final InputLaunchRequest request = new InputLaunchRequest();
+        request.title = title;
+        request.type = type;
+        request.global = global;
+        request.configuration = configuration;
 
         try {
             return api.path(routes.InputsResource().update(inputId), InputLaunchResponse.class)
@@ -251,7 +255,7 @@ public class Node extends ClusterEntity {
     }
 
     @Override
-    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, boolean isExclusive, String nodeId) throws ExclusiveInputException {
+    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, boolean isExclusive) throws ExclusiveInputException {
         if (isExclusive) {
             for (Input input : getInputs()) {
                 if (input.getType().equals(type)) {
@@ -260,7 +264,11 @@ public class Node extends ClusterEntity {
             }
         }
 
-        final InputLaunchRequest request = InputLaunchRequest.create(title, type, global, configuration, nodeId);
+        final InputLaunchRequest request = new InputLaunchRequest();
+        request.title = title;
+        request.type = type;
+        request.global = global;
+        request.configuration = configuration;
 
         try {
             return api.path(routes.InputsResource().create(), InputLaunchResponse.class)
@@ -274,7 +282,6 @@ public class Node extends ClusterEntity {
         }
     }
 
-    @Override
     public boolean launchExistingInput(String inputId) {
         try {
             api.path(routes.InputsResource().launchExisting(inputId))
@@ -440,13 +447,13 @@ public class Node extends ClusterEntity {
     }
 
     public void pause() throws IOException, APIException {
-        api.path(routes.SystemProcessingResource().pauseProcessing())
+        api.path(routes.SystemResource().pauseProcessing())
                 .node(this)
                 .execute();
     }
 
     public void resume() throws IOException, APIException {
-        api.path(routes.SystemProcessingResource().resumeProcessing())
+        api.path(routes.SystemResource().resumeProcessing())
                 .node(this)
                 .execute();
     }
@@ -523,7 +530,7 @@ public class Node extends ClusterEntity {
     }
 
     public void shutdown() throws APIException, IOException {
-        api.path(routes.SystemShutdownResource().shutdown())
+        api.path(routes.SystemResource().shutdown())
                 .node(this)
                 .expect(Http.Status.ACCEPTED)
                 .execute();
