@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.ByteArrayOutputStream;
 import java.io.FilterOutputStream;
@@ -34,7 +35,7 @@ import java.util.Collections;
  * <p>Also suppress the basename of source file, which is printed unconditionally by MSVC compiler,
  * there is no way to turn it off.
  */
-public class ShowIncludesFilter {
+public class ShowIncludesFilter implements FileOutErr.OutputFilter {
 
   private FilterShowIncludesOutputStream filterShowIncludesOutputStream;
   private final String sourceFileName;
@@ -92,6 +93,7 @@ public class ShowIncludesFilter {
     }
   }
 
+  @Override
   public FilterOutputStream getFilteredOutputStream(OutputStream outputStream) {
     filterShowIncludesOutputStream =
         new FilterShowIncludesOutputStream(outputStream, sourceFileName);
