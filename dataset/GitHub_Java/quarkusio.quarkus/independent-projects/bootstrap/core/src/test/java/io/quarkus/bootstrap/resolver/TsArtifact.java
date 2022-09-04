@@ -5,7 +5,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Properties;
 
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
@@ -45,7 +44,7 @@ public class TsArtifact {
         return new TsArtifact(DEFAULT_GROUP_ID, artifactId, EMPTY, TYPE_JAR, version);
     }
 
-    public interface ContentProvider {
+    interface ContentProvider {
         Path getPath(Path workDir) throws IOException;
     }
 
@@ -60,8 +59,6 @@ public class TsArtifact {
     private List<TsDependency> managedDeps = Collections.emptyList();
 
     protected ContentProvider content;
-
-    protected Properties pomProps;
 
     public String getGroupId() {
         return groupId;
@@ -168,10 +165,6 @@ public class TsArtifact {
         model.setPackaging(type);
         model.setVersion(version);
 
-        if(pomProps != null) {
-            model.setProperties(pomProps);
-        }
-
         if(!deps.isEmpty()) {
             for (TsDependency dep : deps) {
                 model.addDependency(dep.toPomDependency());
@@ -213,13 +206,6 @@ public class TsArtifact {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to install " + this, e);
         }
-    }
-
-    public void setPomProperty(String name, String value) {
-        if(pomProps == null) {
-            pomProps = new Properties();
-        }
-        pomProps.setProperty(name, value);
     }
 
     @Override

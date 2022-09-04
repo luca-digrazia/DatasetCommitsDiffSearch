@@ -221,11 +221,7 @@ public class MavenArtifactResolver {
     }
 
     public CollectResult collectDependencies(Artifact artifact, List<Dependency> deps) throws AppModelResolverException {
-        return collectDependencies(artifact, deps, Collections.emptyList());
-    }
-
-    public CollectResult collectDependencies(Artifact artifact, List<Dependency> deps, List<RemoteRepository> mainRepos) throws AppModelResolverException {
-        final CollectRequest request = newCollectRequest(artifact, mainRepos);
+        final CollectRequest request = newCollectRequest(artifact);
         request.setDependencies(deps);
         try {
             return repoSystem.collectDependencies(repoSession, request);
@@ -235,11 +231,7 @@ public class MavenArtifactResolver {
     }
 
     public DependencyResult resolveDependencies(Artifact artifact, List<Dependency> deps) throws AppModelResolverException {
-        return resolveDependencies(artifact, deps, Collections.emptyList());
-    }
-
-    public DependencyResult resolveDependencies(Artifact artifact, List<Dependency> deps, List<RemoteRepository> mainRepos) throws AppModelResolverException {
-        final CollectRequest request = newCollectRequest(artifact, mainRepos);
+        final CollectRequest request = newCollectRequest(artifact);
         request.setDependencies(deps);
         try {
             return repoSystem.resolveDependencies(repoSession,
@@ -262,7 +254,7 @@ public class MavenArtifactResolver {
                 deps.add(dep);
             }
         }
-        final List<RemoteRepository> requestRepos = aggregateRepositories(remoteRepos, newResolutionRepositories(descr.getRepositories()));
+        final List<RemoteRepository> requestRepos = remoteRepoManager.aggregateRepositories(repoSession, remoteRepos, descr.getRepositories(), true);
         try {
             return repoSystem.resolveDependencies(repoSession,
                     new DependencyRequest().setCollectRequest(
@@ -277,32 +269,24 @@ public class MavenArtifactResolver {
     }
 
     public DependencyResult resolveManagedDependencies(Artifact artifact, List<Dependency> deps, List<Dependency> managedDeps, String... excludedScopes) throws AppModelResolverException {
-        return resolveManagedDependencies(artifact, deps, managedDeps, Collections.emptyList(), excludedScopes);
-    }
-
-    public DependencyResult resolveManagedDependencies(Artifact artifact, List<Dependency> deps, List<Dependency> managedDeps, List<RemoteRepository> mainRepos, String... excludedScopes) throws AppModelResolverException {
         try {
             return repoSystem.resolveDependencies(repoSession,
                     new DependencyRequest().setCollectRequest(
-                            newCollectManagedRequest(artifact, deps, managedDeps, mainRepos, excludedScopes)));
+                            newCollectManagedRequest(artifact, deps, managedDeps, excludedScopes)));
         } catch (DependencyResolutionException e) {
             throw new AppModelResolverException("Failed to resolve dependencies for " + artifact, e);
         }
     }
 
     public CollectResult collectManagedDependencies(Artifact artifact, List<Dependency> deps, List<Dependency> managedDeps, String... excludedScopes) throws AppModelResolverException {
-        return collectManagedDependencies(artifact, deps, managedDeps, Collections.emptyList(), excludedScopes);
-    }
-
-    public CollectResult collectManagedDependencies(Artifact artifact, List<Dependency> deps, List<Dependency> managedDeps, List<RemoteRepository> mainRepos, String... excludedScopes) throws AppModelResolverException {
         try {
-            return repoSystem.collectDependencies(repoSession, newCollectManagedRequest(artifact, deps, managedDeps, mainRepos, excludedScopes));
+            return repoSystem.collectDependencies(repoSession, newCollectManagedRequest(artifact, deps, managedDeps, excludedScopes));
         } catch (DependencyCollectionException e) {
             throw new AppModelResolverException("Failed to collect dependencies for " + artifact, e);
         }
     }
 
-    private CollectRequest newCollectManagedRequest(Artifact artifact, List<Dependency> deps, List<Dependency> managedDeps, List<RemoteRepository> mainRepos, String... excludedScopes) throws AppModelResolverException {
+    private CollectRequest newCollectManagedRequest(Artifact artifact, List<Dependency> deps, List<Dependency> managedDeps, String... excludedScopes) throws AppModelResolverException {
         final ArtifactDescriptorResult descr = resolveDescriptor(artifact);
         Collection<String> excluded;
         if(excludedScopes.length == 0) {
@@ -341,20 +325,11 @@ public class MavenArtifactResolver {
             }
         }
 
-        final List<RemoteRepository> repos = aggregateRepositories(mainRepos, remoteRepos);
         return new CollectRequest()
                 .setRootArtifact(artifact)
                 .setDependencies(mergeDeps(deps, originalDeps, managedVersions))
                 .setManagedDependencies(mergedManagedDeps)
-                .setRepositories(aggregateRepositories(repos, newResolutionRepositories(descr.getRepositories())));
-    }
-
-    public List<RemoteRepository> newResolutionRepositories(List<RemoteRepository> repos) {
-        return repos.isEmpty() ? Collections.emptyList() : repoSystem.newResolutionRepositories(repoSession, repos);
-    }
-
-    public List<RemoteRepository> aggregateRepositories(List<RemoteRepository> dominant, List<RemoteRepository> recessive) {
-        return dominant.isEmpty() ? recessive : remoteRepoManager.aggregateRepositories(repoSession, dominant, recessive, false);
+                .setRepositories(remoteRepoManager.aggregateRepositories(repoSession, remoteRepos, descr.getRepositories(), true));
     }
 
     public void install(Artifact artifact) throws AppModelResolverException {
@@ -365,10 +340,10 @@ public class MavenArtifactResolver {
         }
     }
 
-    private CollectRequest newCollectRequest(Artifact artifact, List<RemoteRepository> mainRepos) throws AppModelResolverException {
+    private CollectRequest newCollectRequest(Artifact artifact) throws AppModelResolverException {
         return new CollectRequest()
                 .setRoot(new Dependency(artifact, JavaScopes.RUNTIME))
-                .setRepositories(aggregateRepositories(mainRepos, remoteRepos));
+                .setRepositories(remoteRepos);
     }
 
     private List<Dependency> mergeDeps(List<Dependency> dominant, List<Dependency> recessive, Map<AppArtifactKey, String> managedVersions) {
