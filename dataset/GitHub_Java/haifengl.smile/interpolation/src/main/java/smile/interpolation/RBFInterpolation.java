@@ -15,13 +15,13 @@
  *******************************************************************************/
 package smile.interpolation;
 
-import smile.math.MathEx;
-import smile.math.matrix.Matrix;
+import smile.math.Math;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.rbf.GaussianRadialBasis;
 import smile.math.rbf.RadialBasisFunction;
-import smile.math.matrix.Cholesky;
-import smile.math.matrix.LU;
+import smile.math.matrix.CholeskyDecomposition;
+import smile.math.matrix.LUDecomposition;
 
 /**
  * Radial basis function interpolation is a popular method for the data points are
@@ -109,12 +109,12 @@ public class RBFInterpolation {
 
         int n = x.length;
 
-        DenseMatrix G = Matrix.zeros(n, n);
+        DenseMatrix G = new ColumnMajorMatrix(n, n);
         double[] rhs = new double[n];
         for (int i = 0; i < n; i++) {
             double sum = 0.0;
             for (int j = 0; j <= i; j++) {
-                double r = rbf.f(MathEx.distance(x[i], x[j]));
+                double r = rbf.f(Math.distance(x[i], x[j]));
                 G.set(i, j, r);
                 G.set(j, i, r);
                 sum += 2 * r;
@@ -128,11 +128,11 @@ public class RBFInterpolation {
         }
 
         if (rbf instanceof GaussianRadialBasis) {
-            Cholesky cholesky = G.cholesky();
+            CholeskyDecomposition cholesky = new CholeskyDecomposition(G);
             cholesky.solve(rhs);
             w = rhs;
         } else {
-            LU lu = G.lu(true);
+            LUDecomposition lu = new LUDecomposition(G);
             lu.solve(rhs);
             w = rhs;
         }
@@ -148,7 +148,7 @@ public class RBFInterpolation {
 
         double sum = 0.0, sumw = 0.0;
         for (int i = 0; i < this.x.length; i++) {
-            double f = rbf.f(MathEx.distance(x, this.x[i]));
+            double f = rbf.f(Math.distance(x, this.x[i]));
             sumw += w[i] * f;
             sum += f;
         }
