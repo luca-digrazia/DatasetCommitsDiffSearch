@@ -43,7 +43,7 @@ public class SimpleJsonResource extends SuperClass<Person> {
 
     @POST
     @Path("/person-custom-mt")
-    @Produces("application/vnd.quarkus.person-v1+json")
+    @Produces(MediaType.APPLICATION_JSON)
     @Consumes("application/vnd.quarkus.person-v1+json")
     public Person getPersonCustomMediaType(Person person) {
         if (BlockingOperationControl.isBlockingAllowed()) {
