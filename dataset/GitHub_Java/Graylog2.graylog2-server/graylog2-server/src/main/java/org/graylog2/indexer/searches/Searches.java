@@ -217,13 +217,13 @@ public class Searches {
     }
 
     public SearchResult search(String query, String filter, TimeRange range, int limit, int offset, Sorting sorting) {
-        final SearchesConfig searchesConfig = SearchesConfig.builder()
-                .query(query)
-                .filter(filter)
-                .range(range)
-                .limit(limit)
-                .offset(offset)
-                .sorting(sorting)
+        final SearchesConfig searchesConfig = SearchesConfigBuilder.newConfig()
+                .setQuery(query)
+                .setFilter(filter)
+                .setRange(range)
+                .setLimit(limit)
+                .setOffset(offset)
+                .setSorting(sorting)
                 .build();
 
         return search(searchesConfig);
