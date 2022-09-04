@@ -436,7 +436,7 @@ public class Indices implements IndexManagement {
                 .request();
         try {
             final GetIndexResponse response = c.admin().indices()
-                    .getIndex(indexRequest).actionGet();
+                    .getIndex(indexRequest).actionGet(1,TimeUnit.SECONDS);
             final Settings settings = response.settings().get(index);
             if (settings == null) {
                 return null;
