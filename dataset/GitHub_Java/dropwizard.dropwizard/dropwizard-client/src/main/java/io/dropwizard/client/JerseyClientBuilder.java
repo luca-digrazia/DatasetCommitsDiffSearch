@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.jersey.gzip.ConfiguredGZipEncoder;
 import io.dropwizard.jersey.gzip.GZipDecoder;
-import io.dropwizard.jersey.jackson.JacksonBinder;
+import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
 import io.dropwizard.jersey.validation.HibernateValidationFeature;
 import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.lifecycle.Managed;
@@ -19,9 +19,6 @@ import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.glassfish.jersey.client.ClientConfig;
-import org.glassfish.jersey.client.rx.Rx;
-import org.glassfish.jersey.client.rx.RxClient;
-import org.glassfish.jersey.client.rx.RxInvoker;
 import org.glassfish.jersey.client.spi.ConnectorProvider;
 
 import javax.net.ssl.HostnameVerifier;
@@ -314,15 +311,6 @@ public class JerseyClientBuilder {
     }
 
     /**
-     * Builds the {@link RxClient} instance.
-     *
-     * @return a fully-configured {@link RxClient}
-     */
-    public <RX extends RxInvoker> RxClient<RX> buildRx(String name, Class<RX> invokerType) {
-        return Rx.from(build(name), invokerType, executorService);
-    }
-
-    /**
      * Builds the {@link Client} instance.
      *
      * @return a fully-configured {@link Client}
@@ -403,7 +391,7 @@ public class JerseyClientBuilder {
             config.register(provider);
         }
 
-        config.register(new JacksonBinder(objectMapper));
+        config.register(new JacksonMessageBodyProvider(objectMapper));
         config.register(new HibernateValidationFeature(validator));
 
         for (Map.Entry<String, Object> property : this.properties.entrySet()) {

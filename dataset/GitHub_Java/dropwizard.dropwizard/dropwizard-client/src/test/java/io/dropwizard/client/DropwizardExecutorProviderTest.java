@@ -4,7 +4,7 @@ import io.dropwizard.util.Duration;
 import org.glassfish.jersey.spi.ExecutorServiceProvider;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
