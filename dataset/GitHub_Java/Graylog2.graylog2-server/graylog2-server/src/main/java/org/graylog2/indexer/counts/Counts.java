@@ -16,21 +16,24 @@
  */
 package org.graylog2.indexer.counts;
 
-import org.elasticsearch.action.count.CountRequest;
-import org.elasticsearch.client.Client;
-import org.graylog2.indexer.Deflector;
-
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import org.elasticsearch.action.count.CountRequest;
+import org.elasticsearch.client.Client;
+import org.elasticsearch.node.Node;
+import org.graylog2.indexer.Deflector;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 @Singleton
 public class Counts {
     private final Client c;
     private final Deflector deflector;
 
     @Inject
-    public Counts(Client client, Deflector deflector) {
-        this.c = client;
+    public Counts(Node node, Deflector deflector) {
+        this.c = node.client();
         this.deflector = deflector;
     }
 

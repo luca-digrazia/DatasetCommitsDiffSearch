@@ -20,47 +20,36 @@ package org.graylog2.streams;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import edu.emory.mathcs.backport.java.util.Collections;
 import org.bson.types.ObjectId;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.joda.time.DateTime;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 import java.util.HashMap;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
 
-@RunWith(MockitoJUnitRunner.class)
 public class StreamListFingerprintTest {
-    @Mock
-    Stream stream1;
-    @Mock
-    Stream stream2;
-    @Mock
-    StreamRule streamRule1;
-    @Mock
-    StreamRule streamRule2;
-    @Mock
-    StreamRule streamRule3;
-    @Mock
-    Output output1;
-    @Mock
-    Output output2;
+    @Mock Stream stream1;
+    @Mock Stream stream2;
+    @Mock StreamRule streamRule1;
+    @Mock StreamRule streamRule2;
+    @Mock StreamRule streamRule3;
+    @Mock Output output1;
+    @Mock Output output2;
 
-    private final String expectedFingerprint = "2d0436f6d02566c5ab9657f4cee95ab2287a5868";
+    private final String expectedFingerprint = "944fc39a2e1db9d13ef7c7323a670ebd426e37c1";
     private final String expectedEmptyFingerprint = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
 
-    @Before
+    @BeforeMethod
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
         output1 = makeOutput(1, "output1");
         output2 = makeOutput(2, "output2");
 
@@ -68,8 +57,8 @@ public class StreamListFingerprintTest {
         streamRule2 = makeStreamRule(2, "field2");
         streamRule3 = makeStreamRule(3, "field3");
 
-        stream1 = makeStream(1, "title1", new StreamRule[]{streamRule1, streamRule2}, new Output[]{output1, output2});
-        stream2 = makeStream(2, "title2", new StreamRule[]{streamRule3}, new Output[]{output2, output1});
+        stream1 = makeStream(1, "title1", new StreamRule[] {streamRule1, streamRule2}, new Output[] {output1, output2});
+        stream2 = makeStream(2, "title2", new StreamRule[] {streamRule3}, new Output[] {output2, output1});
     }
 
     private static Stream makeStream(int id, String title, StreamRule[] rules, Output[] outputs) {
@@ -85,22 +74,20 @@ public class StreamListFingerprintTest {
         return new StreamRuleImpl(new ObjectId(String.format("%024d", id)), fields);
     }
 
-    private static Output makeOutput(int id, String title) {
-        return OutputAVImpl.create(
-                String.format("%024d", id),
-                title,
-                "foo",
-                "user1",
-                Collections.<String, Object>emptyMap(),
-                DateTime.parse("2015-01-01T00:00:00Z").toDate(),
-                null);
+    private static Output makeOutput(int id, String field) {
+        final HashMap<String, Object> fields = Maps.newHashMap();
+        fields.put(OutputImpl.FIELD_TITLE, field);
+        fields.put(OutputImpl.FIELD_TYPE, "foo");
+        fields.put(OutputImpl.FIELD_CREATED_AT, DateTime.parse("2015-01-01T00:00:00Z").toDate());
+        fields.put(OutputImpl.FIELD_CREATOR_USER_ID, "user1");
+        return new OutputImpl(new ObjectId(String.format("%024d", id)), fields);
     }
 
     @Test
     public void testGetFingerprint() throws Exception {
         final StreamListFingerprint fingerprint = new StreamListFingerprint(Lists.newArrayList(stream1, stream2));
 
-        assertEquals(expectedFingerprint, fingerprint.getFingerprint());
+        assertEquals(fingerprint.getFingerprint(), expectedFingerprint);
     }
 
     @Test

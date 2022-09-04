@@ -16,10 +16,8 @@
  */
 package org.graylog2.inputs.codecs;
 
-import com.codahale.metrics.Metric;
-import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
 import org.graylog2.plugin.InstantMillisProvider;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
@@ -27,33 +25,34 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Period;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.testng.annotations.AfterTest;
+import org.testng.annotations.BeforeTest;
+import org.testng.annotations.Test;
 
+import java.net.InetSocketAddress;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
-import static org.graylog2.inputs.codecs.GelfChunkAggregator.*;
-import static org.junit.Assert.*;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.*;
 
-@RunWith(MockitoJUnitRunner.class)
 public class GelfChunkAggregatorTest {
     private static final byte[] CHUNK_MAGIC_BYTES = new byte[]{0x1e, 0x0f};
+    private MessageInput input;
     private ScheduledThreadPoolExecutor poolExecutor;
     private GelfChunkAggregator aggregator;
-    private MetricRegistry metricRegistry;
+    private InetSocketAddress remoteAddress;
 
-    @Before
+    @BeforeTest
     public void before() {
+        input = mock(MessageInput.class);
+        when(input.getUniqueReadableId()).thenReturn("input-id");
         poolExecutor = new ScheduledThreadPoolExecutor(1);
-        metricRegistry = new MetricRegistry();
-        aggregator = new GelfChunkAggregator(poolExecutor, metricRegistry);
+        aggregator = new GelfChunkAggregator(poolExecutor);
+        remoteAddress = InetSocketAddress.createUnresolved("127.0.0.1", 4444);
     }
 
-    @After
+    @AfterTest
     public void after() {
         poolExecutor.shutdown();
         DateTimeUtils.setCurrentMillisSystem();
@@ -65,13 +64,8 @@ public class GelfChunkAggregatorTest {
 
         final CodecAggregator.Result result = aggregator.addChunk(singleChunk[0]);
 
-        assertNotNull("message should be complete", result.getMessage());
+        assertNotNull(result.getMessage(), "message should be complete");
 
-        assertEquals(1, counterValueNamed(metricRegistry, COMPLETE_MESSAGES));
-        assertEquals(1, counterValueNamed(metricRegistry, CHUNK_COUNTER));
-        assertEquals(0, counterValueNamed(metricRegistry, WAITING_MESSAGES));
-        assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_CHUNKS));
-        assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_MESSAGES));
     }
 
     @Test
@@ -84,23 +78,9 @@ public class GelfChunkAggregatorTest {
             final CodecAggregator.Result result = aggregator.addChunk(chunk);
             assertTrue(result.isValid());
             if (i == 5) {
-                assertNotNull("message should've been assembled from chunks", result.getMessage());
-
-                assertEquals(1, counterValueNamed(metricRegistry, COMPLETE_MESSAGES));
-                assertEquals(5, counterValueNamed(metricRegistry, CHUNK_COUNTER));
-                assertEquals(0, counterValueNamed(metricRegistry, WAITING_MESSAGES));
-                assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_CHUNKS));
-                assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_MESSAGES));
-
+                assertNotNull(result.getMessage(), "message should've been assembled from chunks");
             } else {
-                assertNull("chunks not complete", result.getMessage());
-
-                assertEquals("message not complete yet", 0, counterValueNamed(metricRegistry, COMPLETE_MESSAGES));
-                assertEquals(i, counterValueNamed(metricRegistry, CHUNK_COUNTER));
-                assertEquals("one message waiting", 1, counterValueNamed(metricRegistry, WAITING_MESSAGES));
-                assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_CHUNKS));
-                assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_MESSAGES));
-
+                assertNull(result.getMessage(), "chunks not complete");
             }
         }
     }
@@ -113,8 +93,7 @@ public class GelfChunkAggregatorTest {
 
         // we don't want the clean up task to run automatically
         poolExecutor = mock(ScheduledThreadPoolExecutor.class);
-        final MetricRegistry metricRegistry = new MetricRegistry();
-        aggregator = new GelfChunkAggregator(poolExecutor, metricRegistry);
+        aggregator = new GelfChunkAggregator(poolExecutor);
         final GelfChunkAggregator.ChunkEvictionTask evictionTask = aggregator.new ChunkEvictionTask();
 
         final ChannelBuffer[] chunks = createChunkedMessage(4096 + 512, 1024); // creates 5 chunks
@@ -128,7 +107,7 @@ public class GelfChunkAggregatorTest {
             }
             result = aggregator.addChunk(chunk);
             assertTrue(result.isValid());
-            assertNull("chunks not complete", result.getMessage());
+            assertNull(result.getMessage(), "chunks not complete");
         }
         // move clock forward enough to evict all of the chunks
         clock.tick(Period.seconds(10));
@@ -137,15 +116,8 @@ public class GelfChunkAggregatorTest {
 
         final CodecAggregator.Result result = aggregator.addChunk(chunks[0]);
 
-        assertNull("message should not be complete because chunks were evicted already", result.getMessage());
+        assertNull(result.getMessage(), "message should not be complete because chunks were evicted already");
         assertTrue(result.isValid());
-
-        // we send all chunks but the last one comes too late
-        assertEquals("no message is complete", 0, counterValueNamed(metricRegistry, COMPLETE_MESSAGES));
-        assertEquals("received 5 chunks", 5, counterValueNamed(metricRegistry, CHUNK_COUNTER));
-        assertEquals("last chunk creates another waiting message", 1, counterValueNamed(metricRegistry, WAITING_MESSAGES));
-        assertEquals("4 chunks expired", 4, counterValueNamed(metricRegistry, EXPIRED_CHUNKS));
-        assertEquals("one message expired", 1, counterValueNamed(metricRegistry, EXPIRED_MESSAGES));
 
         // reset clock for other tests
         DateTimeUtils.setCurrentMillisSystem();
@@ -155,19 +127,14 @@ public class GelfChunkAggregatorTest {
     public void outOfOrderChunks() {
         final ChannelBuffer[] chunks = createChunkedMessage(4096 + 512, 1024); // creates 5 chunks
         CodecAggregator.Result result = null;
-        for (int i = chunks.length - 1; i >= 0; i--) {
+        for (int i = chunks.length - 1 ; i >= 0; i--) {
             result = aggregator.addChunk(chunks[i]);
             if (i != 0) {
-                assertNull("message still incomplete", result.getMessage());
+                assertNull(result.getMessage(), "message still incomplete");
             }
         }
         assertNotNull(result);
-        assertNotNull("first chunk should've completed the message", result.getMessage());
-        assertEquals(1, counterValueNamed(metricRegistry, COMPLETE_MESSAGES));
-        assertEquals(5, counterValueNamed(metricRegistry, CHUNK_COUNTER));
-        assertEquals(0, counterValueNamed(metricRegistry, WAITING_MESSAGES));
-        assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_CHUNKS));
-        assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_MESSAGES));
+        assertNotNull(result.getMessage(), "first chunk should've completed the message");
     }
 
     @Test
@@ -185,14 +152,8 @@ public class GelfChunkAggregatorTest {
         }
         assertNotNull(result1);
         assertNotNull(result2);
-        assertNotNull("message 1 should be complete", result1.getMessage());
-        assertNull("message 2 should not be complete", result2.getMessage());
-        // only one is complete, we sent 9 chunks
-        assertEquals(1, counterValueNamed(metricRegistry, COMPLETE_MESSAGES));
-        assertEquals(9, counterValueNamed(metricRegistry, CHUNK_COUNTER));
-        assertEquals(1, counterValueNamed(metricRegistry, WAITING_MESSAGES));
-        assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_CHUNKS));
-        assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_MESSAGES));
+        assertNotNull(result1.getMessage(), "message 1 should be complete");
+        assertNull(result2.getMessage(), "message 2 should not be complete");
     }
 
     private ChannelBuffer[] createChunkedMessage(int messageSize, int maxChunkSize) {
@@ -247,22 +208,5 @@ public class GelfChunkAggregatorTest {
 
     private byte[] generateMessageId() {
         return generateMessageId(0);
-    }
-
-    public static long counterValueNamed(MetricRegistry metricRegistry, String name) {
-        return metricRegistry.getCounters(new SingleNameMatcher(name)).get(name).getCount();
-    }
-
-    private static class SingleNameMatcher implements MetricFilter {
-        private final String metricName;
-
-        public SingleNameMatcher(String metricName) {
-            this.metricName = metricName;
-        }
-
-        @Override
-        public boolean matches(String name, Metric metric) {
-            return metricName.equals(name);
-        }
     }
 }

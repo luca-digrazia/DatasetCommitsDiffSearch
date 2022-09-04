@@ -28,7 +28,7 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +41,6 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 @RequiresAuthentication
@@ -65,7 +64,7 @@ public class NotificationsResource extends RestResource {
     public Map<String, Object> listNotifications() {
         final List<Map<String, Object>> notifications = Lists.newArrayList();
         for (Notification n : notificationService.all()) {
-            final String notificationType = n.getType().toString().toLowerCase(Locale.ENGLISH);
+            final String notificationType = n.getType().toString().toLowerCase();
             if (!isPermitted(RestPermissions.NOTIFICATIONS_READ, notificationType)) {
                 continue;
             }
@@ -96,7 +95,7 @@ public class NotificationsResource extends RestResource {
         Notification.Type type;
         checkPermission(RestPermissions.NOTIFICATIONS_DELETE, notificationType);
         try {
-            type = Notification.Type.valueOf(notificationType.toUpperCase(Locale.ENGLISH));
+            type = Notification.Type.valueOf(notificationType.toUpperCase());
         } catch (IllegalArgumentException e) {
             LOG.warn("No such notification type: [" + notificationType + "]");
             throw new BadRequestException(e);

@@ -30,7 +30,6 @@ import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.events.inputs.IOStateChangedEvent;
 import org.joda.time.DateTime;
 
-import java.util.Objects;
 import java.util.UUID;
 
 @JsonAutoDetect
@@ -123,11 +122,15 @@ public class IOState<T extends Stoppable> {
 
         IOState that = (IOState) o;
 
-        return Objects.equals(this.stoppable, that.stoppable);
+        if (!stoppable.equals(that.stoppable)) return false;
+
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(this.stoppable);
+        int result = stoppable.hashCode();
+        result = 31 * result + stoppable.hashCode();
+        return result;
     }
 }

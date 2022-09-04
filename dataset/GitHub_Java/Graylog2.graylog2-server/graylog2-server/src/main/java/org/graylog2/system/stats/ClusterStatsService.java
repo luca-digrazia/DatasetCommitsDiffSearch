@@ -18,10 +18,7 @@ package org.graylog2.system.stats;
 
 import org.graylog2.bundles.BundleService;
 import org.graylog2.dashboards.DashboardService;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.inputs.InputService;
-import org.graylog2.security.ldap.LdapSettingsService;
-import org.graylog2.shared.security.ldap.LdapSettings;
 import org.graylog2.shared.users.UserService;
 import org.graylog2.streams.OutputService;
 import org.graylog2.streams.StreamRuleService;
@@ -30,7 +27,6 @@ import org.graylog2.system.stats.elasticsearch.ElasticsearchProbe;
 import org.graylog2.system.stats.elasticsearch.ElasticsearchStats;
 import org.graylog2.system.stats.mongo.MongoProbe;
 import org.graylog2.system.stats.mongo.MongoStats;
-import org.graylog2.users.RoleService;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -46,8 +42,6 @@ public class ClusterStatsService {
     private final OutputService outputService;
     private final DashboardService dashboardService;
     private final BundleService bundleService;
-    private final LdapSettingsService ldapSettingsService;
-    private final RoleService roleService;
 
     @Inject
     public ClusterStatsService(ElasticsearchProbe elasticsearchProbe,
@@ -58,9 +52,7 @@ public class ClusterStatsService {
                                StreamRuleService streamRuleService,
                                OutputService outputService,
                                DashboardService dashboardService,
-                               BundleService bundleService,
-                               LdapSettingsService ldapSettingsService,
-                               RoleService roleService) {
+                               BundleService bundleService) {
         this.elasticsearchProbe = elasticsearchProbe;
         this.mongoProbe = mongoProbe;
         this.userService = userService;
@@ -70,8 +62,6 @@ public class ClusterStatsService {
         this.outputService = outputService;
         this.dashboardService = dashboardService;
         this.bundleService = bundleService;
-        this.ldapSettingsService = ldapSettingsService;
-        this.roleService = roleService;
     }
 
     public ClusterStats clusterStats() {
@@ -90,8 +80,7 @@ public class ClusterStatsService {
                 inputService.totalCountByType(),
                 inputService.totalExtractorCount(),
                 inputService.totalExtractorCountByType(),
-                bundleService.count(),
-                ldapStats()
+                bundleService.count()
         );
     }
 
@@ -101,26 +90,5 @@ public class ClusterStatsService {
 
     public MongoStats mongoStats() {
         return mongoProbe.mongoStats();
-    }
-
-    public LdapStats ldapStats() {
-        int numberOfRoles = 0;
-        LdapSettings ldapSettings = null;
-        try {
-            numberOfRoles = roleService.loadAll().size();
-            ldapSettings = ldapSettingsService.load();
-        } catch (NotFoundException ignored) {}
-        if (ldapSettings == null) {
-            return LdapStats.create(false,
-                                    false,
-                                    0,
-                                    numberOfRoles
-
-            );
-        }
-        return LdapStats.create(ldapSettings.isEnabled(),
-                                ldapSettings.isActiveDirectory(),
-                                ldapSettings.getGroupMapping().size(),
-                                numberOfRoles);
     }
 }

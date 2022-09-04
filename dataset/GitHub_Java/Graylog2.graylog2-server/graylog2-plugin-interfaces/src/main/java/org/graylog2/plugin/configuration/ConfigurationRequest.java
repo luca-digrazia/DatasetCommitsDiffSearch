@@ -31,10 +31,13 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nonnull;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class ConfigurationRequest {
     private static final Logger log = LoggerFactory.getLogger(ConfigurationRequest.class);
 
-    private final Map<String, ConfigurationField> fields = Maps.newLinkedHashMap();
+    private final Map<String, ConfigurationField> fields = Maps.newHashMap();
 
     public ConfigurationRequest() {}
 
@@ -63,7 +66,7 @@ public class ConfigurationRequest {
 
     @JsonValue
     public Map<String, Map<String, Object>> asList() {
-        final Map<String, Map<String, Object>> configs = Maps.newLinkedHashMap();
+        final Map<String, Map<String, Object>> configs = Maps.newHashMap();
 
         for (ConfigurationField f : fields.values()) {
             final Map<String, Object> config = Maps.newHashMap();

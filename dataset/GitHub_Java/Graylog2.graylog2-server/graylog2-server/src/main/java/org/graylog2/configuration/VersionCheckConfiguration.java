@@ -24,7 +24,7 @@ public class VersionCheckConfiguration {
     private boolean enabled = true;
 
     @Parameter(value = "versionchecks_uri")
-    private String uri = "https://versioncheck.graylog.com/check";
+    private String uri = "http://versioncheck.torch.sh/check";
 
     @Parameter(value = "versionchecks_connect_timeout", validator = PositiveIntegerValidator.class)
     private int connectTimeOut = 10000;

@@ -18,16 +18,20 @@ package org.graylog2.indexer.ranges;
 
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.EmptyIndexException;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class CreateNewSingleIndexRangeJob extends RebuildIndexRangesJob {
     private static final Logger LOG = LoggerFactory.getLogger(CreateNewSingleIndexRangeJob.class);
     private final String indexName;
@@ -40,9 +44,10 @@ public class CreateNewSingleIndexRangeJob extends RebuildIndexRangesJob {
     public CreateNewSingleIndexRangeJob(@Assisted Deflector deflector,
                                         @Assisted String indexName,
                                         Searches searches,
+                                        ServerStatus serverStatus,
                                         ActivityWriter activityWriter,
                                         IndexRangeService indexRangeService) {
-        super(deflector, searches, activityWriter, indexRangeService);
+        super(deflector, serverStatus, searches, activityWriter, indexRangeService);
         this.indexName = indexName;
     }
 
@@ -52,20 +57,14 @@ public class CreateNewSingleIndexRangeJob extends RebuildIndexRangesJob {
     }
 
     @Override
-    public String getInfo() {
-        return "Calculating ranges for index " + indexName + ".";
-    }
-
-    @Override
     public void execute() {
         LOG.info("Calculating ranges for index {}.", indexName);
         try {
             final Map<String, Object> range;
-            if (deflector.getCurrentActualTargetIndex().equals(indexName)) {
-                range = getDeflectorIndexRange(indexName);
-            } else {
+            if (deflector.getCurrentActualTargetIndex().equals(indexName))
                 range = calculateRange(indexName);
-            }
+            else
+                range = getDeflectorIndexRange(indexName);
 
             final IndexRange indexRange = indexRangeService.create(range);
             indexRangeService.destroy(indexName);

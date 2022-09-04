@@ -85,7 +85,7 @@ public class ScrollChunkWriter implements MessageBodyWriter<ScrollResult.ScrollC
             int idx = 0;
             // first collect all values from the current message
             for (String fieldName : fields) {
-                final Object val = message.getMessage().getField(fieldName);
+                final Object val = message.getMessage().get(fieldName);
                 if (val == null) {
                     fieldValues[idx] = null;
                 } else {

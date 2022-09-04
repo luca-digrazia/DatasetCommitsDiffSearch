@@ -22,24 +22,23 @@ import org.joda.time.DateTime;
 
 import java.util.Map;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
 public class KeywordRange implements TimeRange {
-    private static final NaturalDateParser DATE_PARSER = new NaturalDateParser();
 
     private final String keyword;
-    private final boolean dynamic;
+    private final DateTime from;
+    private final DateTime to;
 
-    private DateTime from;
-    private DateTime to;
+    @Override
+    public Type getType() {
+        return Type.KEYWORD;
+    }
 
-    public KeywordRange(String keyword, boolean dynamic) throws InvalidRangeParametersException {
-        if (isNullOrEmpty(keyword)) {
+    public KeywordRange(String keyword) throws InvalidRangeParametersException {
+        if (keyword == null || keyword.isEmpty()) {
             throw new InvalidRangeParametersException();
         }
-
         try {
-            NaturalDateParser.Result result = parseKeyword(keyword);
+            NaturalDateParser.Result result = new NaturalDateParser().parse(keyword);
             from = result.getFrom();
             to = result.getTo();
         } catch (NaturalDateParser.DateNotParsableException e) {
@@ -47,20 +46,6 @@ public class KeywordRange implements TimeRange {
         }
 
         this.keyword = keyword;
-        this.dynamic = dynamic;
-    }
-
-    public KeywordRange(String keyword) throws InvalidRangeParametersException {
-        this(keyword, false);
-    }
-
-    private NaturalDateParser.Result parseKeyword(String keyword) throws NaturalDateParser.DateNotParsableException {
-        return DATE_PARSER.parse(keyword);
-    }
-
-    @Override
-    public Type getType() {
-        return Type.KEYWORD;
     }
 
     @Override
@@ -76,21 +61,11 @@ public class KeywordRange implements TimeRange {
     }
 
     public DateTime getFrom() {
-        try {
-            return dynamic ? parseKeyword(keyword).getFrom() : from;
-        } catch (NaturalDateParser.DateNotParsableException e) {
-            // This should never happen
-            return from;
-        }
+        return from;
     }
 
     public DateTime getTo() {
-        try {
-            return dynamic ? parseKeyword(keyword).getTo() : to;
-        } catch (NaturalDateParser.DateNotParsableException e) {
-            // This should never happen
-            return to;
-        }
+        return to;
     }
 }
 

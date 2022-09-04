@@ -1,37 +1,37 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.inputs;
 
 import com.codahale.metrics.InstrumentedExecutorService;
-import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.plugin.IOState;
 import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.shared.utilities.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
+import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class InputLauncher {
@@ -53,14 +53,11 @@ public class InputLauncher {
     }
 
     private ExecutorService executorService(final MetricRegistry metricRegistry) {
+        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("inputs-%d").build();
         return new InstrumentedExecutorService(
-                Executors.newCachedThreadPool(threadFactory(metricRegistry)), metricRegistry);
-    }
-
-    private ThreadFactory threadFactory(final MetricRegistry metricRegistry) {
-        return new InstrumentedThreadFactory(
-                new ThreadFactoryBuilder().setNameFormat("inputs-%d").build(),
-                metricRegistry);
+                Executors.newCachedThreadPool(threadFactory),
+                metricRegistry,
+                name(this.getClass(), "executor-service"));
     }
 
     public IOState<MessageInput> launch(final MessageInput input) {
@@ -70,20 +67,24 @@ public class InputLauncher {
         if (inputRegistry.getInputState(input.getId()) == null) {
             inputState = inputStateFactory.create(input);
             inputRegistry.add(inputState);
-        } else
+        } else {
             inputState = inputRegistry.getInputState(input.getId());
+            if (inputState.getState() == IOState.Type.RUNNING || inputState.getState() == IOState.Type.STARTING)
+                return inputState;
+            inputState.setStoppable(input);
+        }
 
         executor.submit(new Runnable() {
             @Override
             public void run() {
-                LOG.info("Starting [{}] input with ID <{}>", input.getClass().getCanonicalName(), input.getId());
+                LOG.debug("Starting [{}] input with ID <{}>", input.getClass().getCanonicalName(), input.getId());
                 try {
                     input.checkConfiguration();
                     inputState.setState(IOState.Type.STARTING);
                     input.launch(inputBuffer);
                     inputState.setState(IOState.Type.RUNNING);
                     String msg = "Completed starting [" + input.getClass().getCanonicalName() + "] input with ID <" + input.getId() + ">";
-                    LOG.info(msg);
+                    LOG.debug(msg);
                 } catch (Exception e) {
                     handleLaunchException(e, inputState);
                 }
@@ -97,7 +98,7 @@ public class InputLauncher {
         final MessageInput input = inputState.getStoppable();
         StringBuilder msg = new StringBuilder("The [" + input.getClass().getCanonicalName() + "] input with ID <" + input.getId() + "> misfired. Reason: ");
 
-        String causeMsg = extractMessageCause(e);
+        String causeMsg = ExceptionUtils.getRootCauseMessage(e);
 
         msg.append(causeMsg);
 
@@ -108,23 +109,6 @@ public class InputLauncher {
 
         inputState.setState(IOState.Type.FAILED);
         inputState.setDetailedMessage(causeMsg);
-    }
-
-    private String extractMessageCause(Throwable e) {
-        StringBuilder causeMsg = new StringBuilder(e.getMessage());
-
-        // Go down the whole cause chain to build a message that provides as much information as possible.
-        int maxLevel = 7; // ;)
-        Throwable cause = e.getCause();
-        for (int i = 0; i < maxLevel; i++) {
-            if (cause == null) {
-                break;
-            }
-
-            causeMsg.append(", ").append(cause.getMessage());
-            cause = cause.getCause();
-        }
-        return causeMsg.toString();
     }
 
     public void launchAllPersisted() {

@@ -19,7 +19,6 @@ package org.graylog2.restclient.models;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.models.api.responses.AvailableOutputSummary;
 import org.graylog2.restclient.models.api.responses.system.OutputSummaryResponse;
 
 import java.util.Map;
@@ -27,7 +26,7 @@ import java.util.Map;
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-public class Output extends ConfigurableEntity {
+public class Output {
     private final ApiClient api;
     private final UserService userService;
 
@@ -79,13 +78,8 @@ public class Output extends ConfigurableEntity {
         return userService.load(getCreatorUserId());
     }
 
-    @Override
     public Map<String, Object> getConfiguration() {
         return configuration;
-    }
-
-    public Map<String, Object> getConfiguration(AvailableOutputSummary typesRespons) {
-        return getConfiguration(typesRespons.getRequestedConfiguration());
     }
 
     public String getType() {

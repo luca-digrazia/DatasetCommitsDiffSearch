@@ -20,13 +20,10 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
-import com.google.common.collect.ImmutableMap;
-import org.junit.Assert;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 public class MongoDbConfigurationTest {
     @Test
@@ -34,7 +31,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_max_connections", "12345")), configuration).process();
 
-        assertEquals(12345, configuration.getMaxConnections());
+        Assert.assertEquals(12345, configuration.getMaxConnections());
     }
 
     @Test
@@ -42,7 +39,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(), configuration).process();
 
-        assertEquals(1000, configuration.getMaxConnections());
+        Assert.assertEquals(1000, configuration.getMaxConnections());
     }
 
     @Test
@@ -50,7 +47,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_threads_allowed_to_block_multiplier", "12345")), configuration).process();
 
-        assertEquals(12345, configuration.getThreadsAllowedToBlockMultiplier());
+        Assert.assertEquals(12345, configuration.getThreadsAllowedToBlockMultiplier());
     }
 
     @Test
@@ -58,7 +55,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(), configuration).process();
 
-        assertEquals(5, configuration.getThreadsAllowedToBlockMultiplier());
+        Assert.assertEquals(5, configuration.getThreadsAllowedToBlockMultiplier());
     }
 
     @Test
@@ -66,7 +63,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "")), configuration).process();
 
-        assertNull(configuration.getReplicaSet());
+        Assert.assertNull(configuration.getReplicaSet());
     }
 
     @Test
@@ -79,6 +76,7 @@ public class MongoDbConfigurationTest {
 
     @Test
     public void testGetMongoDBReplicaSetServersUnknownHost() throws RepositoryException, ValidationException {
+
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "this-host-hopefully-does-not-exist.:27017")), configuration).process();
 
@@ -98,7 +96,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "127.0.0.1")), configuration).process();
 
-        assertEquals(configuration.getReplicaSet().get(0).getPort(), 27017);
+        Assert.assertEquals(configuration.getReplicaSet().get(0).getPort(), 27017);
     }
 
     @Test
@@ -106,7 +104,7 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "127.0.0.1:27017,127.0.0.1:27018")), configuration).process();
 
-        assertEquals(2, configuration.getReplicaSet().size());
+        Assert.assertEquals(2, configuration.getReplicaSet().size());
     }
 
     @Test
@@ -114,108 +112,13 @@ public class MongoDbConfigurationTest {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_replica_set", "fe80::221:6aff:fe6f:6c88,[fe80::221:6aff:fe6f:6c89]:27018,127.0.0.1:27019")), configuration).process();
 
-        assertEquals(3, configuration.getReplicaSet().size());
+        Assert.assertEquals(3, configuration.getReplicaSet().size());
     }
 
-    @Test(expected = ValidationException.class)
+
+    @Test(expectedExceptions = ValidationException.class)
     public void testValidateMongoDbAuth() throws RepositoryException, ValidationException {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         new JadConfig(new InMemoryRepository(singletonMap("mongodb_useauth", "true")), configuration).process();
-    }
-
-    @Test(expected = ValidationException.class)
-    public void validateFailsIfUriAndHostAreMissing() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        final ImmutableMap<String, String> config = ImmutableMap.of(
-                "mongodb_host", "",
-                "mongodb_database", "graylog"
-        );
-        new JadConfig(new InMemoryRepository(config), configuration).process();
-    }
-
-    @Test(expected = ValidationException.class)
-    public void validateFailsIfUriAndDatabaseAreMissing() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        final ImmutableMap<String, String> properties = ImmutableMap.of(
-                "mongodb_host", "localhost",
-                "mongodb_database", ""
-        );
-        new JadConfig(new InMemoryRepository(properties), configuration).process();
-    }
-
-    @Test
-    public void validateSucceedsIfUriIsEmpty() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_uri", "")), configuration).process();
-        assertEquals("mongodb://127.0.0.1:27017/graylog2", configuration.getUri());
-    }
-
-    @Test
-    public void validateSucceedsIfUriIsNull() throws RepositoryException, ValidationException {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        new JadConfig(new InMemoryRepository(singletonMap("mongodb_uri", (String) null)), configuration).process();
-        assertEquals("mongodb://127.0.0.1:27017/graylog2", configuration.getUri());
-    }
-
-    @Test
-    public void getMongoClientURIBuildsDatabaseCorrectly() throws Exception {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        final ImmutableMap<String, String> properties = ImmutableMap.of(
-                "mongodb_database", "TEST1234"
-        );
-        new JadConfig(new InMemoryRepository(properties), configuration).process();
-
-        assertEquals("mongodb://127.0.0.1:27017/TEST1234", configuration.getMongoClientURI().toString());
-    }
-
-    @Test
-    public void getMongoClientURIBuildsSingleHostCorrectly() throws Exception {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        final ImmutableMap<String, String> properties = ImmutableMap.of(
-                "mongodb_host", "localhost",
-                "mongodb_database", "graylog"
-        );
-        new JadConfig(new InMemoryRepository(properties), configuration).process();
-
-        assertEquals("mongodb://localhost:27017/graylog", configuration.getMongoClientURI().toString());
-    }
-
-    @Test
-    public void getMongoClientURIBuildsSingleHostWithCustomPortCorrectly() throws Exception {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        final ImmutableMap<String, String> properties = ImmutableMap.of(
-                "mongodb_host", "localhost",
-                "mongodb_port", "12345",
-                "mongodb_database", "graylog"
-        );
-        new JadConfig(new InMemoryRepository(properties), configuration).process();
-
-        assertEquals("mongodb://localhost:12345/graylog", configuration.getMongoClientURI().toString());
-    }
-
-    @Test
-    public void getMongoClientURIBuildsReplicaSetCorrectly() throws Exception {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        final ImmutableMap<String, String> properties = ImmutableMap.of(
-                "mongodb_replica_set", "localhost:1234,localhost:5678,localhost:9012",
-                "mongodb_database", "graylog"
-        );
-        new JadConfig(new InMemoryRepository(properties), configuration).process();
-
-        assertEquals("mongodb://localhost:1234,localhost:5678,localhost:9012/graylog", configuration.getMongoClientURI().toString());
-    }
-
-    @Test
-    public void existingUriTakesPrecedenceInGetMongoClientURI() throws Exception {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        final ImmutableMap<String, String> properties = ImmutableMap.of(
-                "mongodb_host", "localhost",
-                "mongodb_port", "27017",
-                "mongodb_database", "graylog",
-                "mongodb_uri", "mongodb://example.com:1234,127.0.0.1:5678/TEST"
-        );
-        new JadConfig(new InMemoryRepository(properties), configuration).process();
-
-        assertEquals("mongodb://example.com:1234,127.0.0.1:5678/TEST", configuration.getMongoClientURI().toString());
     }
 }

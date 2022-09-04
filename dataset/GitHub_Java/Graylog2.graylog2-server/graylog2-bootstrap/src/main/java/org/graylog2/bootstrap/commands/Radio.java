@@ -1,201 +1,113 @@
-/*
- * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.bootstrap.commands;
 
-import com.github.joschi.jadconfig.JadConfig;
-import com.github.joschi.jadconfig.ParameterException;
-import com.github.joschi.jadconfig.RepositoryException;
-import com.github.joschi.jadconfig.ValidationException;
-import com.github.joschi.jadconfig.guice.NamedConfigParametersModule;
-import com.github.joschi.jadconfig.repositories.EnvironmentRepository;
-import com.github.joschi.jadconfig.repositories.PropertiesRepository;
-import com.github.joschi.jadconfig.repositories.SystemPropertiesRepository;
-import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Injector;
 import com.google.inject.Module;
-import io.airlift.command.Command;
-import io.airlift.command.Option;
-import org.graylog2.bootstrap.Bootstrap;
-import org.graylog2.plugin.PluginModule;
+import io.airlift.airline.Command;
+import org.graylog2.bootstrap.Main;
+import org.graylog2.bootstrap.ServerBootstrap;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.radio.Configuration;
+import org.graylog2.radio.bindings.PeriodicalBindings;
 import org.graylog2.radio.bindings.RadioBindings;
 import org.graylog2.radio.bindings.RadioInitializerBindings;
 import org.graylog2.radio.cluster.Ping;
-import org.graylog2.shared.bindings.GuiceInjectorHolder;
-import org.graylog2.shared.bindings.GuiceInstantiationService;
+import org.graylog2.shared.bindings.ObjectMapperModule;
+import org.graylog2.shared.system.activities.Activity;
+import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
 @Command(name = "radio", description = "Start the Graylog2 radio")
-public class Radio extends Bootstrap implements Runnable {
+public class Radio extends ServerBootstrap implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(Radio.class);
-
     private static final Configuration configuration = new Configuration();
+
+    static {
+        // If this is not done, the default from BaseConfiguration will enable journaling on radio,
+        // but the actual Journal implementation there is the NoopJournal. This lead to discarding all incoming messages.
+        // see https://github.com/Graylog2/graylog2-server/issues/927
+        configuration.setMessageJournalEnabled(false);
+    }
 
     public Radio() {
         super("radio", configuration);
     }
 
-    @Option(name = {"-f", "--configfile"}, description = "Configuration file for graylog2-radio")
-    private String configFile = "/etc/graylog2-radio.conf";
-
-    @Option(name = {"-p", "--pidfile"}, description = "File containing the PID of graylog2-radio")
-    private String pidFile = TMPDIR + FILE_SEPARATOR + "graylog2-radio.pid";
-
-    @Option(name = {"-np", "--no-pid-file"}, description = "Do not write a PID file (overrides -p/--pidfile)")
-    private boolean noPidFile = false;
-
-    @Option(name = {"-d", "--debug"}, description = "Run graylog2-radio in debug mode")
-    private boolean debug = false;
-
-    @Option(name = "--version", description = "Print version of graylog2-radio and exit")
-    private boolean showVersion = false;
-
-    @Option(name = {"-h", "--help"}, description = "Show usage information and exit")
-    private boolean showHelp = false;
-
-    @Option(name = "--dump-config", description = "Show the effective graylog2-radio configuration and exit")
-    private boolean dumpConfig = false;
-
-    @Option(name = "--dump-default-config", description = "Show the default configuration and exit")
-    private boolean dumpDefaultConfig = false;
-
-    public String getConfigFile() {
-        return configFile;
+    @Override
+    protected List<Module> getCommandBindings() {
+        return Arrays.<Module>asList(new RadioBindings(configuration, capabilities()),
+                new RadioInitializerBindings(),
+                new PeriodicalBindings(),
+                new ObjectMapperModule());
     }
 
-    public void setConfigFile(String configFile) {
-        this.configFile = configFile;
+    @Override
+    protected List<Object> getCommandConfigurationBeans() {
+        return Arrays.<Object>asList(configuration);
     }
 
-    public String getPidFile() {
-        return pidFile;
-    }
-
-    public void setPidFile(String pidFile) {
-        this.pidFile = pidFile;
-    }
-
-    public boolean isNoPidFile() {
-        return noPidFile;
-    }
-
-    public void setNoPidFile(final boolean noPidFile) {
-        this.noPidFile = noPidFile;
-    }
-
-    public boolean isDebug() {
-        return debug;
-    }
-
-    public void setDebug(boolean debug) {
-        this.debug = debug;
-    }
-
-    public boolean isShowVersion() {
-        return showVersion;
-    }
-
-    public boolean isShowHelp() {
-        return showHelp;
-    }
-
-    public boolean isDumpConfig() {
-        return dumpConfig;
-    }
-
-    public void setDumpConfig(boolean dumpConfig) {
-        this.dumpConfig = dumpConfig;
-    }
-
-    public boolean isDumpDefaultConfig() {
-        return dumpDefaultConfig;
-    }
-
-    public void setDumpDefaultConfig(boolean dumpDefaultConfig) {
-        this.dumpDefaultConfig = dumpDefaultConfig;
-    }
-
-    protected Injector setupInjector(NamedConfigParametersModule configModule, List<PluginModule> pluginModules) {
-        try {
-            final GuiceInstantiationService instantiationService = new GuiceInstantiationService();
-
-            final ImmutableList.Builder<Module> modules = ImmutableList.builder();
-            modules.add(configModule);
-            modules.addAll(
-                    getBindingsModules(instantiationService,
-                            new RadioBindings(configuration),
-                            new RadioInitializerBindings()));
-            LOG.debug("Adding plugin modules: " + pluginModules);
-            modules.addAll(pluginModules);
-
-            final Injector injector = GuiceInjectorHolder.createInjector(modules.build());
-            instantiationService.setInjector(injector);
-
-            return injector;
-        } catch (Exception e) {
-            LOG.error("Injector creation failed!", e);
-            return null;
-        }
-    }
-
-    protected NamedConfigParametersModule readConfiguration(final JadConfig jadConfig, final String configFile) {
-        jadConfig.addConfigurationBean(configuration);
-        jadConfig.setRepositories(Arrays.asList(
-                new EnvironmentRepository(ENVIRONMENT_PREFIX),
-                new SystemPropertiesRepository(PROPERTIES_PREFIX),
-                new PropertiesRepository(configFile)
-        ));
-
-        LOG.debug("Loading configuration from config file: {}", configFile);
-        try {
-            jadConfig.process();
-        } catch (RepositoryException e) {
-            LOG.error("Couldn't load configuration: {}", e.getMessage());
-            System.exit(1);
-        } catch (ParameterException | ValidationException e) {
-            LOG.error("Invalid configuration", e);
-            System.exit(1);
-        }
-
-        if (configuration.getRestTransportUri() == null) {
-            configuration.setRestTransportUri(configuration.getDefaultRestTransportUri());
-            LOG.debug("No rest_transport_uri set. Using default [{}].", configuration.getRestTransportUri());
-        }
-
-        return new NamedConfigParametersModule(Arrays.asList(configuration));
-    }
-
+    @Override
     protected void startNodeRegistration(Injector injector) {
         // register node by initiating first ping. if the node isn't registered, loading persisted inputs will fail silently, for example
         Ping.Pinger pinger = injector.getInstance(Ping.Pinger.class);
         pinger.ping();
+    }
+
+    @Override
+    protected boolean validateConfiguration() {
+        return true;
+    }
+
+    private static class ShutdownHook implements Runnable {
+        private final ActivityWriter activityWriter;
+        private final ServiceManager serviceManager;
+
+        @Inject
+        public ShutdownHook(ActivityWriter activityWriter, ServiceManager serviceManager) {
+            this.activityWriter = activityWriter;
+            this.serviceManager = serviceManager;
+        }
+
+        @Override
+        public void run() {
+            String msg = "SIGNAL received. Shutting down.";
+            LOG.info(msg);
+            activityWriter.write(new Activity(msg, Main.class));
+
+            serviceManager.stopAsync().awaitStopped();
+        }
+    }
+
+    @Override
+    protected Class<? extends Runnable> shutdownHook() {
+        return ShutdownHook.class;
+    }
+
+    @Override
+    protected Set<ServerStatus.Capability> capabilities() {
+        return EnumSet.of(ServerStatus.Capability.RADIO);
     }
 }

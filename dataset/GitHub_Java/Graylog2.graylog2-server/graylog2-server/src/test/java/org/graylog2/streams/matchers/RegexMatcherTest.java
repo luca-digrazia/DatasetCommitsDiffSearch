@@ -19,11 +19,8 @@ package org.graylog2.streams.matchers;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.testng.annotations.Test;
+import static org.testng.AssertJUnit.*;
 
 public class RegexMatcherTest extends MatcherTest {
 
@@ -75,60 +72,6 @@ public class RegexMatcherTest extends MatcherTest {
 
         StreamRuleMatcher matcher = getMatcher(rule);
         assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testMissingFieldShouldNotMatch() throws Exception {
-        final StreamRule rule = getSampleRule();
-        rule.setField("nonexistingfield");
-        rule.setValue("^foo");
-
-        final Message msg = getSampleMessage();
-
-        final StreamRuleMatcher matcher = getMatcher(rule);
-        assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testInvertedMissingFieldShouldMatch() throws Exception {
-        final StreamRule rule = getSampleRule();
-        rule.setField("nonexistingfield");
-        rule.setValue("^foo");
-        rule.setInverted(true);
-
-        final Message msg = getSampleMessage();
-
-        final StreamRuleMatcher matcher = getMatcher(rule);
-        assertTrue(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testNullFieldShouldNotMatch() throws Exception {
-        final String fieldName = "nullfield";
-        final StreamRule rule = getSampleRule();
-        rule.setField(fieldName);
-        rule.setValue("^foo");
-
-        final Message msg = getSampleMessage();
-        msg.addField(fieldName, null);
-
-        final StreamRuleMatcher matcher = getMatcher(rule);
-        assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testInvertedNullFieldShouldMatch() throws Exception {
-        final String fieldName = "nullfield";
-        final StreamRule rule = getSampleRule();
-        rule.setField(fieldName);
-        rule.setValue("^foo");
-        rule.setInverted(true);
-
-        final Message msg = getSampleMessage();
-        msg.addField(fieldName, null);
-
-        final StreamRuleMatcher matcher = getMatcher(rule);
-        assertTrue(matcher.match(msg, rule));
     }
 
     @Test

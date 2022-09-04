@@ -62,8 +62,7 @@ public interface Notification extends Persisted {
         GC_TOO_LONG,
         JOURNAL_UTILIZATION_TOO_HIGH,
         JOURNAL_UNCOMMITTED_MESSAGES_DELETED,
-        OUTPUT_DISABLED,
-        GENERIC
+        OUTPUT_DISABLED
     }
 
     public enum Severity {

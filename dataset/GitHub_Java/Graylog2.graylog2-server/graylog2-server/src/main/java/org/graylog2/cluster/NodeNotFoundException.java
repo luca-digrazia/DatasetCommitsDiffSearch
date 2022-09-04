@@ -16,9 +16,7 @@
  */
 package org.graylog2.cluster;
 
-import org.graylog2.database.NotFoundException;
-
-public class NodeNotFoundException extends NotFoundException {
+public class NodeNotFoundException extends Exception {
     public NodeNotFoundException(String msg) {
         super(msg);
     }

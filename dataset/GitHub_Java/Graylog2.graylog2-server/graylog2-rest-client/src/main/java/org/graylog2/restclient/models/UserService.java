@@ -1,24 +1,40 @@
-/*
- * This file is part of Graylog2.
+/**
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
-import com.google.inject.Inject;
+import org.apache.shiro.subject.SimplePrincipalCollection;
+import org.apache.shiro.subject.Subject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.Graylog2ServerUnavailableException;
@@ -26,15 +42,15 @@ import org.graylog2.restclient.models.api.requests.ApiRequest;
 import org.graylog2.restclient.models.api.requests.CreateUserRequest;
 import org.graylog2.restclient.models.api.responses.system.UserResponse;
 import org.graylog2.restclient.models.api.responses.system.UsersListResponse;
-import org.apache.shiro.subject.SimplePrincipalCollection;
-import org.apache.shiro.subject.Subject;
 import org.graylog2.restroutes.generated.UsersResource;
 import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
 
+import javax.inject.Inject;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -91,7 +107,7 @@ public class UserService {
         } catch (APIException e) {
             log.error("Could not retrieve list of users", e);
         }
-        return Lists.newArrayList();
+        return Collections.emptyList();
     }
 
     public boolean create(CreateUserRequest request) {
@@ -109,13 +125,7 @@ public class UserService {
 
     public boolean savePreferences(String username, Map<String, Object> preferences) {
         try {
-            ObjectMapper m = new ObjectMapper();
-            final String body = m.writeValueAsString(preferences);
-            api.path(resource.savePreferences(username)).body(new ApiRequest() {
-                public String toJson() {
-                    return body;
-                }
-            }).expect(Http.Status.NO_CONTENT).execute();
+            api.path(resource.savePreferences(username)).body(new UserPreferences(preferences)).expect(Http.Status.NO_CONTENT).execute();
         } catch (Exception e) {
             log.error("Could not save preferences for " + username, e);
             return false;
@@ -189,5 +199,14 @@ public class UserService {
         }
 
         return result;
+    }
+
+    private static class UserPreferences extends ApiRequest {
+        private final Map<String, Object> preferences;
+
+        public UserPreferences(Map<String, Object> preferences) {
+            this.preferences = preferences;
+        }
+
     }
 }

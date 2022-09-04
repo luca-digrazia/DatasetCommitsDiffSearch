@@ -17,6 +17,7 @@
 package org.graylog2.inputs.kafka;
 
 import com.codahale.metrics.MetricRegistry;
+import javax.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.codecs.RadioMessageCodec;
@@ -25,12 +26,9 @@ import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.annotations.ConfigClass;
-import org.graylog2.plugin.inputs.annotations.FactoryClass;
-
-import javax.inject.Inject;
 
 public class KafkaInput extends MessageInput {
+
     private static final String NAME = "Kafka Input";
 
     @AssistedInject
@@ -60,7 +58,6 @@ public class KafkaInput extends MessageInput {
         super(metricRegistry, configuration, radioKafkaTransport, localRegistry, radioMessageCodec, config, descriptor, serverStatus);
     }
 
-    @FactoryClass
     public interface Factory extends MessageInput.Factory<KafkaInput> {
         @Override
         KafkaInput create(Configuration configuration);
@@ -75,11 +72,10 @@ public class KafkaInput extends MessageInput {
     public static class Descriptor extends MessageInput.Descriptor {
         @Inject
         public Descriptor() {
-            super(NAME, false, "https://www.graylog.org/documentation/sending/kafka/");
+            super(NAME, false, "http://www.graylog2.org/resources/documentation/sending/kafka");
         }
     }
 
-    @ConfigClass
     public static class Config extends MessageInput.Config {
         @Inject
         public Config(KafkaTransport.Factory transport, RadioMessageCodec.Factory codec) {

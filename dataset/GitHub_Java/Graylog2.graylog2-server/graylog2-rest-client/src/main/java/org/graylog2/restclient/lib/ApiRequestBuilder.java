@@ -76,7 +76,7 @@ public interface ApiRequestBuilder<T> {
 
     T execute() throws APIException, IOException;
 
-    Map<Node, T> executeOnAll() throws APIException;
+    Map<Node, T> executeOnAll();
 
     // solely for test purposes
     URL prepareUrl(ClusterEntity node);

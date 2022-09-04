@@ -40,6 +40,9 @@ import java.util.Map;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class IndexRetentionThread extends Periodical {
 
     private static final Logger LOG = LoggerFactory.getLogger(IndexRetentionThread.class);
@@ -71,7 +74,7 @@ public class IndexRetentionThread extends Periodical {
 
     @Override
     public void doRun() {
-        if (!cluster.isConnected() || !cluster.isHealthy()) {
+        if (!cluster.isConnectedAndHealthy()) {
             LOG.info("Elasticsearch cluster not available, skipping index retention checks.");
             return;
         }
@@ -114,7 +117,7 @@ public class IndexRetentionThread extends Periodical {
     public void runRetention(RetentionStrategy strategy, Map<String, IndexStats> deflectorIndices, int removeCount) throws NoTargetIndexException {
         for (String indexName : IndexHelper.getOldestIndices(deflectorIndices.keySet(), removeCount)) {
             // Never run against the current deflector target.
-            if (indexName.equals(deflector.getCurrentActualTargetIndex())) {
+            if (deflector.getCurrentActualTargetIndex().equals(indexName)) {
                 LOG.info("Not running retention against current deflector target <{}>.", indexName);
                 continue;
             }

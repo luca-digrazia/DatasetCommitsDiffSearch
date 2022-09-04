@@ -17,7 +17,6 @@
 package org.graylog2.rules;
 
 import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import org.apache.commons.io.FilenameUtils;
@@ -42,10 +41,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,7 +51,7 @@ public class DroolsEngine implements RulesEngine {
     private static final Logger LOG = LoggerFactory.getLogger(DroolsEngine.class);
 
     private final KieServices kieServices;
-    private final Set<URI> builtinRuleUrls;
+    private final Set<URL> builtinRuleUrls;
     private KieContainer kieContainer;
     private final AtomicReference<KieSession> session = new AtomicReference<>();
 
@@ -64,10 +60,10 @@ public class DroolsEngine implements RulesEngine {
     private ReleaseId currentReleaseId;
 
     @Inject
-    public DroolsEngine(Set<URI> builtinRuleUrls) {
-        this.builtinRuleUrls = ImmutableSet.copyOf(builtinRuleUrls);
-        this.kieServices = KieServices.Factory.get();
-        this.liveRules.add("// placeholder rule");
+    public DroolsEngine(Set<URL> builtinRuleUrls) {
+        this.builtinRuleUrls = builtinRuleUrls;
+        kieServices = KieServices.Factory.get();
+        liveRules.add("// placeholder rule");
         commitRules();
     }
 
@@ -167,8 +163,8 @@ public class DroolsEngine implements RulesEngine {
             }
 
             createAndDeployJar(kieServices,
-                    newReleaseId,
-                    drls);
+                               newReleaseId,
+                               drls);
             if (kieContainer == null) {
                 kieContainer = kieServices.newKieContainer(newReleaseId);
                 final KieSession session = kieContainer.newKieSession();
@@ -189,16 +185,16 @@ public class DroolsEngine implements RulesEngine {
     }
 
     private KieModule createAndDeployJar(KieServices ks,
-                                         ReleaseId releaseId,
-                                         String... drls) throws RulesCompilationException {
+                                                ReleaseId releaseId,
+                                                String... drls) throws RulesCompilationException {
         byte[] jar = createKJar(ks, releaseId, null, drls);
         return deployJar(ks, jar);
     }
 
     private byte[] createKJar(KieServices ks,
-                              ReleaseId releaseId,
-                              String pom,
-                              String... drls) throws RulesCompilationException {
+                                     ReleaseId releaseId,
+                                     String pom,
+                                     String... drls) throws RulesCompilationException {
         KieFileSystem kfs = ks.newKieFileSystem();
         if (pom != null) {
             kfs.write("pom.xml", pom);
@@ -210,35 +206,30 @@ public class DroolsEngine implements RulesEngine {
                 kfs.write("src/main/resources/r" + i + ".drl", drls[i]);
             }
         }
-        for (URI builtinRuleUrl : builtinRuleUrls) {
+        for (URL builtinRuleUrl : builtinRuleUrls) {
             final String rulesFileName = FilenameUtils.getName(builtinRuleUrl.getPath());
             final String path = "src/main/resources/" + rulesFileName;
-            final URL url;
-            try {
-                url = builtinRuleUrl.toURL();
-            } catch (MalformedURLException e) {
-                throw new RulesCompilationException(Collections.<org.kie.api.builder.Message>emptyList());
-            }
-
             final Resource resource = ResourceFactory
-                    .newUrlResource(url)
+                    .newUrlResource(builtinRuleUrl)
                     .setSourcePath(path)
                     .setResourceType(ResourceType.DRL);
             kfs.write(resource);
         }
 
-        final KieBuilder kb = ks.newKieBuilder(kfs).buildAll();
+        KieBuilder kb = ks.newKieBuilder(kfs).buildAll();
         if (kb.getResults().hasMessages(org.kie.api.builder.Message.Level.ERROR)) {
             throw new RulesCompilationException(kb.getResults().getMessages());
         }
-        final InternalKieModule kieModule = (InternalKieModule) ks.getRepository().getKieModule(releaseId);
-
-        return kieModule.getBytes();
+        InternalKieModule kieModule = (InternalKieModule) ks.getRepository()
+                .getKieModule(releaseId);
+        byte[] jar = kieModule.getBytes();
+        return jar;
     }
 
     private KieModule deployJar(KieServices ks, byte[] jar) {
         // Deploy jar into the repository
-        final Resource jarRes = ks.getResources().newByteArrayResource(jar);
-        return ks.getRepository().addKieModule(jarRes);
+        Resource jarRes = ks.getResources().newByteArrayResource(jar);
+        KieModule km = ks.getRepository().addKieModule(jarRes);
+        return km;
     }
 }

@@ -25,7 +25,6 @@ import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Comparator;
 import java.util.List;
@@ -55,7 +54,7 @@ public class StreamListFingerprint {
                 sb.append(output.hashCode());
             }
         }
-        return String.valueOf(Hex.encodeHex(sha1Digest.digest(sb.toString().getBytes(StandardCharsets.US_ASCII))));
+        return String.valueOf(Hex.encodeHex(sha1Digest.digest(sb.toString().getBytes())));
     }
 
     private Comparator<Output> getOutputComparator() {

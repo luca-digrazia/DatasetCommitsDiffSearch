@@ -17,7 +17,6 @@
 package org.graylog2.restclient.models.api.requests;
 
 import org.graylog2.restclient.models.bundles.Dashboard;
-import org.graylog2.restclient.models.bundles.GrokPattern;
 import org.graylog2.restclient.models.bundles.Input;
 import org.graylog2.restclient.models.bundles.Output;
 import org.graylog2.restclient.models.bundles.Stream;
@@ -33,5 +32,4 @@ public class CreateBundleRequest extends ApiRequest {
     public List<Stream> streams;
     public List<Output> outputs;
     public List<Dashboard> dashboards;
-    public List<GrokPattern> grokPatterns;
 }

@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.buffers;
 
@@ -20,15 +20,13 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import javax.inject.Provider;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.journal.RawMessage;
 import org.graylog2.shared.buffers.processors.DecodingProcessor;
-import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-
-import javax.inject.Provider;
 
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -62,11 +60,8 @@ public class ProcessBufferTest {
     }
 
     public void testBasicInsert() throws Exception {
-        final Provider provider = mock(Provider.class);
-        when(provider.get()).thenReturn(mock(ProcessBufferProcessor.class));
         ProcessBuffer processBuffer = new ProcessBuffer(metricRegistry, serverStatus, mock(DecodingProcessor.Factory.class),
-                provider, 1, 1, "blocking");
-
+                                                        mock(Provider.class), 1, 1, "blocking");
 
         RawMessage message = mock(RawMessage.class);
         MessageInput messageInput = mock(MessageInput.class);

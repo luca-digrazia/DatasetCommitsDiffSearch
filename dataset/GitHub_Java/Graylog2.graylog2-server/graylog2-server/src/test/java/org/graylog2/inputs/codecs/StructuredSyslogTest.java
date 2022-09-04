@@ -21,12 +21,10 @@ import com.codahale.metrics.Timer;
 import com.google.common.collect.ImmutableMap;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.BeforeTest;
+import org.testng.annotations.Test;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -34,10 +32,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 public class StructuredSyslogTest {
     // http://tools.ietf.org/rfc/rfc5424.txt
@@ -48,9 +47,6 @@ public class StructuredSyslogTest {
     private static final String ValidNonStructuredMessage = "<86>Dec 24 17:05:01 nb-lkoopmann CRON[10049]: pam_unix(cron:session): session closed for user root";
     private static final String MessageLookingLikeStructured = "<133>NOMA101FW01A: NetScreen device_id=NOMA101FW01A [Root]system-notification-00257(traffic): start_time=\"2011-12-23 17:33:43\" duration=0 reason=Creation";
 
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
     private final Configuration configuration = new Configuration(ImmutableMap.<String, Object>of(
             SyslogCodec.CK_FORCE_RDNS, false,
             SyslogCodec.CK_ALLOW_OVERRIDE_DATE, false,
@@ -58,14 +54,16 @@ public class StructuredSyslogTest {
             SyslogCodec.CK_STORE_FULL_MESSAGE, true
     ));
     private SyslogCodec syslogCodec;
-    @Mock
-    private MetricRegistry metricRegistry;
-    @Mock
-    private Timer mockedTimer;
+    @Mock private MetricRegistry metricRegistry;
+    @Mock private Timer mockedTimer;
 
-    @Before
+    @BeforeTest
     public void setUp() {
+        MockitoAnnotations.initMocks(this);
+
         when(metricRegistry.timer(any(String.class))).thenReturn(mockedTimer);
+        when(mockedTimer.time()).thenReturn(mock(Timer.Context.class));
+
         syslogCodec = new SyslogCodec(configuration, metricRegistry);
     }
 
@@ -100,7 +98,7 @@ public class StructuredSyslogTest {
     public void testExtractFieldsWithoutExpansion() {
         // Order is not guaranteed in the current syslog4j implementation!
         Map<String, Object> result = syslogCodec.extractFields(newEvent(ValidStructuredMultiMessageSameKey), false);
-        assertTrue("iut value is not 3 or 10!", Pattern.compile("3|10").matcher((String) result.get("iut")).matches());
+        assertTrue(Pattern.compile("3|10").matcher((String) result.get("iut")).matches(), "iut value is not 3 or 10!");
     }
 
     @Test
@@ -113,7 +111,7 @@ public class StructuredSyslogTest {
     @Test
     public void testExtractNoFields() {
         Map<String, Object> result = syslogCodec.extractFields(newEvent(ValidStructuredNoStructValues), false);
-        assertEquals(Collections.<String, Object>emptyMap(), result);
+        assertEquals(result, Collections.emptyMap());
     }
 
     @Test

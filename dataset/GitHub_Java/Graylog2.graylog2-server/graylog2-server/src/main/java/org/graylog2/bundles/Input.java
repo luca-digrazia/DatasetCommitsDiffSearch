@@ -20,7 +20,6 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.hibernate.validator.constraints.NotBlank;
 
-import javax.annotation.Nullable;
 import javax.validation.constraints.NotNull;
 import java.util.Collections;
 import java.util.List;
@@ -28,9 +27,6 @@ import java.util.Map;
 
 @JsonAutoDetect
 public class Input {
-    @JsonProperty
-    @Nullable
-    private String id;
     @JsonProperty
     @NotBlank
     private String title;
@@ -48,14 +44,6 @@ public class Input {
     @JsonProperty
     @NotNull
     private List<Extractor> extractors = Collections.emptyList();
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
 
     public String getTitle() {
         return title;

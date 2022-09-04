@@ -31,13 +31,15 @@ import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.QueryStringQueryBuilder;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.aggregations.bucket.filter.Filter;
-import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogram;
-import org.elasticsearch.search.aggregations.bucket.missing.Missing;
-import org.elasticsearch.search.aggregations.bucket.terms.Terms;
-import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
+import org.elasticsearch.search.facet.FacetBuilders;
+import org.elasticsearch.search.facet.datehistogram.DateHistogramFacet;
+import org.elasticsearch.search.facet.datehistogram.DateHistogramFacetBuilder;
+import org.elasticsearch.search.facet.statistical.StatisticalFacet;
+import org.elasticsearch.search.facet.statistical.StatisticalFacetBuilder;
+import org.elasticsearch.search.facet.terms.TermsFacet;
+import org.elasticsearch.search.facet.terms.TermsFacetBuilder;
+import org.elasticsearch.search.facet.termsstats.TermsStatsFacet;
+import org.elasticsearch.search.facet.termsstats.TermsStatsFacetBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.graylog2.Configuration;
 import org.graylog2.indexer.Deflector;
@@ -71,13 +73,6 @@ import static org.elasticsearch.index.query.QueryBuilders.queryString;
 @Singleton
 public class Searches {
     private static final Logger LOG = LoggerFactory.getLogger(Searches.class);
-
-    public final static String AGG_TERMS = "gl2_terms";
-    public final static String AGG_STATS = "gl2_stats";
-    public final static String AGG_TERMS_STATS = "gl2_termsstats";
-    public static final String AGG_FILTER = "gl2_filter";
-    public static final String AGG_HISTOGRAM = "gl2_histogram";
-    public static final String AGG_EXTENDED_STATS = "gl2_extended_stats";
 
     public static enum TermsStatsOrder {
         TERM,
@@ -119,6 +114,10 @@ public class Searches {
     private final Deflector deflector;
     private final IndexRangeService indexRangeService;
     private final Client c;
+
+    private final static String TERMS_FACET_NAME = "gl2_terms";
+    private final static String STATS_FACET_NAME = "gl2_stats";
+    private final static String TERMS_STATS_FACET_NAME = "gl2_termsstats";
 
     @Inject
     public Searches(Configuration configuration,
@@ -224,26 +223,20 @@ public class Searches {
             srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
         }
 
-        FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
-                .subAggregation(
-                        AggregationBuilders.terms(AGG_TERMS)
-                                .field(field)
-                                .size(size))
-                .subAggregation(
-                        AggregationBuilders.missing("missing")
-                                .field(field))
-                .filter(standardFilters(range, filter));
+        TermsFacetBuilder terms = new TermsFacetBuilder(TERMS_FACET_NAME);
+        terms.global(false);
+        terms.field(field);
+        terms.size(size);
 
-        srb.addAggregation(builder);
+        terms.facetFilter(standardFilters(range, filter));
+
+        srb.addFacet(terms);
 
         final SearchRequest request = srb.request();
         SearchResponse r = c.search(request).actionGet();
 
-        final Filter f = r.getAggregations().get(AGG_FILTER);
         return new TermsResult(
-                (Terms) f.getAggregations().get(AGG_TERMS),
-                (Missing) f.getAggregations().get("missing"),
-                f.getDocCount(),
+                (TermsFacet) r.getFacets().facet(TERMS_FACET_NAME),
                 query,
                 request.source(),
                 r.getTook()
@@ -266,66 +259,22 @@ public class Searches {
             srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
         }
 
+        TermsStatsFacetBuilder stats = new TermsStatsFacetBuilder(TERMS_STATS_FACET_NAME);
+        stats.global(false);
+        stats.keyField(keyField);
+        stats.valueField(valueField);
+        stats.order(TermsStatsFacet.ComparatorType.fromString(order.toString().toLowerCase()));
+        stats.size(size);
 
-        Terms.Order termsOrder;
-        switch (order) {
-            case COUNT:
-                termsOrder = Terms.Order.count(true);
-                break;
-            case REVERSE_COUNT:
-                termsOrder = Terms.Order.count(false);
-                break;
-            case TERM:
-                termsOrder = Terms.Order.term(true);
-                break;
-            case REVERSE_TERM:
-                termsOrder = Terms.Order.term(false);
-                break;
-            case MIN:
-                termsOrder = Terms.Order.aggregation(AGG_STATS, "min", true);
-                break;
-            case REVERSE_MIN:
-                termsOrder = Terms.Order.aggregation(AGG_STATS, "min", false);
-                break;
-            case MAX:
-                termsOrder = Terms.Order.aggregation(AGG_STATS, "max", true);
-                break;
-            case REVERSE_MAX:
-                termsOrder = Terms.Order.aggregation(AGG_STATS, "max", false);
-                break;
-            case MEAN:
-                termsOrder = Terms.Order.aggregation(AGG_STATS, "avg", true);
-                break;
-            case REVERSE_MEAN:
-                termsOrder = Terms.Order.aggregation(AGG_STATS, "avg", false);
-                break;
-            case TOTAL:
-                termsOrder = Terms.Order.aggregation(AGG_STATS, "sum", true);
-                break;
-            case REVERSE_TOTAL:
-                termsOrder = Terms.Order.aggregation(AGG_STATS, "sum", false);
-                break;
-            default:
-                termsOrder = Terms.Order.count(true);
-        }
+        stats.facetFilter(standardFilters(range, filter));
 
-        FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
-                .subAggregation(
-                        AggregationBuilders.terms(AGG_TERMS_STATS)
-                                .field(keyField)
-                                .subAggregation(AggregationBuilders.stats(AGG_STATS).field(valueField))
-                                .order(termsOrder)
-                                .size(size))
-                .filter(standardFilters(range, filter));
-
-        srb.addAggregation(builder);
+        srb.addFacet(stats);
 
         final SearchRequest request = srb.request();
         SearchResponse r = c.search(request).actionGet();
 
-        final Filter f = r.getAggregations().get(AGG_FILTER);
         return new TermsStatsResult(
-                (Terms) f.getAggregations().get(AGG_TERMS_STATS),
+                (TermsStatsFacet) r.getFacets().facet(TERMS_STATS_FACET_NAME),
                 query,
                 request.source(),
                 r.getTook()
@@ -349,11 +298,14 @@ public class Searches {
             srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
         }
 
-        FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
-                .filter(standardFilters(range, filter))
-                .subAggregation(AggregationBuilders.extendedStats(AGG_EXTENDED_STATS).field(field));
+        StatisticalFacetBuilder stats = new StatisticalFacetBuilder(STATS_FACET_NAME);
+        stats.global(false);
 
-        srb.addAggregation(builder);
+        stats.facetFilter(standardFilters(range, filter));
+
+        stats.field(field);
+
+        srb.addFacet(stats);
 
         SearchResponse r;
         final SearchRequest request;
@@ -364,9 +316,8 @@ public class Searches {
             throw new FieldTypeException(e);
         }
 
-        final Filter f = r.getAggregations().get(AGG_FILTER);
         return new FieldStatsResult(
-                (ExtendedStats) f.getAggregations().get(AGG_EXTENDED_STATS),
+                (StatisticalFacet) r.getFacets().facet(STATS_FACET_NAME),
                 r.getHits(),
                 query,
                 request.source(),
@@ -379,12 +330,11 @@ public class Searches {
     }
 
     public HistogramResult histogram(String query, DateHistogramInterval interval, String filter, TimeRange range) {
-        FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
-                .subAggregation(
-                        AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
-                                .field("timestamp")
-                                .interval(interval.getPeriod().toStandardDuration().getMillis()))
-                .filter(standardFilters(range, filter));
+        DateHistogramFacetBuilder fb = FacetBuilders.dateHistogramFacet("histogram")
+                .field("timestamp")
+                .interval(interval.toString().toLowerCase());
+
+        fb.facetFilter(standardFilters(range, filter));
 
         QueryStringQueryBuilder qs = queryString(query);
         qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
@@ -393,29 +343,22 @@ public class Searches {
         final Set<String> affectedIndices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
         srb.setIndices(affectedIndices.toArray(new String[affectedIndices.size()]));
         srb.setQuery(qs);
-        srb.addAggregation(builder);
+        srb.addFacet(fb);
 
         final SearchRequest request = srb.request();
         SearchResponse r = c.search(request).actionGet();
-
-        final Filter f = r.getAggregations().get(AGG_FILTER);
-        return new DateHistogramResult(
-                (DateHistogram) f.getAggregations().get(AGG_HISTOGRAM),
-                query,
+        return new DateHistogramResult((DateHistogramFacet) r.getFacets().facet("histogram"), query,
                 request.source(),
-                interval,
-                r.getTook());
+                interval, r.getTook());
     }
 
     public HistogramResult fieldHistogram(String query, String field, DateHistogramInterval interval, String filter, TimeRange range) throws FieldTypeException {
-        FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
-                .subAggregation(
-                        AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
-                                .field("timestamp")
-                                .subAggregation(AggregationBuilders.stats(AGG_STATS).field(field))
-                                .interval(interval.getPeriod().toStandardDuration().getMillis())
-                )
-                .filter(standardFilters(range, filter));
+        DateHistogramFacetBuilder fb = FacetBuilders.dateHistogramFacet("histogram")
+                .keyField("timestamp")
+                .valueField(field)
+                .interval(interval.toString().toLowerCase());
+
+        fb.facetFilter(standardFilters(range, filter));
 
         QueryStringQueryBuilder qs = queryString(query);
         qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
@@ -424,7 +367,7 @@ public class Searches {
         final Set<String> affectedIndices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
         srb.setIndices(affectedIndices.toArray(new String[affectedIndices.size()]));
         srb.setQuery(qs);
-        srb.addAggregation(builder);
+        srb.addFacet(fb);
 
         SearchResponse r;
         final SearchRequest request = srb.request();
@@ -434,13 +377,8 @@ public class Searches {
             throw new FieldTypeException(e);
         }
 
-        final Filter f = r.getAggregations().get(AGG_FILTER);
-        return new FieldHistogramResult(
-                (DateHistogram) f.getAggregations().get(AGG_HISTOGRAM),
-                query,
-                request.source(),
-                interval,
-                r.getTook());
+        return new FieldHistogramResult((DateHistogramFacet) r.getFacets().facet("histogram"), query, request.source(),
+                interval, r.getTook());
     }
 
     public SearchHit firstOfIndex(String index) {
@@ -590,8 +528,10 @@ public class Searches {
     }
 
     public class FieldTypeException extends Exception {
+
         public FieldTypeException(Throwable e) {
             super(e);
         }
+
     }
 }

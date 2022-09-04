@@ -45,7 +45,7 @@ public class StreamRuleServiceImpl extends PersistedServiceImpl implements Strea
         BasicDBObject o = (BasicDBObject) get(StreamRuleImpl.class, new ObjectId(id));
 
         if (o == null) {
-            throw new NotFoundException("Couldn't find stream rule with ID" + id);
+            throw new NotFoundException();
         }
 
         return new StreamRuleImpl((ObjectId) o.get("_id"), o.toMap());
@@ -69,7 +69,6 @@ public class StreamRuleServiceImpl extends PersistedServiceImpl implements Strea
         streamRuleData.put(StreamRuleImpl.FIELD_FIELD, cr.field());
         streamRuleData.put(StreamRuleImpl.FIELD_INVERTED, cr.inverted());
         streamRuleData.put(StreamRuleImpl.FIELD_STREAM_ID, new ObjectId(streamid));
-        streamRuleData.put(StreamRuleImpl.FIELD_DESCRIPTION, cr.description());
 
         return new StreamRuleImpl(streamRuleData);
     }

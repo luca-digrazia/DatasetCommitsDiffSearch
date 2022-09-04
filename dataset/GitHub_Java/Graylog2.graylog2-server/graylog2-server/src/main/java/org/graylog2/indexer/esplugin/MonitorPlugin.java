@@ -16,7 +16,7 @@
  */
 package org.graylog2.indexer.esplugin;
 
-import org.elasticsearch.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import org.elasticsearch.common.component.LifecycleComponent;
 import org.elasticsearch.common.inject.Module;
 import org.elasticsearch.plugins.AbstractPlugin;
@@ -24,9 +24,10 @@ import org.elasticsearch.plugins.AbstractPlugin;
 import java.util.Collection;
 
 public class MonitorPlugin extends AbstractPlugin {
+
     @Override
     public String name() {
-        return "graylog-monitor";
+        return "graylog2-monitor";
     }
 
     @Override
@@ -36,13 +37,15 @@ public class MonitorPlugin extends AbstractPlugin {
 
     @Override
     public Collection<Class<? extends LifecycleComponent>> services() {
-        return ImmutableSet.<Class<? extends LifecycleComponent>>of(
-                ClusterStateMonitor.class,
-                IndexChangeMonitor.class);
+        Collection<Class<? extends LifecycleComponent>> services = Lists.newArrayList();
+        services.add(ClusterStateMonitor.class);
+        return services;
     }
 
     @Override
     public Collection<Class<? extends Module>> modules() {
-        return ImmutableSet.<Class<? extends Module>>of(MonitorModule.class);
+        Collection<Class<? extends Module>> modules = Lists.newArrayList();
+        modules.add(MonitorModule.class);
+        return modules;
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.graylog2.periodical;
 
+import javax.inject.Inject;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.notifications.Notification;
@@ -23,8 +24,6 @@ import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.periodical.Periodical;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.inject.Inject;
 
 public class IndexerClusterCheckerThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(IndexerClusterCheckerThread.class);
@@ -47,7 +46,7 @@ public class IndexerClusterCheckerThread extends Periodical {
         }
 
         try {
-            cluster.health().getStatus();
+            cluster.getHealth();
         } catch (Exception e) {
             LOG.info("Indexer not fully initialized yet. Skipping periodic cluster check.");
             return;

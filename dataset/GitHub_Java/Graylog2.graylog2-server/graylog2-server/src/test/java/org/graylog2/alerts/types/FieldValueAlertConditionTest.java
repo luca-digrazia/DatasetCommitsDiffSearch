@@ -23,19 +23,22 @@ import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
-import org.junit.Test;
 import org.mockito.Matchers;
+import org.testng.annotations.Test;
 
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.assertNotNull;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
+@Test(enabled=false)
 public class FieldValueAlertConditionTest extends AlertConditionTest {
-    @Test
     public void testConstructor() throws Exception {
         Map<String, Object> parameters = getParametersMap(0,
                 0,
@@ -50,7 +53,6 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
         assertNotNull(fieldValueAlertCondition.getDescription());
     }
 
-    @Test
     public void testRunCheckHigherPositive() throws Exception {
         for (FieldValueAlertCondition.CheckType checkType : FieldValueAlertCondition.CheckType.values()) {
             final double threshold = 50.0;
@@ -67,7 +69,6 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
         }
     }
 
-    @Test
     public void testRunCheckHigherNegative() throws Exception {
         for (FieldValueAlertCondition.CheckType checkType : FieldValueAlertCondition.CheckType.values()) {
             final double threshold = 50.0;
@@ -85,7 +86,6 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
         }
     }
 
-    @Test
     public void testRunCheckLowerPositive() throws Exception {
         for (FieldValueAlertCondition.CheckType checkType : FieldValueAlertCondition.CheckType.values()) {
             final double threshold = 50.0;
@@ -103,7 +103,6 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
         }
     }
 
-    @Test
     public void testRunCheckLowerNegative() throws Exception {
         for (FieldValueAlertCondition.CheckType checkType : FieldValueAlertCondition.CheckType.values()) {
             final double threshold = 50.0;
@@ -135,7 +134,7 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
         return parameters;
     }
 
-    protected FieldValueAlertCondition getFieldValueAlertCondition(Map<String, Object> parameters) {
+    protected FieldValueAlertCondition getFieldValueAlertCondition(Map<String,Object> parameters) {
         return new FieldValueAlertCondition(
                 searches,
                 stream,
@@ -148,13 +147,15 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
     protected void fieldStatsShouldReturn(FieldStatsResult fieldStatsResult) {
         try {
             when(searches.fieldStats(anyString(), Matchers.eq("*"), anyString(), any(RelativeRange.class))).thenReturn(fieldStatsResult);
-        } catch (InvalidRangeFormatException | Searches.FieldTypeException e) {
+        } catch (InvalidRangeFormatException e) {
+            assertNotNull("This should not return an exception!", e);
+        } catch (Searches.FieldTypeException e) {
             assertNotNull("This should not return an exception!", e);
         }
     }
 
     protected FieldStatsResult getFieldStatsResult(FieldValueAlertCondition.CheckType type, Number retValue) {
-        final Double value = (Double) retValue;
+        final Double value = (Double)retValue;
         final FieldStatsResult fieldStatsResult = mock(FieldStatsResult.class);
 
         when(fieldStatsResult.getCount()).thenReturn(1L);

@@ -16,6 +16,7 @@
  */
 package org.graylog2.inputs;
 
+import org.graylog2.cluster.Node;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.PersistedService;
 import org.graylog2.plugin.database.ValidationException;
@@ -27,9 +28,9 @@ import java.util.List;
 import java.util.Map;
 
 public interface InputService extends PersistedService {
-    List<Input> all();
-
     List<Input> allOfThisNode(String nodeId);
+
+    List<Input> allOfRadio(Node radio);
 
     Input create(String id, Map<String, Object> fields);
 
@@ -39,7 +40,11 @@ public interface InputService extends PersistedService {
 
     Input findForThisNode(String nodeId, String id) throws NotFoundException;
 
+    Input findForThisRadio(String radioId, String id) throws NotFoundException;
+
     Input findForThisNodeOrGlobal(String nodeId, String id) throws NotFoundException;
+
+    Input findForThisRadioOrGlobal(String radioId, String id) throws NotFoundException;
 
     /**
      * @return the total number of inputs in the cluster (including global inputs).

@@ -19,18 +19,18 @@ package org.graylog2.rest.resources.system.bundles;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Multimap;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.bundles.BundleService;
 import org.graylog2.bundles.ConfigurationBundle;
 import org.graylog2.bundles.ExportBundle;
 import org.graylog2.database.NotFoundException;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +40,6 @@ import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
-import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -48,6 +47,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 
 @RequiresAuthentication
@@ -78,7 +78,7 @@ public class BundleResource extends RestResource {
             final ConfigurationBundle configurationBundle) {
         checkPermission(RestPermissions.BUNDLE_CREATE);
         final ConfigurationBundle bundle = bundleService.insert(configurationBundle);
-        final URI bundleUri = getUriBuilderToSelf().path(BundleResource.class)
+        final URI bundleUri = UriBuilder.fromResource(BundleResource.class)
                 .path("{bundleId}")
                 .build(bundle.getId());
 
@@ -137,10 +137,7 @@ public class BundleResource extends RestResource {
             @NotNull @Valid
             final ConfigurationBundle configurationBundle) {
         checkPermission(RestPermissions.BUNDLE_UPDATE, bundleId);
-        final boolean result = bundleService.update(bundleId, configurationBundle);
-        if (!result) {
-            throw new InternalServerErrorException("Couldn't update content pack \"" + bundleId + "\"");
-        }
+        bundleService.update(bundleId, configurationBundle);
     }
 
     @DELETE

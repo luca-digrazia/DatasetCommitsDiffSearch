@@ -17,14 +17,14 @@
 package org.graylog2.utilities;
 
 import com.google.common.collect.Maps;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
 
 import java.util.Map;
 
 public class ConfigurationMapConverter {
     /**
-     * Converts the values in the map to the requested types. This has been copied from the Graylog web interface
+     * Converts the values in the map to the requested types. This has been copied from the Graylog2 web interface
      * and should be removed once we have better configuration objects.
      */
     public static Map<String, Object> convertValues(final Map<String, Object> data, final ConfigurationRequest configurationRequest) throws ValidationException {
@@ -32,36 +32,30 @@ public class ConfigurationMapConverter {
         final Map<String, Map<String, Object>> configurationFields = configurationRequest.asList();
 
         for (final Map.Entry<String, Object> entry : data.entrySet()) {
-            final String field = entry.getKey();
-            final Map<String, Object> fieldDescription = configurationFields.get(field);
-            if (fieldDescription == null || fieldDescription.isEmpty()) {
-                throw new ValidationException(field, "Unknown configuration field description for field \"" + field + "\"");
-            }
-
-            final String type = (String) fieldDescription.get("type");
-
-            // Decide what to cast to. (string, bool, number)
             final Object value;
-            switch (type) {
+            // Decide what to cast to. (string, bool, number)
+            switch ((String) configurationFields.get(entry.getKey()).get("type")) {
                 case "text":
-                case "dropdown":
-                    value = entry.getValue() == null ? "" : String.valueOf(entry.getValue());
+                    value = String.valueOf(entry.getValue());
                     break;
                 case "number":
                     try {
                         value = Integer.parseInt(String.valueOf(entry.getValue()));
                     } catch (NumberFormatException e) {
-                        throw new ValidationException(field, e.getMessage());
+                        throw new ValidationException(entry.getKey(), e.getMessage());
                     }
                     break;
                 case "boolean":
-                    value = "true".equalsIgnoreCase(String.valueOf(entry.getValue()));
+                    value = "true".equals(String.valueOf(entry.getValue()));
+                    break;
+                case "dropdown":
+                    value = String.valueOf(entry.getValue());
                     break;
                 default:
-                    throw new ValidationException(field, "Unknown configuration field type \"" + type + "\"");
+                    value = entry.getValue();
             }
 
-            configuration.put(field, value);
+            configuration.put(entry.getKey(), value);
         }
 
         return configuration;

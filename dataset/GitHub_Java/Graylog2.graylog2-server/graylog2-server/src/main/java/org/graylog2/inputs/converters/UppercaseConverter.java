@@ -18,7 +18,6 @@ package org.graylog2.inputs.converters;
 
 import org.graylog2.plugin.inputs.Converter;
 
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -36,7 +35,7 @@ public class UppercaseConverter extends Converter {
             return value;
         }
 
-        return value.toUpperCase(Locale.ENGLISH);
+        return value.toUpperCase();
     }
 
     @Override

@@ -16,12 +16,16 @@
  */
 package org.graylog2.indexer;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class IndexNotFoundException extends Exception {
-    public IndexNotFoundException() {
-        super();
-    }
+    
+    /**
+     * Re-generate if you modify the class structure.
+     */
+	private static final long serialVersionUID = 1332856399663575545L;
 
-    public IndexNotFoundException(String message) {
-        super(message);
-    }
+	public IndexNotFoundException() {}
+    
 }

@@ -26,15 +26,12 @@ import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.Tools;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
 public class IndexHelper {
-    private static final Logger LOG = LoggerFactory.getLogger(IndexHelper.class);
 
     public static Set<String> getOldestIndices(Set<String> indexNames, int count) {
         Set<String> r = Sets.newHashSet();
@@ -123,7 +120,7 @@ public class IndexHelper {
                 final IndexRange deflectorIndexRange = indexRangeService.get(deflector.getCurrentActualTargetIndex());
                 indices.add(deflectorIndexRange);
             } catch (NotFoundException e) {
-                LOG.warn("Couldn't find latest deflector target index", e);
+                e.printStackTrace();
             }
         }
 

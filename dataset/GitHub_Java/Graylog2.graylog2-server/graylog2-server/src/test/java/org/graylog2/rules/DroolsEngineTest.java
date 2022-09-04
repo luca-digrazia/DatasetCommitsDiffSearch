@@ -16,33 +16,34 @@
  */
 package org.graylog2.rules;
 
+import com.google.common.collect.Sets;
+import org.graylog2.Graylog2BaseTest;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
-import java.net.URI;
-import java.util.Collections;
+import java.net.URL;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
-public class DroolsEngineTest {
+public class DroolsEngineTest extends Graylog2BaseTest {
 
     @Test
     public void runWithoutRules() {
-        final DroolsEngine engine = new DroolsEngine(Collections.<URI>emptySet());
+        final DroolsEngine engine = new DroolsEngine(Sets.<URL>newHashSet());
 
         final int rulesFired = engine.evaluateInSharedSession(new Message("test message", "test", Tools.iso8601()));
 
-        assertEquals("No rules should have fired", rulesFired, 0);
+        assertEquals(rulesFired, 0, "No rules should have fired");
 
         engine.stop();
     }
 
     @Test
     public void addedRuleIsVisibleInSession() {
-        final DroolsEngine engine = new DroolsEngine(Collections.<URI>emptySet());
+        final DroolsEngine engine = new DroolsEngine(Sets.<URL>newHashSet());
 
         String rule1 =
                 "declare Message\n" +
@@ -69,23 +70,23 @@ public class DroolsEngineTest {
                 "end\n";
 
         final boolean valid1 = engine.addRule(rule1);
-        assertTrue("Rule should compile without errors", valid1);
+        assertTrue(valid1, "Rule should compile without errors");
 
         final boolean valid2 = engine.addRule(rule2);
-        assertTrue("Rule should compile without errors", valid2);
+        assertTrue(valid2, "Rule should compile without errors");
 
         final Message msg = new Message("test message", "test source", Tools.iso8601());
         final int fired = engine.evaluateInSharedSession(msg);
 
-        assertTrue("msg is filtered out", msg.getFilterOut());
-        assertEquals("both rules should have fired", fired, 2);
+        assertTrue(msg.getFilterOut(), "msg is filtered out");
+        assertEquals(fired, 2, "both rules should have fired");
 
         engine.stop();
     }
 
     @Test
     public void incorrectRuleIsNotApplied() {
-        final DroolsEngine engine = new DroolsEngine(Collections.<URI>emptySet());
+        final DroolsEngine engine = new DroolsEngine(Sets.<URL>newHashSet());
 
         String invalidRule = "rule \"this will not compile\"\n" +
                 "when\n" +
@@ -100,10 +101,10 @@ public class DroolsEngineTest {
                 "end";
 
         boolean deployed = engine.addRule(invalidRule);
-        assertFalse("Should not deploy invalid rule", deployed);
+        assertFalse(deployed, "Should not deploy invalid rule");
 
         deployed = engine.addRule(validRule);
-        assertTrue("Subsequent deployment of valid rule works", deployed);
+        assertTrue(deployed, "Subsequent deployment of valid rule works");
 
         engine.evaluateInSharedSession(new Message("foo", "source", Tools.iso8601()));
 

@@ -28,7 +28,7 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.models.streams.outputs.requests.CreateOutputRequest;
+import org.graylog2.streams.outputs.CreateOutputRequest;
 
 import javax.inject.Inject;
 import java.util.HashMap;
@@ -84,10 +84,17 @@ public class OutputServiceImpl extends PersistedServiceImpl implements OutputSer
     }
 
     @Override
+    public Set<Output> loadForStream(Stream stream) {
+        return stream.getOutputs();
+    }
+
+    @Override
     public Output create(Output request) throws ValidationException {
-        OutputImpl impl = getImplOrFail(request);
-        final String id = save(impl);
-        impl.setId(id);
+        final String id = save(request);
+        if (request instanceof OutputImpl) {
+            OutputImpl impl = OutputImpl.class.cast(request);
+            impl.setId(id);
+        }
         return request;
     }
 
@@ -99,10 +106,9 @@ public class OutputServiceImpl extends PersistedServiceImpl implements OutputSer
 
     @Override
     public void destroy(Output output) throws NotFoundException {
-        final OutputImpl impl = getImplOrFail(output);
         streamService.removeOutputFromAllStreams(output);
         outputRegistry.removeOutput(output);
-        super.destroy(impl);
+        super.destroy(output);
     }
 
     @Override
@@ -125,14 +131,5 @@ public class OutputServiceImpl extends PersistedServiceImpl implements OutputSer
         }
 
         return outputsCountByType;
-    }
-
-    OutputImpl getImplOrFail(Output output) {
-        if (output instanceof OutputImpl) {
-            final OutputImpl impl = (OutputImpl) output;
-            return impl;
-        } else {
-            throw new IllegalArgumentException("Passed object must be of OutputImpl class, not " + output.getClass());
-        }
     }
 }

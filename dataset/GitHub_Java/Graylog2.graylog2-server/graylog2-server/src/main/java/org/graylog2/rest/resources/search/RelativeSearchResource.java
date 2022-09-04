@@ -33,13 +33,13 @@ import org.graylog2.indexer.searches.Sorting;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
-import org.graylog2.rest.models.search.responses.FieldStatsResult;
-import org.graylog2.rest.models.search.responses.HistogramResult;
+import org.graylog2.rest.resources.search.responses.FieldStatsResult;
+import org.graylog2.rest.resources.search.responses.HistogramResult;
 import org.graylog2.rest.resources.search.responses.SearchResponse;
-import org.graylog2.rest.models.search.responses.TermsResult;
-import org.graylog2.rest.models.search.responses.TermsStatsResult;
+import org.graylog2.rest.resources.search.responses.TermsResult;
+import org.graylog2.rest.resources.search.responses.TermsStatsResult;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.rest.AdditionalMediaType;
-import org.graylog2.shared.security.RestPermissions;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -279,17 +279,14 @@ public class RelativeSearchResource extends SearchResource {
             @ApiParam(name = "interval", value = "Histogram interval / bucket size. (year, quarter, month, week, day, hour or minute)", required = true)
             @QueryParam("interval") @NotEmpty String interval,
             @ApiParam(name = "range", value = "Relative timeframe to search in. See search method description.", required = true) @QueryParam("range") int range,
-            @ApiParam(name = "filter", value = "Filter", required = false) @QueryParam("filter") String filter,
-            @ApiParam(name = "cardinality", value = "Calculate the cardinality of the field as well", required = false) @QueryParam("cardinality") boolean includeCardinality
-    ) {
+            @ApiParam(name = "filter", value = "Filter", required = false) @QueryParam("filter") String filter) {
         checkSearchPermission(filter, RestPermissions.SEARCHES_RELATIVE);
 
         interval = interval.toUpperCase();
         validateInterval(interval);
 
         try {
-            return buildHistogramResult(fieldHistogram(field, query, interval, filter, buildRelativeTimeRange(range),
-                                                       includeCardinality));
+            return buildHistogramResult(fieldHistogram(field, query, interval, filter, buildRelativeTimeRange(range)));
         } catch (SearchPhaseExecutionException e) {
             throw createRequestExceptionForParseFailure(query, e);
         }

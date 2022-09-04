@@ -16,65 +16,30 @@
  */
 package org.graylog2.indexer.retention.strategies;
 
-import com.google.common.base.Stopwatch;
-import org.graylog2.auditlog.AuditLogger;
-import org.graylog2.indexer.Deflector;
-import org.graylog2.indexer.indices.Indices;
-import org.graylog2.plugin.cluster.ClusterConfigService;
-import org.graylog2.plugin.indexer.retention.RetentionStrategyConfig;
-import org.graylog2.shared.system.activities.ActivityWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.graylog2.plugin.indexer.retention.IndexManagement;
+import org.graylog2.plugin.indexer.retention.RetentionStrategy;
 
-import javax.inject.Inject;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
-public class ClosingRetentionStrategy extends AbstractIndexCountBasedRetentionStrategy {
-    private static final Logger LOG = LoggerFactory.getLogger(ClosingRetentionStrategy.class);
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+public class ClosingRetentionStrategy extends RetentionStrategy {
 
-    private final Indices indices;
-    private final ClusterConfigService clusterConfigService;
+    public ClosingRetentionStrategy(IndexManagement indexManagement) {
+        super(indexManagement);
+    }
 
-    @Inject
-    public ClosingRetentionStrategy(Deflector deflector,
-                                    Indices indices,
-                                    ActivityWriter activityWriter,
-                                    ClusterConfigService clusterConfigService,
-                                    AuditLogger auditLogger) {
-        super(deflector, indices, activityWriter, auditLogger);
-        this.indices = indices;
-        this.clusterConfigService = clusterConfigService;
+    protected void onMessage(Map<String, String> message) {}
+
+    @Override
+    protected boolean iterates() {
+        return false;
     }
 
     @Override
-    protected Optional<Integer> getMaxNumberOfIndices() {
-        final ClosingRetentionStrategyConfig config = clusterConfigService.get(ClosingRetentionStrategyConfig.class);
-
-        if (config != null) {
-            return Optional.of(config.maxNumberOfIndices());
-        } else {
-            return Optional.empty();
-        }
+    protected Type getType() {
+        return Type.CLOSE;
     }
 
-    @Override
-    public void retain(String indexName) {
-        final Stopwatch sw = Stopwatch.createStarted();
-
-        indices.close(indexName);
-
-        LOG.info("Finished index retention strategy [close] for index <{}> in {}ms.", indexName,
-                sw.stop().elapsed(TimeUnit.MILLISECONDS));
-    }
-
-    @Override
-    public Class<? extends RetentionStrategyConfig> configurationClass() {
-        return ClosingRetentionStrategyConfig.class;
-    }
-
-    @Override
-    public RetentionStrategyConfig defaultConfiguration() {
-        return ClosingRetentionStrategyConfig.createDefault();
-    }
 }

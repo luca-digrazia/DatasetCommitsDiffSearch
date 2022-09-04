@@ -16,7 +16,6 @@
  */
 package org.graylog2.restclient.models.api.requests;
 
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 public class CreateUserRequestForm extends CreateUserRequest {
@@ -68,7 +67,7 @@ public class CreateUserRequestForm extends CreateUserRequest {
         if (session_timeout_never) {
             request.sessionTimeoutMs = -1;
         } else {
-            request.sessionTimeoutMs = TimeUnit.valueOf(timeout_unit.toUpperCase(Locale.ENGLISH)).toMillis(timeout);
+            request.sessionTimeoutMs = TimeUnit.valueOf(timeout_unit.toUpperCase()).toMillis(timeout);
         }
         return request;
     }

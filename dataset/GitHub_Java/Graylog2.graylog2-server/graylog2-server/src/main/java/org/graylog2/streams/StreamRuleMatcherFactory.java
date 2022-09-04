@@ -17,32 +17,36 @@
 package org.graylog2.streams;
 
 import org.graylog2.plugin.streams.StreamRuleType;
-import org.graylog2.streams.matchers.ContainsMatcher;
-import org.graylog2.streams.matchers.ExactMatcher;
-import org.graylog2.streams.matchers.FieldPresenceMatcher;
-import org.graylog2.streams.matchers.GreaterMatcher;
-import org.graylog2.streams.matchers.RegexMatcher;
-import org.graylog2.streams.matchers.SmallerMatcher;
-import org.graylog2.streams.matchers.StreamRuleMatcher;
+import org.graylog2.streams.matchers.*;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class StreamRuleMatcherFactory {
 
     public static StreamRuleMatcher build(StreamRuleType ruleType) throws InvalidStreamRuleTypeException {
+        StreamRuleMatcher matcher = null;
+
         switch (ruleType) {
             case EXACT:
-                return new ExactMatcher();
+                matcher = new ExactMatcher();
+                break;
             case REGEX:
-                return new RegexMatcher();
+                matcher = new RegexMatcher();
+                break;
             case GREATER:
-                return new GreaterMatcher();
+                matcher = new GreaterMatcher();
+                break;
             case SMALLER:
-                return new SmallerMatcher();
+                matcher = new SmallerMatcher();
+                break;
             case PRESENCE:
-                return new FieldPresenceMatcher();
-            case CONTAINS:
-                return new ContainsMatcher();
+                matcher = new FieldPresenceMatcher();
+                break;
             default:
                 throw new InvalidStreamRuleTypeException();
         }
+
+        return matcher;
     }
 }

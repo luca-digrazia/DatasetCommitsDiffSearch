@@ -21,14 +21,10 @@ import org.graylog2.plugin.database.users.User;
 import org.graylog2.shared.security.ldap.LdapEntry;
 import org.graylog2.shared.security.ldap.LdapSettings;
 
-import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 
 public interface UserService extends PersistedService {
     User load(String username);
-
-    int delete(String username);
 
     User create();
 
@@ -41,10 +37,4 @@ public interface UserService extends PersistedService {
     User getAdminUser();
 
     long count();
-
-    Collection<User> loadAllForRole(Role role);
-
-    Set<String> getRoleNames(User user);
-
-    List<String> getPermissionsForUser(User user);
 }

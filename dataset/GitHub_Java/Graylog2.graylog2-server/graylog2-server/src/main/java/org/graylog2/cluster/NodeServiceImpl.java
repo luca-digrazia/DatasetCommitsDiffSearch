@@ -1,46 +1,44 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.cluster;
 
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
+import javax.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
-import org.graylog2.Core;
+import org.graylog2.Configuration;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
-import org.graylog2.database.ValidationException;
+import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.system.NodeId;
 
 import java.net.URI;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class NodeServiceImpl extends PersistedServiceImpl implements NodeService {
-    // TODO: should be moved to configuration class
-    public static final int PING_TIMEOUT = 2;
+    private final long pingTimeout;
 
     @Inject
-    public NodeServiceImpl(MongoConnection mongoConnection) {
+    public NodeServiceImpl(final MongoConnection mongoConnection, final Configuration configuration) {
         super(mongoConnection);
+        this.pingTimeout = TimeUnit.MILLISECONDS.toSeconds(configuration.getStaleMasterTimeout());
     }
 
     @Override
@@ -48,7 +46,7 @@ public class NodeServiceImpl extends PersistedServiceImpl implements NodeService
         Map<String, Object> fields = Maps.newHashMap();
         fields.put("last_seen", Tools.getUTCTimestamp());
         fields.put("node_id", nodeId);
-        fields.put("type", NodeImpl.Type.SERVER.toString());
+        fields.put("type", Node.Type.SERVER.toString());
         fields.put("is_master", isMaster);
         fields.put("transport_address", restTransportUri.toString());
 
@@ -60,16 +58,11 @@ public class NodeServiceImpl extends PersistedServiceImpl implements NodeService
     }
 
     @Override
-    public String registerServer(Core core, boolean isMaster, URI restTransportUri) {
-        return registerServer(core.getNodeId(), isMaster, restTransportUri);
-    }
-
-    @Override
     public String registerRadio(String nodeId, String restTransportUri) {
         Map<String, Object> fields = Maps.newHashMap();
         fields.put("last_seen", Tools.getUTCTimestamp());
         fields.put("node_id", nodeId);
-        fields.put("type", NodeImpl.Type.RADIO.toString());
+        fields.put("type", Node.Type.RADIO.toString());
         fields.put("transport_address", restTransportUri);
 
         try {
@@ -80,31 +73,15 @@ public class NodeServiceImpl extends PersistedServiceImpl implements NodeService
     }
 
     @Override
-    public Node thisNode(Core core) throws NodeNotFoundException {
-        DBObject o = findOne(NodeImpl.class, new BasicDBObject("node_id", core.getNodeId()));
-
-        if (o == null || !o.containsField("node_id")) {
-            throw new NodeNotFoundException("Did not find our own node. This should never happen.");
-        }
-
-        return new NodeImpl((ObjectId) o.get("_id"), o.toMap());
-    }
-
-    @Override
     public Node byNodeId(String nodeId) throws NodeNotFoundException {
         DBObject query = new BasicDBObject("node_id", nodeId);
         DBObject o = findOne(NodeImpl.class, query);
 
         if (o == null || !o.containsField("node_id")) {
-            throw new NodeNotFoundException("Did not find our own node. This should never happen.");
+            throw new NodeNotFoundException("Unable to find node " + nodeId);
         }
 
         return new NodeImpl((ObjectId) o.get("_id"), o.toMap());
-    }
-
-    @Override
-    public Node byNodeId(Core core, String nodeId) {
-        return byNodeId(core, nodeId);
     }
 
     @Override
@@ -113,11 +90,11 @@ public class NodeServiceImpl extends PersistedServiceImpl implements NodeService
     }
 
     @Override
-    public Map<String, Node> allActive(NodeImpl.Type type) {
+    public Map<String, Node> allActive(Node.Type type) {
         Map<String, Node> nodes = Maps.newHashMap();
 
         BasicDBObject query = new BasicDBObject();
-        query.put("last_seen", new BasicDBObject("$gte", Tools.getUTCTimestamp() - PING_TIMEOUT));
+        query.put("last_seen", new BasicDBObject("$gte", Tools.getUTCTimestamp() - pingTimeout));
         query.put("type", type.toString());
 
         for (DBObject obj : query(NodeImpl.class, query)) {
@@ -134,7 +111,7 @@ public class NodeServiceImpl extends PersistedServiceImpl implements NodeService
     public Map<String, Node> allActive() {
         Map<String, Node> nodes = Maps.newHashMap();
 
-        for (NodeImpl.Type type : NodeImpl.Type.values())
+        for (Node.Type type : Node.Type.values())
             nodes.putAll(allActive(type));
 
         return nodes;
@@ -143,7 +120,7 @@ public class NodeServiceImpl extends PersistedServiceImpl implements NodeService
     @Override
     public void dropOutdated() {
         BasicDBObject query = new BasicDBObject();
-        query.put("last_seen", new BasicDBObject("$lt", Tools.getUTCTimestamp() - PING_TIMEOUT));
+        query.put("last_seen", new BasicDBObject("$lt", Tools.getUTCTimestamp() - pingTimeout));
 
         destroyAll(NodeImpl.class, query);
     }
@@ -172,11 +149,11 @@ public class NodeServiceImpl extends PersistedServiceImpl implements NodeService
     }
 
     @Override
-    public boolean isOnlyMaster(Core core) {
+    public boolean isOnlyMaster(NodeId nodeId) {
         BasicDBObject query = new BasicDBObject();
-        query.put("type", NodeImpl.Type.SERVER.toString());
-        query.put("last_seen", new BasicDBObject("$gte", Tools.getUTCTimestamp()-PING_TIMEOUT));
-        query.put("node_id", new BasicDBObject("$ne", core.getNodeId()));
+        query.put("type", Node.Type.SERVER.toString());
+        query.put("last_seen", new BasicDBObject("$gte", Tools.getUTCTimestamp() - pingTimeout));
+        query.put("node_id", new BasicDBObject("$ne", nodeId.toString()));
         query.put("is_master", true);
 
         return query(NodeImpl.class, query).size() == 0;
@@ -185,12 +162,10 @@ public class NodeServiceImpl extends PersistedServiceImpl implements NodeService
     @Override
     public boolean isAnyMasterPresent() {
         BasicDBObject query = new BasicDBObject();
-        query.put("type", NodeImpl.Type.SERVER.toString());
-        query.put("last_seen", new BasicDBObject("$gte", Tools.getUTCTimestamp()-PING_TIMEOUT));
+        query.put("type", Node.Type.SERVER.toString());
+        query.put("last_seen", new BasicDBObject("$gte", Tools.getUTCTimestamp() - pingTimeout));
         query.put("is_master", true);
 
         return query(NodeImpl.class, query).size() > 0;
     }
-
-
 }

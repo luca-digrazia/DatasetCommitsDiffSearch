@@ -16,30 +16,23 @@
  */
 package org.graylog2.indexer.results;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogram;
-import org.elasticsearch.search.aggregations.metrics.stats.Stats;
+import org.elasticsearch.search.facet.datehistogram.DateHistogramFacet;
 import org.graylog2.indexer.searches.Searches;
 
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class FieldHistogramResult extends HistogramResult {
-    private static final Map<String, Number> EMPTY_RESULT = ImmutableMap.<String, Number>builder()
-            .put("count", 0)
-            .put("min", 0)
-            .put("max", 0)
-            .put("total", 0)
-            .put("total_count", 0)
-            .put("mean", 0)
-            .build();
 
-    private final DateHistogram result;
+    private final DateHistogramFacet result;
     private final Searches.DateHistogramInterval interval;
 
-    public FieldHistogramResult(DateHistogram result, String originalQuery, BytesReference builtQuery, Searches.DateHistogramInterval interval, TimeValue took) {
+    public FieldHistogramResult(DateHistogramFacet result, String originalQuery, BytesReference builtQuery, Searches.DateHistogramInterval interval, TimeValue took) {
         super(originalQuery, builtQuery, took);
 
         this.result = result;
@@ -50,24 +43,21 @@ public class FieldHistogramResult extends HistogramResult {
         return interval;
     }
 
-    public Map<Long, Map<String, Number>> getResults() {
-        Map<Long, Map<String, Number>> results = Maps.newTreeMap();
-        long minTimestamp = Long.MAX_VALUE;
-        long maxTimestamp = Long.MIN_VALUE;
+    public Map<Long, Map<String, Object>> getResults() {
+        Map<Long, Map<String, Object>> results = Maps.newTreeMap();
+        Long minTimestamp = Long.MAX_VALUE;
+        Long maxTimestamp = Long.MIN_VALUE;
+        for (DateHistogramFacet.Entry e : result) {
+            Map<String, Object> resultMap = Maps.newHashMap();
 
-        for (DateHistogram.Bucket b : result.getBuckets()) {
-            Map<String, Number> resultMap = Maps.newHashMap();
+            resultMap.put("count", e.getCount());
+            resultMap.put("min", e.getMin());
+            resultMap.put("max", e.getMax());
+            resultMap.put("total", e.getTotal());
+            resultMap.put("total_count", e.getTotalCount());
+            resultMap.put("mean", e.getMean());
 
-            resultMap.put("total_count", b.getDocCount());
-
-            Stats stats = b.getAggregations().get(Searches.AGG_STATS);
-            resultMap.put("count", stats.getCount());
-            resultMap.put("min", stats.getMin());
-            resultMap.put("max", stats.getMax());
-            resultMap.put("total", stats.getSum());
-            resultMap.put("mean", stats.getAvg());
-
-            final long timestamp = b.getKeyAsDate().getMillis() / 1000L;
+            final long timestamp = e.getTime() / 1000;
             if (timestamp < minTimestamp) minTimestamp = timestamp;
             if (timestamp > maxTimestamp) maxTimestamp = timestamp;
 
@@ -75,15 +65,23 @@ public class FieldHistogramResult extends HistogramResult {
         }
         long curTimestamp = minTimestamp;
         while (curTimestamp < maxTimestamp) {
-            Map<String, Number> entry = results.get(curTimestamp);
+            Map<String, Object> entry = results.get(curTimestamp);
 
             // advance timestamp by the interval's seconds value
             curTimestamp += interval.getPeriod().toStandardSeconds().getSeconds();
 
-            if (entry == null) {
-                // synthesize a 0 value for this timestamp
-                results.put(curTimestamp, EMPTY_RESULT);
+            if (entry != null) {
+                continue;
             }
+            // synthesize a 0 value for this timestamp
+            entry = Maps.newHashMap();
+            entry.put("count", 0);
+            entry.put("min", 0);
+            entry.put("max", 0);
+            entry.put("total", 0);
+            entry.put("total_count", 0);
+            entry.put("mean", 0);
+            results.put(curTimestamp, entry);
         }
         return results;
     }

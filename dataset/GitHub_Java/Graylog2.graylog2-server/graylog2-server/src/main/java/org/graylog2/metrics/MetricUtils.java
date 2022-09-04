@@ -1,21 +1,18 @@
 /**
- * Copyright 2014 TORCH GmbH <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.metrics;
 
@@ -26,6 +23,7 @@ import com.codahale.metrics.Timer;
 import com.google.common.collect.Maps;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,6 +32,10 @@ import java.util.concurrent.TimeUnit;
 public class MetricUtils {
 
     public static Map<String, Object> mapAll(Map<String, Metric> metrics) {
+        return mapAllFiltered(metrics, null);
+    }
+
+    public static Map<String, Object> mapAllFiltered(Map<String, Metric> metrics, Set<String> blacklist) {
         Map<String, Object> result = Maps.newHashMap();
 
         if (metrics == null) {
@@ -41,6 +43,20 @@ public class MetricUtils {
         }
 
         for (Map.Entry<String, Metric> metric : metrics.entrySet()) {
+            boolean filtered = false;
+            if (blacklist != null) {
+                for(String x : blacklist) {
+                    if (metric.getKey().startsWith(x)) {
+                        filtered = true;
+                        break;
+                    }
+                }
+            }
+
+            if (filtered) {
+                continue;
+            }
+
             result.put(metric.getKey(), map(metric.getKey(), metric.getValue()));
         }
 

@@ -24,8 +24,8 @@ import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.rest.models.system.inputs.responses.InputTypeInfo;
-import org.graylog2.rest.models.system.inputs.responses.InputTypesSummary;
+import org.graylog2.shared.rest.resources.system.inputs.responses.InputTypeInfo;
+import org.graylog2.shared.rest.resources.system.inputs.responses.InputTypesSummary;
 import org.graylog2.shared.inputs.InputDescription;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.slf4j.Logger;
@@ -40,7 +40,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RequiresAuthentication
 @Api(value = "System/Inputs/Types", description = "Message input types of this node")
@@ -67,22 +66,6 @@ public class InputTypesResource extends RestResource {
 
     @GET
     @Timed
-    @Path("/all")
-    @ApiOperation(value = "Get information about all input types")
-    public Map<String, InputTypeInfo> all() {
-        final Map<String, InputDescription> availableTypes = messageInputFactory.getAvailableInputs();
-        return availableTypes
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(entry -> entry.getKey(), entry -> {
-                    final InputDescription description = entry.getValue();
-                    return InputTypeInfo.create(entry.getKey(), description.getName(), description.isExclusive(),
-                            description.getRequestedConfiguration(), description.getLinkToDocs());
-                }));
-    }
-
-    @GET
-    @Timed
     @Path("{inputType}")
     @ApiOperation(value = "Get information about a single input type")
     @ApiResponses(value = {
@@ -96,6 +79,6 @@ public class InputTypesResource extends RestResource {
             throw new NotFoundException(message);
         }
 
-        return InputTypeInfo.create(inputType, description.getName(), description.isExclusive(), description.getRequestedConfiguration(), description.getLinkToDocs());
+        return InputTypeInfo.create(inputType, description);
     }
 }

@@ -38,8 +38,6 @@ import javax.inject.Inject;
 import java.net.URI;
 import java.util.List;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
 public class StaticEmailAlertSender implements AlertSender {
 
     private static final Logger LOG = LoggerFactory.getLogger(StaticEmailAlertSender.class);
@@ -89,22 +87,21 @@ public class StaticEmailAlertSender implements AlertSender {
         email.setSSLOnConnect(configuration.isUseSsl());
         email.setStartTLSEnabled(configuration.isUseTls());
         email.setFrom(configuration.getFromEmail());
-        email.setSubject(buildSubject(stream, checkResult, backlog));
+        email.setSubject(buildSubject(stream, checkResult, configuration, backlog));
         email.setMsg(buildBody(stream, checkResult, backlog));
         email.addTo(emailAddress);
 
         email.send();
     }
 
-    protected String buildSubject(Stream stream, AlertCondition.CheckResult checkResult, List<Message> backlog) {
+    protected String buildSubject(Stream stream, AlertCondition.CheckResult checkResult, EmailConfiguration config, List<Message> backlog) {
         StringBuilder sb = new StringBuilder();
 
-        final String subjectPrefix = configuration.getSubjectPrefix();
-        if (!isNullOrEmpty(subjectPrefix)) {
-            sb.append(subjectPrefix).append(" ");
+        if (config.getSubjectPrefix() != null && !config.getSubjectPrefix().isEmpty()) {
+            sb.append(config.getSubjectPrefix()).append(" ");
         }
 
-        sb.append("Graylog alert for stream: ").append(stream.getTitle());
+        sb.append("Graylog2 alert for stream: ").append(stream.getTitle());
 
         return sb.toString();
     }

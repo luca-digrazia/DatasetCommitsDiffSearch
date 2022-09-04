@@ -20,7 +20,6 @@ import com.google.common.collect.Maps;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterService;
-import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ClusterStateListener;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.hppc.cursors.ObjectObjectCursor;
@@ -35,7 +34,7 @@ public class ClusterStateMonitor extends org.elasticsearch.common.component.Abst
     private static final Logger log = LoggerFactory.getLogger(ClusterStateMonitor.class);
     private final ClusterService clusterService;
 
-    // Yes, this sucks, but ES and Graylog use different injectors and it's not obvious how to bridge them, so I'm using a static. Shoot me.
+    // Yes, this sucks, but ES and Graylog2 use different injectors and it's not obvious how to bridge them, so I'm using a static. Shoot me.
     private static Cluster cluster;
 
     @org.elasticsearch.common.inject.Inject
@@ -51,11 +50,6 @@ public class ClusterStateMonitor extends org.elasticsearch.common.component.Abst
 
     @Override
     public void clusterChanged(ClusterChangedEvent event) {
-        if(event.previousState().status() != ClusterState.ClusterStateStatus.APPLIED) {
-            // Only process fully applied cluster states
-            return;
-        }
-
         if (event.state().getNodes().masterAndDataNodes().isEmpty()) {
             log.warn("No Elasticsearch data nodes in cluster, cluster is completely offline.");
         }

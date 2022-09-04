@@ -19,7 +19,6 @@ package org.graylog2.shared.initializers;
 import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.glassfish.jersey.jackson.JacksonFeature;
@@ -34,7 +33,6 @@ import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
 import org.graylog2.plugin.rest.JacksonPropertyExceptionMapper;
-import org.graylog2.plugin.rest.JsonProcessingExceptionMapper;
 import org.graylog2.plugin.rest.PluginRestResource;
 import org.graylog2.plugin.rest.WebApplicationExceptionMapper;
 import org.graylog2.shared.rest.CORSFilter;
@@ -67,8 +65,6 @@ import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.ext.ContextResolver;
 import javax.ws.rs.ext.ExceptionMapper;
-import javax.ws.rs.ext.MessageBodyReader;
-import javax.ws.rs.ext.MessageBodyWriter;
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -272,19 +268,16 @@ public class RestApiService extends AbstractIdleService {
         ResourceConfig rc = new ResourceConfig()
                 .property(NettyContainer.PROPERTY_BASE_URI, listenUri)
                 .registerClasses(
-                        JacksonJaxbJsonProvider.class,
-                        MessageBodyReader.class,
-                        MessageBodyWriter.class,
-                        JsonProcessingExceptionMapper.class,
                         JacksonPropertyExceptionMapper.class,
                         AnyExceptionClassMapper.class,
                         WebApplicationExceptionMapper.class)
                 .register(new ContextResolver<ObjectMapper>() {
-                    @Override
-                    public ObjectMapper getContext(Class<?> type) {
-                        return objectMapper;
-                    }
-                })
+                              @Override
+                              public ObjectMapper getContext(Class<?> type) {
+                                  return objectMapper;
+                              }
+                          })
+                .register(JacksonFeature.class)
                 .registerFinder(new PackageNamesScanner(restControllerPackages, true))
                 .registerResources(additionalResources);
 

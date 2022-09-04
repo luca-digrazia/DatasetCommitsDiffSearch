@@ -24,7 +24,7 @@ import com.mongodb.MongoException;
 import io.airlift.airline.Command;
 import io.airlift.airline.Option;
 import org.graylog2.Configuration;
-import org.graylog2.shared.ServerVersion;
+import org.graylog2.ServerVersion;
 import org.graylog2.UI;
 import org.graylog2.bindings.AlarmCallbackBindings;
 import org.graylog2.bindings.InitializerBindings;
@@ -61,7 +61,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-@Command(name = "server", description = "Start the Graylog server")
+@Command(name = "server", description = "Start the Graylog2 server")
 public class Server extends ServerBootstrap implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(Server.class);
 
@@ -76,10 +76,10 @@ public class Server extends ServerBootstrap implements Runnable {
         super("server", configuration);
     }
 
-    @Option(name = {"-t", "--configtest"}, description = "Validate Graylog configuration and exit")
+    @Option(name = {"-t", "--configtest"}, description = "Validate Graylog2 configuration and exit")
     private boolean configTest = false;
 
-    @Option(name = {"-l", "--local"}, description = "Run Graylog in local mode. Only interesting for Graylog developers.")
+    @Option(name = {"-l", "--local"}, description = "Run Graylog2 in local mode. Only interesting for Graylog2 developers.")
     private boolean local = false;
 
     @Option(name = {"-s", "--statistics"}, description = "Print utilization statistics to STDOUT")
@@ -87,6 +87,15 @@ public class Server extends ServerBootstrap implements Runnable {
 
     @Option(name = {"-r", "--no-retention"}, description = "Do not automatically remove messages from index that are older than the retention time")
     private boolean noRetention = false;
+
+    @Option(name = {"-x", "--install-plugin"}, description = "Install plugin with provided short name from graylog2.org")
+    private String pluginShortname;
+
+    @Option(name = {"-v", "--plugin-version"}, description = "Install plugin with this version")
+    private String pluginVersion = ServerVersion.VERSION.toString();
+
+    @Option(name = {"-m", "--force-plugin"}, description = "Force plugin installation even if this version of graylog2-server is not officially supported.")
+    private boolean forcePlugin = false;
 
     public boolean isConfigTest() {
         return configTest;
@@ -102,6 +111,22 @@ public class Server extends ServerBootstrap implements Runnable {
 
     public boolean performRetention() {
         return !noRetention;
+    }
+
+    public boolean isInstallPlugin() {
+        return pluginShortname != null && !pluginShortname.isEmpty();
+    }
+
+    public String getPluginShortname() {
+        return pluginShortname;
+    }
+
+    public String getPluginVersion() {
+        return pluginVersion;
+    }
+
+    public boolean isForcePlugin() {
+        return forcePlugin;
     }
 
     @Override
@@ -167,7 +192,7 @@ public class Server extends ServerBootstrap implements Runnable {
     @Override
     protected boolean validateConfiguration() {
         if (configuration.getPasswordSecret().isEmpty()) {
-            LOG.error("No password secret set. Please define \"password_secret\" in your Graylog configuration.");
+            LOG.error("No password secret set. Please define password_secret in your graylog2.conf.");
             return false;
         }
 
@@ -207,9 +232,7 @@ public class Server extends ServerBootstrap implements Runnable {
         super.annotateInjectorExceptions(messages);
         for (Message message : messages) {
             if (message.getCause() instanceof MongoException) {
-                MongoException e = (MongoException) message.getCause();
-                LOG.error(UI.wallString("Unable to connect to MongoDB. Is it running and the configuration correct?\n" +
-                        "Details: " + e.getMessage()));
+                LOG.error(UI.wallString("Unable to connect to MongoDB. Is it running and the configuration correct?"));
                 System.exit(-1);
             }
         }

@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 package org.graylog2.shared.bindings.providers;
@@ -33,6 +33,11 @@ public class MessagePackProvider implements Provider<MessagePack> {
     @Override
     public MessagePack get() {
         final MessagePack messagePack = new MessagePack();
+
+        // Use a separate class loader for msgpack to avoid generation of duplicate class names.
+        // The JavaassistTemplateBuilder used by MessagePack uses a sequence number for class naming
+        // and is not thread-safe.
+        messagePack.setClassLoader(new ClassLoader(Thread.currentThread().getContextClassLoader()) {});
 
         try {
             // Eagerly generate RadioMessage classes in the MessagePack object to avoid doing it on runtime.

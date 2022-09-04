@@ -17,15 +17,13 @@
 package org.graylog2.restclient.lib.metrics;
 
 import com.google.common.collect.ImmutableMap;
-import org.graylog2.rest.models.metrics.responses.RateMetricsResponse;
+import org.graylog2.restclient.models.api.responses.metrics.RateMetricsResponse;
 
 import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
-import java.util.Locale;
 import java.util.Map;
 
 public class Meter extends Metric {
-    private static final DecimalFormat DF = new DecimalFormat("#.##", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+    private static final DecimalFormat DF = new DecimalFormat("#.##");
 
     public final double total;
     public final double mean;

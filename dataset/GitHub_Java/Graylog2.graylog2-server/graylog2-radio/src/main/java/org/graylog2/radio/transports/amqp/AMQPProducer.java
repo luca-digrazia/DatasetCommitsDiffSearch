@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.io.IOException;
-import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -50,13 +49,13 @@ public class AMQPProducer implements RadioTransport {
             for (int i = 0; i < count; i++) {
                 this.senders[i] = new AMQPSender(configuration.getAmqpHostname(),
                         configuration.getAmqpPort(),
-                        String.format(Locale.ENGLISH, configuration.getAmqpVirtualHost(), i),
+                        String.format(configuration.getAmqpVirtualHost(), i),
                         configuration.getAmqpUsername(),
                         configuration.getAmqpPassword(),
-                        String.format(Locale.ENGLISH, configuration.getAmqpQueueName(), i),
+                        String.format(configuration.getAmqpQueueName(), i),
                         configuration.getAmqpQueueType(),
-                        String.format(Locale.ENGLISH, configuration.getAmqpExchangeName(), i),
-                        String.format(Locale.ENGLISH, configuration.getAmqpRoutingKey(), i),
+                        String.format(configuration.getAmqpExchangeName(), i),
+                        String.format(configuration.getAmqpRoutingKey(), i),
                         configuration.isAmqpPersistentMessagesEnabled(),
                         configuration.getAmqpConnectTimeout()
                 );

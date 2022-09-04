@@ -17,20 +17,22 @@
 package org.graylog2.indexer.ranges;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.primitives.Ints;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+import org.elasticsearch.search.SearchHit;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.EmptyIndexException;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJob;
 import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +42,7 @@ import java.util.concurrent.TimeUnit;
 
 public class RebuildIndexRangesJob extends SystemJob {
     public interface Factory {
-        RebuildIndexRangesJob create(Deflector deflector);
+        public RebuildIndexRangesJob create(Deflector deflector);
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(RebuildIndexRangesJob.class);
@@ -58,9 +60,11 @@ public class RebuildIndexRangesJob extends SystemJob {
 
     @AssistedInject
     public RebuildIndexRangesJob(@Assisted Deflector deflector,
+                                 ServerStatus serverStatus,
                                  Searches searches,
                                  ActivityWriter activityWriter,
                                  IndexRangeService indexRangeService) {
+        super(serverStatus);
         this.deflector = deflector;
         this.searches = searches;
         this.activityWriter = activityWriter;
@@ -79,7 +83,7 @@ public class RebuildIndexRangesJob extends SystemJob {
         }
 
         // lolwtfbbqcasting
-        return (int) Math.floor(((float) indicesCalculated / (float) indicesToCalculate) * 100);
+        return (int) Math.floor(((float) indicesCalculated / (float) indicesToCalculate)*100);
     }
 
     @Override
@@ -100,7 +104,7 @@ public class RebuildIndexRangesJob extends SystemJob {
         indicesToCalculate = indices.length;
 
         Stopwatch sw = Stopwatch.createStarted();
-        for (String index : indices) {
+        for(String index : indices) {
             if (cancelRequested) {
                 info("Stop requested. Not calculating next index range, not updating ranges.");
                 sw.stop();
@@ -141,24 +145,39 @@ public class RebuildIndexRangesJob extends SystemJob {
         return deflectorIndexRange;
     }
 
+    private static int getTimestampOfMessage(SearchHit msg) {
+        Object field = msg.getSource().get("timestamp");
+        if (field == null) {
+            throw new RuntimeException("Document has no field timestamp.");
+        }
+
+        DateTimeFormatter formatter = DateTimeFormat.forPattern(Tools.ES_DATE_FORMAT).withZoneUTC();
+        DateTime dt = formatter.parseDateTime(field.toString());
+
+        return (int) (dt.getMillis() / 1000);
+    }
+
+
     protected Map<String, Object> calculateRange(String index) throws EmptyIndexException {
-        final Stopwatch x = Stopwatch.createStarted();
-        final DateTime timestamp = searches.findOldestMessageTimestampOfIndex(index);
-        if (timestamp == null) {
+        Map<String, Object> range = Maps.newHashMap();
+
+        Stopwatch x = Stopwatch.createStarted();
+        SearchHit doc = searches.firstOfIndex(index);
+        if (doc == null || doc.isSourceEmpty()) {
             x.stop();
             throw new EmptyIndexException();
         }
 
-        final int rangeEnd = Ints.saturatedCast(timestamp.getMillis() / 1000L);
-        final int took = Ints.saturatedCast(x.stop().elapsed(TimeUnit.MILLISECONDS));
+        int rangeStart = getTimestampOfMessage(doc);
+        int took = (int) x.stop().elapsed(TimeUnit.MILLISECONDS);
+
+        range.put("index", index);
+        range.put("start", rangeStart);
+        range.put("calculated_at", Tools.getUTCTimestamp());
+        range.put("took_ms",  took);
 
         LOG.info("Calculated range of [{}] in [{}ms].", index, took);
-
-        return ImmutableMap.<String, Object>of(
-                "index", index,
-                "start", rangeEnd, // FIXME The name of the attribute is massively misleading and should be rectified some time
-                "calculated_at", Tools.getUTCTimestamp(),
-                "took_ms", took);
+        return range;
     }
 
     private void updateCollection(List<Map<String, Object>> ranges) {

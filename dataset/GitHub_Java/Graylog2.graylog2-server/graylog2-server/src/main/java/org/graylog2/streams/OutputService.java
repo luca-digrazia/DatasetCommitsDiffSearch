@@ -20,18 +20,21 @@ import com.google.inject.ImplementedBy;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.PersistedService;
 import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.models.streams.outputs.requests.CreateOutputRequest;
+import org.graylog2.streams.outputs.CreateOutputRequest;
 
 import java.util.Map;
 import java.util.Set;
 
-@ImplementedBy(OutputServiceMJImpl.class)
-public interface OutputService {
+@ImplementedBy(OutputServiceImpl.class)
+public interface OutputService extends PersistedService {
     Output load(String streamOutputId) throws NotFoundException;
 
     Set<Output> loadAll();
+
+    Set<Output> loadForStream(Stream stream);
 
     Output create(Output request) throws ValidationException;
 

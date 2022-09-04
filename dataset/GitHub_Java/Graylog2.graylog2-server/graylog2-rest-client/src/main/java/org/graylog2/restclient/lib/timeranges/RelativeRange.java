@@ -18,7 +18,6 @@ package org.graylog2.restclient.lib.timeranges;
 
 import com.google.common.collect.ImmutableMap;
 
-import java.util.Locale;
 import java.util.Map;
 
 public class RelativeRange extends TimeRange {
@@ -40,7 +39,7 @@ public class RelativeRange extends TimeRange {
     @Override
     public Map<String, String> getQueryParams() {
         return ImmutableMap.of(
-                "range_type", getType().toString().toLowerCase(Locale.ENGLISH),
+                "range_type", getType().toString().toLowerCase(),
                 "range", String.valueOf(range));
     }
 

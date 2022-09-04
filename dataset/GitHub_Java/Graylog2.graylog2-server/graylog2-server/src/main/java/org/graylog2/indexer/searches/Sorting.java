@@ -18,8 +18,6 @@ package org.graylog2.indexer.searches;
 
 import org.elasticsearch.search.sort.SortOrder;
 
-import java.util.Locale;
-
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
@@ -45,7 +43,7 @@ public class Sorting {
     }
 
     public SortOrder asElastic() {
-        return SortOrder.valueOf(direction.toString().toUpperCase(Locale.ENGLISH));
+        return SortOrder.valueOf(direction.toString().toUpperCase());
     }
 
     public static Sorting fromApiParam(String param) {
@@ -55,7 +53,7 @@ public class Sorting {
 
         String[] parts = param.split(":");
 
-        return new Sorting(parts[0], Direction.valueOf(parts[1].toUpperCase(Locale.ENGLISH)));
+        return new Sorting(parts[0], Direction.valueOf(parts[1].toUpperCase()));
     }
 
 }

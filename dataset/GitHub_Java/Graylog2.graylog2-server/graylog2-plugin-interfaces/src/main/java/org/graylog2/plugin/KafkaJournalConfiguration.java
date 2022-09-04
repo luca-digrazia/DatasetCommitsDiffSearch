@@ -38,30 +38,30 @@ public class KafkaJournalConfiguration {
 
     @Parameter("message_journal_segment_size")
     @JsonProperty("segment_size")
-    private Size messageJournalSegmentSize = Size.megabytes(100L);
+    private Size messageJournalSegmentSize = Size.megabytes(100l);
 
     @Parameter("message_journal_segment_age")
     @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     @JsonProperty("segment_age")
-    private Duration messageJournalSegmentAge = Duration.standardHours(1L);
+    private Duration messageJournalSegmentAge = Duration.standardHours(1);
 
     @Parameter("message_journal_max_size")
     @JsonProperty("max_size")
-    private Size messageJournalMaxSize = Size.gigabytes(5L);
+    private Size messageJournalMaxSize = Size.gigabytes(5l);
 
     @Parameter("message_journal_max_age")
     @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     @JsonProperty("max_age")
-    private Duration messageJournalMaxAge = Duration.standardHours(12L);
+    private Duration messageJournalMaxAge = Duration.standardHours(12);
 
     @Parameter("message_journal_flush_interval")
     @JsonProperty("flush_interval")
-    private long messageJournalFlushInterval = 1_000_000L;
+    private long messageJournalFlushInterval = 1_000_000;
 
     @Parameter("message_journal_flush_age")
     @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     @JsonProperty("flush_age")
-    private Duration messageJournalFlushAge = Duration.standardMinutes(1L);
+    private Duration messageJournalFlushAge = Duration.standardMinutes(1);
 
     public File getMessageJournalDir() {
         return messageJournalDir;

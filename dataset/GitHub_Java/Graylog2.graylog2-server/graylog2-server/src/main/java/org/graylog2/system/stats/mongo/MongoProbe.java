@@ -129,26 +129,17 @@ public class MongoProbe {
         final CommandResult dbStatsResult = db.command("dbStats");
         if (dbStatsResult.ok()) {
             final BasicDBObject extentFreeListMap = (BasicDBObject) dbStatsResult.get("extentFreeList");
-            final DatabaseStats.ExtentFreeList extentFreeList;
-            if (extentFreeListMap == null) {
-                extentFreeList = null;
-            } else {
-                extentFreeList = DatabaseStats.ExtentFreeList.create(
-                        extentFreeListMap.getInt("num"),
-                        extentFreeListMap.getInt("totalSize")
-                );
-            }
+            final DatabaseStats.ExtentFreeList extentFreeList = DatabaseStats.ExtentFreeList.create(
+                    extentFreeListMap.getInt("num"),
+                    extentFreeListMap.getInt("totalSize")
+            );
 
             final BasicDBObject dataFileVersionMap = (BasicDBObject) dbStatsResult.get("dataFileVersion");
-            final DatabaseStats.DataFileVersion dataFileVersion;
-            if (dataFileVersionMap == null) {
-                dataFileVersion = null;
-            } else {
-                dataFileVersion = DatabaseStats.DataFileVersion.create(
-                        dataFileVersionMap.getInt("major"),
-                        dataFileVersionMap.getInt("minor")
-                );
-            }
+            final DatabaseStats.DataFileVersion dataFileVersion = DatabaseStats.DataFileVersion.create(
+                    dataFileVersionMap.getInt("major"),
+                    dataFileVersionMap.getInt("minor")
+            );
+
 
             dbStats = DatabaseStats.create(
                     dbStatsResult.getString("db"),
@@ -160,8 +151,8 @@ public class MongoProbe {
                     dbStatsResult.getLong("numExtents"),
                     dbStatsResult.getLong("indexes"),
                     dbStatsResult.getLong("indexSize"),
-                    dbStatsResult.containsField("fileSize") ? dbStatsResult.getLong("fileSize") : null,
-                    dbStatsResult.containsField("nsSizeMB") ? dbStatsResult.getLong("nsSizeMB") : null,
+                    dbStatsResult.getLong("fileSize"),
+                    dbStatsResult.getLong("nsSizeMB"),
                     extentFreeList,
                     dataFileVersion
             );
@@ -176,7 +167,7 @@ public class MongoProbe {
             final ServerStatus.Connections connections = ServerStatus.Connections.create(
                     connectionsMap.getInt("current"),
                     connectionsMap.getInt("available"),
-                    connectionsMap.containsField("totalCreated") ? connectionsMap.getLong("totalCreated") : null
+                    connectionsMap.getLong("totalCreated")
             );
 
             final BasicDBObject networkMap = (BasicDBObject) serverStatusResult.get("network");

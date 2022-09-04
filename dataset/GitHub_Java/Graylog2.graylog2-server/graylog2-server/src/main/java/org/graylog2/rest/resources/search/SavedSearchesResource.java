@@ -27,13 +27,14 @@ import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.NotFoundException;
+import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.rest.resources.search.requests.CreateSavedSearchRequest;
 import org.graylog2.savedsearches.SavedSearch;
+import org.graylog2.savedsearches.SavedSearchImpl;
 import org.graylog2.savedsearches.SavedSearchService;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
@@ -41,12 +42,12 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -72,10 +73,17 @@ public class SavedSearchesResource extends SearchResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response create(@ApiParam(name = "JSON body", required = true)
                            @Valid CreateSavedSearchRequest cr) throws ValidationException {
-        final SavedSearch search = savedSearchService.create(cr.title(), cr.query(), getCurrentUser().getName(), Tools.iso8601());
+        // Create saved search
+        final Map<String, Object> searchData = ImmutableMap.of(
+                "title", cr.title(),
+                "query", cr.query(),
+                "creator_user_id", getCurrentUser().getName(),
+                "created_at", Tools.iso8601());
+
+        final SavedSearch search = new SavedSearchImpl(searchData);
         final String id = savedSearchService.save(search);
 
-        final URI searchUri = getUriBuilderToSelf().path(SavedSearchesResource.class)
+        final URI searchUri = UriBuilder.fromResource(SavedSearchesResource.class)
                 .path("{searchId}")
                 .build(id);
 
@@ -97,27 +105,6 @@ public class SavedSearchesResource extends SearchResource {
         return ImmutableMap.of(
                 "total", searches.size(),
                 "searches", searches);
-    }
-
-    @PUT
-    @Path("/{searchId}")
-    @Timed
-    @RequiresPermissions(RestPermissions.SAVEDSEARCHES_EDIT)
-    @ApiOperation(value = "Update a saved search")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "Saved search not found."),
-            @ApiResponse(code = 400, message = "Invalid ObjectId."),
-            @ApiResponse(code = 400, message = "Validation error")
-    })
-    public Map<String, Object> update(@ApiParam(name = "searchId", required = true)
-                                      @PathParam("searchId") String searchId,
-                                      @ApiParam(name = "JSON body", required = true)
-                                      @Valid CreateSavedSearchRequest cr) throws NotFoundException, ValidationException {
-        final SavedSearch search = savedSearchService.load(searchId);
-        savedSearchService.update(search, cr.title(), cr.query());
-        return search.asMap();
     }
 
     @GET

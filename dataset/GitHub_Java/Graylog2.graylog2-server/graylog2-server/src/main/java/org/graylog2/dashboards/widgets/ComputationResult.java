@@ -38,7 +38,7 @@ public class ComputationResult {
         this.result = result;
         this.tookMs = tookMs;
         this.computationTimeRange = computationTimeRange;
-        this.calculatedAt = Tools.nowUTC();
+        this.calculatedAt = Tools.iso8601();
     }
 
     public Object getResult() {

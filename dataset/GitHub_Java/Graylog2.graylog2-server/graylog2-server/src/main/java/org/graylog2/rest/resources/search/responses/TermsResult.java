@@ -29,7 +29,7 @@ public abstract class TermsResult {
     public abstract long time();
 
     @JsonProperty
-    public abstract Map<String, Long> terms();
+    public abstract Map<String, Integer> terms();
 
     @JsonProperty
     public abstract long missing();
@@ -44,7 +44,7 @@ public abstract class TermsResult {
     public abstract String builtQuery();
 
     public static TermsResult create(long time,
-                                     Map<String, Long> terms,
+                                     Map<String, Integer> terms,
                                      long missing,
                                      long other,
                                      long total,

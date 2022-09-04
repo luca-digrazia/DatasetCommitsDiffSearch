@@ -17,29 +17,28 @@
 package org.graylog2.grok;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.google.common.base.MoreObjects;
 import org.bson.types.ObjectId;
 
 import javax.persistence.Id;
-import java.util.Objects;
 
 @JsonAutoDetect
 public class GrokPattern {
+
     @Id
     @org.mongojack.ObjectId
     public ObjectId id;
+    
     public String name;
+    
     public String pattern;
-    public String contentPack;
 
     @Override
     public String toString() {
-        return MoreObjects.toStringHelper(this)
-                .add("id", id)
-                .add("name='", name)
-                .add("pattern='", pattern)
-                .add("contentPack", contentPack)
-                .toString();
+        return "GrokPattern{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", pattern='" + pattern + '\'' +
+                '}';
     }
 
     @Override
@@ -47,12 +46,18 @@ public class GrokPattern {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        final GrokPattern that = (GrokPattern) o;
-        return Objects.equals(this.name, that.name) && Objects.equals(this.pattern, that.pattern);
+        GrokPattern that = (GrokPattern) o;
+
+        if (!name.equals(that.name)) return false;
+        if (!pattern.equals(that.pattern)) return false;
+
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, pattern);
+        int result = name.hashCode();
+        result = 31 * result + pattern.hashCode();
+        return result;
     }
 }

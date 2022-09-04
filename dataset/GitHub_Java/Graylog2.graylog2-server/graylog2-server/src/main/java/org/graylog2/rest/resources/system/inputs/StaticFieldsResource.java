@@ -17,14 +17,12 @@
 package org.graylog2.rest.resources.system.inputs;
 
 import com.codahale.metrics.annotation.Timed;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.auditlog.Actions;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.inputs.Input;
@@ -32,8 +30,8 @@ import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.rest.models.system.inputs.requests.CreateStaticFieldRequest;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.rest.resources.system.inputs.requests.CreateStaticFieldRequest;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
@@ -52,6 +50,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 
 @RequiresAuthentication
@@ -78,7 +77,6 @@ public class StaticFieldsResource extends RestResource {
             @ApiResponse(code = 400, message = "Field/Key is reserved."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration.")
     })
-    @AuditLog(object = "static field", captureRequestEntity = true, captureResponseEntity = true)
     public Response create(@ApiParam(name = "inputId", required = true)
                            @PathParam("inputId") String inputId,
                            @ApiParam(name = "JSON body", required = true)
@@ -114,7 +112,7 @@ public class StaticFieldsResource extends RestResource {
         LOG.info(msg);
         activityWriter.write(new Activity(msg, StaticFieldsResource.class));
 
-        final URI inputUri = getUriBuilderToSelf().path(InputsResource.class)
+        final URI inputUri = UriBuilder.fromResource(InputsResource.class)
                 .path("{inputId}")
                 .build(mongoInput.getId());
 
@@ -131,7 +129,6 @@ public class StaticFieldsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such static field.")
     })
     @Path("/{key}")
-    @AuditLog(object = "static field")
     public void delete(@ApiParam(name = "Key", required = true)
                        @PathParam("key") String key,
                        @ApiParam(name = "inputId", required = true)

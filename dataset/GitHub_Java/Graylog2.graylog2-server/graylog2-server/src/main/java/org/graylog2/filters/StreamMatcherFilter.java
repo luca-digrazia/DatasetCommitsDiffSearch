@@ -51,7 +51,7 @@ public class StreamMatcherFilter implements MessageFilter {
         for (Stream stream : streams) {
             throughputStats.incrementStreamThroughput(stream.getId());
         }
-        msg.addStreams(streams);
+        msg.setStreams(streams);
 
         LOG.debug("Routed message <{}> to {} streams.", msg.getId(), streams.size());
 

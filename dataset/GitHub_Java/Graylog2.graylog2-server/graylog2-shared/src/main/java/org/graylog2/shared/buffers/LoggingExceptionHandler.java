@@ -19,8 +19,8 @@ package org.graylog2.shared.buffers;
 import com.lmax.disruptor.ExceptionHandler;
 import org.slf4j.Logger;
 
-public class LoggingExceptionHandler implements ExceptionHandler<Object> {
-    private final Logger logger;
+public class LoggingExceptionHandler implements ExceptionHandler {
+    private Logger logger;
 
     public LoggingExceptionHandler(Logger logger) {
         this.logger = logger;
@@ -32,7 +32,7 @@ public class LoggingExceptionHandler implements ExceptionHandler<Object> {
         try {
             eventStr = event.toString();
         } catch (Exception ignored) {}
-        logger.warn("Unable to process event " + eventStr + ", sequence " + sequence, ex);
+        logger.warn("Unable to process event " + eventStr + "sequence " + sequence, ex);
     }
 
     @Override

@@ -16,12 +16,17 @@
  */
 package org.graylog2.system.jobs;
 
+import com.google.common.collect.ImmutableMap;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
 
-import static com.google.common.base.Preconditions.checkState;
+import javax.annotation.Nonnull;
+import java.util.Map;
 
 public abstract class SystemJob {
+
+    private final ServerStatus serverStatus;
 
     // Known types that can be resolved in the SystemJobFactory.
     public enum Type {
@@ -45,15 +50,18 @@ public abstract class SystemJob {
 
     public abstract String getClassName();
 
-    public String getInfo() {
-        return "No further information available.";
-    }
-
+    //protected Core core;
     protected String id;
     protected DateTime startedAt;
 
+    protected SystemJob(@Nonnull ServerStatus serverStatus) {
+        this.serverStatus = serverStatus;
+    }
+
     public String getId() {
-        checkState(id != null, "Cannot return ID if the job has not been started yet.");
+        if (id == null) {
+            throw new IllegalStateException("Cannot return ID if the job has not been started yet.");
+        }
 
         return id;
     }
@@ -69,4 +77,18 @@ public abstract class SystemJob {
     public DateTime getStartedAt() {
         return startedAt;
     }
+
+    public Map<String, Object> toMap() {
+        return ImmutableMap.<String, Object>builder()
+                .put("id", id)
+                .put("name", getClassName()) // getting the concrete class, not this abstract one
+                .put("description", getDescription())
+                .put("started_at", Tools.getISO8601String(getStartedAt()))
+                .put("percent_complete", getProgress())
+                .put("provides_progress", providesProgress())
+                .put("is_cancelable", isCancelable())
+                .put("node_id", serverStatus.getNodeId().toString())
+                .build();
+    }
+
 }

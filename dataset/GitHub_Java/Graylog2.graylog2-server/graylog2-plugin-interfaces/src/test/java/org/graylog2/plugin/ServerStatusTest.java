@@ -26,11 +26,10 @@ import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.joda.time.DateTimeZone;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -38,17 +37,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import static org.testng.Assert.*;
 
-@RunWith(MockitoJUnitRunner.class)
 public class ServerStatusTest {
     @Mock private BaseConfiguration config;
     @Mock private EventBus eventBus;
@@ -56,10 +47,12 @@ public class ServerStatusTest {
     private ServerStatus status;
     private File tempFile;
 
-    @Before
+    @BeforeMethod
     public void setUp() throws Exception {
         tempFile = File.createTempFile("server-status-test", "node-id");
         tempFile.deleteOnExit();
+
+        MockitoAnnotations.initMocks(this);
 
         when(config.getNodeIdFile()).thenReturn(tempFile.getPath());
 
@@ -177,8 +170,8 @@ public class ServerStatusTest {
 
     @Test
     public void testAddCapabilities() throws Exception {
-        assertEquals(status.addCapabilities(ServerStatus.Capability.LOCALMODE), status);
-        assertTrue(status.hasCapabilities(ServerStatus.Capability.MASTER, ServerStatus.Capability.LOCALMODE));
+        assertEquals(status.addCapabilities(ServerStatus.Capability.LOCALMODE, ServerStatus.Capability.STATSMODE), status);
+        assertTrue(status.hasCapabilities(ServerStatus.Capability.MASTER, ServerStatus.Capability.LOCALMODE, ServerStatus.Capability.STATSMODE));
     }
 
     @Test
@@ -221,7 +214,7 @@ public class ServerStatusTest {
         assertEquals(status.getLifecycle(), Lifecycle.RUNNING);
     }
 
-    @Test(expected = ProcessingPauseLockedException.class)
+    @Test(expectedExceptions = ProcessingPauseLockedException.class)
     public void testResumeMessageProcessingWithLock() throws Exception {
         status.pauseMessageProcessing(true);
         status.resumeMessageProcessing();
@@ -234,6 +227,15 @@ public class ServerStatusTest {
 
         status.unlockProcessingPause();
         assertFalse(status.processingPauseLocked());
+    }
+
+    @Test
+    public void testSetStatsMode() throws Exception {
+        status.setStatsMode(false);
+        assertFalse(status.hasCapability(ServerStatus.Capability.STATSMODE));
+
+        status.setStatsMode(true);
+        assertTrue(status.hasCapability(ServerStatus.Capability.STATSMODE));
     }
 
     @Test

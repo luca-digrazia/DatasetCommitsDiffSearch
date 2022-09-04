@@ -17,154 +17,97 @@
 package org.graylog2;
 
 import com.github.joschi.jadconfig.JadConfig;
-import com.github.joschi.jadconfig.ParameterException;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import com.google.common.collect.Maps;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
-import java.util.HashMap;
+import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+/**
+ * Unit tests for {@link Configuration} class
+ */
 public class ConfigurationTest {
-    @Rule
-    public final ExpectedException expectedException = ExpectedException.none();
 
-    private Map<String, String> validProperties;
+    Map<String, String> validProperties;
+    private File tempFile;
 
-    @Before
-    public void setUp() throws Exception {
-        validProperties = new HashMap<>();
+    @BeforeClass
+    public void setUp() {
+        validProperties = Maps.newHashMap();
 
+        try {
+            tempFile = File.createTempFile("graylog", null);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
         // Required properties
         validProperties.put("password_secret", "ipNUnWxmBLCxTEzXcyamrdy0Q3G7HxdKsAvyg30R9SCof0JydiZFiA3dLSkRsbLF");
-        // SHA-256 of "admin"
-        validProperties.put("root_password_sha2", "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918");
+        validProperties.put("elasticsearch_config_file", tempFile.getAbsolutePath());
+        validProperties.put("use_gelf", "true");
+        validProperties.put("gelf_listen_port", "12201");
+        validProperties.put("root_password_sha2", "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"); // sha2 of admin
+
+        // Additional numerical properties
+        validProperties.put("amqp_port", "5672");
+        validProperties.put("forwarder_loggly_timeout", "3");
+
+        validProperties.put("retention_strategy", "delete");
+    }
+
+    @AfterClass
+    public void tearDown() {
+        tempFile.delete();
     }
 
     @Test
-    public void testRestListenUriIsRelativeURI() throws RepositoryException, ValidationException {
-        validProperties.put("rest_listen_uri", "/foo");
-
-        expectedException.expect(ValidationException.class);
-        expectedException.expectMessage("Parameter rest_listen_uri should be an absolute URI (found /foo)");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testWebListenUriIsRelativeURI() throws RepositoryException, ValidationException {
-        validProperties.put("web_listen_uri", "/foo");
-
-        expectedException.expect(ValidationException.class);
-        expectedException.expectMessage("Parameter web_listen_uri should be an absolute URI (found /foo)");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testRestListenUriIsAbsoluteURI() throws RepositoryException, ValidationException {
-        validProperties.put("rest_listen_uri", "http://www.example.com:12900/");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testWebListenUriIsAbsoluteURI() throws RepositoryException, ValidationException {
-        validProperties.put("rest_listen_uri", "http://www.example.com:12900/web");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testRestListenUriWithHttpDefaultPort() throws RepositoryException, ValidationException {
-        validProperties.put("rest_listen_uri", "http://example.com/");
+    public void testGetElasticSearchIndexPrefix() throws RepositoryException, ValidationException {
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
-        assertThat(configuration.getRestListenUri()).hasPort(80);
+        //Assert.assertEquals("graylog2", configuration.getElasticSearchIndexPrefix());
     }
 
-    @Test
-    public void testRestListenUriWithCustomPort() throws RepositoryException, ValidationException {
-        validProperties.put("rest_listen_uri", "http://example.com:12900/");
-
+    /*@Test
+    public void testGetAMQPSubscribedQueuesEmpty() throws RepositoryException, ValidationException {
+        validProperties.put("amqp_subscribed_queues", "");
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
-        assertThat(configuration.getRestListenUri()).hasPort(12900);
+        Assert.assertNull(configuration.getAmqpSubscribedQueues());
     }
 
     @Test
-    public void testWebListenUriWithHttpDefaultPort() throws RepositoryException, ValidationException {
-        validProperties.put("web_listen_uri", "http://example.com/");
-
+    public void testGetAMQPSubscribedQueuesMalformed() throws RepositoryException, ValidationException {
+        validProperties.put("amqp_subscribed_queues", "queue-invalid");
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
-        assertThat(configuration.getWebListenUri()).hasPort(80);
+        Assert.assertNull(configuration.getAmqpSubscribedQueues());
     }
 
     @Test
-    public void testWebListenUriWithCustomPort() throws RepositoryException, ValidationException {
-        validProperties.put("web_listen_uri", "http://example.com:9000/");
-
+    public void testGetAMQPSubscribedQueuesInvalidQueueType() throws RepositoryException, ValidationException {
+        validProperties.put("amqp_subscribed_queues", "queue1:gelf,queue2:invalid");
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
-        assertThat(configuration.getWebListenUri()).hasPort(9000);
+        Assert.assertNull(configuration.getAmqpSubscribedQueues());
     }
 
     @Test
-    public void testPasswordSecretIsTooShort() throws ValidationException, RepositoryException {
-        validProperties.put("password_secret", "too short");
-
-        expectedException.expect(ValidationException.class);
-        expectedException.expectMessage("The minimum length for \"password_secret\" is 16 characters.");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testPasswordSecretIsEmpty() throws ValidationException, RepositoryException {
-        validProperties.put("password_secret", "");
-
-        expectedException.expect(ValidationException.class);
-        expectedException.expectMessage("Parameter password_secret should not be blank");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testPasswordSecretIsNull() throws ValidationException, RepositoryException {
-        validProperties.put("password_secret", null);
-
-        expectedException.expect(ParameterException.class);
-        expectedException.expectMessage("Required parameter \"password_secret\" not found.");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testPasswordSecretIsValid() throws ValidationException, RepositoryException {
-        validProperties.put("password_secret", "abcdefghijklmnopqrstuvwxyz");
-
+    public void testGetAMQPSubscribedQueues() throws RepositoryException, ValidationException {
+        validProperties.put("amqp_subscribed_queues", "queue1:gelf,queue2:syslog");
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
-        assertThat(configuration.getPasswordSecret()).isEqualTo("abcdefghijklmnopqrstuvwxyz");
-    }
+        Assert.assertEquals(2, configuration.getAmqpSubscribedQueues().size());
+    }*/
 }

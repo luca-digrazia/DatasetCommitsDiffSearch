@@ -48,10 +48,6 @@ public class APIException extends Exception {
 		return response != null ? response.getStatusCode() : -1;
 	}
 
-    public byte[] getResponseBody() throws IOException {
-        return response != null ? response.getResponseBodyAsBytes() : new byte[0];
-    }
-
     @Override
     public String getMessage() {
         final StringBuilder sb = new StringBuilder();

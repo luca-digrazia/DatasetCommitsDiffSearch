@@ -18,19 +18,24 @@ package org.graylog2.filters.blacklist;
 
 import com.atlassian.ip.IPMatcher;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
-import java.util.Objects;
 
-public final class BlacklistIpMatcherCondition extends FilterDescription {
+public class BlacklistIpMatcherCondition extends FilterDescription {
+    private static final Logger LOG = LoggerFactory.getLogger(BlacklistIpMatcherCondition.class);
+
     private IPMatcher ipMatcher;
+
+    public BlacklistIpMatcherCondition() {
+    }
 
     @JsonProperty
     public void setPattern(String pattern) {
         this.pattern = pattern;
         ipMatcher = IPMatcher.builder().addPatternOrHost(pattern).build();
     }
-
     public boolean matchesInetAddress(InetAddress otherSource) {
         try {
             return ipMatcher.matches(otherSource);
@@ -46,11 +51,13 @@ public final class BlacklistIpMatcherCondition extends FilterDescription {
 
         BlacklistIpMatcherCondition that = (BlacklistIpMatcherCondition) o;
 
-        return Objects.equals(pattern, that.pattern);
+        if (!pattern.equals(that.pattern)) return false;
+
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pattern);
+        return pattern.hashCode();
     }
 }

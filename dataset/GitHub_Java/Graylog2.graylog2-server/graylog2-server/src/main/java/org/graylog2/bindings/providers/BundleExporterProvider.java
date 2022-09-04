@@ -18,7 +18,6 @@ package org.graylog2.bindings.providers;
 
 import org.graylog2.bundles.BundleExporter;
 import org.graylog2.dashboards.DashboardService;
-import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.inputs.InputService;
 import org.graylog2.streams.OutputService;
 import org.graylog2.streams.StreamService;
@@ -32,23 +31,20 @@ public class BundleExporterProvider implements Provider<BundleExporter> {
     private final StreamService streamService;
     private final OutputService outputService;
     private final DashboardService dashboardService;
-    private final DashboardWidgetCreator dashboardWidgetCreator;
 
     @Inject
     public BundleExporterProvider(final InputService inputService,
                                   final StreamService streamService,
                                   final OutputService outputService,
-                                  final DashboardService dashboardService,
-                                  final DashboardWidgetCreator dashboardWidgetCreator) {
+                                  final DashboardService dashboardService) {
         this.inputService = inputService;
         this.streamService = streamService;
         this.outputService = outputService;
         this.dashboardService = dashboardService;
-        this.dashboardWidgetCreator = dashboardWidgetCreator;
     }
 
     @Override
     public BundleExporter get() {
-        return new BundleExporter(inputService, streamService, outputService, dashboardService, dashboardWidgetCreator);
+        return new BundleExporter(inputService, streamService, outputService, dashboardService);
     }
 }

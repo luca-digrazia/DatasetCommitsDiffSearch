@@ -1,155 +1,70 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.random;
 
-import org.graylog2.inputs.random.generators.FakeHttpMessageGenerator;
-import org.graylog2.inputs.random.generators.Tools;
-import org.graylog2.plugin.GraylogServer;
+import com.codahale.metrics.MetricRegistry;
+import javax.inject.Inject;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.inputs.codecs.RandomHttpMessageCodec;
+import org.graylog2.inputs.transports.RandomMessageTransport;
+import org.graylog2.plugin.LocalMetricRegistry;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.configuration.ConfigurationException;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.configuration.fields.ConfigurationField;
-import org.graylog2.plugin.configuration.fields.NumberField;
-import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.MisfireException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.Map;
-import java.util.Random;
-
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class FakeHttpMessageInput extends MessageInput {
 
-    private static final Logger LOG = LoggerFactory.getLogger(FakeHttpMessageInput.class);
+    private static final String NAME = "Random HTTP message generator";
 
-    public static final String NAME = "Random HTTP message generator";
-
-    public static final String CK_SOURCE = "source";
-    public static final String CK_SLEEP = "sleep";
-    public static final String CK_SLEEP_DEVIATION_PERCENT = "sleep_deviation";
-
-    protected GraylogServer graylogServer;
-    protected Configuration config;
-
-    private final Random rand = new Random();
-
-    private boolean stopRequested = false;
-
-    private String source;
-    private int sleepMs;
-    private int maxSleepDeviation;
-
-    @Override
-    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
-        this.graylogServer = graylogServer;
-        this.config = config;
-
-        if (!checkConfig(config)) {
-            throw new ConfigurationException(config.getSource().toString());
-        }
-
-        source = config.getString(CK_SOURCE);
-        sleepMs = (int) config.getInt(CK_SLEEP);
-        maxSleepDeviation = (int) config.getInt(CK_SLEEP_DEVIATION_PERCENT);
+    @AssistedInject
+    public FakeHttpMessageInput(@Assisted Configuration configuration,
+                                RandomMessageTransport.Factory transportFactory,
+                                RandomHttpMessageCodec.Factory codecFactory,
+                                MetricRegistry metricRegistry, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor, ServerStatus serverStatus) {
+        super(metricRegistry,
+                configuration,
+                transportFactory.create(configuration),
+                localRegistry, codecFactory.create(configuration),
+                config, descriptor, serverStatus);
     }
 
-    @Override
-    public void launch() throws MisfireException {
-        FakeHttpMessageGenerator generator = new FakeHttpMessageGenerator(source);
-        while(!stopRequested) {
-            graylogServer.getProcessBuffer().insertCached(generator.generate(), this);
+    public interface Factory extends MessageInput.Factory<FakeHttpMessageInput> {
+        @Override
+        FakeHttpMessageInput create(Configuration configuration);
 
-            try {
-                Thread.sleep(Tools.deviation(sleepMs, maxSleepDeviation, rand));
-            } catch (InterruptedException e) {
-                break;
-            }
+        @Override
+        Config getConfig();
+
+        @Override
+        Descriptor getDescriptor();
+    }
+
+    public static class Descriptor extends MessageInput.Descriptor {
+        @Inject
+        public Descriptor() {
+            super(NAME, false, "");
         }
     }
 
-    @Override
-    public void stop() {
-        this.stopRequested = true;
+    public static class Config extends MessageInput.Config {
+        @Inject
+        public Config(RandomMessageTransport.Factory transport, RandomHttpMessageCodec.Factory codec) {
+            super(transport.getConfig(), codec.getConfig());
+        }
     }
-
-    @Override
-    public ConfigurationRequest getRequestedConfiguration() {
-        ConfigurationRequest c = new ConfigurationRequest();
-
-        c.addField(new NumberField(
-                CK_SLEEP,
-                "Sleep time",
-                25,
-                "How many milliseconds to sleep between generating messages.",
-                ConfigurationField.Optional.NOT_OPTIONAL,
-                NumberField.Attribute.ONLY_POSITIVE
-        ));
-
-        c.addField(new NumberField(
-                CK_SLEEP_DEVIATION_PERCENT,
-                "Maximum random sleep time deviation",
-                30,
-                "The deviation is used to generate a more realistic and non-steady message flow.",
-                ConfigurationField.Optional.NOT_OPTIONAL,
-                NumberField.Attribute.ONLY_POSITIVE
-        ));
-
-        c.addField(new TextField(
-                CK_SOURCE,
-                "Source name",
-                "example.org",
-                "What to use as source of the generate messages.",
-                ConfigurationField.Optional.NOT_OPTIONAL
-        ));
-
-        return c;
-    }
-
-    @Override
-    public boolean isExclusive() {
-        return false;
-    }
-
-    @Override
-    public String getName() {
-        return NAME;
-    }
-
-    @Override
-    public String linkToDocs() {
-        return "";
-    }
-
-    @Override
-    public Map<String, Object> getAttributes() {
-        return config.getSource();
-    }
-
-    private boolean checkConfig(Configuration config) {
-        return config.stringIsSet(CK_SOURCE)
-                && config.intIsSet(CK_SLEEP)
-                && config.intIsSet(CK_SLEEP_DEVIATION_PERCENT);
-    }
-
 }

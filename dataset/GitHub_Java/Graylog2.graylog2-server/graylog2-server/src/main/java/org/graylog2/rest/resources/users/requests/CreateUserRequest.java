@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.users.requests;
 
@@ -54,6 +54,10 @@ public abstract class CreateUserRequest {
     @Nullable
     public abstract Long sessionTimeoutMs();
 
+    @JsonProperty
+    @Nullable
+    public abstract Startpage startpage();
+
     @JsonCreator
     public static CreateUserRequest create(@JsonProperty("username") @NotEmpty String username,
                                            @JsonProperty("password") @NotEmpty String password,
@@ -61,7 +65,8 @@ public abstract class CreateUserRequest {
                                            @JsonProperty("full_name") @NotEmpty String fullName,
                                            @JsonProperty("permissions") @NotNull List<String> permissions,
                                            @JsonProperty("timezone") @Nullable String timezone,
-                                           @JsonProperty("session_timeout_ms") @Nullable @Min(1) Long sessionTimeoutMs) {
-        return new AutoValue_CreateUserRequest(username, password, email, fullName, permissions, timezone, sessionTimeoutMs);
+                                           @JsonProperty("session_timeout_ms") @Nullable @Min(1) Long sessionTimeoutMs,
+                                           @JsonProperty("startpage") @Nullable Startpage startpage) {
+        return new AutoValue_CreateUserRequest(username, password, email, fullName, permissions, timezone, sessionTimeoutMs, startpage);
     }
 }

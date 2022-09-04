@@ -17,7 +17,6 @@
 package org.graylog2.grok;
 
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import oi.thekraken.grok.api.Grok;
@@ -28,15 +27,12 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 import org.mongojack.DBCursor;
-import org.mongojack.DBQuery;
 import org.mongojack.JacksonDBCollection;
 import org.mongojack.WriteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Collection;
-import java.util.List;
 import java.util.Set;
 import java.util.regex.PatternSyntaxException;
 
@@ -83,21 +79,6 @@ public class GrokPatternServiceImpl implements GrokPatternService {
     }
 
     @Override
-    public List<GrokPattern> saveAll(Collection<GrokPattern> patterns, boolean replace) throws ValidationException {
-        final ImmutableList.Builder<GrokPattern> savedPatterns = ImmutableList.builder();
-
-        if (replace) {
-            deleteAll();
-        }
-
-        for (final GrokPattern pattern : patterns) {
-            savedPatterns.add(save(pattern));
-        }
-
-        return savedPatterns.build();
-    }
-
-    @Override
     public boolean validate(GrokPattern pattern) {
         final boolean fieldsMissing = !(Strings.isNullOrEmpty(pattern.name) || Strings.isNullOrEmpty(pattern.pattern));
         try {
@@ -116,10 +97,5 @@ public class GrokPatternServiceImpl implements GrokPatternService {
     @Override
     public int delete(String patternId) {
         return dbCollection.removeById(new ObjectId(patternId)).getN();
-    }
-
-    @Override
-    public int deleteAll() {
-        return dbCollection.remove(DBQuery.empty()).getN();
     }
 }

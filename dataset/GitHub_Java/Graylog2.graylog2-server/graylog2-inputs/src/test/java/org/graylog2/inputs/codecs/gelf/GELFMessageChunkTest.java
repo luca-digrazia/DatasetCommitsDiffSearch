@@ -18,12 +18,12 @@ package org.graylog2.inputs.codecs.gelf;
 
 import org.graylog2.inputs.TestHelper;
 import org.graylog2.plugin.Tools;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.assertArrayEquals;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertNotNull;
+import static org.testng.AssertJUnit.assertTrue;
 
 
 public class GELFMessageChunkTest {
@@ -43,7 +43,7 @@ public class GELFMessageChunkTest {
         final GELFMessageChunk chunk = buildChunk();
         final long l = Tools.iso8601().getMillis();
         final long arrival = chunk.getArrival();
-        assertTrue(l - arrival < 5000L); // delta shmelta
+        assertTrue(l - arrival < 5000l); // delta shmelta
     }
 
     @Test

@@ -21,12 +21,12 @@ import org.graylog2.restclient.lib.DateTools;
 import org.graylog2.restclient.models.FieldMapper;
 import org.graylog2.restclient.models.api.responses.HighlightRange;
 import org.joda.time.DateTime;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 public class MessageResultTest {
 
@@ -66,7 +66,7 @@ public class MessageResultTest {
     public void testTimestampAsLong() {
         final ImmutableMap<String, Object> message = ImmutableMap.of(
                 "_id", "dead-beef-cafe-babe",
-                "timestamp", NOW.getMillis() / 1000L,
+                "timestamp", NOW.getMillis() / 1000l,
                 "gl2_source_node", "localhost",
                 "gl2_source_input", "Test",
                 "streams", Collections.<String>emptyList()

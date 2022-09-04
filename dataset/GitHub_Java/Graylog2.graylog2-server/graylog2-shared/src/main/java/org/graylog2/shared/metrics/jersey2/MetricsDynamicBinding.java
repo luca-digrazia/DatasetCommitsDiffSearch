@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.shared.metrics.jersey2;
 
 import com.codahale.metrics.MetricRegistry;
@@ -16,7 +32,7 @@ import java.lang.reflect.Method;
 
 @Provider
 public class MetricsDynamicBinding implements DynamicFeature {
-    private static final Logger log = LoggerFactory.getLogger(MetricsDynamicBinding.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MetricsDynamicBinding.class);
     private final MetricRegistry metricRegistry;
 
     public MetricsDynamicBinding(@Context MetricRegistry metricRegistry) {
@@ -28,15 +44,15 @@ public class MetricsDynamicBinding implements DynamicFeature {
 
         final Method resourceMethod = resourceInfo.getResourceMethod();
         if (resourceMethod.isAnnotationPresent(Timed.class)) {
-            log.debug("Setting up filter for Timed resource method: {}#{}", resourceInfo.getResourceClass().getCanonicalName(), resourceMethod.getName());
+            LOG.debug("Setting up filter for Timed resource method: {}#{}", resourceInfo.getResourceClass().getCanonicalName(), resourceMethod.getName());
             context.register(new TimedMetricsFilter(metricRegistry, resourceInfo));
         }
         if (resourceMethod.isAnnotationPresent(Metered.class)) {
-            log.debug("Setting up filter for Metered resource method: {}#{}", resourceInfo.getResourceClass().getCanonicalName(), resourceMethod.getName());
+            LOG.debug("Setting up filter for Metered resource method: {}#{}", resourceInfo.getResourceClass().getCanonicalName(), resourceMethod.getName());
             context.register(new MeteredMetricsFilter(metricRegistry, resourceInfo));
         }
         if (resourceMethod.isAnnotationPresent(ExceptionMetered.class)) {
-            log.debug("Setting up filter for ExceptionMetered resource method: {}#{}", resourceInfo.getResourceClass().getCanonicalName(), resourceMethod.getName());
+            LOG.debug("Setting up filter for ExceptionMetered resource method: {}#{}", resourceInfo.getResourceClass().getCanonicalName(), resourceMethod.getName());
             context.register(new ExceptionMeteredMetricsFilter(metricRegistry, resourceInfo));
         }
     }

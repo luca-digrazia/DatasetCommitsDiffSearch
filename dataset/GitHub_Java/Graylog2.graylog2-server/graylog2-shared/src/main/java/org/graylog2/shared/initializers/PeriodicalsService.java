@@ -1,27 +1,24 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.shared.initializers;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.AbstractIdleService;
-import com.google.inject.Inject;
+import javax.inject.Inject;
 import org.graylog2.periodical.Periodicals;
 import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.plugin.ServerStatus;
@@ -40,20 +37,17 @@ import java.util.concurrent.TimeUnit;
  */
 @Singleton
 public class PeriodicalsService extends AbstractIdleService {
-    private final Logger LOG = LoggerFactory.getLogger(PeriodicalsService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PeriodicalsService.class);
 
     public static final String NAME = "Periodicals initializer";
-    private final InstantiationService instantiationService;
     private final Periodicals periodicals;
     private final ServerStatus serverStatus;
     private final Set<Periodical> periodicalSet;
 
     @Inject
-    public PeriodicalsService(InstantiationService instantiationService,
-                                  Periodicals periodicals,
-                                  ServerStatus serverStatus,
-                                  Set<Periodical> periodicalSet) {
-        this.instantiationService = instantiationService;
+    public PeriodicalsService(Periodicals periodicals,
+                              ServerStatus serverStatus,
+                              Set<Periodical> periodicalSet) {
         this.periodicals = periodicals;
         this.serverStatus = serverStatus;
         this.periodicalSet = periodicalSet;

@@ -42,16 +42,13 @@ public class SyslogOctetCountFrameDecoder extends FrameDecoder {
         // Convert the frame length value bytes into an integer without mutating the buffer reader index.
         final String lengthString = buffer.slice(buffer.readerIndex(), frameSizeValueLength).toString(Charsets.UTF_8);
         final int length = Integer.parseInt(lengthString);
-        final int skipLength = frameSizeValueLength + 1; // Frame length value bytes and the whitespace that follows it.
 
-        // We have to take the skipped bytes (frame size value length + whitespace) into account when checking if
-        // the buffer has enough data to read the complete message.
-        if (buffer.readableBytes() - skipLength < length) {
+        if (buffer.readableBytes() < length) {
             // We cannot read the complete frame yet.
             return null;
         } else {
             // Skip the frame length value bytes and the whitespace that follows it.
-            buffer.skipBytes(skipLength);
+            buffer.skipBytes(frameSizeValueLength + 1);
         }
 
         final ChannelBuffer frame = extractFrame(buffer, buffer.readerIndex(), length);

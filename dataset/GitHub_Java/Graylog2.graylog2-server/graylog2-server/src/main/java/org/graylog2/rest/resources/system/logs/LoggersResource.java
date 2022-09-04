@@ -27,12 +27,8 @@ import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.rest.models.system.loggers.responses.LoggersSummary;
-import org.graylog2.rest.models.system.loggers.responses.SingleLoggerSummary;
-import org.graylog2.rest.models.system.loggers.responses.SingleSubsystemSummary;
-import org.graylog2.rest.models.system.loggers.responses.SubsystemSummary;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.GET;
@@ -46,7 +42,7 @@ import java.util.Enumeration;
 import java.util.Map;
 
 @RequiresAuthentication
-@Api(value = "System/Loggers", description = "Internal Graylog loggers")
+@Api(value = "System/Loggers", description = "Internal Graylog2 loggers")
 @Path("/system/loggers")
 public class LoggersResource extends RestResource {
 
@@ -62,8 +58,8 @@ public class LoggersResource extends RestResource {
     @Timed
     @ApiOperation(value = "List all loggers and their current levels")
     @Produces(MediaType.APPLICATION_JSON)
-    public LoggersSummary loggers() {
-        final Map<String, SingleLoggerSummary> loggerList = Maps.newHashMap();
+    public Map<String, Object> loggers() {
+        final Map<String, Object> loggerList = Maps.newHashMap();
 
         final Enumeration loggers = Logger.getRootLogger().getLoggerRepository().getCurrentLoggers();
         while (loggers.hasMoreElements()) {
@@ -72,10 +68,16 @@ public class LoggersResource extends RestResource {
                 continue;
             }
 
-            loggerList.put(logger.getName(), SingleLoggerSummary.create(logger.getEffectiveLevel().toString().toLowerCase(), logger.getEffectiveLevel().getSyslogEquivalent()));
+            final Map<String, Object> loggerInfo = Maps.newHashMap();
+            loggerInfo.put("level", logger.getEffectiveLevel().toString().toLowerCase());
+            loggerInfo.put("level_syslog", logger.getEffectiveLevel().getSyslogEquivalent());
+
+            loggerList.put(logger.getName(), loggerInfo);
         }
 
-        return LoggersSummary.create(loggerList);
+        return ImmutableMap.of(
+                "loggers", loggerList,
+                "total", loggerList.size());
     }
 
     @GET
@@ -83,29 +85,31 @@ public class LoggersResource extends RestResource {
     @Path("/subsystems")
     @ApiOperation(value = "List all logger subsystems and their current levels")
     @Produces(MediaType.APPLICATION_JSON)
-    public SubsystemSummary subsytems() {
-        final Map<String, SingleSubsystemSummary> subsystems = Maps.newHashMap();
+    public Map<String, Map<String, Object>> subsytems() {
+        final Map<String, Object> subsystems = Maps.newHashMap();
         for (Map.Entry<String, Subsystem> subsystem : SUBSYSTEMS.entrySet()) {
             if (!isPermitted(RestPermissions.LOGGERS_READSUBSYSTEM, subsystem.getKey())) {
                 continue;
             }
 
             try {
-                final Level effectiveLevel = Logger.getLogger(subsystem.getValue().getCategory()).getEffectiveLevel();
+                Map<String, Object> info = Maps.newHashMap();
+                info.put("title", subsystem.getValue().getTitle());
+                info.put("category", subsystem.getValue().getCategory());
+                info.put("description", subsystem.getValue().getDescription());
 
-                subsystems.put(subsystem.getKey(), SingleSubsystemSummary.create(
-                        subsystem.getValue().getTitle(),
-                        subsystem.getValue().getCategory(),
-                        subsystem.getValue().getDescription(),
-                        effectiveLevel.toString().toLowerCase(),
-                        effectiveLevel.getSyslogEquivalent()
-                ));
+                // Get level.
+                Level effectiveLevel = Logger.getLogger(subsystem.getValue().getCategory()).getEffectiveLevel();
+                info.put("level", effectiveLevel.toString().toLowerCase());
+                info.put("level_syslog", effectiveLevel.getSyslogEquivalent());
+
+                subsystems.put(subsystem.getKey(), info);
             } catch (Exception e) {
                 LOG.warn("Error while listing logger subsystem.", e);
             }
         }
 
-        return SubsystemSummary.create(subsystems);
+        return ImmutableMap.of("subsystems", subsystems);
     }
 
     @PUT

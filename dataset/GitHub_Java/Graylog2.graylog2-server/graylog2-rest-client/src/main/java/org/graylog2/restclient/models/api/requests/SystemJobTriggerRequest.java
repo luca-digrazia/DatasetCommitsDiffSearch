@@ -19,14 +19,12 @@ package org.graylog2.restclient.models.api.requests;
 import org.graylog2.restclient.models.SystemJob;
 import org.graylog2.restclient.models.User;
 
-import java.util.Locale;
-
 public class SystemJobTriggerRequest extends ApiRequest {
     public String jobName;
     public String creatorUserId;
 
     public SystemJobTriggerRequest(SystemJob.Type type, User user) {
-        this.jobName = type.toString().toLowerCase(Locale.ENGLISH);
+        this.jobName = type.toString().toLowerCase();
         this.creatorUserId = user.getName();
     }
 

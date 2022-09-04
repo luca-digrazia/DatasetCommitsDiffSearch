@@ -23,7 +23,6 @@
 package org.graylog2.plugin.journal;
 
 import com.eaio.uuid.UUID;
-import com.google.common.base.MoreObjects;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UninitializedMessageException;
@@ -51,7 +50,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.graylog2.plugin.journal.JournalMessages.JournalMessage;
 
 /**
- * A raw message is the unparsed data Graylog was handed by an input.
+ * A raw message is the unparsed data Graylog2 was handed by an input.
  * <p>
  * Typically this is a copy of the exact bytes received over the network, after all de-chunking, removal of transport
  * headers, etc has been performed, but before any parsing, decoding, checking of the actual payload has been performed.
@@ -243,20 +242,6 @@ public class RawMessage implements Serializable {
         }
 
         return list;
-    }
-
-    @Override
-    public String toString() {
-        final MoreObjects.ToStringHelper helper = MoreObjects.toStringHelper(this);
-        helper.add("id", getId())
-                .add("journalOffset", getJournalOffset())
-                .add("codec", getCodecName())
-                .add("payloadSize", getPayload().length)
-                .add("timestamp", getTimestamp());
-        if (getRemoteAddress() != null) {
-            helper.add("remoteAddress", getRemoteAddress().getInetSocketAddress().toString());
-        }
-        return helper.toString();
     }
 
     public long getJournalOffset() {

@@ -17,42 +17,67 @@
 package org.graylog2.radio.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
+import com.google.common.collect.Maps;
+import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.radio.Configuration;
-import org.graylog2.rest.models.system.buffers.responses.BuffersUtilizationSummary;
-import org.graylog2.rest.models.system.buffers.responses.RingSummary;
-import org.graylog2.rest.models.system.buffers.responses.SingleRingUtilization;
+import org.graylog2.radio.rest.resources.RestResource;
 import org.graylog2.shared.buffers.ProcessBuffer;
-import org.graylog2.shared.rest.resources.RestResource;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+import java.util.Map;
 
-@Api(value = "System/Buffers", description = "Buffer information of this node.")
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @Path("/system/buffers")
 public class BuffersResource extends RestResource {
     private final Configuration configuration;
+    private final InputBuffer inputBuffer;
     private final ProcessBuffer processBuffer;
 
     @Inject
-    public BuffersResource(Configuration configuration, ProcessBuffer processBuffer) {
+    public BuffersResource(Configuration configuration, InputBuffer inputBuffer, ProcessBuffer processBuffer) {
         this.configuration = configuration;
+        this.inputBuffer = inputBuffer;
         this.processBuffer = processBuffer;
     }
 
-    @GET
-    @Timed
-    @ApiOperation(value = "Get current utilization of buffers and caches of this node.")
+    @GET @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public BuffersUtilizationSummary utilization() {
-        final int ringSize = configuration.getRingSize();
-        final long inputSize = processBuffer.getUsage();
-        final long inputUtil = inputSize / ringSize * 100;
+    public String utilization() {
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("buffers", buffers());
 
-        return BuffersUtilizationSummary.create(RingSummary.create(SingleRingUtilization.create(inputSize, inputUtil)));
+        return json(result);
     }
+
+    private Map<String, Object> buffers() {
+        Map<String, Object> buffers = Maps.newHashMap();
+        Map<String, Object> input = Maps.newHashMap();
+        Map<String, Object> process = Maps.newHashMap();
+
+        final int inputBufferCapacity = configuration.getInputBufferRingSize();
+        final long inputSize = inputBuffer.size();
+        final float inputUtil = ((float) inputSize / inputBufferCapacity) * 100;
+        input.put("utilization_percent", inputUtil);
+        input.put("utilization", inputSize);
+
+        buffers.put("input", input);
+
+        final int processBufferCapacity = configuration.getRingSize();
+        final long processSize = processBuffer.size();
+        final float processUtil = ((float) processSize / processBufferCapacity) * 100;
+
+        process.put("utilization_percent", processUtil);
+        process.put("utilization", processSize);
+
+        buffers.put("process", process);
+
+        return buffers;
+    }
+
 }

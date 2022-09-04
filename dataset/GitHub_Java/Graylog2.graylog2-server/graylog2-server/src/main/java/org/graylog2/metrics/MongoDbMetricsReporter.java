@@ -1,20 +1,18 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.metrics;
 
@@ -38,7 +36,7 @@ import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 
 public class MongoDbMetricsReporter extends ScheduledReporter {
-    private static final Logger log = LoggerFactory.getLogger(MongoDbMetricsReporter.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MongoDbMetricsReporter.class);
 
     private final Clock clock;
     private final String nodeId;
@@ -115,11 +113,11 @@ public class MongoDbMetricsReporter extends ScheduledReporter {
             // don't hang on to the data for too long.
             final BasicDBObject indexField = new BasicDBObject("timestamp", 1);
             final BasicDBObject indexOptions = new BasicDBObject("expireAfterSeconds", 5 * 60);
-            collection.ensureIndex(indexField, indexOptions);
+            collection.createIndex(indexField, indexOptions);
 
             collection.insert(docs, WriteConcern.UNACKNOWLEDGED);
         } catch (Exception e) {
-            log.warn("Unable to write graylog2 metrics to mongodb. Ignoring this error.", e);
+            LOG.warn("Unable to write graylog2 metrics to mongodb. Ignoring this error.", e);
         }
     }
 

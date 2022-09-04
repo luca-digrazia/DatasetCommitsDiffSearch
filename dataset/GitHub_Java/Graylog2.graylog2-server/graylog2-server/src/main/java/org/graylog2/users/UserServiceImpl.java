@@ -18,32 +18,24 @@ package org.graylog2.users;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.mongodb.BasicDBObject;
-import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.Configuration;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.plugin.database.Persisted;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.security.ldap.LdapEntry;
 import org.graylog2.shared.security.ldap.LdapSettings;
-import org.graylog2.shared.users.Role;
 import org.graylog2.shared.users.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -52,17 +44,11 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     private static final Logger LOG = LoggerFactory.getLogger(UserServiceImpl.class);
 
     private final Configuration configuration;
-    private final RoleService roleService;
 
     @Inject
-    public UserServiceImpl(final MongoConnection mongoConnection,
-                           final Configuration configuration,
-                           final RoleService roleService) {
+    public UserServiceImpl(final MongoConnection mongoConnection, final Configuration configuration) {
         super(mongoConnection);
         this.configuration = configuration;
-        this.roleService = roleService;
-        // ensure that the users' roles array is indexed
-        collection(UserImpl.class).createIndex(UserImpl.ROLES);
     }
 
     @Override
@@ -94,18 +80,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
         LOG.debug("Loaded user {}/{} from MongoDB", username, userId);
         return new UserImpl((ObjectId) userId, userObject.toMap());
-    }
-
-    public int delete(final String username) {
-        LOG.debug("Deleting user(s) with username \"{}\"", username);
-        final DBObject query = BasicDBObjectBuilder.start(UserImpl.USERNAME, username).get();
-        final int result = destroy(query, UserImpl.COLLECTION_NAME);
-
-        if (result > 1) {
-            LOG.warn("Removed {} users matching username \"{}\".", result, username);
-        }
-
-        return result;
     }
 
     @Override
@@ -176,36 +150,9 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
             if (ldapSettings.getDefaultGroup().equals("reader")) {
                 user.setPermissions(Lists.newArrayList(RestPermissions.readerPermissions(username)));
             } else {
-                user.setPermissions(Lists.newArrayList("*"));
+                user.setPermissions(Lists.<String>newArrayList("*"));
             }
         }
-
-        // map ldap groups to user roles, if the mapping is present
-        final Set<String> translatedRoleIds = Sets.newHashSet();
-        if (!userEntry.getGroups().isEmpty()) {
-            try {
-                final Map<String, Role> roleIdToRole = roleService.loadAllIdMap();
-                for (String ldapGroupName : userEntry.getGroups()) {
-                    final String roleId = ldapSettings.getGroupMapping().get(ldapGroupName);
-                    if (roleId == null) {
-                        LOG.warn("User {}: No group mapping for ldap group <{}>", username, ldapGroupName);
-                        continue;
-                    }
-                    final Role role = roleIdToRole.get(roleId);
-                    if (role != null) {
-                        LOG.warn("User {}: Mapping ldap group <{}> to role <{}>", username, ldapGroupName, role.getName());
-                        translatedRoleIds.add(role.getId());
-                    } else {
-                        LOG.warn("User {}: No role found for ldap group <{}>", username, ldapGroupName);
-                    }
-                }
-
-            } catch (NotFoundException e) {
-                LOG.error("Unable to load user roles", e);
-            }
-        }
-        user.setRoleIds(translatedRoleIds);
-
     }
 
     @Override
@@ -225,22 +172,5 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     @Override
     public long count() {
         return totalCount(UserImpl.class);
-    }
-
-    @Override
-    public Collection<User> loadAllForRole(Role role) {
-        final String roleId = role.getId();
-        final DBObject query = BasicDBObjectBuilder.start(UserImpl.ROLES, new ObjectId(roleId)).get();
-
-        final List<DBObject> result = query(UserImpl.class, query);
-        if (result == null || result.isEmpty()) {
-            return Collections.emptySet();
-        }
-        final Set<User> users = Sets.newHashSetWithExpectedSize(result.size());
-        for (DBObject dbObject : result) {
-            //noinspection unchecked
-            users.add(new UserImpl((ObjectId) dbObject.get("_id"), dbObject.toMap()));
-        }
-        return users;
     }
 }

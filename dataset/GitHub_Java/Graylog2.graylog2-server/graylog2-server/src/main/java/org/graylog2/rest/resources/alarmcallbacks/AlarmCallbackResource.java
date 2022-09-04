@@ -33,10 +33,8 @@ import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackListSummary;
-import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackSummary;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +51,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -83,23 +82,18 @@ public class AlarmCallbackResource extends RestResource {
     @Timed
     @ApiOperation(value = "Get a list of all alarm callbacks for this stream")
     @Produces(MediaType.APPLICATION_JSON)
-    public AlarmCallbackListSummary get(@ApiParam(name = "streamid", value = "The id of the stream whose alarm callbacks we want.", required = true)
+    public Map<String, Object> get(@ApiParam(name = "streamid", value = "The id of the stream whose alarm callbacks we want.", required = true)
                                    @PathParam("streamid") String streamid) throws NotFoundException {
         final Stream stream = streamService.load(streamid);
 
-        final List<AlarmCallbackSummary> alarmCallbacks = Lists.newArrayList();
+        final List<Map<String, Object>> alarmCallbacks = Lists.newArrayList();
         for (AlarmCallbackConfiguration callback : alarmCallbackConfigurationService.getForStream(stream)) {
-            alarmCallbacks.add(AlarmCallbackSummary.create(
-                    callback.getId(),
-                    callback.getStreamId(),
-                    callback.getType(),
-                    callback.getConfiguration().getSource(),
-                    callback.getCreatedAt(),
-                    callback.getCreatorUserId()
-            ));
+            alarmCallbacks.add(callback.getFields());
         }
 
-        return AlarmCallbackListSummary.create(alarmCallbacks);
+        return ImmutableMap.of(
+                "alarmcallbacks", alarmCallbacks,
+                "total", alarmCallbacks.size());
     }
 
     @GET
@@ -107,7 +101,7 @@ public class AlarmCallbackResource extends RestResource {
     @Timed
     @ApiOperation(value = "Get a single specified alarm callback for this stream")
     @Produces(MediaType.APPLICATION_JSON)
-    public AlarmCallbackSummary get(@ApiParam(name = "streamid", value = "The id of the stream whose alarm callbacks we want.", required = true)
+    public Map<String, Object> get(@ApiParam(name = "streamid", value = "The id of the stream whose alarm callbacks we want.", required = true)
                                    @PathParam("streamid") String streamid,
                                    @ApiParam(name = "alarmCallbackId", value = "The alarm callback id we are getting", required = true)
                                    @PathParam("alarmCallbackId") String alarmCallbackId) throws NotFoundException {
@@ -118,7 +112,7 @@ public class AlarmCallbackResource extends RestResource {
             throw new javax.ws.rs.NotFoundException();
         }
 
-        return AlarmCallbackSummary.create(result.getId(), result.getStreamId(), result.getType(), result.getConfiguration().getSource(), result.getCreatedAt(), result.getCreatorUserId());
+        return result.getFields();
     }
 
     @POST
@@ -145,7 +139,7 @@ public class AlarmCallbackResource extends RestResource {
         }
 
         final Map<String, String> result = ImmutableMap.of("alarmcallback_id", id);
-        final URI alarmCallbackUri = getUriBuilderToSelf().path(AlarmCallbackResource.class)
+        final URI alarmCallbackUri = UriBuilder.fromResource(AlarmCallbackResource.class)
                 .path("{alarmCallbackId}")
                 .build(streamid, id);
 

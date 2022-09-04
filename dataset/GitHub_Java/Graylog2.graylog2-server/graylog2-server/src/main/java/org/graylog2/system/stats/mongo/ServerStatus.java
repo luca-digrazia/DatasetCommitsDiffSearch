@@ -92,7 +92,7 @@ public abstract class ServerStatus {
 
         public static Connections create(int current,
                                          int available,
-                                         @Nullable Long totalCreated) {
+                                         @Nullable long totalCreated) {
             return new AutoValue_ServerStatus_Connections(current, available, totalCreated);
         }
     }

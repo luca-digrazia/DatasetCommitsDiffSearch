@@ -51,6 +51,7 @@ public class SearchResult {
     private final long totalResultCount;
     private final int tookMs;
     private final List<MessageResult> results;
+    private final SearchResultResponse.QueryError error;
     private final List<Field> fields;
     private final List<IndexRangeSummary> usedIndices;
     private List<Field> allFields;
@@ -65,6 +66,7 @@ public class SearchResult {
                         List<MessageSummaryResponse> summaryResponses,
                         List<String> fields,
                         List<IndexRangeSummary> usedIndices,
+                        SearchResultResponse.QueryError error,
                         DateTime fromDateTime,
                         DateTime toDateTime,
                         FieldMapper fieldMapper) {
@@ -73,6 +75,7 @@ public class SearchResult {
         this.timeRange = timeRange;
         this.totalResultCount = totalResultCount;
         this.tookMs = tookMs;
+        this.error = error;
         this.fields = buildFields(fields);
         this.usedIndices = usedIndices;
         this.fromDateTime = fromDateTime;
@@ -138,6 +141,10 @@ public class SearchResult {
 
     public String getBuiltQuery() {
         return builtQuery;
+    }
+
+    public SearchResultResponse.QueryError getError() {
+        return error;
     }
 
     public DateTime getFromDateTime() {

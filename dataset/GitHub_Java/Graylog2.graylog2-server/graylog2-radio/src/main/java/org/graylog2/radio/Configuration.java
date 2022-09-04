@@ -24,7 +24,6 @@ import org.graylog2.plugin.Tools;
 import org.joda.time.Duration;
 
 import java.net.URI;
-import java.util.Locale;
 
 import static org.graylog2.plugin.Tools.getUriWithPort;
 import static org.graylog2.plugin.Tools.getUriWithScheme;
@@ -38,7 +37,7 @@ public class Configuration extends BaseConfiguration {
     }
 
     @Parameter(value = "node_id_file")
-    private String nodeIdFile = "/etc/graylog/radio/node-id";
+    private String nodeIdFile = "/etc/graylog2-radio-node-id";
 
     @Parameter(value = "transport_type", required = true)
     private String transportType = "amqp";
@@ -112,7 +111,7 @@ public class Configuration extends BaseConfiguration {
 
     public TRANSPORT_TYPE getTransportType() {
         try {
-            return TRANSPORT_TYPE.valueOf(transportType.toUpperCase(Locale.ENGLISH));
+            return TRANSPORT_TYPE.valueOf(transportType.toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new RuntimeException("Invalid [transport_type] configured: " + transportType);
         }

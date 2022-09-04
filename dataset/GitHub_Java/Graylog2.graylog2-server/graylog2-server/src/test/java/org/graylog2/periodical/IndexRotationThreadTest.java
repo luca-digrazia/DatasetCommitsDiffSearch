@@ -16,39 +16,21 @@
  */
 package org.graylog2.periodical;
 
+import javax.inject.Provider;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.NoTargetIndexException;
-import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.initializers.IndexerSetupService;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
-import org.graylog2.shared.system.activities.NullActivityWriter;
 import org.graylog2.system.activities.SystemMessageActivityWriter;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
 import javax.annotation.Nullable;
-import javax.inject.Provider;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-@RunWith(MockitoJUnitRunner.class)
 public class IndexRotationThreadTest {
-    @Mock
-    private Deflector deflector;
-    @Mock
-    private NotificationService notificationService;
-    @Mock
-    private Indices indices;
-    @Mock
-    private Cluster cluster;
 
     @Test
     public void testFailedRotation() {
@@ -65,14 +47,15 @@ public class IndexRotationThreadTest {
             }
         };
 
+        final Deflector deflector = mock(Deflector.class);
         final IndexRotationThread rotationThread = new IndexRotationThread(
-                notificationService,
-                indices,
+                mock(NotificationService.class),
+                mock(Indices.class),
                 deflector,
-                cluster,
-                new NullActivityWriter(),
+                mock(SystemMessageActivityWriter.class),
+                mock(IndexerSetupService.class),
                 provider
-        );
+            );
 
         rotationThread.checkForRotation();
 
@@ -104,14 +87,15 @@ public class IndexRotationThreadTest {
             }
         };
 
+        final Deflector deflector = mock(Deflector.class);
         final IndexRotationThread rotationThread = new IndexRotationThread(
-                notificationService,
-                indices,
+                mock(NotificationService.class),
+                mock(Indices.class),
                 deflector,
-                cluster,
-                new NullActivityWriter(),
+                mock(SystemMessageActivityWriter.class),
+                mock(IndexerSetupService.class),
                 provider
-        );
+            );
 
         when(deflector.getNewestTargetName()).thenReturn("some_index");
 
@@ -146,12 +130,13 @@ public class IndexRotationThreadTest {
             }
         };
 
+        final Deflector deflector = mock(Deflector.class);
         final IndexRotationThread rotationThread = new IndexRotationThread(
-                notificationService,
-                indices,
+                mock(NotificationService.class),
+                mock(Indices.class),
                 deflector,
-                cluster,
-                new NullActivityWriter(),
+                mock(SystemMessageActivityWriter.class),
+                mock(IndexerSetupService.class),
                 provider
         );
 
@@ -161,26 +146,5 @@ public class IndexRotationThreadTest {
 
         verify(deflector, never()).cycle();
         verify(deflector, times(1)).getNewestTargetName();
-    }
-
-    @Test
-    public void testDontPerformRotationIfClusterIsDown() throws NoTargetIndexException {
-        final Provider<RotationStrategy> provider = mock(Provider.class);
-
-        when(cluster.isConnectedAndHealthy()).thenReturn(false);
-
-        final IndexRotationThread rotationThread = new IndexRotationThread(
-                notificationService,
-                indices,
-                deflector,
-                cluster,
-                new NullActivityWriter(),
-                provider
-        );
-
-        rotationThread.doRun();
-
-        verify(deflector, never()).cycle();
-        verify(provider, never()).get();
     }
 }

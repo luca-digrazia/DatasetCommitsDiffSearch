@@ -18,10 +18,9 @@ package org.graylog2.filters.blacklist;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Objects;
 import java.util.regex.Pattern;
 
-public final class BlacklistPatternCondition extends FilterDescription {
+public class BlacklistPatternCondition extends FilterDescription {
 
     private Pattern regex;
 
@@ -45,11 +44,12 @@ public final class BlacklistPatternCondition extends FilterDescription {
 
         BlacklistPatternCondition that = (BlacklistPatternCondition) o;
 
-        return Objects.equals(pattern, that.pattern);
+        return regex.equals(that.regex);
+
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pattern);
+        return regex.hashCode();
     }
 }

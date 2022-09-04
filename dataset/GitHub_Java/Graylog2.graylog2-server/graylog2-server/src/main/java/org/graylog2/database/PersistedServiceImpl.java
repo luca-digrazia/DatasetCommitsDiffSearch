@@ -1,22 +1,19 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.database;
 
 import com.google.common.collect.Lists;
@@ -28,11 +25,17 @@ import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.database.Persisted;
+import org.graylog2.plugin.database.PersistedService;
+import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.plugin.database.validators.ValidationResult;
 import org.graylog2.plugin.database.validators.Validator;
+import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +43,7 @@ public class PersistedServiceImpl implements PersistedService {
     private static final Logger LOG = LoggerFactory.getLogger(PersistedServiceImpl.class);
     public final MongoConnection mongoConnection;
 
-    public PersistedServiceImpl(MongoConnection mongoConnection) {
+    protected PersistedServiceImpl(MongoConnection mongoConnection) {
         this.mongoConnection = mongoConnection;
     }
 
@@ -96,6 +99,8 @@ public class PersistedServiceImpl implements PersistedService {
 
     protected <T extends Persisted> DBCollection collection(Class<T> modelClass) {
         CollectionName collectionNameAnnotation = modelClass.getAnnotation(CollectionName.class);
+        if (collectionNameAnnotation == null)
+            throw new RuntimeException("Unable to determine collection for class " + modelClass.getCanonicalName());
         final String collectionName = (collectionNameAnnotation == null ? null : collectionNameAnnotation.value());
 
         if (collectionName == null)
@@ -174,8 +179,9 @@ public class PersistedServiceImpl implements PersistedService {
 
     @Override
     public <T extends Persisted> String save(T model) throws ValidationException {
-        if (!validate(model, model.getFields())) {
-            throw new ValidationException();
+        Map<String, List<ValidationResult>> errors = validate(model, model.getFields());
+        if (!errors.isEmpty()) {
+            throw new ValidationException(errors);
         }
 
         BasicDBObject doc = new BasicDBObject(model.getFields());
@@ -205,14 +211,15 @@ public class PersistedServiceImpl implements PersistedService {
     }
 
     @Override
-    public <T extends Persisted> boolean validate(T model, Map<String, Object> fields) {
+    public <T extends Persisted> Map<String, List<ValidationResult>> validate(T model, Map<String, Object> fields) {
         return validate(model.getValidations(), fields);
     }
 
     @Override
-    public boolean validate(Map<String, Validator> validators, Map<String, Object> fields) {
+    public Map<String, List<ValidationResult>> validate(Map<String, Validator> validators, Map<String, Object> fields) {
+        Map<String, List<ValidationResult>> validationErrors = new HashMap<>();
         if (validators == null || validators.isEmpty()) {
-            return true;
+            return validationErrors;
         }
 
         for (Map.Entry<String, Validator> validation : validators.entrySet()) {
@@ -220,34 +227,41 @@ public class PersistedServiceImpl implements PersistedService {
             String field = validation.getKey();
 
             try {
-                if (!v.validate(fields.get(field))) {
-                    LOG.info("Validation failure: [{}] on field [{}]", v.getClass().getCanonicalName(), field);
-                    return false;
+                ValidationResult validationResult = v.validate(fields.get(field));
+                if (validationResult instanceof ValidationResult.ValidationFailed) {
+                    LOG.debug("Validation failure: [{}] on field [{}]", v.getClass().getCanonicalName(), field);
+                    if (validationErrors.get(field) == null)
+                        validationErrors.put(field, new ArrayList<ValidationResult>());
+                    validationErrors.get(field).add(validationResult);
                 }
             } catch (Exception e) {
-                LOG.error("Error while trying to validate <{}>. Marking as invalid.", field, e);
-                return false;
+                final String error = "Error while trying to validate <" + field + ">, got exception: " + e;
+                LOG.debug(error);
+                if (validationErrors.get(field) == null)
+                    validationErrors.put(field, new ArrayList<ValidationResult>());
+                validationErrors.get(field).add(new ValidationResult.ValidationFailed(error));
             }
         }
 
-        return true;
+        return validationErrors;
     }
 
     @Override
-    public <T extends Persisted> boolean validate(T model) {
+    public <T extends Persisted> Map<String, List<ValidationResult>> validate(T model) {
         return validate(model, model.getFields());
     }
 
     protected <T extends Persisted> void embed(T model, String key, EmbeddedPersistable o) throws ValidationException {
-        if (!validate(model.getEmbeddedValidations(key), o.getPersistedFields())) {
-            throw new ValidationException();
+        Map<String, List<ValidationResult>> errors = validate(model.getEmbeddedValidations(key), o.getPersistedFields());
+        if (!errors.isEmpty()) {
+            throw new ValidationException(errors);
         }
 
         Map<String, Object> fields = Maps.newHashMap(o.getPersistedFields());
         fieldTransformations(fields);
 
         BasicDBObject dbo = new BasicDBObject(fields);
-        collection(model).update(new BasicDBObject("_id", model.getId()), new BasicDBObject("$push", new BasicDBObject(key, dbo)));
+        collection(model).update(new BasicDBObject("_id", new ObjectId(model.getId())), new BasicDBObject("$push", new BasicDBObject(key, dbo)));
     }
 
     protected <T extends Persisted> void removeEmbedded(T model, String key, String searchId) {
@@ -262,7 +276,7 @@ public class PersistedServiceImpl implements PersistedService {
 
     protected <T extends Persisted> void removeEmbedded(T model, String arrayKey, String key, String searchId) {
         BasicDBObject aryQry = new BasicDBObject(arrayKey, searchId);
-        BasicDBObject qry = new BasicDBObject("_id", model.getId());
+        BasicDBObject qry = new BasicDBObject("_id", new ObjectId(model.getId()));
         BasicDBObject update = new BasicDBObject("$pull", new BasicDBObject(key, aryQry));
 
         // http://docs.mongodb.org/manual/reference/operator/pull/
@@ -275,6 +289,7 @@ public class PersistedServiceImpl implements PersistedService {
 
             // Work on embedded Maps, too.
             if (x.getValue() instanceof Map) {
+                x.setValue(Maps.newHashMap((Map<String, Object>) x.getValue()));
                 fieldTransformations((Map<String, Object>) x.getValue());
                 continue;
             }
@@ -282,6 +297,11 @@ public class PersistedServiceImpl implements PersistedService {
             // JodaTime DateTime is not accepted by MongoDB. Convert to java.util.Date...
             if (x.getValue() instanceof DateTime) {
                 doc.put(x.getKey(), ((DateTime) x.getValue()).toDate());
+            }
+
+            // Our own NodeID
+            if (x.getValue() instanceof NodeId) {
+                doc.put(x.getKey(), x.getValue().toString());
             }
 
         }

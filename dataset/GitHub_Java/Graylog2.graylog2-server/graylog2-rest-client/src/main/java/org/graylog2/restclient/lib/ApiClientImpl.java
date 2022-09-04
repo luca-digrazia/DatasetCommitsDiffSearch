@@ -87,12 +87,12 @@ class ApiClientImpl implements ApiClient {
     @Inject
     private ApiClientImpl(ServerNodes serverNodes, @Named("Default Timeout") Long defaultTimeout) {
         this(serverNodes, defaultTimeout,
-             new ObjectMapper()
-                     .setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES)
-                     .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                     .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
-                     .registerModule(new GuavaModule())
-                     .registerModule(new JodaModule()));
+                new ObjectMapper()
+                        .setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES)
+                        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                        .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
+                        .registerModule(new GuavaModule())
+                        .registerModule(new JodaModule()));
     }
 
     private ApiClientImpl(ServerNodes serverNodes, Long defaultTimeout, ObjectMapper objectMapper) {
@@ -424,14 +424,64 @@ class ApiClientImpl implements ApiClient {
             }
 
             // Set 200 OK as standard if not defined.
-            ensureExpectedResponseCodes();
+            if (expectedResponseCodes.isEmpty()) {
+                expectedResponseCodes.add(200);
+            }
 
             try {
                 // TODO implement streaming responses
                 Response response = requestBuilder.execute().get(timeoutValue, timeoutUnit);
 
                 target.touch();
-                return handleResponse(request, response);
+
+                // TODO: once we switch to jackson we can take the media type into account automatically
+                final MediaType responseContentType;
+                if (response.getContentType() == null) {
+                    responseContentType = MediaType.JSON_UTF_8;
+                } else {
+                    responseContentType = MediaType.parse(response.getContentType());
+                }
+
+                if (!responseContentType.is(mediaType.withoutParameters())) {
+                    LOG.warn("We said we'd accept {} but got {} back, let's see how that's going to work out...", mediaType, responseContentType);
+                }
+                if (responseClass.equals(String.class)) {
+                    return responseClass.cast(response.getResponseBody("UTF-8"));
+                }
+
+                final boolean responseCodeIsExpected = expectedResponseCodes.contains(response.getStatusCode());
+                final boolean responseCodeIsSuccessful = response.getStatusCode() >= 200 && response.getStatusCode() < 300;
+                if (responseCodeIsExpected || responseCodeIsSuccessful) {
+                    T result;
+                    try {
+                        if (response.getResponseBody().isEmpty()) {
+                            return null;
+                        }
+
+                        if (responseContentType.is(MediaType.JSON_UTF_8.withoutParameters())) {
+                            result = deserializeJson(response, responseClass);
+                        } else {
+                            LOG.error("Don't know how to deserialize objects with content in {}, expected {}, failing.", responseContentType, mediaType);
+                            throw new APIException(request, response);
+                        }
+
+                        if (result == null) {
+                            throw new APIException(request, response);
+                        }
+
+                        return result;
+                    } catch (Exception e) {
+                        LOG.error("Caught Exception while deserializing JSON request: ", e);
+                        LOG.debug("Response from backend was: " + response.getResponseBody("UTF-8"));
+
+                        throw new APIException(request, response, e);
+                    }
+                } else {
+                    if (!responseCodeIsExpected) {
+                        throw new APIException(request, response);
+                    }
+                    return null;
+                }
             } catch (InterruptedException e) {
                 // TODO
                 target.markFailure();
@@ -440,7 +490,7 @@ class ApiClientImpl implements ApiClient {
                 throw new RuntimeException("Malformed URL.", e);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof ConnectException) {
-                    LOG.warn("Graylog server unavailable. Connection refused.");
+                    LOG.warn("Graylog2 server unavailable. Connection refused.");
                     target.markFailure();
                     throw new Graylog2ServerUnavailableException(e);
                 }
@@ -458,60 +508,6 @@ class ApiClientImpl implements ApiClient {
             throw new APIException(request, new IllegalStateException("Unhandled error condition in API client"));
         }
 
-        private T handleResponse(Request request, Response response) throws IOException, APIException {
-            // TODO: once we switch to jackson we can take the media type into account automatically
-            final MediaType responseContentType;
-            if (response.getContentType() == null) {
-                responseContentType = MediaType.JSON_UTF_8;
-            } else {
-                responseContentType = MediaType.parse(response.getContentType());
-            }
-
-            if (!responseContentType.is(mediaType.withoutParameters())) {
-                LOG.warn("We said we'd accept {} but got {} back, let's see how that's going to work out...", mediaType, responseContentType);
-            }
-            if (responseClass.equals(String.class)) {
-                return responseClass.cast(response.getResponseBody("UTF-8"));
-            }
-
-            final boolean responseCodeIsExpected = expectedResponseCodes.contains(response.getStatusCode());
-            final boolean responseCodeIsSuccessful = response.getStatusCode() >= 200 && response.getStatusCode() < 300;
-            if (responseCodeIsExpected || responseCodeIsSuccessful) {
-                T result;
-                try {
-                    if (response.getResponseBody().isEmpty()) {
-                        return null;
-                    }
-
-                    if (responseContentType.is(MediaType.JSON_UTF_8.withoutParameters())) {
-                        result = deserializeJson(response, responseClass);
-                    } else {
-                        LOG.error("Don't know how to deserialize objects with content in {}, expected {}, failing.", responseContentType, mediaType);
-                        throw new APIException(request, response);
-                    }
-
-                    if (result == null) {
-                        throw new APIException(request, response);
-                    }
-
-                    return result;
-                } catch (Exception e) {
-                    LOG.error("Caught Exception while deserializing JSON request: ", e);
-                    LOG.debug("Response from backend was: " + response.getResponseBody("UTF-8"));
-
-                    throw new APIException(request, response, e);
-                }
-            } else {
-                throw new APIException(request, response);
-            }
-        }
-
-        private void ensureExpectedResponseCodes() {
-            if (expectedResponseCodes.isEmpty()) {
-                expectedResponseCodes.add(200);
-            }
-        }
-
         private void ensureAuthentication() {
             if (!unauthenticated && sessionId == null) {
                 final User user = UserService.current();
@@ -523,22 +519,14 @@ class ApiClientImpl implements ApiClient {
             }
         }
 
-        private class RequestAndFuture {
-            private final Request request;
-            private final ListenableFuture<Response> listenableFuture;
-            public RequestAndFuture(Request request, ListenableFuture<Response> listenableFuture) {
-                this.request = request;
-                this.listenableFuture = listenableFuture;
-            }
-        }
         @Override
-        public Map<Node, T> executeOnAll() throws APIException {
+        public Map<Node, T> executeOnAll() {
             HashMap<Node, T> results = Maps.newHashMap();
             if (node == null && nodes == null) {
                 nodes = serverNodes.all();
             }
 
-            final Map<Node, RequestAndFuture> requests = Maps.newHashMap();
+            final Map<Node, ListenableFuture<Response>> requests = Maps.newHashMap();
             final Collection<Response> responses = Lists.newArrayList();
 
             ensureAuthentication();
@@ -547,11 +535,8 @@ class ApiClientImpl implements ApiClient {
                 try {
                     final AsyncHttpClient.BoundRequestBuilder requestBuilder = requestBuilderForUrl(url);
                     requestBuilder.addHeader(HttpHeaders.ACCEPT, mediaType.toString());
-                    // we need it for the APIException
-
-                    final Request request = requestBuilder.build();
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("API Request: {}", request.toString());
+                        LOG.debug("API Request: {}", requestBuilder.build().toString());
                     }
                     final ListenableFuture<Response> future = requestBuilder.execute(new AsyncCompletionHandler<Response>() {
                         @Override
@@ -560,24 +545,19 @@ class ApiClientImpl implements ApiClient {
                             return response;
                         }
                     });
-                    requests.put(currentNode, new RequestAndFuture(request, future));
+                    requests.put(currentNode, future);
                 } catch (IOException e) {
                     LOG.error("Cannot execute request", e);
                     currentNode.markFailure();
                 }
             }
-
-            // Set 200 OK as standard if not defined.
-            ensureExpectedResponseCodes();
-
-            for (Map.Entry<Node, RequestAndFuture> nodeAndRequest : requests.entrySet()) {
-                final Node node = nodeAndRequest.getKey();
-                final ListenableFuture<Response> future = nodeAndRequest.getValue().listenableFuture;
+            for (Map.Entry<Node, ListenableFuture<Response>> requestAndNode : requests.entrySet()) {
+                final Node node = requestAndNode.getKey();
+                final ListenableFuture<Response> request = requestAndNode.getValue();
                 try {
-                    final Response response = future.get(timeoutValue, timeoutUnit);
+                    final Response response = request.get(timeoutValue, timeoutUnit);
                     node.touch();
-                    final T result = handleResponse(nodeAndRequest.getValue().request, response);
-                    results.put(node, result);
+                    results.put(node, deserializeJson(response, responseClass));
                 } catch (InterruptedException e) {
                     LOG.error("API call Interrupted", e);
                     node.markFailure();

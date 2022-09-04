@@ -1,5 +1,23 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.inputs.transports;
 
+import com.codahale.metrics.MetricSet;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Maps;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
@@ -7,6 +25,8 @@ import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.Response;
+import org.graylog2.plugin.inputs.annotations.ConfigClass;
+import org.graylog2.plugin.inputs.annotations.FactoryClass;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -14,11 +34,11 @@ import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.DropdownField;
 import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.configuration.fields.TextField;
-import org.graylog2.plugin.inputs.MessageInput2;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.graylog2.plugin.inputs.transports.ThrottleableTransport;
-import org.graylog2.plugin.inputs.transports.TransportFactory;
+import org.graylog2.plugin.inputs.transports.Transport;
 import org.graylog2.plugin.journal.RawMessage;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.slf4j.Logger;
@@ -57,13 +77,15 @@ public class HttpPollTransport extends ThrottleableTransport {
                              EventBus serverEventBus,
                              ServerStatus serverStatus,
                              @Named("daemonScheduler") ScheduledExecutorService scheduler) {
+        super(serverEventBus, configuration);
         this.configuration = configuration;
         this.serverEventBus = serverEventBus;
         this.serverStatus = serverStatus;
         this.scheduler = scheduler;
     }
 
-    private static Map<String, String> parseHeaders(String headerString) {
+    @VisibleForTesting
+    static Map<String, String> parseHeaders(String headerString) {
         final Map<String, String> headers = Maps.newHashMap();
 
         if (headerString == null || headerString.isEmpty()) {
@@ -104,7 +126,7 @@ public class HttpPollTransport extends ThrottleableTransport {
     }
 
     @Override
-    public void launch(final MessageInput2 input) throws MisfireException {
+    public void doLaunch(final MessageInput input) throws MisfireException {
         serverStatus.awaitRunning(new Runnable() {
             @Override
             public void run() {
@@ -138,6 +160,10 @@ public class HttpPollTransport extends ThrottleableTransport {
                     LOG.debug("Message processing paused, not polling HTTP resource {}.", url);
                     return;
                 }
+                if (isThrottled()) {
+                    // this transport won't block, but we can simply skip this iteration
+                    LOG.debug("Not polling HTTP resource {} because we are throttled.", url);
+                }
                 try (AsyncHttpClient client = new AsyncHttpClient()) {
                     final AsyncHttpClient.BoundRequestBuilder requestBuilder = client.prepareGet(url);
 
@@ -154,10 +180,9 @@ public class HttpPollTransport extends ThrottleableTransport {
                         throw new RuntimeException("Expected HTTP status code 200, got " + r.getStatusCode());
                     }
 
-                    input.processRawMessage(new RawMessage(input.getCodec().getName(),
-                                                           input.getId(),
-                                                           remoteAddress,
-                                                           r.getResponseBody().getBytes(StandardCharsets.UTF_8)));
+                    input.processRawMessage(new RawMessage(r.getResponseBody().getBytes(StandardCharsets.UTF_8),
+                                                           remoteAddress
+                    ));
                 } catch (InterruptedException | ExecutionException | IOException e) {
                     LOG.error("Could not fetch HTTP resource at " + url, e);
                 }
@@ -170,7 +195,7 @@ public class HttpPollTransport extends ThrottleableTransport {
     }
 
     @Override
-    public void stop() {
+    public void doStop() {
         serverEventBus.unregister(this);
         if (scheduledFuture != null) {
             scheduledFuture.cancel(true);
@@ -178,52 +203,59 @@ public class HttpPollTransport extends ThrottleableTransport {
     }
 
     @Override
-    public ConfigurationRequest getRequestedConfiguration() {
-        final ConfigurationRequest r = new ConfigurationRequest();
-
-        r.addField(new TextField(
-                CK_URL,
-                "URI of JSON resource",
-                "http://example.org/api",
-                "HTTP resource returning JSON on GET",
-                ConfigurationField.Optional.NOT_OPTIONAL
-        ));
-
-        r.addField(new TextField(
-                CK_HEADERS,
-                "Additional HTTP headers",
-                "",
-                "Add a comma separated list of additional HTTP headers. For example: Accept: application/json, X-Requester: Graylog2",
-                ConfigurationField.Optional.OPTIONAL
-        ));
-
-        r.addField(new NumberField(
-                CK_INTERVAL,
-                "Interval",
-                1,
-                "Time between every collector run. Select a time unit in the corresponding dropdown. Example: Run every 5 minutes.",
-                ConfigurationField.Optional.NOT_OPTIONAL
-        ));
-
-        r.addField(new DropdownField(
-                CK_TIMEUNIT,
-                "Interval time unit",
-                TimeUnit.MINUTES.toString(),
-                DropdownField.ValueTemplates.timeUnits(),
-                ConfigurationField.Optional.NOT_OPTIONAL
-        ));
-
-        return r;
-    }
-
-    @Override
-    public void setupMetrics(MessageInput2 input) {
+    public MetricSet getMetricSet() {
         // TODO do we need any metrics here?
+        return null;
     }
 
 
-    public interface Factory extends TransportFactory<HttpPollTransport> {
+    @FactoryClass
+    public interface Factory extends Transport.Factory<HttpPollTransport> {
         @Override
         HttpPollTransport create(Configuration configuration);
+
+        @Override
+        Config getConfig();
+    }
+
+    @ConfigClass
+    public static class Config extends ThrottleableTransport.Config {
+        @Override
+        public ConfigurationRequest getRequestedConfiguration() {
+            final ConfigurationRequest r = super.getRequestedConfiguration();
+            r.addField(new TextField(
+                    CK_URL,
+                    "URI of JSON resource",
+                    "http://example.org/api",
+                    "HTTP resource returning JSON on GET",
+                    ConfigurationField.Optional.NOT_OPTIONAL
+            ));
+
+            r.addField(new TextField(
+                    CK_HEADERS,
+                    "Additional HTTP headers",
+                    "",
+                    "Add a comma separated list of additional HTTP headers. For example: Accept: application/json, X-Requester: Graylog2",
+                    ConfigurationField.Optional.OPTIONAL
+            ));
+
+            r.addField(new NumberField(
+                    CK_INTERVAL,
+                    "Interval",
+                    1,
+                    "Time between every collector run. Select a time unit in the corresponding dropdown. Example: Run every 5 minutes.",
+                    ConfigurationField.Optional.NOT_OPTIONAL
+            ));
+
+            r.addField(new DropdownField(
+                    CK_TIMEUNIT,
+                    "Interval time unit",
+                    TimeUnit.MINUTES.toString(),
+                    DropdownField.ValueTemplates.timeUnits(),
+                    ConfigurationField.Optional.NOT_OPTIONAL
+            ));
+
+            return r;
+        }
     }
 }

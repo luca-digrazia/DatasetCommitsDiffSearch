@@ -470,7 +470,7 @@ public class BundleImporter {
             dashboardService.addWidget(dashboard, widget);
 
             final WidgetPositions.WidgetPosition widgetPosition = WidgetPositions.WidgetPosition.create(widget.getId(),
-                    dashboardWidget.getCol(), dashboardWidget.getRow(), dashboardWidget.getHeight(), dashboardWidget.getWidth());
+                    dashboardWidget.getCol(), dashboardWidget.getRow());
             widgetPositions.add(widgetPosition);
         }
 

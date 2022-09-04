@@ -25,9 +25,9 @@ import org.elasticsearch.action.admin.cluster.stats.ClusterStatsRequest;
 import org.elasticsearch.action.admin.cluster.stats.ClusterStatsResponse;
 import org.elasticsearch.action.admin.cluster.tasks.PendingClusterTasksRequest;
 import org.elasticsearch.action.admin.cluster.tasks.PendingClusterTasksResponse;
-import org.elasticsearch.client.Client;
 import org.elasticsearch.client.ClusterAdminClient;
 import org.elasticsearch.cluster.service.PendingClusterTask;
+import org.elasticsearch.node.Node;
 import org.graylog2.indexer.indices.Indices;
 
 import javax.inject.Inject;
@@ -35,17 +35,17 @@ import java.util.List;
 
 @Singleton
 public class ElasticsearchProbe {
-    private final Client client;
+    private final Node node;
     private final Indices indices;
 
     @Inject
-    public ElasticsearchProbe(Client client, Indices indices) {
-        this.client = client;
+    public ElasticsearchProbe(Node node, Indices indices) {
+        this.node = node;
         this.indices = indices;
     }
 
     public ElasticsearchStats elasticsearchStats() {
-        final ClusterAdminClient adminClient = client.admin().cluster();
+        final ClusterAdminClient adminClient = node.client().admin().cluster();
 
         final ClusterStatsResponse clusterStatsResponse = adminClient.clusterStats(new ClusterStatsRequest()).actionGet();
         final String clusterName = clusterStatsResponse.getClusterNameAsString();

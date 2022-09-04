@@ -68,7 +68,7 @@ public class StreamRouterEngine {
     private final Set<String> regexFields = Sets.newHashSet();
 
     public interface Factory {
-        StreamRouterEngine create(List<Stream> streams, ExecutorService executorService);
+        public StreamRouterEngine create(List<Stream> streams, ExecutorService executorService);
     }
 
     @Inject
@@ -248,10 +248,8 @@ public class StreamRouterEngine {
     private class StreamMatch {
         private final int ruleCount;
         private int matches = 0;
-        private final Stream stream;
 
         public StreamMatch(Stream stream) {
-            this.stream = stream;
             this.ruleCount = stream.getStreamRules().size();
         }
 
@@ -260,11 +258,8 @@ public class StreamRouterEngine {
         }
 
         public boolean isMatched() {
-            switch (stream.getMatchingType()) {
-                case AND: return ruleCount == matches;
-                case OR: return ruleCount > 0;
-                default: return ruleCount == matches;
-            }
+            // If a stream has multiple stream rules, all of the rules have to match.
+            return ruleCount == matches;
         }
     }
 

@@ -24,9 +24,7 @@ import org.bson.types.ObjectId;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.models.alarmcallbacks.requests.CreateAlarmCallbackRequest;
 
 import javax.inject.Inject;
 import java.util.List;
@@ -73,25 +71,5 @@ public class AlarmCallbackConfigurationServiceImpl extends PersistedServiceImpl 
         fields.put("creator_user_id", userId);
 
         return new AlarmCallbackConfigurationImpl(fields);
-    }
-
-    @Override
-    public long count() {
-        return count(AlarmCallbackConfigurationImpl.class, new BasicDBObject());
-    }
-
-    @Override
-    public AlarmCallbackConfiguration update(String streamId, String alarmCallbackId, Map<String, Object> deltas) {
-        return null;
-    }
-
-    @Override
-    public String save(AlarmCallbackConfiguration model) throws ValidationException {
-        return super.save(model);
-    }
-
-    @Override
-    public int destroy(AlarmCallbackConfiguration model) {
-        return super.destroy(model);
     }
 }

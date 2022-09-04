@@ -18,24 +18,21 @@ package org.graylog2.inputs.extractors;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import org.junit.Before;
-import org.junit.Rule;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.testng.annotations.BeforeMethod;
 
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public abstract class AbstractExtractorTest {
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
     protected MetricRegistry metricRegistry;
     protected Timer timer;
     protected Timer.Context timerContext;
 
-    @Before
+    @BeforeMethod
     public void setUp() throws Exception {
         metricRegistry = mock(MetricRegistry.class);
         timer = mock(Timer.class);

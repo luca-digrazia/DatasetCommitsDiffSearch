@@ -1,46 +1,60 @@
-/*
- * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.bootstrap;
 
-import io.airlift.command.Cli;
-import io.airlift.command.Cli.CliBuilder;
-import io.airlift.command.Help;
+import com.google.common.collect.ImmutableSet;
+import io.airlift.airline.Cli;
+import io.airlift.airline.Cli.CliBuilder;
+import io.airlift.airline.Help;
 import org.graylog2.bootstrap.commands.Radio;
 import org.graylog2.bootstrap.commands.Server;
 import org.graylog2.bootstrap.commands.ShowVersion;
+import org.graylog2.bootstrap.commands.journal.JournalDecode;
+import org.graylog2.bootstrap.commands.journal.JournalShow;
+import org.graylog2.bootstrap.commands.journal.JournalTruncate;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
+import java.util.Set;
+
 public class Main {
-    public static void main(String[] argv) {
-        CliBuilder<Runnable> builder = Cli.<Runnable>builder("graylog2")
+    public static void main(String[] args) {
+        final Set<Class<? extends Runnable>> commands = ImmutableSet.of(
+                Server.class,
+                Radio.class,
+                ShowVersion.class,
+                Help.class);
+
+        final Set<Class<? extends Runnable>> journalCommands = ImmutableSet.<Class<? extends Runnable>>of(
+                JournalShow.class,
+                JournalTruncate.class,
+                JournalDecode.class
+        );
+
+        final CliBuilder<Runnable> builder = Cli.<Runnable>builder("graylog2")
                 .withDescription("Open source, centralized log management")
                 .withDefaultCommand(Help.class)
-                .withCommands(Server.class, Radio.class, ShowVersion.class);
+                .withCommands(commands);
 
-        Cli<Runnable> gitParser = builder.build();
-        gitParser.parse(argv).run();
+        builder.withGroup("journal")
+                .withDescription("Manage the persisted message journal")
+                .withDefaultCommand(JournalShow.class)
+                .withCommands(journalCommands);
+
+        final Cli<Runnable> cli = builder.build();
+        final Runnable command = cli.parse(args);
+        command.run();
     }
 }

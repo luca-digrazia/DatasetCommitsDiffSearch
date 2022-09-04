@@ -19,8 +19,6 @@ package org.graylog2.cluster;
 import org.graylog2.plugin.database.Persisted;
 import org.joda.time.DateTime;
 
-import java.util.Locale;
-
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
@@ -30,10 +28,10 @@ public interface Node extends Persisted {
         RADIO;
 
         public static Type fromString(String from) {
-            if (from.toLowerCase(Locale.ENGLISH).equals("server"))
+            if (from.toLowerCase().equals("server"))
                 return SERVER;
 
-            if (from.toLowerCase(Locale.ENGLISH).equals("radio"))
+            if (from.toLowerCase().equals("radio"))
                 return RADIO;
 
             return null;

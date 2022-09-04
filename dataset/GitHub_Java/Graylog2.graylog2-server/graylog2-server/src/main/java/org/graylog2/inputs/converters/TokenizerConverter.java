@@ -16,19 +16,25 @@
  */
 package org.graylog2.inputs.converters;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.CharMatcher;
+import com.google.common.collect.Maps;
 import org.graylog2.plugin.inputs.Converter;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class TokenizerConverter extends Converter {
-    // ┻━┻ ︵ ¯\(ツ)/¯ ︵ ┻━┻
-    private static final Pattern PATTERN = Pattern.compile("(?:^|\\s)(?:([\\w-]+)\\s?=\\s?((?:\"[^\"]+\")|(?:'[^']+')|(?:[\\S]+)))");
+
+    private static final Pattern p = Pattern.compile("[a-zA-Z0-9_-]*");
+    private static final Pattern kvPattern = Pattern.compile("\\s?=\\s?");
+    private static final Pattern spacePattern = Pattern.compile(" ");
+    private static final Pattern quotedValuePattern = Pattern.compile("([a-zA-Z0-9_-]+=\"[^\"]+\")");
+    private static final CharMatcher QUOTE_MATCHER = CharMatcher.is('"').precomputed();
+    private static final CharMatcher EQUAL_SIGN_MATCHER = CharMatcher.is('=').precomputed();
 
     public TokenizerConverter(Map<String, Object> config) {
         super(Type.TOKENIZER, config);
@@ -36,39 +42,44 @@ public class TokenizerConverter extends Converter {
 
     @Override
     public Object convert(String value) {
-        if (isNullOrEmpty(value)) {
+        if (value == null || value.isEmpty()) {
             return value;
         }
 
+        Map<String, String> fields = Maps.newHashMap();
+
         if (value.contains("=")) {
-            final ImmutableMap.Builder<String, String> fields = ImmutableMap.builder();
-
-            Matcher m = PATTERN.matcher(value);
-            while (m.find()) {
-                if (m.groupCount() != 2) {
-                    continue;
+            final String nmsg = kvPattern.matcher(value).replaceAll("=");
+            if (nmsg.contains("=\"")) {
+                Matcher m = quotedValuePattern.matcher(nmsg);
+                while (m.find()) {
+                    String[] kv = m.group(1).split("=");
+                    if (kv.length == 2 && p.matcher(kv[0]).matches()) {
+                        fields.put(kv[0].trim(), QUOTE_MATCHER.removeFrom(kv[1]).trim());
+                    }
                 }
-
-                fields.put(removeQuotes(m.group(1)), removeQuotes(m.group(2)));
+            } else {
+                final String[] parts = spacePattern.split(nmsg);
+                if (parts != null) {
+                    for (String part : parts) {
+                        if (part.contains("=") && EQUAL_SIGN_MATCHER.countIn(part) == 1) {
+                            String[] kv = part.split("=");
+                            if (kv.length == 2 && p.matcher(kv[0]).matches() && !fields.containsKey(kv[0])) {
+                                fields.put(kv[0].trim(), kv[1].trim());
+                            }
+                        }
+                    }
+                }
             }
-
-            return fields.build();
-        } else {
-            return Collections.emptyMap();
         }
-    }
 
-    private String removeQuotes(String s) {
-        if ((s.startsWith("\"") && s.endsWith("\"")) ||
-                (s.startsWith("'") && s.endsWith("'")) ) {
-            return s.substring(1, s.length() - 1);
-        } else {
-            return s;
-        }
+        return fields;
     }
 
     @Override
     public boolean buildsMultipleFields() {
         return true;
     }
+
+
 }

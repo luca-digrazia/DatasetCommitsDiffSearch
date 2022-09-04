@@ -17,12 +17,10 @@
 package integration.counts;
 
 import integration.BaseRestTest;
-import integration.RequiresAuthentication;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 import static com.jayway.restassured.RestAssured.given;
 
-@RequiresAuthentication
 public class TotalTest extends BaseRestTest {
     @Test
     public void total() {

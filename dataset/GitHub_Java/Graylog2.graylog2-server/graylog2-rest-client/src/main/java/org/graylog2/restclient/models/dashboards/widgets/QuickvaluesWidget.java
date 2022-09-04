@@ -24,8 +24,8 @@ import java.util.Map;
 
 public class QuickvaluesWidget extends DashboardWidget {
 
-    private static final int DEFAULT_WIDTH = 1;
-    private static final int DEFAULT_HEIGHT = 2;
+    private static final int WIDTH = 1;
+    private static final int HEIGHT = 2;
 
     private final String field;
     private final String streamId;
@@ -59,14 +59,12 @@ public class QuickvaluesWidget extends DashboardWidget {
 
     @Override
     public int getWidth() {
-        int storedWidth = super.getWidth();
-        return storedWidth == 0 ? DEFAULT_WIDTH : storedWidth;
+        return WIDTH;
     }
 
     @Override
     public int getHeight() {
-        int storedHeight = super.getHeight();
-        return storedHeight == 0 ? DEFAULT_HEIGHT : storedHeight;
+        return HEIGHT;
     }
 
     @Override

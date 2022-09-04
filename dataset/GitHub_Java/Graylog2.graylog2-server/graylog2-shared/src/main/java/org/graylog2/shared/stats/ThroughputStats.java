@@ -16,6 +16,7 @@
  */
 package org.graylog2.shared.stats;
 
+import com.google.common.collect.Maps;
 import org.cliffc.high_scale_lib.Counter;
 
 import java.util.HashMap;
@@ -26,10 +27,10 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-@Deprecated
 public class ThroughputStats {
     private long currentThroughput;
     private final Counter throughputCounter;
+    private final Counter benchmarkCounter;
     private final AtomicReference<ConcurrentHashMap<String, Counter>> streamThroughput;
     private final AtomicReference<HashMap<String, Counter>> currentStreamThroughput;
 
@@ -37,22 +38,30 @@ public class ThroughputStats {
     public ThroughputStats() {
         this.currentThroughput = 0;
         this.throughputCounter = new Counter();
-        this.streamThroughput = new AtomicReference<>(new ConcurrentHashMap<String, Counter>());
-        this.currentStreamThroughput =  new AtomicReference<>();
+        this.benchmarkCounter = new Counter();
+        this.streamThroughput = new AtomicReference<ConcurrentHashMap<String, Counter>>(new ConcurrentHashMap<String, Counter>());
+        this.currentStreamThroughput =  new AtomicReference<HashMap<String, Counter>>();
+
     }
 
-    @Deprecated
     public long getCurrentThroughput() {
         return currentThroughput;
     }
 
-    @Deprecated
     public Counter getThroughputCounter() {
         return throughputCounter;
     }
 
+    public Counter getBenchmarkCounter() {
+        return benchmarkCounter;
+    }
+
     public void setCurrentThroughput(long currentThroughput) {
         this.currentThroughput = currentThroughput;
+    }
+
+    public AtomicReference<ConcurrentHashMap<String, Counter>> getStreamThroughput() {
+        return streamThroughput;
     }
 
     public Map<String, Counter> cycleStreamThroughput() {
@@ -73,4 +82,12 @@ public class ThroughputStats {
         return currentStreamThroughput.get();
     }
 
+    public Map<String, Long> getCurrentStreamThroughputValues() {
+        Map<String, Long> values = Maps.newHashMap();
+        for (Map.Entry<String, Counter> counter : currentStreamThroughput.get().entrySet()) {
+            values.put(counter.getKey(), counter.getValue().longValue());
+        }
+
+        return values;
+    }
 }

@@ -20,10 +20,10 @@
 
 package org.graylog2;
 
-import com.google.common.collect.Lists;
 import org.graylog2.plugin.Tools;
+import com.google.common.collect.Lists;
 import org.joda.time.DateTime;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
@@ -34,10 +34,8 @@ import java.util.List;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.*;
+import static org.testng.AssertJUnit.assertEquals;
 
 /**
  * @author lennart
@@ -123,7 +121,7 @@ public class ToolsTest {
         assertEquals(testString, Tools.decompressGzip(buffer));
     }
 
-    @Test(expected = EOFException.class)
+    @Test(expectedExceptions = EOFException.class)
     public void testDecompressGzipEmptyInput() throws IOException {
 
         Tools.decompressGzip(new byte[0]);
@@ -200,29 +198,20 @@ public class ToolsTest {
 
     @Test
     public void testGetInt() throws Exception {
-        assertEquals(null, Tools.getDouble(null));
-        assertEquals(null, Tools.getDouble(""));
+        assertEquals(null, Tools.getInt(null));
 
-        assertEquals(0.0, Tools.getDouble(0), 0);
-        assertEquals(1.0, Tools.getDouble(1), 0);
-        assertEquals(1.42, Tools.getDouble(1.42), 0);
-        assertEquals(9001.0, Tools.getDouble(9001), 0);
-        assertEquals(9001.23, Tools.getDouble(9001.23), 0);
+        assertEquals((Integer) 0, Tools.getInt(0));
+        assertEquals((Integer) 1, Tools.getInt(1));
+        assertEquals((Integer) 9001, Tools.getInt(9001));
 
-        assertEquals(1253453.0, Tools.getDouble((long) 1253453), 0);
+        assertEquals((Integer) 1253453, Tools.getInt((long) 1253453));
+        assertEquals(null, Tools.getInt((double) 5));
+        assertEquals(null, Tools.getInt(18.2));
 
-        assertEquals(88.0, Tools.getDouble("88"), 0);
-        assertEquals(1.42, Tools.getDouble("1.42"), 0);
-        assertEquals(null, Tools.getDouble("lol NOT A NUMBER"));
+        assertEquals((Integer) 88, Tools.getInt("88"));
+        assertEquals(null, Tools.getInt("lol NOT A NUMBER"));
 
-        assertEquals(null, Tools.getDouble(new HashMap<String, String>()));
-
-        assertEquals(42.23, Tools.getDouble(new Object() {
-            @Override
-            public String toString() {
-                return "42.23";
-            }
-        }), 0);
+        assertEquals(null, Tools.getInt(new HashMap<String, String>()));
     }
 
     @Test

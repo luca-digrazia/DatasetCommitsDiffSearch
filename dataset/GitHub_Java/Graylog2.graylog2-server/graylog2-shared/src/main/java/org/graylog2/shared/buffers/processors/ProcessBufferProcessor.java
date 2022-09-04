@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.buffers.processors;
 
@@ -38,7 +38,6 @@ public abstract class ProcessBufferProcessor implements WorkHandler<MessageEvent
     private final Meter outgoingMessages;
 
     protected final MetricRegistry metricRegistry;
-    private DecodingProcessor decodingProcessor;
 
     public ProcessBufferProcessor(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
@@ -50,11 +49,6 @@ public abstract class ProcessBufferProcessor implements WorkHandler<MessageEvent
 
     @Override
     public void onEvent(MessageEvent event) throws Exception {
-        // Decode the RawMessage to a Message object. The DecodingProcessor used to be a separate handler in the
-        // ProcessBuffer. Due to performance problems discovered during 1.0.0 testing, we decided to move this here.
-        // TODO The DecodingProcessor does not need to be a EventHandler. We decided to do it like this to keep the change as small as possible for 1.0.0.
-        decodingProcessor.onEvent(event, 0L, false);
-
         final Message msg = event.getMessage();
         if (msg == null) {
             // skip message events which could not be decoded properly
@@ -79,7 +73,4 @@ public abstract class ProcessBufferProcessor implements WorkHandler<MessageEvent
 
     protected abstract void handleMessage(Message msg);
 
-    public void setDecodingProcessor(DecodingProcessor decodingProcessor) {
-        this.decodingProcessor = decodingProcessor;
-    }
 }

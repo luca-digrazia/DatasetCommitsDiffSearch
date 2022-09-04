@@ -16,6 +16,8 @@
  */
 package org.graylog2.indexer;
 
+import com.google.common.collect.Lists;
+import javax.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
@@ -25,12 +27,8 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
 import org.joda.time.DateTime;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import java.util.ArrayList;
 import java.util.List;
 
-@Singleton
 public class IndexFailureServiceImpl extends PersistedServiceImpl implements IndexFailureService {
     @Inject
     public IndexFailureServiceImpl(MongoConnection mongoConnection) {
@@ -38,8 +36,8 @@ public class IndexFailureServiceImpl extends PersistedServiceImpl implements Ind
 
         // Make sure that the index failures collection is always created capped.
         final String collectionName = IndexFailureImpl.class.getAnnotation(CollectionName.class).value();
-        if (!mongoConnection.getDatabase().collectionExists(collectionName)) {
-            final DBObject options = BasicDBObjectBuilder.start()
+        if(!mongoConnection.getDatabase().collectionExists(collectionName)) {
+            DBObject options = BasicDBObjectBuilder.start()
                     .add("capped", true)
                     .add("size", 52428800) // 50MB max size.
                     .get();
@@ -50,9 +48,12 @@ public class IndexFailureServiceImpl extends PersistedServiceImpl implements Ind
 
     @Override
     public List<IndexFailure> all(int limit, int offset) {
-        final DBObject sort = new BasicDBObject("$natural", -1);
-        final List<DBObject> results = query(IndexFailureImpl.class, new BasicDBObject(), sort, limit, offset);
-        final List<IndexFailure> failures = new ArrayList<>(results.size());
+        List<IndexFailure> failures = Lists.newArrayList();
+
+        DBObject sort = new BasicDBObject();
+        sort.put("$natural", -1);
+
+        List<DBObject> results = query(IndexFailureImpl.class, new BasicDBObject(), sort, limit, offset);
         for (DBObject o : results) {
             failures.add(new IndexFailureImpl((ObjectId) o.get("_id"), o.toMap()));
         }
@@ -62,7 +63,8 @@ public class IndexFailureServiceImpl extends PersistedServiceImpl implements Ind
 
     @Override
     public long countSince(DateTime since) {
-        final BasicDBObject query = new BasicDBObject("timestamp", new BasicDBObject("$gte", since.toDate()));
+        BasicDBObject query = new BasicDBObject();
+        query.put("timestamp", new BasicDBObject("$gte", since.toDate()));
 
         return count(IndexFailureImpl.class, query);
     }

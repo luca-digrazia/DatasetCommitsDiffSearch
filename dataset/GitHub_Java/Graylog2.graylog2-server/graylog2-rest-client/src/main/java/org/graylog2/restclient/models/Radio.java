@@ -1,21 +1,18 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
@@ -24,11 +21,11 @@ import com.google.common.collect.Maps;
 import com.google.common.net.MediaType;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.rest.models.system.inputs.requests.InputLaunchRequest;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.metrics.Metric;
-import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
 import org.graylog2.restclient.models.api.responses.BuffersResponse;
 import org.graylog2.restclient.models.api.responses.SystemOverviewResponse;
 import org.graylog2.restclient.models.api.responses.cluster.RadioSummaryResponse;
@@ -76,7 +73,7 @@ public class Radio extends ClusterEntity {
         this.inputFactory = inputFactory;
 
         transportAddress = normalizeUriPath(r.transportAddress);
-        id = r.id;
+        id = r.nodeId;
         shortNodeId = r.shortNodeId;
     }
 
@@ -88,7 +85,7 @@ public class Radio extends ClusterEntity {
             systemInfo = api.path(routes.radio().SystemResource().system(), SystemOverviewResponse.class)
                     .radio(this)
                     .execute();
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Unable to load system information for radio " + this, e);
         }
     }
@@ -101,7 +98,7 @@ public class Radio extends ClusterEntity {
             jvmInfo = new NodeJVMStats(api.path(routes.radio().SystemResource().jvm(), ClusterEntityJVMStatsResponse.class)
                     .radio(this)
                     .execute());
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Unable to load JVM information for radio " + this, e);
         }
     }
@@ -114,7 +111,7 @@ public class Radio extends ClusterEntity {
             bufferInfo = new BufferInfo(api.path(routes.radio().BuffersResource().utilization(), BuffersResponse.class)
                     .radio(this)
                     .execute());
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Unable to load buffer information for radio " + this, e);
         }
     }
@@ -156,6 +153,7 @@ public class Radio extends ClusterEntity {
                 .execute();
     }
 
+    @Override
     public boolean launchExistingInput(String inputId) {
         try {
             api.path(routes.radio().InputsResource().launchExisting(inputId), InputLaunchResponse.class)
@@ -163,7 +161,7 @@ public class Radio extends ClusterEntity {
                     .expect(Http.Status.ACCEPTED)
                     .execute();
             return true;
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Could not launch input " + inputId, e);
         }
 
@@ -178,7 +176,7 @@ public class Radio extends ClusterEntity {
                     .expect(Http.Status.ACCEPTED)
                     .execute();
             return true;
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Could not terminate input " + inputId, e);
         }
 
@@ -245,11 +243,11 @@ public class Radio extends ClusterEntity {
     }
 
     public Map<String, String> getInputTypes() throws IOException, APIException {
-        return api.path(routes.radio().InputsResource().types(), InputTypesResponse.class).radio(this).execute().types;
+        return api.path(routes.radio().InputTypesResource().types(), InputTypesResponse.class).radio(this).execute().types;
     }
 
     public InputTypeSummaryResponse getInputTypeInformation(String type) throws IOException, APIException {
-        return api.path(routes.radio().InputsResource().info(type), InputTypeSummaryResponse.class).radio(this).execute();
+        return api.path(routes.radio().InputTypesResource().info(type), InputTypeSummaryResponse.class).radio(this).execute();
     }
 
     public List<Input> getInputs() {
@@ -283,7 +281,7 @@ public class Radio extends ClusterEntity {
     }
 
     @Override
-    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, User creator, boolean isExclusive) throws ExclusiveInputException {
+    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, boolean isExclusive, String nodeId) throws ExclusiveInputException {
         if (isExclusive) {
             for (Input input : getInputs()) {
                 if (input.getType().equals(type)) {
@@ -292,25 +290,18 @@ public class Radio extends ClusterEntity {
             }
         }
 
-        InputLaunchRequest request = new InputLaunchRequest();
-        request.title = title;
-        request.type = type;
-        request.global = global;
-        request.configuration = configuration;
-        request.creatorUserId = creator.getName();
+        final InputLaunchRequest request = InputLaunchRequest.create(title, type, global, configuration, nodeId);
 
-        InputLaunchResponse ilr = null;
         try {
-            ilr = api.path(routes.radio().InputsResource().launch(), InputLaunchResponse.class)
+            return api.path(routes.radio().InputsResource().launch(), InputLaunchResponse.class)
                     .radio(this)
                     .body(request)
                     .expect(Http.Status.ACCEPTED)
                     .execute();
-
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Could not launch input " + title, e);
+            return null;
         }
-        return ilr;
     }
 
     public BufferInfo getBuffers() {
@@ -333,7 +324,7 @@ public class Radio extends ClusterEntity {
     public int getThroughput() {
         try {
             return api.path(routes.radio().ThroughputResource().total(), NodeThroughputResponse.class).radio(this).execute().throughput;
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Could not load throughput for radio " + this, e);
         }
         return 0;

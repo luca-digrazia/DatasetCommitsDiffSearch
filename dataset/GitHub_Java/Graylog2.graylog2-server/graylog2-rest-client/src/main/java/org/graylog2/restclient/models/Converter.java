@@ -16,7 +16,6 @@
  */
 package org.graylog2.restclient.models;
 
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -39,7 +38,7 @@ public class Converter {
         FLEXDATE;
 
         public static Type fromString(String type) {
-            return valueOf(type.toUpperCase(Locale.ENGLISH));
+            return valueOf(type.toUpperCase());
         }
     }
 
@@ -52,7 +51,7 @@ public class Converter {
     }
 
     public String getType() {
-        return this.type.toString().toLowerCase(Locale.ENGLISH);
+        return this.type.toString().toLowerCase();
     }
 
     public Map<String, Object> getConfig() {

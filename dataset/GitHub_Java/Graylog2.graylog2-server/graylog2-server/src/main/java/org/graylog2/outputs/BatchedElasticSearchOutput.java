@@ -139,7 +139,7 @@ public class BatchedElasticSearchOutput extends ElasticSearchOutput {
         bufferFlushesRequested.mark();
 
         if (!buffer.isEmpty()) {
-            if (cluster.isConnected() && cluster.isHealthy()) {
+            if (cluster.isConnectedAndHealthy()) {
                 final List<Message> temporaryBuffer;
                 synchronized (this.buffer) {
                     temporaryBuffer = ImmutableList.copyOf(buffer);

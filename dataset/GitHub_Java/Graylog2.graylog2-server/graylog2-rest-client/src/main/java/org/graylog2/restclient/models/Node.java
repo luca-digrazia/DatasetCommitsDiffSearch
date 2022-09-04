@@ -21,7 +21,6 @@ import com.google.common.collect.Maps;
 import com.google.common.net.MediaType;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.rest.models.system.buffers.responses.BufferClasses;
 import org.graylog2.rest.models.system.inputs.requests.InputLaunchRequest;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
@@ -92,8 +91,13 @@ public class Node extends ClusterEntity {
     private AtomicInteger failureCount = new AtomicInteger(0);
 
     private BufferInfo bufferInfo;
-    private BufferClasses bufferClasses;
+    private BufferClassesResponse bufferClasses;
     private JournalInfo journalInfo;
+
+    /* for initial set up in test */
+    public Node(NodeSummaryResponse r) {
+        this(null, null, null, r);
+    }
 
     @AssistedInject
     public Node(ApiClient api,
@@ -139,7 +143,7 @@ public class Node extends ClusterEntity {
     public BufferInfo loadBufferInfo() {
         try {
             return new BufferInfo(
-                    api.path(routes.BuffersResource().utilization(), BuffersResponse.class)
+                    api.path(routes.BufferResource().utilization(), BuffersResponse.class)
                             .node(this)
                             .execute());
         } catch (Exception e) {
@@ -148,17 +152,16 @@ public class Node extends ClusterEntity {
         return BufferInfo.buildEmpty();
     }
 
-    public synchronized BufferClasses getBufferClasses() {
+    public synchronized BufferClassesResponse getBufferClasses() {
         if (this.bufferClasses == null) {
-            final BufferClassesResponse response = loadBufferClasses();
-            this.bufferClasses = BufferClasses.create(response.processBufferClass, response.outputBufferClass);
+            this.bufferClasses = loadBufferClasses();
         }
         return this.bufferClasses;
     }
     
     public BufferClassesResponse loadBufferClasses() {
         try {
-            return api.path(routes.BuffersResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
+            return api.path(routes.BufferResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
         } catch (Exception e) {
             LOG.error("Unable to read buffer class names from node " + this, e);
         }
@@ -184,7 +187,7 @@ public class Node extends ClusterEntity {
     public Map<String, InternalLoggerSubsystem> allLoggerSubsystems() {
         Map<String, InternalLoggerSubsystem> subsystems = Maps.newHashMap();
         try {
-            LoggerSubsystemsResponse response = api.path(routes.LoggersResource().subsystems(), LoggerSubsystemsResponse.class)
+            LoggerSubsystemsResponse response = api.path(routes.LoggersResource().subsytems(), LoggerSubsystemsResponse.class)
                     .node(this)
                     .execute();
 
@@ -462,13 +465,13 @@ public class Node extends ClusterEntity {
     }
 
     public void pause() throws IOException, APIException {
-        api.path(routes.SystemProcessingResource().pauseProcessing())
+        api.path(routes.SystemResource().pauseProcessing())
                 .node(this)
                 .execute();
     }
 
     public void resume() throws IOException, APIException {
-        api.path(routes.SystemProcessingResource().resumeProcessing())
+        api.path(routes.SystemResource().resumeProcessing())
                 .node(this)
                 .execute();
     }
@@ -545,7 +548,7 @@ public class Node extends ClusterEntity {
     }
 
     public void shutdown() throws APIException, IOException {
-        api.path(routes.SystemShutdownResource().shutdown())
+        api.path(routes.SystemResource().shutdown())
                 .node(this)
                 .expect(Http.Status.ACCEPTED)
                 .execute();

@@ -22,31 +22,26 @@ import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.testng.annotations.Test;
 
-import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 
-@RunWith(MockitoJUnitRunner.class)
 public class StaticFieldFilterTest {
-    @Mock
-    private InputService inputService;
-    @Mock
-    private Input input;
 
     @Test
     public void testFilter() throws Exception {
-        Message msg = new Message("hello", "junit", Tools.nowUTC());
+        Message msg = new Message("hello", "junit", Tools.iso8601());
         msg.setSourceInputId("someid");
 
+        final InputService inputService = mock(InputService.class);
+        final Input input = mock(Input.class);
         when(inputService.find(eq("someid"))).thenReturn(input);
         when(inputService.getStaticFields(eq(input)))
-                .thenReturn(Lists.newArrayList(Maps.immutableEntry("foo", "bar")));
-
+                     .thenReturn(Lists.newArrayList(Maps.immutableEntry("foo", "bar")));
+        
         final StaticFieldFilter filter = new StaticFieldFilter(inputService);
         filter.filter(msg);
 
@@ -57,9 +52,11 @@ public class StaticFieldFilterTest {
 
     @Test
     public void testFilterIsNotOverwritingExistingKeys() throws Exception {
-        Message msg = new Message("hello", "junit", Tools.nowUTC());
+        Message msg = new Message("hello", "junit", Tools.iso8601());
         msg.addField("foo", "IWILLSURVIVE");
-
+        
+        final InputService inputService = mock(InputService.class);
+        final Input input = mock(Input.class);
         when(inputService.find(eq("someid"))).thenReturn(input);
         when(inputService.getStaticFields(eq(input)))
                 .thenReturn(Lists.newArrayList(Maps.immutableEntry("foo", "bar")));

@@ -20,8 +20,9 @@ import au.com.bytecode.opencsv.CSVWriter;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
+import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.rest.resources.search.responses.SearchResponse;
+import org.graylog2.shared.rest.AdditionalMediaType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,14 +40,14 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 
 @Provider
-@Produces(MoreMediaTypes.TEXT_CSV)
+@Produces(AdditionalMediaType.TEXT_CSV)
 public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse> {
 
     private static final Logger LOG = LoggerFactory.getLogger(SearchResponseCsvWriter.class);
 
     @Override
     public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
-        return SearchResponse.class.equals(type) && MoreMediaTypes.TEXT_CSV_TYPE.isCompatible(mediaType);
+        return SearchResponse.class.equals(type) && AdditionalMediaType.TEXT_CSV_TYPE.isCompatible(mediaType);
     }
 
     @Override
@@ -67,11 +68,11 @@ public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse
 
         // write result set in same order as the header row
         final String[] fieldValues = new String[sortedFields.size()];
-        for (ResultMessageSummary message : searchResponse.messages()) {
+        for (ResultMessage message : searchResponse.messages()) {
             int idx = 0;
             // first collect all values from the current message
             for (String fieldName : sortedFields) {
-                final Object val = message.message().get(fieldName);
+                final Object val = message.getMessage().get(fieldName);
                 fieldValues[idx++] = ((val == null) ? null : val.toString().replaceAll("\n", "\\\\n"));
                 fieldValues[idx++] = ((val == null) ? null : val.toString().replaceAll("\r", "\\\\r"));
             }

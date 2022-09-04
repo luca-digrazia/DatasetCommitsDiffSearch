@@ -32,12 +32,12 @@ import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.indices.IndexStatistics;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
-import org.graylog2.rest.models.system.indexer.responses.ClosedIndices;
-import org.graylog2.rest.models.system.indexer.responses.IndexInfo;
-import org.graylog2.rest.models.system.indexer.responses.IndexStats;
-import org.graylog2.rest.models.system.indexer.responses.ShardRouting;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.rest.resources.system.indexer.responses.ClosedIndices;
+import org.graylog2.rest.resources.system.indexer.responses.IndexInfo;
+import org.graylog2.rest.resources.system.indexer.responses.IndexStats;
+import org.graylog2.rest.resources.system.indexer.responses.ShardRouting;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.system.jobs.SystemJob;
 import org.graylog2.system.jobs.SystemJobConcurrencyException;
 import org.graylog2.system.jobs.SystemJobManager;
@@ -45,7 +45,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.validation.constraints.NotNull;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.GET;
@@ -56,7 +55,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
-import java.util.Locale;
 import java.util.Set;
 
 @RequiresAuthentication
@@ -85,7 +83,7 @@ public class IndicesResource extends RestResource {
         checkPermission(RestPermissions.INDICES_READ, index);
 
         if (!deflector.isGraylog2Index(index)) {
-            final String msg = "Index [" + index + "] doesn't look like an index managed by Graylog.";
+            final String msg = "Index [" + index + "] doesn't look like an index managed by Graylog2.";
             LOG.info(msg);
             throw new NotFoundException(msg);
         }
@@ -159,7 +157,7 @@ public class IndicesResource extends RestResource {
         checkPermission(RestPermissions.INDICES_CHANGESTATE, index);
 
         if (!deflector.isGraylog2Index(index)) {
-            LOG.info("Index [{}] doesn't look like an index managed by Graylog.", index);
+            LOG.info("Index [{}] doesn't look like an index managed by Graylog2.", index);
             throw new NotFoundException();
         }
 
@@ -184,15 +182,15 @@ public class IndicesResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 403, message = "You cannot close the current deflector target index.")
     })
-    public void close(@ApiParam(name = "index") @PathParam("index") @NotNull String index) {
+    public void close(@ApiParam(name = "index") @PathParam("index") String index) {
         checkPermission(RestPermissions.INDICES_CHANGESTATE, index);
 
         if (!deflector.isGraylog2Index(index)) {
-            LOG.info("Index [{}] doesn't look like an index managed by Graylog.", index);
+            LOG.info("Index [{}] doesn't look like an index managed by Graylog2.", index);
             throw new NotFoundException();
         }
 
-        if (index.equals(deflector.getCurrentActualTargetIndex())) {
+        if (deflector.getCurrentActualTargetIndex().equals(index)) {
             throw new ForbiddenException();
         }
 
@@ -218,16 +216,16 @@ public class IndicesResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 403, message = "You cannot delete the current deflector target index.")
     })
-    public void delete(@ApiParam(name = "index") @PathParam("index") @NotNull String index) {
+    public void delete(@ApiParam(name = "index") @PathParam("index") String index) {
         checkPermission(RestPermissions.INDICES_DELETE, index);
 
         if (!deflector.isGraylog2Index(index)) {
-            final String msg = "Index [" + index + "] doesn't look like an index managed by Graylog.";
+            final String msg = "Index [" + index + "] doesn't look like an index managed by Graylog2.";
             LOG.info(msg);
             throw new NotFoundException(msg);
         }
 
-        if (index.equals(deflector.getCurrentActualTargetIndex())) {
+        if (deflector.getCurrentActualTargetIndex().equals(index)) {
             throw new ForbiddenException();
         }
 
@@ -247,7 +245,7 @@ public class IndicesResource extends RestResource {
 
     private ShardRouting shardRouting(org.elasticsearch.cluster.routing.ShardRouting route) {
         return ShardRouting.create(route.shardId().getId(),
-                route.state().name().toLowerCase(Locale.ENGLISH),
+                route.state().name().toLowerCase(),
                 route.active(),
                 route.primary(),
                 route.currentNodeId(),

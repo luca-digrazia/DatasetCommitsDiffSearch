@@ -16,17 +16,24 @@
  */
 package org.graylog2.restclient.models;
 
+import javax.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.rest.models.system.SystemJobSummary;
+import org.graylog2.restclient.models.api.responses.system.SystemJobSummaryResponse;
 import org.joda.time.DateTime;
 
 import java.util.UUID;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class SystemJob {
     public interface Factory {
-        SystemJob fromSummaryResponse(SystemJobSummary r);
+        SystemJob fromSummaryResponse(SystemJobSummaryResponse r);
     }
+
+    @Inject
+    private static Factory systemJobFactory;
 
     // Some known SystemJob types that can be triggered manually from the web interface.
     public enum Type {
@@ -41,7 +48,6 @@ public class SystemJob {
     private final UUID id;
     private final String name;
     private final String description;
-    private final String info;
     private final Node node;
     private final DateTime startedAt;
     private final int percentComplete;
@@ -49,18 +55,17 @@ public class SystemJob {
     private final boolean providesProgress;
 
     @AssistedInject
-    public SystemJob(NodeService nodeService, @Assisted SystemJobSummary s) {
-        this.id = s.id();
-        this.name = s.name();
-        this.description = s.description();
-        this.info = s.info();
-        this.startedAt = s.startedAt();
-        this.percentComplete = s.percentComplete();
-        this.isCancelable = s.isCancelable();
-        this.providesProgress = s.providesProgress();
+    public SystemJob(NodeService nodeService, @Assisted SystemJobSummaryResponse s) {
+        this.id = UUID.fromString(s.id);
+        this.name = s.name;
+        this.description = s.description;
+        this.startedAt = DateTime.parse(s.startedAt);
+        this.percentComplete = s.percentComplete;
+        this.isCancelable = s.isCancelable;
+        this.providesProgress = s.providesProgress;
 
         try {
-            this.node = nodeService.loadNode(s.nodeId());
+            this.node = nodeService.loadNode(s.nodeId);
         } catch (NodeService.NodeNotFoundException e) {
             throw new RuntimeException(e);
         }
@@ -78,10 +83,6 @@ public class SystemJob {
         return description;
     }
 
-    public String getInfo() {
-        return info;
-    }
-
     public Node getNode() {
         return node;
     }
@@ -93,4 +94,5 @@ public class SystemJob {
     public DateTime getStartedAt() {
         return startedAt;
     }
+
 }

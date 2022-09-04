@@ -17,11 +17,9 @@
 package org.graylog2.restclient.models;
 
 import com.google.common.collect.Lists;
-import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackListSummary;
-import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackSummary;
-import org.graylog2.rest.models.alarmcallbacks.responses.CreateAlarmCallbackResponse;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.lib.plugin.configuration.RequestedConfigurationField;
 import org.graylog2.restclient.models.api.requests.alarmcallbacks.CreateAlarmCallbackRequest;
 import org.graylog2.restclient.models.api.responses.alarmcallbacks.*;
 import org.graylog2.restroutes.generated.AlarmCallbackResource;
@@ -49,11 +47,11 @@ public class AlarmCallbackService {
     }
 
     public List<AlarmCallback> all(String streamId) throws IOException, APIException {
-        final AlarmCallbackListSummary response = apiClient.path(resource.get(streamId), AlarmCallbackListSummary.class)
+        GetAlarmCallbacksResponse response = apiClient.path(resource.get(streamId), GetAlarmCallbacksResponse.class)
                 .expect(Http.Status.OK).execute();
 
         List<AlarmCallback> result = Lists.newArrayList();
-        for (final AlarmCallbackSummary callbackResponse : response.alarmCallbacks()) {
+        for (AlarmCallbackSummaryResponse callbackResponse : response.alarmcallbacks) {
             result.add(alarmCallbackFactory.fromSummaryResponse(streamId, callbackResponse));
         }
 
@@ -61,7 +59,7 @@ public class AlarmCallbackService {
     }
 
     public AlarmCallback get(String streamId, String alarmCallbackId) throws IOException, APIException {
-        final AlarmCallbackSummary response = apiClient.path(resource.get(streamId, alarmCallbackId), AlarmCallbackSummary.class)
+        AlarmCallbackSummaryResponse response = apiClient.path(resource.get(streamId, alarmCallbackId), AlarmCallbackSummaryResponse.class)
                 .expect(Http.Status.OK).execute();
 
         return alarmCallbackFactory.fromSummaryResponse(streamId, response);

@@ -16,57 +16,30 @@
  */
 package org.graylog2.indexer.retention.strategies;
 
-import com.google.common.base.Optional;
-import com.google.common.base.Stopwatch;
-import org.graylog2.indexer.Deflector;
-import org.graylog2.indexer.indices.Indices;
-import org.graylog2.plugin.cluster.ClusterConfigService;
-import org.graylog2.shared.system.activities.ActivityWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.graylog2.plugin.indexer.retention.IndexManagement;
+import org.graylog2.plugin.indexer.retention.RetentionStrategy;
 
-import javax.inject.Inject;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
-public class DeletionRetentionStrategy extends AbstractIndexCountBasedRetentionStrategy {
-    private static final Logger LOG = LoggerFactory.getLogger(DeletionRetentionStrategy.class);
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+public class DeletionRetentionStrategy extends RetentionStrategy {
 
-    private final Indices indices;
-    private final ClusterConfigService clusterConfigService;
+    public DeletionRetentionStrategy(IndexManagement indexManagement) {
+        super(indexManagement);
+    }
 
-    @Inject
-    public DeletionRetentionStrategy(Deflector deflector,
-                                     Indices indices,
-                                     ActivityWriter activityWriter,
-                                     ClusterConfigService clusterConfigService) {
-        super(deflector, indices, activityWriter);
-        this.indices = indices;
-        this.clusterConfigService = clusterConfigService;
+    protected void onMessage(Map<String, String> message) {}
+
+    @Override
+    protected boolean iterates() {
+        return false;
     }
 
     @Override
-    protected Optional<Integer> getMaxNumberOfIndices() {
-        final DeletionRetentionStrategyConfig config = clusterConfigService.get(DeletionRetentionStrategyConfig.class);
-
-        if (config != null) {
-            return Optional.of(config.maxNumberOfIndices());
-        } else {
-            return Optional.absent();
-        }
+    protected Type getType() {
+        return Type.DELETE;
     }
 
-    @Override
-    public void retain(String indexName) {
-        final Stopwatch sw = Stopwatch.createStarted();
-
-        indices.delete(indexName);
-
-        LOG.info("Finished index retention strategy [delete] for index <{}> in {}ms.", indexName,
-                sw.stop().elapsed(TimeUnit.MILLISECONDS));
-    }
-
-    @Override
-    public Class<?> configurationClass() {
-        return DeletionRetentionStrategyConfig.class;
-    }
 }

@@ -18,8 +18,7 @@ package org.graylog2.indexer.healing;
 
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.buffers.Buffers;
-import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
@@ -39,12 +38,11 @@ public class FixDeflectorByDeleteJob extends SystemJob {
 
         FixDeflectorByDeleteJob create();
     }
-
     private static final Logger LOG = LoggerFactory.getLogger(FixDeflectorByDeleteJob.class);
 
     public static final int MAX_CONCURRENCY = 1;
 
-    private final IndexSetRegistry indexSetRegistry;
+    private final Deflector deflector;
     private final Indices indices;
     private final ServerStatus serverStatus;
     private final ActivityWriter activityWriter;
@@ -54,13 +52,14 @@ public class FixDeflectorByDeleteJob extends SystemJob {
     private int progress = 0;
 
     @AssistedInject
-    public FixDeflectorByDeleteJob(IndexSetRegistry indexSetRegistry,
+    public FixDeflectorByDeleteJob(Deflector deflector,
                                    Indices indices,
                                    ServerStatus serverStatus,
                                    ActivityWriter activityWriter,
                                    Buffers bufferSynchronizer,
                                    NotificationService notificationService) {
-        this.indexSetRegistry = indexSetRegistry;
+        super(serverStatus);
+        this.deflector = deflector;
         this.indices = indices;
         this.serverStatus = serverStatus;
         this.activityWriter = activityWriter;
@@ -70,12 +69,8 @@ public class FixDeflectorByDeleteJob extends SystemJob {
 
     @Override
     public void execute() {
-        indexSetRegistry.forEach(this::doExecute);
-    }
-
-    public void doExecute(IndexSet indexSet) {
-        if (indexSet.isUp() || !indices.exists(indexSet.getWriteIndexAlias())) {
-            LOG.error("There is no index <{}>. No need to run this job. Aborting.", indexSet.getWriteIndexAlias());
+        if (deflector.isUp() || !indices.exists(deflector.getName())) {
+            LOG.error("There is no index <{}>. No need to run this job. Aborting.", deflector.getName());
             return;
         }
 
@@ -90,12 +85,12 @@ public class FixDeflectorByDeleteJob extends SystemJob {
         progress = 25;
 
         // Delete deflector index.
-        LOG.info("Deleting <{}> index.", indexSet.getWriteIndexAlias());
-        indices.delete(indexSet.getWriteIndexAlias());
+        LOG.info("Deleting <{}> index.", deflector.getName());
+        indices.delete(deflector.getName());
         progress = 70;
 
         // Set up deflector.
-        indexSet.setUp();
+        deflector.setUp();
         progress = 80;
 
         // Start message processing again.

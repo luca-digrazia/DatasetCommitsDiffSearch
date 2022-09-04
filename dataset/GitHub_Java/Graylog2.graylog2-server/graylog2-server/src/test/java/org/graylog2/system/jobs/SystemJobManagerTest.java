@@ -17,29 +17,19 @@
 package org.graylog2.system.jobs;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.util.concurrent.Uninterruptibles;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.system.activities.SystemMessageActivityWriter;
-import org.junit.Rule;
-import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.testng.annotations.Test;
 
-import java.util.concurrent.TimeUnit;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 
 public class SystemJobManagerTest {
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
-    @Mock
-    private SystemMessageActivityWriter systemMessageActivityWriter;
 
     @Test
     public void testGetRunningJobs() throws Exception {
-        SystemJobManager manager = new SystemJobManager(systemMessageActivityWriter, new MetricRegistry());
+        SystemJobManager manager = new SystemJobManager(mock(SystemMessageActivityWriter.class), new MetricRegistry());
 
         LongRunningJob job1 = new LongRunningJob(1);
         LongRunningJob job2 = new LongRunningJob(1);
@@ -57,7 +47,7 @@ public class SystemJobManagerTest {
 
     @Test
     public void testConcurrentJobs() throws Exception {
-        SystemJobManager manager = new SystemJobManager(systemMessageActivityWriter, new MetricRegistry());
+        SystemJobManager manager = new SystemJobManager(mock(SystemMessageActivityWriter.class), new MetricRegistry());
 
         SystemJob job1 = new LongRunningJob(3);
         SystemJob job2 = new LongRunningJob(3);
@@ -73,7 +63,7 @@ public class SystemJobManagerTest {
 
     @Test
     public void testSubmitThrowsExceptionIfMaxConcurrencyLevelReached() throws Exception {
-        SystemJobManager manager = new SystemJobManager(systemMessageActivityWriter, new MetricRegistry());
+        SystemJobManager manager = new SystemJobManager(mock(SystemMessageActivityWriter.class), new MetricRegistry());
 
         LongRunningJob job1 = new LongRunningJob(3);
         LongRunningJob job2 = new LongRunningJob(3);
@@ -106,12 +96,18 @@ public class SystemJobManagerTest {
         private int maxConcurrency = 9001;
 
         public LongRunningJob(int seconds) {
+            super(mock(ServerStatus.class));
             this.seconds = seconds;
         }
 
         @Override
         public void execute() {
-            Uninterruptibles.sleepUninterruptibly(seconds, TimeUnit.SECONDS);
+            try {
+                Thread.sleep(seconds * 1000);
+            } catch (InterruptedException e) {
+                // That's fine.
+                return;
+            }
         }
 
         void setMaxConcurrency(int maxConcurrency) {
@@ -158,12 +154,18 @@ public class SystemJobManagerTest {
         private int seconds;
 
         public AnotherLongRunningJob(int seconds) {
+            super(mock(ServerStatus.class));
             this.seconds = seconds;
         }
 
         @Override
         public void execute() {
-            Uninterruptibles.sleepUninterruptibly(seconds, TimeUnit.SECONDS);
+            try {
+                Thread.sleep(seconds * 1000);
+            } catch (InterruptedException e) {
+                // That's fine.
+                return;
+            }
         }
 
         @Override

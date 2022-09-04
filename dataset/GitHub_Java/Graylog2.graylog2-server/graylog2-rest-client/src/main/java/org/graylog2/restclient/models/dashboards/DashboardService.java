@@ -17,7 +17,7 @@
 package org.graylog2.restclient.models.dashboards;
 
 import com.google.common.collect.Lists;
-import org.graylog2.rest.models.dashboards.responses.CreateDashboardResponse;
+import javax.inject.Inject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.models.api.requests.dashboards.CreateDashboardRequest;
@@ -26,10 +26,12 @@ import org.graylog2.restclient.models.api.responses.dashboards.GetDashboardsResp
 import org.graylog2.restroutes.generated.routes;
 import play.mvc.Http;
 
-import javax.inject.Inject;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class DashboardService {
 
     private final ApiClient api;
@@ -66,14 +68,12 @@ public class DashboardService {
         return dashboards;
     }
 
-    public String create(CreateDashboardRequest request) throws APIException, IOException {
-        CreateDashboardResponse response = api.path(routes.DashboardsResource().create(), CreateDashboardResponse.class)
+    public void create(CreateDashboardRequest request) throws APIException, IOException {
+        api.path(routes.DashboardsResource().create())
                 .onlyMasterNode()
                 .body(request)
                 .expect(Http.Status.CREATED)
                 .execute();
-
-        return response.dashboardId();
     }
 
     public void delete(String id) throws APIException, IOException {

@@ -153,8 +153,6 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
         this.messagesWritten = metricRegistry.meter(name(this.getClass(), "messagesWritten"));
         this.messagesRead = metricRegistry.meter(name(this.getClass(), "messagesRead"));
 
-        registerUncommittedGauge(metricRegistry, name(this.getClass(), "uncommittedMessages"));
-
         // the registerHdrTimer helper doesn't throw on existing metrics
         this.writeTime = registerHdrTimer(metricRegistry, name(this.getClass(), "writeTime"));
         this.readTime = registerHdrTimer(metricRegistry, name(this.getClass(), "readTime"));
@@ -278,20 +276,6 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
             timer = Iterables.getOnlyElement(timers.values());
         }
         return timer;
-    }
-
-    private void registerUncommittedGauge(MetricRegistry metricRegistry, String name) {
-        try {
-            metricRegistry.register(name,
-                                    new Gauge<Long>() {
-                                        @Override
-                                        public Long getValue() {
-                                            return Math.max(0, getLogEndOffset() - 1 - committedOffset.get());
-                                        }
-                                    });
-        } catch (IllegalArgumentException ignored) {
-            // already registered, we'll ignore that.
-        }
     }
 
     public int getPurgedSegmentsInLastRetention() {
@@ -505,7 +489,6 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
                         i);
             }
         } while (!committedOffset.compareAndSet(prev, Math.max(offset, prev)));
-
     }
 
     /**
@@ -622,10 +605,10 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     }
 
     /**
-     * Returns the highest journal offset that has been writting to persistent storage by Graylog.
+     * Returns the highest journal offset that has been writting to persistent storage by Graylog2.
      * <p>
      * Every message at an offset prior to this one can be considered as processed and does not need to be held in
-     * the journal any longer. By default Graylog will try to aggressively flush the journal to consume a smaller
+     * the journal any longer. By default Graylog2 will try to aggressively flush the journal to consume a smaller
      * amount of disk space.
      * </p>
      *

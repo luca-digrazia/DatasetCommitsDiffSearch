@@ -16,14 +16,10 @@
  */
 package org.graylog2.periodical;
 
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.RatioGauge;
 import com.github.joschi.jadconfig.util.Size;
 import com.google.common.eventbus.EventBus;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
-import org.graylog2.plugin.GlobalMetricNames;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.ThrottleState;
 import org.graylog2.plugin.periodical.Periodical;
@@ -35,8 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Named;
-
-import static org.graylog2.shared.metrics.MetricUtils.safelyRegister;
 
 /**
  * The ThrottleStateUpdater publishes the current state buffer state of the journal to other interested parties,
@@ -61,18 +55,21 @@ public class ThrottleStateUpdaterThread extends Periodical {
     private final ServerStatus serverStatus;
 
     private boolean firstRun = true;
+
+    private long logStartOffset;
     private long logEndOffset;
+    private long previousLogEndOffset;
+    private long previousReadOffset;
     private long currentReadOffset;
     private long currentTs;
-    private ThrottleState throttleState;
+    private long prevTs;
 
     @Inject
-    public ThrottleStateUpdaterThread(final Journal journal,
+    public ThrottleStateUpdaterThread(Journal journal,
                                       ProcessBuffer processBuffer,
                                       EventBus eventBus,
                                       NotificationService notificationService,
                                       ServerStatus serverStatus,
-                                      MetricRegistry metricRegistry,
                                       @Named("message_journal_max_size") Size retentionSize) {
         this.processBuffer = processBuffer;
         this.eventBus = eventBus;
@@ -85,68 +82,6 @@ public class ThrottleStateUpdaterThread extends Periodical {
         } else {
             this.journal = null;
         }
-        throttleState = new ThrottleState();
-
-        safelyRegister(metricRegistry,
-                       GlobalMetricNames.JOURNAL_APPEND_RATE,
-                       new Gauge<Long>() {
-                           @Override
-                           public Long getValue() {
-                               return throttleState.appendEventsPerSec;
-                           }
-                       });
-        safelyRegister(metricRegistry,
-                       GlobalMetricNames.JOURNAL_READ_RATE,
-                       new Gauge<Long>() {
-                           @Override
-                           public Long getValue() {
-                               return throttleState.readEventsPerSec;
-                           }
-                       });
-        safelyRegister(metricRegistry,
-                       GlobalMetricNames.JOURNAL_SEGMENTS,
-                       new Gauge<Integer>() {
-                           @Override
-                           public Integer getValue() {
-                               if (ThrottleStateUpdaterThread.this.journal == null) {
-                                   return 0;
-                               }
-                               return ThrottleStateUpdaterThread.this.journal.numberOfSegments();
-                           }
-                       });
-        safelyRegister(metricRegistry,
-                       GlobalMetricNames.JOURNAL_UNCOMMITTED_ENTRIES,
-                       new Gauge<Long>() {
-                           @Override
-                           public Long getValue() {
-                               return throttleState.uncommittedJournalEntries;
-                           }
-                       });
-        final Gauge<Long> sizeGauge = safelyRegister(metricRegistry,
-                                   GlobalMetricNames.JOURNAL_SIZE,
-                                   new Gauge<Long>() {
-                                       @Override
-                                       public Long getValue() {
-                                           return throttleState.journalSize;
-                                       }
-                                   });
-        final Gauge<Long> sizeLimitGauge = safelyRegister(metricRegistry,
-                                        GlobalMetricNames.JOURNAL_SIZE_LIMIT,
-                                        new Gauge<Long>() {
-                                            @Override
-                                            public Long getValue() {
-                                                return throttleState.journalSizeLimit;
-                                            }
-                                        });
-        safelyRegister(metricRegistry,
-                       GlobalMetricNames.JOURNAL_UTILIZATION_RATIO,
-                       new RatioGauge() {
-                           @Override
-                           protected Ratio getRatio() {
-                               return Ratio.of(sizeGauge.getValue(),
-                                               sizeLimitGauge.getValue());
-                           }
-                       });
     }
 
     @Override
@@ -192,18 +127,15 @@ public class ThrottleStateUpdaterThread extends Periodical {
 
     @Override
     public void doRun() {
-        throttleState = new ThrottleState(throttleState);
+        final ThrottleState throttleState = new ThrottleState();
         final long committedOffset = journal.getCommittedOffset();
 
-        // TODO there's a lot of duplication around this class. Probably should be refactored a bit.
-        // also update metrics for each of the values, so clients can get to it cheaply
-
-        long prevTs = currentTs;
+        prevTs = currentTs;
         currentTs = System.nanoTime();
 
-        long previousLogEndOffset = logEndOffset;
-        long previousReadOffset = currentReadOffset;
-        long logStartOffset = journal.getLogStartOffset();
+        previousLogEndOffset = logEndOffset;
+        previousReadOffset = currentReadOffset;
+        logStartOffset = journal.getLogStartOffset();
         logEndOffset = journal.getLogEndOffset() - 1; // -1 because getLogEndOffset is the next offset that gets assigned
         currentReadOffset = journal.getNextReadOffset() - 1; // just to make it clear which field we read
 
@@ -228,7 +160,7 @@ public class ThrottleStateUpdaterThread extends Periodical {
             throttleState.uncommittedJournalEntries = logEndOffset - committedOffset;
         }
         log.debug("ThrottleState: {}", throttleState);
-
+        
         // the journal needs this to provide information to rest clients
         journal.setThrottleState(throttleState);
         

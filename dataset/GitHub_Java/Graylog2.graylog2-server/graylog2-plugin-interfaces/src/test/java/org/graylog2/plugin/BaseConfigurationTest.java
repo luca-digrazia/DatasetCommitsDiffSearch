@@ -29,7 +29,6 @@ import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
 import com.google.common.collect.Maps;
 import org.testng.Assert;
-import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -46,7 +45,7 @@ public class BaseConfigurationTest {
         private URI restListenUri = URI.create("http://127.0.0.1:12900/");
 
         @Parameter(value = "node_id_file", required = false)
-        private String nodeIdFile = "/etc/graylog/server/node-id";
+        private String nodeIdFile = "/etc/graylog2-server-node-id";
 
         @Override
         public String getNodeIdFile() {
@@ -65,8 +64,13 @@ public class BaseConfigurationTest {
     @BeforeMethod
     public void setUp() throws Exception {
         validProperties = Maps.newHashMap();
-        tempFile = File.createTempFile("graylog", null);
 
+        try {
+            tempFile = File.createTempFile("graylog", null);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
         // Required properties
         validProperties.put("password_secret", "ipNUnWxmBLCxTEzXcyamrdy0Q3G7HxdKsAvyg30R9SCof0JydiZFiA3dLSkRsbLF");
         validProperties.put("elasticsearch_config_file", tempFile.getAbsolutePath());
@@ -79,13 +83,6 @@ public class BaseConfigurationTest {
         validProperties.put("use_gelf", "true");
         validProperties.put("gelf_listen_port", "12201");
         validProperties.put("root_password_sha2", "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"); // sha2 of admin
-    }
-
-    @AfterMethod
-    public void tearDown() {
-        if(tempFile != null) {
-            tempFile.delete();
-        }
     }
 
     @Test

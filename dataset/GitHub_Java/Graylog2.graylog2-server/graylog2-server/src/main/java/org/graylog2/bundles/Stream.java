@@ -37,8 +37,6 @@ public class Stream {
     @JsonProperty
     private boolean disabled = false;
     @JsonProperty
-    private org.graylog2.plugin.streams.Stream.MatchingType matchingType = org.graylog2.plugin.streams.Stream.MatchingType.DEFAULT;
-    @JsonProperty
     @NotNull
     private List<StreamRule> streamRules = Collections.emptyList();
     @JsonProperty
@@ -75,14 +73,6 @@ public class Stream {
 
     public void setDisabled(boolean disabled) {
         this.disabled = disabled;
-    }
-
-    public org.graylog2.plugin.streams.Stream.MatchingType getMatchingType() {
-        return matchingType;
-    }
-
-    public void setMatchingType(org.graylog2.plugin.streams.Stream.MatchingType matchingType) {
-        this.matchingType = matchingType;
     }
 
     public List<StreamRule> getStreamRules() {

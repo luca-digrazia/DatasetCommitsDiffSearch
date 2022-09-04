@@ -1,33 +1,27 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.lib.metrics;
 
+import com.google.common.collect.ImmutableMap;
 import org.graylog2.restclient.models.api.responses.metrics.TimerMetricsResponse;
 
-import java.util.HashMap;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class Timer extends Metric {
-
     public enum Unit {
         MICROSECONDS
     }
@@ -57,15 +51,15 @@ public class Timer extends Metric {
     }
 
     public Timer(final TimerMetricsResponse t, Unit durationUnit) {
-        this(new HashMap<String, Object>() {{
-            put("std_dev", t.stdDev);
-            put("min", t.min);
-            put("max", t.max);
-            put("mean", t.mean);
-            put("95th_percentile", t.percentile95th);
-            put("98th_percentile", t.percentile98th);
-            put("99th_percentile", t.percentile99th);
-        }}, durationUnit);
+        this(ImmutableMap.<String, Object>builder()
+                        .put("std_dev", t.stdDev)
+                        .put("min", t.min)
+                        .put("max", t.max)
+                        .put("mean", t.mean)
+                        .put("95th_percentile", t.percentile95th)
+                        .put("98th_percentile", t.percentile98th)
+                        .put("99th_percentile", t.percentile99th).build(),
+                durationUnit);
     }
 
     public double getStandardDeviation() {
@@ -95,5 +89,4 @@ public class Timer extends Metric {
     public double get99thPercentile() {
         return percentile99th;
     }
-
 }

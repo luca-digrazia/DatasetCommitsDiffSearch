@@ -29,7 +29,6 @@ import org.graylog2.plugin.journal.RawMessage;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Collection;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -46,7 +45,6 @@ public class MessageEvent {
 
     private RawMessage raw;
     private Message msg;
-    private Collection<Message> messages;
 
     @Nullable
     public Message getMessage()
@@ -59,25 +57,15 @@ public class MessageEvent {
         this.msg = msg;
     }
 
-    @Nullable
-    public Collection<Message> getMessages() {
-        return messages;
-    }
-
-    public void setMessages(@Nullable final Collection<Message> messages) {
-        this.messages = messages;
-    }
-
     /**
-     * Sets the raw message but also clears out the {@link #getMessage() message} and {@link #getMessages() messages}
-     * references to avoid handling stale messages and to let older messages be garbage collected earlier.
+     * Sets the raw message but also clears out the {@link #getMessage() message} reference to avoid handling stale messages
+     * and to let older messages be garbage collected earlier.
      *
      * @param raw
      */
     public void setRaw(@Nonnull RawMessage raw) {
         this.raw = raw;
         setMessage(null);
-        setMessages(null);
     }
 
     public void clearRaw() {
@@ -94,7 +82,6 @@ public class MessageEvent {
         return MoreObjects.toStringHelper(this)
                 .add("raw", raw)
                 .add("message", msg)
-                .add("messages", messages)
                 .toString();
     }
 }

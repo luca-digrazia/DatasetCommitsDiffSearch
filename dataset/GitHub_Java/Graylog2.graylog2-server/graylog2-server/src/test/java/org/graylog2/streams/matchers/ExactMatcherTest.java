@@ -19,11 +19,8 @@ package org.graylog2.streams.matchers;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.testng.annotations.Test;
+import static org.testng.AssertJUnit.*;
 
 public class ExactMatcherTest extends MatcherTest {
 
@@ -81,34 +78,7 @@ public class ExactMatcherTest extends MatcherTest {
         msg.addField("someother", "foo");
 
         StreamRuleMatcher matcher = getMatcher(rule);
-        assertTrue(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testNullFieldShouldNotMatch() {
-        final String fieldName = "nullfield";
-        final StreamRule rule = getSampleRule();
-        rule.setField(fieldName);
-
-        final Message msg = getSampleMessage();
-        msg.addField(fieldName, null);
-
-        final StreamRuleMatcher matcher = getMatcher(rule);
         assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testInvertedNullFieldShouldMatch() {
-        final String fieldName = "nullfield";
-        final StreamRule rule = getSampleRule();
-        rule.setField(fieldName);
-        rule.setInverted(true);
-
-        final Message msg = getSampleMessage();
-        msg.addField(fieldName, null);
-
-        final StreamRuleMatcher matcher = getMatcher(rule);
-        assertTrue(matcher.match(msg, rule));
     }
 
     protected StreamRule getSampleRule() {

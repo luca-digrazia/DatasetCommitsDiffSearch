@@ -30,7 +30,7 @@ import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.models.streams.alerts.requests.CreateConditionRequest;
+import org.graylog2.rest.resources.streams.alerts.requests.CreateConditionRequest;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Seconds;
@@ -209,7 +209,7 @@ public class AlertServiceImpl extends PersistedServiceImpl implements AlertServi
 
         if (inGracePeriod(alertCondition)) {
             LOG.debug("Alert condition [{}] is in grace period. Not triggered.", this);
-            return new AbstractAlertCondition.NegativeCheckResult();
+            return new AbstractAlertCondition.CheckResult(false);
         }
 
         return ((AbstractAlertCondition) alertCondition).runCheck();

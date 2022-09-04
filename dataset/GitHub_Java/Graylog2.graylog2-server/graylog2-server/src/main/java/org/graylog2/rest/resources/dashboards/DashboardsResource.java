@@ -20,6 +20,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
@@ -28,6 +29,7 @@ import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.dashboards.Dashboard;
+import org.graylog2.dashboards.DashboardImpl;
 import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
@@ -44,7 +46,7 @@ import org.graylog2.rest.resources.dashboards.requests.UpdateDashboardRequest;
 import org.graylog2.rest.resources.dashboards.requests.UpdateWidgetRequest;
 import org.graylog2.rest.resources.dashboards.requests.WidgetPositions;
 import org.graylog2.rest.resources.dashboards.responses.DashboardList;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
@@ -64,6 +66,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -107,13 +110,19 @@ public class DashboardsResource extends RestResource {
         restrictToMaster();
 
         // Create dashboard.
-        final Dashboard dashboard = dashboardService.create(cr.title(), cr.description(), getCurrentUser().getName(), Tools.iso8601());
+        Map<String, Object> dashboardData = Maps.newHashMap();
+        dashboardData.put("title", cr.title());
+        dashboardData.put("description", cr.description());
+        dashboardData.put("creator_user_id", getCurrentUser().getName());
+        dashboardData.put("created_at", Tools.iso8601());
+
+        final Dashboard dashboard = new DashboardImpl(dashboardData);
         final String id = dashboardService.save(dashboard);
 
         dashboardRegistry.add(dashboard);
 
         final Map<String, String> result = ImmutableMap.of("dashboard_id", id);
-        final URI dashboardUri = getUriBuilderToSelf().path(DashboardsResource.class)
+        final URI dashboardUri = UriBuilder.fromResource(DashboardsResource.class)
                 .path("{dashboardId}")
                 .build(id);
 
@@ -277,7 +286,7 @@ public class DashboardsResource extends RestResource {
         }
 
         final Map<String, String> result = ImmutableMap.of("widget_id", widget.getId());
-        final URI widgetUri = getUriBuilderToSelf().path(DashboardsResource.class)
+        final URI widgetUri = UriBuilder.fromResource(DashboardsResource.class)
                 .path("{dashboardId}/widgets/{widgetId}")
                 .build(dashboardId, widget.getId());
 

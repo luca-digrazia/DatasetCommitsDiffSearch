@@ -24,14 +24,14 @@ import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.elasticsearch.index.IndexNotFoundException;
+import org.elasticsearch.indices.IndexMissingException;
 import org.graylog2.indexer.messages.DocumentNotFoundException;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Message;
-import org.graylog2.rest.models.messages.responses.MessageTokens;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.rest.resources.messages.responses.MessageTokens;
+import org.graylog2.security.RestPermissions;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,12 +75,12 @@ public class MessageResource extends RestResource {
         checkPermission(RestPermissions.MESSAGES_READ, messageId);
         try {
             final ResultMessage resultMessage = messages.get(messageId, index);
-            final Message message = resultMessage.getMessage();
+            final Message message = new Message(resultMessage.getMessage());
             checkMessageReadPermission(message);
 
             return resultMessage;
-        } catch (IndexNotFoundException e) {
-            final String msg = "Index " + e.getIndex() + " does not exist.";
+        } catch (IndexMissingException e) {
+            final String msg = "Index " + e.index().name() + " does not exist.";
             LOG.error(msg, e);
             throw new NotFoundException(msg, e);
         } catch (DocumentNotFoundException e) {
@@ -125,10 +125,10 @@ public class MessageResource extends RestResource {
             @QueryParam("string") @NotEmpty String string) {
         try {
             return MessageTokens.create(messages.analyze(string, index));
-        } catch (IndexNotFoundException e) {
-            final String message = "Index " + index + "does not exist.";
-            LOG.error(message, e);
-            throw new NotFoundException(message);
+        } catch (IndexMissingException e) {
+            LOG.error("Index does not exist. Returning HTTP 404.");
+            throw new NotFoundException("Index " + index + "does not exist.");
         }
+
     }
 }

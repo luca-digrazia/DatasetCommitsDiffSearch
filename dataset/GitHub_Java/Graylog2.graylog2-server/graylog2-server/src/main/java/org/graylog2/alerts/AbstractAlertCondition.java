@@ -107,7 +107,7 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
 
     @Override
     public Integer getBacklog() {
-        final Object rawParameter = getParameters().get("backlog");
+        Object rawParameter = getParameters().get("backlog");
         if (rawParameter != null && rawParameter instanceof Number) {
             return (Integer) rawParameter;
         } else {
@@ -165,6 +165,12 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
             }
         }
 
+        public CheckResult(boolean isTriggered) {
+            this(false, null, null, null, null);
+            if (isTriggered)
+                throw new RuntimeException("Boolean only constructor should only be called if CheckResult is not triggered!");
+        }
+
         public boolean isTriggered() {
             return isTriggered;
         }
@@ -184,12 +190,6 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
         @Override
         public List<MessageSummary> getMatchingMessages() {
             return summaries;
-        }
-    }
-
-    public static class NegativeCheckResult extends CheckResult {
-        public NegativeCheckResult() {
-            super(false, null, null, null, null);
         }
     }
 

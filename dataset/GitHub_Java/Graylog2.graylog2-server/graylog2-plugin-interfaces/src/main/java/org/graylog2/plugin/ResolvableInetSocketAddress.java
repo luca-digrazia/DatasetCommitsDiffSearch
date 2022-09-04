@@ -22,31 +22,24 @@
  */
 package org.graylog2.plugin;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
-import static java.util.Objects.requireNonNull;
-
 /**
- * {@link InetSocketAddress} does not support finding out whether an IP address has been reverse looked up or not.
- * However, we need to avoid triggering a name service lookup unless specifically asked to.
+ * InetSocketAddress does not support finding out whether an IP address has been reverse looked up or not.<br/>
+ * However, we need to avoid triggering a name service lookup unless specifically asked to.<br/>
  * This class exists to make the reverse lookup step explicit in the code.
  */
 public class ResolvableInetSocketAddress {
     private final InetSocketAddress inetSocketAddress;
     private boolean reverseLookedUp = false;
 
-    @VisibleForTesting
-    protected ResolvableInetSocketAddress(InetSocketAddress inetSocketAddress) {
-        this.inetSocketAddress = requireNonNull(inetSocketAddress);
+    public ResolvableInetSocketAddress(InetSocketAddress inetSocketAddress) {
+        this.inetSocketAddress = inetSocketAddress;
     }
 
     public static ResolvableInetSocketAddress wrap(InetSocketAddress socketAddress) {
-        if (socketAddress == null) {
-            return null;
-        }
+        if (socketAddress == null) return null;
         return new ResolvableInetSocketAddress(socketAddress);
     }
 
@@ -85,14 +78,5 @@ public class ResolvableInetSocketAddress {
 
     public InetSocketAddress getInetSocketAddress() {
         return inetSocketAddress;
-    }
-
-    @Override
-    public String toString() {
-        if (isReverseLookedUp()) {
-            return getHostName() + ":" + getPort();
-        } else {
-            return getAddress().getHostAddress() + ":" + getPort();
-        }
     }
 }

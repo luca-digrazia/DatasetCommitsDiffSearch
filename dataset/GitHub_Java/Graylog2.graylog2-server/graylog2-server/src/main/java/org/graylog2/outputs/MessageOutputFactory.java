@@ -16,7 +16,6 @@
  */
 package org.graylog2.outputs;
 
-import com.google.common.base.Preconditions;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
@@ -41,18 +40,7 @@ public class MessageOutputFactory {
     }
 
     public MessageOutput fromStreamOutput(Output output, final Stream stream, Configuration configuration) throws MessageOutputConfigurationException {
-        Preconditions.checkNotNull(output);
-        Preconditions.checkNotNull(stream);
-        Preconditions.checkNotNull(configuration);
-
-        final String outputType = output.getType();
-        Preconditions.checkArgument(outputType != null);
-
-        final MessageOutput.Factory<? extends MessageOutput> factory = this.availableOutputs.get(outputType);
-
-        Preconditions.checkArgument(factory != null, "Output type is not supported: %s!", outputType);
-
-        return factory.create(stream, configuration);
+        return this.availableOutputs.get(output.getType()).create(stream, configuration);
     }
 
 

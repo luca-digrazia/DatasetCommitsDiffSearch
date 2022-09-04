@@ -47,7 +47,6 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.search.SearchHit;
-import org.graylog2.bindings.providers.EsClientProvider;
 import org.graylog2.bindings.providers.EsNodeProvider;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.plugin.Tools;
@@ -69,13 +68,13 @@ public class ESTimestampFixup {
     private static final String ENVIRONMENT_PREFIX = "GRAYLOG2_";
     private static final String PROPERTIES_PREFIX = "graylog2.";
 
-    @Parameters(commandDescription = "Graylog ES fixup tool")
+    @Parameters(commandDescription = "Graylog2 ES fixup tool")
     public static class CommandLineOptions {
         @Parameter(names = {"-F", "--fix"}, description = "Fix problems")
         private boolean fix = false;
 
-        @Parameter(names = {"-f", "--configfile"}, description = "Configuration file for Graylog")
-        private String configFile = "/etc/graylog/server/server.conf";
+        @Parameter(names = {"-f", "--configfile"}, description = "Configuration file for Graylog2")
+        private String configFile = "/etc/graylog2.conf";
 
         @Parameter(names = {"-i", "--indices"}, description = "Indices to process (required)", variableArity = true)
         private List<String> indices = Lists.newArrayList();
@@ -139,7 +138,6 @@ public class ESTimestampFixup {
         protected void configure() {
             bind(Configuration.class).toInstance(configuration);
             bind(Node.class).toProvider(EsNodeProvider.class).in(Scopes.SINGLETON);
-            bind(Client.class).toProvider(EsClientProvider.class).in(Scopes.SINGLETON);
         }
     }
 

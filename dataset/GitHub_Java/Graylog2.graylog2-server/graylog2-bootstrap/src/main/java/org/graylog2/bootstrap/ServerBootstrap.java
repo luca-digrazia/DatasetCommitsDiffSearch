@@ -27,12 +27,11 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.shared.bindings.GenericBindings;
 import org.graylog2.shared.bindings.GenericInitializerBindings;
+import org.graylog2.shared.bindings.InstantiationService;
 import org.graylog2.shared.bindings.MessageInputBindings;
 import org.graylog2.shared.bindings.PluginRestResourceBindings;
 import org.graylog2.shared.bindings.SchedulerBindings;
-import org.graylog2.shared.bindings.ServerStatusBindings;
 import org.graylog2.shared.bindings.SharedPeriodicalBindings;
-import org.graylog2.shared.bindings.ValidatorModule;
 import org.graylog2.shared.initializers.ServiceManagerListener;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
@@ -56,8 +55,8 @@ public abstract class ServerBootstrap extends CmdLineTool {
         this.commandName = commandName;
     }
 
-    @Option(name = {"-p", "--pidfile"}, description = "File containing the PID of Graylog")
-    private String pidFile = TMPDIR + FILE_SEPARATOR + "graylog.pid";
+    @Option(name = {"-p", "--pidfile"}, description = "File containing the PID of Graylog2")
+    private String pidFile = TMPDIR + FILE_SEPARATOR + "graylog2.pid";
 
     @Option(name = {"-np", "--no-pid-file"}, description = "Do not write a PID file (overrides -p/--pidfile)")
     private boolean noPidFile = false;
@@ -74,7 +73,7 @@ public abstract class ServerBootstrap extends CmdLineTool {
 
     @Override
     protected void startCommand() {
-        LOG.info("Graylog " + commandName + " {} starting up. (JRE: {})", version, Tools.getSystemInformation());
+        LOG.info("Graylog2 " + commandName + " {} starting up. (JRE: {})", version, Tools.getSystemInformation());
 
         // Do not use a PID file if the user requested not to
         if (!isNoPidFile()) {
@@ -118,13 +117,13 @@ public abstract class ServerBootstrap extends CmdLineTool {
             } catch (TimeoutException timeoutException) {
                 LOG.error("Unable to shutdown properly on time. {}", serviceManager.servicesByState());
             }
-            LOG.error("Graylog startup failed. Exiting. Exception was:", e);
+            LOG.error("Graylog2 startup failed. Exiting. Exception was:", e);
             System.exit(-1);
         }
         LOG.info("Services started, startup times in ms: {}", serviceManager.startupTimes());
 
         activityWriter.write(new Activity("Started up.", Main.class));
-        LOG.info("Graylog " + commandName + " up and running.");
+        LOG.info("Graylog2 " + commandName + " up and running.");
 
         // Block forever.
         try {
@@ -152,12 +151,10 @@ public abstract class ServerBootstrap extends CmdLineTool {
     }
 
     @Override
-    protected List<Module> getSharedBindingsModules() {
-        final List<Module> result = super.getSharedBindingsModules();
+    protected List<Module> getSharedBindingsModules(InstantiationService instantiationService) {
+        final List<Module> result = super.getSharedBindingsModules(instantiationService);
 
-        result.add(new GenericBindings());
-        result.add(new ServerStatusBindings(capabilities()));
-        result.add(new ValidatorModule());
+        result.add(new GenericBindings(instantiationService));
         result.add(new SharedPeriodicalBindings());
         result.add(new SchedulerBindings());
         result.add(new GenericInitializerBindings());

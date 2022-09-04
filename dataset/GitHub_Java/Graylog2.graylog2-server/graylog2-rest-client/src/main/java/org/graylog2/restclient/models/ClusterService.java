@@ -17,7 +17,7 @@
 package org.graylog2.restclient.models;
 
 import com.google.common.collect.Lists;
-import org.graylog2.rest.models.system.SystemJobSummary;
+import javax.inject.Inject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ServerNodes;
@@ -33,6 +33,7 @@ import org.graylog2.restclient.models.api.responses.system.GetSystemJobsResponse
 import org.graylog2.restclient.models.api.responses.system.GetSystemMessagesResponse;
 import org.graylog2.restclient.models.api.responses.system.NodeThroughputResponse;
 import org.graylog2.restclient.models.api.responses.system.NotificationSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.SystemJobSummaryResponse;
 import org.graylog2.restclient.models.api.responses.system.SystemMessageSummaryResponse;
 import org.graylog2.restclient.models.api.responses.system.indices.IndexerFailureCountResponse;
 import org.graylog2.restclient.models.api.responses.system.indices.IndexerFailuresResponse;
@@ -45,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import play.libs.F;
 import play.mvc.Http;
 
-import javax.inject.Inject;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -134,7 +134,7 @@ public class ClusterService {
         for (Node node : serverNodes.all()) {
             GetSystemJobsResponse r = api.path(routes.SystemJobResource().list(), GetSystemJobsResponse.class).node(node).execute();
 
-            for (SystemJobSummary job : r.jobs) {
+            for (SystemJobSummaryResponse job : r.jobs) {
                 jobs.add(systemJobFactory.fromSummaryResponse(job));
             }
         }

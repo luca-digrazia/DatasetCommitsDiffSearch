@@ -19,7 +19,7 @@ package org.graylog2.streams.matchers;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.streams.StreamRule;
 
-import static org.graylog2.plugin.Tools.getDouble;
+import static org.graylog2.plugin.Tools.getInt;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -28,13 +28,13 @@ public class SmallerMatcher implements StreamRuleMatcher {
 
 	@Override
 	public boolean match(Message msg, StreamRule rule) {
-        Double msgVal = getDouble(msg.getField(rule.getField()));
+        Integer msgVal = getInt(msg.getField(rule.getField()));
 
         if (msgVal == null) {
             return false;
         }
 
-        Double ruleVal = getDouble(rule.getValue());
+        Integer ruleVal = getInt(rule.getValue());
         if (ruleVal == null) {
             return false;
         }

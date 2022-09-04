@@ -36,9 +36,10 @@ import org.graylog2.security.realm.*;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
-import javax.inject.Singleton;
 
-@Singleton
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class DefaultSecurityManagerProvider implements Provider<DefaultSecurityManager> {
     private static DefaultSecurityManager sm = null;
 

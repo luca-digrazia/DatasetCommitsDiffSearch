@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.radio.cluster;
 
@@ -34,13 +34,11 @@ import javax.inject.Named;
 import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
 public class InputService {
     private static final Logger LOG = LoggerFactory.getLogger(InputService.class);
 
@@ -50,7 +48,7 @@ public class InputService {
     private final ServerStatus serverStatus;
 
     @Inject
-    public InputService(AsyncHttpClient httpclient, @Named("ServerUri") URI serverUrl, ServerStatus serverStatus) {
+    public InputService(AsyncHttpClient httpclient, @Named("graylog2_server_uri") URI serverUrl, ServerStatus serverStatus) {
         this.httpclient = httpclient;
         this.serverUrl = serverUrl;
         this.serverStatus = serverStatus;
@@ -60,22 +58,24 @@ public class InputService {
         final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
         uriBuilder.path("/system/radios/" + serverStatus.getNodeId().toString() + "/inputs");
 
-        Request request = httpclient.prepareGet(uriBuilder.build().toString()).build();
+        final Request request = httpclient.prepareGet(uriBuilder.build().toString())
+                .setHeader("Content-Type", "application/json")
+                .build();
         LOG.debug("API Request {} {}", request.getMethod(), request.getUrl());
-        Future<Response> f = httpclient.executeRequest(request);
+        final Future<Response> f = httpclient.executeRequest(request);
 
-        Response r = null;
+        final Response r;
         try {
             r = f.get();
         } catch (InterruptedException | ExecutionException e) {
             LOG.error("Unable to fetch inputs from master: ", e);
-            return null;
+            return Collections.emptyList();
         }
 
         if (r.getStatusCode() != 200) {
             throw new RuntimeException("Expected HTTP response [200] for list of persisted input but got [" + r.getStatusCode() + "].");
         }
-        String responseBody = r.getResponseBody();
+        final String responseBody = r.getResponseBody();
         PersistedInputsResponse persistedInputsResponse = mapper.readValue(responseBody,
                 PersistedInputsResponse.class);
         return persistedInputsResponse.inputs;
@@ -94,7 +94,7 @@ public class InputService {
         final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
         uriBuilder.path("/system/radios/" + serverStatus.getNodeId().toString() + "/inputs");
 
-        RegisterInputRequest rir = new RegisterInputRequest(input, serverStatus.getNodeId().toString());
+        RegisterInputRequest rir = RegisterInputRequest.create(input, serverStatus.getNodeId().toString());
 
         String json;
         try {
@@ -104,6 +104,7 @@ public class InputService {
         }
 
         Future<Response> f = httpclient.preparePost(uriBuilder.build().toString())
+                .setHeader("Content-Type", "application/json")
                 .setBody(json)
                 .execute();
 
@@ -125,13 +126,12 @@ public class InputService {
         final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
         uriBuilder.path("/system/radios/" + serverStatus.getNodeId().toString() + "/inputs/" + input.getPersistId());
 
-        Future<Response> f = httpclient.prepareDelete(uriBuilder.build().toString()).execute();
-
+        Future<Response> f = httpclient.prepareDelete(uriBuilder.build().toString())
+                .setHeader("Content-Type", "application/json")
+                .execute();
         Response r = f.get();
-
         if (r.getStatusCode() != 204) {
             throw new RuntimeException("Expected HTTP response [204] for input unregistration but got [" + r.getStatusCode() + "].");
         }
     }
-
 }

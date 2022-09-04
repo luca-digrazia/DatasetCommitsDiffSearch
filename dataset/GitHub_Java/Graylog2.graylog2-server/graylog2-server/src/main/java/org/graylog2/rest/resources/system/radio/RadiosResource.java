@@ -31,15 +31,13 @@ import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.cluster.NodeService;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.inputs.Input;
+import org.graylog2.inputs.InputImpl;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Tools;
-import org.graylog2.rest.models.radio.responses.PersistedInputsResponse;
-import org.graylog2.rest.models.radio.responses.PersistedInputsSummaryResponse;
-import org.graylog2.rest.models.radio.responses.RegisterInputResponse;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.rest.models.radio.requests.PingRequest;
+import org.graylog2.rest.resources.system.radio.requests.PingRequest;
 import org.graylog2.rest.resources.system.radio.responses.RadioSummary;
-import org.graylog2.rest.models.system.inputs.requests.RegisterInputRequest;
+import org.graylog2.shared.rest.resources.system.inputs.requests.RegisterInputRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +55,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -69,14 +68,11 @@ public class RadiosResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(RadiosResource.class);
 
-    private final NodeService nodeService;
-    private final InputService inputService;
+    @Inject
+    private NodeService nodeService;
 
     @Inject
-    public RadiosResource(NodeService nodeService, InputService inputService) {
-        this.nodeService = nodeService;
-        this.inputService = inputService;
-    }
+    private InputService inputService;
 
     @GET
     @Timed
@@ -148,7 +144,6 @@ public class RadiosResource extends RestResource {
             throw new NotFoundException();
         }
 
-        // TODO: Make this cleaner.
         final Map<String, Object> inputData = Maps.newHashMap();
         if (rir.inputId() != null) {
             inputData.put("input_id", rir.inputId());
@@ -163,16 +158,17 @@ public class RadiosResource extends RestResource {
             inputData.put("radio_id", rir.radioId());
         }
 
-        final Input mongoInput = inputService.create(inputData);
+        final Input mongoInput = new InputImpl(inputData);
 
         // Write to database.
         final String id = inputService.save(mongoInput);
 
-        final URI radioUri = getUriBuilderToSelf().path(RadiosResource.class)
+        final Map<String, String> result = ImmutableMap.of("persist_id", id);
+        final URI radioUri = UriBuilder.fromResource(RadiosResource.class)
                 .path("{radioId}")
                 .build(id);
 
-        return Response.created(radioUri).entity(RegisterInputResponse.create(id)).build();
+        return Response.created(radioUri).entity(result).build();
     }
 
     @DELETE
@@ -215,7 +211,7 @@ public class RadiosResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Radio not found.")
     })
-    public PersistedInputsSummaryResponse persistedInputs(@ApiParam(name = "radioId", required = true)
+    public Map<String, Object> persistedInputs(@ApiParam(name = "radioId", required = true)
                                                @PathParam("radioId") String radioId) {
         Node radio = null;
         try {
@@ -224,14 +220,26 @@ public class RadiosResource extends RestResource {
             LOG.debug("Radio <{}> not found.", radioId);
         }
 
-        final List<PersistedInputsResponse> inputs = Lists.newArrayList();
+        final List<Map<String, Object>> inputs = Lists.newArrayList();
         if (radio != null) {
-            for (Input input : inputService.allOfRadio(radio))
-                inputs.add(PersistedInputsResponse.create(input.getType(), input.getId(), input.getTitle(),
-                        input.getCreatorUserId(), Tools.getISO8601String(input.getCreatedAt()), input.isGlobal(), input.getConfiguration()));
+            for (Input input : inputService.allOfRadio(radio)) {
+                Map<String, Object> inputSummary = Maps.newHashMap();
+
+                inputSummary.put("type", input.getType());
+                inputSummary.put("id", input.getId());
+                inputSummary.put("title", input.getTitle());
+                inputSummary.put("configuration", input.getConfiguration());
+                inputSummary.put("creator_user_id", input.getCreatorUserId());
+                inputSummary.put("created_at", Tools.getISO8601String(input.getCreatedAt()));
+                inputSummary.put("global", input.isGlobal());
+
+                inputs.add(inputSummary);
+            }
         }
 
-        return PersistedInputsSummaryResponse.create(inputs);
+        return ImmutableMap.of(
+                "inputs", inputs,
+                "total", inputs.size());
     }
 
 

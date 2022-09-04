@@ -1,134 +1,74 @@
 /**
- * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.radio;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.inject.Inject;
-import org.graylog2.inputs.amqp.AMQPInput;
-import org.graylog2.plugin.configuration.ConfigurationException;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.configuration.fields.ConfigurationField;
-import org.graylog2.plugin.configuration.fields.NumberField;
-import org.graylog2.plugin.configuration.fields.TextField;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.inputs.codecs.RadioMessageCodec;
+import org.graylog2.inputs.transports.RadioAmqpTransport;
+import org.graylog2.plugin.LocalMetricRegistry;
+import org.graylog2.plugin.ServerStatus;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.inputs.MessageInput;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class RadioAMQPInput extends AMQPInput {
+import javax.inject.Inject;
 
-    public static final String NAME = "Graylog2 Radio Input (AMQP)";
+public class RadioAMQPInput extends MessageInput {
 
-    @Inject
-    public RadioAMQPInput(MetricRegistry metricRegistry) {
-        super(metricRegistry);
+    private static final String NAME = "Graylog2 Radio Input (AMQP)";
+
+    @AssistedInject
+    public RadioAMQPInput(@Assisted Configuration configuration,
+                          MetricRegistry metricRegistry,
+                          RadioAmqpTransport.Factory transport,
+                          RadioMessageCodec.Factory codec,
+                          LocalMetricRegistry localRegistry, Config config, Descriptor descriptor, ServerStatus serverStatus) {
+        super(metricRegistry,
+                configuration,
+                transport.create(configuration),
+                localRegistry,
+                codec.create(configuration),
+                config,
+                descriptor, serverStatus);
     }
 
-    @Override
-    public void checkConfiguration() throws ConfigurationException {
-        configuration.setString(CK_EXCHANGE, "graylog2");
-        configuration.setString(CK_QUEUE, "graylog2-radio-messages");
-        configuration.setString(CK_ROUTING_KEY, "graylog2-radio-message");
+    public interface Factory extends MessageInput.Factory<RadioAMQPInput> {
+        @Override
+        RadioAMQPInput create(Configuration configuration);
 
-        if (!checkConfig(configuration)) {
-            throw new ConfigurationException(configuration.getSource().toString());
+        @Override
+        Config getConfig();
+
+        @Override
+        Descriptor getDescriptor();
+    }
+
+    public static class Descriptor extends MessageInput.Descriptor {
+        @Inject
+        public Descriptor() {
+            super(NAME, false, "");
         }
     }
 
-    @Override
-    public ConfigurationRequest getRequestedConfiguration() {
-        ConfigurationRequest cr = new ConfigurationRequest();
-
-        cr.addField(
-                new TextField(
-                        CK_HOSTNAME,
-                        "Broker hostname",
-                        "",
-                        "Hostname of the AMQP broker to use",
-                        ConfigurationField.Optional.NOT_OPTIONAL
-                )
-        );
-
-        cr.addField(
-                new NumberField(
-                        CK_PORT,
-                        "Broker port",
-                        5672,
-                        "Port of the AMQP broker to use",
-                        ConfigurationField.Optional.OPTIONAL,
-                        NumberField.Attribute.IS_PORT_NUMBER
-                )
-        );
-
-        cr.addField(
-                new TextField(
-                        CK_VHOST,
-                        "Broker virtual host",
-                        "/",
-                        "Virtual host of the AMQP broker to use",
-                        ConfigurationField.Optional.NOT_OPTIONAL
-                )
-        );
-
-        cr.addField(
-                new TextField(
-                        CK_USERNAME,
-                        "Username",
-                        "",
-                        "Username to connect to AMQP broker",
-                        ConfigurationField.Optional.OPTIONAL
-                )
-        );
-
-        cr.addField(
-                new TextField(
-                        CK_PASSWORD,
-                        "Password",
-                        "",
-                        "Password to connect to AMQP broker",
-                        ConfigurationField.Optional.OPTIONAL,
-                        TextField.Attribute.IS_PASSWORD
-                )
-        );
-
-        cr.addField(
-                new NumberField(
-                        CK_PREFETCH,
-                        "Prefetch count",
-                        0,
-                        "For advanced usage: AMQP prefetch count. Default is 0 (unlimited).",
-                        ConfigurationField.Optional.NOT_OPTIONAL
-                )
-        );
-
-        return cr;
+    public static class Config extends MessageInput.Config {
+        @Inject
+        public Config(RadioAmqpTransport.Factory transport, RadioMessageCodec.Factory codec) {
+            super(transport.getConfig(), codec.getConfig());
+        }
     }
-
-    @Override
-    public String getName() {
-        return NAME;
-    }
-
-    @Override
-    public boolean isExclusive() {
-        return true;
-    }
-
-
 }

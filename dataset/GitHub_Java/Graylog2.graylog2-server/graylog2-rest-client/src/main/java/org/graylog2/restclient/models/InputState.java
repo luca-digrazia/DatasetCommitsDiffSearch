@@ -23,8 +23,6 @@ import org.graylog2.restclient.models.api.responses.system.InputStateSummaryResp
 import org.joda.time.DateTime;
 import org.slf4j.LoggerFactory;
 
-import java.util.Locale;
-
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
@@ -49,7 +47,7 @@ public class InputState {
 
         @Override
         public String toString() {
-            return super.toString().toLowerCase(Locale.ENGLISH);
+            return super.toString().toLowerCase();
         }
     }
 
@@ -79,7 +77,7 @@ public class InputState {
         this.node = node;
 
         this.id = issr.id;
-        this.state = InputStateType.valueOf(issr.state.toUpperCase(Locale.ENGLISH));
+        this.state = InputStateType.valueOf(issr.state.toUpperCase());
         this.startedAt = DateTime.parse(issr.startedAt);
         this.input = inputFactory.fromSummaryResponse(issr.messageinput, node);
         this.detailedMessage = issr.detailedMessage;

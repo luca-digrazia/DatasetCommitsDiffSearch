@@ -1,8 +1,24 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.restclient.models.bundles;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
-import com.google.inject.Inject;
+import javax.inject.Inject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.models.api.requests.CreateBundleRequest;
@@ -51,6 +67,10 @@ public class BundleService {
 
     public void apply(String bundleId) throws APIException, IOException {
         api.path(routes.BundleResource().applyBundle(bundleId)).expect(Http.Status.NO_CONTENT).execute();
+    }
+
+    public void delete(String bundleId) throws APIException, IOException {
+        api.path(routes.BundleResource().deleteBundle(bundleId)).expect(Http.Status.NO_CONTENT).execute();
     }
 
     public ConfigurationBundle export(ExportBundleRequest request) throws APIException, IOException {

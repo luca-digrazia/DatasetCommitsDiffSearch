@@ -1,28 +1,29 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.radio.cluster;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import javax.inject.Inject;
+import javax.inject.Named;
 import com.ning.http.client.AsyncHttpClient;
+import com.ning.http.client.Request;
 import com.ning.http.client.Response;
+import org.graylog2.plugin.ServerStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,14 +54,16 @@ public class Ping {
         final UriBuilder uriBuilder = UriBuilder.fromUri(server);
         uriBuilder.path("/system/radios/" + radioId + "/ping");
 
-        Future<Response> f = client.preparePut(uriBuilder.build().toString())
-                .setBody(rootNode.toString())
-                .execute();
+        final Request request = client.preparePut(uriBuilder.build().toString())
+                .setHeader("Content-Type", "application/json")
+                .setBody(rootNode.toString()).build();
+        Future<Response> f = client.executeRequest(request);
 
         Response r = f.get();
 
-        if (r.getStatusCode() != 200) {
-            throw new RuntimeException("Expected ping HTTP response [200] but got [" + r.getStatusCode() + "].");
+        // fail on a non-ok status
+        if (r.getStatusCode() > 299) {
+            throw new RuntimeException("Expected ping HTTP response OK but got [" + r.getStatusCode() + "]. Request was " + request.getUrl());
         }
     }
 
@@ -71,15 +74,20 @@ public class Ping {
         private final URI serverUri;
         private final URI ourUri;
 
-        public Pinger(AsyncHttpClient httpClient, String nodeId, URI ourUri, URI serverUri) {
+        @Inject
+        public Pinger(AsyncHttpClient httpClient, @Named("rest_transport_uri") URI ourUri, @Named("graylog2_server_uri") URI serverUri, ServerStatus serverStatus) {
             this.httpClient = httpClient;
-            this.nodeId = nodeId;
+            this.nodeId = serverStatus.getNodeId().toString();
             this.ourUri = ourUri;
             this.serverUri = serverUri;
         }
 
         @Override
         public void run() {
+            ping();
+        }
+
+        public void ping() {
             LOG.debug("Updating (ping) this radio instance [{}] in the Graylog2 cluster at [{}]", nodeId, serverUri);
             try {
                 Ping.ping(httpClient, serverUri, ourUri, nodeId);

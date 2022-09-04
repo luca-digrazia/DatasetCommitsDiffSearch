@@ -18,9 +18,7 @@ package org.graylog2.restclient.models;
 
 import org.graylog2.restclient.lib.metrics.Meter;
 import org.graylog2.restclient.lib.metrics.Timer;
-import org.graylog2.rest.models.metrics.responses.TimerRateMetricsResponse;
-
-import java.util.Map;
+import org.graylog2.restclient.models.api.responses.metrics.TimerRateMetricsResponse;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>

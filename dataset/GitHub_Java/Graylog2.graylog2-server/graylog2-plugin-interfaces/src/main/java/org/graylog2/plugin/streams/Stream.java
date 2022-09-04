@@ -29,46 +29,34 @@ import java.util.Map;
 import java.util.Set;
 
 public interface Stream extends Persisted {
-    enum MatchingType {
-        AND,
-        OR;
 
-        public static final MatchingType DEFAULT = AND;
+    public String getId();
 
-        public static MatchingType valueOfOrDefault(String name) {
-            return (name == null ? DEFAULT : valueOf(name));
-        }
-    }
+    public String getTitle();
 
-    String getId();
+    public String getDescription();
 
-    String getTitle();
+    public Boolean getDisabled();
 
-    String getDescription();
+    public String getContentPack();
 
-    Boolean getDisabled();
+    public void setTitle(String title);
 
-    String getContentPack();
+    public void setDescription(String description);
 
-    void setTitle(String title);
+    public void setDisabled(Boolean disabled);
 
-    void setDescription(String description);
+    public void setContentPack(String contentPack);
 
-    void setDisabled(Boolean disabled);
-
-    void setContentPack(String contentPack);
-
-    Boolean isPaused();
+    public Boolean isPaused();
 
     Map<String, List<String>> getAlertReceivers();
 
-    Map<String, Object> asMap(List<StreamRule> streamRules);
+    public Map<String, Object> asMap(List<StreamRule> streamRules);
 
-    String toString();
+    public String toString();
 
-    List<StreamRule> getStreamRules();
+    public List<StreamRule> getStreamRules();
 
-    Set<Output> getOutputs();
-
-    MatchingType getMatchingType();
+    public Set<Output> getOutputs();
 }

@@ -19,11 +19,8 @@ package org.graylog2.streams.matchers;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.testng.annotations.Test;
+import static org.testng.AssertJUnit.*;
 
 public class GreaterMatcherTest extends MatcherTest {
 
@@ -38,19 +35,7 @@ public class GreaterMatcherTest extends MatcherTest {
         StreamRuleMatcher matcher = getMatcher(rule);
         assertTrue(matcher.match(msg, rule));
     }
-
-    @Test
-    public void testSuccessfulDoubleMatch() {
-        StreamRule rule = getSampleRule();
-        rule.setValue("1.0");
-
-        Message msg = getSampleMessage();
-        msg.addField("something", "1.1");
-
-        StreamRuleMatcher matcher = getMatcher(rule);
-        assertTrue(matcher.match(msg, rule));
-    }
-
+    
     @Test
     public void testSuccessfulMatchWithNegativeValue() {
         StreamRule rule = getSampleRule();
@@ -58,18 +43,6 @@ public class GreaterMatcherTest extends MatcherTest {
 
         Message msg = getSampleMessage();
         msg.addField("something", "4");
-
-        StreamRuleMatcher matcher = getMatcher(rule);
-        assertTrue(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testSuccessfulDoubleMatchWithNegativeValue() {
-        StreamRule rule = getSampleRule();
-        rule.setValue("-54354.0");
-
-        Message msg = getSampleMessage();
-        msg.addField("something", "4.1");
 
         StreamRuleMatcher matcher = getMatcher(rule);
         assertTrue(matcher.match(msg, rule));
@@ -101,18 +74,6 @@ public class GreaterMatcherTest extends MatcherTest {
     }
 
     @Test
-    public void testMissedDoubleMatch() {
-        StreamRule rule = getSampleRule();
-        rule.setValue("25");
-
-        Message msg = getSampleMessage();
-        msg.addField("something", "12.4");
-
-        StreamRuleMatcher matcher = getMatcher(rule);
-        assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
     public void testMissedInvertedMatch() {
         StreamRule rule = getSampleRule();
         rule.setValue("25");
@@ -138,18 +99,6 @@ public class GreaterMatcherTest extends MatcherTest {
     }
 
     @Test
-    public void testMissedDoubleMatchWithEqualValues() {
-        StreamRule rule = getSampleRule();
-        rule.setValue("-9001.45");
-
-        Message msg = getSampleMessage();
-        msg.addField("something", "-9001.45");
-
-        StreamRuleMatcher matcher = getMatcher(rule);
-        assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
     public void testSuccessfullInvertedMatchWithEqualValues() {
         StreamRule rule = getSampleRule();
         rule.setValue("-9001");
@@ -169,18 +118,6 @@ public class GreaterMatcherTest extends MatcherTest {
 
         Message msg = getSampleMessage();
         msg.addField("something", "90000");
-
-        StreamRuleMatcher matcher = getMatcher(rule);
-        assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testMissedDoubleMatchWithInvalidValue() {
-        StreamRule rule = getSampleRule();
-        rule.setValue("LOL I AM NOT EVEN A NUMBER");
-
-        Message msg = getSampleMessage();
-        msg.addField("something", "90000.23");
 
         StreamRuleMatcher matcher = getMatcher(rule);
         assertFalse(matcher.match(msg, rule));

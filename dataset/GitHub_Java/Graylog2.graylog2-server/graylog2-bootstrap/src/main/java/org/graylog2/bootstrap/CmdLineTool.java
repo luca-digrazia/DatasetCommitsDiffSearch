@@ -91,17 +91,17 @@ public abstract class CmdLineTool implements Runnable {
     protected final JadConfig jadConfig;
     protected final BaseConfiguration configuration;
 
-    @Option(name = "--dump-config", description = "Show the effective Graylog configuration and exit")
+    @Option(name = "--dump-config", description = "Show the effective Graylog2 configuration and exit")
     protected boolean dumpConfig = false;
 
     @Option(name = "--dump-default-config", description = "Show the default configuration and exit")
     protected boolean dumpDefaultConfig = false;
 
-    @Option(name = {"-d", "--debug"}, description = "Run Graylog in debug mode")
+    @Option(name = {"-d", "--debug"}, description = "Run Graylog2 in debug mode")
     private boolean debug = false;
 
-    @Option(name = {"-f", "--configfile"}, description = "Configuration file for Graylog")
-    private String configFile = "/etc/graylog/server/server.conf";
+    @Option(name = {"-f", "--configfile"}, description = "Configuration file for Graylog2")
+    private String configFile = "/etc/graylog2.conf";
 
     protected String commandName = "command";
 
@@ -280,7 +280,7 @@ public abstract class CmdLineTool implements Runnable {
             }
         }
 
-        LOG.info("Loaded plugins: " + plugins);
+        LOG.debug("Loaded plugins: " + plugins);
         return plugins;
     }
 

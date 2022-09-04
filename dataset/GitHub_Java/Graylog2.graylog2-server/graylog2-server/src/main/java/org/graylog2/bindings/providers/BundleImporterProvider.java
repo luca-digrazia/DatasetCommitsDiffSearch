@@ -20,7 +20,6 @@ import com.codahale.metrics.MetricRegistry;
 import org.graylog2.bundles.BundleImporter;
 import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.dashboards.DashboardService;
-import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.extractors.ExtractorFactory;
@@ -45,7 +44,6 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
     private final OutputService outputService;
     private final DashboardService dashboardService;
     private final DashboardRegistry dashboardRegistry;
-    private final DashboardWidgetCreator dashboardWidgetCreator;
     private final ServerStatus serverStatus;
     private final MetricRegistry metricRegistry;
     private final Searches searches;
@@ -61,7 +59,6 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
                                   final OutputService outputService,
                                   final DashboardService dashboardService,
                                   final DashboardRegistry dashboardRegistry,
-                                  final DashboardWidgetCreator dashboardWidgetCreator,
                                   final ServerStatus serverStatus,
                                   final MetricRegistry metricRegistry,
                                   final Searches searches,
@@ -75,7 +72,6 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
         this.outputService = outputService;
         this.dashboardService = dashboardService;
         this.dashboardRegistry = dashboardRegistry;
-        this.dashboardWidgetCreator = dashboardWidgetCreator;
         this.serverStatus = serverStatus;
         this.metricRegistry = metricRegistry;
         this.searches = searches;
@@ -87,7 +83,7 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
     public BundleImporter get() {
         return new BundleImporter(inputService, inputRegistry, extractorFactory,
                 streamService, streamRuleService, outputService, dashboardService,
-                dashboardRegistry, dashboardWidgetCreator, serverStatus, metricRegistry, searches, messageInputFactory,
+                dashboardRegistry, serverStatus, metricRegistry, searches, messageInputFactory,
                 inputLauncher);
     }
 }

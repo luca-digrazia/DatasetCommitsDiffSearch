@@ -25,7 +25,6 @@ package org.graylog2.plugin.configuration.fields;
 import com.google.common.collect.Lists;
 
 import java.util.List;
-import java.util.Locale;
 
 public class NumberField extends AbstractConfigurationField {
 
@@ -56,7 +55,7 @@ public class NumberField extends AbstractConfigurationField {
         this.attributes = Lists.newArrayList();
         if (attrs != null) {
             for (Attribute attribute : attrs) {
-                this.attributes.add(attribute.toString().toLowerCase(Locale.ENGLISH));
+                this.attributes.add(attribute.toString().toLowerCase());
             }
         }
     }

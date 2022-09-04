@@ -26,7 +26,6 @@ import org.graylog2.restclient.lib.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Locale;
 import java.util.Map;
 
 public class MetricsListItem {
@@ -42,7 +41,7 @@ public class MetricsListItem {
 
     @SuppressWarnings("unchecked")
     public Metric getMetric() {
-        Metric.MetricType metricType = Metric.MetricType.valueOf(this.type.toUpperCase(Locale.ENGLISH));
+        Metric.MetricType metricType = Metric.MetricType.valueOf(this.type.toUpperCase());
 
         try {
             switch (metricType) {
@@ -50,7 +49,7 @@ public class MetricsListItem {
                 case TIMER:
                     String timerTimeUnit = (String) metric.get("duration_unit");
                     Map<String, Object> timing = (Map<String, Object>) metric.get("time");
-                    return new Timer(timing, Timer.Unit.valueOf(timerTimeUnit.toUpperCase(Locale.ENGLISH)));
+                    return new Timer(timing, Timer.Unit.valueOf(timerTimeUnit.toUpperCase()));
                 case METER:
                     Map<String, Object> rate = (Map<String, Object>) metric.get("rate");
                     return new Meter(rate);

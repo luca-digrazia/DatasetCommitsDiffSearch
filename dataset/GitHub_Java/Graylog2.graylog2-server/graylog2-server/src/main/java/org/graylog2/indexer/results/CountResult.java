@@ -16,15 +16,36 @@
  */
 package org.graylog2.indexer.results;
 
-import com.google.auto.value.AutoValue;
+import org.elasticsearch.search.SearchHits;
 
-@AutoValue
-public abstract class CountResult {
-    public abstract long count();
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+public class CountResult {
 
-    public abstract long tookMs();
+    private final long count;
+    private final long tookMs;
+    private SearchHits searchHits = null;
 
-    public static CountResult create(long count, long tookMs) {
-        return new AutoValue_CountResult(count, tookMs);
+    public CountResult(long count, long tookMs) {
+        this.count = count;
+        this.tookMs = tookMs;
+    }
+
+    public CountResult(long totalHits, long tookInMillis, SearchHits searchHits) {
+        this(totalHits, tookInMillis);
+        this.searchHits = searchHits;
+    }
+
+    public long getCount() {
+        return count;
+    }
+
+    public long getTookMs() {
+        return tookMs;
+    }
+
+    public SearchHits getSearchHits() {
+        return searchHits;
     }
 }

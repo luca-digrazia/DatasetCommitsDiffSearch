@@ -25,21 +25,22 @@ package org.graylog2.plugin.journal;
 import com.google.common.base.Charsets;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.system.NodeId;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
 
 public class RawMessageTest {
+
     @Test
     public void minimalEncodeDecode() throws IOException {
+
         final RawMessage rawMessage = new RawMessage("testmessage".getBytes(Charsets.UTF_8));
         final File tempFile = File.createTempFile("node", "test");
-        rawMessage.addSourceNode("inputid", new NodeId(tempFile.getAbsolutePath()));
+        rawMessage.addSourceNode("inputid", new NodeId(tempFile.getAbsolutePath()), true);
         rawMessage.setCodecName("raw");
         rawMessage.setCodecConfig(Configuration.EMPTY_CONFIGURATION);
 
@@ -47,7 +48,9 @@ public class RawMessageTest {
         final RawMessage decodedMsg = RawMessage.decode(encoded, 1);
 
         assertNotNull(decodedMsg);
-        assertArrayEquals("testmessage".getBytes(Charsets.UTF_8), decodedMsg.getPayload());
-        assertEquals("raw", decodedMsg.getCodecName());
+        assertEquals(decodedMsg.getPayload(), "testmessage".getBytes(Charsets.UTF_8));
+        assertEquals(decodedMsg.getCodecName(), "raw");
+
     }
+
 }

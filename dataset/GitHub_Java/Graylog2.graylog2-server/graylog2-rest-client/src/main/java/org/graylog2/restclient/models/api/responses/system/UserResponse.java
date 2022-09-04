@@ -21,7 +21,6 @@ import org.graylog2.restclient.models.Startpage;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class UserResponse {
 
@@ -49,8 +48,6 @@ public class UserResponse {
 
     @JsonProperty("session_timeout_ms")
     public long sessionTimeoutMs;
-
-    public Set<String> roles;
 
     public Startpage getStartpage() {
         if (startpage == null || startpage.type == null || startpage.id == null) {

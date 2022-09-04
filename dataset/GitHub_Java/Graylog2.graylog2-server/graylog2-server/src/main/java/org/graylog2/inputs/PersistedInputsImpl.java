@@ -1,6 +1,23 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.inputs;
 
 import com.google.common.collect.Lists;
+import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
@@ -32,12 +49,35 @@ public class PersistedInputsImpl implements PersistedInputs {
                 final MessageInput input = inputService.getMessageInput(io);
                 result.add(input);
             } catch (NoSuchInputTypeException e) {
-                LOG.warn("Cannot launch persisted input. No such type [{}].", io.getType());
+                LOG.warn("Cannot instantiate persisted input. No such type [{}].", io.getType());
             } catch (Throwable e) {
-                LOG.warn("Cannot launch persisted input. Exception caught: ", e);
+                LOG.warn("Cannot instantiate persisted input. Exception caught: ", e);
             }
         }
 
         return result.iterator();
+    }
+
+    @Override
+    public MessageInput get(String id) {
+        try {
+            return inputService.getMessageInput(inputService.find(id));
+        } catch (NoSuchInputTypeException e) {
+            LOG.warn("Cannot instantiate persisted input: ", e);
+        } catch (NotFoundException e) {
+            LOG.warn("Cannot find persisted Input with id {}", id);
+        }
+
+        return null;
+    }
+
+    @Override
+    public boolean add(MessageInput e) {
+        return false;
+    }
+
+    @Override
+    public boolean remove(Object o) {
+        return false;
     }
 }

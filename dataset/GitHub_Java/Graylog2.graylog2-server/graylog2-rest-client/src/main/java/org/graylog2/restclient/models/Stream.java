@@ -16,7 +16,6 @@
  */
 package org.graylog2.restclient.models;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.Lists;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
@@ -44,7 +43,7 @@ public class Stream {
     private final StreamService streamService;
 
     public interface Factory {
-        Stream fromSummaryResponse(StreamSummaryResponse ssr);
+        public Stream fromSummaryResponse(StreamSummaryResponse ssr);
     }
 
     private final ApiClient api;
@@ -183,7 +182,6 @@ public class Stream {
         return creatorUserId;
     }
 
-    @JsonIgnore
     public User getCreatorUser() {
         return userService.load(this.creatorUserId);
     }
@@ -219,6 +217,15 @@ public class Stream {
     }
 
     public int getActiveAlerts() throws APIException, IOException {
+        /*int total = 0;
+        for (AlertCondition alertCondition : this.alertConditionService.allOfStream(this)) {
+            if (alertCondition.getParameters() == null) continue;
+
+            int time = (alertCondition.getParameters().get("time") == null ? 0 : Integer.parseInt(alertCondition.getParameters().get("time").toString()));
+            int grace = (alertCondition.getParameters().get("grace") == null ? 0 : Integer.parseInt(alertCondition.getParameters().get("grace").toString()));
+            int since = Math.round(new DateTime().minusMinutes((time + grace == 0 ? 1 : time + grace)).getMillis()/1000);
+            total += getAlertsInformation(since).alerts.size();
+        }*/
         CheckConditionResponse response = streamService.activeAlerts(this.getId());
         int size = (response.results == null ? 0 : response.results.size());
 

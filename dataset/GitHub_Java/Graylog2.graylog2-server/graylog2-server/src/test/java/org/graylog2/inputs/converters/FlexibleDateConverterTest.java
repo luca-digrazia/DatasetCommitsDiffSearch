@@ -16,25 +16,21 @@
  */
 package org.graylog2.inputs.converters;
 
-import com.google.common.collect.ImmutableMap;
-import org.assertj.jodatime.api.Assertions;
 import org.graylog2.plugin.inputs.Converter;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
-import java.util.Collections;
+import java.util.HashMap;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.*;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class FlexibleDateConverterTest {
 
     @Test
     public void testConvert() throws Exception {
-        Converter c = new FlexibleDateConverter(Collections.<String, Object>emptyMap());
+        Converter c = new FlexibleDateConverter(new HashMap<String, Object>());
 
         assertNull(c.convert(null));
         assertEquals(null, c.convert(""));
@@ -49,24 +45,4 @@ public class FlexibleDateConverterTest {
         assertTrue(c.convert("Mar 2 13:48:18").toString().contains("-03-02T13:48:18.000"));
     }
 
-    @Test
-    public void convertObeysTimeZone() throws Exception {
-        Converter c = new FlexibleDateConverter(ImmutableMap.<String, Object>of("time_zone", "+12:00"));
-
-        final DateTime dateOnly = (DateTime) c.convert("2014-3-12");
-        assertThat(dateOnly.getZone()).isEqualTo(DateTimeZone.forOffsetHours(12));
-        Assertions.assertThat(dateOnly)
-                .isAfterOrEqualTo(new DateTime(2014, 3, 12, 0, 0, DateTimeZone.forOffsetHours(12)))
-                .isBefore(new DateTime(2014, 3, 13, 0, 0, DateTimeZone.forOffsetHours(12)));
-
-        final DateTime dateTime = (DateTime) c.convert("2014-3-12 12:34");
-        assertThat(dateTime.getZone()).isEqualTo(DateTimeZone.forOffsetHours(12));
-        Assertions.assertThat(dateTime)
-                .isEqualTo(new DateTime(2014, 3, 12, 12, 34, DateTimeZone.forOffsetHours(12)));
-
-        final DateTime textualDateTime = (DateTime) c.convert("Mar 12, 2014 2pm");
-        assertThat(textualDateTime.getZone()).isEqualTo(DateTimeZone.forOffsetHours(12));
-        Assertions.assertThat(textualDateTime)
-                .isEqualTo(new DateTime(2014, 3, 12, 14, 0, DateTimeZone.forOffsetHours(12)));
-    }
 }

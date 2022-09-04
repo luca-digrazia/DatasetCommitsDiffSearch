@@ -38,7 +38,7 @@ import org.graylog2.plugin.alarms.callbacks.AlarmCallbackException;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +53,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.Collections;
 import java.util.List;
@@ -105,7 +106,7 @@ public class StreamAlertReceiverResource extends RestResource {
         final Stream stream = streamService.load(streamid);
 
         // TODO What's the actual URI of the created resource?
-        final URI streamAlertUri = getUriBuilderToSelf().path(StreamAlertResource.class).build(streamid);
+        final URI streamAlertUri = UriBuilder.fromResource(StreamAlertResource.class).build(streamid);
 
         // Maybe the list already contains this receiver?
         if (stream.getAlertReceivers().containsKey(type) || stream.getAlertReceivers().get(type) != null) {
@@ -142,7 +143,8 @@ public class StreamAlertReceiverResource extends RestResource {
         streamService.removeAlertReceiver(stream, type, entity);
     }
 
-    @POST
+    // TODO Replace @GET with @POST (because the method isn't idempotent)
+    @GET
     @Timed
     @Path("sendDummyAlert")
     @ApiOperation(value = "Send a test mail for a given stream")
@@ -150,7 +152,7 @@ public class StreamAlertReceiverResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Response sendDummyAlert(@ApiParam(name = "streamId", value = "The stream id the dummy alert should be sent for.", required = true)
+    public Response sendDummyAlert(@ApiParam(name = "streamId", value = "The stream id this new alert condition belongs to.", required = true)
                                @PathParam("streamId") String streamid)
             throws TransportConfigurationException, EmailException, NotFoundException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);

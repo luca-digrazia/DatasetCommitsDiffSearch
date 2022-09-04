@@ -16,41 +16,40 @@
  */
 package org.graylog2.alarmcallbacks;
 
-import com.google.inject.Injector;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.graylog2.shared.bindings.InstantiationService;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertTrue;
 
-@RunWith(MockitoJUnitRunner.class)
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class AlarmCallbackFactoryTest {
     private AlarmCallbackFactory alarmCallbackFactory;
-    @Mock
-    private Injector injector;
-    @Mock
+    private InstantiationService instantiationService;
     private DummyAlarmCallback dummyAlarmCallback;
 
     public interface DummyAlarmCallback extends AlarmCallback {
     }
 
-    @Before
+    @BeforeMethod
     public void setUp() throws Exception {
-        when(injector.getInstance(DummyAlarmCallback.class)).thenReturn(dummyAlarmCallback);
+        this.instantiationService = mock(InstantiationService.class);
+        this.dummyAlarmCallback = mock(DummyAlarmCallback.class);
+        when(instantiationService.getInstance(DummyAlarmCallback.class)).thenReturn(dummyAlarmCallback);
         Set<Class<? extends AlarmCallback>> availableAlarmCallbacks = new HashSet<Class<? extends AlarmCallback>>();
         availableAlarmCallbacks.add(DummyAlarmCallback.class);
 
-        this.alarmCallbackFactory = new AlarmCallbackFactory(injector, availableAlarmCallbacks);
+        this.alarmCallbackFactory = new AlarmCallbackFactory(instantiationService, availableAlarmCallbacks);
     }
 
     @Test

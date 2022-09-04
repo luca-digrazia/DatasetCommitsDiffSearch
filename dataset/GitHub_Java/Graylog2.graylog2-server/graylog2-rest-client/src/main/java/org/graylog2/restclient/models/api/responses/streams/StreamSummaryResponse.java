@@ -43,7 +43,4 @@ public class StreamSummaryResponse {
 
 	@JsonProperty("content_pack")
 	public String contentPack;
-
-	@JsonProperty("matching_type")
-	public String matchingType;
 }

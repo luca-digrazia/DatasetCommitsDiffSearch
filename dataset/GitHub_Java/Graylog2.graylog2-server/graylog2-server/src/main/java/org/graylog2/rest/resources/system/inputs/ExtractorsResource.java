@@ -29,10 +29,7 @@ import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.converters.ConverterFactory;
 import org.graylog2.inputs.extractors.ExtractorFactory;
-import org.graylog2.rest.models.system.inputs.extractors.responses.ExtractorMetrics;
-import org.graylog2.rest.models.system.inputs.extractors.responses.ExtractorSummary;
-import org.graylog2.rest.models.system.inputs.extractors.responses.ExtractorSummaryList;
-import org.graylog2.shared.metrics.MetricUtils;
+import org.graylog2.metrics.MetricUtils;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.inputs.Converter;
@@ -40,8 +37,7 @@ import org.graylog2.plugin.inputs.Extractor;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.resources.system.inputs.requests.CreateExtractorRequest;
 import org.graylog2.rest.resources.system.inputs.requests.OrderExtractorsRequest;
-import org.graylog2.shared.rest.resources.system.inputs.InputsResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.PersistedInputs;
 import org.graylog2.shared.rest.resources.RestResource;
@@ -56,6 +52,7 @@ import javax.validation.constraints.NotNull;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -127,7 +124,7 @@ public class ExtractorsResource extends RestResource {
         activityWriter.write(new Activity(msg, ExtractorsResource.class));
 
         final Map<String, String> result = ImmutableMap.of("extractor_id", id);
-        final URI extractorUri = getUriBuilderToSelf().path(ExtractorsResource.class)
+        final URI extractorUri = UriBuilder.fromResource(ExtractorsResource.class)
                 .path("{inputId}")
                 .build(input.getId());
 
@@ -147,7 +144,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 400, message = "Field the extractor should write on is reserved."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration.")
     })
-    public ExtractorSummary update(@ApiParam(name = "inputId", required = true)
+    public Map<String, Object> update(@ApiParam(name = "inputId", required = true)
                                       @PathParam("inputId") String inputId,
                                       @ApiParam(name = "extractorId", required = true)
                                       @PathParam("extractorId") String extractorId,
@@ -187,7 +184,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public ExtractorSummaryList list(@ApiParam(name = "inputId", required = true)
+    public Map<String, Object> list(@ApiParam(name = "inputId", required = true)
                                     @PathParam("inputId") String inputId) throws NotFoundException {
         checkPermission(RestPermissions.INPUTS_READ, inputId);
 
@@ -197,12 +194,14 @@ public class ExtractorsResource extends RestResource {
             throw new javax.ws.rs.NotFoundException();
         }
 
-        final List<ExtractorSummary> extractors = Lists.newArrayList();
+        final List<Map<String, Object>> extractors = Lists.newArrayList();
         for (Extractor extractor : inputService.getExtractors(input)) {
             extractors.add(toMap(extractor));
         }
 
-        return ExtractorSummaryList.create(extractors);
+        return ImmutableMap.of(
+                "extractors", extractors,
+                "total", inputService.getExtractors(input).size());
     }
 
     @GET
@@ -214,7 +213,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such extractor on this input.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public ExtractorSummary single(
+    public Map<String, Object> single(
             @ApiParam(name = "inputId", required = true)
             @PathParam("inputId") String inputId,
             @ApiParam(name = "extractorId", required = true)
@@ -299,14 +298,31 @@ public class ExtractorsResource extends RestResource {
         LOG.info("Updated extractor ordering of input <persist:{}>.", inputPersistId);
     }
 
-    private ExtractorSummary toMap(Extractor extractor) {
-        final ExtractorMetrics metrics = ExtractorMetrics.create(MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getTotalTimerName())),
-                MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getConverterTimerName())));
+    private Map<String, Object> toMap(Extractor extractor) {
+        Map<String, Object> map = Maps.newHashMap();
 
-        return ExtractorSummary.create(extractor.getId(), extractor.getTitle(), extractor.getType().toString().toLowerCase(), extractor.getCursorStrategy().toString().toLowerCase(),
-                extractor.getSourceField(), extractor.getTargetField(), extractor.getExtractorConfig(), extractor.getCreatorUserId(), extractor.converterConfigMap(),
-                extractor.getConditionType().toString().toLowerCase(), extractor.getConditionValue(), extractor.getOrder(), extractor.getExceptionCount(),
-                extractor.getConverterExceptionCount(), metrics);
+        map.put(Extractor.FIELD_ID, extractor.getId());
+        map.put(Extractor.FIELD_TITLE, extractor.getTitle());
+        map.put(Extractor.FIELD_TYPE, extractor.getType().toString().toLowerCase());
+        map.put(Extractor.FIELD_CURSOR_STRATEGY, extractor.getCursorStrategy().toString().toLowerCase());
+        map.put(Extractor.FIELD_SOURCE_FIELD, extractor.getSourceField());
+        map.put(Extractor.FIELD_TARGET_FIELD, extractor.getTargetField());
+        map.put(Extractor.FIELD_EXTRACTOR_CONFIG, extractor.getExtractorConfig());
+        map.put(Extractor.FIELD_CREATOR_USER_ID, extractor.getCreatorUserId());
+        map.put(Extractor.FIELD_CONVERTERS, extractor.converterConfigMap());
+        map.put(Extractor.FIELD_CONDITION_TYPE, extractor.getConditionType().toString().toLowerCase());
+        map.put(Extractor.FIELD_CONDITION_VALUE, extractor.getConditionValue());
+        map.put(Extractor.FIELD_ORDER, extractor.getOrder());
+
+        map.put("exceptions", extractor.getExceptionCount());
+        map.put("converter_exceptions", extractor.getConverterExceptionCount());
+
+        Map<String, Object> metrics = Maps.newHashMap();
+        metrics.put("total", MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getTotalTimerName())));
+        metrics.put("converters", MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getConverterTimerName())));
+        map.put("metrics", metrics);
+
+        return map;
     }
 
     private List<Converter> loadConverters(Map<String, Map<String, Object>> requestConverters) {

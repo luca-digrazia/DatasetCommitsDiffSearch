@@ -56,6 +56,7 @@ import org.elasticsearch.common.hppc.cursors.ObjectObjectCursor;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.node.Node;
 import org.elasticsearch.search.SearchHit;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.IndexNotFoundException;
@@ -82,8 +83,8 @@ public class Indices implements IndexManagement {
     private final ElasticsearchConfiguration configuration;
 
     @Inject
-    public Indices(Client client, ElasticsearchConfiguration configuration) {
-        this.c = client;
+    public Indices(Node node, ElasticsearchConfiguration configuration) {
+        this.c = node.client();
         this.configuration = configuration;
     }
 
@@ -268,6 +269,7 @@ public class Indices implements IndexManagement {
     public void flush(String index) {
         FlushRequest flush = new FlushRequest(index);
         flush.force(true); // Just flushes. Even if it is not necessary.
+        flush.full(false);
 
         c.admin().indices().flush(new FlushRequest(index).force(true)).actionGet();
     }
@@ -390,6 +392,7 @@ public class Indices implements IndexManagement {
         or.maxNumSegments(configuration.getIndexOptimizationMaxNumSegments());
         or.onlyExpungeDeletes(false);
         or.flush(true);
+        or.waitForMerge(true); // This makes us block until the operation finished.
 
         c.admin().indices().optimize(or).actionGet();
     }

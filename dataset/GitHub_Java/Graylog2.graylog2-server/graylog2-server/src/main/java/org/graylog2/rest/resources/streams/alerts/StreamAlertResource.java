@@ -35,10 +35,8 @@ import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.models.streams.alerts.AlertListSummary;
-import org.graylog2.rest.models.streams.alerts.AlertSummary;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.StreamService;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -46,7 +44,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.Path;
@@ -89,7 +86,7 @@ public class StreamAlertResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public AlertListSummary list(@ApiParam(name = "streamId", value = "The stream id this new alert condition belongs to.", required = true)
+    public Map<String, Object> list(@ApiParam(name = "streamId", value = "The stream id this new alert condition belongs to.", required = true)
                                     @PathParam("streamId") String streamid,
                                     @ApiParam(name = "since", value = "Optional parameter to define a lower date boundary. (UNIX timestamp)", required = false)
                                     @QueryParam("since") int sinceTs) throws NotFoundException {
@@ -103,34 +100,14 @@ public class StreamAlertResource extends RestResource {
         }
 
         final Stream stream = streamService.load(streamid);
-        final List<AlertSummary> conditions = toSummaryList(alertService.loadRecentOfStream(stream.getId(), since));
+        final List<Map<String, Object>> conditions = Lists.newArrayList();
+        for (Alert alert : alertService.loadRecentOfStream(stream.getId(), since)) {
+            conditions.add(alert.toMap());
+        }
 
-        return AlertListSummary.create(alertService.totalCountForStream(streamid), conditions);
-    }
-
-    @GET
-    @Timed
-    @Path("paginated")
-    @ApiOperation(value = "Get the alarms of this stream, filtered by specifying limit and offset parameters.")
-    @Produces(MediaType.APPLICATION_JSON)
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "Stream not found."),
-            @ApiResponse(code = 400, message = "Invalid ObjectId.")
-    })
-    public AlertListSummary listPaginated(@ApiParam(name = "streamId", value = "The stream id this new alert condition belongs to.", required = true)
-                                    @PathParam("streamId") String streamid,
-                                    @ApiParam(name = "skip", value = "The number of elements to skip (offset).", required = true)
-                                    @QueryParam("skip") @DefaultValue("0") int skip,
-                                    @ApiParam(name = "limit", value = "The maximum number of elements to return.", required = true)
-                                    @QueryParam("limit") @DefaultValue("0") int limit) throws NotFoundException {
-        checkPermission(RestPermissions.STREAMS_READ, streamid);
-
-        if (limit == 0) { limit = AlertImpl.MAX_LIST_COUNT; }
-
-        final Stream stream = streamService.load(streamid);
-        final List<AlertSummary> conditions = toSummaryList(alertService.listForStreamId(stream.getId(), skip, limit));
-
-        return AlertListSummary.create(alertService.totalCountForStream(streamid), conditions);
+        return ImmutableMap.of(
+                "alerts", conditions,
+                "total", alertService.totalCountForStream(streamid));
     }
 
     @GET
@@ -180,15 +157,6 @@ public class StreamAlertResource extends RestResource {
         } catch (ExecutionException e) {
             LOG.error("Could not check for alerts.", e);
             throw new InternalServerErrorException(e);
-        }
-
-        return result;
-    }
-
-    private List<AlertSummary> toSummaryList(List<Alert> alertList) {
-        final List<AlertSummary> result = Lists.newArrayList();
-        for (Alert alert : alertList) {
-            result.add(AlertSummary.create(alert.getId(), alert.getConditionId(), alert.getStreamId(), alert.getDescription(), alert.getConditionParameters(), alert.getTriggeredAt()));
         }
 
         return result;

@@ -1,39 +1,40 @@
 /**
- * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.radio.transports.amqp;
 
-import com.rabbitmq.client.*;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.RadioMessage;
+import org.graylog2.radio.Configuration;
+import org.joda.time.Duration;
 import org.msgpack.MessagePack;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import java.io.IOException;
+
+import static com.rabbitmq.client.MessageProperties.MINIMAL_BASIC;
+import static com.rabbitmq.client.MessageProperties.MINIMAL_PERSISTENT_BASIC;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class AMQPSender {
-
-    private static final Logger LOG = LoggerFactory.getLogger(AMQPSender.class);
 
     // Not threadsafe!
 
@@ -42,14 +43,41 @@ public class AMQPSender {
     private final String vHost;
     private final String username;
     private final String password;
+    private final String queueName;
+    private final String queueType;
+    private final String exchangeName;
+    private final String routingKey;
+    private final boolean amqpPersistentMessagesEnabled;
+    private final Duration connectTimeout;
 
     private Connection connection;
     private Channel channel;
 
     private final MessagePack pack;
 
-    public AMQPSender(String hostname, int port, String vHost, String username, String password) {
+    public AMQPSender(String hostname,
+                      int port,
+                      String vHost,
+                      String username,
+                      String password,
+                      String queueName,
+                      String queueType,
+                      String exchangeName,
+                      String routingKey,
+                      boolean amqpPersistentMessagesEnabled, 
+                      Duration amqpConnectTimeout) {
+        this.queueName = queueName;
+        this.queueType = queueType;
+        this.exchangeName = exchangeName;
+        this.routingKey = routingKey;
+        this.amqpPersistentMessagesEnabled = amqpPersistentMessagesEnabled;
+        connectTimeout = amqpConnectTimeout;
         pack = new MessagePack();
+
+        // Use a separate class loader for msgpack to avoid generation of duplicate class names.
+        // The JavaassistTemplateBuilder used by MessagePack uses a sequence number for class naming
+        // and is not thread-safe.
+        pack.setClassLoader(new ClassLoader(Thread.currentThread().getContextClassLoader()) {});
 
         this.hostname = hostname;
         this.port = port;
@@ -58,19 +86,37 @@ public class AMQPSender {
         this.password = password;
     }
 
+    @Inject
+    public AMQPSender(Configuration configuration) {
+        this(configuration.getAmqpHostname(),
+                configuration.getAmqpPort(),
+                configuration.getAmqpVirtualHost(),
+                configuration.getAmqpUsername(),
+                configuration.getAmqpPassword(),
+                configuration.getAmqpQueueName(),
+                configuration.getAmqpQueueType(),
+                configuration.getAmqpExchangeName(),
+                configuration.getAmqpRoutingKey(),
+                configuration.isAmqpPersistentMessagesEnabled(),
+                configuration.getAmqpConnectTimeout());
+    }
+
     public void send(Message msg) throws IOException {
         if (!isConnected()) {
             connect();
         }
 
-        byte[] body = RadioMessage.serialize(pack, msg);
+        final byte[] body = RadioMessage.serialize(pack, msg);
 
-        boolean mandatory = true;
-        channel.basicPublish(AMQPProducer.EXCHANGE, AMQPProducer.ROUTING_KEY, mandatory, new AMQP.BasicProperties(), body);
+        channel.basicPublish(exchangeName,
+                             routingKey,
+                             true, // mandatory
+                             amqpPersistentMessagesEnabled ? MINIMAL_PERSISTENT_BASIC : MINIMAL_BASIC,
+                             body);
     }
 
     public void connect() throws IOException {
-        ConnectionFactory factory = new ConnectionFactory();
+        final ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(hostname);
         factory.setPort(port);
 
@@ -81,15 +127,17 @@ public class AMQPSender {
             factory.setUsername(username);
             factory.setPassword(password);
         }
+        
+        factory.setConnectionTimeout((int) connectTimeout.getMillis());
 
         connection = factory.newConnection();
         channel = connection.createChannel();
 
         // It's ok if the queue or exchange already exist.
-        channel.queueDeclare(AMQPProducer.QUEUE, true, false, false, null);
-        channel.exchangeDeclare(AMQPProducer.EXCHANGE, "topic", true, false, null);
+        channel.queueDeclare(queueName, true, false, false, null);
+        channel.exchangeDeclare(exchangeName, queueType, false, false, null);
 
-        channel.queueBind(AMQPProducer.QUEUE, AMQPProducer.EXCHANGE, AMQPProducer.ROUTING_KEY);
+        channel.queueBind(queueName, exchangeName, routingKey);
     }
 
     public boolean isConnected() {

@@ -17,7 +17,6 @@
 package org.graylog2.rest.resources.streams.rules;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.Lists;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
@@ -33,7 +32,7 @@ import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.responses.SingleStreamRuleSummaryResponse;
 import org.graylog2.rest.resources.streams.responses.StreamRuleListResponse;
 import org.graylog2.rest.resources.streams.rules.requests.CreateStreamRuleRequest;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
 import org.hibernate.validator.constraints.NotEmpty;
@@ -52,8 +51,8 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.List;
 
 @RequiresAuthentication
@@ -87,7 +86,7 @@ public class StreamRuleResource extends RestResource {
 
         final SingleStreamRuleSummaryResponse response = SingleStreamRuleSummaryResponse.create(id);
 
-        final URI streamRuleUri = getUriBuilderToSelf().path(StreamRuleResource.class)
+        final URI streamRuleUri = UriBuilder.fromResource(StreamRuleResource.class)
                 .path("{streamRuleId}")
                 .build(streamId, id);
 
@@ -193,20 +192,5 @@ public class StreamRuleResource extends RestResource {
         } else {
             throw new NotFoundException();
         }
-    }
-
-    @GET
-    @Path("/types")
-    @Timed
-    @ApiOperation(value = "Get all available stream types")
-    @Produces(MediaType.APPLICATION_JSON)
-    public List<StreamRuleType> types(@ApiParam(name = "streamid", value = "The stream id this new rule belongs to.", required = true)
-                                          @PathParam("streamid") String streamid) {
-        final List<StreamRuleType> result = new ArrayList<>(StreamRuleType.values().length);
-        for (StreamRuleType type : StreamRuleType.values()) {
-            result.add(type);
-        }
-
-        return result;
     }
 }

@@ -1,29 +1,24 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.utilities.date;
 
-import org.junit.Test;
+import org.testng.annotations.Test;
 
-import static junit.framework.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.testng.AssertJUnit.*;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -43,9 +38,26 @@ public class NaturalDateParserTest {
         p.parse("last week to today");
     }
 
-    @Test(expected = NaturalDateParser.DateNotParsableException.class)
+    @Test(expectedExceptions = NaturalDateParser.DateNotParsableException.class)
     public void testParseFailsOnUnparsableDate() throws Exception, NaturalDateParser.DateNotParsableException {
         new NaturalDateParser().parse("LOLWUT");
     }
 
+    @Test(expectedExceptions = NaturalDateParser.DateNotParsableException.class)
+    public void testParseFailsOnEmptyDate() throws Exception, NaturalDateParser.DateNotParsableException {
+        new NaturalDateParser().parse("");
+    }
+
+    @Test(enabled = false)
+    public void testTemporalOrder() throws Exception, NaturalDateParser.DateNotParsableException {
+        NaturalDateParser p = new NaturalDateParser();
+
+        NaturalDateParser.Result result1 = p.parse("last hour");
+        assertTrue(result1.getFrom().compareTo(result1.getTo()) < 0);
+
+        NaturalDateParser.Result result2 = p.parse("last one hour");
+        assertTrue(result2.getFrom().compareTo(result2.getTo()) < 0);
+
+
+    }
 }

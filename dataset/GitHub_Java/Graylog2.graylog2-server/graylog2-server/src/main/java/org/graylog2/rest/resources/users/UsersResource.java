@@ -16,10 +16,8 @@
  */
 package org.graylog2.rest.resources.users;
 
-import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
@@ -29,24 +27,21 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.Configuration;
 import org.graylog2.plugin.database.ValidationException;
-import org.graylog2.rest.models.users.requests.ChangePasswordRequest;
-import org.graylog2.rest.models.users.requests.ChangeUserRequest;
-import org.graylog2.rest.models.users.requests.CreateUserRequest;
-import org.graylog2.rest.models.users.requests.PermissionEditRequest;
-import org.graylog2.rest.models.users.requests.Startpage;
-import org.graylog2.rest.models.users.requests.UpdateUserPreferences;
-import org.graylog2.rest.models.users.responses.Token;
-import org.graylog2.rest.models.users.responses.TokenList;
-import org.graylog2.rest.models.users.responses.UserList;
-import org.graylog2.rest.models.users.responses.UserSummary;
+import org.graylog2.rest.resources.users.requests.ChangePasswordRequest;
+import org.graylog2.rest.resources.users.requests.ChangeUserRequest;
+import org.graylog2.rest.resources.users.requests.CreateUserRequest;
+import org.graylog2.rest.resources.users.requests.PermissionEditRequest;
+import org.graylog2.rest.resources.users.requests.Startpage;
+import org.graylog2.rest.resources.users.requests.UpdateUserPreferences;
+import org.graylog2.rest.resources.users.responses.Token;
+import org.graylog2.rest.resources.users.responses.TokenList;
+import org.graylog2.rest.resources.users.responses.User;
+import org.graylog2.rest.resources.users.responses.UserList;
 import org.graylog2.security.AccessToken;
 import org.graylog2.security.AccessTokenService;
-import org.graylog2.security.InMemoryRolePermissionResolver;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
-import org.graylog2.shared.users.Role;
 import org.graylog2.shared.users.UserService;
-import org.graylog2.users.RoleService;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,15 +62,14 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
-import static org.graylog2.shared.security.RestPermissions.USERS_EDIT;
-import static org.graylog2.shared.security.RestPermissions.USERS_PERMISSIONSEDIT;
+import static org.graylog2.security.RestPermissions.USERS_EDIT;
+import static org.graylog2.security.RestPermissions.USERS_PERMISSIONSEDIT;
 
 @RequiresAuthentication
 @Path("/users")
@@ -87,20 +81,14 @@ public class UsersResource extends RestResource {
 
     private final UserService userService;
     private final AccessTokenService accessTokenService;
-    private final InMemoryRolePermissionResolver inMemoryRolePermissionResolver;
-    private final RoleService roleService;
     private final Configuration configuration;
 
     @Inject
     public UsersResource(UserService userService,
                          AccessTokenService accessTokenService,
-                         InMemoryRolePermissionResolver inMemoryRolePermissionResolver,
-                         RoleService roleService,
                          Configuration configuration) {
         this.userService = userService;
         this.accessTokenService = accessTokenService;
-        this.inMemoryRolePermissionResolver = inMemoryRolePermissionResolver;
-        this.roleService = roleService;
         this.configuration = configuration;
     }
 
@@ -111,8 +99,8 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 404, message = "The user could not be found.")
     })
-    public UserSummary get(@ApiParam(name = "username", value = "The username to return information for.", required = true)
-                           @PathParam("username") String username) {
+    public User get(@ApiParam(name = "username", value = "The username to return information for.", required = true)
+                    @PathParam("username") String username) {
         final org.graylog2.plugin.database.users.User user = userService.load(username);
         if (user == null) {
             throw new NotFoundException();
@@ -129,7 +117,7 @@ public class UsersResource extends RestResource {
     @ApiOperation(value = "List all users", notes = "The permissions assigned to the users are always included.")
     public UserList listUsers() {
         final List<org.graylog2.plugin.database.users.User> users = userService.loadAll();
-        final List<UserSummary> resultUsers = Lists.newArrayListWithCapacity(users.size() + 1);
+        final List<User> resultUsers = Lists.newArrayListWithCapacity(users.size() + 1);
         resultUsers.add(toUserResponse(userService.getAdminUser()));
 
         for (org.graylog2.plugin.database.users.User user : users) {
@@ -171,14 +159,14 @@ public class UsersResource extends RestResource {
         }
 
         final Startpage startpage = cr.startpage();
-        if (startpage != null) {
+        if(startpage != null) {
             user.setStartpage(startpage.type(), startpage.id());
         }
 
         final String id = userService.save(user);
         LOG.debug("Saved user {} with id {}", user.getName(), id);
 
-        final URI userUri = getUriBuilderToSelf().path(UsersResource.class)
+        final URI userUri = UriBuilder.fromResource(UsersResource.class)
                 .path("{username}")
                 .build(user.getName());
 
@@ -255,9 +243,16 @@ public class UsersResource extends RestResource {
     @ApiResponses({@ApiResponse(code = 400, message = "When attempting to remove a read only user (e.g. built-in or LDAP user).")})
     public void deleteUser(@ApiParam(name = "username", value = "The name of the user to delete.", required = true)
                            @PathParam("username") String username) {
-        if (userService.delete(username) == 0) {
+        final org.graylog2.plugin.database.users.User user = userService.load(username);
+        if (user == null) {
             throw new NotFoundException();
         }
+
+        if (user.isReadOnly()) {
+            throw new BadRequestException("Cannot delete readonly user " + username);
+        }
+
+        userService.destroy(user);
     }
 
     @PUT
@@ -435,51 +430,23 @@ public class UsersResource extends RestResource {
         return user;
     }
 
-    private UserSummary toUserResponse(org.graylog2.plugin.database.users.User user) {
+    private User toUserResponse(org.graylog2.plugin.database.users.User user) {
         return toUserResponse(user, true);
     }
 
-    private UserSummary toUserResponse(org.graylog2.plugin.database.users.User user, boolean includePermissions) {
-
-        final List<String> permissions;
-
-        final Set<String> roleIds = user.getRoleIds();
-        Set<String> roleNames = null;
-        if (!roleIds.isEmpty()) {
-            try {
-                final Map<String, Role> idMap = roleService.loadAllIdMap();
-                roleNames = Sets.newHashSet(Collections2.transform(roleIds, new Role.RoleIdToNameFunction(idMap)));
-            } catch (org.graylog2.database.NotFoundException e) {
-                LOG.error("Unable to load roles", e);
-            }
-        }
-        if (includePermissions) {
-            Set<String> permSet = Sets.newHashSet(user.getPermissions());
-
-            for (String roleId : roleIds) {
-                final Set<String> rolePerms = inMemoryRolePermissionResolver.resolveStringPermission(roleId);
-                if (rolePerms != null) {
-                    permSet.addAll(rolePerms);
-                }
-            }
-            permissions = Lists.newArrayList(permSet);
-        }
-        else {
-            permissions = Collections.emptyList();
-        }
-        return UserSummary.create(
+    private User toUserResponse(org.graylog2.plugin.database.users.User user, boolean includePermissions) {
+        return User.create(
                 user.getId(),
                 user.getName(),
                 user.getEmail(),
                 user.getFullName(),
-                permissions,
+                includePermissions ? user.getPermissions() : Collections.<String>emptyList(),
                 user.getPreferences(),
                 firstNonNull(user.getTimeZone(), DateTimeZone.UTC).getID(),
                 user.getSessionTimeoutMs(),
                 user.isReadOnly(),
                 user.isExternalUser(),
-                user.getStartpage(),
-                roleNames
+                user.getStartpage()
         );
     }
 }

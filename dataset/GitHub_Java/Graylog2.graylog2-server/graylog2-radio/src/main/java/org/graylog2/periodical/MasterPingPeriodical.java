@@ -1,28 +1,26 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.periodical;
 
 import com.ning.http.client.AsyncHttpClient;
+import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.cluster.Ping;
-import org.graylog2.shared.ServerStatus;
+import org.graylog2.plugin.ServerStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +32,7 @@ import java.util.concurrent.ExecutionException;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class MasterPingPeriodical extends Periodical {
-    private final Logger LOG = LoggerFactory.getLogger(MasterPingPeriodical.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MasterPingPeriodical.class);
 
     private final ServerStatus serverStatus;
     private final Configuration configuration;
@@ -85,7 +83,7 @@ public class MasterPingPeriodical extends Periodical {
     }
 
     @Override
-    public void run() {
+    public void doRun() {
         try {
             Ping.ping(httpClient,
                     configuration.getGraylog2ServerUri(),
@@ -94,5 +92,10 @@ public class MasterPingPeriodical extends Periodical {
         } catch (IOException | ExecutionException | InterruptedException e) {
             LOG.error("Master ping failed.", e);
         }
+    }
+
+    @Override
+    protected Logger getLogger() {
+        return LOG;
     }
 }

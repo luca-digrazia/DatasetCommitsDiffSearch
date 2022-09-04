@@ -25,9 +25,11 @@ import org.graylog2.filters.StaticFieldFilter;
 import org.graylog2.filters.StreamMatcherFilter;
 import org.graylog2.plugin.filters.MessageFilter;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.URL;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class MessageFilterBindings extends AbstractModule {
     @Override
     protected void configure() {
@@ -38,12 +40,7 @@ public class MessageFilterBindings extends AbstractModule {
         messageFilters.addBinding().to(StreamMatcherFilter.class);
 
         // built it drools rules
-        final Multibinder<URI> rulesUrls = Multibinder.newSetBinder(binder(), URI.class);
-        try {
-            final URI blacklistRulesUri = Resources.getResource("blacklist.drl").toURI();
-            rulesUrls.addBinding().toInstance(blacklistRulesUri);
-        } catch (URISyntaxException e) {
-            // Ignore
-        }
+        final Multibinder<URL> rulesUrls = Multibinder.newSetBinder(binder(), URL.class);
+        rulesUrls.addBinding().toInstance(Resources.getResource("blacklist.drl"));
     }
 }

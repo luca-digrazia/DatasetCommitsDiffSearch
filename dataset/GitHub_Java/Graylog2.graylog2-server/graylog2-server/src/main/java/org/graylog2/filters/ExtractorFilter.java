@@ -19,7 +19,6 @@ package org.graylog2.filters;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Lists;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
@@ -76,22 +75,17 @@ public class ExtractorFilter implements MessageFilter {
                 public List<Extractor> call() throws Exception {
                     LOG.debug("Re-loading extractors for input <{}> into cache.", inputId);
 
-                    try {
-                        Input input = inputService.find(inputId);
+                    Input input = inputService.find(inputId);
 
-                        List<Extractor> sorted = Lists.newArrayList(inputService.getExtractors(input));
+                    List<Extractor> sorted = Lists.newArrayList(inputService.getExtractors(input));
 
-                        Collections.sort(sorted, new Comparator<Extractor>() {
-                            public int compare(Extractor e1, Extractor e2) {
-                                return e1.getOrder().intValue() - e2.getOrder().intValue();
-                            }
-                        });
+                    Collections.sort(sorted, new Comparator<Extractor>() {
+                        public int compare(Extractor e1, Extractor e2) {
+                            return e1.getOrder().intValue() - e2.getOrder().intValue();
+                        }
+                    });
 
-                        return sorted;
-                    } catch (NotFoundException e) {
-                        LOG.warn("Unable to load input: {}", e.getMessage());
-                        return Collections.emptyList();
-                    }
+                    return sorted;
                 }
             });
         } catch (ExecutionException e) {

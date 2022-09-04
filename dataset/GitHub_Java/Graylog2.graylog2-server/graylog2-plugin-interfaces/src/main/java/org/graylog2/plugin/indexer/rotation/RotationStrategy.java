@@ -22,7 +22,15 @@
  */
 package org.graylog2.plugin.indexer.rotation;
 
+import javax.annotation.Nullable;
+
 public interface RotationStrategy {
-    void rotate();
-    Class<?> configurationClass();
+
+    interface Result {
+        String getDescription();
+        boolean shouldRotate();
+    }
+
+    @Nullable
+    Result shouldRotate(String index);
 }

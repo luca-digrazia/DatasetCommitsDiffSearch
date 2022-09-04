@@ -16,7 +16,6 @@
  */
 package org.graylog2.restclient.models.dashboards.widgets;
 
-import org.graylog2.rest.models.dashboards.requests.AddWidgetRequest;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.timeranges.InvalidRangeParametersException;
@@ -102,13 +101,6 @@ public abstract class DashboardWidget {
                     .onlyMasterNode()
                     .execute();
     }
-
-    public void updateWidget(ApiClient api, AddWidgetRequest addWidgetRequest) throws APIException, IOException {
-        api.path(routes.DashboardsResource().updateWidget(dashboard.getId(), id))
-                .body(addWidgetRequest)
-                .onlyMasterNode()
-                .execute();
-    };
 
     public void updateDescription(ApiClient api, String newDescription) throws APIException, IOException {
         WidgetUpdateRequest wur = new WidgetUpdateRequest();

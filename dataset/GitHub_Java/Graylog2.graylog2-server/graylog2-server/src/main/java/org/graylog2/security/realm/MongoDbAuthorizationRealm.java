@@ -17,8 +17,6 @@
 package org.graylog2.security.realm;
 
 import com.google.common.collect.Sets;
-import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.AuthenticationInfo;
 import org.apache.shiro.authc.AuthenticationToken;
@@ -27,60 +25,50 @@ import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.graylog2.plugin.database.users.User;
-import org.graylog2.security.MongoDbAuthorizationCacheManager;
 import org.graylog2.shared.users.UserService;
-import org.graylog2.users.events.UserChangedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import java.util.Collections;
 import java.util.List;
 
 public class MongoDbAuthorizationRealm extends AuthorizingRealm {
 
-    public static final String NAME = "mongodb-authorization-realm";
     private static final Logger LOG = LoggerFactory.getLogger(MongoDbAuthorizationRealm.class);
     private final UserService userService;
 
     @Inject
-    MongoDbAuthorizationRealm(UserService userService,
-                              MongoDbAuthorizationCacheManager mongoDbAuthorizationCacheManager,
-                              EventBus serverEventBus) {
+    public MongoDbAuthorizationRealm(UserService userService) {
         this.userService = userService;
-        setCachingEnabled(true);
-        setCacheManager(mongoDbAuthorizationCacheManager);
-        serverEventBus.register(this);
     }
 
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
         LOG.debug("Retrieving authorization information for {}", principals);
+        final SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
         final User user = userService.load(principals.getPrimaryPrincipal().toString());
 
-        if (user == null) {
-            return new SimpleAuthorizationInfo();
+        final List<String> permissions;
+        if (null == user) {
+            permissions = Collections.emptyList();
         } else {
-            final SimpleAuthorizationInfo info = new UserAuthorizationInfo(user);
-            final List<String> permissions = user.getPermissions();
+            permissions = user.getPermissions();
 
             if (permissions != null) {
                 info.setStringPermissions(Sets.newHashSet(permissions));
             }
-            info.setRoles(user.getRoleIds());
 
-            LOG.debug("User {} has permissions: {}", principals, permissions);
-            return info;
         }
+
+        LOG.debug("User {} has permissions: {}", principals, permissions);
+        return info;
     }
+
 
     @Override
     protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
         // this class does not authenticate at all
         return null;
-    }
-
-    @Subscribe
-    public void handleUserSave(UserChangedEvent event) {
-        getAuthorizationCache().clear();
     }
 }

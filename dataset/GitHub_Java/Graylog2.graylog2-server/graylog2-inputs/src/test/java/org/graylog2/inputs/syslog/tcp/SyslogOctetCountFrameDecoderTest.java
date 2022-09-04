@@ -21,18 +21,18 @@ import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.handler.codec.embedder.CodecEmbedderException;
 import org.jboss.netty.handler.codec.embedder.DecoderEmbedder;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 public class SyslogOctetCountFrameDecoderTest {
     private DecoderEmbedder<ChannelBuffer> embedder;
 
-    @Before
+    @BeforeMethod
     public void setUp() throws Exception {
         embedder = new DecoderEmbedder<ChannelBuffer>(new SyslogOctetCountFrameDecoder());
     }
@@ -81,29 +81,7 @@ public class SyslogOctetCountFrameDecoderTest {
         assertEquals(embedder.poll().toString(Charsets.UTF_8), "<45>1 2014-10-21T10:21:09+00:00 c4dc57ba1ebb syslog-ng 7120 - [meta sequenceId=\"1\"] syslog-ng starting up; version='3.5.3'\n");
     }
 
-    @Test
-    public void testIncompleteFramesAndSmallBuffer() throws Exception {
-        /*
-         * This test has been added to reproduce this issue: https://github.com/Graylog2/graylog2-server/issues/1105
-         *
-         * It triggers an edge case where the buffer is missing <frame size value length + 1> bytes.
-         * The SyslogOctetCountFrameDecoder was handling this wrong in previous versions and tried to read more from
-         * the buffer than there was available after the frame size value bytes have been skipped.
-         */
-        final byte[] bytes = "123 <45>1 2014-10-21T10:21:09+00:00 c4dc57ba1ebb syslog-ng 7120 - [meta sequenceId=\"1\"] syslog-ng starting up; version='3.5.".getBytes();
-        final ChannelBuffer buf = ChannelBuffers.dynamicBuffer(bytes.length);
-        buf.writeBytes(bytes);
-
-        assertFalse(embedder.offer(buf));
-        assertNull(embedder.poll());
-
-        buf.writeBytes("3'\n".getBytes());
-
-        assertTrue(embedder.offer(buf));
-        assertEquals(embedder.poll().toString(Charsets.UTF_8), "<45>1 2014-10-21T10:21:09+00:00 c4dc57ba1ebb syslog-ng 7120 - [meta sequenceId=\"1\"] syslog-ng starting up; version='3.5.3'\n");
-    }
-
-    @Test(expected = CodecEmbedderException.class)
+    @Test(expectedExceptions = CodecEmbedderException.class)
     public void testBrokenFrames() throws Exception {
         final ChannelBuffer buf1 = ChannelBuffers.copiedBuffer("1 2014-10-21T10:21:09+00:00 c4dc57ba1ebb syslog-ng 7120 - ", Charsets.UTF_8);
 

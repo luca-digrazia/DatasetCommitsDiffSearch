@@ -27,7 +27,7 @@ import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.system.activities.SystemMessage;
 import org.graylog2.system.activities.SystemMessageService;
 import org.slf4j.Logger;
@@ -43,7 +43,7 @@ import java.util.List;
 import java.util.Map;
 
 @RequiresAuthentication
-@Api(value = "System/Messages", description = "Internal Graylog messages")
+@Api(value = "System/Messages", description = "Internal Graylog2 messages")
 @Path("/system/messages")
 public class MessagesResource extends RestResource {
 
@@ -58,7 +58,7 @@ public class MessagesResource extends RestResource {
 
     @GET
     @Timed
-    @ApiOperation(value = "Get internal Graylog system messages")
+    @ApiOperation(value = "Get internal Graylog2 system messages")
     @RequiresPermissions(RestPermissions.SYSTEMMESSAGES_READ)
     @Produces(MediaType.APPLICATION_JSON)
     public Map<String, Object> all(@ApiParam(name = "page", value = "Page", required = false) @QueryParam("page") int page) {
@@ -76,9 +76,5 @@ public class MessagesResource extends RestResource {
         return ImmutableMap.of(
                 "messages", messages,
                 "total", systemMessageService.totalCount());
-    }
-
-    private int page(int page) {
-        return Math.max(0, page - 1);
     }
 }

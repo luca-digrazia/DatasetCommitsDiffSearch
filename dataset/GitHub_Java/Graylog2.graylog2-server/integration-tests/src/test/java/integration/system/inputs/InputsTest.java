@@ -17,31 +17,26 @@
 package integration.system.inputs;
 
 import integration.BaseRestTest;
-import integration.MongoDbSeed;
-import integration.RequiresAuthentication;
 import integration.RequiresVersion;
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 import static com.jayway.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.notNullValue;
 
 @RequiresVersion(">=0.90.0")
-@RequiresAuthentication
 public class InputsTest extends BaseRestTest {
 
     @Test
-    @MongoDbSeed(location = "graylog", database = "graylog2")
     public void createInputTest() {
 
         given().when()
                 .body(jsonResourceForMethod()).post("/system/inputs")
                 .then()
-                    .statusCode(400).statusLine(notNullValue());
+                    .statusCode(404).statusLine(notNullValue());
     }
 
-    @Test
+    @Test(dependsOnMethods = "createInputTest")
     public void listInput() {
-        createInputTest();
         given().when().get("/system/inputs").then().statusCode(200);
     }
 }

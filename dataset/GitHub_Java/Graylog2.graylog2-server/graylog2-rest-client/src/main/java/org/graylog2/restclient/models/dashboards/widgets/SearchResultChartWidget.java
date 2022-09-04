@@ -25,8 +25,8 @@ import java.util.Map;
 
 public class SearchResultChartWidget extends DashboardWidget {
 
-    private static final int DEFAULT_WIDTH = 2;
-    private static final int DEFAULT_HEIGHT = 1;
+    private static final int WIDTH = 2;
+    private static final int HEIGHT = 1;
 
     private final String streamId;
     private final String interval;
@@ -55,14 +55,12 @@ public class SearchResultChartWidget extends DashboardWidget {
 
     @Override
     public int getWidth() {
-        int storedWidth = super.getWidth();
-        return storedWidth == 0 ? DEFAULT_WIDTH : storedWidth;
+        return WIDTH;
     }
 
     @Override
     public int getHeight() {
-        int storedHeight = super.getHeight();
-        return storedHeight == 0 ? DEFAULT_HEIGHT : storedHeight;
+        return HEIGHT;
     }
 
     @Override

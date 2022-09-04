@@ -65,13 +65,13 @@ public class NaturalDateParser {
             if (from != null) {
                 this.from = new DateTime(from, DateTimeZone.UTC);
             } else {
-                this.from = Tools.nowUTC();
+                this.from = Tools.iso8601();
             }
 
             if (to != null) {
                 this.to = new DateTime(to, DateTimeZone.UTC);
             } else {
-                this.to = Tools.nowUTC();
+                this.to = Tools.iso8601();
             }
         }
 

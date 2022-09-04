@@ -29,18 +29,16 @@ import java.util.Date;
 import java.util.Map;
 
 @JsonAutoDetect
-public interface Output {
-    String getId();
+public interface Output extends Persisted {
+    public String getTitle();
 
-    String getTitle();
+    public String getType();
 
-    String getType();
+    public String getCreatorUserId();
 
-    String getCreatorUserId();
+    public Map<String, Object> getConfiguration();
 
-    Map<String, Object> getConfiguration();
+    public Date getCreatedAt();
 
-    Date getCreatedAt();
-
-    String getContentPack();
+    public String getContentPack();
 }

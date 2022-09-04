@@ -17,22 +17,18 @@
 
 package org.graylog2.outputs;
 
-import com.codahale.metrics.CsvReporter;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.Metric;
-import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.*;
 import com.google.common.collect.ImmutableList;
+import javax.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.journal.Journal;
 
-import javax.annotation.Nullable;
-import javax.inject.Inject;
 import java.io.File;
 import java.util.List;
 import java.util.Locale;
@@ -48,6 +44,14 @@ public class BenchmarkOutput implements MessageOutput {
     private final Meter messagesWritten;
     private final CsvReporter csvReporter;
     private final Journal journal;
+
+    @AssistedInject
+    public BenchmarkOutput(final MetricRegistry metricRegistry,
+                           final Journal journal,
+                           @Assisted Stream stream,
+                           @Assisted Configuration configuration) {
+        this(metricRegistry, journal);
+    }
 
     @Inject
     public BenchmarkOutput(final MetricRegistry metricRegistry, final Journal journal) {
@@ -102,7 +106,7 @@ public class BenchmarkOutput implements MessageOutput {
 
     public interface Factory extends MessageOutput.Factory<GelfOutput> {
         @Override
-        GelfOutput create(Stream stream, Configuration configuration, @Nullable String id);
+        GelfOutput create(Stream stream, Configuration configuration);
 
         @Override
         Config getConfig();
@@ -112,6 +116,10 @@ public class BenchmarkOutput implements MessageOutput {
     }
 
     public static class Config extends MessageOutput.Config {
+        @Override
+        public ConfigurationRequest getRequestedConfiguration() {
+            return new ConfigurationRequest();
+        }
     }
 
     public static class Descriptor extends MessageOutput.Descriptor {
@@ -120,7 +128,7 @@ public class BenchmarkOutput implements MessageOutput {
         }
     }
 
-    private static class CsvMetricFilter implements MetricFilter {
+    private class CsvMetricFilter implements MetricFilter {
         private final List<String> prefixes;
 
         public CsvMetricFilter(List<String> prefixes) {

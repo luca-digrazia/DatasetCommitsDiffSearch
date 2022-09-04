@@ -22,6 +22,7 @@ import com.codahale.metrics.Timer;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+import javax.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.indexer.messages.Messages;
@@ -34,7 +35,6 @@ import org.graylog2.shared.journal.Journal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -42,9 +42,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static com.codahale.metrics.MetricRegistry.name;
 
 public class ElasticSearchOutput implements MessageOutput {
-    public static final String WRITES_METRICNAME = name(ElasticSearchOutput.class, "writes");
-    public static final String PROCESS_TIME_METRICNAME = name(ElasticSearchOutput.class, "processTime");
-
     private static final String NAME = "ElasticSearch Output";
     private static final Logger LOG = LoggerFactory.getLogger(ElasticSearchOutput.class);
 
@@ -70,8 +67,8 @@ public class ElasticSearchOutput implements MessageOutput {
         this.messages = messages;
         this.journal = journal;
         // Only constructing metrics here. write() get's another Core reference. (because this technically is a plugin)
-        this.writes = metricRegistry.meter(WRITES_METRICNAME);
-        this.processTime = metricRegistry.timer(PROCESS_TIME_METRICNAME);
+        this.writes = metricRegistry.meter(name(ElasticSearchOutput.class, "writes"));
+        this.processTime = metricRegistry.timer(name(ElasticSearchOutput.class, "processTime"));
 
         // Should be set in initialize once this becomes a real plugin.
         isRunning.set(true);

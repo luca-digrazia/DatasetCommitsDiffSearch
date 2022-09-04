@@ -108,7 +108,7 @@ public class AccessTokenServiceImpl extends PersistedServiceImpl implements Acce
 
     @Override
     public void touch(AccessToken accessToken) throws ValidationException {
-        accessToken.getFields().put(AccessTokenImpl.LAST_ACCESS, Tools.nowUTC());
+        accessToken.getFields().put(AccessTokenImpl.LAST_ACCESS, Tools.iso8601());
         save(accessToken);
     }
 

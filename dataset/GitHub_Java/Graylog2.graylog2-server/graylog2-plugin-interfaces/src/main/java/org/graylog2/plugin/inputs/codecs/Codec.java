@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+ * Copyright (c) 2012 Graylog, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 public interface Codec {
-
     @Nullable
     Message decode(@Nonnull RawMessage rawMessage);
 
@@ -40,9 +39,18 @@ public interface Codec {
 
     String getName();
 
-    ConfigurationRequest getRequestedConfiguration();
+    @Nonnull
+    Configuration getConfiguration();
 
     public interface Factory<C> {
         C create(Configuration configuration);
+        Config getConfig();
+    }
+
+    public interface Config {
+        public static final String CK_OVERRIDE_SOURCE = "override_source";
+
+        ConfigurationRequest getRequestedConfiguration();
+        void overrideDefaultValues(@Nonnull ConfigurationRequest cr);
     }
 }

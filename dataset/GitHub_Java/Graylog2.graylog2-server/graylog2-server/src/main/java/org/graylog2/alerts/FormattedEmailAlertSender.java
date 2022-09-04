@@ -61,10 +61,10 @@ public class FormattedEmailAlertSender extends StaticEmailAlertSender implements
     }
 
     @Override
-    protected String buildSubject(Stream stream, AlertCondition.CheckResult checkResult, List<Message> backlog) {
+    protected String buildSubject(Stream stream, AlertCondition.CheckResult checkResult, EmailConfiguration config, List<Message> backlog) {
         final String template;
         if (pluginConfig == null || pluginConfig.getString("subject") == null) {
-            template = "Graylog alert for stream: ${stream.title}";
+            template = "Graylog2 alert for stream: ${stream.title}";
         } else {
             template = pluginConfig.getString("subject");
         }

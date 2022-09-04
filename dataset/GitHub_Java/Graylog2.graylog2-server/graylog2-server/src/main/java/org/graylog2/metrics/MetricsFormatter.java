@@ -16,7 +16,6 @@
  */
 package org.graylog2.metrics;
 
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -29,7 +28,7 @@ public class MetricsFormatter {
             return "noname-" + streamId;
         }
         
-        return streamNames.get(streamId).toLowerCase(Locale.ENGLISH).replaceAll("[^a-zA-Z0-9\\-]", "");
+        return streamNames.get(streamId).toLowerCase().replaceAll("[^a-zA-Z0-9\\-]", "");
     }
 
     public String buildHostMetricName(String hostname) {

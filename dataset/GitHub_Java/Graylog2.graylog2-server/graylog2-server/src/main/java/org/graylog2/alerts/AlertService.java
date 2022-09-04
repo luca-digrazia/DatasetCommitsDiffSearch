@@ -19,7 +19,7 @@ package org.graylog2.alerts;
 import org.graylog2.plugin.database.PersistedService;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.models.streams.alerts.requests.CreateConditionRequest;
+import org.graylog2.rest.resources.streams.alerts.requests.CreateConditionRequest;
 import org.joda.time.DateTime;
 
 import java.util.List;
@@ -50,6 +50,4 @@ public interface AlertService extends PersistedService {
     AlertCondition.CheckResult triggered(AlertCondition alertCondition);
 
     Map<String, Object> asMap(final AlertCondition alertCondition);
-
-    List<Alert> listForStreamId(String streamId, int skip, int limit);
 }

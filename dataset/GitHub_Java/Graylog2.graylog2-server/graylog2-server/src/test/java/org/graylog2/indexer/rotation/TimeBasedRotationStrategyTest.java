@@ -16,29 +16,23 @@
  */
 package org.graylog2.indexer.rotation;
 
-import org.graylog2.indexer.indices.Indices;
+import org.graylog2.Graylog2BaseTest;
 import org.graylog2.plugin.InstantMillisProvider;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Period;
-import org.junit.After;
-import org.junit.Test;
+import org.testng.annotations.AfterTest;
+import org.testng.annotations.Test;
 
 import static org.joda.time.Period.minutes;
 import static org.joda.time.Period.seconds;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.testng.Assert.*;
 
-public class TimeBasedRotationStrategyTest {
+public class TimeBasedRotationStrategyTest extends Graylog2BaseTest {
 
-    @After
+    @AfterTest
     public void resetTimeProvider() {
         DateTimeUtils.setCurrentMillisSystem();
     }
@@ -74,7 +68,7 @@ public class TimeBasedRotationStrategyTest {
         assertEquals(dayAnd6Hours.getHourOfDay(), 0);
         assertEquals(dayAnd6Hours.getMinuteOfHour(), 0);
         assertEquals(dayAnd6Hours.getSecondOfMinute(), 0);
-
+        
         period = Period.days(30);
         final DateTime thirtyDays = TimeBasedRotationStrategy.determineRotationPeriodAnchor(period);
         assertEquals(thirtyDays.getYear(), 2014);
@@ -93,26 +87,23 @@ public class TimeBasedRotationStrategyTest {
         final InstantMillisProvider clock = new InstantMillisProvider(initialTime);
         DateTimeUtils.setCurrentMillisProvider(clock);
 
-        Indices indices = mock(Indices.class);
-        when(indices.indexCreationDate(anyString())).thenReturn(Tools.iso8601());
-
         final Period period = Period.hours(1);
-        final TimeBasedRotationStrategy hourlyRotation = new TimeBasedRotationStrategy(period, indices);
+        final TimeBasedRotationStrategy hourlyRotation = new TimeBasedRotationStrategy(period);
 
         RotationStrategy.Result result;
 
         result = hourlyRotation.shouldRotate("ignored");
-        assertTrue("Should rotate the first index", result.shouldRotate());
+        assertTrue(result.shouldRotate(), "Should rotate the first index");
 
         clock.tick(seconds(2));
 
         result = hourlyRotation.shouldRotate("ignored");
-        assertTrue("Crossed rotation period", result.shouldRotate());
+        assertTrue(result.shouldRotate(), "Crossed rotation period");
 
         clock.tick(seconds(2));
 
         result = hourlyRotation.shouldRotate("ignored");
-        assertFalse("Did not cross rotation period", result.shouldRotate());
+        assertFalse(result.shouldRotate(), "Did not cross rotation period");
     }
 
     @Test
@@ -122,40 +113,38 @@ public class TimeBasedRotationStrategyTest {
 
         final InstantMillisProvider clock = new InstantMillisProvider(initialTime);
         DateTimeUtils.setCurrentMillisProvider(clock);
-        Indices indices = mock(Indices.class);
-        when(indices.indexCreationDate(anyString())).thenReturn(Tools.iso8601());
 
         final Period period = Period.minutes(10);
-        final TimeBasedRotationStrategy tenMinRotation = new TimeBasedRotationStrategy(period, indices);
+        final TimeBasedRotationStrategy tenMinRotation = new TimeBasedRotationStrategy(period);
         RotationStrategy.Result result;
 
         result = tenMinRotation.shouldRotate("ignored");
-        assertTrue("Should rotate the first index", result.shouldRotate());
+        assertTrue(result.shouldRotate(), "Should rotate the first index");
 
         // advance time to 01:55:01
         clock.tick(seconds(1));
 
         result = tenMinRotation.shouldRotate("ignored");
-        assertFalse("Did not cross rotation period", result.shouldRotate());
+        assertFalse(result.shouldRotate(), "Did not cross rotation period");
 
         // advance time to 02:00:00
         clock.tick(minutes(4).withSeconds(59));
 
         result = tenMinRotation.shouldRotate("ignored");
-        assertTrue("Crossed rotation period", result.shouldRotate());
+        assertTrue(result.shouldRotate(), "Crossed rotation period");
 
         // advance time multiple rotation periods into the future
         // to time 02:51:00
         clock.tick(minutes(51));
 
         result = tenMinRotation.shouldRotate("ignored");
-        assertTrue("Crossed multiple rotation periods", result.shouldRotate());
+        assertTrue(result.shouldRotate(), "Crossed multiple rotation periods");
 
         // move time to 2:52:00
         // this should not cycle again, because next valid rotation time is 3:00:00
         clock.tick(minutes(1));
         result = tenMinRotation.shouldRotate("ignored");
-        assertFalse("Should not cycle when we missed multiple periods", result.shouldRotate());
+        assertFalse(result.shouldRotate(), "Should not cycle when we missed multiple periods");
     }
 
 }

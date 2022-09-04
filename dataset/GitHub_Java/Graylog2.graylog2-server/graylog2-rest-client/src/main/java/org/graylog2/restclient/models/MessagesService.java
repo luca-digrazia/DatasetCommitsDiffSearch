@@ -1,32 +1,32 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.restclient.models;
 
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.Configuration;
-import org.graylog2.restclient.models.api.responses.*;
+import org.graylog2.restclient.models.api.responses.GetMessageResponse;
+import org.graylog2.restclient.models.api.responses.HighlightRange;
+import org.graylog2.restclient.models.api.responses.MessageAnalyzeResponse;
+import org.graylog2.restclient.models.api.responses.MessageCountResponse;
+import org.graylog2.restclient.models.api.responses.MessageFieldResponse;
 import org.graylog2.restclient.models.api.results.MessageAnalyzeResult;
 import org.graylog2.restclient.models.api.results.MessageResult;
 import org.graylog2.restroutes.generated.routes;
@@ -36,6 +36,7 @@ import play.cache.Cache;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -78,7 +79,7 @@ public class MessagesService {
             log.error("Unexpected error condition", e);
             throw new IllegalStateException(e);
         }
-        return Sets.newHashSet();
+        return Collections.emptySet();
     }
 
     public long total() {

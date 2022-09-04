@@ -31,14 +31,17 @@ import org.graylog2.plugin.streams.Stream;
 
 import java.util.List;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public interface MessageOutput extends Stoppable {
-    interface Factory<T> {
+    public interface Factory<T> {
         T create(Stream stream, Configuration configuration);
         Config getConfig();
         Descriptor getDescriptor();
     }
 
-    class Descriptor extends AbstractDescriptor {
+    public static class Descriptor extends AbstractDescriptor {
         private final String humanName;
 
         protected Descriptor() {
@@ -55,14 +58,14 @@ public interface MessageOutput extends Stoppable {
         }
     }
 
-    class Config {
+    public static class Config {
         public ConfigurationRequest getRequestedConfiguration() {
             return new ConfigurationRequest();
         }
     }
 
-    void stop();
-    boolean isRunning();
-    void write(Message message) throws Exception;
-    void write(List<Message> messages) throws Exception;
+    public void stop();
+    public boolean isRunning();
+    public void write(Message message) throws Exception;
+    public void write(List<Message> messages) throws Exception;
 }
