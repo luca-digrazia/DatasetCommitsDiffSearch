@@ -24,11 +24,11 @@ import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.DeclaredToolchainInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.skyframe.RegisteredToolchainsValue;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
+import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.util.Collection;
@@ -38,16 +38,14 @@ import javax.annotation.Nullable;
 import org.junit.Before;
 
 /** Utility methods for setting up platform and toolchain related tests. */
-public abstract class ToolchainTestCase extends BuildViewTestCase {
+public abstract class ToolchainTestCase extends SkylarkTestCase {
 
   public PlatformInfo linuxPlatform;
   public PlatformInfo macPlatform;
 
   public ConstraintSettingInfo setting;
-  public ConstraintSettingInfo defaultedSetting;
   public ConstraintValueInfo linuxConstraint;
   public ConstraintValueInfo macConstraint;
-  public ConstraintValueInfo defaultedConstraint;
 
   public Label testToolchainTypeLabel;
   public ToolchainTypeInfo testToolchainType;
@@ -81,7 +79,7 @@ public abstract class ToolchainTestCase extends BuildViewTestCase {
     }
 
     // Make sure the label is under the packageRoot.
-    if (!label.getRepository().equals(packageRoot.getRepository())) {
+    if (!label.getPackageIdentifier().getRepository().equals(packageRoot.getRepository())) {
       return false;
     }
 
@@ -103,40 +101,28 @@ public abstract class ToolchainTestCase extends BuildViewTestCase {
         "constraint_value(name = 'linux',",
         "    constraint_setting = ':os')",
         "constraint_value(name = 'mac',",
-        "    constraint_setting = ':os')",
-        "constraint_setting(name = 'setting_with_default',",
-        "    default_constraint_value = ':default_value')",
-        "constraint_value(name = 'default_value',",
-        "    constraint_setting = ':setting_with_default')",
-        "constraint_value(name = 'non_default_value',",
-        "    constraint_setting = ':setting_with_default')");
+        "    constraint_setting = ':os')");
 
     scratch.file(
         "platforms/BUILD",
         "platform(name = 'linux',",
-        "    constraint_values = ['//constraints:linux', '//constraints:non_default_value'])",
+        "    constraint_values = ['//constraints:linux'])",
         "platform(name = 'mac',",
-        "    constraint_values = ['//constraints:mac', '//constraints:non_default_value'])");
+        "    constraint_values = ['//constraints:mac'])");
 
     setting = ConstraintSettingInfo.create(makeLabel("//constraints:os"));
     linuxConstraint = ConstraintValueInfo.create(setting, makeLabel("//constraints:linux"));
     macConstraint = ConstraintValueInfo.create(setting, makeLabel("//constraints:mac"));
-    defaultedSetting =
-        ConstraintSettingInfo.create(makeLabel("//constraints:setting_with_default"));
-    defaultedConstraint =
-        ConstraintValueInfo.create(defaultedSetting, makeLabel("//constraints:non_default_value"));
 
     linuxPlatform =
         PlatformInfo.builder()
             .setLabel(makeLabel("//platforms:linux"))
             .addConstraint(linuxConstraint)
-            .addConstraint(defaultedConstraint)
             .build();
     macPlatform =
         PlatformInfo.builder()
             .setLabel(makeLabel("//platforms:mac"))
             .addConstraint(macConstraint)
-            .addConstraint(defaultedConstraint)
             .build();
   }
 
