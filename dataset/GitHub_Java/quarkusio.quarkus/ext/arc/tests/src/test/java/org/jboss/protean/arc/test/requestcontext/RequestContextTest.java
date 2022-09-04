@@ -17,7 +17,7 @@ import org.junit.Test;
 public class RequestContextTest {
 
     @Rule
-    public ArcTestContainer container = new ArcTestContainer(Controller.class, ControllerClient.class);
+    public ArcTestContainer container = new ArcTestContainer(Controller.class);
 
     @Test
     public void testRequestContext() {
@@ -46,19 +46,8 @@ public class RequestContextTest {
         }
 
         // Id must be different in a different request
-        Controller.DESTROYED.set(false);
-        arc.withinRequest(() -> assertNotEquals(controller2Id, arc.instance(Controller.class).get().getId())).run();
-        assertTrue(Controller.DESTROYED.get());
-
-        Controller.DESTROYED.set(false);
-        assertNotEquals(controller2Id, arc.withinRequest(() -> arc.instance(Controller.class).get().getId()).get());
-        assertTrue(Controller.DESTROYED.get());
-
-        // @ActivateRequestContext
-        Controller.DESTROYED.set(false);
-        ControllerClient client = arc.instance(ControllerClient.class).get();
-        assertNotEquals(controller2Id, client.getControllerId());
-        assertTrue(Controller.DESTROYED.get());
+        arc.withinRequest(() -> assertNotEquals(controller2Id, arc.instance(Controller.class).get().getId()));
+        assertNotEquals(controller2Id, arc.withinRequest(() -> arc.instance(Controller.class).get().getId()));
     }
 
 }

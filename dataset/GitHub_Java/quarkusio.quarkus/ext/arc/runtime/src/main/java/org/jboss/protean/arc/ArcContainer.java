@@ -29,21 +29,17 @@ public interface ArcContainer {
     ManagedContext requestContext();
 
     /**
-     * Ensures the provided action will be performed with the request context active.
-     *
-     * Does not manage the context if it's already active.
+     * Ensures the action is perform with the request context active. Does not manage the context if it's already active.
      *
      * @param action
      */
-    Runnable withinRequest(Runnable action);
+    void withinRequest(Runnable action);
 
     /**
-     * Ensures the providedaction will be performed with the request context active.
-     *
-     * Does not manage the context if it's already active.
+     * Ensures the action is perform with the request context active. Does not manage the context if it's already active.
      *
      * @param action
      */
-    <T> Supplier<T> withinRequest(Supplier<T> action);
+    <T> T withinRequest(Supplier<T> action);
 
 }

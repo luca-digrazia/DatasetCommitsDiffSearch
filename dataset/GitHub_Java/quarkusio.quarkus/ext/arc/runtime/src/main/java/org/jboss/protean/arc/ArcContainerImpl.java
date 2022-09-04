@@ -96,39 +96,37 @@ class ArcContainerImpl implements ArcContainer {
     }
 
     @Override
-    public Runnable withinRequest(Runnable action) {
-        return () -> {
-            requireRunning();
-            ManagedContext requestContext = requestContext();
-            if (requestContext.isActive()) {
+    public void withinRequest(Runnable action) {
+        requireRunning();
+        ManagedContext requestContext = requestContext();
+        if (requestContext.isActive()) {
+            action.run();
+        } else {
+            try {
+                requestContext.activate();
                 action.run();
-            } else {
-                try {
-                    requestContext.activate();
-                    action.run();
-                } finally {
-                    requestContext.terminate();
-                }
+            } finally {
+                requestContext.destroy();
+                requestContext.deactivate();
             }
-        };
+        }
     }
 
     @Override
-    public <T> Supplier<T> withinRequest(Supplier<T> action) {
-        return () -> {
-            requireRunning();
-            ManagedContext requestContext = requestContext();
-            if (requestContext.isActive()) {
+    public <T> T withinRequest(Supplier<T> action) {
+        requireRunning();
+        ManagedContext requestContext = requestContext();
+        if (requestContext.isActive()) {
+            return action.get();
+        } else {
+            try {
+                requestContext.activate();
                 return action.get();
-            } else {
-                try {
-                    requestContext.activate();
-                    return action.get();
-                } finally {
-                    requestContext.terminate();
-                }
+            } finally {
+                requestContext.destroy();
+                requestContext.deactivate();
             }
-        };
+        }
     }
 
     @Override
