@@ -44,7 +44,7 @@ public class AccessorEntity extends GenericEntity<Integer> {
     
     public void method() {
         // touch some fields
-        byte b2 = b;
+        System.err.println(b);
         i = 2;
         t = 1;
         t2 = 2;
