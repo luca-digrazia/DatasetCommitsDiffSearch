@@ -27,7 +27,6 @@ import org.hamcrest.Matcher;
 
 import java.io.IOException;
 import java.net.URL;
-import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -73,13 +72,13 @@ public class BaseRestTestHelper {
      * @param relativeFileName the name of the file relative to the caller's class.
      * @return the bytes in that file.
      */
-    protected String jsonResource(String relativeFileName) {
+    protected byte[] jsonResource(String relativeFileName) {
         final URL resource = Resources.getResource(this.getClass(), relativeFileName);
         if (resource == null) {
             throw new IllegalStateException("Unable to find JSON resource " + relativeFileName + " for test. This is a bug.");
         }
         try {
-            return Resources.toString(resource, Charset.defaultCharset());
+            return Resources.toByteArray(resource);
         } catch (IOException e) {
             throw new IllegalStateException("Unable to read JSON resource " + relativeFileName + " for test. This is a bug.");
         }
@@ -89,7 +88,7 @@ public class BaseRestTestHelper {
      * Same as @{link #jsonResource} but guesses the file name from the caller's method name. Be careful when refactoring.
      * @return the bytes in that file
      */
-    protected String jsonResourceForMethod() {
+    protected byte[] jsonResourceForMethod() {
         final StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
         final String testMethodName = stackTraceElements[2].getMethodName();
 
