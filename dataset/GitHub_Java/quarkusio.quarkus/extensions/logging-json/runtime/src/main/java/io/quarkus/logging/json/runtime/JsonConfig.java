@@ -16,7 +16,7 @@ public class JsonConfig {
     /**
      * Determine whether to enable the JSON console formatting extension, which disables "normal" console formatting.
      */
-    @ConfigItem(name = ConfigItem.PARENT)
+    @ConfigItem(name = ConfigItem.PARENT, defaultValue = "true")
     boolean enable;
     /**
      * Enable "pretty printing" of the JSON record. Note that some JSON parsers will fail to read pretty printed output.
@@ -29,7 +29,7 @@ public class JsonConfig {
     @ConfigItem(defaultValue = "default")
     String dateFormat;
     /**
-     * The special end-of-record delimiter to be used. By default, no delimiter is used.
+     * The special end-of-record delimiter to be used. By default, newline is used as delimiter.
      */
     @ConfigItem
     Optional<String> recordDelimiter;
