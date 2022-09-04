@@ -24,21 +24,12 @@ package org.graylog2.plugin;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.eventbus.EventBus;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
 import org.joda.time.DateTime;
 
 import java.util.UUID;
 
 @JsonAutoDetect
 public class IOState<T extends Stoppable> {
-    public interface Factory<T extends Stoppable> {
-        IOState<T> create(T stoppable);
-        IOState<T> create(T stoppable, Type state);
-        IOState<T> create(T stoppable, String id);
-        IOState<T> create(T stoppable, Type state, String id);
-    }
     public enum Type {
         CREATED,
         INITIALIZED,
@@ -52,29 +43,23 @@ public class IOState<T extends Stoppable> {
 
     protected T stoppable;
     protected final String id;
-    private EventBus eventbus;
     protected Type state;
     protected DateTime startedAt;
     protected String detailedMessage;
 
-    @AssistedInject
-    public IOState(EventBus eventbus, @Assisted T stoppable) {
-        this(eventbus, stoppable, Type.CREATED);
+    public IOState(T stoppable) {
+        this(stoppable, Type.CREATED);
     }
 
-    @AssistedInject
-    public IOState(EventBus eventbus, @Assisted T stoppable, @Assisted Type state) {
-        this(eventbus, stoppable, state, UUID.randomUUID().toString());
+    public IOState(T stoppable, Type state) {
+        this(stoppable, state, UUID.randomUUID().toString());
     }
 
-    @AssistedInject
-    public IOState(EventBus eventbus, @Assisted T stoppable, @Assisted String id) {
-        this(eventbus, stoppable, Type.CREATED, id);
+    public IOState(T stoppable, String id) {
+        this(stoppable, Type.CREATED, id);
     }
 
-    @AssistedInject
-    public IOState(EventBus eventbus, @Assisted T stoppable, @Assisted Type state, @Assisted String id) {
-        this.eventbus = eventbus;
+    public IOState(T stoppable, Type state, String id) {
         this.state = state;
         this.stoppable = stoppable;
         this.id = id;
@@ -100,7 +85,6 @@ public class IOState<T extends Stoppable> {
     public void setState(Type state) {
         this.state = state;
         this.setDetailedMessage(null);
-        this.eventbus.post(this);
     }
 
     public DateTime getStartedAt() {
