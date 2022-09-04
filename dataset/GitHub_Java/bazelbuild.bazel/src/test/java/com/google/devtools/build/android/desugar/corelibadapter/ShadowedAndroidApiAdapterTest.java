@@ -16,10 +16,11 @@
 
 package com.google.devtools.build.android.desugar.corelibadapter;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.android.desugar.testing.junit.DesugarTestHelpers.findMethodInvocationSites;
 import static com.google.devtools.build.android.desugar.testing.junit.DesugarTestHelpers.getRuntimePathsFromJvmFlag;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.android.desugar.testing.junit.AsmNode;
 import com.google.devtools.build.android.desugar.testing.junit.DesugarRule;
 import com.google.devtools.build.android.desugar.testing.junit.DesugarRunner;
@@ -30,10 +31,13 @@ import com.google.devtools.build.android.desugar.testing.junit.ParameterValueSou
 import com.google.devtools.build.android.desugar.testing.junit.RuntimeMethodHandle;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.util.Arrays;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 /** Tests for accessing private constructors from another class within a nest. */
@@ -273,18 +277,16 @@ public class ShadowedAndroidApiAdapterTest {
               round = 1)
           MethodNode method) {
     assertThat(
-            findMethodInvocationSites(
+            findMethodInvocations(
                 method,
                 "com/google/devtools/build/android/desugar/typeadapter/javadesugar/testing/CuboidConverter",
-                "from",
-                ".*"))
+                "from"))
         .isEmpty();
     assertThat(
-            findMethodInvocationSites(
+            findMethodInvocations(
                 method,
                 "com/google/devtools/build/android/desugar/typeadapter/javadesugar/testing/CuboidConverter",
-                "to",
-                ".*"))
+                "to"))
         .isNotEmpty();
   }
 
@@ -296,25 +298,22 @@ public class ShadowedAndroidApiAdapterTest {
               round = 1)
           MethodNode method) {
     assertThat(
-            findMethodInvocationSites(
+            findMethodInvocations(
                 method,
-                "com/google/devtools/build/android/desugar/typeadapter/android/testing/CuboidInflater\\$.*\\$Adapter",
-                "inflateStatic",
-                ".*"))
+                "com/google/devtools/build/android/desugar/typeadapter/android/testing/CuboidInflaterAdapter",
+                "inflateStatic"))
         .isNotEmpty();
     assertThat(
-            findMethodInvocationSites(
+            findMethodInvocations(
                 method,
                 "com/google/devtools/build/android/desugar/typeadapter/javadesugar/testing/CuboidConverter",
-                "from",
-                ".*"))
+                "from"))
         .isEmpty();
     assertThat(
-            findMethodInvocationSites(
+            findMethodInvocations(
                 method,
                 "com/google/devtools/build/android/desugar/typeadapter/javadesugar/testing/CuboidConverter",
-                "to",
-                ".*"))
+                "to"))
         .isEmpty();
   }
 
@@ -326,25 +325,33 @@ public class ShadowedAndroidApiAdapterTest {
               round = 1)
           MethodNode method) {
     assertThat(
-            findMethodInvocationSites(
+            findMethodInvocations(
                 method,
-                "com/google/devtools/build/android/desugar/typeadapter/android/testing/CuboidInflater\\$.*\\$Adapter",
-                "inflateInstance",
-                ".*"))
+                "com/google/devtools/build/android/desugar/typeadapter/android/testing/CuboidInflaterAdapter",
+                "inflateInstance"))
         .isNotEmpty();
     assertThat(
-            findMethodInvocationSites(
+            findMethodInvocations(
                 method,
                 "com/google/devtools/build/android/desugar/typeadapter/javadesugar/testing/CuboidConverter",
-                "from",
-                ".*"))
+                "from"))
         .isEmpty();
     assertThat(
-            findMethodInvocationSites(
+            findMethodInvocations(
                 method,
                 "com/google/devtools/build/android/desugar/typeadapter/javadesugar/testing/CuboidConverter",
-                "to",
-                ".*"))
+                "to"))
         .isEmpty();
+  }
+
+  private static ImmutableList<MethodInsnNode> findMethodInvocations(
+      MethodNode enclosingMethod, String invokedMethodOwner, String invokedMethodName) {
+    AbstractInsnNode[] instructions = enclosingMethod.instructions.toArray();
+    return Arrays.stream(instructions)
+        .filter(node -> node.getType() == AbstractInsnNode.METHOD_INSN)
+        .map(node -> (MethodInsnNode) node)
+        .filter(
+            node -> invokedMethodOwner.equals(node.owner) && invokedMethodName.equals(node.name))
+        .collect(toImmutableList());
   }
 }
