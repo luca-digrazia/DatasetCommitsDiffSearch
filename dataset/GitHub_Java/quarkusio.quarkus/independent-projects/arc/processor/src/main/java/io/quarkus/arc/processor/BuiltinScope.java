@@ -6,7 +6,6 @@ import javax.enterprise.context.Dependent;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Singleton;
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 
 public enum BuiltinScope {
@@ -50,15 +49,6 @@ public enum BuiltinScope {
     public static boolean isIn(Iterable<AnnotationInstance> annotations) {
         for (AnnotationInstance annotation : annotations) {
             if (from(annotation.name()) != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static boolean isDeclaredOn(ClassInfo clazz) {
-        for (BuiltinScope scope : BuiltinScope.values()) {
-            if (clazz.classAnnotation(scope.getName()) != null) {
                 return true;
             }
         }

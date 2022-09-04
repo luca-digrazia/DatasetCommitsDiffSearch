@@ -15,18 +15,14 @@ import org.jboss.resteasy.core.MediaTypeMap;
 import org.jboss.resteasy.plugins.interceptors.AcceptEncodingGZIPFilter;
 import org.jboss.resteasy.plugins.interceptors.GZIPDecodingInterceptor;
 import org.jboss.resteasy.plugins.interceptors.GZIPEncodingInterceptor;
-import org.jboss.resteasy.plugins.providers.StringTextStar;
 
-import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
-import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
-import io.quarkus.runtime.configuration.MemorySize;
 
 public class ResteasyCommonProcessor {
 
@@ -43,34 +39,18 @@ public class ResteasyCommonProcessor {
     private ResteasyCommonConfig resteasyCommonConfig;
 
     @ConfigRoot(name = "resteasy")
-    public static final class ResteasyCommonConfig {
+    static final class ResteasyCommonConfig {
         /**
-         * Enable gzip support for REST
+         * Enable gzip support for REST Clients.
          */
-        public ResteasyCommonConfigGzip gzip;
-    }
-
-    @ConfigGroup
-    public static final class ResteasyCommonConfigGzip {
-        /**
-         * If gzip is enabled
-         */
-        @ConfigItem
-        public boolean enabled;
-        /**
-         * Maximum deflated file bytes size
-         * <p>
-         * If the limit is exceeded, Resteasy will return Response
-         * with status 413("Request Entity Too Large")
-         */
-        @ConfigItem(defaultValue = "10M")
-        public MemorySize maxInput;
+        @ConfigItem(defaultValue = "false")
+        boolean enableGzip;
     }
 
     @BuildStep
     void setupGzipProviders(BuildProducer<ResteasyJaxrsProviderBuildItem> providers) {
         // If GZIP support is enabled, enable it
-        if (resteasyCommonConfig.gzip.enabled) {
+        if (resteasyCommonConfig.enableGzip) {
             providers.produce(new ResteasyJaxrsProviderBuildItem(AcceptEncodingGZIPFilter.class.getName()));
             providers.produce(new ResteasyJaxrsProviderBuildItem(GZIPDecodingInterceptor.class.getName()));
             providers.produce(new ResteasyJaxrsProviderBuildItem(GZIPEncodingInterceptor.class.getName()));
@@ -80,7 +60,6 @@ public class ResteasyCommonProcessor {
     @BuildStep
     JaxrsProvidersToRegisterBuildItem setupProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             CombinedIndexBuildItem indexBuildItem,
-            BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             List<ResteasyJaxrsProviderBuildItem> contributedProviderBuildItems) throws Exception {
 
         Set<String> contributedProviders = new HashSet<>();
@@ -107,16 +86,11 @@ public class ResteasyCommonProcessor {
         // add the other providers detected
         Set<String> providersToRegister = new HashSet<>(otherProviders);
 
-        // we add a couple of default providers
-        providersToRegister.add(StringTextStar.class.getName());
-        providersToRegister.addAll(categorizedWriters.getPossible(MediaType.APPLICATION_JSON_TYPE));
-
         IndexView index = indexBuildItem.getIndex();
-        IndexView beansIndex = beanArchiveIndexBuildItem.getIndex();
 
         // find the providers declared in our services
         boolean useBuiltinProviders = collectDeclaredProviders(providersToRegister, categorizedReaders, categorizedWriters,
-                categorizedContextResolvers, index, beansIndex);
+                categorizedContextResolvers, index);
 
         if (useBuiltinProviders) {
             providersToRegister = new HashSet<>(contributedProviders);
@@ -134,7 +108,7 @@ public class ResteasyCommonProcessor {
         return new JaxrsProvidersToRegisterBuildItem(providersToRegister, contributedProviders, useBuiltinProviders);
     }
 
-    public static void categorizeProviders(Set<String> availableProviders, MediaTypeMap<String> categorizedReaders,
+    private static void categorizeProviders(Set<String> availableProviders, MediaTypeMap<String> categorizedReaders,
             MediaTypeMap<String> categorizedWriters, MediaTypeMap<String> categorizedContextResolvers,
             Set<String> otherProviders) {
         for (String availableProvider : availableProviders) {
@@ -183,29 +157,27 @@ public class ResteasyCommonProcessor {
 
     private static boolean collectDeclaredProviders(Set<String> providersToRegister,
             MediaTypeMap<String> categorizedReaders, MediaTypeMap<String> categorizedWriters,
-            MediaTypeMap<String> categorizedContextResolvers, IndexView... indexes) {
-
-        for (IndexView index : indexes) {
-            for (ProviderDiscoverer providerDiscoverer : PROVIDER_DISCOVERERS) {
-                Collection<AnnotationInstance> getMethods = index.getAnnotations(providerDiscoverer.getMethodAnnotation());
-                for (AnnotationInstance getMethod : getMethods) {
-                    MethodInfo methodTarget = getMethod.target().asMethod();
-                    if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedReaders,
-                            methodTarget, ResteasyDotNames.CONSUMES, providerDiscoverer.noConsumesDefaultsToAll())) {
-                        return true;
-                    }
-                    if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedWriters,
-                            methodTarget, ResteasyDotNames.PRODUCES, providerDiscoverer.noProducesDefaultsToAll())) {
-                        return true;
-                    }
-                    if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister,
-                            categorizedContextResolvers, methodTarget, ResteasyDotNames.PRODUCES,
-                            providerDiscoverer.noProducesDefaultsToAll())) {
-                        return true;
-                    }
+            MediaTypeMap<String> categorizedContextResolvers, IndexView index) {
+        for (ProviderDiscoverer providerDiscoverer : PROVIDER_DISCOVERERS) {
+            Collection<AnnotationInstance> getMethods = index.getAnnotations(providerDiscoverer.getMethodAnnotation());
+            for (AnnotationInstance getMethod : getMethods) {
+                MethodInfo methodTarget = getMethod.target().asMethod();
+                if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedReaders,
+                        methodTarget, ResteasyDotNames.CONSUMES, providerDiscoverer.noConsumesDefaultsToAll())) {
+                    return true;
+                }
+                if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedWriters,
+                        methodTarget, ResteasyDotNames.PRODUCES, providerDiscoverer.noProducesDefaultsToAll())) {
+                    return true;
+                }
+                if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister,
+                        categorizedContextResolvers, methodTarget, ResteasyDotNames.PRODUCES,
+                        providerDiscoverer.noProducesDefaultsToAll())) {
+                    return true;
                 }
             }
         }
+
         return false;
     }
 
