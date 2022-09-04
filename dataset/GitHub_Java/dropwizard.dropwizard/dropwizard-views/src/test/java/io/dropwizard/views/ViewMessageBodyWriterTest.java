@@ -4,15 +4,16 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import org.glassfish.jersey.message.internal.HeaderValueException;
 import org.glassfish.jersey.server.ContainerRequest;
-import org.junit.jupiter.api.Test;
+import org.junit.Rule;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedHashMap;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.lang.annotation.Annotation;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Locale;
@@ -30,16 +31,23 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 public class ViewMessageBodyWriterTest {
-
-    public ContainerRequest headers = mock(ContainerRequest.class);
-    public MetricRegistry metricRegistry = mock(MetricRegistry.class);
-    public View view = mock(View.class);
-    public OutputStream stream = mock(OutputStream.class);
-    public Timer timer = mock(Timer.class);
-    public Timer.Context timerContext = mock(Timer.Context.class);
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+    @Mock
+    public ContainerRequest headers;
+    @Mock
+    public MetricRegistry metricRegistry;
+    @Mock
+    public View view;
+    @Mock
+    public OutputStream stream;
+    @Mock
+    public Timer timer;
+    @Mock
+    public Timer.Context timerContext;
 
     @Test
-    void writeToShouldUseValidRenderer() throws IOException {
+    public void writeToShouldUseValidRenderer() throws IOException {
         final ViewRenderer renderable = mock(ViewRenderer.class);
         final ViewRenderer nonRenderable = mock(ViewRenderer.class);
         final Locale locale = new Locale("en-US");
@@ -52,10 +60,8 @@ public class ViewMessageBodyWriterTest {
 
         final ViewMessageBodyWriter writer = spy(new ViewMessageBodyWriter(metricRegistry, Arrays.asList(nonRenderable, renderable)));
         doReturn(locale).when(writer).detectLocale(any());
-        writer.setHeaders(mock(HttpHeaders.class));
 
-        writer.writeTo(view, Class.class, Class.class, new Annotation[]{}, new MediaType(),
-            new MultivaluedHashMap<>(), stream);
+        writer.writeTo(view, null, null, null, null, null, stream);
 
         verify(nonRenderable).isRenderable(view);
         verifyNoMoreInteractions(nonRenderable);
@@ -65,22 +71,21 @@ public class ViewMessageBodyWriterTest {
     }
 
     @Test
-    void writeToShouldThrowWhenNoValidRendererFound() {
+    public void writeToShouldThrowWhenNoValidRendererFound() {
         final ViewMessageBodyWriter writer = new ViewMessageBodyWriter(metricRegistry, Collections.emptyList());
 
         when(metricRegistry.timer(anyString())).thenReturn(timer);
         when(timer.time()).thenReturn(timerContext);
 
         assertThatExceptionOfType(WebApplicationException.class).isThrownBy(() -> {
-            writer.writeTo(view, Class.class, Class.class, new Annotation[]{}, new MediaType(),
-                new MultivaluedHashMap<>(), stream);
+            writer.writeTo(view, null, null, null, null, null, stream);
         }).withCauseExactlyInstanceOf(ViewRenderException.class);
 
         verify(timerContext).stop();
     }
 
     @Test
-    void writeToShouldHandleViewRenderingExceptions() throws IOException {
+    public void writeToShouldHandleViewRenderingExceptions() throws IOException {
         final ViewRenderer renderer = mock(ViewRenderer.class);
         final Locale locale = new Locale("en-US");
         final ViewRenderException exception = new ViewRenderException("oops");
@@ -93,18 +98,16 @@ public class ViewMessageBodyWriterTest {
 
         final ViewMessageBodyWriter writer = spy(new ViewMessageBodyWriter(metricRegistry, Collections.singletonList(renderer)));
         doReturn(locale).when(writer).detectLocale(any());
-        writer.setHeaders(mock(HttpHeaders.class));
 
         assertThatExceptionOfType(WebApplicationException.class).isThrownBy(() -> {
-            writer.writeTo(view, Class.class, Class.class, new Annotation[]{}, new MediaType(),
-                new MultivaluedHashMap<>(), stream);
+            writer.writeTo(view, null, null, null, null, null, stream);
         }).withCause(exception);
 
         verify(timerContext).stop();
     }
 
     @Test
-    void detectLocaleShouldHandleBadlyFormedHeader() {
+    public void detectLocaleShouldHandleBadlyFormedHeader() {
         when(headers.getAcceptableLanguages()).thenThrow(HeaderValueException.class);
 
         final ViewMessageBodyWriter writer = new ViewMessageBodyWriter(metricRegistry, Collections.emptyList());
@@ -115,7 +118,7 @@ public class ViewMessageBodyWriterTest {
     }
 
     @Test
-    void detectLocaleShouldReturnDefaultLocaleWhenHeaderNotSpecified() {
+    public void detectLocaleShouldReturnDefaultLocaleWhenHeaderNotSpecified() {
         // We call the real methods to make sure that 'getAcceptableLanguages' returns a locale with a wildcard
         // (which is their default value). This also validates that 'detectLocale' skips wildcard languages.
         when(headers.getAcceptableLanguages()).thenCallRealMethod();
@@ -129,7 +132,7 @@ public class ViewMessageBodyWriterTest {
     }
 
     @Test
-    void detectLocaleShouldReturnCorrectLocale() {
+    public void detectLocaleShouldReturnCorrectLocale() {
         final Locale fakeLocale = new Locale("en-US");
         when(headers.getAcceptableLanguages()).thenReturn(Collections.singletonList(fakeLocale));
 
