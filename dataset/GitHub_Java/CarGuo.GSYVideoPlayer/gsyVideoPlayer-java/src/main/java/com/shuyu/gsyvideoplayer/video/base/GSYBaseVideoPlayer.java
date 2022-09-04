@@ -358,9 +358,6 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
             }
         }
 
-        if (!mShowFullAnimation) {
-            delay = 0;
-        }
 
         final ViewGroup vp = getViewGroup();
         final View oldF = vp.findViewById(getFullId());

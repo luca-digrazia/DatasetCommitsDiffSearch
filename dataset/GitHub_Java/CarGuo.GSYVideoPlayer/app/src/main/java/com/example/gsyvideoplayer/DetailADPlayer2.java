@@ -58,6 +58,7 @@ public class DetailADPlayer2 extends GSYBaseADActivityDetail<NormalGSYVideoPlaye
                 if (currentSecond == 5 && currentSecond != preSecond) {
                     detailPlayer.getCurrentPlayer().onVideoPause();
                     getGSYADVideoOptionBuilder().setUrl(urlAd2).build(adPlayer);
+                    adPlayer.setVisibility(View.VISIBLE);
                     startAdPlay();
                 }
                 preSecond = currentSecond;
