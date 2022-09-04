@@ -201,7 +201,7 @@ class VertxProcessor {
 
         String baseName;
         if (bean.getImplClazz().enclosingClass() != null) {
-            baseName = DotNames.simpleName(bean.getImplClazz().enclosingClass()) + "_" + DotNames.simpleName(bean.getImplClazz());
+            baseName = DotNames.simpleName(bean.getImplClazz().enclosingClass()) + "_" + DotNames.simpleName(bean.getImplClazz().name());
         } else {
             baseName = DotNames.simpleName(bean.getImplClazz().name());
         }
