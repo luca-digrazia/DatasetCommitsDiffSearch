@@ -18,8 +18,11 @@ package org.graylog.events.processor.aggregation;
 
 import com.google.common.collect.ImmutableList;
 import org.graylog.events.EventsConfigurationTestProvider;
+import org.graylog.events.processor.EventDefinition;
+import org.graylog.events.search.MoreSearch;
 import org.graylog.plugins.views.search.db.SearchJobService;
 import org.graylog.plugins.views.search.engine.QueryEngine;
+import org.graylog.plugins.views.search.rest.PermittedStreams;
 import org.graylog.plugins.views.search.searchtypes.pivot.PivotResult;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
@@ -41,6 +44,12 @@ public class PivotAggregationSearchTest {
     private SearchJobService searchJobService;
     @Mock
     private QueryEngine queryEngine;
+    @Mock
+    private EventDefinition eventDefinition;
+    @Mock
+    private MoreSearch moreSearch;
+    @Mock
+    private PermittedStreams permittedStreams;
 
     @Test
     public void testExtractValuesWithGroupBy() throws Exception {
@@ -63,12 +72,15 @@ public class PivotAggregationSearchTest {
                 .build();
 
         final PivotAggregationSearch pivotAggregationSearch = new PivotAggregationSearch(
-            config,
-            parameters,
-            "test",
-            searchJobService,
-            queryEngine,
-            EventsConfigurationTestProvider.create());
+                config,
+                parameters,
+                "test",
+                eventDefinition,
+                searchJobService,
+                queryEngine,
+                EventsConfigurationTestProvider.create(),
+                moreSearch,
+                permittedStreams);
 
         final PivotResult pivotResult = PivotResult.builder()
                 .id("test")
@@ -135,12 +147,13 @@ public class PivotAggregationSearchTest {
     public void testExtractValuesWithoutGroupBy() throws Exception {
         final RelativeRange timerange = RelativeRange.create(3600);
         final AggregationSeries seriesCount = AggregationSeries.create("abc123", AggregationFunction.COUNT, "source");
+        final AggregationSeries seriesCountNoField = AggregationSeries.create("abc123", AggregationFunction.COUNT, "");
         final AggregationSeries seriesCard = AggregationSeries.create("abc123", AggregationFunction.CARD, "source");
         final AggregationEventProcessorConfig config = AggregationEventProcessorConfig.builder()
                 .query("")
                 .streams(Collections.emptySet())
                 .groupBy(Collections.emptyList())
-                .series(ImmutableList.of(seriesCount, seriesCard))
+                .series(ImmutableList.of(seriesCount, seriesCountNoField, seriesCard))
                 .conditions(null)
                 .searchWithinMs(30000)
                 .executeEveryMs(30000)
@@ -152,12 +165,15 @@ public class PivotAggregationSearchTest {
                 .build();
 
         final PivotAggregationSearch pivotAggregationSearch = new PivotAggregationSearch(
-            config,
-            parameters,
-            "test",
-            searchJobService,
-            queryEngine,
-            EventsConfigurationTestProvider.create());
+                config,
+                parameters,
+                "test",
+                eventDefinition,
+                searchJobService,
+                queryEngine,
+                EventsConfigurationTestProvider.create(),
+                moreSearch,
+                permittedStreams);
 
         final PivotResult pivotResult = PivotResult.builder()
                 .id("test")
@@ -166,6 +182,7 @@ public class PivotAggregationSearchTest {
                 .addRow(PivotResult.Row.builder()
                         .key(ImmutableList.of())
                         .addValue(PivotResult.Value.create(ImmutableList.of("metric/count/source/abc123"), 42, true, "row-leaf"))
+                        .addValue(PivotResult.Value.create(ImmutableList.of("metric/count/<no-field>/abc123"), 23, true, "row-leaf"))
                         .addValue(PivotResult.Value.create(ImmutableList.of("metric/card/source/abc123"), 1, true, "row-leaf"))
                         .source("leaf")
                         .build())
@@ -182,6 +199,11 @@ public class PivotAggregationSearchTest {
                                 .key(ImmutableList.of())
                                 .value(42.0)
                                 .series(seriesCount)
+                                .build(),
+                        AggregationSeriesValue.builder()
+                                .key(ImmutableList.of())
+                                .value(23.0)
+                                .series(seriesCountNoField)
                                 .build(),
                         AggregationSeriesValue.builder()
                                 .key(ImmutableList.of())
@@ -213,12 +235,15 @@ public class PivotAggregationSearchTest {
                 .build();
 
         final PivotAggregationSearch pivotAggregationSearch = new PivotAggregationSearch(
-            config,
-            parameters,
-            "test",
-            searchJobService,
-            queryEngine,
-            EventsConfigurationTestProvider.create());
+                config,
+                parameters,
+                "test",
+                eventDefinition,
+                searchJobService,
+                queryEngine,
+                EventsConfigurationTestProvider.create(),
+                moreSearch,
+                permittedStreams);
 
         final PivotResult pivotResult = PivotResult.builder()
                 .id("test")
