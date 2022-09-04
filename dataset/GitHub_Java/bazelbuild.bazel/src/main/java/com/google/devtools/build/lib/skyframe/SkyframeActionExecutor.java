@@ -790,7 +790,7 @@ public final class SkyframeActionExecutor {
             (action instanceof IncludeScannable)
                 ? ((IncludeScannable) action).getDiscoveredModules()
                 : null,
-            ActionExecutionFunction.actionDependsOnBuildId(action));
+            action instanceof NotifyOnActionCacheHit);
       }
     }
   }
