@@ -26,6 +26,8 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.remote.RemoteWebDriver;
+import play.libs.F;
+import play.test.TestBrowser;
 import selenium.LoggedIn;
 import selenium.serverstub.ServerStub;
 
@@ -40,15 +42,15 @@ import static play.test.Helpers.*;
  */
 public class StreamsTest extends LoggedIn {
 
-    private static final int SERVER_STUB_PORT = 9005;
+    private static final int STUB_PORT = 9005;
     private ServerStub serverStub;
 
     private WebDriver driver;
 
     @Before
     public void setUp() throws MalformedURLException {
-        System.out.println("Launching graylog2-server stub on :" + SERVER_STUB_PORT);
-        serverStub = new ServerStub(SERVER_STUB_PORT);
+        System.out.println("Launching graylog2-server stub on :" + STUB_PORT);
+        serverStub = new ServerStub(STUB_PORT);
         serverStub.initialize();
 
         String sauceUser = System.getenv("SAUCE_USERNAME");
@@ -77,9 +79,9 @@ public class StreamsTest extends LoggedIn {
 
     @Test
     public void addingStreamRulesWorks() {
-        running(testServer(3333), new Runnable() {
+        running(testServer(19001), new Runnable() {
             public void run() {
-                Result r = login(testBrowser(driver, 3333), serverStub, "lennart", "123123123");
+                Result r = login(testBrowser(driver), serverStub, "lennart", "123123123");
                 assertTrue("Login failed", r.isSuccess());
 
                 try {
