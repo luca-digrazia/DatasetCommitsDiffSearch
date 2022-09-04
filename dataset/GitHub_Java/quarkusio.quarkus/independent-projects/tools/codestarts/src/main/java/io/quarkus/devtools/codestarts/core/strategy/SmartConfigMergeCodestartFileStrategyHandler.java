@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import io.quarkus.devtools.codestarts.CodestartException;
-import io.quarkus.devtools.codestarts.CodestartType;
-import io.quarkus.devtools.codestarts.core.CodestartData;
 import io.quarkus.devtools.codestarts.core.reader.TargetFile;
 import io.quarkus.devtools.codestarts.utils.NestedMaps;
 import java.io.IOException;
@@ -20,7 +18,6 @@ final class SmartConfigMergeCodestartFileStrategyHandler implements CodestartFil
 
     private static final ObjectMapper YAML_MAPPER = new ObjectMapper(
             new YAMLFactory().configure(YAMLGenerator.Feature.WRITE_DOC_START_MARKER, false));
-    private static final String APP_CONFIG = "app-config";
 
     @Override
     public String name() {
@@ -33,12 +30,12 @@ final class SmartConfigMergeCodestartFileStrategyHandler implements CodestartFil
         checkNotEmptyCodestartFiles(codestartFiles);
 
         final String configType = getConfigType(data);
-        final Map<String, Object> config = initConfigMap(data);
+        final Map<String, Object> config = new HashMap<>();
         for (TargetFile codestartFile : codestartFiles) {
             final String content = codestartFile.getContent();
             if (!content.trim().isEmpty()) {
-                final Map<String, Object> o = YAML_MAPPER.readerFor(Map.class).readValue(content);
-                config.putAll(NestedMaps.deepMerge(config, o));
+                final Map o = YAML_MAPPER.readerFor(Map.class).readValue(content);
+                NestedMaps.deepMerge(config, o);
             }
         }
         final Path targetPath = targetDirectory.resolve(relativePath);
@@ -73,10 +70,10 @@ final class SmartConfigMergeCodestartFileStrategyHandler implements CodestartFil
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    static void flatten(String prefix, Map<String, String> target, Map<String, ?> map) {
+    private static void flatten(String prefix, Map<String, String> target, Map<String, ?> map) {
         for (Map.Entry entry : map.entrySet()) {
             if (entry.getValue() instanceof Map) {
-                flatten(prefix + entry.getKey() + ".", target, (Map) entry.getValue());
+                flatten(entry.getKey() + ".", target, (Map) entry.getValue());
             } else {
                 // TODO: handle different types of values
                 target.put(prefix + entry.getKey(), entry.getValue().toString());
@@ -85,17 +82,8 @@ final class SmartConfigMergeCodestartFileStrategyHandler implements CodestartFil
     }
 
     private static String getConfigType(Map<String, Object> data) {
-        final Optional<String> config = CodestartData.getInputCodestartForType(data, CodestartType.CONFIG);
+        final Optional<String> config = NestedMaps.getValue(data, "codestart-project.config.name");
         return config.orElseThrow(() -> new CodestartException("Config type is required"));
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> initConfigMap(final Map<String, Object> data) {
-        if (data.get(APP_CONFIG) instanceof Map) {
-            return NestedMaps.unflatten((Map<String, Object>) data.get(APP_CONFIG));
-        }
-
-        return new HashMap<>();
     }
 
 }
