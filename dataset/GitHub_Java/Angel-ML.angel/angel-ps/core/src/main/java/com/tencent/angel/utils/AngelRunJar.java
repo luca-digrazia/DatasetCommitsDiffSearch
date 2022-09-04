@@ -16,9 +16,8 @@
 
 package com.tencent.angel.utils;
 
-import com.tencent.angel.AngelDeployMode;
 import com.tencent.angel.AppSubmitter;
-import com.tencent.angel.conf.AngelConf;
+import com.tencent.angel.conf.AngelConfiguration;
 import com.tencent.angel.exception.InvalidParameterException;
 
 import org.apache.commons.logging.Log;
@@ -49,10 +48,10 @@ public class AngelRunJar {
   private static final Log LOG = LogFactory.getLog(AngelRunJar.class);
   private static final String angelSysConfFile = "angel-site.xml";
 
-  public static void main(String[] args) {
-    final Configuration conf = new Configuration();
+  public static void main(String[] args) throws Exception {
     try {
-      // load hadoop configuration
+      final Configuration conf = new Configuration();
+
       String hadoopHomePath = System.getenv("HADOOP_HOME");
       if(hadoopHomePath == null) {
         LOG.warn("HADOOP_HOME is empty.");
@@ -75,14 +74,14 @@ public class AngelRunJar {
       // 1. user config file
       // 2. command lines
       Map<String, String> cmdConfMap = parseArgs(args);
-      if (cmdConfMap.containsKey(AngelConf.ANGEL_APP_CONFIG_FILE)) {
-        LOG.info("user app config file " + cmdConfMap.get(AngelConf.ANGEL_APP_CONFIG_FILE));
-        conf.addResource(new Path(cmdConfMap.get(AngelConf.ANGEL_APP_CONFIG_FILE)));
+      if (cmdConfMap.containsKey(AngelConfiguration.ANGEL_APP_CONFIG_FILE)) {
+        LOG.info("user app config file " + cmdConfMap.get(AngelConfiguration.ANGEL_APP_CONFIG_FILE));
+        conf.addResource(new Path(cmdConfMap.get(AngelConfiguration.ANGEL_APP_CONFIG_FILE)));
       }
 
       // add user resource files to "angel.lib.jars" to upload to hdfs
-      if (cmdConfMap.containsKey(AngelConf.ANGEL_APP_USER_RESOURCE_FILES)) {
-        addResourceFiles(conf, cmdConfMap.get(AngelConf.ANGEL_APP_USER_RESOURCE_FILES));
+      if (cmdConfMap.containsKey(AngelConfiguration.ANGEL_APP_USER_RESOURCE_FILES)) {
+        addResourceFiles(conf, cmdConfMap.get(AngelConfiguration.ANGEL_APP_USER_RESOURCE_FILES));
       }
 
       for (Entry<String, String> kvEntry : cmdConfMap.entrySet()) {
@@ -90,7 +89,7 @@ public class AngelRunJar {
       }
 
       // load user job jar if it exist
-      String jobJar = conf.get(AngelConf.ANGEL_JOB_JAR);
+      String jobJar = conf.get(AngelConfiguration.ANGEL_JOB_JAR);
       if (jobJar != null) {
         loadJar(jobJar);
         addResourceFiles(conf, jobJar);
@@ -105,8 +104,8 @@ public class AngelRunJar {
       
       // instance submitter class
       final String submitClassName =
-          conf.get(AngelConf.ANGEL_APP_SUBMIT_CLASS,
-              AngelConf.DEFAULT_ANGEL_APP_SUBMIT_CLASS);
+          conf.get(AngelConfiguration.ANGEL_APP_SUBMIT_CLASS,
+              AngelConfiguration.DEFAULT_ANGEL_APP_SUBMIT_CLASS);
       UserGroupInformation ugi = UGITools.getCurrentUser(conf);
       ugi.doAs(new PrivilegedExceptionAction<String>() {
 
@@ -116,24 +115,20 @@ public class AngelRunJar {
           try {
             Class<?> submitClass = Class.forName(submitClassName);
             submmiter = (AppSubmitter) submitClass.newInstance();
-            submmiter.submit(conf);
-          } catch (Throwable x) {
-            LOG.fatal("submit application failed " + x.getMessage());
-            exit(-1, conf);
+          } catch (Exception x) {
+            String message = "load submit class failed " + x.getMessage();
+            LOG.fatal(message);
+            throw new InvalidParameterException(message);
           }
+
+          submmiter.submit(conf);
           return "OK";
         }
       });
-    } catch (Throwable x) {
-      LOG.fatal("submit application failed " + x.getMessage());
-      exit(-1, conf);
-    }
-  }
 
-  private static void exit(int exitCode, Configuration conf) {
-    String modeStr = conf.get(AngelConf.ANGEL_DEPLOY_MODE, AngelDeployMode.YARN.name());
-    if(modeStr.equals(AngelDeployMode.YARN.name())) {
-      System.exit(exitCode);
+    } catch (Exception x) {
+      x.printStackTrace();
+      System.exit(-1);
     }
   }
 
@@ -165,7 +160,7 @@ public class AngelRunJar {
     }
 
     // Add default fs(local fs) for lib jars.
-    String libJars = conf.get(AngelConf.ANGEL_JOB_LIBJARS);
+    String libJars = conf.get(AngelConfiguration.ANGEL_JOB_LIBJARS);
     if (libJars != null) {
       StringBuilder sb = new StringBuilder();
       String[] jars = libJars.split(",");
@@ -182,7 +177,7 @@ public class AngelRunJar {
           }
         }
       }
-      conf.set(AngelConf.ANGEL_JOB_LIBJARS, sb.toString());
+      conf.set(AngelConfiguration.ANGEL_JOB_LIBJARS, sb.toString());
     }
   }
 
@@ -198,12 +193,12 @@ public class AngelRunJar {
       sb.append(url.toString());
     }
 
-    String addJars = conf.get(AngelConf.ANGEL_JOB_LIBJARS);
+    String addJars = conf.get(AngelConfiguration.ANGEL_JOB_LIBJARS);
 
     if (addJars == null || addJars.trim().isEmpty()) {
-      conf.set(AngelConf.ANGEL_JOB_LIBJARS, sb.toString());
+      conf.set(AngelConfiguration.ANGEL_JOB_LIBJARS, sb.toString());
     } else {
-      conf.set(AngelConf.ANGEL_JOB_LIBJARS, sb.toString() + "," + addJars);
+      conf.set(AngelConfiguration.ANGEL_JOB_LIBJARS, sb.toString() + "," + addJars);
     }
   }
 
@@ -237,7 +232,7 @@ public class AngelRunJar {
               throw new InvalidParameterException("there must be a jar file after jar commond");
             } else {
               i++;
-              kvMap.put(AngelConf.ANGEL_JOB_JAR, args[i]);
+              kvMap.put(AngelConfiguration.ANGEL_JOB_JAR, args[i]);
             }
             break;
           }
