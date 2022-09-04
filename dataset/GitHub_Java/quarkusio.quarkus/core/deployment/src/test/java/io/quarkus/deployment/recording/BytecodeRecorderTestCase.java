@@ -22,7 +22,6 @@ import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.deployment.TestClassLoader;
@@ -138,28 +137,6 @@ public class BytecodeRecorderTestCase {
     }
 
     @Test
-    public void testValidationFails() throws Exception {
-        Assertions.assertThrows(RuntimeException.class, () -> {
-            runTest(generator -> {
-                TestRecorder recorder = generator.getRecordingProxy(TestRecorder.class);
-                ValidationFails validationFails = new ValidationFails();
-                validationFails.setName("Stuart Douglas");
-                recorder.object(validationFails);
-            });
-        });
-    }
-
-    @Test
-    public void testRelaxedValidationSucceeds() throws Exception {
-        runTest(generator -> {
-            TestRecorder recorder = generator.getRecordingProxy(TestRecorder.class);
-            ValidationFails validationFails = new ValidationFails();
-            validationFails.setName("Stuart Douglas");
-            recorder.relaxedObject(validationFails);
-        }, new ValidationFails("Stuart Douglas"));
-    }
-
-    @Test
     public void testJavaBeanWithEmbeddedReturnValue() throws Exception {
         runTest(generator -> {
             TestRecorder recorder = generator.getRecordingProxy(TestRecorder.class);
@@ -270,16 +247,6 @@ public class BytecodeRecorderTestCase {
             recorder.add(instance);
             recorder.result(instance);
         }, new TestJavaBean(null, 2));
-    }
-
-    @Test
-    public void testRecordableConstructor() throws Exception {
-        runTest(generator -> {
-            TestConstructorBean bean = new TestConstructorBean("John", "Citizen");
-            bean.setAge(30);
-            TestRecorder recorder = generator.getRecordingProxy(TestRecorder.class);
-            recorder.bean(bean);
-        }, new TestConstructorBean("John", "Citizen").setAge(30));
     }
 
     @Test
