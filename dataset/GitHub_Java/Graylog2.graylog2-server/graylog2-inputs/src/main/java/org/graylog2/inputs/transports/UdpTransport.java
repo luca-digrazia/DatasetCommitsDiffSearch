@@ -33,9 +33,9 @@
  */
 package org.graylog2.inputs.transports;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.transports.NettyTransport;
 import org.graylog2.plugin.inputs.transports.TransportFactory;
@@ -57,8 +57,8 @@ public class UdpTransport extends NettyTransport {
     public UdpTransport(@Assisted Configuration configuration,
                         @Named("cached") Provider<Executor> workerPoolProvider,
                         ThroughputCounter throughputCounter,
-                        LocalMetricRegistry localRegistry) {
-        super(configuration, throughputCounter, localRegistry);
+                        MetricRegistry metricRegistry) {
+        super(configuration, throughputCounter, metricRegistry);
         this.workerExecutor = workerPoolProvider.get();
     }
 

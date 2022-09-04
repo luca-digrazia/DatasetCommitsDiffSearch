@@ -21,16 +21,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.random.generators.FakeHttpRawMessageGenerator;
-import org.graylog2.plugin.ConfigClass;
-import org.graylog2.plugin.FactoryClass;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.configuration.fields.TextField;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.inputs.transports.GeneratorTransport;
-import org.graylog2.plugin.inputs.transports.Transport;
+import org.graylog2.plugin.inputs.transports.TransportFactory;
 import org.graylog2.plugin.journal.RawMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +37,7 @@ import java.util.Random;
 
 import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterruptibly;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.graylog2.inputs.random.generators.FakeHttpRawMessageGenerator.rateDeviation;
+import static org.graylog2.inputs.random.generators.FakeHttpMessageGenerator.deviation;
 
 public class RandomMessageTransport extends GeneratorTransport {
     private static final Logger log = LoggerFactory.getLogger(RandomMessageTransport.class);
@@ -97,7 +95,7 @@ public class RandomMessageTransport extends GeneratorTransport {
     }
 
     @Override
-    protected RawMessage produceRawMessage(MessageInput input) {
+    protected RawMessage produceRawMessage(MessageInput2 input) {
         final byte[] payload;
         try {
             final FakeHttpRawMessageGenerator.GeneratorState state = generator.generateState();
@@ -105,7 +103,7 @@ public class RandomMessageTransport extends GeneratorTransport {
 
             final RawMessage raw = new RawMessage("randomhttp", input.getId(), null, payload);
 
-            sleepUninterruptibly(rateDeviation(sleepMs, maxSleepDeviation, rand), MILLISECONDS);
+            sleepUninterruptibly(deviation(sleepMs, maxSleepDeviation, rand), MILLISECONDS);
             return raw;
         } catch (JsonProcessingException e) {
             log.error("Unable to serialize generator state", e);
@@ -114,47 +112,8 @@ public class RandomMessageTransport extends GeneratorTransport {
     }
 
 
-    @FactoryClass
-    public interface Factory extends Transport.Factory<RandomMessageTransport> {
+    public interface Factory extends TransportFactory<RandomMessageTransport> {
         @Override
         RandomMessageTransport create(Configuration configuration);
-
-        @Override
-        Config getConfig();
-    }
-
-    @ConfigClass
-    public static class Config extends GeneratorTransport.Config {
-        @Override
-        public ConfigurationRequest getRequestedConfiguration() {
-            final ConfigurationRequest c = super.getRequestedConfiguration();
-            c.addField(new NumberField(
-                    CK_SLEEP,
-                    "Sleep time",
-                    25,
-                    "How many milliseconds to sleep between generating messages.",
-                    ConfigurationField.Optional.NOT_OPTIONAL,
-                    NumberField.Attribute.ONLY_POSITIVE
-            ));
-
-            c.addField(new NumberField(
-                    CK_SLEEP_DEVIATION_PERCENT,
-                    "Maximum random sleep time deviation",
-                    30,
-                    "The deviation is used to generate a more realistic and non-steady message flow.",
-                    ConfigurationField.Optional.NOT_OPTIONAL,
-                    NumberField.Attribute.ONLY_POSITIVE
-            ));
-
-            c.addField(new TextField(
-                    CK_SOURCE,
-                    "Source name",
-                    "example.org",
-                    "What to use as source of the generate messages.",
-                    ConfigurationField.Optional.NOT_OPTIONAL
-            ));
-
-            return c;
-        }
     }
 }
