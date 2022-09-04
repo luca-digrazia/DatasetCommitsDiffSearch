@@ -89,7 +89,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
@@ -243,7 +243,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         "",
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
-        ImmutableMap.<String, String>of(),
         tsgm);
     useConfiguration();
     setUpSkyframe();
@@ -351,7 +350,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         packageCacheOptions,
         ruleClassProvider.getDefaultsPackageContent(optionsParser),
         UUID.randomUUID(),
-        ImmutableMap.<String, String>of(),
         ImmutableMap.<String, String>of(),
         tsgm);
     skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
@@ -467,7 +465,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected CachingAnalysisEnvironment getTestAnalysisEnvironment() {
     return new CachingAnalysisEnvironment(view.getArtifactFactory(),
         ArtifactOwner.NULL_OWNER, /*isSystemEnv=*/true, /*extendedSanityChecks*/false, reporter,
-        /*skyframeEnv=*/ null, /*actionsEnabled=*/true);
+        /*skyframeEnv=*/ null, /*actionsEnabled=*/true, binTools);
   }
 
   /**
@@ -567,7 +565,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         reporter.handle(e);
       }
     };
-    return view.getRuleContextForTesting(target, eventHandler, masterConfig);
+    return view.getRuleContextForTesting(target, eventHandler, masterConfig, binTools);
   }
 
   /**
@@ -1630,6 +1628,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
+    public Artifact getEmbeddedToolArtifact(String embeddedPath) {
+      return null;
+    }
+
+    @Override
     public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, Root root) {
       throw new UnsupportedOperationException();
     }
@@ -1640,7 +1643,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public ExtendedEventHandler getEventHandler() {
+    public EventHandler getEventHandler() {
       return reporter;
     }
 
