@@ -2,6 +2,7 @@ package io.quarkus.hibernate.reactive.runtime.boot;
 
 import javax.persistence.EntityManagerFactory;
 
+import org.hibernate.MultiTenancyStrategy;
 import org.hibernate.boot.internal.SessionFactoryOptionsBuilder;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.spi.SessionFactoryOptions;
@@ -17,8 +18,9 @@ public final class FastBootReactiveEntityManagerFactoryBuilder extends FastBootE
 
     public FastBootReactiveEntityManagerFactoryBuilder(PrevalidatedQuarkusMetadata metadata, String persistenceUnitName,
             StandardServiceRegistry standardServiceRegistry, RuntimeSettings runtimeSettings, Object validatorFactory,
-            Object cdiBeanManager) {
-        super(metadata, persistenceUnitName, standardServiceRegistry, runtimeSettings, validatorFactory, cdiBeanManager);
+            Object cdiBeanManager, MultiTenancyStrategy strategy) {
+        super(metadata, persistenceUnitName, standardServiceRegistry, runtimeSettings, validatorFactory, cdiBeanManager,
+                strategy);
     }
 
     @Override
@@ -26,7 +28,8 @@ public final class FastBootReactiveEntityManagerFactoryBuilder extends FastBootE
         final SessionFactoryOptionsBuilder optionsBuilder = metadata.buildSessionFactoryOptionsBuilder();
         optionsBuilder.enableCollectionInDefaultFetchGroup(true);
         optionsBuilder.applyMultiTableBulkIdStrategy(new ReactiveBulkIdStrategy(metadata));
-        populate(PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME, optionsBuilder, standardServiceRegistry);
+        populate(PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME, optionsBuilder, standardServiceRegistry,
+                multiTenancyStrategy);
         SessionFactoryOptions options = optionsBuilder.buildOptions();
         return new ReactiveSessionFactoryImpl(metadata, options);
     }
