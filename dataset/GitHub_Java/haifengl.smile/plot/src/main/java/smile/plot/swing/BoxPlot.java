@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.plot.swing;
 
@@ -198,12 +198,12 @@ public class BoxPlot extends Plot {
                 locations[i] = i + 0.5;
             }
 
-            canvas.getAxis(0).setTicks(labels, locations);
+            canvas.getAxis(0).addLabel(labels, locations);
             if (k > 10) {
                 canvas.getAxis(0).setRotation(-Math.PI / 2);
             }
         } else {
-            canvas.getAxis(0).setTickVisible(false);
+            canvas.getAxis(0).setLabelVisible(false);
         }
 
         return canvas;

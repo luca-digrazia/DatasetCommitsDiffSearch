@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.plot.swing;
 
@@ -136,8 +136,8 @@ public class BarPlot extends Plot {
         for (int i = 0; i < n; i++) {
             double[][] x = new double[data[i].length][2];
             for (int j = 0; j < x.length; j++) {
-                x[j][0] = j + (i+1) * width;
-                x[j][1] = data[i][j];
+                x[i][0] = j + (i+1) * width;
+                x[i][1] = data[i][j];
             }
 
             Color color = Palette.COLORS[i];

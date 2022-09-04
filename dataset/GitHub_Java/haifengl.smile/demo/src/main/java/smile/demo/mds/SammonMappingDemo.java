@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.mds;
 
@@ -34,7 +34,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
 import org.apache.commons.csv.CSVFormat;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.io.Read;
 import smile.mds.SammonMapping;
@@ -97,7 +96,7 @@ public class SammonMappingDemo extends JPanel implements Runnable, ActionListene
      */
     public JComponent learn() {
         JPanel pane = new JPanel(new GridLayout(1, 2));
-        double[][] data = datasetIndex == 2 || datasetIndex == 3 ? dataset[datasetIndex].toArray(false, CategoricalEncoder.ONE_HOT) : dataset[datasetIndex].drop(0).toArray(false, CategoricalEncoder.ONE_HOT);
+        double[][] data = datasetIndex == 2 || datasetIndex == 3 ? dataset[datasetIndex].toArray() : dataset[datasetIndex].drop(0).toArray();
         String[] labels = datasetIndex == 0 || datasetIndex == 1 ? dataset[datasetIndex].stringVector(0).toArray() : dataset[datasetIndex].names();
 
         long clock = System.currentTimeMillis();

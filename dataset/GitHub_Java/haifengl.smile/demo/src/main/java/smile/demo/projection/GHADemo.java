@@ -23,11 +23,13 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
+import smile.plot.swing.Palette;
 import smile.plot.swing.Canvas;
 import smile.plot.swing.ScatterPlot;
 import smile.plot.swing.TextPlot;
 import smile.projection.GHA;
 import smile.projection.PCA;
+import smile.math.MathEx;
 
 /**
  *
@@ -54,7 +56,7 @@ public class GHADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, mark, labels).canvas();
+            plot = ScatterPlot.of(y, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -68,7 +70,7 @@ public class GHADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, mark, labels).canvas();
+            plot = ScatterPlot.of(y, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -94,7 +96,7 @@ public class GHADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, mark, labels).canvas();
+            plot = ScatterPlot.of(y, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -120,7 +122,7 @@ public class GHADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, mark, labels).canvas();
+            plot = ScatterPlot.of(y, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }

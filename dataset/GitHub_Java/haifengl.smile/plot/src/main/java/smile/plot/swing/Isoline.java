@@ -40,14 +40,14 @@ public class Isoline extends Shape {
     /**
      * Show the value of isoline.
      */
-    private boolean isLevelVisible;
+    private boolean showValue;
 
     /**
      * Constructor.
      */
-    public Isoline(double level, boolean isLevelVisible) {
+    public Isoline(double level, boolean showValue) {
         this.level = level;
-        this.isLevelVisible = isLevelVisible;
+        this.showValue = showValue;
     }
 
     /**
@@ -113,7 +113,7 @@ public class Isoline extends Shape {
             horizontalReference = 0.0;
         }
 
-        if (isLevelVisible && label == null) {
+        if (showValue && label == null) {
             double[] lb = g.getLowerBound();
             double[] ub = g.getUpperBound();
             double xrange = ub[0] - lb[0];

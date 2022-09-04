@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.manifold;
 
@@ -27,7 +27,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-import smile.data.CategoricalEncoder;
 import smile.plot.swing.Canvas;
 import smile.manifold.LaplacianEigenmap;
 import smile.plot.swing.Wireframe;
@@ -60,7 +59,7 @@ public class LaplacianEigenmapDemo extends ManifoldDemo {
         }
         sigmaField.setEnabled(false);
 
-        double[][] data = dataset[datasetIndex].toArray(false, CategoricalEncoder.ONE_HOT);
+        double[][] data = dataset[datasetIndex].toArray();
         if (data.length > 1000) {
             double[][] x = new double[1000][];
             for (int i = 0; i < 1000; i++) {

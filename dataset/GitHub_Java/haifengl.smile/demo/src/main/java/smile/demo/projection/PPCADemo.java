@@ -28,6 +28,7 @@ import smile.plot.swing.ScatterPlot;
 import smile.plot.swing.TextPlot;
 import smile.projection.PCA;
 import smile.projection.PPCA;
+import smile.math.MathEx;
 
 /**
  *
@@ -54,7 +55,7 @@ public class PPCADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, mark, labels).canvas();
+            plot = ScatterPlot.of(y, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -68,7 +69,7 @@ public class PPCADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, mark, labels).canvas();
+            plot = ScatterPlot.of(y, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -81,7 +82,7 @@ public class PPCADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, mark, labels).canvas();
+            plot = ScatterPlot.of(y, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -96,7 +97,7 @@ public class PPCADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, mark, labels).canvas();
+            plot = ScatterPlot.of(y, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }

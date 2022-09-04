@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.demo.vq;
 
@@ -57,7 +57,7 @@ public class NeuralGasDemo extends VQDemo {
         NeuralGas gas = new NeuralGas(NeuralGas.seed(numNeurons, dataset[datasetIndex]),
                 TimeFunction.exp(learningRate, dataset[datasetIndex].length * epochs / 2),
                 TimeFunction.exp(neighborhood, dataset[datasetIndex].length * epochs / 8),
-                TimeFunction.constant(dataset[datasetIndex].length * 2));
+                2 * dataset[datasetIndex].length);
 
         Canvas plot = ScatterPlot.of(dataset[datasetIndex], pointLegend).canvas();
         plot.add(ScatterPlot.of(gas.neurons(), '@'));

@@ -74,7 +74,7 @@ public class Contour extends Plot {
     /**
      * Show the level.
      */
-    private boolean isLevelVisible = true;
+    private boolean showValue = true;
 
     /**
      * Constructor.
@@ -97,7 +97,6 @@ public class Contour extends Plot {
     public Contour(double[][] z, double[] levels) {
         this.z = z;
         this.levels = levels;
-        isLevelVisible = false;
         init();
     }
 
@@ -146,8 +145,15 @@ public class Contour extends Plot {
         this.y = y;
         this.z = z;
         this.levels = levels;
-        isLevelVisible = false;
         init();
+    }
+
+    /**
+     * Sets if show the value of isoline.
+     * @param showValue
+     */
+    public void setShowValue(boolean showValue) {
+        this.showValue = showValue;
     }
 
     /**
@@ -536,7 +542,7 @@ public class Contour extends Plot {
                         }
 
                         // Save the contour locations into the list of contours
-                        Isoline contour = new Isoline(zc, isLevelVisible);
+                        Isoline contour = new Isoline(zc, showValue);
 
                         Segment s = start;
                         contour.add(s.x0, s.y0);

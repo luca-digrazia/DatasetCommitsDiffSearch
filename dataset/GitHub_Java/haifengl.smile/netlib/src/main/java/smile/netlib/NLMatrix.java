@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.netlib;
 
@@ -40,7 +40,7 @@ public class NLMatrix extends JMatrix {
             try {
                 System.loadLibrary("mkl_rt");
             } catch (Exception ex) {
-                logger.warn("mkl_rt.dll is not available: {}", ex);
+                logger.error("Failed log mkl_rt native library: {}", ex);
             }
         }
     }
@@ -98,7 +98,7 @@ public class NLMatrix extends JMatrix {
     }
 
     @Override
-    public NLMatrix clone() {
+    public NLMatrix copy() {
         return new NLMatrix(nrows(), ncols(), data().clone());
     }
 

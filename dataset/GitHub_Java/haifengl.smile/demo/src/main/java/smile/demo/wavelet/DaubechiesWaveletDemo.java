@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.wavelet;
 
@@ -23,7 +23,7 @@ import javax.swing.*;
 
 import smile.plot.swing.LinePlot;
 import smile.plot.swing.Canvas;
-import smile.plot.swing.PlotGrid;
+import smile.plot.swing.PlotGroup;
 import smile.wavelet.DaubechiesWavelet;
 import smile.wavelet.Wavelet;
 import smile.wavelet.WaveletShrinkage;
@@ -33,7 +33,7 @@ import smile.wavelet.WaveletShrinkage;
  * @author Haifeng Li
  */
 @SuppressWarnings("serial")
-public class DaubechiesWaveletDemo extends PlotGrid {
+public class DaubechiesWaveletDemo extends PlotGroup {
     public DaubechiesWaveletDemo() {
         for (int i = 4; i <= 18; i+=2) {
             double[] x = new double[1024];
