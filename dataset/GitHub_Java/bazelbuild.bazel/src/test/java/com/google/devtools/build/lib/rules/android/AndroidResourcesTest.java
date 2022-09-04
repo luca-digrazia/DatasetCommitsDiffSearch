@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Optional;
 import org.junit.Before;
@@ -146,12 +145,14 @@ public class AndroidResourcesTest extends ResourceTestBase {
       throws Exception {
     RuleContext ruleContext = getRuleContext();
     ValidatedAndroidResources unfiltered =
-        new AndroidResources(unfilteredResources, getResourceRoots(unfilteredResources))
+        new AndroidResources(
+                unfilteredResources,
+                getResourceRoots(unfilteredResources),
+                DataBinding.asDisabledDataBindingContext())
             .process(
                 ruleContext,
                 AndroidDataContext.forNative(ruleContext),
                 getManifest(),
-                DataBinding.contextFrom(ruleContext),
                 /* neverlink = */ false);
     Optional<? extends AndroidResources> maybeFiltered =
         assertFilter(unfiltered, filteredResources, /* isDependency = */ true);
@@ -179,7 +180,10 @@ public class AndroidResourcesTest extends ResourceTestBase {
       boolean isDependency)
       throws Exception {
     AndroidResources unfiltered =
-        new AndroidResources(unfilteredResources, getResourceRoots(unfilteredResources));
+        new AndroidResources(
+            unfilteredResources,
+            getResourceRoots(unfilteredResources),
+            DataBinding.asDisabledDataBindingContext());
     assertFilter(unfiltered, filteredResources, isDependency);
   }
 
@@ -226,8 +230,7 @@ public class AndroidResourcesTest extends ResourceTestBase {
     useConfiguration("--android_aapt=aapt");
 
     RuleContext ruleContext = getRuleContext();
-    ParsedAndroidResources parsed =
-        assertParse(ruleContext, DataBinding.asEnabledDataBindingContextFrom(ruleContext));
+    ParsedAndroidResources parsed = assertParse(ruleContext, /* enableDataBinding = */ true);
 
     // Since we are not using aapt2, there should be no compiled symbols
     assertThat(parsed.getCompiledSymbols()).isNull();
@@ -268,9 +271,9 @@ public class AndroidResourcesTest extends ResourceTestBase {
     mockAndroidSdkWithAapt2();
     useConfiguration("--android_sdk=//sdk:sdk", "--android_aapt=aapt2");
 
-    RuleContext ruleContext = getRuleContextWithDataBinding();
+    RuleContext ruleContext = getRuleContext();
 
-    ParsedAndroidResources parsed = assertParse(ruleContext);
+    ParsedAndroidResources parsed = assertParse(ruleContext, /* enableDataBinding = */ true);
 
     // The parse action should take resources and busybox artifacts in and output symbols
     assertActionArtifacts(
@@ -287,20 +290,20 @@ public class AndroidResourcesTest extends ResourceTestBase {
             .add(parsed.getManifest())
             .build(),
         /* outputs = */ ImmutableList.of(
-            parsed.getCompiledSymbols(),
-            ParsedAndroidResources.getDummyDataBindingArtifact(ruleContext)));
+            parsed.getCompiledSymbols(), DataBinding.getSuffixedInfoFile(ruleContext, "_unused")));
   }
 
   @Test
   public void testMergeDataBinding() throws Exception {
     useConfiguration("--android_aapt=aapt");
 
-    RuleContext ruleContext = getRuleContextWithDataBinding();
+    RuleContext ruleContext = getRuleContext();
     ParsedAndroidResources parsed = assertParse(ruleContext);
     MergedAndroidResources merged =
         parsed.merge(
             AndroidDataContext.forNative(ruleContext),
             ResourceDependencies.empty(),
+            /* enableDataBinding = */ true,
             AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
 
     // Besides processed manifest, inherited values should be equal
@@ -337,6 +340,7 @@ public class AndroidResourcesTest extends ResourceTestBase {
         parsed.merge(
             AndroidDataContext.forNative(ruleContext),
             ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
+            DataBinding.isEnabled(ruleContext),
             AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
 
     // Besides processed manifest, inherited values should be equal
@@ -498,8 +502,7 @@ public class AndroidResourcesTest extends ResourceTestBase {
                 false,
                 false,
                 null,
-                null,
-                DataBinding.contextFrom(ruleContext))
+                null)
             .generateRClass(dataContext, AndroidAaptVersion.AUTO);
 
     assertThat(resourceApk.getResourceProguardConfig()).isNotNull();
@@ -511,23 +514,26 @@ public class AndroidResourcesTest extends ResourceTestBase {
    * for further validation.
    */
   private ParsedAndroidResources assertParse(RuleContext ruleContext) throws Exception {
-    return assertParse(ruleContext, DataBinding.contextFrom(ruleContext));
+    return assertParse(ruleContext, /* enableDataBinding = */ false);
   }
 
-  private ParsedAndroidResources assertParse(
-      RuleContext ruleContext, DataBindingContext dataBindingContext) throws Exception {
+  private ParsedAndroidResources assertParse(RuleContext ruleContext, boolean enableDataBinding)
+      throws Exception {
+
     ImmutableList<Artifact> resources = getResources("values-en/foo.xml", "drawable-hdpi/bar.png");
     AndroidResources raw =
         new AndroidResources(
-            resources, AndroidResources.getResourceRoots(ruleContext, resources, "resource_files"));
+            resources,
+            AndroidResources.getResourceRoots(ruleContext, resources, "resource_files"),
+            DataBinding.asDisabledDataBindingContext());
     StampedAndroidManifest manifest = getManifest();
 
     ParsedAndroidResources parsed =
         raw.parse(
             AndroidDataContext.forNative(ruleContext),
             manifest,
-            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext),
-            dataBindingContext);
+            enableDataBinding,
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
 
     // Inherited values should be equal
     assertThat(raw).isEqualTo(new AndroidResources(parsed));
@@ -544,19 +550,30 @@ public class AndroidResourcesTest extends ResourceTestBase {
         .merge(
             AndroidDataContext.forNative(ruleContext),
             ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
+            DataBinding.isEnabled(ruleContext),
             AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
   }
 
   private ParsedAndroidResources makeParsedResources(RuleContext ruleContext)
       throws RuleErrorException, InterruptedException {
+    return makeParsedResources(ruleContext, /* enableDataBinding = */ false);
+  }
+
+  private ParsedAndroidResources makeParsedResources(
+      RuleContext ruleContext, boolean enableDataBinding)
+      throws RuleErrorException, InterruptedException {
     ImmutableList<Artifact> resources = getResources("values-en/foo.xml", "drawable-hdpi/bar.png");
     return new AndroidResources(
-            resources, AndroidResources.getResourceRoots(ruleContext, resources, "resource_files"))
+            resources,
+            AndroidResources.getResourceRoots(ruleContext, resources, "resource_files"),
+            enableDataBinding
+                ? DataBinding.asEnabledDataBindingContextFrom(ruleContext)
+                : DataBinding.asDisabledDataBindingContext())
         .parse(
             AndroidDataContext.forNative(ruleContext),
             getManifest(),
-            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext),
-            DataBinding.contextFrom(ruleContext));
+            enableDataBinding,
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
   }
 
   private ProcessedAndroidManifest getManifest() {
@@ -567,10 +584,6 @@ public class AndroidResourcesTest extends ResourceTestBase {
   /** Gets a dummy rule context object by creating a dummy target. */
   private RuleContext getRuleContext() throws Exception {
     return getRuleContext("android_library");
-  }
-
-  private RuleContext getRuleContextWithDataBinding() throws Exception {
-    return getRuleContext("android_library", "enable_data_binding = 1");
   }
 
   /** Gets a dummy rule context object by creating a dummy target. */

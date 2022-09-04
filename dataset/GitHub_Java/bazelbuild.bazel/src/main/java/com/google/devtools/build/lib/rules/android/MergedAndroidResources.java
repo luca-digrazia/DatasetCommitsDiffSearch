@@ -40,6 +40,7 @@ public class MergedAndroidResources extends ParsedAndroidResources {
       AndroidDataContext dataContext,
       ParsedAndroidResources parsed,
       ResourceDependencies resourceDeps,
+      boolean enableDataBinding,
       AndroidAaptVersion aaptVersion)
       throws InterruptedException {
 
@@ -59,7 +60,10 @@ public class MergedAndroidResources extends ParsedAndroidResources {
             .setThrowOnResourceConflict(androidConfiguration.throwOnResourceConflict())
             .setUseCompiledMerge(useCompiledMerge);
 
-    parsed.asDataBindingContext().supplyLayoutInfo(builder::setDataBindingInfoZip);
+    if (enableDataBinding) {
+      builder.setDataBindingInfoZip(
+          DataBinding.getLayoutInfoFile(dataContext.getActionConstructionContext()));
+    }
 
     return builder
         .setManifestOut(

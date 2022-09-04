@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.android.resources.ResourceFolderType;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -137,24 +136,32 @@ public class AndroidResources {
     return from(
         ruleContext,
         ruleContext.getPrerequisites(resourcesAttr, Mode.TARGET, FileProvider.class),
-        resourcesAttr);
+        resourcesAttr,
+        DataBinding.contextFrom(ruleContext));
   }
 
   public static AndroidResources from(
       RuleErrorConsumer errorConsumer,
       Iterable<FileProvider> resourcesTargets,
-      String resourcesAttr)
+      String resourcesAttr,
+      DataBindingContext dataBindingContext)
       throws RuleErrorException {
-    return forResources(errorConsumer, getResources(resourcesTargets), resourcesAttr);
+    return forResources(
+        errorConsumer, getResources(resourcesTargets), resourcesAttr, dataBindingContext);
   }
 
   /** Returns an {@link AndroidResources} for a list of resource artifacts. */
   @VisibleForTesting
   public static AndroidResources forResources(
-      RuleErrorConsumer ruleErrorConsumer, ImmutableList<Artifact> resources, String resourcesAttr)
+      RuleErrorConsumer ruleErrorConsumer,
+      ImmutableList<Artifact> resources,
+      String resourcesAttr,
+      DataBindingContext dataBindingContext)
       throws RuleErrorException {
     return new AndroidResources(
-        resources, getResourceRoots(ruleErrorConsumer, resources, resourcesAttr));
+        resources,
+        getResourceRoots(ruleErrorConsumer, resources, resourcesAttr),
+        dataBindingContext);
   }
 
   /**
@@ -167,7 +174,8 @@ public class AndroidResources {
   }
 
   static AndroidResources empty() {
-    return new AndroidResources(ImmutableList.of(), ImmutableList.of());
+    return new AndroidResources(
+        ImmutableList.of(), ImmutableList.of(), DataBinding.asDisabledDataBindingContext());
   }
 
   /**
@@ -184,7 +192,8 @@ public class AndroidResources {
     Preconditions.checkArgument(resourcesDir.isTreeArtifact());
     return new AndroidResources(
         ImmutableList.of(resourcesDir),
-        ImmutableList.of(resourcesDir.getExecPath().getChild("res")));
+        ImmutableList.of(resourcesDir.getExecPath().getChild("res")),
+        DataBinding.asDisabledDataBindingContext());
   }
 
   /**
@@ -307,16 +316,20 @@ public class AndroidResources {
 
   private final ImmutableList<Artifact> resources;
   private final ImmutableList<PathFragment> resourceRoots;
+  private final DataBindingContext dataBindingContext;
 
   AndroidResources(AndroidResources other) {
-    this(other.resources, other.resourceRoots);
+    this(other.resources, other.resourceRoots, other.dataBindingContext);
   }
 
   @VisibleForTesting
   public AndroidResources(
-      ImmutableList<Artifact> resources, ImmutableList<PathFragment> resourceRoots) {
+      ImmutableList<Artifact> resources,
+      ImmutableList<PathFragment> resourceRoots,
+      DataBindingContext dataBindingContext) {
     this.resources = resources;
     this.resourceRoots = resourceRoots;
+    this.dataBindingContext = dataBindingContext;
   }
 
   private static ImmutableList<Artifact> getResources(Iterable<FileProvider> targets) {
@@ -398,18 +411,19 @@ public class AndroidResources {
     return Optional.of(
         new AndroidResources(
             filtered.get(),
-            getResourceRoots(errorConsumer, filtered.get(), DEFAULT_RESOURCES_ATTR)));
+            getResourceRoots(errorConsumer, filtered.get(), DEFAULT_RESOURCES_ATTR),
+            dataBindingContext));
   }
 
   /** Parses these resources. */
   public ParsedAndroidResources parse(
       AndroidDataContext dataContext,
       StampedAndroidManifest manifest,
-      AndroidAaptVersion aaptVersion,
-      DataBindingContext dataBindingContext)
+      boolean enableDataBinding,
+      AndroidAaptVersion aaptVersion)
       throws InterruptedException {
     return ParsedAndroidResources.parseFrom(
-        dataContext, this, manifest, aaptVersion, dataBindingContext);
+        dataContext, this, manifest, enableDataBinding, aaptVersion);
   }
 
   /**
@@ -420,14 +434,13 @@ public class AndroidResources {
       RuleContext ruleContext,
       AndroidDataContext dataContext,
       StampedAndroidManifest manifest,
-      DataBindingContext dataBindingContext,
       boolean neverlink)
       throws RuleErrorException, InterruptedException {
     return process(
         dataContext,
         manifest,
         ResourceDependencies.fromRuleDeps(ruleContext, neverlink),
-        dataBindingContext,
+        DataBinding.isEnabled(ruleContext),
         AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
   }
 
@@ -435,11 +448,11 @@ public class AndroidResources {
       AndroidDataContext dataContext,
       StampedAndroidManifest manifest,
       ResourceDependencies resourceDeps,
-      DataBindingContext dataBindingContext,
+      boolean enableDataBinding,
       AndroidAaptVersion aaptVersion)
       throws InterruptedException {
-    return parse(dataContext, manifest, aaptVersion, dataBindingContext)
-        .merge(dataContext, resourceDeps, aaptVersion)
+    return parse(dataContext, manifest, enableDataBinding, aaptVersion)
+        .merge(dataContext, resourceDeps, enableDataBinding, aaptVersion)
         .validate(dataContext, aaptVersion);
   }
 
@@ -456,13 +469,5 @@ public class AndroidResources {
   @Override
   public int hashCode() {
     return Objects.hash(resources, resourceRoots);
-  }
-
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("resources", resources)
-        .add("resourceRoots", resourceRoots)
-        .toString();
   }
 }

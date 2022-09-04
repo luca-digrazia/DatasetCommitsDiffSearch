@@ -17,6 +17,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.skylarkbuildapi.android.ValidatedAndroidDataApi;
 
 /**
  * A {@link CompiledMergableAndroidData} that has been fully processed, validated, and packaged.
@@ -27,7 +28,7 @@ import com.google.devtools.build.lib.packages.RuleErrorConsumer;
  * ResourceContainer} is removed, this interface can be replaced with {@link
  * ValidatedAndroidResources}
  */
-public interface ValidatedAndroidData extends CompiledMergableAndroidData {
+public interface ValidatedAndroidData extends CompiledMergableAndroidData, ValidatedAndroidDataApi {
 
   Artifact getRTxt();
 
@@ -47,4 +48,23 @@ public interface ValidatedAndroidData extends CompiledMergableAndroidData {
 
   @VisibleForTesting
   Artifact getApk();
+
+  /**
+   * Gets an Artifact containing a zip of merged resources.
+   *
+   * <p>If assets were processed together with resources, the zip will also contain merged assets.
+   *
+   * @deprecated This artifact is produced by an often-expensive action and should not be used if
+   *     another option is available. Furthermore, it will be replaced by flat files once we
+   *     completely move to aapt2.
+   */
+  @Deprecated
+  Artifact getMergedResources();
+
+  ProcessedAndroidManifest getProcessedManifest();
+
+  /** Exports an immutable version of this data. */
+  default ValidatedAndroidData export() {
+    return this;
+  }
 }
