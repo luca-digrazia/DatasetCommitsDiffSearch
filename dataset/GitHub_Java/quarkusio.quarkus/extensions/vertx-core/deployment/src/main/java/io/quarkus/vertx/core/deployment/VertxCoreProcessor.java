@@ -17,12 +17,10 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.IOThreadDetectorBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.ThreadFactoryBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
@@ -95,8 +93,7 @@ class VertxCoreProcessor {
 
     @BuildStep
     LogCleanupFilterBuildItem filterNettyHostsFileParsingWarn() {
-        return new LogCleanupFilterBuildItem("io.netty.resolver.HostsFileParser",
-                "Failed to load and parse hosts file");
+        return new LogCleanupFilterBuildItem("io.netty.resolver.HostsFileParser", "Failed to load and parse hosts file");
     }
 
     @BuildStep
@@ -106,17 +103,5 @@ class VertxCoreProcessor {
                 .getAllKnownSubclasses(DotName.createSimple(AbstractVerticle.class.getName()))) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ci.toString()));
         }
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    ThreadFactoryBuildItem createVertxThreadFactory(VertxCoreRecorder recorder) {
-        return new ThreadFactoryBuildItem(recorder.createThreadFactory());
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    void setSharedExecutorInFactory(VertxCoreRecorder recorder, ExecutorBuildItem executorBuildItem) {
-        recorder.setupExecutorFactory(executorBuildItem.getExecutorProxy());
     }
 }

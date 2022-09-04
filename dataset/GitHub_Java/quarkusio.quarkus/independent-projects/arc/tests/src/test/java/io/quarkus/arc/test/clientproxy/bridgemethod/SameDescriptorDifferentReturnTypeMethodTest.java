@@ -15,15 +15,12 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 public class SameDescriptorDifferentReturnTypeMethodTest {
 
     @RegisterExtension
-    public ArcTestContainer container = new ArcTestContainer(LoopProducer.class, Loop.class, SuperLoop.class,
-            EvenMoreSuperLoop.class, ComplexLoop.class, Complex.class);
+    public ArcTestContainer container = new ArcTestContainer(LoopProducer.class, Loop.class, SuperLoop.class);
 
     @Test
     public void testProxy() throws IOException {
         Serializable ret = Arc.container().instance(SuperLoop.class).get().next();
         assertEquals(9, ret);
-        Object complexRet = Arc.container().instance(EvenMoreSuperLoop.class, new Complex.Literal()).get().next();
-        assertEquals(11, complexRet);
     }
 
     @Dependent
@@ -31,25 +28,12 @@ public class SameDescriptorDifferentReturnTypeMethodTest {
 
         @Produces
         @ApplicationScoped
-        Loop produceLoop() {
+        Loop produce() {
             return new Loop() {
 
                 @Override
                 public Integer next() {
                     return 9;
-                }
-            };
-        }
-
-        @Complex
-        @Produces
-        @ApplicationScoped
-        ComplexLoop produceComplexLoop() {
-            return new ComplexLoop() {
-
-                @Override
-                public Integer next() {
-                    return 11;
                 }
             };
         }
@@ -65,18 +49,6 @@ public class SameDescriptorDifferentReturnTypeMethodTest {
     interface SuperLoop {
 
         Serializable next();
-
-    }
-
-    interface EvenMoreSuperLoop {
-
-        Object next();
-
-    }
-
-    interface ComplexLoop extends SuperLoop, EvenMoreSuperLoop {
-
-        // intentionally don't implement next()
 
     }
 
