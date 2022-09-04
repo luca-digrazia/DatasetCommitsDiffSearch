@@ -101,9 +101,10 @@ public class EnvironmentTest extends EvaluationTestCase {
 
   @Test
   public void testGetVariableNames() throws Exception {
-    Environment env;
+    Environment outerEnv;
+    Environment innerEnv;
     try (Mutability mut = Mutability.create("outer")) {
-      env =
+      outerEnv =
           Environment.builder(mut)
               .useDefaultSemantics()
               .setGlobals(Environment.DEFAULT_GLOBALS)
@@ -111,12 +112,56 @@ public class EnvironmentTest extends EvaluationTestCase {
               .update("foo", "bar")
               .update("wiz", 3);
     }
+    try (Mutability mut = Mutability.create("inner")) {
+      innerEnv =
+          Environment.builder(mut)
+              .useDefaultSemantics()
+              .setGlobals(outerEnv.getGlobals())
+              .build()
+              .update("foo", "bat")
+              .update("quux", 42);
+    }
 
-    assertThat(env.getVariableNames())
+    assertThat(outerEnv.getVariableNames())
         .isEqualTo(
             Sets.newHashSet(
                 "foo",
                 "wiz",
+                "False",
+                "None",
+                "True",
+                "all",
+                "any",
+                "bool",
+                "depset",
+                "dict",
+                "dir",
+                "enumerate",
+                "fail",
+                "getattr",
+                "hasattr",
+                "hash",
+                "int",
+                "len",
+                "list",
+                "max",
+                "min",
+                "print",
+                "range",
+                "repr",
+                "reversed",
+                "select",
+                "sorted",
+                "str",
+                "tuple",
+                "type",
+                "zip"));
+    assertThat(innerEnv.getVariableNames())
+        .isEqualTo(
+            Sets.newHashSet(
+                "foo",
+                "wiz",
+                "quux",
                 "False",
                 "None",
                 "True",
