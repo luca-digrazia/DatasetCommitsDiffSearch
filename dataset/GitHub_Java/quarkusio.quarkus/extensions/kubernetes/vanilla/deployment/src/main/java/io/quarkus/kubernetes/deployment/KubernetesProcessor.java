@@ -19,7 +19,6 @@ import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_BUI
 import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_COMMIT_ID;
 import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_VCS_URL;
 import static io.quarkus.kubernetes.deployment.Constants.SERVICE;
-import static io.quarkus.kubernetes.deployment.ResourceNameUtil.*;
 import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.DEFAULT_PRIORITY;
 import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.VANILLA_KUBERNETES_PRIORITY;
 import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.mergeList;
@@ -420,7 +419,7 @@ class KubernetesProcessor {
             }
 
             if (!generatedFileNames.isEmpty()) {
-                log.infof("Generated the Kubernetes manifests: '%s' in '%s'", String.join(",", generatedFileNames),
+                log.debugf("Generated the Kubernetes manifests: '%s' in '%s'", String.join(",", generatedFileNames),
                         outputTarget.getOutputDirectory() + File.separator + KUBERNETES);
             }
 
@@ -438,6 +437,10 @@ class KubernetesProcessor {
 
             log.warn("Failed to generate Kubernetes resources", e);
         }
+    }
+
+    private String getResourceName(PlatformConfiguration platformConfiguration, ApplicationInfoBuildItem applicationInfo) {
+        return platformConfiguration.getName().orElse(applicationInfo.getName());
     }
 
     /**
