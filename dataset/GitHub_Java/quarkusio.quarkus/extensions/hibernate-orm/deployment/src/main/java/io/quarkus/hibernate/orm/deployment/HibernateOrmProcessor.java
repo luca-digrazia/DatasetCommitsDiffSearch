@@ -108,8 +108,8 @@ import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.IoUtil;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.hibernate.orm.PersistenceUnit;
+import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationBuildItem;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationRuntimeConfiguredBuildItem;
-import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationStaticConfiguredBuildItem;
 import io.quarkus.hibernate.orm.runtime.HibernateOrmRecorder;
 import io.quarkus.hibernate.orm.runtime.HibernateOrmRuntimeConfig;
 import io.quarkus.hibernate.orm.runtime.JPAConfig;
@@ -121,7 +121,6 @@ import io.quarkus.hibernate.orm.runtime.boot.QuarkusPersistenceUnitDefinition;
 import io.quarkus.hibernate.orm.runtime.boot.scan.QuarkusScanner;
 import io.quarkus.hibernate.orm.runtime.dialect.QuarkusH2Dialect;
 import io.quarkus.hibernate.orm.runtime.dialect.QuarkusPostgreSQL10Dialect;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationStaticInitListener;
 import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
 import io.quarkus.hibernate.orm.runtime.tenant.DataSourceTenantConnectionResolver;
 import io.quarkus.hibernate.orm.runtime.tenant.TenantConnectionResolver;
@@ -385,7 +384,7 @@ public final class HibernateOrmProcessor {
             JpaEntitiesBuildItem domainObjects,
             List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
-            List<HibernateOrmIntegrationStaticConfiguredBuildItem> integrationBuildItems,
+            List<HibernateOrmIntegrationBuildItem> integrations, //Used to make sure ORM integrations are performed before this item
             ProxyDefinitionsBuildItem proxyDefinitions,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<BeanContainerListenerBuildItem> beanContainerListener) throws Exception {
@@ -419,12 +418,9 @@ public final class HibernateOrmProcessor {
             integratorClasses.add((Class<? extends Integrator>) recorderContext.classProxy(integratorClassName));
         }
 
-        List<HibernateOrmIntegrationStaticInitListener> integrationStaticInitListeners = HibernateOrmIntegrationStaticConfiguredBuildItem
-                .collectListeners(integrationBuildItems);
-
         List<QuarkusPersistenceUnitDefinition> finalStagePUDescriptors = new ArrayList<>();
         for (PersistenceUnitDescriptorBuildItem pud : persistenceUnitDescriptorBuildItems) {
-            finalStagePUDescriptors.add(pud.asOutputPersistenceUnitDefinition(integrationStaticInitListeners));
+            finalStagePUDescriptors.add(pud.asOutputPersistenceUnitDefinition());
         }
 
         //Make it possible to record the QuarkusPersistenceUnitDefinition as bytecode:
@@ -527,11 +523,10 @@ public final class HibernateOrmProcessor {
     @BuildStep
     @Record(RUNTIME_INIT)
     public PersistenceProviderSetUpBuildItem setupPersistenceProvider(HibernateOrmRecorder recorder,
-            Capabilities capabilities, HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig,
-            List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationBuildItems) {
+            Capabilities capabilities,
+            HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig) {
         if (capabilities.isMissing(Capability.HIBERNATE_REACTIVE)) {
-            recorder.setupPersistenceProvider(hibernateOrmRuntimeConfig,
-                    HibernateOrmIntegrationRuntimeConfiguredBuildItem.collectListeners(integrationBuildItems));
+            recorder.setupPersistenceProvider(hibernateOrmRuntimeConfig);
         }
 
         return new PersistenceProviderSetUpBuildItem();
@@ -542,6 +537,7 @@ public final class HibernateOrmProcessor {
     public ServiceStartBuildItem startPersistenceUnits(HibernateOrmRecorder recorder, BeanContainerBuildItem beanContainer,
             List<JdbcDataSourceBuildItem> dataSourcesConfigured,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
+            List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationsRuntimeConfigured,
             List<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem,
             List<PersistenceProviderSetUpBuildItem> persistenceProviderSetUp) throws Exception {
         if (hasEntities(jpaEntities, nonJpaModels)) {

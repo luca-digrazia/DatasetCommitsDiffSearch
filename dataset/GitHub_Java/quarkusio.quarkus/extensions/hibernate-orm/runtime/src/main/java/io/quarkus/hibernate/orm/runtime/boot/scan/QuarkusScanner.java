@@ -1,22 +1,7 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.hibernate.orm.runtime.boot.scan;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 
 import org.hibernate.boot.archive.internal.UrlInputStreamAccess;
@@ -38,11 +23,20 @@ import org.hibernate.boot.archive.spi.InputStreamAccess;
  */
 public class QuarkusScanner implements Scanner {
 
+    private Set<PackageDescriptor> packageDescriptors;
     private Set<ClassDescriptor> classDescriptors;
 
     @Override
     public ScanResult scan(ScanEnvironment scanEnvironment, ScanOptions scanOptions, ScanParameters scanParameters) {
-        return new Result();
+        return new Result(packageDescriptors, classDescriptors, scanEnvironment, scanOptions);
+    }
+
+    public Set<PackageDescriptor> getPackageDescriptors() {
+        return packageDescriptors;
+    }
+
+    public void setPackageDescriptors(Set<PackageDescriptor> packageDescriptors) {
+        this.packageDescriptors = packageDescriptors;
     }
 
     public Set<ClassDescriptor> getClassDescriptors() {
@@ -53,17 +47,39 @@ public class QuarkusScanner implements Scanner {
         this.classDescriptors = classDescriptors;
     }
 
-    public class Result implements ScanResult {
+    public static class Result implements ScanResult {
+
+        private final Set<PackageDescriptor> selectedPackageDescriptors;
+        private final Set<ClassDescriptor> selectedClassDescriptors;
+
+        Result(Set<PackageDescriptor> packageDescriptors, Set<ClassDescriptor> classDescriptors,
+                ScanEnvironment scanEnvironment, ScanOptions scanOptions) {
+            this.selectedPackageDescriptors = new HashSet<>();
+            this.selectedClassDescriptors = new HashSet<>();
+
+            for (PackageDescriptor packageDescriptor : packageDescriptors) {
+                if (scanOptions.canDetectUnlistedClassesInRoot() ||
+                        scanEnvironment.getExplicitlyListedClassNames().contains(packageDescriptor.getName())) {
+                    this.selectedPackageDescriptors.add(packageDescriptor);
+                }
+            }
+
+            for (ClassDescriptor classDescriptor : classDescriptors) {
+                if (scanOptions.canDetectUnlistedClassesInRoot() ||
+                        scanEnvironment.getExplicitlyListedClassNames().contains(classDescriptor.getName())) {
+                    this.selectedClassDescriptors.add(classDescriptor);
+                }
+            }
+        }
 
         @Override
         public Set<PackageDescriptor> getLocatedPackages() {
-            //todo: handle packages
-            return Collections.emptySet();
+            return selectedPackageDescriptors;
         }
 
         @Override
         public Set<ClassDescriptor> getLocatedClasses() {
-            return classDescriptors;
+            return selectedClassDescriptors;
         }
 
         @Override
@@ -73,8 +89,34 @@ public class QuarkusScanner implements Scanner {
         }
     }
 
-    public static class ClassDescriptorImpl implements ClassDescriptor {
+    public static class PackageDescriptorImpl implements PackageDescriptor {
 
+        private String name;
+
+        public PackageDescriptorImpl(String name) {
+            this.name = name;
+        }
+
+        public PackageDescriptorImpl() {
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public InputStreamAccess getStreamAccess() {
+            return new UrlInputStreamAccess(
+                    Thread.currentThread().getContextClassLoader().getResource(name.replace('.', '/') + "/package-info.class"));
+        }
+    }
+
+    public static class ClassDescriptorImpl implements ClassDescriptor {
 
         private String name;
         private Categorization categorization;
@@ -107,7 +149,8 @@ public class QuarkusScanner implements Scanner {
 
         @Override
         public InputStreamAccess getStreamAccess() {
-            return new UrlInputStreamAccess(Thread.currentThread().getContextClassLoader().getResource(name.replace('.', '/') + ".class"));
+            return new UrlInputStreamAccess(
+                    Thread.currentThread().getContextClassLoader().getResource(name.replace('.', '/') + ".class"));
         }
     }
 }

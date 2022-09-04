@@ -9,6 +9,12 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import javax.persistence.ElementCollection;
+import javax.persistence.Embeddable;
+import javax.persistence.Embedded;
+import javax.persistence.Entity;
+import javax.persistence.MappedSuperclass;
+
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
@@ -32,9 +38,16 @@ import io.quarkus.deployment.configuration.ConfigurationError;
  * @author Emmanuel Bernard emmanuel@hibernate.org
  * @author Sanne Grinovero <sanne@hibernate.org>
  */
-public final class JpaJandexScavenger {
+final class JpaJandexScavenger {
 
-    public static final List<DotName> EMBEDDED_ANNOTATIONS = Arrays.asList(ClassNames.EMBEDDED, ClassNames.ELEMENT_COLLECTION);
+    private static final DotName JPA_ENTITY = DotName.createSimple(Entity.class.getName());
+    private static final DotName EMBEDDABLE = DotName.createSimple(Embeddable.class.getName());
+    private static final List<DotName> EMBEDDED_ANNOTATIONS = Arrays.asList(
+            DotName.createSimple(Embedded.class.getName()),
+            DotName.createSimple(ElementCollection.class.getName()));
+    private static final DotName MAPPED_SUPERCLASS = DotName.createSimple(MappedSuperclass.class.getName());
+
+    private static final DotName ENUM = DotName.createSimple(Enum.class.getName());
 
     private final List<PersistenceXmlDescriptorBuildItem> explicitDescriptors;
     private final BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
@@ -65,12 +78,11 @@ public final class JpaJandexScavenger {
         for (DotName packageAnnotation : HibernateOrmAnnotations.PACKAGE_ANNOTATIONS) {
             enlistJPAModelAnnotatedPackages(indexView, domainObjectCollector, packageAnnotation);
         }
-        enlistJPAModelClasses(indexView, domainObjectCollector, enumTypeCollector, javaTypeCollector, ClassNames.JPA_ENTITY,
+        enlistJPAModelClasses(indexView, domainObjectCollector, enumTypeCollector, javaTypeCollector, JPA_ENTITY,
                 unindexedClasses);
-        enlistJPAModelClasses(indexView, domainObjectCollector, enumTypeCollector, javaTypeCollector, ClassNames.EMBEDDABLE,
+        enlistJPAModelClasses(indexView, domainObjectCollector, enumTypeCollector, javaTypeCollector, EMBEDDABLE,
                 unindexedClasses);
-        enlistJPAModelClasses(indexView, domainObjectCollector, enumTypeCollector, javaTypeCollector,
-                ClassNames.MAPPED_SUPERCLASS,
+        enlistJPAModelClasses(indexView, domainObjectCollector, enumTypeCollector, javaTypeCollector, MAPPED_SUPERCLASS,
                 unindexedClasses);
         enlistEmbeddedsAndElementCollections(indexView, domainObjectCollector, enumTypeCollector, javaTypeCollector,
                 unindexedClasses);
@@ -84,7 +96,7 @@ public final class JpaJandexScavenger {
         domainObjectCollector.registerAllForReflection(reflectiveClass);
 
         if (!enumTypeCollector.isEmpty()) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "java.lang.Enum"));
+            reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, Enum.class.getName()));
             for (String className : enumTypeCollector) {
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, className));
             }
@@ -235,7 +247,7 @@ public final class JpaJandexScavenger {
         for (FieldInfo fieldInfo : classInfo.fields()) {
             DotName fieldType = fieldInfo.type().name();
             ClassInfo fieldTypeClassInfo = index.getClassByName(fieldType);
-            if (fieldTypeClassInfo != null && ClassNames.ENUM.equals(fieldTypeClassInfo.superName())) {
+            if (fieldTypeClassInfo != null && ENUM.equals(fieldTypeClassInfo.superName())) {
                 enumTypeCollector.add(fieldType.toString());
             }
         }
@@ -262,7 +274,7 @@ public final class JpaJandexScavenger {
     }
 
     private static void collectDomainObject(JpaEntitiesBuildItem domainObjectCollector, ClassInfo modelClass) {
-        if (modelClass.classAnnotation(ClassNames.JPA_ENTITY) != null) {
+        if (modelClass.classAnnotation(JPA_ENTITY) != null) {
             domainObjectCollector.addEntityClass(modelClass.name().toString());
         } else {
             domainObjectCollector.addModelClass(modelClass.name().toString());
