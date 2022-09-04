@@ -17,8 +17,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.devtools.build.android.desugar.io.BitFlags;
-import com.google.devtools.build.android.desugar.io.FieldInfo;
 import java.lang.reflect.Method;
 import javax.annotation.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
@@ -71,7 +69,7 @@ class InterfaceDesugaring extends ClassVisitor {
       ClassLoader targetLoader,
       GeneratedClassStore store,
       boolean legacyJaCoCo) {
-    super(Opcodes.ASM7, dest);
+    super(Opcodes.ASM6, dest);
     this.interfaceCache = interfaceCache;
     this.depsCollector = depsCollector;
     this.coreLibrarySupport = coreLibrarySupport;
@@ -338,7 +336,7 @@ class InterfaceDesugaring extends ClassVisitor {
   private class InterfaceFieldWriteCollector extends MethodVisitor {
 
     public InterfaceFieldWriteCollector(MethodVisitor mv) {
-      super(Opcodes.ASM7, mv);
+      super(Opcodes.ASM6, mv);
     }
 
     @Override
@@ -384,7 +382,7 @@ class InterfaceDesugaring extends ClassVisitor {
         ClassLoader targetLoader,
         DependencyCollector depsCollector,
         String declaringClass) {
-      super(Opcodes.ASM7, dest);
+      super(Opcodes.ASM6, dest);
       this.interfaceName = knownInterfaceName;
       this.bootclasspath = bootclasspath;
       this.targetLoader = targetLoader;
@@ -478,7 +476,7 @@ class InterfaceDesugaring extends ClassVisitor {
   private static class MoveJacocoFieldAccess extends MethodVisitor {
 
     public MoveJacocoFieldAccess(MethodVisitor mv) {
-      super(Opcodes.ASM7, mv);
+      super(Opcodes.ASM6, mv);
     }
 
     @Override
@@ -501,7 +499,7 @@ class InterfaceDesugaring extends ClassVisitor {
     private final MethodVisitor annotationOnlyDest;
 
     public MultiplexAnnotations(@Nullable MethodVisitor dest, MethodVisitor annotationOnlyDest) {
-      super(Opcodes.ASM7, dest);
+      super(Opcodes.ASM6, dest);
       this.annotationOnlyDest = annotationOnlyDest;
     }
 
@@ -546,7 +544,7 @@ class InterfaceDesugaring extends ClassVisitor {
 
     public MultiplexAnnotationVisitor(
         @Nullable AnnotationVisitor dest, AnnotationVisitor... moreDestinations) {
-      super(Opcodes.ASM7, dest);
+      super(Opcodes.ASM6, dest);
       this.moreDestinations = moreDestinations;
     }
 

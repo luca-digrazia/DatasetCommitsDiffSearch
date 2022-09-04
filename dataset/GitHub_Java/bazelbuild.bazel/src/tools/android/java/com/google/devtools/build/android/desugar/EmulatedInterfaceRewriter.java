@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android.desugar;
 
-import com.google.devtools.build.android.desugar.io.BitFlags;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import org.objectweb.asm.ClassVisitor;
@@ -32,7 +31,7 @@ public class EmulatedInterfaceRewriter extends ClassVisitor {
   private final CoreLibrarySupport support;
 
   public EmulatedInterfaceRewriter(ClassVisitor dest, CoreLibrarySupport support) {
-    super(Opcodes.ASM7, dest);
+    super(Opcodes.ASM6, dest);
     this.support = support;
   }
 
