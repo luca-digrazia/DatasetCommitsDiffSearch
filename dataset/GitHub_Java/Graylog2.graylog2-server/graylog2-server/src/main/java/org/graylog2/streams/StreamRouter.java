@@ -1,114 +1,127 @@
 /**
- * Copyright 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.streams;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
+import com.google.common.eventbus.EventBus;
+import com.google.common.eventbus.Subscribe;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.graylog2.plugin.Message;
+import org.graylog2.plugin.ServerStatus;
+import org.graylog2.plugin.streams.Stream;
+import org.graylog2.streams.events.StreamsChangedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.graylog2.streams.matchers.StreamRuleMatcher;
 
+import javax.inject.Inject;
+import javax.inject.Named;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-
-import com.google.common.collect.Lists;
-import org.graylog2.Core;
-import org.graylog2.plugin.Message;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.plugin.streams.StreamRule;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Routes a GELF Message to it's streams.
- *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * Routes a {@link org.graylog2.plugin.Message} to its streams.
  */
 public class StreamRouter {
-
     private static final Logger LOG = LoggerFactory.getLogger(StreamRouter.class);
-    private static LoadingCache<String, List<Stream>> cachedStreams;
 
-    public List<Stream> route(Core server, Message msg) {
-        List<Stream> matches = Lists.newArrayList();
-        List<Stream> streams = getStreams(server);
+    protected final StreamService streamService;
+    private final ServerStatus serverStatus;
+    private final ScheduledExecutorService scheduler;
 
-        for (Stream stream : streams) {
-            boolean missed = false;
+    private final AtomicReference<StreamRouterEngine> routerEngine = new AtomicReference<>(null);
+    private final StreamRouterEngineUpdater engineUpdater;
 
-            if (stream.getStreamRules().isEmpty()) {
-                continue;
-            }
+    @Inject
+    public StreamRouter(StreamService streamService,
+                        ServerStatus serverStatus,
+                        StreamRouterEngine.Factory routerEngineFactory,
+                        EventBus serverEventBus,
+                        @Named("daemonScheduler") ScheduledExecutorService scheduler) {
+        this.streamService = streamService;
+        this.serverStatus = serverStatus;
+        this.scheduler = scheduler;
 
-            for (StreamRule rule : stream.getStreamRules()) {
-                try {
-                    StreamRuleMatcher matcher = StreamRuleMatcherFactory.build(rule.getType());
-                    if (!matchStreamRule(msg, matcher, rule)) {
-                        missed = true;
-                        break;
-                    }
-                } catch (InvalidStreamRuleTypeException e) {
-                    LOG.warn("Invalid stream rule type. Skipping matching for this rule. " + e.getMessage(), e);
+        this.engineUpdater = new StreamRouterEngineUpdater(routerEngine, routerEngineFactory, streamService, executorService());
+        this.routerEngine.set(engineUpdater.getNewEngine());
+
+        // TODO: This class needs lifecycle management to avoid leaking objects in the EventBus
+        serverEventBus.register(this);
+    }
+
+    @Subscribe
+    @SuppressWarnings("unused")
+    public void handleStreamsUpdate(StreamsChangedEvent event) {
+        scheduler.submit(engineUpdater);
+    }
+
+    private ExecutorService executorService() {
+        final ThreadFactory threadFactory = new ThreadFactoryBuilder()
+                .setNameFormat("stream-router-%d")
+                .setDaemon(true)
+                .build();
+        return Executors.newCachedThreadPool(threadFactory);
+    }
+
+    public List<Stream> route(final Message msg) {
+        final StreamRouterEngine engine = routerEngine.get();
+
+        msg.recordCounter(serverStatus, "streams-evaluated", engine.getStreams().size());
+
+        return engine.match(msg);
+    }
+
+    private class StreamRouterEngineUpdater implements Runnable {
+        private final AtomicReference<StreamRouterEngine> routerEngine;
+        private final StreamRouterEngine.Factory engineFactory;
+        private final StreamService streamService;
+        private final ExecutorService executorService;
+
+        public StreamRouterEngineUpdater(AtomicReference<StreamRouterEngine> routerEngine,
+                                         StreamRouterEngine.Factory engineFactory,
+                                         StreamService streamService,
+                                         ExecutorService executorService) {
+            this.routerEngine = routerEngine;
+            this.engineFactory = engineFactory;
+            this.streamService = streamService;
+            this.executorService = executorService;
+        }
+
+        @Override
+        public void run() {
+            try {
+                final StreamRouterEngine engine = getNewEngine();
+
+                if (engine.getFingerprint().equals(routerEngine.get().getFingerprint())) {
+                    LOG.debug("Not updating router engine, streams did not change (fingerprint={})", engine.getFingerprint());
+                } else {
+                    LOG.debug("Updating to new stream router engine. (old-fingerprint={} new-fingerprint={}",
+                            routerEngine.get().getFingerprint(), engine.getFingerprint());
+                    routerEngine.set(engine);
                 }
-            }
-
-            // All rules were matched.
-            if (!missed) {
-                matches.add(stream);
+            } catch (Exception e) {
+                LOG.error("Stream router engine update failed!", e);
             }
         }
 
-        return matches;
-    }
-
-    private List<Stream> getStreams(final Core server) {
-        if (cachedStreams == null)
-            cachedStreams = CacheBuilder.newBuilder()
-                    .maximumSize(1)
-                    .expireAfterWrite(1, TimeUnit.SECONDS)
-                    .build(
-                            new CacheLoader<String, List<Stream>>() {
-                                @Override
-                                public List<Stream> load(String s) throws Exception {
-                                    return StreamImpl.loadAllEnabled(server);
-                                }
-                            }
-                    );
-        List<Stream> result = null;
-        try {
-            result = cachedStreams.get("streams");
-        } catch (ExecutionException e) {
-            LOG.error("Caught exception while fetching from cache", e);
-        }
-        return result;
-    }
-
-    public boolean matchStreamRule(Message msg, StreamRuleMatcher matcher, StreamRule rule) {
-        try {
-            return matcher.match(msg, rule);
-        } catch (Exception e) {
-            LOG.warn("Could not match stream rule <" + rule.getType() + "/" + rule.getValue() + ">: " + e.getMessage(), e);
-            return false;
+        private StreamRouterEngine getNewEngine() {
+            return engineFactory.create(streamService.loadAllEnabled(), executorService);
         }
     }
-
 }

@@ -33,6 +33,7 @@ import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.inputs.converters.ConverterFactory;
+import org.graylog2.rest.models.system.inputs.responses.InputUpdated;
 import org.graylog2.inputs.extractors.ExtractorFactory;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.database.EmbeddedPersistable;
@@ -43,7 +44,6 @@ import org.graylog2.plugin.inputs.Extractor;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.models.system.inputs.responses.InputCreated;
 import org.graylog2.rest.models.system.inputs.responses.InputDeleted;
-import org.graylog2.rest.models.system.inputs.responses.InputUpdated;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.slf4j.Logger;
@@ -60,19 +60,16 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     private static final Logger LOG = LoggerFactory.getLogger(InputServiceImpl.class);
 
     private final ExtractorFactory extractorFactory;
-    private final ConverterFactory converterFactory;
     private final MessageInputFactory messageInputFactory;
     private final EventBus clusterEventBus;
 
     @Inject
     public InputServiceImpl(MongoConnection mongoConnection,
                             ExtractorFactory extractorFactory,
-                            ConverterFactory converterFactory,
                             MessageInputFactory messageInputFactory,
                             ClusterEventBus clusterEventBus) {
         super(mongoConnection);
         this.extractorFactory = extractorFactory;
-        this.converterFactory = converterFactory;
         this.messageInputFactory = messageInputFactory;
         this.clusterEventBus = clusterEventBus;
     }
@@ -109,15 +106,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         final String resultId = super.save(model);
         if (resultId != null && !resultId.isEmpty()) {
             publishChange(InputCreated.create(resultId));
-        }
-        return resultId;
-    }
-
-    @Override
-    public String update(Input model) throws ValidationException {
-        final String resultId = super.save(model);
-        if (resultId != null && !resultId.isEmpty()) {
-            publishChange(InputUpdated.create(resultId));
         }
         return resultId;
     }
@@ -307,7 +295,7 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
             final DBObject c = (BasicDBObject) element;
 
             try {
-                listBuilder.add(converterFactory.create(
+                listBuilder.add(ConverterFactory.factory(
                         Converter.Type.valueOf(((String) c.get(Extractor.FIELD_CONVERTER_TYPE)).toUpperCase(Locale.ENGLISH)),
                         (Map<String, Object>) c.get(Extractor.FIELD_CONVERTER_CONFIG)
                 ));
