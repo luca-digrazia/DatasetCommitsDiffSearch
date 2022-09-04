@@ -137,6 +137,11 @@ public abstract class RepositoryFunction {
     RepositoryMissingDependencyException() {
       super(Location.BUILTIN, "Internal exception");
     }
+
+    @Override
+    protected boolean canBeAddedToStackTrace() {
+      return false; // to avoid polluting the log with internal cause information
+    }
   }
 
   /**
@@ -290,7 +295,8 @@ public abstract class RepositoryFunction {
       if (pkgLookupValue == PackageLookupValue.NO_BUILD_FILE_VALUE) {
         message = PackageLookupFunction.explainNoBuildFileValue(label.getPackageIdentifier(), env);
       }
-      throw new EvalException("Unable to load package for " + label + ": " + message);
+      throw new EvalException(
+          Location.BUILTIN, "Unable to load package for " + label + ": " + message);
     }
 
     // And now for the file

@@ -383,6 +383,11 @@ final class Eval {
         throw ex.ensureLocation(stmt.getOperatorLocation());
       }
 
+    } else if (lhs instanceof ListExpression) {
+      // TODO(adonovan): make this a static error.
+      throw new EvalException(
+          stmt.getOperatorLocation(), "cannot perform augmented assignment on a list literal");
+
     } else {
       // Not possible for resolved ASTs.
       throw new EvalException(
