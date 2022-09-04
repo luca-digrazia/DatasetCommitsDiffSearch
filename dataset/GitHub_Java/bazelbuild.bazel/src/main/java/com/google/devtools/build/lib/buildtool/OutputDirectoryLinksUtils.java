@@ -13,9 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.buildtool;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
@@ -40,20 +38,12 @@ public class OutputDirectoryLinksUtils {
 
   private static final String NO_CREATE_SYMLINKS_PREFIX = "/";
 
-  public static ImmutableList<String> getOutputSymlinkNames(String productName,
-      String symlinkPrefix) {
-    ImmutableList.Builder<String> builder = ImmutableList.<String>builder();
-    // TODO(b/35234395): This symlink is created for backwards compatiblity, remove it once
-    // we're sure it won't cause any other issues.
-    builder.add(productName + "-out");
-    if (!productName.equals(symlinkPrefix)) {
-      builder.add(symlinkPrefix + "out");
-    }
-    return builder.build();
+  public static String getOutputSymlinkName(String productName) {
+    return productName + "-out";
   }
 
-  private static String execRootSymlink(String symlinkPrefix, String workspaceName) {
-    return symlinkPrefix + workspaceName;
+  private static String execRootSymlink(String productName, String workspaceName) {
+    return productName + "-" + workspaceName;
   }
   /**
    * Attempts to create convenience symlinks in the workspaceDirectory and in
@@ -72,13 +62,11 @@ public class OutputDirectoryLinksUtils {
 
     // Make the two non-specific links from the workspace to the output area,
     // and the configuration-specific links in both the workspace and the execution root dirs.
-    // IMPORTANT: Keep in sync with removeOutputDirectoryLinks below.
-    for (String outputSymlinkName : getOutputSymlinkNames(productName, symlinkPrefix)) {
-      createLink(workspace, outputSymlinkName, outputPath, failures);
-    }
+    // NB!  Keep in sync with removeOutputDirectoryLinks below.
+    createLink(workspace, getOutputSymlinkName(productName), outputPath, failures);
 
     // Points to execroot
-    createLink(workspace, execRootSymlink(symlinkPrefix, workspaceName), execRoot, failures);
+    createLink(workspace, execRootSymlink(productName, workspaceName), execRoot, failures);
 
     if (targetConfig != null) {
       createLink(workspace, symlinkPrefix + "bin",
@@ -114,14 +102,12 @@ public class OutputDirectoryLinksUtils {
     }
 
     PathFragment result = relativize(file, workspaceDirectory,
-        execRootSymlink(symlinkPrefix, workspaceName));
+        execRootSymlink(productName, workspaceName));
     if (result != null) {
       return result;
     }
 
-    ImmutableList<String> outputSymlinkNames = getOutputSymlinkNames(productName, symlinkPrefix);
-    checkArgument(!outputSymlinkNames.isEmpty());
-    result = relativize(file, workspaceDirectory, outputSymlinkNames.get(0));
+    result = relativize(file, workspaceDirectory, getOutputSymlinkName(productName));
     if (result != null) {
       return result;
     }
@@ -164,10 +150,8 @@ public class OutputDirectoryLinksUtils {
     }
     List<String> failures = new ArrayList<>();
 
-    for (String outputSymlinkName : getOutputSymlinkNames(productName, symlinkPrefix)) {
-      removeLink(workspace, outputSymlinkName, failures);
-    }
-    removeLink(workspace, execRootSymlink(symlinkPrefix, workspaceName), failures);
+    removeLink(workspace, getOutputSymlinkName(productName), failures);
+    removeLink(workspace, execRootSymlink(productName, workspaceName), failures);
     removeLink(workspace, symlinkPrefix + "bin", failures);
     removeLink(workspace, symlinkPrefix + "testlogs", failures);
     removeLink(workspace, symlinkPrefix + "genfiles", failures);

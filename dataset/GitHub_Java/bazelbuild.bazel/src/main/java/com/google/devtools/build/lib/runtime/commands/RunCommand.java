@@ -79,7 +79,6 @@ import java.util.List;
          shortDescription = "Runs the specified target.",
          help = "resource:run.txt",
          allowResidue = true,
-         hasSensitiveResidue = true,
          binaryStdOut = true,
          completion = "label-bin",
          binaryStdErr = true)

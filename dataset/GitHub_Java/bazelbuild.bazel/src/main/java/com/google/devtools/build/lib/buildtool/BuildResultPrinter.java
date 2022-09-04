@@ -18,25 +18,22 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.InputFileConfiguredTarget;
+import com.google.devtools.build.lib.analysis.OutputFileConfiguredTarget;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.util.io.OutErr;
+
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -60,7 +57,6 @@ class BuildResultPrinter {
       BuildRequest request,
       BuildResult result,
       Collection<ConfiguredTarget> configuredTargets,
-      Collection<ConfiguredTarget> configuredTargetsToSkip,
       Collection<AspectValue> aspects) {
     // NOTE: be careful what you print!  We don't want to create a consistency
     // problem where the summary message and the exit code disagree.  The logic
@@ -76,9 +72,6 @@ class BuildResultPrinter {
       Collection<ConfiguredTarget> successfulTargets = result.getSuccessfulTargets();
       (successfulTargets.contains(target) ? succeeded : failed).add(target);
     }
-
-    // TODO(bazel-team): convert these to a new "SKIPPED" status when ready: b/62191890.
-    failed.addAll(configuredTargetsToSkip);
 
     // Suppress summary if --show_result value is exceeded:
     if (succeeded.size() + failed.size() + aspectsToPrint.size()
@@ -135,11 +128,11 @@ class BuildResultPrinter {
 
       // For failed compilation, it is still useful to examine temp artifacts,
       // (ie, preprocessed and assembler files).
-      OutputGroupInfo topLevelProvider =
-          OutputGroupInfo.get(target);
+      OutputGroupProvider topLevelProvider =
+          target.getProvider(OutputGroupProvider.class);
       String productName = env.getRuntime().getProductName();
       if (topLevelProvider != null) {
-        for (Artifact temp : topLevelProvider.getOutputGroup(OutputGroupInfo.TEMP_FILES)) {
+        for (Artifact temp : topLevelProvider.getOutputGroup(OutputGroupProvider.TEMP_FILES)) {
           if (temp.getPath().exists()) {
             outErr.printErrLn("  See temp at "
                 + OutputDirectoryLinksUtils.getPrettyPath(temp.getPath(),
@@ -211,44 +204,36 @@ class BuildResultPrinter {
   private Collection<ConfiguredTarget> filterTargetsToPrint(
       Collection<ConfiguredTarget> configuredTargets) {
     ImmutableList.Builder<ConfiguredTarget> result = ImmutableList.builder();
-    for (ConfiguredTarget configuredTarget : configuredTargets) {
+    for (ConfiguredTarget target : configuredTargets) {
       // TODO(bazel-team): this is quite ugly. Add a marker provider for this check.
-      if (configuredTarget instanceof InputFileConfiguredTarget) {
+      if (target instanceof InputFileConfiguredTarget) {
         // Suppress display of source files (because we do no work to build them).
         continue;
       }
-      Target target = null;
-      try {
-        target = env.getPackageManager().getTarget(env.getReporter(), configuredTarget.getLabel());
-      } catch (NoSuchPackageException | NoSuchTargetException | InterruptedException e) {
-        env.getReporter()
-            .handle(Event.error("Unable to get target when filtering targets to print. " + e));
-        continue;
-      }
-      if (target instanceof Rule) {
-        Rule rule = (Rule) target;
+      if (target.getTarget() instanceof Rule) {
+        Rule rule = (Rule) target.getTarget();
         if (rule.getRuleClass().contains("$")) {
           // Suppress display of hidden rules
           continue;
         }
       }
-      if (configuredTarget instanceof OutputFileConfiguredTarget) {
+      if (target instanceof OutputFileConfiguredTarget) {
         // Suppress display of generated files (because they appear underneath
         // their generating rule), EXCEPT those ones which are not part of the
         // filesToBuild of their generating rule (e.g. .par, _deploy.jar
         // files), OR when a user explicitly requests an output file but not
         // its rule.
         TransitiveInfoCollection generatingRule =
-            ((OutputFileConfiguredTarget) configuredTarget).getGeneratingRule();
+            ((OutputFileConfiguredTarget) target).getGeneratingRule();
         if (CollectionUtils.containsAll(
-                generatingRule.getProvider(FileProvider.class).getFilesToBuild(),
-                configuredTarget.getProvider(FileProvider.class).getFilesToBuild())
+            generatingRule.getProvider(FileProvider.class).getFilesToBuild(),
+            target.getProvider(FileProvider.class).getFilesToBuild())
             && configuredTargets.contains(generatingRule)) {
           continue;
         }
       }
 
-      result.add(configuredTarget);
+      result.add(target);
     }
     return result.build();
   }

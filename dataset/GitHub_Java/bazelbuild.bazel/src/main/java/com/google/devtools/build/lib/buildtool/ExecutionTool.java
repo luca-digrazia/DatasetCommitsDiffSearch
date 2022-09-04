@@ -19,7 +19,6 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.base.Stopwatch;
-import com.google.common.base.Strings;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -244,10 +243,9 @@ public class ExecutionTool {
         SpawnActionContext context =
             strategyConverter.getStrategy(SpawnActionContext.class, entry.getValue());
         if (context == null) {
-          String strategy = Strings.emptyToNull(entry.getKey());
           throw makeExceptionForInvalidStrategyValue(
               entry.getValue(),
-              Joiner.on(' ').skipNulls().join(strategy, "spawn"),
+              "spawn",
               strategyConverter.getValidValues(SpawnActionContext.class));
         }
         spawnStrategyMap.put(entry.getKey(), context);
@@ -652,6 +650,7 @@ public class ExecutionTool {
       SkyframeExecutor skyframeExecutor,
       ModifiedFileSet modifiedOutputFiles) {
     BuildRequest.BuildRequestOptions options = request.getBuildOptions();
+    boolean verboseExplanations = options.verboseExplanations;
     boolean keepGoing = request.getViewOptions().keepGoing;
 
     Path actionOutputRoot = env.getDirectories().getActionConsoleOutputDirectory();
@@ -664,24 +663,12 @@ public class ExecutionTool {
 
     skyframeExecutor.setActionOutputRoot(actionOutputRoot);
     ArtifactFactory artifactFactory = env.getSkyframeBuildView().getArtifactFactory();
-    return new SkyframeBuilder(
-        skyframeExecutor,
-        new ActionCacheChecker(
-            actionCache,
-            artifactFactory,
-            executionFilter,
-            ActionCacheChecker.CacheConfig.builder()
-                .setEnabled(options.useActionCache)
-                .setVerboseExplanations(options.verboseExplanations)
-                .build()),
-        keepGoing,
-        actualJobs,
+    return new SkyframeBuilder(skyframeExecutor,
+        new ActionCacheChecker(actionCache, artifactFactory, executionFilter, verboseExplanations),
+        keepGoing, actualJobs,
         request.getPackageCacheOptions().checkOutputFiles
-            ? modifiedOutputFiles
-            : ModifiedFileSet.NOTHING_MODIFIED,
-        options.finalizeActions,
-        fileCache,
-        request.getBuildOptions().progressReportInterval);
+            ? modifiedOutputFiles : ModifiedFileSet.NOTHING_MODIFIED,
+        options.finalizeActions, fileCache, request.getBuildOptions().progressReportInterval);
   }
 
   private void configureResourceManager(BuildRequest request) {
