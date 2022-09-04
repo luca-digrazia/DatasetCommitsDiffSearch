@@ -832,7 +832,7 @@ public final class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void testRuleBadTypeInAdd() throws Exception {
     registerDummyStarlarkFunction();
     checkEvalErrorContains(
-        "got dict<string, string> for 'attrs', want dict<string, Attribute>",
+        "expected <String, Descriptor> type for 'attrs' but got <string, string> instead",
         "rule(impl, attrs = {'a1': 'some text'})");
   }
 
