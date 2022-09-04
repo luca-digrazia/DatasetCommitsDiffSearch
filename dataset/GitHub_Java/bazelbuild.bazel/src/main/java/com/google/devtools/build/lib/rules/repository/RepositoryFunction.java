@@ -38,9 +38,7 @@ import com.google.devtools.build.lib.repository.ExternalPackageException;
 import com.google.devtools.build.lib.repository.ExternalPackageUtil;
 import com.google.devtools.build.lib.repository.ExternalRuleNotFoundException;
 import com.google.devtools.build.lib.skyframe.ActionEnvironmentFunction;
-import com.google.devtools.build.lib.skyframe.PackageLookupFunction;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
-import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -55,7 +53,6 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -99,10 +96,10 @@ public abstract class RepositoryFunction {
    * {@link RepositoryDelegatorFunction} has to know how to catch.</p>
    */
   public static class RepositoryFunctionException extends SkyFunctionException {
-
     public RepositoryFunctionException(NoSuchPackageException cause, Transience transience) {
       super(cause, transience);
     }
+
     /**
      * Error reading or writing to the filesystem.
      */
@@ -117,11 +114,11 @@ public abstract class RepositoryFunction {
       super(cause, transience);
     }
   }
+
   /**
    * Exception thrown when something a repository rule cannot be found.
    */
   public static final class RepositoryNotFoundException extends RepositoryFunctionException {
-
     public RepositoryNotFoundException(String repositoryName) {
       super(
           new BuildFileContainsErrorsException(
@@ -130,6 +127,7 @@ public abstract class RepositoryFunction {
           Transience.PERSISTENT);
     }
   }
+
   /**
    * An exception thrown when a dependency is missing to notify the SkyFunction from an evaluation.
    */
@@ -138,12 +136,8 @@ public abstract class RepositoryFunction {
     RepositoryMissingDependencyException() {
       super(Location.BUILTIN, "Internal exception");
     }
-
-    @Override
-    public boolean canBeAddedToStackTrace() {
-      return false;
-    }
   }
+
   /**
    * repository functions can throw the result of this function to notify the RepositoryFunction
    * that a dependency was missing and the evaluation of the function must be restarted.
@@ -184,8 +178,7 @@ public abstract class RepositoryFunction {
       Path outputDirectory,
       BlazeDirectories directories,
       Environment env,
-      Map<String, String> markerData,
-      SkyKey key)
+      Map<String, String> markerData)
       throws SkyFunctionException, InterruptedException;
 
   @SuppressWarnings("unchecked")
@@ -285,12 +278,8 @@ public abstract class RepositoryFunction {
       throw RepositoryFunction.restart();
     }
     if (!pkgLookupValue.packageExists()) {
-      String message = pkgLookupValue.getErrorMsg();
-      if (pkgLookupValue == PackageLookupValue.NO_BUILD_FILE_VALUE) {
-        message = PackageLookupFunction.explainNoBuildFileValue(label.getPackageIdentifier(), env);
-      }
       throw new EvalException(
-          Location.BUILTIN, "Unable to load package for " + label + ": " + message);
+          Location.BUILTIN, "Unable to load package for " + label + ": not found.");
     }
 
     // And now for the file
@@ -299,38 +288,25 @@ public abstract class RepositoryFunction {
   }
 
   /**
-   * A method that can be called from a implementation of {@link #fetch(Rule, Path,
-   * BlazeDirectories, Environment, Map, SkyKey)} to declare a list of Skyframe dependencies on
-   * environment variable. It also add the information to the marker file. It returns the list of
-   * environment variable on which the function depends, or null if the skyframe function needs to
-   * be restarted.
+   * A method that can be called from a implementation of
+   * {@link #fetch(Rule, Path, BlazeDirectories, Environment, Map)} to declare a list of Skyframe
+   * dependencies on environment variable. It also add the information to the marker file. It
+   * returns the list of environment variable on which the function depends, or null if the skyframe
+   * function needs to be restarted.
    */
-  protected Map<String, String> declareEnvironmentDependencies(
-      Map<String, String> markerData, Environment env, Iterable<String> keys)
-      throws InterruptedException {
+  protected Map<String, String> declareEnvironmentDependencies(Map<String, String> markerData,
+      Environment env, Iterable<String> keys) throws InterruptedException {
     Map<String, String> environ = ActionEnvironmentFunction.getEnvironmentView(env, keys);
 
     // Returns true if there is a null value and we need to wait for some dependencies.
     if (environ == null) {
       return null;
     }
-
-    Map<String, String> repoEnvOverride = PrecomputedValue.REPO_ENV.get(env);
-    if (repoEnvOverride == null) {
-      return null;
-    }
-
-    Map<String, String> repoEnv = new LinkedHashMap<String, String>(environ);
-    for (Map.Entry<String, String> value : repoEnvOverride.entrySet()) {
-      repoEnv.put(value.getKey(), value.getValue());
-    }
-
     // Add the dependencies to the marker file
-    for (Map.Entry<String, String> value : repoEnv.entrySet()) {
+    for (Map.Entry<String, String> value : environ.entrySet()) {
       markerData.put("ENV:" + value.getKey(), value.getValue());
     }
-
-    return repoEnv;
+    return environ;
   }
 
   /**
@@ -530,8 +506,8 @@ public abstract class RepositoryFunction {
    * encourage nor optimize for since it is not common. So the set of external files is small.
    */
   public static void addExternalFilesDependencies(
-      RootedPath rootedPath, boolean isDirectory, BlazeDirectories directories, Environment env)
-      throws InterruptedException {
+      RootedPath rootedPath, BlazeDirectories directories, Environment env)
+      throws IOException, InterruptedException {
     Path externalRepoDir = getExternalRepositoryDirectory(directories);
     PathFragment repositoryPath = rootedPath.asPath().relativeTo(externalRepoDir);
     if (repositoryPath.isEmpty()) {
@@ -553,9 +529,8 @@ public abstract class RepositoryFunction {
         return;
       }
 
-      if (isDirectory || repositoryPath.segmentCount() > 1) {
-        if (!isDirectory
-            && rule.getRuleClass().equals(LocalRepositoryRule.NAME)
+      if (repositoryPath.segmentCount() > 1) {
+        if (rule.getRuleClass().equals(LocalRepositoryRule.NAME)
             && repositoryPath.endsWith(BuildFileName.WORKSPACE.getFilenameFragment())) {
           // Ignore this, there is a dependency from LocalRepositoryFunction->WORKSPACE file already
           return;
@@ -582,27 +557,12 @@ public abstract class RepositoryFunction {
       // Alternatively, the repository might still be provided by an override. Therefore, in
       // any case, register the dependency on the repository overrides.
       RepositoryDelegatorFunction.REPOSITORY_OVERRIDES.get(env);
+      return;
     } catch (ExternalPackageException ex) {
       // This should never happen.
       throw new IllegalStateException(
           "Repository " + repositoryName + " cannot be resolved for path " + rootedPath, ex);
     }
-  }
-
-  /**
-   * For paths that are under managed directories, we require that the corresponding FileStateValue
-   * or DirectoryListingStateValue is evaluated only after RepositoryDirectoryValue is evaluated.
-   * This way we guarantee that the repository rule is given a chance to update the managed
-   * directory before the files under the managed directory are accessed.
-   *
-   * <p>We do not need to require anything else (comparing to dependencies required for external
-   * repositories files), as overriding external repositories with managed directories is currently
-   * forbidden; also, we do not have do perform special checks for local_repository targets, since
-   * such targets cannot have managed directories by definition.
-   */
-  public static void addManagedDirectoryDependencies(RepositoryName repositoryName, Environment env)
-      throws InterruptedException {
-    env.getValue(RepositoryDirectoryValue.key(repositoryName));
   }
 
   /**
