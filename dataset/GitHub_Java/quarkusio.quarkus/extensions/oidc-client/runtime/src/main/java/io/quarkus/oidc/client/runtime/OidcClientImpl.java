@@ -3,7 +3,6 @@ package io.quarkus.oidc.client.runtime;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
-import java.time.Instant;
 import java.util.Base64;
 import java.util.function.Supplier;
 
@@ -29,6 +28,10 @@ public class OidcClientImpl implements OidcClient {
 
     private static final Logger LOG = Logger.getLogger(OidcClientImpl.class);
 
+    private static final String ACCESS_TOKEN = "access_token";
+    private static final String REFRESH_TOKEN = "refresh_token";
+    private static final String EXPIRES_AT = "expires_at";
+
     private static final String AUTHORIZATION_HEADER = String.valueOf(HttpHeaders.AUTHORIZATION);
 
     private final WebClient client;
@@ -48,8 +51,26 @@ public class OidcClientImpl implements OidcClient {
         this.commonRefreshGrantParams = commonRefreshGrantParams;
         this.grantType = grantType;
         this.oidcConfig = oidcClientConfig;
-        this.clientSecretBasicAuthScheme = OidcCommonUtils.initClientSecretBasicAuth(oidcClientConfig);
-        this.clientJwtKey = OidcCommonUtils.initClientJwtKey(oidcClientConfig);
+        this.clientSecretBasicAuthScheme = initClientSecretBasicAuth(oidcClientConfig);
+        this.clientJwtKey = initClientJwtKey(oidcClientConfig);
+    }
+
+    private static String initClientSecretBasicAuth(OidcClientConfig oidcClientConfig) {
+        if (OidcCommonUtils.isClientSecretBasicAuthRequired(oidcClientConfig.credentials)) {
+            return "Basic "
+                    + Base64.getEncoder().encodeToString(
+                            (oidcClientConfig.getClientId().get() + ":"
+                                    + OidcCommonUtils.clientSecret(oidcClientConfig.credentials))
+                                            .getBytes(StandardCharsets.UTF_8));
+        }
+        return null;
+    }
+
+    private static Key initClientJwtKey(OidcClientConfig oidcClientConfig) {
+        if (OidcCommonUtils.isClientJwtAuthRequired(oidcClientConfig.credentials)) {
+            return OidcCommonUtils.clientJwtKey(oidcClientConfig.credentials);
+        }
+        return null;
     }
 
     @Override
@@ -63,7 +84,7 @@ public class OidcClientImpl implements OidcClient {
             throw new OidcClientException("Refresh token is null");
         }
         MultiMap refreshGrantParams = copyMultiMap(commonRefreshGrantParams);
-        refreshGrantParams.add(OidcConstants.REFRESH_TOKEN_VALUE, refreshToken);
+        refreshGrantParams.add(REFRESH_TOKEN, refreshToken);
         return getJsonResponse(refreshGrantParams, true);
     }
 
@@ -94,22 +115,17 @@ public class OidcClientImpl implements OidcClient {
         if (resp.statusCode() == 200) {
             LOG.debugf("%s OidcClient has %s the tokens", oidcConfig.getId().get(), (refresh ? "refreshed" : "acquired"));
             JsonObject json = resp.bodyAsJsonObject();
-            final String accessToken = json.getString(OidcConstants.ACCESS_TOKEN_VALUE);
-            final String refreshToken = json.getString(OidcConstants.REFRESH_TOKEN_VALUE);
-            Long accessTokenExpiresAt;
-            Long accessTokenExpiresIn = json.getLong(OidcConstants.EXPIRES_IN);
-            if (accessTokenExpiresIn != null) {
-                accessTokenExpiresAt = Instant.now().getEpochSecond() + accessTokenExpiresIn;
-            } else {
+            final String accessToken = json.getString(ACCESS_TOKEN);
+            final String refreshToken = json.getString(REFRESH_TOKEN);
+            Long accessTokenExpiresAt = json.getLong(EXPIRES_AT);
+            if (accessTokenExpiresAt == null) {
                 accessTokenExpiresAt = getExpiresJwtClaim(accessToken);
             }
-            return new Tokens(accessToken, accessTokenExpiresAt, oidcConfig.refreshTokenTimeSkew.orElse(null), refreshToken);
+            return new Tokens(accessToken, accessTokenExpiresAt, refreshToken);
         } else {
-            String errorMessage = resp.bodyAsString();
-            LOG.debugf("%s OidcClient has failed to complete the %s grant request:  status: %d, error message: %s",
-                    oidcConfig.getId().get(), (refresh ? OidcConstants.REFRESH_TOKEN_GRANT : grantType), resp.statusCode(),
-                    errorMessage);
-            throw new OidcClientException(errorMessage);
+            LOG.debugf("%s OidcClient has failed to complete the %s grant request: %s", oidcConfig.getId().get(),
+                    (refresh ? OidcConstants.REFRESH_TOKEN_GRANT : grantType), resp.bodyAsString());
+            throw new OidcClientException();
         }
     }
 
