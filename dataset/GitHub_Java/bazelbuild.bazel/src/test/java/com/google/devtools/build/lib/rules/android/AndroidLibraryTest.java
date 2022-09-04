@@ -27,9 +27,8 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
@@ -1543,51 +1542,6 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void compileDataBindingOutputWhenDataBindingEnabled() throws Exception {
-    scratch.file(
-        "sdk/BUILD",
-        "android_sdk(",
-        "    name = 'sdk',",
-        "    aapt = 'aapt',",
-        "    aapt2 = 'aapt2',",
-        "    adb = 'adb',",
-        "    aidl = 'aidl',",
-        "    android_jar = 'android.jar',",
-        "    annotations_jar = 'annotations_jar',",
-        "    apksigner = 'apksigner',",
-        "    dx = 'dx',",
-        "    framework_aidl = 'framework_aidl',",
-        "    main_dex_classes = 'main_dex_classes',",
-        "    main_dex_list_creator = 'main_dex_list_creator',",
-        "    proguard = 'proguard',",
-        "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign')");
-    scratch.file(
-        "java/a/BUILD",
-        "android_library(",
-        "  name = 'a', ",
-        "  srcs = ['A.java'],",
-        "  enable_data_binding = 1,",
-        "  manifest = 'a/AndroidManifest.xml',",
-        "  resource_files = [ 'res/values/a.xml' ]",
-        ")");
-    useConfiguration("--android_sdk=//sdk:sdk");
-    ConfiguredTarget a = getConfiguredTarget("//java/a:a");
-
-    SpawnAction compileAction =
-        getGeneratingSpawnAction(
-            getImplicitOutputArtifact(a, AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS));
-    assertThat(compileAction).isNotNull();
-
-    ParameterFileWriteAction paramsFileAction = findParamsFileAction(compileAction);
-    if (paramsFileAction == null) {
-      assertThat(compileAction.getArguments()).contains("--dataBindingInfoOut");
-    } else {
-      assertThat(paramsFileAction.getContents()).contains("--dataBindingInfoOut");
-    }
-  }
-
-  @Test
   public void testUseManifestFromResourceApk() throws Exception {
     scratch.file(
         "java/a/BUILD",
@@ -1679,7 +1633,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
             .getActionForArtifactEndingWith(
                 getOutputGroup(
                     getConfiguredTarget("//java/com/google/android/hello:l2"),
-                    OutputGroupInfo.HIDDEN_TOP_LEVEL),
+                    OutputGroupProvider.HIDDEN_TOP_LEVEL),
                 "library_spec.cfg_valid");
     assertWithMessage("Proguard validate action was not spawned.").that(action).isNotNull();
     assertWithMessage("Proguard validate action was spawned without correct input.")
@@ -1690,7 +1644,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
             .getActionForArtifactEndingWith(
                 getOutputGroup(
                     getConfiguredTarget("//java/com/google/android/hello:l3"),
-                    OutputGroupInfo.HIDDEN_TOP_LEVEL),
+                    OutputGroupProvider.HIDDEN_TOP_LEVEL),
                 "library_spec.cfg_valid");
     assertWithMessage("Proguard validate action was not spawned.")
         .that(transitiveAction)
