@@ -11,7 +11,6 @@ import android.content.Intent;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.EditText;
@@ -115,7 +114,7 @@ public class MyActivity extends Activity {
 	}
 
 	@Click
-	void startListActivity(View v) {
+	void startListActivity() {
 		startActivity(new Intent(this, MyListActivity.class));
 	}
 
