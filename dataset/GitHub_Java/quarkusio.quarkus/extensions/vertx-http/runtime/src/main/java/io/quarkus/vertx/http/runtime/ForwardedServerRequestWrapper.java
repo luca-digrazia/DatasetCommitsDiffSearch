@@ -35,9 +35,9 @@ class ForwardedServerRequestWrapper implements HttpServerRequest {
     private String uri;
     private String absoluteURI;
 
-    ForwardedServerRequestWrapper(HttpServerRequest request, ForwardingProxyOptions forwardingProxyOptions) {
+    ForwardedServerRequestWrapper(HttpServerRequest request, boolean allowForwarded) {
         delegate = request;
-        forwardedParser = new ForwardedParser(delegate, forwardingProxyOptions);
+        forwardedParser = new ForwardedParser(delegate, allowForwarded);
     }
 
     void changeTo(HttpMethod method, String uri) {

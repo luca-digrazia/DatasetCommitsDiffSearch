@@ -13,12 +13,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.security.test.utils.TestIdentityController;
-import io.quarkus.security.test.utils.TestIdentityProvider;
 import io.quarkus.test.QuarkusUnitTest;
 import io.restassured.RestAssured;
 import io.restassured.filter.cookie.CookieFilter;
-import io.restassured.matcher.RestAssuredMatchers;
 
 public class FormAuthTestCase {
 
@@ -61,8 +58,7 @@ public class FormAuthTestCase {
                 .assertThat()
                 .statusCode(302)
                 .header("location", containsString("/login"))
-                .cookie("quarkus-redirect-location",
-                        RestAssuredMatchers.detailedCookie().value(containsString("/admin")).secured(false));
+                .cookie("quarkus-redirect-location", containsString("/admin"));
 
         RestAssured
                 .given()
@@ -76,8 +72,7 @@ public class FormAuthTestCase {
                 .assertThat()
                 .statusCode(302)
                 .header("location", containsString("/admin"))
-                .cookie("quarkus-credential",
-                        RestAssuredMatchers.detailedCookie().value(notNullValue()).secured(false));
+                .cookie("quarkus-credential", notNullValue());
 
         RestAssured
                 .given()

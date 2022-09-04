@@ -58,9 +58,10 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token issuer claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifyIssuerClaim() {
+    public void verifyIssuerClaim() throws Exception {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -78,9 +79,10 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token sub claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifySubClaim() {
+    public void verifySubClaim() throws Exception {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -99,9 +101,10 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token jti claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifyJTI() {
+    public void verifyJTI() throws Exception {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -120,9 +123,10 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token upn claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifyUPN() {
+    public void verifyUPN() throws Exception {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -141,9 +145,10 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token aud claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifyAudience() {
+    public void verifyAudience() throws Exception {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -162,9 +167,10 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token aud claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifyAudience2() {
+    public void verifyAudience2() throws Exception {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -183,9 +189,10 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token iat claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifyIssuedAt() {
+    public void verifyIssuedAt() throws Exception {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
@@ -204,9 +211,10 @@ public class RequiredClaimsUnitTest {
     /**
      * Verify that the token exp claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifyExpiration() {
+    public void verifyExpiration() throws Exception {
         io.restassured.response.Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()

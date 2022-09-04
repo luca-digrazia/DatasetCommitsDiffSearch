@@ -62,9 +62,10 @@ public class JwtAuthUnitTest {
     /**
      * Verify that the injected token issuer claim is as expected
      *
+     * @throws Exception
      */
     @Test()
-    public void verifyIssuerClaim() {
+    public void verifyIssuerClaim() throws Exception {
         Response response = RestAssured.given().auth()
                 .oauth2(token)
                 .when()
