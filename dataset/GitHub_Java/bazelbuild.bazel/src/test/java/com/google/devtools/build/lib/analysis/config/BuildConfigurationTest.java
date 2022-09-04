@@ -18,7 +18,6 @@ import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.util.ConfigurationTestCase;
@@ -54,13 +53,13 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     String outputDirPrefix =
         outputBase + "/execroot/" + config.getMainRepositoryName() + "/blaze-out/.*piii-fastbuild";
 
-    assertThat(config.getOutputDirectory(RepositoryName.MAIN).getRoot().toString())
+    assertThat(config.getOutputDirectory(RepositoryName.MAIN).getPath().toString())
         .matches(outputDirPrefix);
-    assertThat(config.getBinDirectory(RepositoryName.MAIN).getRoot().toString())
+    assertThat(config.getBinDirectory(RepositoryName.MAIN).getPath().toString())
         .matches(outputDirPrefix + "/bin");
-    assertThat(config.getIncludeDirectory(RepositoryName.MAIN).getRoot().toString())
+    assertThat(config.getIncludeDirectory(RepositoryName.MAIN).getPath().toString())
         .matches(outputDirPrefix + "/include");
-    assertThat(config.getTestLogsDirectory(RepositoryName.MAIN).getRoot().toString())
+    assertThat(config.getTestLogsDirectory(RepositoryName.MAIN).getPath().toString())
         .matches(outputDirPrefix + "/testlogs");
   }
 
@@ -71,7 +70,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     }
 
     BuildConfiguration config = create("--platform_suffix=-test");
-    assertThat(config.getOutputDirectory(RepositoryName.MAIN).getRoot().toString())
+    assertThat(config.getOutputDirectory(RepositoryName.MAIN).getPath().toString())
         .matches(
             outputBase
                 + "/execroot/"
@@ -284,10 +283,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     BuildConfiguration config = create();
     BuildConfiguration trimmedConfig =
         config.clone(
-            FragmentClassSet.of(
-                ImmutableSortedSet.orderedBy(BuildConfiguration.lexicalFragmentSorter)
-                    .add(CppConfiguration.class)
-                    .build()),
+            ImmutableSet.<Class<? extends Fragment>>of(CppConfiguration.class),
             analysisMock.createRuleClassProvider());
     BuildConfiguration hostConfig = createHost();
 
