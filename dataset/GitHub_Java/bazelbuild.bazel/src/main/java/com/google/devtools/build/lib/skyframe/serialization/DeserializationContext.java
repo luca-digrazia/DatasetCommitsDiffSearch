@@ -104,9 +104,12 @@ public class DeserializationContext {
    *
    * <p>This method is idempotent: calling it on an already memoizing context will return the same
    * context.
+   *
+   * <p><em>This is public for testing and {@link
+   * com.google.devtools.build.lib.packages.PackageSerializer} only.</em>
    */
   @CheckReturnValue
-  DeserializationContext getMemoizingContext() {
+  public DeserializationContext getMemoizingContext() {
     if (deserializer != null) {
       return this;
     }
