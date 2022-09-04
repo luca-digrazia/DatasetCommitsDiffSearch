@@ -26,7 +26,7 @@ import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
-import org.graylog2.shared.security.Permissions;
+import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.shared.users.Role;
 import org.graylog2.shared.users.Roles;
 import org.mongojack.DBCursor;
@@ -67,7 +67,7 @@ public class RoleServiceImpl implements RoleService {
     @Inject
     protected RoleServiceImpl(MongoConnection mongoConnection,
                               MongoJackObjectMapperProvider mapper,
-                              Permissions permissions,
+                              RestPermissions permissions,
                               Validator validator) {
         this.validator = validator;
 
@@ -95,9 +95,8 @@ public class RoleServiceImpl implements RoleService {
         try {
             previousRole = load(roleName);
             if (!previousRole.isReadOnly() || !expectedPermissions.equals(previousRole.getPermissions()))  {
-                final String msg = "Invalid role '" + roleName + "', fixing it.";
-                log.error(msg);
-                throw new IllegalArgumentException(msg); // jump to fix code
+                log.error("Invalid role '{}', fixing it.", roleName);
+                throw new IllegalArgumentException(); // jump to fix code
             }
         } catch (NotFoundException | IllegalArgumentException | NoSuchElementException ignored) {
             log.info("{} role is missing or invalid, re-adding it as a built-in role.", roleName);

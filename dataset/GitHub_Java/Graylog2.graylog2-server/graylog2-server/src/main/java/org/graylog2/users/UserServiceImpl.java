@@ -35,7 +35,7 @@ import org.graylog2.plugin.database.Persisted;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.security.InMemoryRolePermissionResolver;
-import org.graylog2.shared.security.Permissions;
+import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.shared.security.ldap.LdapEntry;
 import org.graylog2.shared.security.ldap.LdapSettings;
 import org.graylog2.shared.users.Role;
@@ -62,7 +62,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     private final Configuration configuration;
     private final RoleService roleService;
     private final UserImpl.Factory userFactory;
-    private final Permissions permissions;
+    private final RestPermissions permissions;
     private final InMemoryRolePermissionResolver inMemoryRolePermissionResolver;
 
     @Inject
@@ -70,7 +70,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
                            final Configuration configuration,
                            final RoleService roleService,
                            final UserImpl.Factory userFactory,
-                           final Permissions permissions,
+                           final RestPermissions permissions,
                            final InMemoryRolePermissionResolver inMemoryRolePermissionResolver) {
         super(mongoConnection);
         this.configuration = configuration;
@@ -298,22 +298,13 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
     @Override
     public List<String> getPermissionsForUser(User user) {
-        final ImmutableSet.Builder<String> permSet = ImmutableSet.<String>builder()
-                .addAll(user.getPermissions())
-                .addAll(getUserPermissionsFromRoles(user));
-
-        return permSet.build().asList();
-    }
-
-    @Override
-    public Set<String> getUserPermissionsFromRoles(User user) {
-        final ImmutableSet.Builder<String> permSet = ImmutableSet.builder();
+        final ImmutableSet.Builder<String> permSet = ImmutableSet.<String>builder().addAll(user.getPermissions());
 
         for (String roleId : user.getRoleIds()) {
             permSet.addAll(inMemoryRolePermissionResolver.resolveStringPermission(roleId));
         }
 
-        return permSet.build();
+        return permSet.build().asList();
     }
 
     @Override
