@@ -33,7 +33,6 @@ import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.QueryStringQueryBuilder;
-import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
@@ -501,12 +500,12 @@ public class Searches {
     }
 
     /**
-     * Find the oldest message timestamp in the given index.
+     * Find the youngest message timestamp in the given index.
      *
      * @param index Name of the index to query.
-     * @return the oldest message timestamp in the given index, or {@code null} if it couldn't be found.
+     * @return the youngest message timestamp in the given index, or {@code null} if it couldn't be found.
      */
-    public DateTime findOldestMessageTimestampOfIndex(String index) {
+    public DateTime findYoungestMessageTimestampOfIndex(String index) {
         final FilterAggregationBuilder builder = AggregationBuilders.filter("agg")
                 .filter(FilterBuilders.existsFilter("timestamp"))
                 .subAggregation(AggregationBuilders.min("ts_min").field("timestamp"));
@@ -518,10 +517,8 @@ public class Searches {
         final SearchResponse response;
         try {
             response = c.search(srb.request()).actionGet();
-        } catch (IndexMissingException e) {
-            throw e;
         } catch (ElasticsearchException e) {
-            LOG.error("Error while calculating oldest timestamp in index <" + index + ">", e);
+            LOG.error("Error while calculating youngest timestamp in index <" + index + ">", e);
             return null;
         }
         esRequestTimer.update(response.getTookInMillis(), TimeUnit.MILLISECONDS);
@@ -558,8 +555,6 @@ public class Searches {
         final SearchResponse response;
         try {
             response = c.search(srb.request()).actionGet();
-        } catch (IndexMissingException e) {
-            throw e;
         } catch (ElasticsearchException e) {
             LOG.error("Error while calculating timestamp stats in index <" + index + ">", e);
             return null;
@@ -589,12 +584,12 @@ public class Searches {
     }
 
     /**
-     * Find the newest message timestamp in the given index.
+     * Find the oldest message timestamp in the given index.
      *
      * @param index Name of the index to query.
-     * @return the youngest message timestamp in the given index, or {@code null} if it couldn't be found.
+     * @return the oldest message timestamp in the given index, or {@code null} if it couldn't be found.
      */
-    public DateTime findNewestMessageTimestampOfIndex(String index) {
+    public DateTime findOldestMessageTimestampOfIndex(String index) {
         final FilterAggregationBuilder builder = AggregationBuilders.filter("agg")
                 .filter(FilterBuilders.existsFilter("timestamp"))
                 .subAggregation(AggregationBuilders.max("ts_max").field("timestamp"));
@@ -606,10 +601,8 @@ public class Searches {
         final SearchResponse response;
         try {
             response = c.search(srb.request()).actionGet();
-        } catch (IndexMissingException e) {
-            throw e;
         } catch (ElasticsearchException e) {
-            LOG.error("Error while calculating newest timestamp in index <" + index + ">", e);
+            LOG.error("Error while calculating oldest timestamp in index <" + index + ">", e);
             return null;
         }
         esRequestTimer.update(response.getTookInMillis(), TimeUnit.MILLISECONDS);

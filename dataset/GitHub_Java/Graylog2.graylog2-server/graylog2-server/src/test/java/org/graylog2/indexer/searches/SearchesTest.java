@@ -31,7 +31,6 @@ import com.lordofthejars.nosqlunit.elasticsearch.EmbeddedElasticsearch;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.IndicesAdminClient;
-import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
 import org.graylog2.Configuration;
 import org.graylog2.configuration.ElasticsearchConfiguration;
@@ -371,23 +370,25 @@ public class SearchesTest {
 
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void testFindNewestMessageTimestampOfIndex() throws Exception {
-        DateTime dateTime = searches.findNewestMessageTimestampOfIndex("graylog");
+    public void testFindYoungestMessageTimestampOfIndex() throws Exception {
+        DateTime dateTime = searches.findYoungestMessageTimestampOfIndex("graylog");
 
-        assertThat(dateTime).isEqualTo(new DateTime(2015, 1, 1, 5, 0, DateTimeZone.UTC));
+        assertThat(dateTime).isEqualTo(new DateTime(2015, 1, 1, 1, 0, DateTimeZone.UTC));
     }
 
     @Test
     @UsingDataSet(locations = "SearchesTest-EmptyIndex.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void testFindNewestMessageTimestampOfIndexWithEmptyIndex() throws Exception {
-        DateTime dateTime = searches.findNewestMessageTimestampOfIndex("graylog");
+    public void testFindYoungestMessageTimestampOfIndexWithEmptyIndex() throws Exception {
+        DateTime dateTime = searches.findYoungestMessageTimestampOfIndex("graylog");
 
         assertThat(dateTime).isNull();
     }
 
-    @Test(expected = IndexMissingException.class)
-    public void testFindNewestMessageTimestampOfIndexWithNonExistingIndex() throws Exception {
-        searches.findNewestMessageTimestampOfIndex("does-not-exist");
+    @Test
+    public void testFindYoungestMessageTimestampOfIndexWithNonExistingIndex() throws Exception {
+        DateTime dateTime = searches.findYoungestMessageTimestampOfIndex("does-not-exist");
+
+        assertThat(dateTime).isNull();
     }
 
     @Test
@@ -395,7 +396,7 @@ public class SearchesTest {
     public void testFindOldestMessageTimestampOfIndex() throws Exception {
         DateTime dateTime = searches.findOldestMessageTimestampOfIndex("graylog");
 
-        assertThat(dateTime).isEqualTo(new DateTime(2015, 1, 1, 1, 0, DateTimeZone.UTC));
+        assertThat(dateTime).isEqualTo(new DateTime(2015, 1, 1, 5, 0, DateTimeZone.UTC));
     }
 
     @Test
@@ -406,9 +407,11 @@ public class SearchesTest {
         assertThat(dateTime).isNull();
     }
 
-    @Test(expected = IndexMissingException.class)
+    @Test
     public void testFindOldestMessageTimestampOfIndexWithNonExistingIndex() throws Exception {
-        searches.findOldestMessageTimestampOfIndex("does-not-exist");
+        DateTime dateTime = searches.findOldestMessageTimestampOfIndex("does-not-exist");
+
+        assertThat(dateTime).isNull();
     }
     
     @Test
@@ -429,9 +432,11 @@ public class SearchesTest {
         assertThat(stats).isNull();
     }
 
-    @Test(expected = IndexMissingException.class)
+    @Test
     public void testTimestampStatsOfIndexWithNonExistingIndex() throws Exception {
-        searches.timestampStatsOfIndex("does-not-exist");
+        TimestampStats stats = searches.timestampStatsOfIndex("does-not-exist");
+
+        assertThat(stats).isNull();
     }
 
     public static class IndexCreatingLoadStrategyFactory implements LoadStrategyFactory {
