@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -54,12 +53,12 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfig
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Tool;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import java.util.ArrayList;
@@ -93,7 +92,7 @@ public class CppHelper {
       ImmutableList.of("deps", "srcs");
 
   /** Base label of the c++ toolchain category. */
-  public static final String TOOLCHAIN_TYPE_LABEL = "//tools/cpp:toolchain_type";
+  public static final String TOOLCHAIN_TYPE_LABEL = "//tools/cpp:toolchain_category";
 
   /** Returns label used to select resolved cc_toolchain instances based on platform. */
   public static Label getCcToolchainType(String toolsRepository) {
@@ -266,28 +265,6 @@ public class CppHelper {
     }
     linkopts.add(labelName);
     return false;
-  }
-
-  /**
-   * Returns the dynamic linking mode (full, off, or default) implied by the given configuration and
-   * toolchain.
-   */
-  public static DynamicMode getDynamicMode(CppConfiguration config, CcToolchainProvider toolchain) {
-    // With LLVM, ThinLTO is automatically used in place of LIPO. ThinLTO works fine with dynamic
-    // linking (and in fact creates a lot more work when dynamic linking is off).
-    if (config.getLipoMode() == LipoMode.BINARY && !toolchain.isLLVMCompiler()) {
-      // TODO(bazel-team): implement dynamic linking with LIPO
-      return DynamicMode.OFF;
-    } else {
-      return config.getDynamicModeFlag();
-    }
-  }
-
-  /** Returns true if LIPO optimization should be applied for this configuration and toolchain. */
-  public static boolean isLipoOptimization(CppConfiguration config, CcToolchainProvider toolchain) {
-    // The LIPO optimization bits are set in the LIPO context collector configuration, too.
-    // If compiler is LLVM, then LIPO gets auto-converted to ThinLTO.
-    return config.lipoOptimizationIsActivated() && !toolchain.isLLVMCompiler();
   }
 
   /**
@@ -825,14 +802,11 @@ public class CppHelper {
 
   /**
    * Returns true when {@link CppRuleClasses#WINDOWS_EXPORT_ALL_SYMBOLS} feature is enabled and
-   * {@link CppRuleClasses#NO_WINDOWS_EXPORT_ALL_SYMBOLS} feature is not enabled and no custom DEF
-   * file is specified in win_def_file attribute.
+   * {@link CppRuleClasses#NO_WINDOWS_EXPORT_ALL_SYMBOLS} feature is not enabled.
    */
-  public static boolean shouldUseGeneratedDefFile(
-      RuleContext ruleContext, FeatureConfiguration featureConfiguration) {
+  public static boolean shouldUseDefFile(FeatureConfiguration featureConfiguration) {
     return featureConfiguration.isEnabled(CppRuleClasses.WINDOWS_EXPORT_ALL_SYMBOLS)
-        && !featureConfiguration.isEnabled(CppRuleClasses.NO_WINDOWS_EXPORT_ALL_SYMBOLS)
-        && ruleContext.getPrerequisiteArtifact("win_def_file", Mode.TARGET) == null;
+        && !featureConfiguration.isEnabled(CppRuleClasses.NO_WINDOWS_EXPORT_ALL_SYMBOLS);
   }
 
   /**

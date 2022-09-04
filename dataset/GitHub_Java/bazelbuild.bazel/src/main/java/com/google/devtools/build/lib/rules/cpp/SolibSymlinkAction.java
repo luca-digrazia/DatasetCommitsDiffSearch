@@ -14,49 +14,44 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 
 /**
- * Creates mangled symlinks in the solib directory for all shared libraries. Libraries that have a
- * potential to contain SONAME field rely on the mangled symlink to the parent directory instead.
+ * Creates mangled symlinks in the solib directory for all shared libraries.
+ * Libraries that have a potential to contain SONAME field rely on the mangled
+ * symlink to the parent directory instead.
  *
- * <p>Such symlinks are used by the linker to ensure that all rpath entries can be specified
- * relative to the $ORIGIN.
+ * Such symlinks are used by the linker to ensure that all rpath entries can be
+ * specified relative to the $ORIGIN.
  */
-@AutoCodec
 @Immutable
 public final class SolibSymlinkAction extends AbstractAction {
   private final Path target;
   private final Artifact symlink;
 
-  @VisibleForSerialization
-  SolibSymlinkAction(
-      ActionOwner owner, Artifact primaryInput, Artifact primaryOutput) {
-    super(owner, ImmutableList.of(primaryInput), ImmutableList.of(primaryOutput));
+  private SolibSymlinkAction(ActionOwner owner, Artifact library, Artifact symlink) {
+    super(owner, ImmutableList.of(library), ImmutableList.of(symlink));
 
-    Preconditions.checkArgument(Link.SHARED_LIBRARY_FILETYPES.matches(primaryInput.getFilename()));
-    this.symlink = Preconditions.checkNotNull(primaryOutput);
-    this.target = primaryInput.getPath();
+    Preconditions.checkArgument(Link.SHARED_LIBRARY_FILETYPES.matches(library.getFilename()));
+    this.symlink = Preconditions.checkNotNull(symlink);
+    this.target = library.getPath();
   }
 
   @Override
@@ -72,8 +67,9 @@ public final class SolibSymlinkAction extends AbstractAction {
     return ActionResult.EMPTY;
   }
 
+
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addPath(symlink.getPath());
     f.addPath(target);
@@ -153,11 +149,10 @@ public final class SolibSymlinkAction extends AbstractAction {
     Preconditions.checkArgument(!library.getRootRelativePath().getSegment(0).startsWith("_solib_"));
 
     // Ignore libraries that are already represented by the symlinks.
-    ArtifactRoot root = configuration.getBinDirectory(ruleContext.getRule().getRepository());
+    Root root = configuration.getBinDirectory(ruleContext.getRule().getRepository());
     Artifact symlink = ruleContext.getShareableArtifact(symlinkName, root);
     ruleContext.registerAction(
-        new SolibSymlinkAction(
-            ruleContext.getActionOwner(), library, symlink));
+        new SolibSymlinkAction(ruleContext.getActionOwner(), library, symlink));
     return symlink;
   }
 

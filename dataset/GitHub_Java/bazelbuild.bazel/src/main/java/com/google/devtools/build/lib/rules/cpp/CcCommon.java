@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.FluentIterable;
@@ -54,6 +53,7 @@ import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
@@ -190,6 +190,7 @@ public final class CcCommon {
     return compilationOutputs == null // Possible in LIPO collection mode (see initializationHook).
         ? DwoArtifactsCollector.emptyCollector()
         : DwoArtifactsCollector.transitiveCollector(
+            ruleContext,
             compilationOutputs,
             deps.build(),
             generateDwo,
@@ -539,12 +540,6 @@ public final class CcCommon {
         CppFileTypes.LINKER_SCRIPT);
   }
 
-  /** Returns the Windows DEF file specified in win_def_file attribute of the rule. */
-  @Nullable
-  Artifact getWinDefFile() {
-    return ruleContext.getPrerequisiteArtifact("win_def_file", Mode.TARGET);
-  }
-
   /**
    * Provides support for instrumentation.
    */
@@ -615,7 +610,7 @@ public final class CcCommon {
             ImmutableSet.of(
                 toolchain.getCompilationMode().toString(), getHostOrNonHostFeature(ruleContext)),
             DEFAULT_FEATURES,
-            toolchain.getFeatures().getDefaultFeaturesAndActionConfigs(),
+            toolchain.getFeatures().getDefaultFeatures(),
             ruleContext.getFeatures())) {
       if (!unsupportedFeatures.contains(feature)) {
         requestedFeatures.add(feature);
