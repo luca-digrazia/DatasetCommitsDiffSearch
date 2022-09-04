@@ -45,18 +45,17 @@ public class NetFlowPluginMetaData implements PluginMetaData {
 
     @Override
     public URI getURL() {
-        return URI.create("https://www.graylog.org/");
+        return URI.create("https://github.com/Graylog2/graylog-plugin-netflow");
     }
 
     @Override
     public Version getVersion() {
-        return new Version(1, 0, 0);
+        return new Version(0, 1, 0);
     }
 
     @Override
     public String getDescription() {
-        // TODO Insert correct plugin description
-        return "NetFlow input";
+        return "Provides NetFlow inputs";
     }
 
     @Override
