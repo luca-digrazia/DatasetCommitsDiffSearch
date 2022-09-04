@@ -14,13 +14,11 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
-import com.google.common.collect.ImmutableList;
 import java.io.NotSerializableException;
 import java.util.ArrayList;
 
 /** Exception signaling a failure to Serialize or Deserialize an Object. */
 public class SerializationException extends Exception {
-  private final ArrayList<String> trail = new ArrayList<>();
 
   public SerializationException(String msg) {
     super(msg);
@@ -38,13 +36,10 @@ public class SerializationException extends Exception {
    * or type of object.
    */
   public static class NoCodecException extends SerializationException {
+    ArrayList<String> trail = new ArrayList<>();
+
     NoCodecException(String message) {
       super(message);
-    }
-
-    NoCodecException(String message, Class<?> type) {
-      super(message);
-      addTrail(type);
     }
 
     NoCodecException(String message, NotSerializableException e) {
@@ -59,24 +54,20 @@ public class SerializationException extends Exception {
     NoCodecException(String message, NoCodecException e) {
       super(message, e);
     }
-  }
 
-  @Override
-  public String getMessage() {
-    return super.getMessage() + (trail.isEmpty() ? "" : " " + trail);
-  }
+    @Override
+    public String getMessage() {
+      return super.getMessage() + (trail.isEmpty() ? "" : " " + trail);
+    }
 
-  /**
-   * Adds extra tracing info for debugging.
-   *
-   * <p>Primarily useful for {@link DynamicCodec}.
-   */
-  public void addTrail(Class<?> type) {
-    trail.add(type.getName());
-  }
-
-  public ImmutableList<String> getTrailForTesting() {
-    return ImmutableList.copyOf(trail);
+    /**
+     * Adds extra tracing info for debugging.
+     *
+     * <p>Primarily useful for {@link DynamicCodec}.
+     */
+    public void addTrail(Class<?> type) {
+      trail.add(type.getName());
+    }
   }
 
   /**
