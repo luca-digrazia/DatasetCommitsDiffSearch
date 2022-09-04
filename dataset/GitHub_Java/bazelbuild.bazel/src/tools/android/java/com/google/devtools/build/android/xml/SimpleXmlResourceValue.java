@@ -182,7 +182,7 @@ public class SimpleXmlResourceValue implements XmlResourceValue {
   public static XmlResourceValue from(SerializeFormat.DataValueXml proto) {
     return of(
         Type.valueOf(proto.getValueType()),
-        ImmutableMap.copyOf(proto.getAttributeMap()),
+        ImmutableMap.copyOf(proto.getAttribute()),
         proto.hasValue() ? proto.getValue() : null);
   }
 

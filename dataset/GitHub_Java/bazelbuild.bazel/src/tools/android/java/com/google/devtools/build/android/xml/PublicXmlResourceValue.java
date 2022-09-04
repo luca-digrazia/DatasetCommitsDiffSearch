@@ -118,7 +118,7 @@ public class PublicXmlResourceValue implements XmlResourceValue {
 
   @SuppressWarnings("deprecation")
   public static XmlResourceValue from(SerializeFormat.DataValueXml proto) {
-    Map<String, String> protoValues = proto.getMappedStringValueMap();
+    Map<String, String> protoValues = proto.getMappedStringValue();
     ImmutableMap.Builder<ResourceType, Optional<Integer>> typeToId = ImmutableMap.builder();
     for (Map.Entry<String, String> entry : protoValues.entrySet()) {
       ResourceType type = ResourceType.getEnum(entry.getKey());

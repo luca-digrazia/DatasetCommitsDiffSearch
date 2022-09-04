@@ -13,13 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
+import com.android.aapt.Resources.Reference;
+import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.android.resources.Visibility;
 import com.google.devtools.build.android.xml.Namespaces;
 import java.io.IOException;
 import java.io.OutputStream;
 
-/**
- * An {@link XmlResourceValue} is extracted from xml files in the resource 'values' directory.
- */
+/** An {@link XmlResourceValue} is extracted from xml files in the resource 'values' directory. */
 public interface XmlResourceValue {
   /**
    * Each XmlValue is expected to write a valid representation in xml to the writer.
@@ -35,7 +36,7 @@ public interface XmlResourceValue {
 
   /**
    * Combines these xml values together and returns a single value.
-   * 
+   *
    * @param value Another resource to be combined with this one.
    * @return A union of the values of these two values.
    * @throws IllegalArgumentException if either value cannot combine with the other.
@@ -43,14 +44,28 @@ public interface XmlResourceValue {
   XmlResourceValue combineWith(XmlResourceValue value);
 
   /**
-   * Queue up writing the resource to the given {@link AndroidResourceClassWriter}.
-   * Each resource can generate one or more (in the case of styleable) fields and inner classes
-   * in the R class.
+   * Returns 1 if the xml value is higher priority than the given value, -1 if lower priority, and 0
+   * if equal priority.
+   */
+  int compareMergePriorityTo(XmlResourceValue value);
+
+  /**
+   * Queue up writing the resource to the given {@link AndroidResourceClassWriter}. Each resource
+   * can generate one or more (in the case of styleable) fields and inner classes in the R class.
    *
+   * @param dependencyInfo The provenance (in terms of Bazel relationship) of the resource
    * @param key The FullyQualifiedName of the resource
-   * @param resourceClassWriter the R java class writer
+   * @param sink the symbol sink for producing source and classes
    */
   void writeResourceToClass(
-      FullyQualifiedName key,
-      AndroidResourceClassWriter resourceClassWriter);
+      DependencyInfo dependencyInfo, FullyQualifiedName key, AndroidResourceSymbolSink sink);
+
+  /** Returns a representation of the xml value as a string suitable for conflict messages. */
+  String asConflictStringWith(DataSource source);
+
+  /** Visibility of this resource as denoted by a {@code <public>} tag, or lack thereof. */
+  Visibility getVisibility();
+
+  /** Resources referenced via XML attributes or proxying resource definitions. */
+  ImmutableList<Reference> getReferencedResources();
 }

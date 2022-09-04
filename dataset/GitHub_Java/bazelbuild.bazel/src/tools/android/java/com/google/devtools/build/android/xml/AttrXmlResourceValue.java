@@ -172,17 +172,15 @@ public final class AttrXmlResourceValue implements XmlResourceValue {
     ImmutableMap.Builder<String, ResourceXmlAttrValue> formats =
         ImmutableMap.<String, AttrXmlResourceValue.ResourceXmlAttrValue>builder();
     for (Map.Entry<String, SerializeFormat.DataValueXml> entry :
-        proto.getMappedXmlValueMap().entrySet()) {
+        proto.getMappedXmlValue().entrySet()) {
       switch (entry.getKey()) {
         case FLAGS:
           formats.put(
-              entry.getKey(),
-              FlagResourceXmlAttrValue.of(entry.getValue().getMappedStringValueMap()));
+              entry.getKey(), FlagResourceXmlAttrValue.of(entry.getValue().getMappedStringValue()));
           break;
         case ENUM:
           formats.put(
-              entry.getKey(),
-              EnumResourceXmlAttrValue.of(entry.getValue().getMappedStringValueMap()));
+              entry.getKey(), EnumResourceXmlAttrValue.of(entry.getValue().getMappedStringValue()));
           break;
         case REFERENCE:
           formats.put(entry.getKey(), ReferenceResourceXmlAttrValue.of());

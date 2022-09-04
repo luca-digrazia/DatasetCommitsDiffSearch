@@ -171,7 +171,7 @@ public class DataResourceXml implements DataResource {
       throws InvalidProtocolBufferException {
     DataValueXml xmlValue = protoValue.getXmlValue();
     return createWithNamespaces(
-        source, valueFromProto(xmlValue), Namespaces.from(xmlValue.getNamespaceMap()));
+        source, valueFromProto(xmlValue), Namespaces.from(xmlValue.getNamespace()));
   }
 
   public static DataResourceXml from(

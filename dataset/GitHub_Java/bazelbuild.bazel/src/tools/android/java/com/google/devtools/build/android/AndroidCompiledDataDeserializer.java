@@ -71,7 +71,6 @@ import com.android.resources.ScreenSize;
 import com.android.resources.TouchScreen;
 import com.android.resources.UiMode;
 import com.google.auto.value.AutoValue;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -80,7 +79,6 @@ import com.google.common.hash.Hashing;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.LittleEndianDataInputStream;
 import com.google.devtools.build.android.aapt2.CompiledResources;
-import com.google.devtools.build.android.aapt2.ResourceCompiler;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.proto.SerializeFormat.Header;
 import com.google.devtools.build.android.resources.Visibility;
@@ -100,13 +98,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
@@ -257,10 +253,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
   }
 
   private static void consumeResourceTable(
-      DependencyInfo dependencyInfo,
-      KeyValueConsumers consumers,
-      ResourceTable resourceTable,
-      VisibilityRegistry registry)
+      DependencyInfo dependencyInfo, KeyValueConsumers consumers, ResourceTable resourceTable)
       throws UnsupportedEncodingException, InvalidProtocolBufferException {
     List<String> sourcePool =
         decodeSourcePool(resourceTable.getSourcePool().getData().toByteArray());
@@ -285,21 +278,26 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
                       resourceType,
                       resource,
                       convertToQualifiers(configValue.getConfig()));
-              Visibility visibility =
-                  registry.getVisibility(
-                      ResourceName.create(packageName, resourceType, resource.getName()));
 
               int sourceIndex = configValue.getValue().getSource().getPathIdx();
               String source = sourcePool.get(sourceIndex);
               DataSource dataSource = DataSource.of(dependencyInfo, Paths.get(source));
 
               Value resourceValue = configValue.getValue();
+              // TODO(b/26297204): use visibility from ResourceTable instead of UNKNOWN
               DataResource dataResource =
                   resourceValue.getItem().hasFile()
                       ? DataValueFile.of(
-                          visibility, dataSource, /*fingerprint=*/ null, /*rootXmlNode=*/ null)
+                          Visibility.UNKNOWN,
+                          dataSource,
+                          /*fingerprint=*/ null,
+                          /*rootXmlNode=*/ null)
                       : DataResourceXml.from(
-                          resourceValue, visibility, dataSource, resourceType, packageResolver);
+                          resourceValue,
+                          Visibility.UNKNOWN,
+                          dataSource,
+                          resourceType,
+                          packageResolver);
 
               if (!fqn.isOverwritable()) {
                 consumers.combiningConsumer.accept(fqn, dataResource);
@@ -520,8 +518,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
   private static void consumeCompiledFile(
       DependencyInfo dependencyInfo,
       KeyValueConsumers consumers,
-      CompiledFileWithData compiledFileWithData,
-      VisibilityRegistry registry)
+      CompiledFileWithData compiledFileWithData)
       throws InvalidProtocolBufferException {
     CompiledFile compiledFile = compiledFileWithData.compiledFile();
     Path sourcePath = Paths.get(compiledFile.getSourcePath());
@@ -534,10 +531,11 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
             resourceName.type(),
             resourceName.entry());
 
+    // TODO(b/26297204): use visibility from ResourceTable instead of UNKNOWN
     consumers.overwritingConsumer.accept(
         fqn,
         DataValueFile.of(
-            registry.getVisibility(resourceName),
+            Visibility.UNKNOWN,
             dataSource,
             compiledFileWithData.fingerprint(),
             compiledFileWithData.rootXmlNode()));
@@ -560,7 +558,8 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
       DataResourceXml dataResourceXml =
           DataResourceXml.from(
               Value.getDefaultInstance(),
-              registry.getVisibility(exportedResourceName),
+              // TODO(b/26297204): use visibility from ResourceTable instead of UNKNOWN
+              Visibility.UNKNOWN,
               dataSource,
               ResourceType.ID,
               /*packageResolver=*/ null);
@@ -631,13 +630,12 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     }
   }
 
-  @VisibleForTesting
   public static void readTable(
       DependencyInfo dependencyInfo, InputStream in, KeyValueConsumers consumers)
       throws IOException {
     final ResourceTable resourceTable =
         ResourceTable.parseFrom(in, ExtensionRegistry.getEmptyRegistry());
-    consumeResourceTable(dependencyInfo, consumers, resourceTable, new VisibilityRegistry());
+    consumeResourceTable(dependencyInfo, consumers, resourceTable);
   }
 
   public Map<DataKey, DataResource> read(DependencyInfo dependencyInfo, Path inPath) {
@@ -661,13 +659,12 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     try (ZipFile zipFile = new ZipFile(inPath.toFile())) {
       ResourceContainer resourceContainer =
           readResourceContainer(zipFile, includeFileContentsForValidation);
-      VisibilityRegistry registry = findPublicResources(resourceContainer);
 
       for (ResourceTable resourceTable : resourceContainer.resourceTables()) {
-        consumeResourceTable(dependencyInfo, consumers, resourceTable, registry);
+        consumeResourceTable(dependencyInfo, consumers, resourceTable);
       }
       for (CompiledFileWithData compiledFile : resourceContainer.compiledFiles()) {
-        consumeCompiledFile(dependencyInfo, consumers, compiledFile, registry);
+        consumeCompiledFile(dependencyInfo, consumers, compiledFile);
       }
 
       Enumeration<? extends ZipEntry> resourceFiles = zipFile.entries();
@@ -778,28 +775,6 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     return ResourceContainer.create(resourceTables, compiledFiles);
   }
 
-  // TODO(b/26297204): implied "private"ness needs to be segregated by res/ directory; see also
-  // b/148110689.
-  private static VisibilityRegistry findPublicResources(ResourceContainer resourceContainer) {
-    VisibilityRegistry registry = new VisibilityRegistry();
-    for (ResourceTable resourceTable : resourceContainer.resourceTables()) {
-      for (Package pkg : resourceTable.getPackageList()) {
-        for (Resources.Type type : pkg.getTypeList()) {
-          ResourceType resourceType = ResourceType.getEnum(type.getName());
-          for (Resources.Entry entry : type.getEntryList()) {
-            if (entry.getVisibility().getLevel()
-                != com.android.aapt.Resources.Visibility.Level.PUBLIC) {
-              continue;
-            }
-            registry.markPublic(
-                ResourceName.create(pkg.getPackageName(), resourceType, entry.getName()));
-          }
-        }
-      }
-    }
-    return registry;
-  }
-
   private static byte[] readBytesAndSkipPadding(LittleEndianDataInputStream input, int size)
       throws IOException {
     byte[] result = new byte[size];
@@ -893,27 +868,6 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
         CompiledFile compiledFile, @Nullable HashCode fingerprint, @Nullable XmlNode xmlNode) {
       return new AutoValue_AndroidCompiledDataDeserializer_CompiledFileWithData(
           compiledFile, fingerprint, xmlNode);
-    }
-  }
-
-  private static class VisibilityRegistry {
-    private final Set<ResourceName> explicitlyPublicResources = new HashSet<>();
-
-    void markPublic(ResourceName resourceName) {
-      explicitlyPublicResources.add(resourceName);
-    }
-
-    Visibility getVisibility(ResourceName resourceName) {
-      if (!ResourceCompiler.USE_VISIBILITY_FROM_AAPT2) {
-        return Visibility.UNKNOWN;
-      }
-      if (explicitlyPublicResources.isEmpty()) {
-        // TODO(b/146647897): make resources private by default
-        return Visibility.UNKNOWN;
-      }
-      return explicitlyPublicResources.contains(resourceName)
-          ? Visibility.PUBLIC
-          : Visibility.PRIVATE;
     }
   }
 }

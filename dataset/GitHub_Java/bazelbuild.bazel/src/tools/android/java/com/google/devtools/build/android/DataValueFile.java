@@ -13,39 +13,67 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
+import com.android.aapt.Resources.Reference;
+import com.android.aapt.Resources.XmlNode;
 import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableList;
+import com.google.common.hash.HashCode;
+import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.proto.SerializeFormat;
+import com.google.devtools.build.android.resources.Visibility;
+import com.google.devtools.build.android.xml.ProtoXmlUtils;
 import com.google.protobuf.CodedOutputStream;
-
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.file.FileSystem;
 import java.nio.file.Path;
 import java.util.Objects;
+import javax.annotation.Nullable;
 
 /**
  * Represents a file based android resource or asset.
  *
- * These include all resource types except those found in values, as well as all assets.
+ * <p>These include all resource types except those found in values, as well as all assets.
  */
 public class DataValueFile implements DataResource, DataAsset {
 
-  private final Path source;
+  private final Visibility visibility;
+  private final DataSource source;
+  @Nullable private final HashCode fingerprint;
+  // Set only for XML-based resources, and only when reading the output of aapt2.
+  @Nullable private final XmlNode rootXmlNode;
 
-  private DataValueFile(Path source) {
+  private DataValueFile(
+      Visibility visibility,
+      DataSource source,
+      @Nullable HashCode fingerprint,
+      @Nullable XmlNode rootXmlNode) {
+    this.visibility = visibility;
     this.source = source;
+    this.fingerprint = fingerprint;
+    this.rootXmlNode = rootXmlNode;
   }
 
+  @Deprecated
   public static DataValueFile of(Path source) {
-    return new DataValueFile(source);
+    return of(
+        Visibility.UNKNOWN,
+        DataSource.of(DependencyInfo.UNKNOWN, source),
+        /*fingerprint=*/ null,
+        /*rootXmlNode=*/ null);
   }
 
-  /**
-   * Creates a {@link DataValueFile} from a {@link SerializeFormat.DataValue}.
-   */
-  public static DataValueFile from(
-      SerializeFormat.DataValue protoValue, FileSystem currentFileSystem) {
-    return of(currentFileSystem.getPath(protoValue.getSource().getFilename()));
+  public static DataValueFile of(
+      Visibility visibility,
+      DataSource source,
+      @Nullable HashCode fingerprint,
+      @Nullable XmlNode rootXmlNode) {
+    return new DataValueFile(visibility, source, fingerprint, rootXmlNode);
+  }
+
+  /** Creates a {@link DataValueFile} from a {@link SerializeFormat#DataValue}. */
+  @Deprecated
+  public static DataValueFile from(Path source) {
+    return of(source);
   }
 
   @Override
@@ -59,7 +87,9 @@ public class DataValueFile implements DataResource, DataAsset {
       return false;
     }
     DataValueFile resource = (DataValueFile) obj;
-    return Objects.equals(source, resource.source);
+    return Objects.equals(visibility, resource.visibility)
+        && Objects.equals(source, resource.source)
+        && Objects.equals(fingerprint, resource.fingerprint);
   }
 
   @Override
@@ -68,39 +98,107 @@ public class DataValueFile implements DataResource, DataAsset {
   }
 
   @Override
-  public Path source() {
+  public DataSource source() {
     return source;
   }
 
   @Override
   public void writeAsset(RelativeAssetPath key, AndroidDataWritingVisitor mergedDataWriter)
       throws IOException {
-    mergedDataWriter.copyAsset(source, key.toPathString());
+    mergedDataWriter.copyAsset(source.getPath(), key.toPathString());
   }
 
   @Override
   public void writeResource(FullyQualifiedName key, AndroidDataWritingVisitor mergedDataWriter)
-      throws IOException {
-    mergedDataWriter.copyResource(source, key.toPathString(getSourceExtension()));
+      throws MergingException {
+    mergedDataWriter.copyResource(source.getPath(), key.toPathString(source.getPath()));
   }
 
   @Override
-  public int serializeTo(DataKey key, OutputStream output) throws IOException {
+  public int serializeTo(DataSourceTable sourceTable, OutputStream output)
+      throws IOException {
     SerializeFormat.DataValue.Builder builder = SerializeFormat.DataValue.newBuilder();
-    SerializeFormat.DataValue value =
-        builder.setSource(builder.getSourceBuilder().setFilename(source.toString())).build();
+    SerializeFormat.DataValue value = builder.setSourceId(sourceTable.getSourceId(source)).build();
     value.writeDelimitedTo(output);
     return CodedOutputStream.computeUInt32SizeNoTag(value.getSerializedSize())
         + value.getSerializedSize();
   }
 
-  private String getSourceExtension() {
-    // TODO(corysmith): Switch to a filename parser utility.
-    String fileName = source.getFileName().toString();
-    int extensionStart = fileName.lastIndexOf('.');
-    if (extensionStart > 0) {
-      return fileName.substring(extensionStart);
+  @Override
+  public DataResource combineWith(DataResource resource) {
+    throw new IllegalArgumentException(getClass() + " does not combine.");
+  }
+
+  @Override
+  public DataResource overwrite(DataResource resource) {
+    if (equals(resource)) {
+      return this;
     }
-    return "";
+    return new DataValueFile(
+        visibility, source.overwrite(resource.source()), fingerprint, rootXmlNode);
+  }
+
+  @Override
+  public DataAsset overwrite(DataAsset asset) {
+    if (equals(asset)) {
+      return this;
+    }
+    return new DataValueFile(
+        visibility, source.overwrite(asset.source()), fingerprint, rootXmlNode);
+  }
+
+  @Override
+  public void writeResourceToClass(FullyQualifiedName key, AndroidResourceSymbolSink sink) {
+    sink.acceptSimpleResource(source().getDependencyInfo(), visibility, key.type(), key.name());
+  }
+
+  @Override
+  public DataValue update(DataSource source) {
+    return new DataValueFile(visibility, source, fingerprint, rootXmlNode);
+  }
+
+  @Override
+  public String asConflictString() {
+    return source.asConflictString();
+  }
+
+  @Override
+  public boolean valueEquals(DataValue value) {
+    if (!(value instanceof DataValueFile)) {
+      return false;
+    }
+    DataValueFile other = (DataValueFile) value;
+    if (!Objects.equals(visibility, other.visibility)) {
+      return false;
+    }
+    // Just check the path, ignoring other components of DataSource.  Build label is not
+    // relevant to whether something is a conflict.
+    if (Objects.equals(source.getPath(), other.source.getPath())) {
+      return true;
+    }
+    // fingerprint==null && other.fingerprint==null shouldn't count as equality.
+    if (fingerprint != null && Objects.equals(fingerprint, other.fingerprint)) {
+      return true;
+    }
+    return false;
+  }
+
+  @Override
+  public int compareMergePriorityTo(DataValue value) {
+    return 0;
+  }
+
+  @Override
+  public Visibility getVisibility() {
+    return visibility;
+  }
+
+  @Override
+  public ImmutableList<Reference> getReferencedResources() {
+    if (rootXmlNode == null) {
+      return ImmutableList.of();
+    } else {
+      return ProtoXmlUtils.getAllResourceReferences(rootXmlNode);
+    }
   }
 }
