@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.devtools.build.lib.util.BatchCallback;
 import com.google.devtools.build.lib.util.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * A callback that is used during the process of converting target patterns (such as
@@ -100,9 +101,8 @@ public abstract class TargetPatternResolver<T> {
       throws TargetParsingException, E, InterruptedException;
 
   /**
-   * Async version of {@link #findTargetsBeneathDirectory}
-   *
-   * <p>Default implementation is synchronous.
+   * Same as {@link #findTargetsBeneathDirectory}, but optionally making use of the given
+   * {@link ForkJoinPool} to achieve parallelism.
    */
   public <E extends Exception> ListenableFuture<Void> findTargetsBeneathDirectoryAsync(
       RepositoryName repository,
