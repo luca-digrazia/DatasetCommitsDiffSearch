@@ -23,7 +23,8 @@ import io.dropwizard.util.JarLocation;
  */
 public abstract class Application<T extends Configuration> {
     protected Application() {
-        bootstrapLogging();
+        // make sure spinning up Hibernate Validator doesn't yell at us
+        BootstrapLogging.bootstrap(bootstrapLogLevel());
     }
 
     /**
@@ -31,11 +32,6 @@ public abstract class Application<T extends Configuration> {
      */
     protected Level bootstrapLogLevel() {
         return Level.WARN;
-    }
-
-    protected void bootstrapLogging() {
-        // make sure spinning up Hibernate Validator doesn't yell at us
-        BootstrapLogging.bootstrap(bootstrapLogLevel());
     }
 
     /**
@@ -66,7 +62,7 @@ public abstract class Application<T extends Configuration> {
     }
 
     /**
-     * When the application runs, this is called after the {@link ConfiguredBundle}s are run. Override it to add
+     * When the application runs, this is called after the {@link Bundle}s are run. Override it to add
      * providers, resources, etc. for your application.
      *
      * @param configuration the parsed {@link Configuration} object
@@ -86,12 +82,14 @@ public abstract class Application<T extends Configuration> {
         final Bootstrap<T> bootstrap = new Bootstrap<>(this);
         addDefaultCommands(bootstrap);
         initialize(bootstrap);
-        // Should be called after initialize to give an opportunity to set a custom metric registry
+        // Should by called after initialize to give an opportunity to set a custom metric registry
         bootstrap.registerMetrics();
 
         final Cli cli = new Cli(new JarLocation(getClass()), bootstrap, System.out, System.err);
-        // only exit if there's an error running the command
-        cli.run(arguments).ifPresent(this::onFatalError);
+        if (!cli.run(arguments)) {
+            // only exit if there's an error running the command
+            onFatalError();
+        }
     }
 
     /**
@@ -109,23 +107,7 @@ public abstract class Application<T extends Configuration> {
      *
      * The default implementation calls {@link System#exit(int)} with a non-zero status code to terminate the
      * application.
-     *
-     * @param t The {@link Throwable} instance which caused the command to fail.
-     * @since 2.0
      */
-    protected void onFatalError(Throwable t) {
-        onFatalError();
-    }
-
-    /**
-     * Called by {@link #run(String...)} to indicate there was a fatal error running the requested command.
-     *
-     * The default implementation calls {@link System#exit(int)} with a non-zero status code to terminate the
-     * application.
-     *
-     * @deprecated Use #onFatalError(Throwable) instead.
-     */
-    @Deprecated
     protected void onFatalError() {
         System.exit(1);
     }
