@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.EvalException;
 
 /**
@@ -41,15 +42,17 @@ public enum AttributeValueSource {
     this.mustHaveSkylarkPrefix = mustHaveSkylarkPrefix;
   }
 
-  /** Throws an {@link EvalException} if the given Skylark name is not valid for this type. */
-  public void validateSkylarkName(String attrSkylarkName) throws EvalException {
+  /**
+   * Throws an {@link EvalException} if the given Skylark name is not valid for this type.
+   */
+  public void validateSkylarkName(String attrSkylarkName, Location location) throws EvalException {
     if (attrSkylarkName.isEmpty()) {
-      throw new EvalException(null, "Attribute name must not be empty.");
+      throw new EvalException(location, "Attribute name must not be empty.");
     }
 
     if (mustHaveSkylarkPrefix && !attrSkylarkName.startsWith(SKYLARK_PREFIX)) {
       throw new EvalException(
-          null,
+          location,
           String.format(
               "When an attribute value is a function, the attribute must be private "
                   + "(i.e. start with '%s'). Found '%s'",
@@ -61,8 +64,9 @@ public enum AttributeValueSource {
    * Converts the given Skylark attribute name to a native attribute name for this type, or throws
    * an {@link EvalException} if the given Skylark name is not valid for this type.
    */
-  public String convertToNativeName(String attrSkylarkName) throws EvalException {
-    validateSkylarkName(attrSkylarkName);
+  public String convertToNativeName(String attrSkylarkName, Location location)
+      throws EvalException {
+    validateSkylarkName(attrSkylarkName, location);
     // No need to check for mustHaveSkylarkPrefix since this was already done in
     // validateSkylarkName().
     return attrSkylarkName.startsWith(SKYLARK_PREFIX)

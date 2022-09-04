@@ -63,7 +63,7 @@ public class AttributeValueSourceTest {
       source.validateSkylarkName(name, Location.BUILTIN);
       fail("Expected an exception because of an invalid name.");
     } catch (EvalException ex) {
-      assertThat(ex).hasMessageThat().isEqualTo(expectedExceptionMessage);
+      assertThat(ex).hasMessage(expectedExceptionMessage);
     }
   }
 
@@ -94,12 +94,9 @@ public class AttributeValueSourceTest {
       fail("Expected an exception because of an invalid name.");
     } catch (EvalException ex) {
       assertThat(ex)
-          .hasMessageThat()
-          .isEqualTo(
-              String.format(
-                  "When an attribute value is a function, the attribute must be private "
-                      + "(i.e. start with '_'). Found '%s'",
-                  invalidName));
+          .hasMessage(
+              String.format("When an attribute value is a function, the attribute must be private "
+                  + "(i.e. start with '_'). Found '%s'", invalidName));
     }
   }
 
