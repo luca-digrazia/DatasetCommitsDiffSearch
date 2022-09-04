@@ -1,20 +1,6 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.gizmo;
+
+import org.objectweb.asm.Type;
 
 /**
  * Use to construct the various branches of an if statement.
@@ -32,4 +18,12 @@ public interface BranchResult {
      * @return A {@link BytecodeCreator} that is used to construct the false branch
      */
     BytecodeCreator falseBranch();
+
+    ResultHandle mergeBranches(ResultHandle trueResult, ResultHandle falseResult);
+
+    ResultHandle mergeBranches(ResultHandle trueResult, ResultHandle falseResult, String expectedType);
+
+    default ResultHandle mergeBranches(ResultHandle trueResult, ResultHandle falseResult, Class<?> expectedType) {
+        return mergeBranches(trueResult, falseResult, Type.getDescriptor(expectedType));
+    }
 }

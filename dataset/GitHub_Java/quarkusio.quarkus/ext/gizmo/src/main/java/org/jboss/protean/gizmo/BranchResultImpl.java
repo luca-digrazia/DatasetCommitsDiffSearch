@@ -1,29 +1,19 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.gizmo;
 
 class BranchResultImpl implements BranchResult {
+    private final BytecodeCreatorImpl owner;
 
     private final BytecodeCreator trueBranch;
     private final BytecodeCreator falseBranch;
+    private final BytecodeCreatorImpl underlyingTrueBranch;
+    private final BytecodeCreatorImpl underlyingFalseBranch;
 
-    BranchResultImpl(BytecodeCreator trueBranch, BytecodeCreator falseBranch) {
+    public BranchResultImpl(BytecodeCreatorImpl owner, BytecodeCreator trueBranch, BytecodeCreator falseBranch, BytecodeCreatorImpl underlyingTrueBranch, BytecodeCreatorImpl underlyingFalseBranch) {
+        this.owner = owner;
         this.trueBranch = trueBranch;
         this.falseBranch = falseBranch;
+        this.underlyingTrueBranch = underlyingTrueBranch;
+        this.underlyingFalseBranch = underlyingFalseBranch;
     }
 
     @Override
@@ -34,5 +24,21 @@ class BranchResultImpl implements BranchResult {
     @Override
     public BytecodeCreator falseBranch() {
         return falseBranch;
+    }
+
+    @Override
+    public ResultHandle mergeBranches(ResultHandle trueResult, ResultHandle falseResult) {
+            if(!trueResult.getType().equals(falseResult.getType())) {
+                throw new RuntimeException("Result handles must be of the same type " + trueResult.getType() + " " + falseResult.getType());
+            }
+            return mergeBranches(trueResult, falseResult, trueResult.getType());
+    }
+
+    @Override
+    public ResultHandle mergeBranches(final ResultHandle trueResult, final ResultHandle falseResult, final String expectedType) {
+        ResultHandle rs = new ResultHandle(expectedType, owner);
+        underlyingTrueBranch.assign(rs, trueResult);
+        underlyingFalseBranch.assign(rs, falseResult);
+        return rs;
     }
 }

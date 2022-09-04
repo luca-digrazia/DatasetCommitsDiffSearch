@@ -1068,24 +1068,12 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
     static abstract class Operation {
 
 
-        private final Throwable errorPoint;
-
-        Operation() {
-            if(Boolean.getBoolean("arc.debug")) {
-                errorPoint= new RuntimeException("Error location");
-            } else {
-                errorPoint = null;
-            }
-        }
-
+        private final Throwable errorPoint = new RuntimeException("Error location");
 
         public void doProcess(MethodVisitor visitor) {
             try {
                 writeBytecode(visitor);
             } catch (Throwable e) {
-                if(errorPoint == null) {
-                    throw new RuntimeException(e);
-                }
                 RuntimeException ex = new RuntimeException("Exception generating bytecode", errorPoint);
                 ex.addSuppressed(e);
                 throw ex;
