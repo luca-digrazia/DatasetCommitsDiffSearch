@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import javax.annotation.Nullable;
 
 /**
  * A parser for options. Typical use case in a main method:
@@ -160,8 +161,7 @@ public class OptionsParser implements OptionsParsingResult {
     /**
      * Sets the {@link OptionsData} used by this parser, based on the given {@code optionsClasses}.
      */
-    @SafeVarargs
-    public final Builder optionsClasses(Class<? extends OptionsBase>... optionsClasses) {
+    public Builder optionsClasses(Class<? extends OptionsBase>... optionsClasses) {
       return this.optionsData(
           (OpaqueOptionsData) getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
     }
@@ -183,7 +183,7 @@ public class OptionsParser implements OptionsParsingResult {
     }
 
     /** Any flags with this prefix will be skipped during processing. */
-    public Builder skippedPrefix(String skippedPrefix) {
+    public Builder skippedPrefix(@Nullable String skippedPrefix) {
       this.implBuilder.skippedPrefix(skippedPrefix);
       return this;
     }
