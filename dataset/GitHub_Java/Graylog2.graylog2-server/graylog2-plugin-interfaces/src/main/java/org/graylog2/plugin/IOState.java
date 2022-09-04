@@ -27,7 +27,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.eventbus.EventBus;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.plugin.events.inputs.IOStateChangedEvent;
 import org.joda.time.DateTime;
 
 import java.util.UUID;
@@ -82,11 +81,9 @@ public class IOState<T extends Stoppable> {
     }
 
     public void setState(Type state) {
-        final IOStateChangedEvent<T> evt = IOStateChangedEvent.create(this.state, state, this);
-
         this.state = state;
         this.setDetailedMessage(null);
-        this.eventbus.post(evt);
+        this.eventbus.post(this);
     }
 
     public DateTime getStartedAt() {

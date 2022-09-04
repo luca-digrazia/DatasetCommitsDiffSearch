@@ -66,10 +66,8 @@ public class InputLauncher {
         if (inputRegistry.getInputState(input.getId()) == null) {
             inputState = inputStateFactory.create(input);
             inputRegistry.add(inputState);
-        } else {
+        } else
             inputState = inputRegistry.getInputState(input.getId());
-            inputState.setStoppable(input);
-        }
 
         executor.submit(new Runnable() {
             @Override
