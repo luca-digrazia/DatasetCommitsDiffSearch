@@ -12,7 +12,6 @@ import org.jboss.jandex.Type;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.FieldVisitor;
 
-import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
@@ -25,11 +24,8 @@ import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.Gizmo;
 import io.quarkus.mongodb.rest.data.panache.PanacheMongoEntityResource;
 import io.quarkus.mongodb.rest.data.panache.PanacheMongoRepositoryResource;
-import io.quarkus.mongodb.rest.data.panache.runtime.NoopUpdateExecutor;
-import io.quarkus.mongodb.rest.data.panache.runtime.RestDataPanacheExceptionMapper;
 import io.quarkus.rest.data.panache.deployment.ResourceMetadata;
 import io.quarkus.rest.data.panache.deployment.RestDataResourceBuildItem;
-import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 
 class MongoPanacheRestProcessor {
 
@@ -42,16 +38,6 @@ class MongoPanacheRestProcessor {
     @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(MONGODB_REST_DATA_PANACHE);
-    }
-
-    @BuildStep
-    ResteasyJaxrsProviderBuildItem registerRestDataPanacheExceptionMapper() {
-        return new ResteasyJaxrsProviderBuildItem(RestDataPanacheExceptionMapper.class.getName());
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem registerTransactionalExecutor() {
-        return AdditionalBeanBuildItem.unremovableOf(NoopUpdateExecutor.class);
     }
 
     @BuildStep
