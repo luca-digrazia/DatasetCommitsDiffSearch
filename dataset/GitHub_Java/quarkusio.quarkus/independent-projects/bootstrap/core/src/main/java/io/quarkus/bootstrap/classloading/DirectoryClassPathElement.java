@@ -22,7 +22,6 @@ public class DirectoryClassPathElement extends AbstractClassPathElement {
     private final Path root;
 
     public DirectoryClassPathElement(Path root) {
-        assert root != null : "root is null";
         this.root = root;
     }
 
@@ -102,10 +101,5 @@ public class DirectoryClassPathElement extends AbstractClassPathElement {
     @Override
     public void close() throws IOException {
         //noop
-    }
-
-    @Override
-    public String toString() {
-        return root.toAbsolutePath().toString();
     }
 }

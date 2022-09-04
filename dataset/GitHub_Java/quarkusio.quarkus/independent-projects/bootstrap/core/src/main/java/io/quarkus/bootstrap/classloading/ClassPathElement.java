@@ -42,7 +42,11 @@ public interface ClassPathElement extends Closeable {
      * Creates an element from a file system path
      */
     static ClassPathElement fromPath(Path path) {
-        return Files.isDirectory(path) ? new DirectoryClassPathElement(path) : new JarClassPathElement(path);
+        if (Files.isDirectory(path)) {
+            return new DirectoryClassPathElement(path);
+        } else {
+            return new JarClassPathElement(path);
+        }
     }
 
     static ClassPathElement EMPTY = new ClassPathElement() {
