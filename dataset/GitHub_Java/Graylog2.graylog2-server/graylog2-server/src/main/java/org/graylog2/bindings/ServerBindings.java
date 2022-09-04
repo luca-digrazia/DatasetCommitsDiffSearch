@@ -36,7 +36,6 @@ import org.graylog2.bindings.providers.*;
 import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
-import org.graylog2.caches.DiskJournalCache;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.filters.FilterService;
 import org.graylog2.filters.FilterServiceImpl;
@@ -50,9 +49,6 @@ import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.inputs.BasicCache;
-import org.graylog2.inputs.InputCache;
-import org.graylog2.inputs.OutputCache;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.plugin.PluginMetaData;
 import org.graylog2.plugin.RulesEngine;
@@ -83,9 +79,22 @@ import javax.ws.rs.ext.ExceptionMapper;
  */
 public class ServerBindings extends AbstractModule {
     private final Configuration configuration;
+    private final MongoConnection mongoConnection;
 
     public ServerBindings(Configuration configuration) {
         this.configuration = configuration;
+
+        mongoConnection = new MongoConnection();
+        mongoConnection.setUser(configuration.getMongoUser());
+        mongoConnection.setPassword(configuration.getMongoPassword());
+        mongoConnection.setHost(configuration.getMongoHost());
+        mongoConnection.setPort(configuration.getMongoPort());
+        mongoConnection.setDatabase(configuration.getMongoDatabase());
+        mongoConnection.setUseAuth(configuration.isMongoUseAuth());
+        mongoConnection.setMaxConnections(configuration.getMongoMaxConnections());
+        mongoConnection.setThreadsAllowedToBlockMultiplier(configuration.getMongoThreadsAllowedToBlockMultiplier());
+        mongoConnection.setReplicaSet(configuration.getMongoReplicaSet());
+        mongoConnection.connect();
     }
 
     @Override
@@ -121,7 +130,7 @@ public class ServerBindings extends AbstractModule {
         bind(Configuration.class).toInstance(configuration);
         bind(BaseConfiguration.class).toInstance(configuration);
 
-        bind(MongoConnection.class).toProvider(MongoConnectionProvider.class);
+        bind(MongoConnection.class).toInstance(mongoConnection);
 
         Multibinder<ServerStatus.Capability> capabilityBinder =
                 Multibinder.newSetBinder(binder(), ServerStatus.Capability.class);
@@ -141,14 +150,6 @@ public class ServerBindings extends AbstractModule {
         bind(SystemJobFactory.class).toProvider(SystemJobFactoryProvider.class);
         bind(AsyncHttpClient.class).toProvider(AsyncHttpClientProvider.class);
         bind(GracefulShutdown.class).in(Scopes.SINGLETON);
-
-        if (configuration.isMessageCacheOffHeap()) {
-            bind(InputCache.class).to(DiskJournalCache.Input.class).in(Scopes.SINGLETON);
-            bind(OutputCache.class).to(DiskJournalCache.Output.class).in(Scopes.SINGLETON);
-        } else {
-            bind(InputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
-            bind(OutputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
-        }
     }
 
     private void bindInterfaces() {
@@ -157,6 +158,10 @@ public class ServerBindings extends AbstractModule {
         bind(AlertSender.class).to(FormattedEmailAlertSender.class);
         bind(StreamRouter.class);
         bind(FilterService.class).to(FilterServiceImpl.class).in(Scopes.SINGLETON);
+    }
+
+    private MongoConnection getMongoConnection() {
+        return this.mongoConnection;
     }
 
     private void bindDynamicFeatures() {
