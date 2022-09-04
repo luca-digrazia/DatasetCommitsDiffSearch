@@ -14,6 +14,10 @@
 
 package com.google.devtools.build.lib.rules.platform;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -22,7 +26,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.platform.PlatformInfo.DuplicateConstraintException;
 import com.google.devtools.build.lib.syntax.Type;
 import java.util.Map;
 
@@ -32,31 +35,76 @@ public class Platform implements RuleConfiguredTargetFactory {
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
 
-    Iterable<ConstraintValueInfo> constraintValues =
-        ConstraintValueInfo.fromTargets(
-            ruleContext.getPrerequisites(PlatformRule.CONSTRAINT_VALUES_ATTR, Mode.DONT_CHECK));
+    Iterable<ConstraintValueProvider> constraintValues =
+        ruleContext.getPrerequisites(
+            PlatformRule.CONSTRAINT_VALUES_ATTR, Mode.DONT_CHECK, ConstraintValueProvider.class);
 
-    PlatformInfo.Builder platformBuilder = PlatformInfo.builder();
-    platformBuilder.addConstraints(constraintValues);
+    // Verify the constraints - no two values for the same setting, and construct the map.
+    ImmutableMap<ConstraintSettingProvider, ConstraintValueProvider> constraints =
+        validateConstraints(ruleContext, constraintValues);
+    if (constraints == null) {
+      // An error occurred, return null.
+      return null;
+    }
+
+    PlatformProvider.Builder platformProviderBuilder = PlatformProvider.builder();
+    platformProviderBuilder.constraints(constraints);
 
     Map<String, String> remoteExecutionProperties =
         ruleContext.attributes().get(PlatformRule.REMOTE_EXECUTION_PROPS_ATTR, Type.STRING_DICT);
-    platformBuilder.addRemoteExecutionProperties(remoteExecutionProperties);
-
-    PlatformInfo platformInfo;
-    try {
-      platformInfo = platformBuilder.build();
-    } catch (DuplicateConstraintException e) {
-      // Report the error and return null.
-      ruleContext.attributeError(PlatformRule.CONSTRAINT_VALUES_ATTR, e.getMessage());
-      return null;
-    }
+    platformProviderBuilder.remoteExecutionProperties(remoteExecutionProperties);
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .addProvider(FileProvider.class, FileProvider.EMPTY)
         .addProvider(FilesToRunProvider.class, FilesToRunProvider.EMPTY)
-        .addNativeDeclaredProvider(platformInfo)
+        .addProvider(PlatformProvider.class, platformProviderBuilder.build())
         .build();
+  }
+
+  private ImmutableMap<ConstraintSettingProvider, ConstraintValueProvider> validateConstraints(
+      RuleContext ruleContext, Iterable<ConstraintValueProvider> constraintValues) {
+    Multimap<ConstraintSettingProvider, ConstraintValueProvider> constraints =
+        ArrayListMultimap.create();
+
+    for (ConstraintValueProvider constraintValue : constraintValues) {
+      constraints.put(constraintValue.constraint(), constraintValue);
+    }
+
+    // Are there any settings with more than one value?
+    boolean foundError = false;
+    for (ConstraintSettingProvider constraintSetting : constraints.keySet()) {
+      if (constraints.get(constraintSetting).size() > 1) {
+        foundError = true;
+        // error
+        StringBuilder constraintValuesDescription = new StringBuilder();
+        for (ConstraintValueProvider constraintValue : constraints.get(constraintSetting)) {
+          if (constraintValuesDescription.length() > 0) {
+            constraintValuesDescription.append(", ");
+          }
+          constraintValuesDescription.append(constraintValue.value());
+        }
+        ruleContext.attributeError(
+            PlatformRule.CONSTRAINT_VALUES_ATTR,
+            String.format(
+                "Duplicate constraint_values for constraint_setting %s: %s",
+                constraintSetting.constraintSetting(), constraintValuesDescription.toString()));
+      }
+    }
+
+    if (foundError) {
+      return null;
+    }
+
+    // Convert to a flat map.
+    ImmutableMap.Builder<ConstraintSettingProvider, ConstraintValueProvider> builder =
+        new ImmutableMap.Builder<>();
+    for (ConstraintSettingProvider constraintSetting : constraints.keySet()) {
+      ConstraintValueProvider constraintValue =
+          Iterables.getOnlyElement(constraints.get(constraintSetting));
+      builder.put(constraintSetting, constraintValue);
+    }
+
+    return builder.build();
   }
 }
