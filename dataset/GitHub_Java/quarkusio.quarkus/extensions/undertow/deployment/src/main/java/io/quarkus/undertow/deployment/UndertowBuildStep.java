@@ -14,7 +14,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -320,7 +319,7 @@ public class UndertowBuildStep {
                 knownPaths.knownDirectories,
                 launchMode.getLaunchMode(), shutdownContext, contextPath, httpBuildTimeConfig.rootPath,
                 servletConfig.defaultCharset, webMetaData.getRequestCharacterEncoding(),
-                webMetaData.getResponseCharacterEncoding(), httpBuildTimeConfig.auth.proactive);
+                webMetaData.getResponseCharacterEncoding());
 
         if (webMetaData.getContextParams() != null) {
             for (ParamValueMetaData i : webMetaData.getContextParams()) {
@@ -480,24 +479,19 @@ public class UndertowBuildStep {
             if (servlet.getLoadOnStartup() == 0) {
                 reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
             }
-            RuntimeValue<ServletInfo> s = recorder.registerServlet(deployment, servlet.getName(),
-                    context.classProxy(servletClass),
+            recorder.registerServlet(deployment, servlet.getName(), context.classProxy(servletClass),
                     servlet.isAsyncSupported(), servlet.getLoadOnStartup(), bc.getValue(),
                     servlet.getInstanceFactory());
 
             for (String m : servlet.getMappings()) {
                 recorder.addServletMapping(deployment, servlet.getName(), m);
             }
-            for (Map.Entry<String, String> entry : servlet.getInitParams().entrySet()) {
-                recorder.addServletInitParam(s, entry.getKey(), entry.getValue());
-            }
         }
 
         for (FilterBuildItem filter : filters) {
             String filterClass = filter.getFilterClass();
             reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, filterClass));
-            RuntimeValue<FilterInfo> f = recorder.registerFilter(deployment, filter.getName(), context.classProxy(filterClass),
-                    filter.isAsyncSupported(),
+            recorder.registerFilter(deployment, filter.getName(), context.classProxy(filterClass), filter.isAsyncSupported(),
                     bc.getValue(), filter.getInstanceFactory());
             for (FilterBuildItem.FilterMappingInfo m : filter.getMappings()) {
                 if (m.getMappingType() == FilterBuildItem.FilterMappingInfo.MappingType.URL) {
@@ -505,9 +499,6 @@ public class UndertowBuildStep {
                 } else {
                     recorder.addFilterServletNameMapping(deployment, filter.getName(), m.getMapping(), m.getDispatcher());
                 }
-            }
-            for (Map.Entry<String, String> entry : filter.getInitParams().entrySet()) {
-                recorder.addFilterInitParam(f, entry.getKey(), entry.getValue());
             }
         }
         for (ServletInitParamBuildItem i : initParams) {
