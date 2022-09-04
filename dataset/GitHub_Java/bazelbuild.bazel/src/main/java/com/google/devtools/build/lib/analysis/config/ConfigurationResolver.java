@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionUtil;
 import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
 import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -218,36 +217,12 @@ public final class ConfigurationResolver {
                   Dependency.builder()
                       .setLabel(dep.getLabel())
                       .withNullConfiguration()
-                      .setTransitionKeys(ImmutableList.copyOf(toOptions.keySet()))
+                      .addTransitionKeys(ImmutableList.copyOf(toOptions.keySet()))
                       .build();
             }
           }
         }
         putOnlyEntry(resolvedDeps, dependencyEdge, finalDependency);
-        continue;
-      } else if (transition.isHostTransition()) {
-        // The current rule's host configuration can also be used for the dep. We short-circuit
-        // the standard transition logic for host transitions because these transitions are
-        // uniquely frequent. It's possible, e.g., for every node in the configured target graph
-        // to incur multiple host transitions. So we aggressively optimize to avoid hurting
-        // analysis time.
-        if (hostConfiguration.trimConfigurationsRetroactively() && !dep.getAspects().isEmpty()) {
-          String message =
-              ctgValue.getLabel()
-                  + " has aspects attached, but these are not supported in retroactive"
-                  + " trimming mode.";
-          env.getListener()
-              .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-          throw new DependencyEvaluationException(new InvalidConfigurationException(message));
-        }
-        putOnlyEntry(
-            resolvedDeps,
-            dependencyEdge,
-            Dependency.builder()
-                .setLabel(dep.getLabel())
-                .setConfiguration(hostConfiguration)
-                .setAspects(dep.getAspects())
-                .build());
         continue;
       }
 
@@ -288,6 +263,30 @@ public final class ConfigurationResolver {
               Dependency.builder()
                   .setLabel(dep.getLabel())
                   .setConfiguration(ctgValue.getConfiguration())
+                  .setAspects(dep.getAspects())
+                  .build());
+          continue;
+        } else if (transition.isHostTransition()) {
+          // The current rule's host configuration can also be used for the dep. We short-circuit
+          // the standard transition logic for host transitions because these transitions are
+          // uniquely frequent. It's possible, e.g., for every node in the configured target graph
+          // to incur multiple host transitions. So we aggressively optimize to avoid hurting
+          // analysis time.
+          if (hostConfiguration.trimConfigurationsRetroactively() && !dep.getAspects().isEmpty()) {
+            String message =
+                ctgValue.getLabel()
+                    + " has aspects attached, but these are not supported in retroactive"
+                    + " trimming mode.";
+            env.getListener()
+                .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
+            throw new DependencyEvaluationException(new InvalidConfigurationException(message));
+          }
+          putOnlyEntry(
+              resolvedDeps,
+              dependencyEdge,
+              Dependency.builder()
+                  .setLabel(dep.getLabel())
+                  .setConfiguration(hostConfiguration)
                   .setAspects(dep.getAspects())
                   .build());
           continue;
@@ -338,9 +337,6 @@ public final class ConfigurationResolver {
                 .setLabel(dep.getLabel())
                 .setConfiguration(ctgValue.getConfiguration())
                 .setAspects(dep.getAspects())
-                // Explicitly do not set the transition key, since there is only one configuration
-                // and it matches the current one. This ignores the transition key set if this
-                // was a split transition.
                 .build());
         continue;
       }
@@ -432,7 +428,7 @@ public final class ConfigurationResolver {
                   .setLabel(originalDep.getLabel())
                   .setConfiguration(trimmedConfig)
                   .setAspects(originalDep.getAspects())
-                  .setTransitionKey(info.second)
+                  .addTransitionKey(info.second)
                   .build();
           Attribute attribute = attr.dependencyKind.getAttribute();
           if (attribute != null && attribute.getTransitionFactory().isSplit()) {
@@ -606,8 +602,7 @@ public final class ConfigurationResolver {
 
     // TODO(bazel-team): Add safety-check that this never mutates fromOptions.
     StoredEventHandler handlerWithErrorStatus = new StoredEventHandler();
-    Map<String, BuildOptions> result =
-        transition.apply(TransitionUtil.restrict(transition, fromOptions), handlerWithErrorStatus);
+    Map<String, BuildOptions> result = transition.apply(fromOptions, handlerWithErrorStatus);
 
     if (doesStarlarkTransition) {
       // We use a temporary StoredEventHandler instead of the caller's event handler because

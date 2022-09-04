@@ -14,27 +14,19 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.testing.EqualsTester;
-import com.google.common.testing.NullPointerTester;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
-import com.google.devtools.build.lib.analysis.util.TestAspects.AttributeAspect;
-import com.google.devtools.build.lib.analysis.util.TestAspects.SimpleAspect;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.packages.NativeAspectClass;
-
+import com.google.devtools.build.lib.packages.AspectDescriptor;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.LinkedHashSet;
-import java.util.Set;
 
 /**
  * Tests for {@link Dependency}.
@@ -45,368 +37,339 @@ import java.util.Set;
 public class DependencyTest extends AnalysisTestCase {
   @Test
   public void withNullConfiguration_BasicAccessors() throws Exception {
-    Dependency nullDep = Dependency.withNullConfiguration(Label.parseAbsolute("//a"));
+    Dependency nullDep =
+        Dependency.builder()
+            .withNullConfiguration()
+            .setLabel(Label.parseAbsolute("//a", ImmutableMap.of()))
+            .build();
 
-    assertThat(nullDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(nullDep.hasStaticConfiguration()).isTrue();
+    assertThat(nullDep.getLabel()).isEqualTo(Label.parseAbsolute("//a", ImmutableMap.of()));
     assertThat(nullDep.getConfiguration()).isNull();
-    assertThat(nullDep.getAspects()).isEmpty();
-    assertThat(nullDep.getAspectConfigurations()).isEmpty();
-
-    try {
-      nullDep.getTransition();
-      fail("withNullConfiguration-created Dependencies should throw ISE on getTransition()");
-    } catch (IllegalStateException ex) {
-      // good. expected.
-    }
+    assertThat(nullDep.getAspects().getAllAspects()).isEmpty();
   }
 
   @Test
   public void withConfiguration_BasicAccessors() throws Exception {
     update();
     Dependency targetDep =
-        Dependency.withConfiguration(Label.parseAbsolute("//a"), getTargetConfiguration());
+        Dependency.builder()
+            .setLabel(Label.parseAbsolute("//a", ImmutableMap.of()))
+            .setConfiguration(getTargetConfiguration())
+            .build();
 
-    assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(targetDep.hasStaticConfiguration()).isTrue();
+    assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a", ImmutableMap.of()));
     assertThat(targetDep.getConfiguration()).isEqualTo(getTargetConfiguration());
-    assertThat(targetDep.getAspects()).isEmpty();
-    assertThat(targetDep.getAspectConfigurations()).isEmpty();
-
-    try {
-      targetDep.getTransition();
-      fail("withConfiguration-created Dependencies should throw ISE on getTransition()");
-    } catch (IllegalStateException ex) {
-      // good. expected.
-    }
+    assertThat(targetDep.getAspects().getAllAspects()).isEmpty();
   }
 
   @Test
   public void withConfigurationAndAspects_BasicAccessors() throws Exception {
     update();
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<SimpleAspect>(SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<AttributeAspect>(AttributeAspect.class));
-    ImmutableSet<AspectDescriptor> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
+    AspectDescriptor simpleAspect = new AspectDescriptor(TestAspects.SIMPLE_ASPECT);
+    AspectDescriptor attributeAspect = new AspectDescriptor(TestAspects.ATTRIBUTE_ASPECT);
+    AspectCollection twoAspects = AspectCollection.createForTests(
+        ImmutableSet.of(simpleAspect, attributeAspect));
     Dependency targetDep =
-        Dependency.withConfigurationAndAspects(
-            Label.parseAbsolute("//a"), getTargetConfiguration(), twoAspects);
+        Dependency.builder()
+            .setLabel(Label.parseAbsolute("//a", ImmutableMap.of()))
+            .setConfiguration(getTargetConfiguration())
+            .setAspects(twoAspects)
+            .build();
 
-    assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(targetDep.hasStaticConfiguration()).isTrue();
+    assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a", ImmutableMap.of()));
     assertThat(targetDep.getConfiguration()).isEqualTo(getTargetConfiguration());
-    assertThat(targetDep.getAspects()).containsExactlyElementsIn(twoAspects);
-    assertThat(targetDep.getAspectConfigurations())
-        .containsExactlyEntriesIn(
-            ImmutableMap.of(
-                simpleAspect, getTargetConfiguration(),
-                attributeAspect, getTargetConfiguration()));
-
-    try {
-      targetDep.getTransition();
-      fail("withConfigurationAndAspects-created Dependencies should throw ISE on getTransition()");
-    } catch (IllegalStateException ex) {
-      // good. that's what I WANTED to happen.
-    }
+    assertThat(targetDep.getAspects()).isEqualTo(twoAspects);
+    assertThat(targetDep.getAspectConfiguration(simpleAspect)).isEqualTo(getTargetConfiguration());
+    assertThat(targetDep.getAspectConfiguration(attributeAspect))
+        .isEqualTo(getTargetConfiguration());
   }
 
   @Test
-  public void withConfigurationAndAspects_RejectsNullAspectsWithNPE() throws Exception {
-    update();
-    Set<AspectDescriptor> nullSet = new LinkedHashSet<>();
-    nullSet.add(null);
-
-    try {
-      Dependency.withConfigurationAndAspects(
-          Label.parseAbsolute("//a"), getTargetConfiguration(), nullSet);
-      fail("should not be allowed to create a dependency with a null aspect");
-    } catch (NullPointerException expected) {
-      // good. just as planned.
-    }
-  }
-
-  @Test
-  public void withConfigurationAndAspects_RejectsNullConfigWithNPE() throws Exception {
+  public void withConfigurationAndAspects_RejectsNullConfig() throws Exception {
     // Although the NullPointerTester should check this, this test invokes a different code path,
     // because it includes aspects (which the NPT test will not).
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<SimpleAspect>(SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<AttributeAspect>(AttributeAspect.class));
-    ImmutableSet<AspectDescriptor> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
+    AspectDescriptor simpleAspect = new AspectDescriptor(TestAspects.SIMPLE_ASPECT);
+    AspectDescriptor attributeAspect = new AspectDescriptor(TestAspects.ATTRIBUTE_ASPECT);
+    AspectCollection twoAspects = AspectCollection.createForTests(simpleAspect, attributeAspect);
 
-    try {
-      Dependency.withConfigurationAndAspects(Label.parseAbsolute("//a"), null, twoAspects);
-      fail("should not be allowed to create a dependency with a null configuration");
-    } catch (NullPointerException expected) {
-      // good. you fell rrrrright into my trap.
-    }
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            Dependency.builder()
+                .setLabel(Label.parseAbsolute("//a", ImmutableMap.of()))
+                .setConfiguration(null)
+                .setAspects(twoAspects)
+                .build());
   }
 
   @Test
   public void withConfigurationAndAspects_AllowsEmptyAspectSet() throws Exception {
     update();
     Dependency dep =
-        Dependency.withConfigurationAndAspects(
-            Label.parseAbsolute("//a"),
-            getTargetConfiguration(),
-            ImmutableSet.<AspectDescriptor>of());
+        Dependency.builder()
+            .setLabel(Label.parseAbsolute("//a", ImmutableMap.of()))
+            .setConfiguration(getTargetConfiguration())
+            .build();
     // Here we're also checking that this doesn't throw an exception. No boom? OK. Good.
-    assertThat(dep.getAspects()).isEmpty();
-    assertThat(dep.getAspectConfigurations()).isEmpty();
+    assertThat(dep.getAspects().getAllAspects()).isEmpty();
   }
 
   @Test
   public void withConfiguredAspects_BasicAccessors() throws Exception {
     update();
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<TestAspects.SimpleAspect>(TestAspects.SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<AttributeAspect>(AttributeAspect.class));
-    ImmutableMap<AspectDescriptor, BuildConfiguration> twoAspectMap = ImmutableMap.of(
-        simpleAspect, getTargetConfiguration(), attributeAspect, getHostConfiguration());
+    AspectDescriptor simpleAspect = new AspectDescriptor(TestAspects.SIMPLE_ASPECT);
+    AspectDescriptor attributeAspect = new AspectDescriptor(TestAspects.ATTRIBUTE_ASPECT);
+    AspectCollection aspects =
+        AspectCollection.createForTests(ImmutableSet.of(simpleAspect, attributeAspect));
     Dependency targetDep =
-        Dependency.withConfiguredAspects(
-            Label.parseAbsolute("//a"), getTargetConfiguration(), twoAspectMap);
+        Dependency.builder()
+            .setLabel(Label.parseAbsolute("//a", ImmutableMap.of()))
+            .setConfiguration(getTargetConfiguration())
+            .setAspects(aspects)
+            .build();
 
-    assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(targetDep.hasStaticConfiguration()).isTrue();
+    assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a", ImmutableMap.of()));
     assertThat(targetDep.getConfiguration()).isEqualTo(getTargetConfiguration());
-    assertThat(targetDep.getAspects())
-        .containsExactlyElementsIn(ImmutableSet.of(simpleAspect, attributeAspect));
-    assertThat(targetDep.getAspectConfigurations()).containsExactlyEntriesIn(twoAspectMap);
-
-    try {
-      targetDep.getTransition();
-      fail("withConfiguredAspects-created Dependencies should throw ISE on getTransition()");
-    } catch (IllegalStateException ex) {
-      // good. all according to keikaku. (TL note: keikaku means plan)
-    }
+    assertThat(targetDep.getAspects().getAllAspects())
+        .containsExactly(simpleAspect, attributeAspect);
   }
-
 
   @Test
   public void withConfiguredAspects_AllowsEmptyAspectMap() throws Exception {
     update();
     Dependency dep =
-        Dependency.withConfiguredAspects(
-            Label.parseAbsolute("//a"), getTargetConfiguration(),
-            ImmutableMap.<AspectDescriptor, BuildConfiguration>of());
+        Dependency.builder()
+            .setLabel(Label.parseAbsolute("//a", ImmutableMap.of()))
+            .setConfiguration(getTargetConfiguration())
+            .setAspects(AspectCollection.EMPTY)
+            .build();
     // Here we're also checking that this doesn't throw an exception. No boom? OK. Good.
-    assertThat(dep.getAspects()).isEmpty();
-    assertThat(dep.getAspectConfigurations()).isEmpty();
-  }
-
-  @Test
-  public void withTransitionAndAspects_BasicAccessors() throws Exception {
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<>(SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<>(AttributeAspect.class));
-    ImmutableSet<AspectDescriptor> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
-    Dependency hostDep =
-        Dependency.withTransitionAndAspects(
-            Label.parseAbsolute("//a"), ConfigurationTransition.HOST, twoAspects);
-
-    assertThat(hostDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(hostDep.hasStaticConfiguration()).isFalse();
-    assertThat(hostDep.getAspects()).containsExactlyElementsIn(twoAspects);
-    assertThat(hostDep.getTransition()).isEqualTo(ConfigurationTransition.HOST);
-
-    try {
-      hostDep.getConfiguration();
-      fail("withTransitionAndAspects-created Dependencies should throw ISE on getConfiguration()");
-    } catch (IllegalStateException ex) {
-      // good. I knew you would do that.
-    }
-
-    try {
-      hostDep.getAspectConfigurations();
-      fail("withTransitionAndAspects-created Dependencies should throw ISE on "
-          + "getAspectConfigurations()");
-    } catch (IllegalStateException ex) {
-      // good. you're so predictable.
-    }
-  }
-
-  @Test
-  public void withTransitionAndAspects_AllowsEmptyAspectSet() throws Exception {
-    update();
-    Dependency dep =
-        Dependency.withTransitionAndAspects(
-            Label.parseAbsolute("//a"), ConfigurationTransition.HOST,
-            ImmutableSet.<AspectDescriptor>of());
-    // Here we're also checking that this doesn't throw an exception. No boom? OK. Good.
-    assertThat(dep.getAspects()).isEmpty();
-  }
-
-  @Test
-  public void factoriesPassNullableTester() throws Exception {
-    update();
-
-    new NullPointerTester()
-        .setDefault(Label.class, Label.parseAbsolute("//a"))
-        .setDefault(BuildConfiguration.class, getTargetConfiguration())
-        .testAllPublicStaticMethods(Dependency.class);
+    assertThat(dep.getAspects().getAllAspects()).isEmpty();
   }
 
   @Test
   public void equalsPassesEqualsTester() throws Exception {
     update();
 
-    Label a = Label.parseAbsolute("//a");
-    Label aExplicit = Label.parseAbsolute("//a:a");
-    Label b = Label.parseAbsolute("//b");
+    Label a = Label.parseAbsolute("//a", ImmutableMap.of());
+    Label aExplicit = Label.parseAbsolute("//a:a", ImmutableMap.of());
+    Label b = Label.parseAbsolute("//b", ImmutableMap.of());
 
     BuildConfiguration host = getHostConfiguration();
     BuildConfiguration target = getTargetConfiguration();
 
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<>(TestAspects.SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<>(TestAspects.AttributeAspect.class));
-    AspectDescriptor errorAspect = new AspectDescriptor(
-        new NativeAspectClass<>(TestAspects.ErrorAspect.class));
+    AspectDescriptor simpleAspect = new AspectDescriptor(TestAspects.SIMPLE_ASPECT);
+    AspectDescriptor attributeAspect = new AspectDescriptor(TestAspects.ATTRIBUTE_ASPECT);
+    AspectDescriptor errorAspect = new AspectDescriptor(TestAspects.ERROR_ASPECT);
 
-    ImmutableSet<AspectDescriptor> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
-    ImmutableSet<AspectDescriptor> inverseAspects = ImmutableSet.of(attributeAspect, simpleAspect);
-    ImmutableSet<AspectDescriptor> differentAspects = ImmutableSet.of(attributeAspect, errorAspect);
-    ImmutableSet<AspectDescriptor> noAspects = ImmutableSet.<AspectDescriptor>of();
-
-    ImmutableMap<AspectDescriptor, BuildConfiguration> twoAspectsHostMap =
-        ImmutableMap.of(simpleAspect, host, attributeAspect, host);
-    ImmutableMap<AspectDescriptor, BuildConfiguration> twoAspectsTargetMap =
-        ImmutableMap.of(simpleAspect, target, attributeAspect, target);
-    ImmutableMap<AspectDescriptor, BuildConfiguration> differentAspectsHostMap =
-        ImmutableMap.of(attributeAspect, host, errorAspect, host);
-    ImmutableMap<AspectDescriptor, BuildConfiguration> differentAspectsTargetMap =
-        ImmutableMap.of(attributeAspect, target, errorAspect, target);
-    ImmutableMap<AspectDescriptor, BuildConfiguration> noAspectsMap =
-        ImmutableMap.<AspectDescriptor, BuildConfiguration>of();
+    AspectCollection twoAspects =
+        AspectCollection.createForTests(simpleAspect, attributeAspect);
+    AspectCollection inverseAspects =
+        AspectCollection.createForTests(attributeAspect, simpleAspect);
+    AspectCollection differentAspects =
+        AspectCollection.createForTests(attributeAspect, errorAspect);
+    AspectCollection noAspects = AspectCollection.EMPTY;
 
     new EqualsTester()
         .addEqualityGroup(
             // base set: //a, host configuration, normal aspect set
-            Dependency.withConfigurationAndAspects(a, host, twoAspects),
-            Dependency.withConfigurationAndAspects(aExplicit, host, twoAspects),
-            Dependency.withConfigurationAndAspects(a, host, inverseAspects),
-            Dependency.withConfigurationAndAspects(aExplicit, host, inverseAspects),
-            Dependency.withConfiguredAspects(a, host, twoAspectsHostMap),
-            Dependency.withConfiguredAspects(aExplicit, host, twoAspectsHostMap))
+            Dependency.builder().setLabel(a).setConfiguration(host).setAspects(twoAspects).build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(host)
+                .setAspects(twoAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(a)
+                .setConfiguration(host)
+                .setAspects(inverseAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(host)
+                .setAspects(inverseAspects)
+                .build(),
+            Dependency.builder().setLabel(a).setConfiguration(host).setAspects(twoAspects).build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(host)
+                .setAspects(twoAspects)
+                .build())
         .addEqualityGroup(
             // base set but with label //b
-            Dependency.withConfigurationAndAspects(b, host, twoAspects),
-            Dependency.withConfigurationAndAspects(b, host, inverseAspects),
-            Dependency.withConfiguredAspects(b, host, twoAspectsHostMap))
+            Dependency.builder().setLabel(b).setConfiguration(host).setAspects(twoAspects).build(),
+            Dependency.builder()
+                .setLabel(b)
+                .setConfiguration(host)
+                .setAspects(inverseAspects)
+                .build(),
+            Dependency.builder().setLabel(b).setConfiguration(host).setAspects(twoAspects).build())
         .addEqualityGroup(
             // base set but with target configuration
-            Dependency.withConfigurationAndAspects(a, target, twoAspects),
-            Dependency.withConfigurationAndAspects(aExplicit, target, twoAspects),
-            Dependency.withConfigurationAndAspects(a, target, inverseAspects),
-            Dependency.withConfigurationAndAspects(aExplicit, target, inverseAspects),
-            Dependency.withConfiguredAspects(a, target, twoAspectsTargetMap),
-            Dependency.withConfiguredAspects(aExplicit, target, twoAspectsTargetMap))
+            Dependency.builder()
+                .setLabel(a)
+                .setConfiguration(target)
+                .setAspects(twoAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(target)
+                .setAspects(twoAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(a)
+                .setConfiguration(target)
+                .setAspects(inverseAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(target)
+                .setAspects(inverseAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(a)
+                .setConfiguration(target)
+                .setAspects(twoAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(target)
+                .setAspects(twoAspects)
+                .build())
         .addEqualityGroup(
             // base set but with null configuration
-            Dependency.withNullConfiguration(a),
-            Dependency.withNullConfiguration(aExplicit))
+            Dependency.builder().withNullConfiguration().setLabel(a).build(),
+            Dependency.builder().withNullConfiguration().setLabel(aExplicit).build())
         .addEqualityGroup(
             // base set but with different aspects
-            Dependency.withConfigurationAndAspects(a, host, differentAspects),
-            Dependency.withConfigurationAndAspects(aExplicit, host, differentAspects),
-            Dependency.withConfiguredAspects(a, host, differentAspectsHostMap),
-            Dependency.withConfiguredAspects(aExplicit, host, differentAspectsHostMap))
+            Dependency.builder()
+                .setLabel(a)
+                .setConfiguration(host)
+                .setAspects(differentAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(host)
+                .setAspects(differentAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(a)
+                .setConfiguration(host)
+                .setAspects(differentAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(host)
+                .setAspects(differentAspects)
+                .build())
         .addEqualityGroup(
             // base set but with label //b and target configuration
-            Dependency.withConfigurationAndAspects(b, target, twoAspects),
-            Dependency.withConfigurationAndAspects(b, target, inverseAspects),
-            Dependency.withConfiguredAspects(b, target, twoAspectsTargetMap))
+            Dependency.builder()
+                .setLabel(b)
+                .setConfiguration(target)
+                .setAspects(twoAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(b)
+                .setConfiguration(target)
+                .setAspects(inverseAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(b)
+                .setConfiguration(target)
+                .setAspects(twoAspects)
+                .build())
         .addEqualityGroup(
             // base set but with label //b and null configuration
-            Dependency.withNullConfiguration(b))
+            Dependency.builder().withNullConfiguration().setLabel(b).build())
         .addEqualityGroup(
             // base set but with label //b and different aspects
-            Dependency.withConfigurationAndAspects(b, host, differentAspects),
-            Dependency.withConfiguredAspects(b, host, differentAspectsHostMap))
+            Dependency.builder()
+                .setLabel(b)
+                .setConfiguration(host)
+                .setAspects(differentAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(b)
+                .setConfiguration(host)
+                .setAspects(differentAspects)
+                .build())
         .addEqualityGroup(
             // base set but with target configuration and different aspects
-            Dependency.withConfigurationAndAspects(a, target, differentAspects),
-            Dependency.withConfigurationAndAspects(aExplicit, target, differentAspects),
-            Dependency.withConfiguredAspects(a, target, differentAspectsTargetMap),
-            Dependency.withConfiguredAspects(aExplicit, target, differentAspectsTargetMap))
+            Dependency.builder()
+                .setLabel(a)
+                .setConfiguration(target)
+                .setAspects(differentAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(target)
+                .setAspects(differentAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(a)
+                .setConfiguration(target)
+                .setAspects(differentAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(target)
+                .setAspects(differentAspects)
+                .build())
         .addEqualityGroup(
             // inverse of base set: //b, target configuration, different aspects
-            Dependency.withConfigurationAndAspects(b, target, differentAspects),
-            Dependency.withConfiguredAspects(b, target, differentAspectsTargetMap))
+            Dependency.builder()
+                .setLabel(b)
+                .setConfiguration(target)
+                .setAspects(differentAspects)
+                .build(),
+            Dependency.builder()
+                .setLabel(b)
+                .setConfiguration(target)
+                .setAspects(differentAspects)
+                .build())
         .addEqualityGroup(
             // base set but with no aspects
-            Dependency.withConfiguration(a, host),
-            Dependency.withConfiguration(aExplicit, host),
-            Dependency.withConfigurationAndAspects(a, host, noAspects),
-            Dependency.withConfigurationAndAspects(aExplicit, host, noAspects),
-            Dependency.withConfiguredAspects(a, host, noAspectsMap),
-            Dependency.withConfiguredAspects(aExplicit, host, noAspectsMap))
+            Dependency.builder().setLabel(a).setConfiguration(host).build(),
+            Dependency.builder().setLabel(aExplicit).setConfiguration(host).build(),
+            Dependency.builder().setLabel(a).setConfiguration(host).setAspects(noAspects).build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(host)
+                .setAspects(noAspects)
+                .build(),
+            Dependency.builder().setLabel(a).setConfiguration(host).setAspects(noAspects).build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(host)
+                .setAspects(noAspects)
+                .build())
         .addEqualityGroup(
             // base set but with label //b and no aspects
-            Dependency.withConfiguration(b, host),
-            Dependency.withConfigurationAndAspects(b, host, noAspects),
-            Dependency.withConfiguredAspects(b, host, noAspectsMap))
+            Dependency.builder().setLabel(b).setConfiguration(host).build(),
+            Dependency.builder().setLabel(b).setConfiguration(host).setAspects(noAspects).build(),
+            Dependency.builder().setLabel(b).setConfiguration(host).setAspects(noAspects).build())
         .addEqualityGroup(
             // base set but with target configuration and no aspects
-            Dependency.withConfiguration(a, target),
-            Dependency.withConfiguration(aExplicit, target),
-            Dependency.withConfigurationAndAspects(a, target, noAspects),
-            Dependency.withConfigurationAndAspects(aExplicit, target, noAspects),
-            Dependency.withConfiguredAspects(a, target, noAspectsMap),
-            Dependency.withConfiguredAspects(aExplicit, target, noAspectsMap))
+            Dependency.builder().setLabel(a).setConfiguration(target).build(),
+            Dependency.builder().setLabel(aExplicit).setConfiguration(target).build(),
+            Dependency.builder().setLabel(a).setConfiguration(target).setAspects(noAspects).build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(target)
+                .setAspects(noAspects)
+                .build(),
+            Dependency.builder().setLabel(a).setConfiguration(target).setAspects(noAspects).build(),
+            Dependency.builder()
+                .setLabel(aExplicit)
+                .setConfiguration(target)
+                .setAspects(noAspects)
+                .build())
         .addEqualityGroup(
             // inverse of base set: //b, target configuration, no aspects
-            Dependency.withConfiguration(b, target),
-            Dependency.withConfigurationAndAspects(b, target, noAspects),
-            Dependency.withConfiguredAspects(b, target, noAspectsMap))
-        .addEqualityGroup(
-            // base set but with transition HOST
-            Dependency.withTransitionAndAspects(a, ConfigurationTransition.HOST, twoAspects),
-            Dependency.withTransitionAndAspects(
-                aExplicit, ConfigurationTransition.HOST, twoAspects),
-            Dependency.withTransitionAndAspects(a, ConfigurationTransition.HOST, inverseAspects),
-            Dependency.withTransitionAndAspects(
-                aExplicit, ConfigurationTransition.HOST, inverseAspects))
-        .addEqualityGroup(
-            // base set but with transition HOST and different aspects
-            Dependency.withTransitionAndAspects(a, ConfigurationTransition.HOST, differentAspects),
-            Dependency.withTransitionAndAspects(
-                aExplicit, ConfigurationTransition.HOST, differentAspects))
-        .addEqualityGroup(
-            // base set but with transition HOST and label //b
-            Dependency.withTransitionAndAspects(b, ConfigurationTransition.HOST, twoAspects),
-            Dependency.withTransitionAndAspects(b, ConfigurationTransition.HOST, inverseAspects))
-        .addEqualityGroup(
-            // inverse of base set: transition HOST, label //b, different aspects
-            Dependency.withTransitionAndAspects(b, ConfigurationTransition.HOST, differentAspects),
-            Dependency.withTransitionAndAspects(b, ConfigurationTransition.HOST, differentAspects))
-        .addEqualityGroup(
-            // base set but with transition NONE
-            Dependency.withTransitionAndAspects(a, ConfigurationTransition.NONE, twoAspects),
-            Dependency.withTransitionAndAspects(
-                aExplicit, ConfigurationTransition.NONE, twoAspects),
-            Dependency.withTransitionAndAspects(a, ConfigurationTransition.NONE, inverseAspects),
-            Dependency.withTransitionAndAspects(
-                aExplicit, ConfigurationTransition.NONE, inverseAspects))
-        .addEqualityGroup(
-            // base set but with transition NONE and different aspects
-            Dependency.withTransitionAndAspects(a, ConfigurationTransition.NONE, differentAspects),
-            Dependency.withTransitionAndAspects(
-                aExplicit, ConfigurationTransition.NONE, differentAspects))
-        .addEqualityGroup(
-            // base set but with transition NONE and label //b
-            Dependency.withTransitionAndAspects(b, ConfigurationTransition.NONE, twoAspects),
-            Dependency.withTransitionAndAspects(b, ConfigurationTransition.NONE, inverseAspects))
-        .addEqualityGroup(
-            // inverse of base set: transition NONE, label //b, different aspects
-            Dependency.withTransitionAndAspects(b, ConfigurationTransition.NONE, differentAspects),
-            Dependency.withTransitionAndAspects(b, ConfigurationTransition.NONE, differentAspects))
+            Dependency.builder().setLabel(b).setConfiguration(target).build(),
+            Dependency.builder().setLabel(b).setConfiguration(target).setAspects(noAspects).build(),
+            Dependency.builder().setLabel(b).setConfiguration(target).setAspects(noAspects).build())
         .testEquals();
   }
 }

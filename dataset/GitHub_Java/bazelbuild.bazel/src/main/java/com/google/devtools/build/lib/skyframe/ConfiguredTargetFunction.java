@@ -753,11 +753,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     // Get the configured targets as ConfigMatchingProvider interfaces.
     for (Dependency entry : configConditionDeps) {
-      SkyKey baseKey =
-          ConfiguredTargetKey.builder()
-              .setLabel(entry.getLabel())
-              .setConfiguration(entry.getConfiguration())
-              .build();
+      SkyKey baseKey = ConfiguredTargetKey.of(entry.getLabel(), entry.getConfiguration());
       ConfiguredTarget value = configValues.get(baseKey).getConfiguredTarget();
       // The code above guarantees that value is non-null here and since the rule is a
       // config_setting, provider must also be non-null.
@@ -801,7 +797,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     // to do a potential second pass, in which we fetch all the Packages for AliasConfiguredTargets.
     Iterable<SkyKey> depKeys =
         Iterables.concat(
-            Iterables.transform(deps, Dependency::getConfiguredTargetKey),
+            Iterables.transform(
+                deps, input -> ConfiguredTargetKey.of(input.getLabel(), input.getConfiguration())),
             Iterables.transform(
                 deps, input -> PackageValue.key(input.getLabel().getPackageIdentifier())));
     Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> depValuesOrExceptions =
@@ -813,7 +810,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     Collection<Dependency> depsToProcess = deps;
     for (int i = 0; i < 2; i++) {
       for (Dependency dep : depsToProcess) {
-        SkyKey key = dep.getConfiguredTargetKey();
+        SkyKey key = ConfiguredTargetKey.of(dep.getLabel(), dep.getConfiguration());
         try {
           ConfiguredTargetValue depValue =
               (ConfiguredTargetValue) depValuesOrExceptions.get(key).get();
@@ -932,10 +929,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     StoredEventHandler events = new StoredEventHandler();
     CachingAnalysisEnvironment analysisEnvironment =
         view.createAnalysisEnvironment(
-            ConfiguredTargetKey.builder()
-                .setLabel(target.getLabel())
-                .setConfiguration(configuration)
-                .build(),
+            ConfiguredTargetKey.of(target.getLabel(), configuration),
             false,
             events,
             env,
