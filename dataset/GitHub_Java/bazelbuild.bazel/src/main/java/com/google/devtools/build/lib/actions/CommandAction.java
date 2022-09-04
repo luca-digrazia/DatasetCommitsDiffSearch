@@ -22,7 +22,7 @@ import java.util.List;
  * An action that exposes command line arguments and environment variables for the process in which
  * that command line is executed.
  */
-public interface CommandAction extends Action {
+public interface CommandAction extends Action, ExecutionInfoSpecifier {
 
   /**
    * Returns a list of command line arguments that implements this action.
