@@ -1,8 +1,10 @@
 package io.dropwizard.jersey.errors;
 
 import com.codahale.metrics.MetricRegistry;
-import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
+import io.dropwizard.logging.BootstrapLogging;
+import org.glassfish.jersey.test.JerseyTest;
+import org.glassfish.jersey.test.TestProperties;
 import org.junit.Test;
 
 import javax.ws.rs.WebApplicationException;
@@ -13,10 +15,14 @@ import javax.ws.rs.core.Response;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
-public class LoggingExceptionMapperTest extends AbstractJerseyTest {
+public class LoggingExceptionMapperTest extends JerseyTest {
+    static {
+        BootstrapLogging.bootstrap();
+    }
 
     @Override
     protected Application configure() {
+        forceSet(TestProperties.CONTAINER_PORT, "0");
         return DropwizardResourceConfig.forTesting(new MetricRegistry())
                 .register(DefaultLoggingExceptionMapper.class)
                 .register(DefaultJacksonMessageBodyProvider.class)

@@ -10,30 +10,15 @@ import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 import java.util.concurrent.ThreadLocalRandom;
 
-import static java.util.Objects.requireNonNull;
-
 @Provider
 public abstract class LoggingExceptionMapper<E extends Throwable> implements ExceptionMapper<E> {
-    protected final Logger logger;
-
-    /**
-     * @since 2.0
-     */
-    protected LoggingExceptionMapper(Logger logger) {
-        this.logger = requireNonNull(logger, "logger");
-    }
-
-    /**
-     * @since 2.0
-     */
-    public LoggingExceptionMapper() {
-        this(LoggerFactory.getLogger(LoggingExceptionMapper.class));
-    }
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoggingExceptionMapper.class);
 
     @Override
     public Response toResponse(E exception) {
-        // If we're dealing with a web exception, we can service certain types of request (like
-        // redirection or server errors) better and also propagate properties of the inner response.
+        final int status;
+        final ErrorMessage errorMessage;
+
         if (exception instanceof WebApplicationException) {
             final Response response = ((WebApplicationException) exception).getResponse();
             Response.Status.Family family = response.getStatusInfo().getFamily();
@@ -43,20 +28,17 @@ public abstract class LoggingExceptionMapper<E extends Throwable> implements Exc
             if (family.equals(Response.Status.Family.SERVER_ERROR)) {
                 logException(exception);
             }
-
-            return Response.fromResponse(response)
-                    .type(MediaType.APPLICATION_JSON_TYPE)
-                    .entity(new ErrorMessage(response.getStatus(), exception.getLocalizedMessage()))
-                    .build();
+            status = response.getStatus();
+            errorMessage = new ErrorMessage(status, exception.getLocalizedMessage());
+        } else {
+            final long id = logException(exception);
+            status = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
+            errorMessage = new ErrorMessage(formatErrorMessage(id, exception));
         }
 
-        // Else the thrown exception is a not a web exception, so the exception is most likely
-        // unexpected. We'll create a unique id in the server error response that is also logged for
-        // correlation
-        final long id = logException(exception);
-        return Response.status(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode())
+        return Response.status(status)
                 .type(MediaType.APPLICATION_JSON_TYPE)
-                .entity(new ErrorMessage(formatErrorMessage(id, exception)))
+                .entity(errorMessage)
                 .build();
     }
 
@@ -72,7 +54,7 @@ public abstract class LoggingExceptionMapper<E extends Throwable> implements Exc
     }
 
     protected void logException(long id, E exception) {
-        logger.error(formatLogMessage(id, exception), exception);
+        LOGGER.error(formatLogMessage(id, exception), exception);
     }
 
     @SuppressWarnings("UnusedParameters")
