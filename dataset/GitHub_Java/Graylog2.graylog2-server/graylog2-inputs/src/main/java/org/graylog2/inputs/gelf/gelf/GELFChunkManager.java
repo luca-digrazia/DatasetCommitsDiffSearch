@@ -1,6 +1,4 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,55 +13,49 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
-
 package org.graylog2.inputs.gelf.gelf;
 
-import java.io.ByteArrayOutputStream;
-import java.util.Map;
-
 import com.codahale.metrics.Meter;
-import org.graylog2.plugin.GraylogServer;
+import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.Uninterruptibles;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Maps;
+import java.io.ByteArrayOutputStream;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-/**
- * @author Lennart Koopmann <lennart@socketfeed.com>
- */
 public class GELFChunkManager extends Thread {
-
     private static final Logger LOG = LoggerFactory.getLogger(GELFChunkManager.class);
+
+    // The number of milliseconds a chunk is valid. Every message with chunks older than this will be dropped.
+    public static final long MILLIS_VALID = 5000l;
 
     private Map<String, Map<Integer, GELFMessageChunk>> chunks = Maps.newConcurrentMap();
     private GELFProcessor processor;
-    
-	private GraylogServer server;
 
-    // The number of seconds a chunk is valid. Every message with chunks older than this will be dropped.
-    public static final int SECONDS_VALID = 5;
     private final Meter outdatedMessagesDropped;
 
-    public GELFChunkManager(GraylogServer server) {
-        this.processor = new GELFProcessor(server);
-        this.server = server;
+    public GELFChunkManager(MetricRegistry metricRegistry, Buffer processBuffer) {
+        this.processor = new GELFProcessor(metricRegistry, processBuffer);
 
-        this.outdatedMessagesDropped = server.metrics().meter(name(GELFChunkManager.class, "outdatedMessagesDropped"));
+        this.outdatedMessagesDropped = metricRegistry.meter(name(GELFChunkManager.class, "outdatedMessagesDropped"));
     }
 
     @Override
     public void run() {
         while (true) {
             try {
-                if (!chunks.isEmpty()) {
+                if (!chunks.isEmpty() && LOG.isDebugEnabled()) {
                     LOG.debug("Dumping GELF chunk map [{}]:\n{}", chunks.size(), humanReadableChunkMap());
                 }
-                
+
                 // Check for complete or outdated messages.
                 for (Map.Entry<String, Map<Integer, GELFMessageChunk>> message : chunks.entrySet()) {
                     String messageId = message.getKey();
@@ -71,13 +63,13 @@ public class GELFChunkManager extends Thread {
                     // Outdated?
                     if (isOutdated(messageId)) {
                         outdatedMessagesDropped.mark();
-                        
-                        LOG.debug("Not all chunks of <{}> arrived in time. Dropping. [{}s]", messageId, SECONDS_VALID);
+
+                        LOG.debug("Not all chunks of <{}> arrived in time. Dropping. [{}ms]", messageId, MILLIS_VALID);
                         dropMessage(messageId);
                         continue;
                     }
 
-                    // Not oudated. Maybe complete?
+                    // Not outdated. Maybe complete?
                     if (isComplete(messageId)) {
                         // We got a complete message! Re-assemble and insert to GELFProcessor.
                         LOG.debug("Message <{}> seems to be complete. Handling now.", messageId);
@@ -92,7 +84,7 @@ public class GELFChunkManager extends Thread {
                 LOG.error("Error in GELFChunkManager", e);
             }
 
-            try { Thread.sleep(1000); } catch (InterruptedException ex) { /* trololol */}
+            Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
         }
     }
 
@@ -122,8 +114,8 @@ public class GELFChunkManager extends Thread {
             return false;
         }
 
-        int limit = (int) (System.currentTimeMillis() / 1000) - SECONDS_VALID;
-        
+        long limit = System.currentTimeMillis() - MILLIS_VALID;
+
         // Checks for oldest chunk arrival date.
         for (Map.Entry<Integer, GELFMessageChunk> chunk : chunks.get(messageId).entrySet()) {
             if (chunk.getValue().getArrival() < limit) {
@@ -158,12 +150,12 @@ public class GELFChunkManager extends Thread {
     private MessageInput getSourceInput(String messageId) {
         try {
             return chunks.get(messageId).get(0).getSourceInput();
-        } catch(Exception e) {
+        } catch (Exception e) {
             LOG.error("Could not get source input ID from chunked GELF message.", e);
             return null;
         }
     }
-    
+
     public boolean hasMessage(String messageId) {
         return chunks.containsKey(messageId);
     }
@@ -174,13 +166,13 @@ public class GELFChunkManager extends Thread {
 
     public void insert(GELFMessageChunk chunk) {
         LOG.debug("Handling GELF chunk: {}", chunk);
-        
+
         if (chunks.containsKey(chunk.getId())) {
             // Add chunk to partial message.
             chunks.get(chunk.getId()).put(chunk.getSequenceNumber(), chunk);
         } else {
             // First chunk of message.
-            Map<Integer, GELFMessageChunk> c = Maps.newHashMap();
+            Map<Integer, GELFMessageChunk> c = Maps.newTreeMap();
             c.put(chunk.getSequenceNumber(), chunk);
             chunks.put(chunk.getId(), c);
         }
@@ -193,7 +185,7 @@ public class GELFChunkManager extends Thread {
         for (Map.Entry<String, Map<Integer, GELFMessageChunk>> entry : chunks.entrySet()) {
             sb.append("Message <").append(entry.getKey()).append("> ");
             sb.append("\tChunks:\n");
-            for(Map.Entry<Integer, GELFMessageChunk> chunk : entry.getValue().entrySet()) {
+            for (Map.Entry<Integer, GELFMessageChunk> chunk : entry.getValue().entrySet()) {
                 sb.append("\t\t").append(chunk.getValue()).append(("\n"));
             }
         }
