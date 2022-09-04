@@ -17,10 +17,11 @@
 package io.quarkus.example.test;
 
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.isEmptyString;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
 import io.restassured.parsing.Parser;
 
@@ -35,6 +36,12 @@ public class JaxRSTestCase {
     @Test
     public void testInteger() {
         RestAssured.when().get("/test/int/10").then().body(is("11"));
+    }
+
+    @Test
+    public void testAnnotatedInterface() {
+        RestAssured.when().get("/interface").then().body(is("interface endpoint"));
+
     }
 
     @Test
@@ -121,5 +128,48 @@ public class JaxRSTestCase {
         RestAssured.when().get("/test/response").then()
                 .body("name", is("my entity name"),
                         "value", is("my entity value"));
+    }
+
+    @Test
+    public void testFromJson() {
+        RestAssured.when().get("/test/from-json").then()
+                .body("name", is("my entity name"),
+                        "value", is("my entity value"));
+    }
+
+    @Test
+    public void testOpenApiSchemaResponse() {
+        RestAssured.when().get("/test/openapi/responses").then()
+                .body("name", is("my openapi entity name"));
+    }
+
+    @Test
+    public void testOpenApiSchemaResponsesV1() {
+        RestAssured.when().get("/test/openapi/responses/v1").then()
+                .body("name", is("my openapi entity version one name"));
+    }
+
+    @Test
+    public void testOpenApiSchemaResponseV2() {
+        RestAssured.when().get("/test/openapi/responses/v2").then()
+                .body("name", is("my openapi entity version two name"));
+    }
+
+    @Test
+    public void testOpenApiSchema() {
+        RestAssured.when().get("/test/openapi/schema").then()
+                .body("name", is("my openapi schema"));
+    }
+
+    @Test
+    public void testOpenApiResponsesWithNoContent() {
+        RestAssured.when().get("/test/openapi/no-content/api-responses").then()
+                .body(isEmptyString());
+    }
+
+    @Test
+    public void testOpenApiResponseWithNoContent() {
+        RestAssured.when().get("/test/openapi/no-content/api-response").then()
+                .body(isEmptyString());
     }
 }
