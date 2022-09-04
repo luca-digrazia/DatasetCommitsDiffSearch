@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Predicate;
 import com.google.common.base.Splitter;
 import com.google.common.base.Suppliers;
 import com.google.common.base.Verify;
@@ -28,13 +29,13 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MutableClassToInstanceMap;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BuildConfigurationEvent;
-import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
@@ -50,7 +51,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -68,7 +68,6 @@ import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -169,6 +168,14 @@ public class BuildConfiguration {
      */
     public Map<String, Object> lateBoundOptionDefaults() {
       return ImmutableMap.of();
+    }
+
+    /**
+     * @return false if a Fragment understands that it won't be able to work with a given strategy,
+     *     or true otherwise.
+     */
+    public boolean compatibleWithStrategy(String strategyName) {
+      return true;
     }
 
     /**
@@ -425,21 +432,6 @@ public class BuildConfiguration {
     public int minParamFileSize;
 
     @Option(
-        name = "defer_param_files",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {
-          OptionEffectTag.LOADING_AND_ANALYSIS,
-          OptionEffectTag.EXECUTION,
-          OptionEffectTag.ACTION_COMMAND_LINES
-        },
-        help =
-            "Whether to use deferred param files. WHen set, param files will not be "
-                + "added to the action graph. Instead, they will be added as virtual action inputs "
-                + "and written at the same time as the action executes.")
-    public boolean deferParamFiles;
-
-    @Option(
       name = "experimental_extended_sanity_checks",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -581,20 +573,6 @@ public class BuildConfiguration {
               + "Used only by the 'bazel test' command."
     )
     public List<Map.Entry<String, String>> testEnvironment;
-
-    @Option(
-        name = "test_timeout",
-        defaultValue = "-1",
-        converter = TestTimeout.TestTimeoutConverter.class,
-        documentationCategory = OptionDocumentationCategory.TESTING,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "Override the default test timeout values for test timeouts (in secs). If a single "
-                + "positive integer value is specified it will override all categories.  If 4 "
-                + "comma-separated integers are specified, they will override the timeouts for "
-                + "short, moderate, long and eternal (in that order). In either form, a value of "
-                + "-1 tells blaze to use its default timeouts for that category.")
-    public Map<TestTimeout, Duration> testTimeout;
 
     // TODO(bazel-team): The set of available variables from the client environment for actions
     // is computed independently in CommandEnvironment to inject a more restricted client
@@ -1009,7 +987,6 @@ public class BuildConfiguration {
   private final String repositoryName;
   private final RepositoryName mainRepositoryName;
   private final ImmutableSet<String> reservedActionMnemonics;
-  private CommandLineLimits commandLineLimits;
 
   /**
    * Directories in the output tree.
@@ -1127,7 +1104,6 @@ public class BuildConfiguration {
 
   private final ActionEnvironment actionEnv;
   private final ActionEnvironment testEnv;
-  private final ImmutableMap<TestTimeout, Duration> testTimeout;
 
   private final BuildOptions buildOptions;
   private final BuildOptions.OptionsDiffForReconstruction buildOptionsDiff;
@@ -1229,6 +1205,20 @@ public class BuildConfiguration {
   }
 
   /**
+   * @return false if any of the fragments don't work well with the supplied strategy.
+   */
+  public boolean compatibleWithStrategy(final String strategyName) {
+    return Iterables.all(
+        fragments.values(),
+        new Predicate<Fragment>() {
+          @Override
+          public boolean apply(@Nullable Fragment fragment) {
+            return fragment.compatibleWithStrategy(strategyName);
+          }
+        });
+  }
+
+  /**
    * Compute the test environment, which, at configuration level, is a pair consisting of the
    * statically set environment variables with their values and the set of environment variables to
    * be inherited from the client environment.
@@ -1308,8 +1298,6 @@ public class BuildConfiguration {
 
     this.testEnv = setupTestEnvironment();
 
-    this.testTimeout = ImmutableMap.copyOf(options.testTimeout);
-
     this.transitiveOptionDetails = computeOptionsMap(buildOptions, fragments.values());
 
     ImmutableMap.Builder<String, String> globalMakeEnvBuilder = ImmutableMap.builder();
@@ -1333,7 +1321,6 @@ public class BuildConfiguration {
 
     this.reservedActionMnemonics = reservedActionMnemonics;
     this.buildEventSupplier = Suppliers.memoize(this::createBuildEvent);
-    this.commandLineLimits = new CommandLineLimits(options.minParamFileSize);
   }
 
   /**
@@ -1754,11 +1741,6 @@ public class BuildConfiguration {
     return testEnv.getFixedEnv();
   }
 
-  /** Returns test timeout mapping as set by --test_timeout options. */
-  public ImmutableMap<TestTimeout, Duration> getTestTimeout() {
-    return testTimeout;
-  }
-
   /**
    * Returns user-specified test environment variables and their values, as set by the
    * {@code --test_env} options. It is incomplete in that it is not a superset of the
@@ -1770,12 +1752,8 @@ public class BuildConfiguration {
     return testEnv;
   }
 
-  public CommandLineLimits getCommandLineLimits() {
-    return commandLineLimits;
-  }
-
-  public boolean deferParamFiles() {
-    return options.deferParamFiles;
+  public int getMinParamFileSize() {
+    return options.minParamFileSize;
   }
 
   @SkylarkCallable(name = "coverage_enabled", structField = true,
