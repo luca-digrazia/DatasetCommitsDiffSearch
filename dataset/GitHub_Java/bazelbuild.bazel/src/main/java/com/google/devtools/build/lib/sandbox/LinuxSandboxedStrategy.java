@@ -38,7 +38,7 @@ public final class LinuxSandboxedStrategy extends AbstractSpawnStrategy {
 
   @Override
   public String toString() {
-    return "linux-sandbox";
+    return "sandboxed";
   }
 
   /**
@@ -49,15 +49,10 @@ public final class LinuxSandboxedStrategy extends AbstractSpawnStrategy {
    * @param timeoutKillDelay additional grace period before killing timing out commands
    * @param sandboxfsProcess instance of the sandboxfs process to use; may be null for none, in
    *     which case the runner uses a symlinked sandbox
-   * @param sandboxfsMapSymlinkTargets map the targets of symlinks within the sandbox if true
    */
   static LinuxSandboxedSpawnRunner create(
-      CommandEnvironment cmdEnv,
-      Path sandboxBase,
-      Duration timeoutKillDelay,
-      @Nullable SandboxfsProcess sandboxfsProcess,
-      boolean sandboxfsMapSymlinkTargets)
-      throws IOException {
+      CommandEnvironment cmdEnv, Path sandboxBase, Duration timeoutKillDelay,
+      @Nullable SandboxfsProcess sandboxfsProcess) throws IOException {
     Path inaccessibleHelperFile = sandboxBase.getRelative("inaccessibleHelperFile");
     FileSystemUtils.touchFile(inaccessibleHelperFile);
     inaccessibleHelperFile.setReadable(false);
@@ -76,7 +71,6 @@ public final class LinuxSandboxedStrategy extends AbstractSpawnStrategy {
         inaccessibleHelperFile,
         inaccessibleHelperDir,
         timeoutKillDelay,
-        sandboxfsProcess,
-        sandboxfsMapSymlinkTargets);
+        sandboxfsProcess);
   }
 }
