@@ -20,8 +20,6 @@
 
 package org.graylog2.filters;
 
-import com.yammer.metrics.core.TimerContext;
-import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
 import org.graylog2.GraylogServer;
 import org.graylog2.logmessage.LogMessage;
@@ -39,13 +37,9 @@ public class RewriteFilter implements MessageFilter {
 
     @Override
     public boolean filter(LogMessage msg, GraylogServer server) {
-        TimerContext tcx = server.getTimer(RewriteFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
-
         if (server.getRulesEngine() != null) {
             server.getRulesEngine().evaluate(msg);
         }
-
-        tcx.stop();
 
         // Do not discard message.
         return false;
