@@ -50,7 +50,6 @@ import org.graylog2.indexer.indexset.IndexSetService;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.database.ValidationException;
-import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
@@ -59,7 +58,6 @@ import org.graylog2.rest.models.alarmcallbacks.requests.CreateAlarmCallbackReque
 import org.graylog2.rest.models.streams.alerts.requests.CreateConditionRequest;
 import org.graylog2.rest.resources.streams.requests.CreateStreamRequest;
 import org.graylog2.rest.resources.streams.rules.requests.CreateStreamRuleRequest;
-import org.graylog2.shared.users.UserService;
 import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
@@ -89,7 +87,6 @@ public class StreamFacade implements EntityFacade<Stream> {
     private final AlarmCallbackConfigurationService alarmCallbackConfigurationService;
     private final V20190722150700_LegacyAlertConditionMigration legacyAlertsMigration;
     private final IndexSetService indexSetService;
-    private final UserService userService;
 
     @Inject
     public StreamFacade(ObjectMapper objectMapper,
@@ -98,7 +95,7 @@ public class StreamFacade implements EntityFacade<Stream> {
                         AlertService streamAlertService,
                         AlarmCallbackConfigurationService alarmCallbackConfigurationService,
                         V20190722150700_LegacyAlertConditionMigration legacyAlertsMigration,
-                        IndexSetService indexSetService, UserService userService) {
+                        IndexSetService indexSetService) {
         this.objectMapper = objectMapper;
         this.streamService = streamService;
         this.streamRuleService = streamRuleService;
@@ -106,7 +103,6 @@ public class StreamFacade implements EntityFacade<Stream> {
         this.alarmCallbackConfigurationService = alarmCallbackConfigurationService;
         this.legacyAlertsMigration = legacyAlertsMigration;
         this.indexSetService = indexSetService;
-        this.userService = userService;
     }
 
     @VisibleForTesting
@@ -153,8 +149,7 @@ public class StreamFacade implements EntityFacade<Stream> {
                                                    Map<EntityDescriptor, Object> nativeEntities,
                                                    String username) {
         if (entity instanceof EntityV1) {
-            final User user = Optional.ofNullable(userService.load(username)).orElseThrow(() -> new IllegalStateException("Cannot load user <" + username + "> from db"));
-            return decode((EntityV1) entity, parameters, nativeEntities, user);
+            return decode((EntityV1) entity, parameters, nativeEntities, username);
         } else {
             throw new IllegalArgumentException("Unsupported entity version: " + entity.getClass());
         }
@@ -163,7 +158,7 @@ public class StreamFacade implements EntityFacade<Stream> {
     private NativeEntity<Stream> decode(EntityV1 entity,
                                         Map<String, ValueReference> parameters,
                                         Map<EntityDescriptor, Object> nativeEntities,
-                                        User user) {
+                                        String username) {
         final StreamEntity streamEntity = objectMapper.convertValue(entity.data(), StreamEntity.class);
         final CreateStreamRequest createStreamRequest = CreateStreamRequest.create(
                 streamEntity.title().asString(parameters),
@@ -173,7 +168,7 @@ public class StreamFacade implements EntityFacade<Stream> {
                 streamEntity.matchingType().asString(parameters),
                 streamEntity.removeMatches().asBoolean(parameters),
                 indexSetService.getDefault().id());
-        final Stream stream = streamService.create(createStreamRequest, user.getName());
+        final Stream stream = streamService.create(createStreamRequest, username);
         final List<StreamRule> streamRules = streamEntity.streamRules().stream()
                 .map(streamRuleEntity -> createStreamRuleRequest(streamRuleEntity, parameters))
                 .map(request -> streamRuleService.create(DUMMY_STREAM_ID, request))
@@ -183,7 +178,7 @@ public class StreamFacade implements EntityFacade<Stream> {
                 .map(alertCondition -> createStreamAlertConditionRequest(alertCondition, parameters))
                 .map(request -> {
                     try {
-                        return streamAlertService.fromRequest(request, stream, user.getName());
+                        return streamAlertService.fromRequest(request, stream, username);
                     } catch (ConfigurationException e) {
                         throw new ContentPackException("Couldn't create entity " + entity.toEntityDescriptor(), e);
                     }
@@ -192,11 +187,11 @@ public class StreamFacade implements EntityFacade<Stream> {
         // TODO: The creation of legacy alarm callback should be avoided and a new event notification should be created instead
         final List<AlarmCallbackConfiguration> alarmCallbacks = streamEntity.alarmCallbacks().stream()
                 .map(alarmCallback -> createStreamAlarmCallbackRequest(alarmCallback, parameters))
-                .map(request -> alarmCallbackConfigurationService.create(stream.getId(), request, user.getName()))
+                .map(request -> alarmCallbackConfigurationService.create(stream.getId(), request, username))
                 .collect(Collectors.toList());
         final String savedStreamId;
         try {
-            savedStreamId = streamService.saveWithRulesAndOwnership(stream, streamRules, user);
+            savedStreamId = streamService.saveWithRules(stream, streamRules);
 
             for (final AlertCondition alertCondition : alertConditions) {
                 streamService.addAlertCondition(stream, alertCondition);

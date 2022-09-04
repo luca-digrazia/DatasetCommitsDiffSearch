@@ -20,11 +20,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
+import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
+import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.bson.types.ObjectId;
 import org.graylog.events.legacy.V20190722150700_LegacyAlertConditionMigration;
-import org.graylog.security.entities.EntityOwnershipService;
-import org.graylog.testing.mongodb.MongoDBFixtures;
-import org.graylog.testing.mongodb.MongoDBInstance;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
 import org.graylog2.alerts.AlertService;
 import org.graylog2.contentpacks.EntityDescriptorIds;
@@ -36,7 +36,9 @@ import org.graylog2.contentpacks.model.entities.EntityExcerpt;
 import org.graylog2.contentpacks.model.entities.EntityV1;
 import org.graylog2.contentpacks.model.entities.StreamEntity;
 import org.graylog2.contentpacks.model.entities.references.ValueReference;
+import org.graylog2.dashboards.DashboardImpl;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.database.MongoConnectionRule;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.indexer.MongoIndexSet;
 import org.graylog2.indexer.indexset.IndexSetService;
@@ -57,6 +59,7 @@ import org.graylog2.streams.StreamService;
 import org.graylog2.streams.StreamServiceImpl;
 import org.graylog2.streams.matchers.StreamRuleMock;
 import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -69,12 +72,16 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executors;
 
+import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 public class StreamCatalogTest {
+    @ClassRule
+    public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
+
     @Rule
-    public final MongoDBInstance mongodb = MongoDBInstance.createForClass();
+    public final MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
 
     @Rule
     public final MockitoRule mockitoRule = MockitoJUnit.rule();
@@ -95,14 +102,12 @@ public class StreamCatalogTest {
     private AlarmCallbackConfigurationService alarmCallbackConfigurationService;
     @Mock
     private V20190722150700_LegacyAlertConditionMigration legacyAlertConditionMigration;
-    @Mock
-    private EntityOwnershipService entityOwnershipService;
     private StreamFacade facade;
 
     @Before
     @SuppressForbidden("Using Executors.newSingleThreadExecutor() is okay in tests")
     public void setUp() throws Exception {
-        final MongoConnection mongoConnection = mongodb.mongoConnection();
+        final MongoConnection mongoConnection = mongoRule.getMongoConnection();
         final ClusterEventBus clusterEventBus = new ClusterEventBus("cluster-event-bus", Executors.newSingleThreadExecutor());
         final StreamRuleService streamRuleService = new StreamRuleServiceImpl(mongoConnection, clusterEventBus);
         final StreamService streamService = new StreamServiceImpl(
@@ -113,7 +118,6 @@ public class StreamCatalogTest {
                 indexSetService,
                 mongoIndexSetFactory,
                 notificationService,
-                entityOwnershipService,
                 clusterEventBus,
                 alarmCallbackConfigurationService);
         when(outputService.load("5adf239e4b900a0fdb4e5197")).thenReturn(
@@ -165,7 +169,7 @@ public class StreamCatalogTest {
     @Test
     public void createExcerpt() {
         final ImmutableMap<String, Object> fields = ImmutableMap.of(
-                "title", "Stream Title"
+                DashboardImpl.FIELD_TITLE, "Stream Title"
         );
         final StreamImpl stream = new StreamImpl(fields);
         final EntityExcerpt excerpt = facade.createExcerpt(stream);
@@ -177,7 +181,7 @@ public class StreamCatalogTest {
 
 
     @Test
-    @MongoDBFixtures("StreamCatalogTest.json")
+    @UsingDataSet(locations = "/org/graylog2/contentpacks/streams.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void listEntityExcerpts() {
         final EntityExcerpt expectedEntityExcerpt1 = EntityExcerpt.builder()
                 .id(ModelId.of("000000000000000000000001"))
@@ -195,7 +199,7 @@ public class StreamCatalogTest {
     }
 
     @Test
-    @MongoDBFixtures("StreamCatalogTest.json")
+    @UsingDataSet(locations = "/org/graylog2/contentpacks/streams.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void collectEntity() {
         final EntityDescriptor descriptor = EntityDescriptor.create("5adf23894b900a0fdb4e517d", ModelTypes.STREAM_V1);
         final EntityDescriptor outputDescriptor = EntityDescriptor.create("5adf239e4b900a0fdb4e5197", ModelTypes.OUTPUT_V1);
