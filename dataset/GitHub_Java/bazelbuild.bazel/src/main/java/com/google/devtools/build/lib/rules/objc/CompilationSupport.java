@@ -87,7 +87,7 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.XcodeConfig;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigInfo;
+import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper;
@@ -131,6 +131,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Stream;
+import javax.annotation.Nullable;
 
 /**
  * Support for rules that compile sources. Provides ways to determine files that should be output,
@@ -352,7 +353,7 @@ public class CompilationSupport {
             .setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext));
 
     if (pchHdr != null) {
-      result.addAdditionalInputs(ImmutableList.of(pchHdr));
+      result.addNonModuleMapHeader(pchHdr);
     }
 
     if (getCustomModuleMap(ruleContext).isPresent() || !generateModuleMap) {
@@ -608,7 +609,7 @@ public class CompilationSupport {
     // components in the version number.
     activatedCrosstoolSelectables.add(
         XCODE_VERSION_FEATURE_NAME_PREFIX
-            + XcodeConfig.getXcodeConfigInfo(ruleContext)
+            + XcodeConfig.getXcodeConfigProvider(ruleContext)
                 .getXcodeVersion()
                 .toStringWithComponents(2));
 
@@ -992,17 +993,22 @@ public class CompilationSupport {
    *
    * @param compilationArtifacts collection of artifacts required for the compilation
    * @param objcProvider provides all compiling and linking information to register these actions
+   * @param toolchain the toolchain to be used in determining command lines
    * @return this compilation support
    * @throws RuleErrorException for invalid crosstool files
    */
   CompilationSupport registerCompileAndArchiveActions(
-      CompilationArtifacts compilationArtifacts, ObjcProvider objcProvider)
+      CompilationArtifacts compilationArtifacts,
+      ObjcProvider objcProvider,
+      CcToolchainProvider toolchain)
       throws RuleErrorException, InterruptedException {
     return registerCompileAndArchiveActions(
         compilationArtifacts,
         objcProvider,
         ExtraCompileArgs.NONE,
-        ImmutableList.<PathFragment>of());
+        ImmutableList.<PathFragment>of(),
+        toolchain,
+        toolchain.getFdoContext());
   }
 
   /**
@@ -1039,17 +1045,21 @@ public class CompilationSupport {
    * @param objcProvider provides all compiling and linking information to register these actions
    * @param extraCompileArgs args to be added to compile actions
    * @param priorityHeaders priority headers to be included before the dependency headers
+   * @param ccToolchain the cpp toolchain provider, may be null
+   * @param fdoContext the cpp FDO support provider, may be null
    * @return this compilation support
    * @throws RuleErrorException for invalid crosstool files
    */
-  private CompilationSupport registerCompileAndArchiveActions(
+  CompilationSupport registerCompileAndArchiveActions(
       CompilationArtifacts compilationArtifacts,
       ObjcProvider objcProvider,
       ExtraCompileArgs extraCompileArgs,
-      Iterable<PathFragment> priorityHeaders)
+      Iterable<PathFragment> priorityHeaders,
+      @Nullable CcToolchainProvider ccToolchain,
+      @Nullable FdoContext fdoContext)
       throws RuleErrorException, InterruptedException {
-    Preconditions.checkNotNull(toolchain);
-    Preconditions.checkNotNull(toolchain.getFdoContext());
+    Preconditions.checkNotNull(ccToolchain);
+    Preconditions.checkNotNull(fdoContext);
     ObjcVariablesExtension.Builder extension =
         new ObjcVariablesExtension.Builder()
             .setRuleContext(ruleContext)
@@ -1072,8 +1082,8 @@ public class CompilationSupport {
               compilationArtifacts,
               extension,
               extraCompileArgs,
-              toolchain,
-              toolchain.getFdoContext(),
+              ccToolchain,
+              fdoContext,
               priorityHeaders,
               LinkTargetType.OBJC_ARCHIVE,
               objList);
@@ -1088,8 +1098,8 @@ public class CompilationSupport {
               compilationArtifacts,
               extension,
               extraCompileArgs,
-              toolchain,
-              toolchain.getFdoContext(),
+              ccToolchain,
+              fdoContext,
               priorityHeaders,
               /* linkType */ null,
               /* linkActionInput */ null);
@@ -1120,7 +1130,9 @@ public class CompilationSupport {
           common.getCompilationArtifacts().get(),
           common.getObjcProvider(),
           extraCompileArgs,
-          priorityHeaders);
+          priorityHeaders,
+          toolchain,
+          toolchain.getFdoContext());
     }
     return this;
   }
@@ -1137,7 +1149,8 @@ public class CompilationSupport {
 
   /**
    * Registers any actions necessary to link this rule and its dependencies. Automatically infers
-   * the toolchain from the configuration of this CompilationSupport.
+   * the toolchain from the configuration of this CompilationSupport - if a different toolchain is
+   * required, use the custom toolchain override.
    *
    * <p>Dsym bundle is generated if {@link ObjcConfiguration#generateDsym()} is set.
    *
@@ -1158,7 +1171,8 @@ public class CompilationSupport {
       J2ObjcMappingFileProvider j2ObjcMappingFileProvider,
       J2ObjcEntryClassProvider j2ObjcEntryClassProvider,
       ExtraLinkArgs extraLinkArgs,
-      Iterable<Artifact> extraLinkInputs)
+      Iterable<Artifact> extraLinkInputs,
+      CcToolchainProvider toolchain)
       throws InterruptedException, RuleErrorException {
     Iterable<Artifact> prunedJ2ObjcArchives =
         computeAndStripPrunedJ2ObjcArchives(
@@ -1199,6 +1213,7 @@ public class CompilationSupport {
             .addVariableCategory(VariableCategory.EXECUTABLE_LINKING_VARIABLES);
 
     Artifact binaryToLink = getBinaryToLink();
+    FdoContext fdoContext = toolchain.getFdoContext();
     CppLinkActionBuilder executableLinkAction =
         new CppLinkActionBuilder(
                 ruleContext,
@@ -1207,7 +1222,7 @@ public class CompilationSupport {
                 binaryToLink,
                 ruleContext.getConfiguration(),
                 toolchain,
-                toolchain.getFdoContext(),
+                fdoContext,
                 getFeatureConfiguration(ruleContext, toolchain, buildConfiguration, objcProvider),
                 createObjcCppSemantics(
                     objcProvider, /* privateHdrs= */ ImmutableList.of(), /* pchHdr= */ null))
@@ -1335,12 +1350,32 @@ public class CompilationSupport {
    *
    * @param objcProvider provides all compiling and linking information to create this artifact
    * @param outputArchive the output artifact for this action
+   */
+  public CompilationSupport registerFullyLinkAction(
+      ObjcProvider objcProvider, Artifact outputArchive)
+      throws InterruptedException, RuleErrorException {
+    return registerFullyLinkAction(
+        objcProvider, outputArchive, toolchain, toolchain.getFdoContext());
+  }
+
+  /**
+   * Registers an action to create an archive artifact by fully (statically) linking all transitive
+   * dependencies of this rule.
+   *
+   * @param objcProvider provides all compiling and linking information to create this artifact
+   * @param outputArchive the output artifact for this action
+   * @param ccToolchain the cpp toolchain provider, may be null
+   * @param fdoContext the cpp FDO support provider, may be null
    * @return this {@link CompilationSupport} instance
    */
-  CompilationSupport registerFullyLinkAction(ObjcProvider objcProvider, Artifact outputArchive)
+  CompilationSupport registerFullyLinkAction(
+      ObjcProvider objcProvider,
+      Artifact outputArchive,
+      @Nullable CcToolchainProvider ccToolchain,
+      @Nullable FdoContext fdoContext)
       throws InterruptedException, RuleErrorException {
-    Preconditions.checkNotNull(toolchain);
-    Preconditions.checkNotNull(toolchain.getFdoContext());
+    Preconditions.checkNotNull(ccToolchain);
+    Preconditions.checkNotNull(fdoContext);
     PathFragment labelName = PathFragment.create(ruleContext.getLabel().getName());
     String libraryIdentifier =
         ruleContext
@@ -1364,9 +1399,9 @@ public class CompilationSupport {
                 ruleContext.getLabel(),
                 outputArchive,
                 ruleContext.getConfiguration(),
-                toolchain,
-                toolchain.getFdoContext(),
-                getFeatureConfiguration(ruleContext, toolchain, buildConfiguration, objcProvider),
+                ccToolchain,
+                fdoContext,
+                getFeatureConfiguration(ruleContext, ccToolchain, buildConfiguration, objcProvider),
                 createObjcCppSemantics(
                     objcProvider, /* privateHdrs= */ ImmutableList.of(), /* pchHdr= */ null))
             .setGrepIncludes(CppHelper.getGrepIncludes(ruleContext))
@@ -1375,7 +1410,7 @@ public class CompilationSupport {
             .addActionInputs(objcProvider.getObjcLibraries())
             .addActionInputs(objcProvider.getCcLibraries())
             .addActionInputs(objcProvider.get(IMPORTED_LIBRARY).toSet())
-            .setLinkerFiles(toolchain.getLinkerFiles())
+            .setLinkerFiles(ccToolchain.getLinkerFiles())
             .setLinkType(LinkTargetType.OBJC_FULLY_LINKED_ARCHIVE)
             .setLinkingMode(LinkingMode.STATIC)
             .setLibraryIdentifier(libraryIdentifier)
@@ -1491,7 +1526,7 @@ public class CompilationSupport {
 
       ruleContext.registerAction(
           ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                  XcodeConfigInfo.fromRuleContext(ruleContext),
+                  XcodeConfigProvider.fromRuleContext(ruleContext),
                   appleConfiguration.getSingleArchPlatform())
               .setMnemonic("DummyPruner")
               .setExecutable(pruner)
@@ -1606,7 +1641,7 @@ public class CompilationSupport {
 
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                XcodeConfigInfo.fromRuleContext(ruleContext),
+                XcodeConfigProvider.fromRuleContext(ruleContext),
                 appleConfiguration.getSingleArchPlatform())
             .setMnemonic("ObjcBinarySymbolStrip")
             .setExecutable(xcrunwrapper(ruleContext))
@@ -1846,12 +1881,12 @@ public class CompilationSupport {
             .add("--platform", appleConfiguration.getSingleArchPlatform().getLowerCaseNameInPlist())
             .add(
                 "--sdk_version",
-                XcodeConfig.getXcodeConfigInfo(ruleContext)
+                XcodeConfig.getXcodeConfigProvider(ruleContext)
                     .getSdkVersionForPlatform(appleConfiguration.getSingleArchPlatform())
                     .toStringWithMinimumComponents(2))
             .add(
                 "--xcode_version",
-                XcodeConfig.getXcodeConfigInfo(ruleContext)
+                XcodeConfig.getXcodeConfigProvider(ruleContext)
                     .getXcodeVersion()
                     .toStringWithMinimumComponents(2))
             .add("--");

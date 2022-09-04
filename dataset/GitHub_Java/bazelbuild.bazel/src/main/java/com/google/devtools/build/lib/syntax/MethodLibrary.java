@@ -33,11 +33,10 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -61,10 +60,10 @@ class MethodLibrary {
               + "<pre class=\"language-python\">min(2, 5, 4) == 2\n"
               + "min([5, 6, 3]) == 3</pre>",
       extraPositionals =
-          @Param(name = "args", type = Sequence.class, doc = "The elements to be checked."),
+          @Param(name = "args", type = SkylarkList.class, doc = "The elements to be checked."),
       useLocation = true,
       useStarlarkThread = true)
-  public Object min(Sequence<?> args, Location loc, StarlarkThread thread) throws EvalException {
+  public Object min(SkylarkList<?> args, Location loc, StarlarkThread thread) throws EvalException {
     try {
       return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR.reverse(), loc, thread);
     } catch (ComparisonException e) {
@@ -81,10 +80,10 @@ class MethodLibrary {
               + "<pre class=\"language-python\">max(2, 5, 4) == 5\n"
               + "max([5, 6, 3]) == 6</pre>",
       extraPositionals =
-          @Param(name = "args", type = Sequence.class, doc = "The elements to be checked."),
+          @Param(name = "args", type = SkylarkList.class, doc = "The elements to be checked."),
       useLocation = true,
       useStarlarkThread = true)
-  public Object max(Sequence<?> args, Location loc, StarlarkThread thread) throws EvalException {
+  public Object max(SkylarkList<?> args, Location loc, StarlarkThread thread) throws EvalException {
     try {
       return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR, loc, thread);
     } catch (ComparisonException e) {
@@ -94,7 +93,7 @@ class MethodLibrary {
 
   /** Returns the maximum element from this list, as determined by maxOrdering. */
   private static Object findExtreme(
-      Sequence<?> args, Ordering<Object> maxOrdering, Location loc, StarlarkThread thread)
+      SkylarkList<?> args, Ordering<Object> maxOrdering, Location loc, StarlarkThread thread)
       throws EvalException {
     // Args can either be a list of items to compare, or a singleton list whose element is an
     // iterable of items to compare. In either case, there must be at least one item to compare.
@@ -193,7 +192,7 @@ class MethodLibrary {
       },
       useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> sorted(
+  public MutableList<?> sorted(
       Object iterable,
       final Object key,
       Boolean reverse,
@@ -201,10 +200,10 @@ class MethodLibrary {
       final StarlarkThread thread)
       throws EvalException, InterruptedException {
 
-    Object[] array = EvalUtils.toCollection(iterable, loc, thread).toArray();
-    if (key == Starlark.NONE) {
+    ArrayList<?> list = new ArrayList<>(EvalUtils.toCollection(iterable, loc, thread));
+    if (key == Runtime.NONE) {
       try {
-        Arrays.sort(array, EvalUtils.SKYLARK_COMPARATOR);
+        Collections.sort(list, EvalUtils.SKYLARK_COMPARATOR);
       } catch (EvalUtils.ComparisonException e) {
         throw new EvalException(loc, e);
       }
@@ -234,7 +233,7 @@ class MethodLibrary {
 
       KeyComparator comp = new KeyComparator();
       try {
-        Arrays.sort(array, comp);
+        Collections.sort(list, comp);
       } catch (EvalUtils.ComparisonException e) {
         throw new EvalException(loc, e);
       }
@@ -251,13 +250,9 @@ class MethodLibrary {
     }
 
     if (reverse) {
-      for (int i = 0, j = array.length - 1; i < j; i++, j--) {
-        Object tmp = array[i];
-        array[i] = array[j];
-        array[j] = tmp;
-      }
+      Collections.reverse(list);
     }
-    return StarlarkList.wrap(thread.mutability(), array);
+    return MutableList.wrapUnsafe(thread, list);
   }
 
   @SkylarkCallable(
@@ -275,16 +270,16 @@ class MethodLibrary {
       },
       useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> reversed(Object sequence, Location loc, StarlarkThread thread)
+  public MutableList<?> reversed(Object sequence, Location loc, StarlarkThread thread)
       throws EvalException {
-    if (sequence instanceof Dict) {
+    if (sequence instanceof SkylarkDict) {
       throw new EvalException(loc, "Argument to reversed() must be a sequence, not a dictionary.");
     }
     ArrayDeque<Object> tmpList = new ArrayDeque<>();
     for (Object element : EvalUtils.toIterable(sequence, loc, thread)) {
       tmpList.addFirst(element);
     }
-    return StarlarkList.copyOf(thread.mutability(), tmpList);
+    return MutableList.copyOf(thread, tmpList);
   }
 
   @SkylarkCallable(
@@ -325,8 +320,8 @@ class MethodLibrary {
       },
       useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> list(Object x, Location loc, StarlarkThread thread) throws EvalException {
-    return StarlarkList.copyOf(thread.mutability(), EvalUtils.toCollection(x, loc, thread));
+  public MutableList<?> list(Object x, Location loc, StarlarkThread thread) throws EvalException {
+    return MutableList.copyOf(thread, EvalUtils.toCollection(x, loc, thread));
   }
 
   @SkylarkCallable(
@@ -346,8 +341,8 @@ class MethodLibrary {
       return ((String) x).length();
     } else if (x instanceof Map) {
       return ((Map<?, ?>) x).size();
-    } else if (x instanceof Sequence) {
-      return ((Sequence<?>) x).size();
+    } else if (x instanceof SkylarkList) {
+      return ((SkylarkList<?>) x).size();
     } else if (x instanceof SkylarkNestedSet) {
       if (thread.getSemantics().incompatibleDepsetIsNotIterable()) {
         throw new EvalException(
@@ -611,11 +606,14 @@ class MethodLibrary {
       extraKeywords = @Param(name = "kwargs", doc = "Dictionary of additional entries."),
       useLocation = true,
       useStarlarkThread = true)
-  public Dict<?, ?> dict(Object args, Dict<?, ?> kwargs, Location loc, StarlarkThread thread)
+  public SkylarkDict<?, ?> dict(
+      Object args, SkylarkDict<?, ?> kwargs, Location loc, StarlarkThread thread)
       throws EvalException {
-    Dict<?, ?> argsDict =
-        args instanceof Dict ? (Dict) args : Dict.getDictFromArgs("dict", args, loc, thread);
-    return Dict.plus(argsDict, kwargs, thread);
+    SkylarkDict<?, ?> argsDict =
+        args instanceof SkylarkDict
+            ? (SkylarkDict) args
+            : SkylarkDict.getDictFromArgs("dict", args, loc, thread);
+    return SkylarkDict.plus(argsDict, kwargs, thread);
   }
 
   @SkylarkCallable(
@@ -637,16 +635,15 @@ class MethodLibrary {
       },
       useStarlarkThread = true,
       useLocation = true)
-  public StarlarkList<?> enumerate(Object input, Integer start, Location loc, StarlarkThread thread)
+  public MutableList<?> enumerate(Object input, Integer start, Location loc, StarlarkThread thread)
       throws EvalException {
-    Collection<?> src = EvalUtils.toCollection(input, loc, thread);
-    Object[] array = new Object[src.size()];
-    int i = 0;
-    for (Object x : src) {
-      array[i] = Tuple.pair(i + start, x);
-      i++;
+    int count = start;
+    ArrayList<SkylarkList<?>> result = new ArrayList<>();
+    for (Object obj : EvalUtils.toCollection(input, loc, thread)) {
+      result.add(Tuple.of(count, obj));
+      count++;
     }
-    return StarlarkList.wrap(thread.mutability(), array);
+    return MutableList.wrapUnsafe(thread, result);
   }
 
   @SkylarkCallable(
@@ -709,12 +706,12 @@ class MethodLibrary {
       },
       useLocation = true,
       useStarlarkThread = true)
-  public Sequence<Integer> range(
+  public SkylarkList<Integer> range(
       Integer startOrStop, Object stopOrNone, Integer step, Location loc, StarlarkThread thread)
       throws EvalException {
     int start;
     int stop;
-    if (stopOrNone == Starlark.NONE) {
+    if (stopOrNone == Runtime.NONE) {
       start = 0;
       stop = startOrStop;
     } else if (stopOrNone instanceof Integer) {
@@ -726,7 +723,7 @@ class MethodLibrary {
     if (step == 0) {
       throw new EvalException(loc, "step cannot be 0");
     }
-    return new RangeList(start, stop, step);
+    return RangeList.of(start, stop, step);
   }
 
   /** Returns true if the object has a field of the given name, otherwise false. */
@@ -819,7 +816,7 @@ class MethodLibrary {
       },
       useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> dir(Object object, Location loc, StarlarkThread thread)
+  public MutableList<?> dir(Object object, Location loc, StarlarkThread thread)
       throws EvalException {
     // Order the fields alphabetically.
     Set<String> fields = new TreeSet<>();
@@ -827,7 +824,7 @@ class MethodLibrary {
       fields.addAll(((ClassObject) object).getFieldNames());
     }
     fields.addAll(CallUtils.getMethodNames(thread.getSemantics(), object.getClass()));
-    return StarlarkList.copyOf(thread.mutability(), fields);
+    return MutableList.copyOf(thread, fields);
   }
 
   @SkylarkCallable(
@@ -854,9 +851,9 @@ class MethodLibrary {
             named = true)
       },
       useLocation = true)
-  public NoneType fail(Object msg, Object attr, Location loc) throws EvalException {
+  public Runtime.NoneType fail(Object msg, Object attr, Location loc) throws EvalException {
     String str = Printer.str(msg);
-    if (attr != Starlark.NONE) {
+    if (attr != Runtime.NONE) {
       str = String.format("attribute %s: %s", attr, str);
     }
     throw new EvalException(loc, str);
@@ -887,7 +884,8 @@ class MethodLibrary {
       extraPositionals = @Param(name = "args", doc = "The objects to print."),
       useLocation = true,
       useStarlarkThread = true)
-  public NoneType print(String sep, Sequence<?> starargs, Location loc, StarlarkThread thread)
+  public Runtime.NoneType print(
+      String sep, SkylarkList<?> starargs, Location loc, StarlarkThread thread)
       throws EvalException {
     try {
       String msg = starargs.stream().map(Printer::debugPrint).collect(joining(sep));
@@ -898,7 +896,7 @@ class MethodLibrary {
         msg += "<== skylark flag test ==>";
       }
       thread.handleEvent(Event.debug(loc, msg));
-      return Starlark.NONE;
+      return Runtime.NONE;
     } catch (NestedSetDepthException exception) {
       throw new EvalException(
           loc,
@@ -997,7 +995,7 @@ class MethodLibrary {
             name = "transitive",
             named = true,
             positional = false,
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = SkylarkNestedSet.class,
             noneable = true,
             doc = "A list of depsets whose elements will become indirect elements of the depset.",
@@ -1035,8 +1033,8 @@ class MethodLibrary {
     }
 
     if (semantics.incompatibleDisableDepsetItems()) {
-      if (x != Starlark.NONE) {
-        if (direct != Starlark.NONE) {
+      if (x != Runtime.NONE) {
+        if (direct != Runtime.NONE) {
           throw new EvalException(
               loc, "parameter 'direct' cannot be specified both positionally and by keyword");
         }
@@ -1044,7 +1042,7 @@ class MethodLibrary {
       }
       return depsetConstructor(direct, order, transitive, loc);
     } else {
-      if (x != Starlark.NONE) {
+      if (x != Runtime.NONE) {
         if (!isEmptySkylarkList(items)) {
           throw new EvalException(
               loc, "parameter 'items' cannot be specified both positionally and by keyword");
@@ -1079,9 +1077,9 @@ class MethodLibrary {
 
   private static <T> List<T> listFromNoneable(
       Object listOrNone, Class<T> objectType, String paramName) throws EvalException {
-    if (listOrNone != Starlark.NONE) {
-      SkylarkType.checkType(listOrNone, Sequence.class, paramName);
-      return ((Sequence<?>) listOrNone).getContents(objectType, paramName);
+    if (listOrNone != Runtime.NONE) {
+      SkylarkType.checkType(listOrNone, SkylarkList.class, paramName);
+      return ((SkylarkList<?>) listOrNone).getContents(objectType, paramName);
     } else {
       return ImmutableList.of();
     }
@@ -1091,30 +1089,31 @@ class MethodLibrary {
       Object items, Order order, Object direct, Object transitive, Location loc)
       throws EvalException {
 
-    if (transitive == Starlark.NONE && direct == Starlark.NONE) {
+    if (transitive == Runtime.NONE && direct == Runtime.NONE) {
       // Legacy behavior.
       return SkylarkNestedSet.of(order, items, loc);
     }
 
-    if (direct != Starlark.NONE && !isEmptySkylarkList(items)) {
+    if (direct != Runtime.NONE && !isEmptySkylarkList(items)) {
       throw new EvalException(
           loc, "Do not pass both 'direct' and 'items' argument to depset constructor.");
     }
 
     // Non-legacy behavior: either 'transitive' or 'direct' were specified.
     Iterable<Object> directElements;
-    if (direct != Starlark.NONE) {
-      SkylarkType.checkType(direct, Sequence.class, "direct");
-      directElements = ((Sequence<?>) direct).getContents(Object.class, "direct");
+    if (direct != Runtime.NONE) {
+      SkylarkType.checkType(direct, SkylarkList.class, "direct");
+      directElements = ((SkylarkList<?>) direct).getContents(Object.class, "direct");
     } else {
-      SkylarkType.checkType(items, Sequence.class, "items");
-      directElements = ((Sequence<?>) items).getContents(Object.class, "items");
+      SkylarkType.checkType(items, SkylarkList.class, "items");
+      directElements = ((SkylarkList<?>) items).getContents(Object.class, "items");
     }
 
     Iterable<SkylarkNestedSet> transitiveList;
-    if (transitive != Starlark.NONE) {
-      SkylarkType.checkType(transitive, Sequence.class, "transitive");
-      transitiveList = ((Sequence<?>) transitive).getContents(SkylarkNestedSet.class, "transitive");
+    if (transitive != Runtime.NONE) {
+      SkylarkType.checkType(transitive, SkylarkList.class, "transitive");
+      transitiveList =
+          ((SkylarkList<?>) transitive).getContents(SkylarkNestedSet.class, "transitive");
     } else {
       transitiveList = ImmutableList.of();
     }
@@ -1129,7 +1128,7 @@ class MethodLibrary {
   }
 
   private static boolean isEmptySkylarkList(Object o) {
-    return o instanceof Sequence && ((Sequence) o).isEmpty();
+    return o instanceof SkylarkList && ((SkylarkList) o).isEmpty();
   }
 
   /**
@@ -1146,7 +1145,7 @@ class MethodLibrary {
       parameters = {
         @Param(
             name = "x",
-            type = Dict.class,
+            type = SkylarkDict.class,
             doc = "The parameter to convert.",
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true),
@@ -1158,7 +1157,8 @@ class MethodLibrary {
             named = true)
       },
       useLocation = true)
-  public Object select(Dict<?, ?> dict, String noMatchError, Location loc) throws EvalException {
+  public Object select(SkylarkDict<?, ?> dict, String noMatchError, Location loc)
+      throws EvalException {
     if (dict.isEmpty()) {
       throw new EvalException(
           loc,
@@ -1189,7 +1189,7 @@ class MethodLibrary {
       extraPositionals = @Param(name = "args", doc = "lists to zip."),
       useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> zip(Sequence<?> args, Location loc, StarlarkThread thread)
+  public MutableList<?> zip(SkylarkList<?> args, Location loc, StarlarkThread thread)
       throws EvalException {
     Iterator<?>[] iterators = new Iterator<?>[args.size()];
     for (int i = 0; i < args.size(); i++) {
@@ -1211,7 +1211,7 @@ class MethodLibrary {
         result.add(Tuple.copyOf(elem));
       }
     } while (allHasNext);
-    return StarlarkList.copyOf(thread.mutability(), result);
+    return MutableList.wrapUnsafe(thread, result);
   }
 
   /** Skylark int type. */

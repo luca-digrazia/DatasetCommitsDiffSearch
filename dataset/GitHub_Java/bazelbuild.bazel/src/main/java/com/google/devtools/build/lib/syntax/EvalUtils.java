@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Concatable.Concatter;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.util.SpellChecker;
 import java.util.Collection;
 import java.util.IllegalFormatException;
@@ -61,7 +62,7 @@ public final class EvalUtils {
    */
   public static final Ordering<Object> SKYLARK_COMPARATOR =
       new Ordering<Object>() {
-        private int compareLists(Sequence<?> o1, Sequence<?> o2) {
+        private int compareLists(SkylarkList<?> o1, SkylarkList<?> o2) {
           if (o1 instanceof RangeList || o2 instanceof RangeList) {
             throw new ComparisonException("Cannot compare range objects");
           }
@@ -91,10 +92,10 @@ public final class EvalUtils {
           o1 = SkylarkType.convertToSkylark(o1, (StarlarkThread) null);
           o2 = SkylarkType.convertToSkylark(o2, (StarlarkThread) null);
 
-          if (o1 instanceof Sequence
-              && o2 instanceof Sequence
+          if (o1 instanceof SkylarkList
+              && o2 instanceof SkylarkList
               && o1 instanceof Tuple == o2 instanceof Tuple) {
-            return compareLists((Sequence) o1, (Sequence) o2);
+            return compareLists((SkylarkList) o1, (SkylarkList) o2);
           }
 
           if (o1 instanceof ClassObject) {
@@ -181,15 +182,16 @@ public final class EvalUtils {
         // TODO(adonovan): delete those below, and order those above by cost.
         // there is a registered Skylark ancestor class (useful e.g. when using AutoValue)
         || SkylarkInterfaceUtils.getSkylarkModule(c) != null
-        || ImmutableMap.class.isAssignableFrom(c); // will be converted to Dict
+        || ImmutableMap.class.isAssignableFrom(c); // will be converted to SkylarkDict
   }
 
   // TODO(bazel-team): move the following few type-related functions to SkylarkType
   /**
    * Return the Skylark-type of {@code c}
    *
-   * <p>The result will be a type that Skylark understands and is either equal to {@code c} or is a
-   * supertype of it.
+   * <p>The result will be a type that Skylark understands and is either equal to {@code c}
+   * or is a supertype of it. For example, all instances of (all subclasses of) SkylarkList
+   * are considered to be SkylarkLists.
    *
    * <p>Skylark's type validation isn't equipped to deal with inheritance so we must tell it which
    * of the superclasses or interfaces of {@code c} is the one that matters for type compatibility.
@@ -271,9 +273,9 @@ public final class EvalUtils {
       return "int";
     } else if (c.equals(Boolean.class)) {
       return "bool";
-    } else if (List.class.isAssignableFrom(c)) { // This is a Java List that isn't a Sequence
+    } else if (List.class.isAssignableFrom(c)) { // This is a Java List that isn't a SkylarkList
       return "List"; // This case shouldn't happen in normal code, but we keep it for debugging.
-    } else if (Map.class.isAssignableFrom(c)) { // This is a Java Map that isn't a Dict
+    } else if (Map.class.isAssignableFrom(c)) { // This is a Java Map that isn't a SkylarkDict
       return "Map"; // This case shouldn't happen in normal code, but we keep it for debugging.
     } else if (StarlarkCallable.class.isAssignableFrom(c)) {
       // TODO(adonovan): each StarlarkCallable should report its own type string.
@@ -305,13 +307,13 @@ public final class EvalUtils {
       throws EvalException {
     if (o instanceof Collection) {
       return (Collection<?>) o;
-    } else if (o instanceof Sequence) {
-      return ((Sequence) o).getImmutableList();
+    } else if (o instanceof SkylarkList) {
+      return ((SkylarkList) o).getImmutableList();
     } else if (o instanceof Map) {
       // For dictionaries we iterate through the keys only
-      if (o instanceof Dict) {
-        // Dicts handle ordering themselves
-        Dict<?, ?> dict = (Dict) o;
+      if (o instanceof SkylarkDict) {
+        // SkylarkDicts handle ordering themselves
+        SkylarkDict<?, ?> dict = (SkylarkDict) o;
         List<Object> list = Lists.newArrayListWithCapacity(dict.size());
         for (Map.Entry<?, ?> entries : dict.entrySet()) {
           list.add(entries.getKey());
@@ -398,15 +400,13 @@ public final class EvalUtils {
 
   public static void lock(Object object, Location loc) {
     if (object instanceof StarlarkMutable) {
-      StarlarkMutable x = (StarlarkMutable) object;
-      x.mutability().lock(x, loc);
+      ((StarlarkMutable) object).lock(loc);
     }
   }
 
   public static void unlock(Object object, Location loc) {
     if (object instanceof StarlarkMutable) {
-      StarlarkMutable x = (StarlarkMutable) object;
-      x.mutability().unlock(x, loc);
+      ((StarlarkMutable) object).unlock(loc);
     }
   }
 
@@ -493,7 +493,7 @@ public final class EvalUtils {
 
   /**
    * Calculates the indices of the elements in a slice, after validating the arguments and replacing
-   * Starlark.NONE with default values. Throws an EvalException if a bad argument is given.
+   * Runtime.NONE with default values. Throws an EvalException if a bad argument is given.
    */
   public static List<Integer> getSliceIndices(
       Object startObj, Object endObj, Object stepObj, int length, Location loc)
@@ -502,7 +502,7 @@ public final class EvalUtils {
     int end;
     int step;
 
-    if (stepObj == Starlark.NONE) {
+    if (stepObj == Runtime.NONE) {
       step = 1;
     } else if (stepObj instanceof Integer) {
       step = ((Integer) stepObj).intValue();
@@ -514,7 +514,7 @@ public final class EvalUtils {
       throw new EvalException(loc, "slice step cannot be zero");
     }
 
-    if (startObj == Starlark.NONE) {
+    if (startObj == Runtime.NONE) {
       start = (step > 0) ? 0 : length - 1;
     } else if (startObj instanceof Integer) {
       start = ((Integer) startObj).intValue();
@@ -522,7 +522,7 @@ public final class EvalUtils {
       throw new EvalException(
           loc, String.format("slice start must be an integer, not '%s'", startObj));
     }
-    if (endObj == Starlark.NONE) {
+    if (endObj == Runtime.NONE) {
       // If step is negative, can't use -1 for end since that would be converted
       // to the rightmost element's position.
       end = (step > 0) ? length : -length - 1;
@@ -537,11 +537,11 @@ public final class EvalUtils {
 
   /** @return true if x is Java null or Skylark None */
   public static boolean isNullOrNone(Object x) {
-    return x == null || x == Starlark.NONE;
+    return x == null || x == Runtime.NONE;
   }
 
   /**
-   * Build a Dict of kwarg arguments from a list, removing null-s or None-s.
+   * Build a SkylarkDict of kwarg arguments from a list, removing null-s or None-s.
    *
    * @param thread the StarlarkThread in which this map can be mutated.
    * @param init a series of key, value pairs (as consecutive arguments) as in {@code optionMap(k1,
@@ -551,7 +551,7 @@ public final class EvalUtils {
    *     <p>Ignore any entry where the value is null or None. Keys cannot be null.
    */
   @SuppressWarnings("unchecked")
-  public static <K, V> Dict<K, V> optionMap(StarlarkThread thread, Object... init) {
+  public static <K, V> SkylarkDict<K, V> optionMap(StarlarkThread thread, Object... init) {
     ImmutableMap.Builder<K, V> b = new ImmutableMap.Builder<>();
     Preconditions.checkState(init.length % 2 == 0);
     for (int i = init.length - 2; i >= 0; i -= 2) {
@@ -561,7 +561,7 @@ public final class EvalUtils {
         b.put(key, value);
       }
     }
-    return Dict.copyOf(thread, b.build());
+    return SkylarkDict.copyOf(thread, b.build());
   }
 
   /**
@@ -612,10 +612,10 @@ public final class EvalUtils {
 
         // TODO(bazel-team): Unify this check with the logic in getSkylarkType. Might
         // break some providers whose contents don't implement SkylarkValue, aren't wrapped in
-        // Sequence, etc.
+        // SkylarkList, etc.
         // TODO(adonovan): this is still far too permissive. Replace with isSkylarkAcceptable.
         if (result instanceof NestedSet
-            || (result instanceof List && !(result instanceof Sequence))) {
+            || (result instanceof List && !(result instanceof SkylarkList))) {
           throw new EvalException(
               loc,
               "internal error: type '"
@@ -778,8 +778,8 @@ public final class EvalUtils {
       return Tuple.concat((Tuple<?>) x, (Tuple<?>) y);
     }
 
-    if (x instanceof StarlarkList && y instanceof StarlarkList) {
-      return StarlarkList.concat((StarlarkList<?>) x, (StarlarkList<?>) y, thread.mutability());
+    if (x instanceof MutableList && y instanceof MutableList) {
+      return MutableList.concat((MutableList<?>) x, (MutableList<?>) y, thread.mutability());
     }
 
     if (x instanceof Concatable && y instanceof Concatable) {
@@ -853,11 +853,11 @@ public final class EvalUtils {
       if (otherFactor instanceof Integer) {
         return Math.multiplyExact(number, (Integer) otherFactor);
       } else if (otherFactor instanceof String) {
+        // Similar to Python, a factor < 1 leads to an empty string.
         return Strings.repeat((String) otherFactor, Math.max(0, number));
-      } else if (otherFactor instanceof Tuple) {
-        return ((Tuple<?>) otherFactor).repeat(number, thread.mutability());
-      } else if (otherFactor instanceof StarlarkList) {
-        return ((StarlarkList<?>) otherFactor).repeat(number, thread.mutability());
+      } else if (otherFactor instanceof SkylarkList && !(otherFactor instanceof RangeList)) {
+        // Similar to Python, a factor < 1 leads to an empty string.
+        return ((SkylarkList<?>) otherFactor).repeat(number, thread.mutability());
       }
     }
     throw unknownBinaryOperator(x, y, TokenKind.STAR, location);

@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.NoneType;
+import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
 import com.google.devtools.build.lib.syntax.SkylarkList;
@@ -576,7 +576,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             allowedTypes = {
               @ParamType(type = FileApi.class),
               @ParamType(type = String.class),
-              @ParamType(type = NoneType.class),
+              @ParamType(type = Runtime.NoneType.class),
             },
             noneable = true,
             defaultValue = "None",
@@ -621,7 +621,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             allowedTypes = {
               @ParamType(type = String.class),
               @ParamType(type = SkylarkList.class, generic1 = String.class),
-              @ParamType(type = NoneType.class),
+              @ParamType(type = Runtime.NoneType.class),
             },
             noneable = true,
             defaultValue = "None",
@@ -684,7 +684,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       allowReturnNones = true,
       useLocation = true,
       useStarlarkThread = true)
-  public NoneType action(
+  public Runtime.NoneType action(
       SkylarkList<?> outputs,
       Object inputs,
       Object executableUnchecked,
@@ -758,7 +758,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       allowReturnNones = true,
       useLocation = true,
       useStarlarkThread = true)
-  public NoneType fileAction(
+  public Runtime.NoneType fileAction(
       FileApi output, String content, Boolean executable, Location loc, StarlarkThread thread)
       throws EvalException;
 
@@ -791,8 +791,8 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       allowReturnNones = true,
       useLocation = true,
       useStarlarkThread = true)
-  public NoneType emptyAction(String mnemonic, Object inputs, Location loc, StarlarkThread thread)
-      throws EvalException;
+  public Runtime.NoneType emptyAction(
+      String mnemonic, Object inputs, Location loc, StarlarkThread thread) throws EvalException;
 
   @SkylarkCallable(
       name = "template_action",
@@ -830,7 +830,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       allowReturnNones = true,
       useLocation = true,
       useStarlarkThread = true)
-  public NoneType templateAction(
+  public Runtime.NoneType templateAction(
       FileApi template,
       FileApi output,
       SkylarkDict<?, ?> substitutionsUnchecked,
@@ -870,9 +870,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             defaultValue = "False",
             named = true,
             doc =
-                "<b>Use of this parameter is not recommended. See "
-                    + "<a href=\"../rules.html#runfiles\">runfiles guide</a></b>. "
-                    + "<p>Whether to collect the data "
+                "Whether to collect the data "
                     + "runfiles from the dependencies in srcs, data and deps attributes."),
         @Param(
             name = "collect_default",
@@ -880,9 +878,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             defaultValue = "False",
             named = true,
             doc =
-                "<b>Use of this parameter is not recommended. See "
-                    + "<a href=\"../rules.html#runfiles\">runfiles guide</a></b>. "
-                    + "<p>Whether to collect the default "
+                "Whether to collect the default "
                     + "runfiles from the dependencies in srcs, data and deps attributes."),
         @Param(
             name = "symlinks",
