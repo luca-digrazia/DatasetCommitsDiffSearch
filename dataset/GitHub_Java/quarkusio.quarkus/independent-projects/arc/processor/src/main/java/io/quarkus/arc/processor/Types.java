@@ -9,7 +9,6 @@ import io.quarkus.arc.impl.WildcardTypeImpl;
 import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -41,7 +40,7 @@ import org.jboss.logging.Logger;
  *
  * @author Martin Kouba
  */
-public final class Types {
+final class Types {
 
     static final Logger LOGGER = Logger.getLogger(Types.class);
 
@@ -76,24 +75,9 @@ public final class Types {
     }
 
     static ResultHandle getTypeHandle(BytecodeCreator creator, Type type, ResultHandle tccl) {
-        return getTypeHandle(creator, type, tccl, null);
-    }
-
-    static ResultHandle getTypeHandle(BytecodeCreator creator, Type type, ResultHandle tccl,
-            Map<Type, ResultHandle> sharedTypes) {
-        if (sharedTypes != null) {
-            ResultHandle sharedType = sharedTypes.get(type);
-            if (sharedType != null) {
-                return sharedType;
-            }
-        }
         if (Kind.CLASS.equals(type.kind())) {
             String className = type.asClassType().name().toString();
-            ResultHandle classHandle = doLoadClass(creator, className, tccl);
-            if (sharedTypes != null) {
-                sharedTypes.put(type, classHandle);
-            }
-            return classHandle;
+            return doLoadClass(creator, className, tccl);
         } else if (Kind.TYPE_VARIABLE.equals(type.kind())) {
             // E.g. T -> new TypeVariableImpl("T")
             TypeVariable typeVariable = type.asTypeVariable();
@@ -104,51 +88,48 @@ public final class Types {
             } else {
                 boundsHandle = creator.newArray(java.lang.reflect.Type.class, creator.load(bounds.size()));
                 for (int i = 0; i < bounds.size(); i++) {
-                    creator.writeArrayValue(boundsHandle, i, getTypeHandle(creator, bounds.get(i), tccl, sharedTypes));
+                    creator.writeArrayValue(boundsHandle, i, getTypeHandle(creator, bounds.get(i), tccl));
                 }
             }
-            ResultHandle typeVariableHandle = creator.newInstance(
+            return creator.newInstance(
                     MethodDescriptor.ofConstructor(TypeVariableImpl.class, String.class, java.lang.reflect.Type[].class),
                     creator.load(typeVariable.identifier()), boundsHandle);
-            if (sharedTypes != null) {
-                sharedTypes.put(typeVariable, typeVariableHandle);
-            }
-            return typeVariableHandle;
 
         } else if (Kind.PARAMETERIZED_TYPE.equals(type.kind())) {
             // E.g. List<String> -> new ParameterizedTypeImpl(List.class, String.class)
-            return getParameterizedType(creator, tccl, type.asParameterizedType(), sharedTypes);
+            ParameterizedType parameterizedType = type.asParameterizedType();
+
+            List<Type> arguments = parameterizedType.arguments();
+            ResultHandle typeArgsHandle = creator.newArray(java.lang.reflect.Type.class, creator.load(arguments.size()));
+            for (int i = 0; i < arguments.size(); i++) {
+                creator.writeArrayValue(typeArgsHandle, i, getTypeHandle(creator, arguments.get(i), tccl));
+            }
+            return creator.newInstance(
+                    MethodDescriptor.ofConstructor(ParameterizedTypeImpl.class, java.lang.reflect.Type.class,
+                            java.lang.reflect.Type[].class),
+                    doLoadClass(creator, parameterizedType.name().toString(), tccl), typeArgsHandle);
 
         } else if (Kind.ARRAY.equals(type.kind())) {
             Type componentType = type.asArrayType().component();
             // E.g. String[] -> new GenericArrayTypeImpl(String.class)
-            ResultHandle arrayHandle = creator.newInstance(
-                    MethodDescriptor.ofConstructor(GenericArrayTypeImpl.class, java.lang.reflect.Type.class),
-                    getTypeHandle(creator, componentType, tccl, sharedTypes));
-            if (sharedTypes != null) {
-                sharedTypes.put(type, arrayHandle);
-            }
-            return arrayHandle;
+            return creator.newInstance(MethodDescriptor.ofConstructor(GenericArrayTypeImpl.class, java.lang.reflect.Type.class),
+                    getTypeHandle(creator, componentType, tccl));
 
         } else if (Kind.WILDCARD_TYPE.equals(type.kind())) {
             // E.g. ? extends Number -> WildcardTypeImpl.withUpperBound(Number.class)
             WildcardType wildcardType = type.asWildcardType();
-            ResultHandle wildcardHandle;
+
             if (wildcardType.superBound() == null) {
-                wildcardHandle = creator.invokeStaticMethod(
+                return creator.invokeStaticMethod(
                         MethodDescriptor.ofMethod(WildcardTypeImpl.class, "withUpperBound",
                                 java.lang.reflect.WildcardType.class, java.lang.reflect.Type.class),
-                        getTypeHandle(creator, wildcardType.extendsBound(), tccl, sharedTypes));
+                        getTypeHandle(creator, wildcardType.extendsBound(), tccl));
             } else {
-                wildcardHandle = creator.invokeStaticMethod(
+                return creator.invokeStaticMethod(
                         MethodDescriptor.ofMethod(WildcardTypeImpl.class, "withLowerBound",
                                 java.lang.reflect.WildcardType.class, java.lang.reflect.Type.class),
-                        getTypeHandle(creator, wildcardType.superBound(), tccl, sharedTypes));
+                        getTypeHandle(creator, wildcardType.superBound(), tccl));
             }
-            if (sharedTypes != null) {
-                sharedTypes.put(wildcardType, wildcardHandle);
-            }
-            return wildcardHandle;
         } else if (Kind.PRIMITIVE.equals(type.kind())) {
             switch (type.asPrimitiveType().primitive()) {
                 case INT:
@@ -173,39 +154,6 @@ public final class Types {
         } else {
             throw new IllegalArgumentException("Unsupported bean type: " + type.kind() + ", " + type);
         }
-    }
-
-    static ResultHandle getParameterizedType(BytecodeCreator creator, ResultHandle tccl,
-            ParameterizedType parameterizedType, Map<Type, ResultHandle> sharedTypes) {
-        List<Type> arguments = parameterizedType.arguments();
-        ResultHandle typeArgsHandle = creator.newArray(java.lang.reflect.Type.class, creator.load(arguments.size()));
-        for (int i = 0; i < arguments.size(); i++) {
-            creator.writeArrayValue(typeArgsHandle, i, getTypeHandle(creator, arguments.get(i), tccl, sharedTypes));
-        }
-        Type rawType = Type.create(parameterizedType.name(), Kind.CLASS);
-        ResultHandle rawTypeHandle = null;
-        if (sharedTypes != null) {
-            rawTypeHandle = sharedTypes.get(rawType);
-        }
-        if (rawTypeHandle == null) {
-            rawTypeHandle = doLoadClass(creator, parameterizedType.name().toString(), tccl);
-            if (sharedTypes != null) {
-                sharedTypes.put(rawType, rawTypeHandle);
-            }
-        }
-        ResultHandle parameterizedTypeHandle = creator.newInstance(
-                MethodDescriptor.ofConstructor(ParameterizedTypeImpl.class, java.lang.reflect.Type.class,
-                        java.lang.reflect.Type[].class),
-                rawTypeHandle, typeArgsHandle);
-        if (sharedTypes != null) {
-            sharedTypes.put(parameterizedType, parameterizedTypeHandle);
-        }
-        return parameterizedTypeHandle;
-    }
-
-    public static ResultHandle getParameterizedType(BytecodeCreator creator, ResultHandle tccl,
-            ParameterizedType parameterizedType) {
-        return getParameterizedType(creator, tccl, parameterizedType, null);
     }
 
     private static ResultHandle doLoadClass(BytecodeCreator creator, String className, ResultHandle tccl) {
@@ -299,39 +247,6 @@ public final class Types {
         return restrictBeanTypes(types, beanDeployment.getAnnotations(classInfo));
     }
 
-    static List<Type> getResolvedParameters(ClassInfo classInfo, MethodInfo method, IndexView index) {
-        return getResolvedParameters(classInfo, Collections.emptyMap(), method, index);
-    }
-
-    static List<Type> getResolvedParameters(ClassInfo classInfo, Map<TypeVariable, Type> resolvedMap,
-            MethodInfo method, IndexView index) {
-        List<TypeVariable> typeParameters = classInfo.typeParameters();
-        // E.g. Foo, T, List<String>
-        List<Type> parameters = method.parameters();
-        if (typeParameters.isEmpty()) {
-            return parameters;
-        } else {
-            resolvedMap = buildResolvedMap(typeParameters, typeParameters,
-                    resolvedMap, index);
-            List<Type> resolved = new ArrayList<>();
-            for (Type param : parameters) {
-                switch (param.kind()) {
-                    case ARRAY:
-                    case PRIMITIVE:
-                    case CLASS:
-                        resolved.add(param);
-                        break;
-                    case TYPE_VARIABLE:
-                    case PARAMETERIZED_TYPE:
-                        resolved.add(resolveTypeParam(param, resolvedMap, index));
-                    default:
-                        break;
-                }
-            }
-            return resolved;
-        }
-    }
-
     static Set<Type> getTypeClosure(ClassInfo classInfo, AnnotationTarget producerFieldOrMethod,
             Map<TypeVariable, Type> resolvedTypeParameters,
             BeanDeployment beanDeployment, BiConsumer<ClassInfo, Map<TypeVariable, Type>> resolvedTypeVariablesConsumer) {
@@ -398,32 +313,6 @@ public final class Types {
                 types.addAll(getTypeClosure(superClassInfo, producerFieldOrMethod, resolved, beanDeployment,
                         resolvedTypeVariablesConsumer));
             }
-        }
-        return types;
-    }
-
-    static Set<Type> getDelegateTypeClosure(InjectionPointInfo delegateInjectionPoint, BeanDeployment beanDeployment) {
-        Set<Type> types;
-        Type delegateType = delegateInjectionPoint.getRequiredType();
-        if (delegateType.kind() == Kind.TYPE_VARIABLE
-                || delegateType.kind() == Kind.PRIMITIVE
-                || delegateType.kind() == Kind.ARRAY) {
-            throw new DefinitionException("Illegal delegate type declared:" + delegateInjectionPoint.getTargetInfo());
-        }
-        ClassInfo delegateTypeClass = getClassByName(beanDeployment.getBeanArchiveIndex(), delegateType);
-        if (delegateTypeClass == null) {
-            throw new IllegalArgumentException("Delegate type not found in index: " + delegateType);
-        }
-        if (Kind.CLASS.equals(delegateType.kind())) {
-            types = getTypeClosure(delegateTypeClass, delegateInjectionPoint.getTarget(), Collections.emptyMap(),
-                    beanDeployment, null);
-        } else if (Kind.PARAMETERIZED_TYPE.equals(delegateType.kind())) {
-            types = getTypeClosure(delegateTypeClass, delegateInjectionPoint.getTarget(),
-                    buildResolvedMap(delegateType.asParameterizedType().arguments(), delegateTypeClass.typeParameters(),
-                            Collections.emptyMap(), beanDeployment.getBeanArchiveIndex()),
-                    beanDeployment, null);
-        } else {
-            throw new IllegalArgumentException("Unsupported return type");
         }
         return types;
     }
@@ -531,19 +420,6 @@ public final class Types {
 
     static boolean isPrimitiveClassName(String className) {
         return PRIMITIVE_CLASS_NAMES.contains(className);
-    }
-
-    static boolean containsTypeVariable(Type type) {
-        if (type.kind() == Kind.TYPE_VARIABLE) {
-            return true;
-        } else if (type.kind() == Kind.PARAMETERIZED_TYPE) {
-            for (Type arg : type.asParameterizedType().arguments()) {
-                if (containsTypeVariable(arg)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
 }
