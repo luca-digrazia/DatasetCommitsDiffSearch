@@ -114,7 +114,6 @@ public class BootstrapMavenContext {
     private Boolean currentProjectExists;
     private DefaultServiceLocator serviceLocator;
     private String alternatePomName;
-    private Path rootProjectDir;
 
     public static BootstrapMavenContextConfig<?> config() {
         return new BootstrapMavenContextConfig<>();
@@ -140,7 +139,6 @@ public class BootstrapMavenContext {
         this.remoteRepos = config.remoteRepos;
         this.remoteRepoManager = config.remoteRepoManager;
         this.cliOptions = config.cliOptions;
-        this.rootProjectDir = config.rootProjectDir;
         if (config.currentProject != null) {
             this.currentProject = config.currentProject;
             this.currentPom = currentProject.getRawModel().getPomFile().toPath();
@@ -181,20 +179,11 @@ public class BootstrapMavenContext {
                 ? userSettings = resolveSettingsFile(
                         getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_USER_SETTINGS),
                         () -> {
-                            final String quarkusMavenSettings = getProperty(MAVEN_SETTINGS);
+                            final String quarkusMavenSettings = PropertyUtils.getProperty(MAVEN_SETTINGS);
                             return quarkusMavenSettings == null ? new File(userMavenConfigurationHome, SETTINGS_XML)
                                     : new File(quarkusMavenSettings);
                         })
                 : userSettings;
-    }
-
-    private String getProperty(String name) {
-        String value = PropertyUtils.getProperty(name);
-        if (value != null) {
-            return value;
-        }
-        final Properties props = getCliOptions().getSystemProperties();
-        return props == null ? null : props.getProperty(name);
     }
 
     public File getGlobalSettings() {
@@ -202,14 +191,9 @@ public class BootstrapMavenContext {
                 ? globalSettings = resolveSettingsFile(
                         getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_GLOBAL_SETTINGS),
                         () -> {
-                            String mavenHome = getProperty(MAVEN_DOT_HOME);
-                            if (mavenHome == null) {
-                                mavenHome = System.getenv(MAVEN_HOME);
-                                if (mavenHome == null) {
-                                    mavenHome = "";
-                                }
-                            }
-                            return new File(mavenHome, "conf/settings.xml");
+                            final String envM2Home = System.getenv(MAVEN_HOME);
+                            return new File(PropertyUtils.getProperty(MAVEN_DOT_HOME, envM2Home != null ? envM2Home : ""),
+                                    "conf/settings.xml");
                         })
                 : globalSettings;
     }
@@ -237,20 +221,13 @@ public class BootstrapMavenContext {
             return settings;
         }
 
-        final DefaultSettingsBuildingRequest settingsRequest = new DefaultSettingsBuildingRequest()
-                .setSystemProperties(System.getProperties())
-                .setUserSettingsFile(getUserSettings())
-                .setGlobalSettingsFile(getGlobalSettings());
-
-        final Properties cmdLineProps = getCliOptions().getSystemProperties();
-        if (cmdLineProps != null) {
-            settingsRequest.setUserProperties(cmdLineProps);
-        }
-
         final Settings effectiveSettings;
         try {
             final SettingsBuildingResult result = new DefaultSettingsBuilderFactory()
-                    .newInstance().build(settingsRequest);
+                    .newInstance().build(new DefaultSettingsBuildingRequest()
+                            .setSystemProperties(System.getProperties())
+                            .setUserSettingsFile(getUserSettings())
+                            .setGlobalSettingsFile(getGlobalSettings()));
             final List<SettingsProblem> problems = result.getProblems();
             if (!problems.isEmpty()) {
                 for (SettingsProblem problem : problems) {
@@ -283,12 +260,12 @@ public class BootstrapMavenContext {
         }
     }
 
-    private String resolveLocalRepo(Settings settings) {
+    public static String resolveLocalRepo(Settings settings) {
         String localRepo = System.getenv("QUARKUS_LOCAL_REPO");
         if (localRepo != null) {
             return localRepo;
         }
-        localRepo = getProperty("maven.repo.local");
+        localRepo = PropertyUtils.getProperty("maven.repo.local");
         if (localRepo != null) {
             return localRepo;
         }
@@ -794,10 +771,6 @@ public class BootstrapMavenContext {
     }
 
     public Path getRootProjectBaseDir() {
-        return rootProjectDir == null ? rootProjectDir = resolveRootProjectDir() : rootProjectDir;
-    }
-
-    private Path resolveRootProjectDir() {
         final String rootBaseDir = System.getenv(MAVEN_PROJECTBASEDIR);
         if (rootBaseDir == null) {
             return null;
