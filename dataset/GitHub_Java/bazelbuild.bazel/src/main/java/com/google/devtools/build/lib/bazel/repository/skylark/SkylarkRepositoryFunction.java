@@ -56,7 +56,6 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
 
   private final HttpDownloader httpDownloader;
   private double timeoutScaling = 1.0;
-  private boolean useNativePatch;
 
   public SkylarkRepositoryFunction(HttpDownloader httpDownloader) {
     this.httpDownloader = httpDownloader;
@@ -64,10 +63,6 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
 
   public void setTimeoutScaling(double timeoutScaling) {
     this.timeoutScaling = timeoutScaling;
-  }
-
-  public void setUseNativePatch(boolean useNativePatch) {
-    this.useNativePatch = useNativePatch;
   }
 
   @Nullable
@@ -145,8 +140,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               clientEnvironment,
               httpDownloader,
               timeoutScaling,
-              markerData,
-              useNativePatch);
+              markerData);
 
       // Since restarting a repository function can be really expensive, we first ensure that
       // all label-arguments can be resolved to paths.
@@ -242,16 +236,6 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
   @Override
   protected boolean isLocal(Rule rule) {
     return (Boolean) rule.getAttributeContainer().getAttr("$local");
-  }
-
-  @Override
-  protected boolean isConfigure(Rule rule) {
-    return (Boolean) rule.getAttributeContainer().getAttr("$configure");
-  }
-
-  public static boolean isConfigurelikeRule(Rule rule) {
-    return rule.getRuleClassObject().isSkylark()
-        && ((Boolean) rule.getAttributeContainer().getAttr("$configure"));
   }
 
   @Override

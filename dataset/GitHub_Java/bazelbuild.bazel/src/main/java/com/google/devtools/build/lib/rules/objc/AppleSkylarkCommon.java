@@ -46,12 +46,12 @@ import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SplitTransitionProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleCommonApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -182,8 +182,8 @@ public class AppleSkylarkCommon
   @Override
   // This method is registered statically for skylark, and never called directly.
   public ObjcProvider newObjcProvider(
-      Boolean usesSwift, SkylarkDict<?, ?> kwargs, StarlarkThread thread) throws EvalException {
-    ObjcProvider.Builder resultBuilder = new ObjcProvider.Builder(thread.getSemantics());
+      Boolean usesSwift, SkylarkDict<?, ?> kwargs, Environment environment) throws EvalException {
+    ObjcProvider.Builder resultBuilder = new ObjcProvider.Builder(environment.getSemantics());
     if (usesSwift) {
       resultBuilder.add(ObjcProvider.FLAG, ObjcProvider.Flag.USES_SWIFT);
     }
@@ -207,23 +207,22 @@ public class AppleSkylarkCommon
       Object dylibBinary,
       ObjcProvider depsObjcProvider,
       Object dynamicFrameworkDirs,
-      Object dynamicFrameworkFiles)
-      throws EvalException {
+      Object dynamicFrameworkFiles) {
     NestedSet<PathFragment> frameworkDirs;
     if (dynamicFrameworkDirs == Runtime.NONE) {
       frameworkDirs = NestedSetBuilder.<PathFragment>emptySet(Order.STABLE_ORDER);
     } else {
-      SkylarkNestedSet frameworkDirsSet = (SkylarkNestedSet) dynamicFrameworkDirs;
       Iterable<String> pathStrings =
-          frameworkDirsSet.getSetFromParam(String.class, "framework_dirs");
+          ((SkylarkNestedSet) dynamicFrameworkDirs).getSet(String.class);
       frameworkDirs =
           NestedSetBuilder.<PathFragment>stableOrder()
               .addAll(Iterables.transform(pathStrings, PathFragment::create))
               .build();
     }
     NestedSet<Artifact> frameworkFiles =
-        SkylarkNestedSet.getSetFromNoneableParam(
-            dynamicFrameworkFiles, Artifact.class, "framework_files");
+        dynamicFrameworkFiles != Runtime.NONE
+            ? ((SkylarkNestedSet) dynamicFrameworkFiles).getSet(Artifact.class)
+            : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
     Artifact binary = (dylibBinary != Runtime.NONE) ? (Artifact) dylibBinary : null;
 
     return new AppleDynamicFrameworkInfo(
@@ -235,7 +234,7 @@ public class AppleSkylarkCommon
       SkylarkRuleContextApi skylarkRuleContextApi,
       SkylarkList<String> extraLinkopts,
       SkylarkList<? extends FileApi> extraLinkInputs,
-      StarlarkThread thread)
+      Environment environment)
       throws EvalException, InterruptedException {
     SkylarkRuleContext skylarkRuleContext = (SkylarkRuleContext) skylarkRuleContextApi;
     try {
@@ -245,7 +244,7 @@ public class AppleSkylarkCommon
               ruleContext,
               extraLinkopts.getImmutableList(),
               SkylarkList.castList(extraLinkInputs, Artifact.class, "extra_link_inputs"));
-      return createAppleBinaryOutputSkylarkStruct(appleBinaryOutput, thread);
+      return createAppleBinaryOutputSkylarkStruct(appleBinaryOutput, environment);
     } catch (RuleErrorException | ActionConflictException exception) {
       throw new EvalException(null, exception);
     }
@@ -270,7 +269,7 @@ public class AppleSkylarkCommon
    * function.
    */
   private StructImpl createAppleBinaryOutputSkylarkStruct(
-      AppleBinaryOutput output, StarlarkThread thread) {
+      AppleBinaryOutput output, Environment environment) {
     Provider constructor =
         new NativeProvider<StructImpl>(StructImpl.class, "apple_binary_output") {};
     // We have to transform the output group dictionary into one that contains SkylarkValues instead
@@ -283,7 +282,7 @@ public class AppleSkylarkCommon
         ImmutableMap.of(
             "binary_provider", output.getBinaryInfoProvider(),
             "debug_outputs_provider", output.getDebugOutputsProvider(),
-            "output_groups", SkylarkDict.copyOf(thread, outputGroups));
+            "output_groups", SkylarkDict.copyOf(environment, outputGroups));
     return SkylarkInfo.createSchemaless(constructor, fields, Location.BUILTIN);
   }
 }

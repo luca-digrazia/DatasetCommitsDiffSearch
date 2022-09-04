@@ -166,7 +166,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         name = "struct_field_with_extra",
         documented = false,
         structField = true,
-        useStarlarkSemantics = true)
+        useSkylarkSemantics = true)
     public String structFieldWithExtra(StarlarkSemantics sem) {
       return "struct_field_with_extra("
         + (sem != null)
@@ -316,7 +316,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         useLocation = true,
         useAst = true,
         useEnvironment = true,
-        useStarlarkSemantics = true,
+        useSkylarkSemantics = true,
         useContext = true)
     public String withExtraInterpreterParams(
         Location location,
@@ -384,7 +384,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         useAst = true,
         useLocation = true,
         useEnvironment = true,
-        useStarlarkSemantics = true)
+        useSkylarkSemantics = true)
     public String withParamsAndExtraInterpreterParams(
         Integer pos1,
         boolean pos2,
@@ -1103,27 +1103,31 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testLegacyNamed() throws Exception {
-    new SkylarkTest("--incompatible_restrict_named_params=false")
+    new SkylarkTest()
         .update("mock", new Mock())
-        .setUp("b = mock.legacy_method(True, legacyNamed=True, named=True)")
+        .setUp(
+            "b = mock.legacy_method(True, legacyNamed=True, named=True)")
         .testLookup("b", "legacy_method(true, true, true)");
 
-    new SkylarkTest("--incompatible_restrict_named_params=false")
+    new SkylarkTest()
         .update("mock", new Mock())
-        .setUp("b = mock.legacy_method(True, True, named=True)")
+        .setUp(
+            "b = mock.legacy_method(True, True, named=True)")
         .testLookup("b", "legacy_method(true, true, true)");
 
     // Verify legacyNamed also works with proxy method objects.
-    new SkylarkTest("--incompatible_restrict_named_params=false")
+    new SkylarkTest()
         .update("mock", new Mock())
         .setUp(
             "m = mock.proxy_methods_object()",
             "b = m.legacy_method(True, legacyNamed=True, named=True)")
         .testLookup("b", "legacy_method(true, true, true)");
 
-    new SkylarkTest("--incompatible_restrict_named_params=false")
+    new SkylarkTest()
         .update("mock", new Mock())
-        .setUp("m = mock.proxy_methods_object()", "b = m.legacy_method(True, True, named=True)")
+        .setUp(
+            "m = mock.proxy_methods_object()",
+            "b = m.legacy_method(True, True, named=True)")
         .testLookup("b", "legacy_method(true, true, true)");
   }
 
@@ -1442,7 +1446,11 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testStructAccessOfMethod() throws Exception {
-    new SkylarkTest().update("mock", new Mock()).testStatement("v = mock.function", null);
+    new SkylarkTest()
+        .update("mock", new Mock())
+        .testIfExactError(
+            "object of type 'Mock' has no field 'function', however, a method of that name exists",
+            "v = mock.function");
   }
 
   @Test
@@ -1500,7 +1508,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest("--incompatible_depset_union=false")
         .testStatement("str(depset([1, 3]) | depset([1, 2]))", "depset([1, 2, 3])")
         .testStatement("str(depset([1, 2]) | [1, 3])", "depset([1, 2, 3])")
-        .testIfExactError("unsupported operand type(s) for |: 'int' and 'bool'", "2 | False");
+        .testIfExactError("unsupported operand type(s) for |: 'int' and 'int'", "2 | 4");
   }
 
   @Test
@@ -1886,16 +1894,15 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   public void testGetattrMethods() throws Exception {
     new SkylarkTest()
         .update("mock", new Mock())
-        .setUp(
-            "a = str(getattr(mock, 'struct_field', 'no'))",
-            "b = str(getattr(mock, 'function', 'no'))",
-            "c = str(getattr(mock, 'is_empty', 'no'))",
-            "d = str(getattr('str', 'replace', 'no'))",
-            "e = str(getattr(mock, 'other', 'no'))\n")
+        .setUp("a = getattr(mock, 'struct_field', 'no')",
+            "b = getattr(mock, 'function', 'no')",
+            "c = getattr(mock, 'is_empty', 'no')",
+            "d = getattr('str', 'replace', 'no')",
+            "e = getattr(mock, 'other', 'no')\n")
         .testLookup("a", "a")
-        .testLookup("b", "<built-in function function>")
-        .testLookup("c", "<built-in function is_empty>")
-        .testLookup("d", "<built-in function replace>")
+        .testLookup("b", "no")
+        .testLookup("c", "no")
+        .testLookup("d", "no")
         .testLookup("e", "no");
   }
 

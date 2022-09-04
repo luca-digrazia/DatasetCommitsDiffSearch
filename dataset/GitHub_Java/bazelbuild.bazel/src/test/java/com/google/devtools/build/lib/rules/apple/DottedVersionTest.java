@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.testing.EqualsTester;
 import org.junit.Test;
@@ -46,8 +46,6 @@ public class DottedVersionTest {
         .addEqualityGroup(DottedVersion.fromString("10.0.0.10A255"))
         .addEqualityGroup(DottedVersion.fromString("10.2"))
         .addEqualityGroup(DottedVersion.fromString("10.2.0.10P99q"))
-        .addEqualityGroup(
-            DottedVersion.fromString("10.10.simulator.internal"), DottedVersion.fromString("10.10"))
         .testCompare();
   }
 

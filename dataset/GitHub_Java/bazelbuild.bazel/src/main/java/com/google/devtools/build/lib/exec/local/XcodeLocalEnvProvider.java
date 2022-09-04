@@ -65,7 +65,7 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
   }
 
   @Override
-  public ImmutableMap<String, String> rewriteLocalEnv(
+  public Map<String, String> rewriteLocalEnv(
       Map<String, String> env, BinTools binTools, String fallbackTmpDir) throws IOException {
     boolean containsXcodeVersion = env.containsKey(AppleConfiguration.XCODE_VERSION_ENV_NAME);
     boolean containsAppleSdkVersion =

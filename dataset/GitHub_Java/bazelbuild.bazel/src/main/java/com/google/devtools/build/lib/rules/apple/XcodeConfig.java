@@ -93,17 +93,12 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
     DottedVersion macosMinimumOsVersion = (appleOptions.macosMinimumOs != null)
         ? DottedVersion.maybeUnwrap(appleOptions.macosMinimumOs) : macosSdkVersion;
 
-    XcodeConfigInfo xcodeVersions =
-        new XcodeConfigInfo(
-            iosSdkVersion,
-            iosMinimumOsVersion,
-            watchosSdkVersion,
-            watchosMinimumOsVersion,
-            tvosSdkVersion,
-            tvosMinimumOsVersion,
-            macosSdkVersion,
-            macosMinimumOsVersion,
-            xcodeVersionProperties.getXcodeVersion().orNull());
+    XcodeConfigProvider xcodeVersions = new XcodeConfigProvider(
+        iosSdkVersion, iosMinimumOsVersion,
+        watchosSdkVersion, watchosMinimumOsVersion,
+        tvosSdkVersion, tvosMinimumOsVersion,
+        macosSdkVersion, macosMinimumOsVersion,
+        xcodeVersionProperties.getXcodeVersion().orNull());
 
     AppleBitcodeMode bitcodeMode = appleConfig.getBitcodeMode();
     DottedVersion xcodeVersion = xcodeVersions.getXcodeVersion();
@@ -254,10 +249,10 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
             alias, Joiner.on(", ").join(labelsContainingAlias.build())));
   }
 
-  public static XcodeConfigInfo getXcodeConfigInfo(RuleContext ruleContext) {
+  public static XcodeConfigProvider getXcodeConfigProvider(RuleContext ruleContext) {
     return ruleContext.getPrerequisite(
         XcodeConfigRule.XCODE_CONFIG_ATTR_NAME,
         RuleConfiguredTarget.Mode.TARGET,
-        XcodeConfigInfo.PROVIDER);
+        XcodeConfigProvider.PROVIDER);
   }
 }
