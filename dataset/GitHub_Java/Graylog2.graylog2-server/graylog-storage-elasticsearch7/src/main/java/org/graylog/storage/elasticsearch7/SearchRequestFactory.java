@@ -68,8 +68,7 @@ public class SearchRequestFactory {
         applyStreamsFilter(filteredQueryBuilder, searchCommand);
 
         final SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
-                .query(filteredQueryBuilder)
-                .trackTotalHits(true);
+                .query(filteredQueryBuilder);
 
         applyPaginationIfPresent(searchSourceBuilder, searchCommand);
 
