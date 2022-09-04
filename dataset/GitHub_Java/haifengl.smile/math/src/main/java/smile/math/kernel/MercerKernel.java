@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math.kernel;
 
 import java.io.Serializable;
-import java.util.function.ToDoubleBiFunction;
 
 /**
  * A Mercer Kernel is a kernel that is positive semi-definite. When a kernel
@@ -26,8 +25,8 @@ import java.util.function.ToDoubleBiFunction;
  * implicitly mapping data to a high-dimensional feature space where some
  * linear algorithm is applied that works exclusively with inner products.
  * Assume we have some mapping &#934; from an input space X to a feature space H,
- * then a kernel <code>k(u, v) = &lt;&#934;(u), &#934;(v)&gt;</code> may be used
- * to define the inner product in feature space H.
+ * then a kernel k(u, v) = &lt;&#934;(u), &#934;(v)&gt; may be used to define the
+ * inner product in feature space H.
  * <p>
  * Positive definiteness in the context of kernel functions also implies that
  * a kernel matrix created using a particular kernel is positive semi-definite.
@@ -35,7 +34,7 @@ import java.util.function.ToDoubleBiFunction;
  * 
  * @author Haifeng Li
  */
-public interface MercerKernel<T> extends ToDoubleBiFunction<T,T>, Serializable {
+public interface MercerKernel<T> extends Serializable {
 
     /**
      * Kernel function.
@@ -47,11 +46,6 @@ public interface MercerKernel<T> extends ToDoubleBiFunction<T,T>, Serializable {
      * This is simply for Scala convenience.
      */
     default double apply(T x, T y) {
-        return k(x, y);
-    }
-
-    @Override
-    default double applyAsDouble(T x, T y) {
         return k(x, y);
     }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.nd4j;
 
@@ -31,7 +31,7 @@ import org.nd4j.linalg.inverse.InvertMatrix;
  *
  * @author Haifeng Li
  */
-public class NDMatrix implements DenseMatrix, Cloneable {
+public class NDMatrix implements DenseMatrix {
     private static final long serialVersionUID = 1L;
 
     static {
@@ -40,9 +40,7 @@ public class NDMatrix implements DenseMatrix, Cloneable {
         // (float). Here we set the order globally to double precision.
         // Alternatively, we can set the property when launching the JVM:
         // -Ddtype=double
-
-        // since beta4
-        Nd4j.setDefaultDataTypes(org.nd4j.linalg.api.buffer.DataType.DOUBLE, org.nd4j.linalg.api.buffer.DataType.DOUBLE);
+        Nd4j.setDataType(org.nd4j.linalg.api.buffer.DataBuffer.Type.DOUBLE);
     }
 
     /**
@@ -128,7 +126,7 @@ public class NDMatrix implements DenseMatrix, Cloneable {
     }
 
     @Override
-    public NDMatrix clone() {
+    public NDMatrix copy() {
         return new NDMatrix(A.dup());
     }
 

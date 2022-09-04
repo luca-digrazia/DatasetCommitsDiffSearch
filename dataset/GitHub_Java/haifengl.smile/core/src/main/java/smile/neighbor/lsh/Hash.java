@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.neighbor.lsh;
 
 import java.io.Serializable;
 import smile.math.MathEx;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 
 /**
@@ -63,7 +64,7 @@ public class Hash implements Serializable {
      * The random vectors with entries chosen independently from a Gaussian
      * distribution.
      */
-    Matrix a;
+    DenseMatrix a;
     /**
      * Real numbers chosen uniformly from the range [0, w].
      */
@@ -141,9 +142,9 @@ public class Hash implements Serializable {
      * @param x the vector to be hashed.
      * @return the bucket of hash table for given vector x.
      */
-    public int hash(double[] x) {
+    int hash(double[] x) {
         double[] h = new double[k];
-        a.mv(x, h);
+        a.ax(x, h);
 
         long g = 0;
         for (int i = 0; i < k; i++) {

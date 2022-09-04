@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.sort;
 
@@ -47,12 +47,11 @@ public class HeapSelect<T extends Comparable<? super T>> {
 
     /**
      * Constructor.
-     * @param clazz the data type of elements.
      * @param k the size of heap.
      */
     @SuppressWarnings("unchecked")
-    public HeapSelect(Class clazz, int k) {
-        this((T[]) java.lang.reflect.Array.newInstance(clazz, k));
+    public HeapSelect(int k) {
+        this((T[]) new Comparable[k]);
     }
 
     /**
@@ -66,20 +65,9 @@ public class HeapSelect<T extends Comparable<? super T>> {
         sorted = false;
     }
 
-    /** Returns the number of objects that have been added into heap. */
-    public int size() {
-        return n;
-    }
-
     /** Returns the array back the heap. */
     public T[] toArray() {
         return heap;
-    }
-
-    /** Returns the array back the heap. */
-    public T[] toArray(T[] a) {
-        System.arraycopy(heap, 0, a, 0, k);
-        return a;
     }
 
     /**

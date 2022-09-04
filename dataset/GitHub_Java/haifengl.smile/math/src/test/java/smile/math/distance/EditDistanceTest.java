@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.math.distance;
 
@@ -63,8 +63,6 @@ public class EditDistanceTest {
         assertEquals(4, EditDistance.levenshtein(x, y));
         assertEquals(4, EditDistance.levenshtein(x, z));
 
-        assertEquals(2, EditDistance.levenshtein("act", "cat"));
-        assertEquals(2, EditDistance.levenshtein("pat", "pta"));
         assertEquals(5, EditDistance.levenshtein("adcroft", "addessi"));
         assertEquals(3, EditDistance.levenshtein("baird", "baisden"));
         assertEquals(2, EditDistance.levenshtein("boggan", "boggs"));
@@ -85,8 +83,6 @@ public class EditDistanceTest {
         assertEquals(4, EditDistance.damerau(x, y));
         assertEquals(3, EditDistance.damerau(x, z));
 
-        assertEquals(1, EditDistance.damerau("act", "cat"));
-        assertEquals(1, EditDistance.damerau("pat", "pta"));
         assertEquals(5, EditDistance.damerau("adcroft", "addessi"));
         assertEquals(3, EditDistance.damerau("baird", "baisden"));
         assertEquals(2, EditDistance.damerau("boggan", "boggs"));
@@ -117,8 +113,7 @@ public class EditDistanceTest {
         assertEquals(0, edit.d(x, x), 1E-7);
         assertEquals(4, edit.d(x, y), 1E-7);
         assertEquals(4, edit.d(x, z), 1E-7);
-
-        assertEquals(2, edit.d("act", "cat"), 1E-7);
+        
         assertEquals(5, edit.d("adcroft", "addessi"), 1E-7);
         assertEquals(3, edit.d("baird", "baisden"), 1E-7);
         assertEquals(2, edit.d("boggan", "boggs"), 1E-7);
@@ -140,7 +135,6 @@ public class EditDistanceTest {
         assertEquals(4, edit.d(x, y), 1E-7);
         assertEquals(3, edit.d(x, z), 1E-7);
 
-        assertEquals(1, edit.d("act", "cat"), 1E-7);
         assertEquals(5, edit.d("adcroft", "addessi"), 1E-7);
         assertEquals(3, edit.d("baird", "baisden"), 1E-7);
         assertEquals(2, edit.d("boggan", "boggs"), 1E-7);

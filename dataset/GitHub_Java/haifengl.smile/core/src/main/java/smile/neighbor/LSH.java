@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.neighbor;
 
@@ -55,28 +55,28 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
     /**
      * The keys of data objects.
      */
-    protected ArrayList<double[]> keys;
+    ArrayList<double[]> keys;
     /**
      * The data objects.
      */
-    protected ArrayList<E> data;
+    ArrayList<E> data;
     /**
      * Hash functions.
      */
-    protected List<Hash> hash;
+    List<Hash> hash;
     /**
      * The size of hash table.
      */
-    protected int H;
+    int H;
     /**
      * The number of random projections per hash value.
      */
-    protected int k;
+    int k;
     /**
      * The width of projection. The hash function is defined as floor((a * x + b) / w). The value
      * of w determines the bucket interval.
      */
-    protected double w;
+    double w;
 
     /**
      * Constructor.

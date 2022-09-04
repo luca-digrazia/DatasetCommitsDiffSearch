@@ -17,17 +17,15 @@
 
 package smile.math.matrix;
 
-import java.io.IOException;
-import java.io.LineNumberReader;
-import java.io.Serializable;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
-import smile.stat.distribution.GaussianDistribution;
 import smile.util.SparseArray;
+import smile.stat.distribution.GaussianDistribution;
 
 /**
  * An abstract interface of matrix. The most important method is the matrix vector

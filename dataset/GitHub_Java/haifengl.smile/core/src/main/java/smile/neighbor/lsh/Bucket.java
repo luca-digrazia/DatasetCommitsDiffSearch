@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.neighbor.lsh;
 
@@ -23,7 +23,7 @@ import smile.util.IntArrayList;
 /**
  * A bucket is a container for points that all have the same value for hash
  * function g (function g is a vector of k LSH functions). A bucket is specified
- * by an integer vector of length k.
+ * by a vector in integers of length k.
  *
  * @author Haifeng Li
  */
