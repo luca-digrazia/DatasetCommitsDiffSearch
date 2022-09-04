@@ -72,6 +72,7 @@ public enum StreamRuleType {
         throw new IllegalArgumentException("Invalid Stream Rule Type specified: " + name);
     }
 
+    @JsonValue
     public Map<String, Object> toMap() {
         final Map<String, Object> result = ImmutableMap.<String, Object>of(
                 "id", value,
