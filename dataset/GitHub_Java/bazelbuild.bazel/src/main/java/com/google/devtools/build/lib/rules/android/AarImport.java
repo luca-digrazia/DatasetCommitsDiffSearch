@@ -96,28 +96,47 @@ public class AarImport implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(
         createAarResourcesExtractorActions(ruleContext, aar, resources, assets));
 
-    AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
-    StampedAndroidManifest manifest = AndroidManifest.forAarImport(androidManifestArtifact);
+    final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
+    final ResourceApk resourceApk;
+    if (AndroidResources.decoupleDataProcessing(dataContext)) {
+      StampedAndroidManifest manifest = AndroidManifest.forAarImport(androidManifestArtifact);
 
-    boolean neverlink = JavaCommon.isNeverLink(ruleContext);
+      boolean neverlink = JavaCommon.isNeverLink(ruleContext);
+      ValidatedAndroidResources validatedResources =
+          AndroidResources.forAarImport(resources)
+              .process(
+                  ruleContext,
+                  dataContext,
+                  manifest,
+                  DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
+                  neverlink);
+      MergedAndroidAssets mergedAssets =
+          AndroidAssets.forAarImport(assets)
+              .process(
+                  dataContext,
+                  AssetDependencies.fromRuleDeps(ruleContext, neverlink),
+                  AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
 
-    ValidatedAndroidResources validatedResources =
-        AndroidResources.forAarImport(resources)
-            .process(
-                ruleContext,
-                dataContext,
-                manifest,
-                DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
-                neverlink);
+      resourceApk = ResourceApk.of(validatedResources, mergedAssets, null, null);
+    } else {
+      ApplicationManifest androidManifest =
+          ApplicationManifest.fromExplicitManifest(ruleContext, androidManifestArtifact);
 
-    MergedAndroidAssets mergedAssets =
-        AndroidAssets.forAarImport(assets)
-            .process(
-                dataContext,
-                AssetDependencies.fromRuleDeps(ruleContext, neverlink),
-                AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
+      Artifact resourcesZip =
+          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP);
 
-    ResourceApk resourceApk = ResourceApk.of(validatedResources, mergedAssets, null, null);
+      resourceApk =
+          androidManifest.packAarWithDataAndResources(
+              ruleContext,
+              dataContext,
+              AndroidAssets.forAarImport(assets),
+              AndroidResources.forAarImport(resources),
+              ResourceDependencies.fromRuleDeps(ruleContext, JavaCommon.isNeverLink(ruleContext)),
+              ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
+              ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LOCAL_SYMBOLS),
+              ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
+              resourcesZip);
+    }
 
     // There isn't really any use case for building an aar_import target on its own, so the files to
     // build could be empty. The resources zip and merged jars are added here as a sanity check for
@@ -171,7 +190,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
         .outputArtifiact(depsCheckerResult)
         .importDepsCheckingLevel(javaConfig.getImportDepsCheckingLevel())
         .jdepsOutputArtifact(jdepsArtifact)
-        .ruleLabel(ruleContext.getLabel())
+        .ruleLabel(ruleContext.getLabel().getName())
         .buildAndRegister(ruleContext);
 
     // We pass depsCheckerResult to create the action of extracting ANDROID_MANIFEST. Note that

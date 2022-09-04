@@ -156,32 +156,53 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     // other artifacts.
     final ResourceApk resourceApk;
     if (definesLocalResources) {
-      StampedAndroidManifest manifest =
-          AndroidManifest.fromAttributes(ruleContext, dataContext, androidSemantics)
-              .stamp(dataContext);
+      // By decoupling processing of manifest, resources and assets, we get a higher degree of
+      // action parallelism.
+      if (androidConfig.decoupleDataProcessing()) {
+        StampedAndroidManifest manifest =
+            AndroidManifest.fromAttributes(ruleContext, dataContext, androidSemantics)
+                .stamp(dataContext);
 
-      ValidatedAndroidResources resources =
-          AndroidResources.from(ruleContext, "resource_files")
-              .process(
-                  ruleContext,
-                  dataContext,
-                  manifest,
-                  DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
-                  isNeverLink);
+        ValidatedAndroidResources resources =
+            AndroidResources.from(ruleContext, "resource_files")
+                .process(
+                    ruleContext,
+                    dataContext,
+                    manifest,
+                    DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
+                    isNeverLink);
 
-      MergedAndroidAssets assets =
-          AndroidAssets.from(ruleContext)
-              .process(
-                  dataContext, assetDeps, AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
+        MergedAndroidAssets assets =
+            AndroidAssets.from(ruleContext)
+                .process(
+                    dataContext,
+                    assetDeps,
+                    AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
 
-      resourceApk = ResourceApk.of(resources, assets, null, null);
-
+        resourceApk = ResourceApk.of(resources, assets, null, null);
+      } else {
+        // Monolithically process all Android data in the same pipeline.
+        ApplicationManifest applicationManifest =
+            androidSemantics
+                .getManifestForRule(ruleContext)
+                .renamePackage(dataContext, AndroidCommon.getJavaPackage(ruleContext));
+        resourceApk =
+            applicationManifest.packLibraryWithDataAndResources(
+                ruleContext,
+                dataContext,
+                resourceDeps,
+                ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
+                ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_MERGED_SYMBOLS),
+                ruleContext.getImplicitOutputArtifact(
+                    AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
+                ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP),
+                DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()));
+      }
       if (ruleContext.hasErrors()) {
         return null;
       }
     } else {
-      // No local resources, but we still need to process transitive resources in order to export an
-      // aar.
+      // No local resources, but we still need to process transitive resources.
       resourceApk =
           ResourceApk.processFromTransitiveLibraryData(
               dataContext,
@@ -248,7 +269,8 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         .addNativeDeclaredProvider(
             new AndroidNativeLibsInfo(
                 AndroidCommon.collectTransitiveNativeLibs(ruleContext).build()))
-        .addNativeDeclaredProvider(new AndroidCcLinkParamsProvider(androidCommon.getCcInfo()))
+        .addNativeDeclaredProvider(
+            new AndroidCcLinkParamsProvider(androidCommon.getCcLinkingInfo()))
         .add(
             JavaSourceInfoProvider.class,
             JavaSourceInfoProvider.fromJavaTargetAttributes(javaTargetAttributes, javaSemantics))

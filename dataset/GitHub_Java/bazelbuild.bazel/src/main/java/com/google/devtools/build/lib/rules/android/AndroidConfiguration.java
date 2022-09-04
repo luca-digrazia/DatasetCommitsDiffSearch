@@ -816,6 +816,19 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     public AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel;
 
     @Option(
+        name = "android_decouple_data_processing",
+        defaultValue = "true",
+        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+        effectTags = {
+          OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
+          OptionEffectTag.ACTION_COMMAND_LINES
+        },
+        help =
+            "If true, Android data (assets, resources, and manifests) will be processed seperately "
+                + "when possible. Otherwise, they will all be processed together.")
+    public boolean decoupleDataProcessing;
+
+    @Option(
       name = "android_migration_tag_check",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -920,6 +933,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   private final boolean skipParsingAction;
   private final boolean fixedResourceNeverlinking;
   private final AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel;
+  private final boolean decoupleDataProcessing;
   private final boolean checkForMigrationTag;
   private final boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
   private final boolean dataBindingV2;
@@ -960,6 +974,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.skipParsingAction = options.skipParsingAction;
     this.fixedResourceNeverlinking = options.fixedResourceNeverlinking;
     this.robolectricTestDeprecationLevel = options.robolectricTestDeprecationLevel;
+    this.decoupleDataProcessing = options.decoupleDataProcessing;
     this.checkForMigrationTag = options.checkForMigrationTag;
     this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
         options.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
@@ -1014,6 +1029,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
       boolean skipParsingAction,
       boolean fixedResourceNeverlinking,
       AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel,
+      boolean decoupleDataProcessing,
       boolean checkForMigrationTag,
       boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest,
       boolean dataBindingV2) {
@@ -1049,6 +1065,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.skipParsingAction = skipParsingAction;
     this.fixedResourceNeverlinking = fixedResourceNeverlinking;
     this.robolectricTestDeprecationLevel = robolectricTestDeprecationLevel;
+    this.decoupleDataProcessing = decoupleDataProcessing;
     this.checkForMigrationTag = checkForMigrationTag;
     this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
         oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
@@ -1201,8 +1218,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   }
 
   public boolean decoupleDataProcessing() {
-    // TODO(b/76418450): Entirely remove this method and code that depends on it
-    return true;
+    return decoupleDataProcessing;
   }
 
   public boolean checkForMigrationTag() {

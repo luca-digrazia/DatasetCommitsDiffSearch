@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.rules.java.ClasspathConfiguredFragment;
@@ -61,6 +60,7 @@ import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.OneVersionCheckActionBuilder;
+import com.google.devtools.build.lib.rules.java.ProguardHelper;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OS;
@@ -94,19 +94,49 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     JavaTargetAttributes.Builder attributesBuilder = javaCommon.initCommon();
 
     final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
-    final ResourceApk resourceApk =
-        buildResourceApk(
-            dataContext,
-            androidSemantics,
-            ruleContext,
-            DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
-            AndroidManifest.fromAttributes(ruleContext, dataContext),
-            AndroidResources.from(ruleContext, "resource_files"),
-            AndroidAssets.from(ruleContext),
-            ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
-            AssetDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
-            StampedAndroidManifest.getManifestValues(ruleContext),
-            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
+    final ResourceApk resourceApk;
+
+    if (AndroidResources.decoupleDataProcessing(dataContext)) {
+      resourceApk =
+          buildResourceApk(
+              dataContext,
+              androidSemantics,
+              DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
+              AndroidManifest.fromAttributes(ruleContext, dataContext),
+              AndroidResources.from(ruleContext, "resource_files"),
+              AndroidAssets.from(ruleContext),
+              ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
+              AssetDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
+              ApplicationManifest.getManifestValues(ruleContext),
+              AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
+    } else {
+      // Create the final merged manifest
+      ResourceDependencies resourceDependencies =
+          ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink= */ false);
+
+      ApplicationManifest applicationManifest =
+          getApplicationManifest(ruleContext, dataContext, resourceDependencies);
+
+      // Create the final merged R class
+      resourceApk =
+          applicationManifest.packBinaryWithDataAndResources(
+              ruleContext,
+              dataContext,
+              DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
+              ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
+              resourceDependencies,
+              ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
+              ResourceFilterFactory.fromRuleContextAndAttrs(ruleContext),
+              ImmutableList.of(), /* list of uncompressed extensions */
+              false, /* crunch png */
+              ProguardHelper.getProguardConfigArtifact(ruleContext, ""),
+              /* mainDexProguardCfg= */ null,
+              /* conditionalKeepRules= */ false,
+              ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
+              ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP),
+              null, /* featureOfArtifact */
+              null /* featureAfterArtifact */);
+    }
 
     attributesBuilder.addRuntimeClassPathEntry(resourceApk.getResourceJavaClassJar());
 
@@ -326,7 +356,8 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
 
     if (generatedExtensionRegistryProvider != null) {
-      builder.addNativeDeclaredProvider(generatedExtensionRegistryProvider);
+      builder.addProvider(
+          GeneratedExtensionRegistryProvider.class, generatedExtensionRegistryProvider);
     }
 
     JavaRuleOutputJarsProvider ruleOutputJarsProvider = javaRuleOutputJarsProviderBuilder.build();
@@ -375,6 +406,38 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
         .addProvider(JavaPrimaryClassProvider.class, new JavaPrimaryClassProvider(testClass))
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
         .build();
+  }
+
+  /**
+   * Returns a merged {@link ApplicationManifest} for the rule. The final merged manifest will be
+   * merged into the manifest provided on the rule, or into a placeholder manifest if one is not
+   * provided
+   *
+   * @throws InterruptedException
+   * @throws RuleErrorException
+   */
+  private ApplicationManifest getApplicationManifest(
+      RuleContext ruleContext,
+      AndroidDataContext dataContext,
+      ResourceDependencies resourceDependencies)
+      throws InterruptedException, RuleErrorException {
+    ApplicationManifest applicationManifest;
+
+    if (AndroidResources.definesAndroidResources(ruleContext.attributes())) {
+      AndroidResources.validateRuleContext(ruleContext);
+      ApplicationManifest ruleManifest =
+          ApplicationManifest.renamedFromRule(ruleContext, dataContext);
+      applicationManifest =
+          ruleManifest.mergeWith(
+              ruleContext, dataContext, createAndroidSemantics(), resourceDependencies);
+    } else {
+      // we don't have a manifest, merge like android_library with a stub manifest
+      ApplicationManifest dummyManifest = ApplicationManifest.generatedManifest(ruleContext);
+      applicationManifest =
+          dummyManifest.mergeWith(
+              ruleContext, dataContext, createAndroidSemantics(), resourceDependencies);
+    }
+    return applicationManifest;
   }
 
   private static void setUpJavaCommon(
@@ -494,7 +557,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
   static ResourceApk buildResourceApk(
       AndroidDataContext dataContext,
       AndroidSemantics androidSemantics,
-      RuleErrorConsumer errorConsumer,
       DataBindingContext dataBindingContext,
       AndroidManifest manifest,
       AndroidResources resources,
@@ -509,10 +571,9 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
         manifest.mergeWithDeps(
             dataContext,
             androidSemantics,
-            errorConsumer,
             resourceDeps,
             manifestValues,
-            /* manifestMerger = */ null);
+            /* useLegacyMerger = */ false);
 
     return ProcessedAndroidData.processLocalTestDataFrom(
             dataContext,

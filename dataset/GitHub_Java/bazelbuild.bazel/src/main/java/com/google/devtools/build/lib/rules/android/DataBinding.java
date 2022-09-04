@@ -467,12 +467,13 @@ public final class DataBinding {
             ruleContext,
             String.format(
                 "%s/%s", DEP_METADATA_INPUT_DIR, depMetadata.getRootRelativePathString()));
-    ruleContext.registerAction(SymlinkAction.toArtifact(
-        ruleContext.getActionOwner(),
-        depMetadata,
-        symlink,
-        String.format(
-            "Symlinking dep metadata output %s for %s", depMetadata.getFilename(), ruleLabel)));
+    ruleContext.registerAction(
+        new SymlinkAction(
+            ruleContext.getActionOwner(),
+            depMetadata,
+            symlink,
+            String.format(
+                "Symlinking dep metadata output %s for %s", depMetadata.getFilename(), ruleLabel)));
     return symlink;
   }
 }

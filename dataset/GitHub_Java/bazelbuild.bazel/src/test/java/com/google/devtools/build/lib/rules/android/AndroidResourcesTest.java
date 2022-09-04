@@ -25,8 +25,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
-import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
+import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Optional;
 import org.junit.Before;
@@ -468,7 +467,7 @@ public class AndroidResourcesTest extends ResourceTestBase {
             null,
             null);
 
-    ValidatedAndroidResources validated =
+    ValidatedAndroidData validated =
         processedData
             .generateRClass(
                 AndroidDataContext.forNative(ruleContext),
@@ -509,28 +508,6 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
     assertThat(resourceApk.getResourceProguardConfig()).isNotNull();
     assertThat(resourceApk.getMainDexProguardConfig()).isNotNull();
-  }
-
-  @Test
-  public void test_incompatibleUseAapt2ByDefaultEnabled_targetsAapt2() throws Exception {
-    mockAndroidSdkWithAapt2();
-    useConfiguration("--android_sdk=//sdk:sdk", "--incompatible_use_aapt2_by_default");
-    RuleContext ruleContext =
-        getRuleContext(
-            "android_binary", "aapt_version = 'auto',", "manifest = 'AndroidManifest.xml',");
-    assertThat(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
-        .isEqualTo(AndroidAaptVersion.AAPT2);
-  }
-
-  @Test
-  public void test_incompatibleUseAapt2ByDefaultDisabled_targetsAapt() throws Exception {
-    mockAndroidSdkWithAapt2();
-    useConfiguration("--android_sdk=//sdk:sdk", "--noincompatible_use_aapt2_by_default");
-    RuleContext ruleContext =
-        getRuleContext(
-            "android_binary", "aapt_version = 'auto',", "manifest = 'AndroidManifest.xml',");
-    assertThat(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
-        .isEqualTo(AndroidAaptVersion.AAPT);
   }
 
   /**
@@ -579,10 +556,7 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   private ParsedAndroidResources makeParsedResources(RuleContext ruleContext)
       throws RuleErrorException, InterruptedException {
-    DataBindingContext dataBindingContext =
-        DataBinding.contextFrom(ruleContext,
-            ruleContext.getConfiguration().getFragment(AndroidConfiguration.class));
-    return makeParsedResources(ruleContext, dataBindingContext);
+    return makeParsedResources(ruleContext, DataBinding.asDisabledDataBindingContext());
   }
 
   private ParsedAndroidResources makeParsedResources(
