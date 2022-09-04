@@ -17,13 +17,15 @@
 package org.graylog.plugins.map.rest;
 
 import com.codahale.metrics.annotation.Timed;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog.plugins.map.search.MapDataSearch;
 import org.graylog.plugins.map.search.MapDataSearchRequest;
 import org.graylog.plugins.map.search.MapDataSearchResult;
+import org.graylog2.audit.jersey.NoAuditEvent;
+import org.graylog2.decorators.DecoratorProcessor;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
@@ -52,8 +54,8 @@ public class MapDataResource extends SearchResource implements PluginRestResourc
     private final MapDataSearch search;
 
     @Inject
-    public MapDataResource(MapDataSearch search, Searches searches, ClusterConfigService clusterConfigService) {
-        super(searches, clusterConfigService);
+    public MapDataResource(MapDataSearch search, Searches searches, ClusterConfigService clusterConfigService, DecoratorProcessor decoratorProcessor) {
+        super(searches, clusterConfigService, decoratorProcessor);
         this.search = search;
     }
 
@@ -62,6 +64,7 @@ public class MapDataResource extends SearchResource implements PluginRestResourc
     @ApiOperation(value = "Get map data")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
+    @NoAuditEvent("only used to fetch map data, no changes made in the system")
     public MapDataSearchResult mapData(@ApiParam(name = "JSON body", required = true) MapDataSearchRequest request) {
         final String filter = "streams:" + request.streamId();
 
