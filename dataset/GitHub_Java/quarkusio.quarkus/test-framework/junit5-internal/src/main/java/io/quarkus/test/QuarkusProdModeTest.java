@@ -1,14 +1,19 @@
 package io.quarkus.test;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,6 +31,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.asset.Asset;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -41,7 +47,6 @@ import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppDependency;
-import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.RestAssuredURLManager;
 import io.quarkus.utilities.JavaBinFinder;
@@ -379,7 +384,34 @@ public class QuarkusProdModeTest
             timeoutTask = null;
 
             if ((outputDir != null) && !preventOutputDirCleanup) {
-                FileUtil.deleteDirectory(outputDir);
+                Files.walkFileTree(outputDir, new FileVisitor<Path>() {
+                    @Override
+                    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                            throws IOException {
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                        Files.delete(file);
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                        if (exc == null) {
+                            Files.delete(dir);
+                            return FileVisitResult.CONTINUE;
+                        } else {
+                            throw exc;
+                        }
+                    }
+                });
             }
         }
     }
@@ -425,4 +457,22 @@ public class QuarkusProdModeTest
         return this;
     }
 
+    private static class PropertiesAsset implements Asset {
+        private final Properties props;
+
+        public PropertiesAsset(final Properties props) {
+            this.props = props;
+        }
+
+        @Override
+        public InputStream openStream() {
+            final ByteArrayOutputStream outputStream = new ByteArrayOutputStream(128);
+            try {
+                props.store(outputStream, "Unit test Generated Application properties");
+            } catch (IOException e) {
+                throw new RuntimeException("Could not write application properties resource", e);
+            }
+            return new ByteArrayInputStream(outputStream.toByteArray());
+        }
+    }
 }
