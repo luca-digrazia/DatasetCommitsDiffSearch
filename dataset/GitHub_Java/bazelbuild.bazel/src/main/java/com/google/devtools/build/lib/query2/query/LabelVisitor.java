@@ -410,18 +410,18 @@ final class LabelVisitor {
 
       observeNode(target);
 
-      // LabelVisitor has some legacy special handling of OutputFiles.
-      if (target instanceof OutputFile) {
-        Rule rule = ((OutputFile) target).getGeneratingRule();
-        observeEdge(target, null, rule);
-        visit(null, null, rule, depth + 1, count + 1);
-      }
-
       LabelVisitationUtils.visitTargetExceptionally(
           target,
           edgeFilter,
-          (fromTarget, attribute, toLabel) ->
-              enqueueTarget(target, attribute, toLabel, depth, count));
+          (fromTarget, attribute, toLabel) -> {
+            if (target instanceof OutputFile) {
+              Rule rule = ((OutputFile) target).getGeneratingRule();
+              observeEdge(target, null, rule);
+              visit(null, null, rule, depth + 1, count + 1);
+            } else {
+              enqueueTarget(target, attribute, toLabel, depth, count);
+            }
+          });
     }
 
     private void observeEdge(Target from, Attribute attribute, Target to) {
