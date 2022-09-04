@@ -21,17 +21,16 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleFormatter;
-import com.google.devtools.build.lib.repository.ExternalPackageException;
-import com.google.devtools.build.lib.repository.ExternalPackageUtil;
-import com.google.devtools.build.lib.repository.ExternalRuleNotFoundException;
+import com.google.devtools.build.lib.rules.ExternalPackageUtil;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.skyframe.FileValue;
-import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue.Precomputed;
+import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -54,7 +53,7 @@ import javax.annotation.Nullable;
  */
 public final class RepositoryDelegatorFunction implements SkyFunction {
   public static final Precomputed<Map<RepositoryName, PathFragment>> REPOSITORY_OVERRIDES =
-      new Precomputed<>(PrecomputedValue.Key.create("repository_overrides"));
+      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "repository_overrides"));
 
   // The marker file version is inject in the rule key digest so the rule key is always different
   // when we decide to update the format.
@@ -118,8 +117,8 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
 
     Rule rule;
     try {
-      rule = getRepository(repositoryName, env);
-    } catch (ExternalRuleNotFoundException e) {
+      rule = ExternalPackageUtil.getRepository(repositoryName, null, env);
+    } catch (ExternalPackageUtil.ExternalRuleNotFoundException e) {
       return RepositoryDirectoryValue.NO_SUCH_REPOSITORY_VALUE;
     }
     if (rule == null) {
@@ -145,10 +144,10 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     }
     String ruleKey = computeRuleKey(rule, ruleSpecificData);
     Map<String, String> markerData = new TreeMap<>();
-     if (isFetch.get() && handler.isLocal(rule)) {
-      // Local repositories are fetched regardless of the marker file because the operation is
-      // generally fast and they do not depend on non-local data, so it does not make much sense to
-      // try to cache from across server instances.
+    if (handler.isLocal(rule)) {
+      // Local repositories are always fetched because the operation is generally fast and they do
+      // not depend on non-local data, so it does not make much sense to try to cache from across
+      // server instances.
       setupRepositoryRoot(repoRoot);
       RepositoryDirectoryValue.Builder localRepo =
           handler.fetch(rule, repoRoot, directories, env, markerData);
@@ -223,18 +222,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
 
     return RepositoryDirectoryValue.builder().setPath(repoRootValue.realRootedPath().asPath())
         .setFetchingDelayed().build();
-  }
-
-  /**
-   * Uses a remote repository name to fetch the corresponding Rule describing how to get it. This
-   * should be called from {@link SkyFunction#compute} functions, which should return null if this
-   * returns null.
-   */
-  @Nullable
-  private static Rule getRepository(
-      RepositoryName repositoryName, Environment env)
-      throws ExternalPackageException, InterruptedException {
-    return ExternalPackageUtil.getRuleByName(repositoryName.strippedName(), env);
   }
 
   private String computeRuleKey(Rule rule, byte[] ruleSpecificData) {

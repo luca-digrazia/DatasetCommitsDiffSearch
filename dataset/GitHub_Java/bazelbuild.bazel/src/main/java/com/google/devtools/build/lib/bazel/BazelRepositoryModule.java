@@ -169,7 +169,7 @@ public class BazelRepositoryModule extends BlazeModule {
             isFetch,
             clientEnvironmentSupplier,
             directories));
-    builder.addSkyFunction(MavenServerFunction.NAME, new MavenServerFunction(directories));
+    builder.addSkyFunction(MavenServerFunction.NAME, new MavenServerFunction());
     filesystem = directories.getFileSystem();
   }
 
