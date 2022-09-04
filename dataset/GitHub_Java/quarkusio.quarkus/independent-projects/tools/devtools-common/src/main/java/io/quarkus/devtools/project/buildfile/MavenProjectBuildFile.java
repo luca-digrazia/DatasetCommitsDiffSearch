@@ -6,7 +6,6 @@ import static io.quarkus.devtools.project.extensions.Extensions.toKey;
 import io.quarkus.bootstrap.resolver.maven.BootstrapMavenException;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
-import io.quarkus.bootstrap.resolver.maven.workspace.ModelUtils;
 import io.quarkus.devtools.messagewriter.MessageWriter;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
@@ -73,8 +72,7 @@ public class MavenProjectBuildFile extends BuildFile {
         if (projectPom == null) {
             managedDeps = Collections.emptyList();
             deps = () -> Collections.emptyList();
-            // TODO allow multiple streams in the same catalog for now
-            quarkusVersion = null;// defaultQuarkusVersion.get();
+            quarkusVersion = defaultQuarkusVersion.get();
         } else {
             final ArtifactDescriptorResult descriptor = describe(mvnResolver, projectPom);
             managedDeps = toArtifactCoords(descriptor.getManagedDependencies());
@@ -88,8 +86,7 @@ public class MavenProjectBuildFile extends BuildFile {
                 : ExtensionCatalogResolver.empty();
         if (catalogResolver.hasRegistries()) {
             try {
-                extensionCatalog = quarkusVersion == null ? catalogResolver.resolveExtensionCatalog()
-                        : catalogResolver.resolveExtensionCatalog(quarkusVersion);
+                extensionCatalog = catalogResolver.resolveExtensionCatalog(quarkusVersion);
             } catch (RegistryResolutionException e) {
                 throw new RuntimeException("Failed to resolve extension catalog", e);
             }
@@ -170,9 +167,9 @@ public class MavenProjectBuildFile extends BuildFile {
         }
     }
 
-    private Model model;
-    private List<ArtifactCoords> managedDependencies;
-    private Properties projectProps;
+    private final Model model;
+    private final List<ArtifactCoords> managedDependencies;
+    private final Properties projectProps;
     private Supplier<List<ArtifactCoords>> projectDepsSupplier;
     private List<ArtifactCoords> dependencies;
     private List<ArtifactCoords> importedPlatforms;
@@ -191,36 +188,6 @@ public class MavenProjectBuildFile extends BuildFile {
     @Override
     public BuildTool getBuildTool() {
         return BuildTool.MAVEN;
-    }
-
-    @Override
-    protected boolean importBom(ArtifactCoords coords) {
-        if (!"pom".equalsIgnoreCase(coords.getType())) {
-            throw new IllegalArgumentException(coords + " is not a POM");
-        }
-        final Dependency d = new Dependency();
-        d.setGroupId(coords.getGroupId());
-        d.setArtifactId(coords.getArtifactId());
-        d.setType(coords.getType());
-        d.setScope("import");
-        d.setVersion(coords.getVersion());
-        DependencyManagement dependencyManagement = model().getDependencyManagement();
-        if (dependencyManagement == null) {
-            dependencyManagement = new DependencyManagement();
-            model().setDependencyManagement(dependencyManagement);
-        }
-        if (dependencyManagement.getDependencies()
-                .stream()
-                .filter(t -> t.getScope().equals("import"))
-                .noneMatch(thisDep -> d.getManagementKey().equals(resolveKey(thisDep)))) {
-            dependencyManagement.addDependency(d);
-            // the effective managed dependencies set may already include it
-            if (!getManagedDependencies().contains(coords)) {
-                getManagedDependencies().add(coords);
-            }
-            return true;
-        }
-        return false;
     }
 
     @Override
@@ -332,21 +299,6 @@ public class MavenProjectBuildFile extends BuildFile {
 
     @Override
     protected void refreshData() {
-        final Path projectPom = getProjectDirPath().resolve("pom.xml");
-        if (Files.exists(projectPom)) {
-            try {
-                model = ModelUtils.readModel(projectPom);
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to read " + projectPom, e);
-            }
-            projectProps = model.getProperties();
-            final ArtifactDescriptorResult descriptor = describe(getMavenResolver(getProjectDirPath()), new DefaultArtifact(
-                    ModelUtils.getGroupId(model), model.getArtifactId(), "pom", ModelUtils.getVersion(model)));
-            managedDependencies = toArtifactCoords(descriptor.getManagedDependencies());
-            dependencies = null;
-            projectDepsSupplier = () -> toArtifactCoords(descriptor.getDependencies());
-
-        }
     }
 
     private int getIndexToAddExtension() {

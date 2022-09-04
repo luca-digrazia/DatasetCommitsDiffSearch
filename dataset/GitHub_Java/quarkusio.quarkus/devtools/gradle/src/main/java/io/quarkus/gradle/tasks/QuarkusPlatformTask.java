@@ -41,9 +41,10 @@ public abstract class QuarkusPlatformTask extends QuarkusTask {
         final ExtensionCatalogResolver catalogResolver = QuarkusProjectHelper.isRegistryClientEnabled()
                 ? QuarkusProjectHelper.getCatalogResolver(log)
                 : ExtensionCatalogResolver.empty();
-        if (catalogResolver.hasRegistries() && !limitExtensionsToImportedPlatforms) {
+        if (catalogResolver.hasRegistries()) {
             try {
-                return catalogResolver.resolveExtensionCatalog(platforms);
+                return limitExtensionsToImportedPlatforms ? catalogResolver.resolveExtensionCatalog(platforms)
+                        : catalogResolver.resolveExtensionCatalog(quarkusCoreVersion());
             } catch (Exception e) {
                 throw new RuntimeException("Failed to resolve extensions catalog", e);
             }
