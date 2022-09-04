@@ -31,17 +31,13 @@ import org.nd4j.linalg.inverse.InvertMatrix;
  *
  * @author Haifeng Li
  */
-public class NDMatrix implements DenseMatrix {
+public class NDMatrix extends DenseMatrix {
     private static final long serialVersionUID = 1L;
 
     /**
      * The matrix storage.
      */
     private INDArray A;
-    /**
-     * True if the matrix is symmetric.
-     */
-    private boolean symmetric = false;
 
     /**
      * Constructor.
@@ -88,16 +84,6 @@ public class NDMatrix implements DenseMatrix {
 
     public static NDMatrix eye(int n) {
         return new NDMatrix(Nd4j.eye(n));
-    }
-
-    @Override
-    public boolean isSymmetric() {
-        return symmetric;
-    }
-
-    @Override
-    public void setSymmetric(boolean symmetric) {
-        this.symmetric = symmetric;
     }
 
     @Override
@@ -325,7 +311,7 @@ public class NDMatrix implements DenseMatrix {
         if (b instanceof NDMatrix)
             add((NDMatrix) b);
         else
-            DenseMatrix.super.add(b);
+            super.add(b);
 
         return this;
     }
@@ -344,7 +330,7 @@ public class NDMatrix implements DenseMatrix {
         if (b instanceof NDMatrix && c instanceof NDMatrix)
             return add((NDMatrix) b, (NDMatrix) c);
         else
-            return DenseMatrix.super.add(b, c);
+            return super.add(b, c);
     }
 
     public NDMatrix add(NDMatrix b, NDMatrix c) {
@@ -357,7 +343,7 @@ public class NDMatrix implements DenseMatrix {
         if (b instanceof NDMatrix)
             sub((NDMatrix) b);
         else
-            DenseMatrix.super.sub(b);
+            super.sub(b);
 
         return this;
     }
@@ -376,7 +362,7 @@ public class NDMatrix implements DenseMatrix {
         if (b instanceof NDMatrix && c instanceof NDMatrix)
             return sub((NDMatrix) b, (NDMatrix) c);
         else
-            return DenseMatrix.super.sub(b, c);
+            return super.sub(b, c);
     }
 
     public NDMatrix sub(NDMatrix b, NDMatrix c) {
@@ -389,7 +375,7 @@ public class NDMatrix implements DenseMatrix {
         if (b instanceof NDMatrix)
             mul((NDMatrix) b);
         else
-            DenseMatrix.super.mul(b);
+            super.mul(b);
 
         return this;
     }
@@ -408,7 +394,7 @@ public class NDMatrix implements DenseMatrix {
         if (b instanceof NDMatrix && c instanceof NDMatrix)
             return mul((NDMatrix) b, (NDMatrix) c);
         else
-            return DenseMatrix.super.mul(b, c);
+            return super.mul(b, c);
     }
 
     public NDMatrix mul(NDMatrix b, NDMatrix c) {
@@ -421,7 +407,7 @@ public class NDMatrix implements DenseMatrix {
         if (b instanceof NDMatrix)
             div((NDMatrix) b);
         else
-            DenseMatrix.super.div(b);
+            super.div(b);
 
         return this;
     }
@@ -440,7 +426,7 @@ public class NDMatrix implements DenseMatrix {
         if (b instanceof NDMatrix && c instanceof NDMatrix)
             return div((NDMatrix) b, (NDMatrix) c);
         else
-            return DenseMatrix.super.div(b, c);
+            return super.div(b, c);
     }
 
     public NDMatrix div(NDMatrix b, NDMatrix c) {
@@ -459,7 +445,7 @@ public class NDMatrix implements DenseMatrix {
         if (c instanceof NDMatrix)
             return add(x, (NDMatrix)c);
         else
-            return DenseMatrix.super.add(x, c);
+            return super.add(x, c);
     }
 
     public NDMatrix add(double x, NDMatrix c) {
@@ -478,7 +464,7 @@ public class NDMatrix implements DenseMatrix {
         if (c instanceof NDMatrix)
             return sub(x, (NDMatrix) c);
         else
-            return DenseMatrix.super.sub(x, c);
+            return super.sub(x, c);
     }
 
     public NDMatrix sub(double x, NDMatrix c) {
@@ -497,7 +483,7 @@ public class NDMatrix implements DenseMatrix {
         if (c instanceof NDMatrix)
             return mul(x, (NDMatrix) c);
         else
-            return DenseMatrix.super.mul(x, c);
+            return super.mul(x, c);
     }
 
     public NDMatrix mul(double x, NDMatrix c) {
@@ -516,7 +502,7 @@ public class NDMatrix implements DenseMatrix {
         if (c instanceof NDMatrix)
             return div(x, (NDMatrix) c);
         else
-            return DenseMatrix.super.div(x, c);
+            return super.div(x, c);
     }
 
     public NDMatrix div(double x, NDMatrix c) {
