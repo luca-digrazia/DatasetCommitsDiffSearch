@@ -7,15 +7,14 @@ import java.util.List;
 import java.util.Set;
 
 import io.quarkus.cli.common.BuildOptions;
-import io.quarkus.cli.common.CategoryListFormatOptions;
 import io.quarkus.cli.common.DebugOptions;
 import io.quarkus.cli.common.DevOptions;
 import io.quarkus.cli.common.ListFormatOptions;
 import io.quarkus.cli.common.OutputOptionMixin;
-import io.quarkus.cli.common.PropertiesOptions;
 import io.quarkus.cli.common.RegistryClientMixin;
 import io.quarkus.cli.common.RunModeOption;
 import io.quarkus.devtools.project.BuildTool;
+import io.quarkus.registry.config.RegistriesConfigLocator;
 
 public class JBangRunner implements BuildSystemRunner {
     static final String[] windowsWrapper = { "jbang.cmd", "jbang.ps1" };
@@ -44,13 +43,7 @@ public class JBangRunner implements BuildSystemRunner {
     }
 
     @Override
-    public Integer listExtensionCategories(RunModeOption runMode, CategoryListFormatOptions format) throws Exception {
-        throw new UnsupportedOperationException("Not there yet. ;)");
-    }
-
-    @Override
-    public Integer listExtensions(RunModeOption runMode, ListFormatOptions format, boolean installable, String searchPattern,
-            String category)
+    public Integer listExtensions(RunModeOption runMode, ListFormatOptions format, boolean installable, String searchPattern)
             throws Exception {
         throw new UnsupportedOperationException("Not there yet. ;)");
     }
@@ -66,8 +59,7 @@ public class JBangRunner implements BuildSystemRunner {
     }
 
     @Override
-    public BuildCommandArgs prepareBuild(BuildOptions buildOptions, PropertiesOptions propertiesOptions, RunModeOption runMode,
-            List<String> params) {
+    public BuildCommandArgs prepareBuild(BuildOptions buildOptions, RunModeOption runMode, List<String> params) {
         ArrayDeque<String> args = new ArrayDeque<>();
 
         if (buildOptions.offline) {
@@ -80,14 +72,14 @@ public class JBangRunner implements BuildSystemRunner {
             args.add("--native");
         }
         args.add("build");
+        setJbangProperties(args, false);
         args.addAll(params);
         args.add(getMainPath());
         return prependExecutable(args);
     }
 
     @Override
-    public BuildCommandArgs prepareDevMode(DevOptions devOptions, PropertiesOptions propertiesOptions,
-            DebugOptions debugOptions, List<String> params) {
+    public BuildCommandArgs prepareDevMode(DevOptions devOptions, DebugOptions debugOptions, List<String> params) {
         throw new UnsupportedOperationException("Not there yet. ;)");
     }
 
@@ -133,5 +125,11 @@ public class JBangRunner implements BuildSystemRunner {
             throw new IllegalStateException("Unable to find a source file for use with JBang");
         }
         return mainPath;
+    }
+
+    void setJbangProperties(ArrayDeque<String> args, boolean batchMode) {
+        ExecuteUtil.propagatePropertyIfSet("maven.repo.local", args);
+        ExecuteUtil.propagatePropertyIfSet(RegistriesConfigLocator.CONFIG_FILE_PATH_PROPERTY, args);
+        ExecuteUtil.propagatePropertyIfSet("io.quarkus.maven.secondary-local-repo", args);
     }
 }
