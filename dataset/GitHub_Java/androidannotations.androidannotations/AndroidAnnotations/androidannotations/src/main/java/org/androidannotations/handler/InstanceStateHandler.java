@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,7 +19,6 @@ import static com.sun.codemodel.JExpr.ref;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
-import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.InstanceState;
 import org.androidannotations.helper.APTCodeModelHelper;
@@ -64,11 +63,8 @@ public class InstanceStateHandler extends BaseAnnotationHandler<HasInstanceState
 		JVar restoreStateBundleParam = holder.getRestoreStateBundleParam();
 
 		AnnotationHelper annotationHelper = new AnnotationHelper(processingEnv);
+		BundleHelper bundleHelper = new BundleHelper(annotationHelper, element);
 		APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
-
-		TypeMirror type = codeModelHelper.getActualType(element, holder);
-
-		BundleHelper bundleHelper = new BundleHelper(annotationHelper, type);
 
 		JFieldRef ref = ref(fieldName);
 		saveStateBody.invoke(saveStateBundleParam, bundleHelper.getMethodNameToSave()).arg(fieldName).arg(ref);

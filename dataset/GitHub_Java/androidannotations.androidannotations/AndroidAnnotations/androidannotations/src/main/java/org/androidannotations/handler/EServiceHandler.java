@@ -15,17 +15,17 @@
  */
 package org.androidannotations.handler;
 
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+
 import org.androidannotations.annotations.EService;
 import org.androidannotations.holder.EServiceHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 import org.androidannotations.process.ProcessHolder;
 
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
-
-public class EServiceHandler extends BaseGeneratingAnnotationHandler<EServiceHolder> {
+public class EServiceHandler extends BaseAnnotationHandler<EServiceHolder> implements GeneratingAnnotationHandler<EServiceHolder> {
 
 	public EServiceHandler(ProcessingEnvironment processingEnvironment) {
 		super(EService.class, processingEnvironment);
@@ -33,14 +33,14 @@ public class EServiceHandler extends BaseGeneratingAnnotationHandler<EServiceHol
 
 	@Override
 	public EServiceHolder createGeneratedClassHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
-		return new EServiceHolder(processHolder, annotatedElement, androidManifest);
+		return new EServiceHolder(processHolder, annotatedElement);
 	}
 
 	@Override
 	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		super.validate(element, validatedElements, valid);
-
 		validatorHelper.extendsService(element, valid);
+
+		validatorHelper.isNotFinal(element, valid);
 
 		validatorHelper.componentRegistered(element, androidManifest, valid);
 	}

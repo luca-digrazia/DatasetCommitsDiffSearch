@@ -28,7 +28,6 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.ItemClick;
-import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
@@ -42,8 +41,6 @@ import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
 public class ItemClickHandler extends AbstractListenerHandler {
-
-	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public ItemClickHandler(ProcessingEnvironment processingEnvironment) {
 		super(ItemClick.class, processingEnvironment);
@@ -82,12 +79,8 @@ public class ItemClickHandler extends AbstractListenerHandler {
 			if (parameterType.getKind() == TypeKind.INT) {
 				call.arg(onItemClickPositionParam);
 			} else {
-				JClass parameterClass = codeModelHelper.typeMirrorToJClass(parameterType, getHolder());
-				call.arg(cast(parameterClass, invoke(onItemClickParentParam, "getAdapter").invoke("getItem").arg(onItemClickPositionParam)));
-
-				if (parameterClass.isParameterized()) {
-					listenerMethod.annotate(SuppressWarnings.class).param("value", "unchecked");
-				}
+				String parameterTypeQualifiedName = parameterType.toString();
+				call.arg(cast(refClass(parameterTypeQualifiedName), invoke(onItemClickParentParam, "getAdapter").invoke("getItem").arg(onItemClickPositionParam)));
 			}
 		}
 	}

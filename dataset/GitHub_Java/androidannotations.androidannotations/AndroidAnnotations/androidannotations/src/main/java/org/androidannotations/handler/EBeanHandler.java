@@ -42,7 +42,7 @@ public class EBeanHandler extends BaseAnnotationHandler<EBeanHolder> implements 
 
 		validatorHelper.isNotPrivate(element, valid);
 
-		validatorHelper.isAbstractOrHasEmptyOrContextConstructor(element, valid);
+		validatorHelper.hasEmptyOrContextConstructor(element, valid);
 	}
 
 	@Override
@@ -54,7 +54,6 @@ public class EBeanHandler extends BaseAnnotationHandler<EBeanHolder> implements 
 		holder.createFactoryMethod(hasSingletonScope);
 
 		if (!hasSingletonScope) {
-            holder.invokeInitInConstructor();
 			holder.createRebindMethod();
 		}
 	}

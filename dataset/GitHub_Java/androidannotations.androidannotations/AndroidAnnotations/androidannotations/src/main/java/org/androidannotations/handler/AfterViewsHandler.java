@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -42,7 +42,7 @@ public class AfterViewsHandler extends BaseAnnotationHandler<EComponentWithViewS
 
 		validatorHelper.doesntThrowException(executableElement, valid);
 
-		validatorHelper.param.noParam().validate(executableElement, valid);
+		validatorHelper.param.zeroParameter(executableElement, valid);
 	}
 
 	@Override

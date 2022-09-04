@@ -15,18 +15,15 @@
  */
 package org.androidannotations.handler.rest;
 
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JInvocation;
 import org.androidannotations.annotations.rest.Options;
-import org.androidannotations.holder.RestHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 
 public class OptionsHandler extends RestMethodHandler {
 
@@ -49,13 +46,8 @@ public class OptionsHandler extends RestMethodHandler {
 		return annotation.value();
 	}
 
-    @Override
-    protected JExpression getResponseClass(Element element, RestHolder holder) {
-        return JExpr._null();
-    }
-
 	@Override
-	protected JExpression addResultCallMethod(JExpression exchangeCall, JClass methodReturnClass) {
+	protected JInvocation addResultCallMethod(JInvocation exchangeCall, JClass methodReturnClass) {
 		return exchangeCall.invoke("getHeaders").invoke("getAllow");
 	}
 }

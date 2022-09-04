@@ -71,6 +71,6 @@ public class ProduceHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 		JMethod delegatingMethod = codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
 
-		delegatingMethod.annotate(refClass(PRODUCE));
+		delegatingMethod.annotate(holder.refClass(PRODUCE));
 	}
 }
