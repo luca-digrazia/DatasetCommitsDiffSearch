@@ -45,10 +45,12 @@ import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
+import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidManifestMerger;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.config.ConfigFeatureFlagProvider;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
@@ -110,8 +112,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_shrunk.ap_");
   public static final SafeImplicitOutputsFunction ANDROID_RESOURCES_ZIP =
       fromTemplates("%{name}_files/resource_files.zip");
-  public static final SafeImplicitOutputsFunction ANDROID_ASSETS_ZIP =
-      fromTemplates("%{name}_files/assets.zip");
   public static final SafeImplicitOutputsFunction ANDROID_RESOURCES_SHRUNK_ZIP =
       fromTemplates("%{name}_files/resource_files_shrunk.zip");
   public static final SafeImplicitOutputsFunction ANDROID_RESOURCE_SHRINKER_LOG =
@@ -137,8 +137,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_symbols/local.bin");
   public static final SafeImplicitOutputsFunction ANDROID_MERGED_SYMBOLS =
       fromTemplates("%{name}_symbols/merged.bin");
-  public static final SafeImplicitOutputsFunction ANDROID_ASSET_SYMBOLS =
-      fromTemplates("%{name}_symbols/assets.bin");
   public static final SafeImplicitOutputsFunction ANDROID_COMPILED_SYMBOLS =
       fromTemplates("%{name}_symbols/symbols.zip");
   public static final SafeImplicitOutputsFunction ANDROID_SYMLINKED_MANIFEST =
@@ -175,6 +173,7 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_files/dexmanifest.txt");
   public static final SafeImplicitOutputsFunction JAVA_RESOURCES_JAR =
       fromTemplates("%{name}_files/java_resources.jar");
+  public static final String MANIFEST_MERGE_TOOL_LABEL = "//tools/android:merge_manifests";
   public static final String BUILD_INCREMENTAL_DEXMANIFEST_LABEL =
       "//tools/android:build_incremental_dexmanifest";
   public static final String STUBIFY_MANIFEST_LABEL = "//tools/android:stubify_manifest";
@@ -366,7 +365,7 @@ public final class AndroidRuleClasses {
   /** Definition of the {@code android_sdk} rule. */
   public static final class AndroidSdkRule implements RuleDefinition {
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
       return builder
           .requiresConfigurationFragments(JavaConfiguration.class, AndroidConfiguration.class)
           .setUndocumented()
@@ -542,6 +541,12 @@ public final class AndroidRuleClasses {
               attr(DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR, LABEL)
                   .cfg(HostTransition.INSTANCE)
                   .value(env.getToolsLabel("//tools/android:databinding_annotation_processor")))
+          // TODO(b/30816740): Remove this once legacy manifest merging is no longer supported.
+          .add(
+              attr("$android_manifest_merge_tool", LABEL)
+                  .cfg(HostTransition.INSTANCE)
+                  .exec()
+                  .value(env.getToolsLabel(AndroidRuleClasses.MANIFEST_MERGE_TOOL_LABEL)))
           .advertiseSkylarkProvider(AndroidResourcesInfo.PROVIDER.id())
           .advertiseSkylarkProvider(AndroidNativeLibsInfo.PROVIDER.id())
           .build();
@@ -928,6 +933,31 @@ public final class AndroidRuleClasses {
               attr(":cc_toolchain_split", LABEL)
                   .cfg(AndroidRuleClasses.ANDROID_SPLIT_TRANSITION)
                   .value(CppRuleClasses.ccToolchainAttribute(env)))
+          /* <!-- #BLAZE_RULE(android_binary).ATTRIBUTE(manifest_merger) -->
+          Select the manifest merger to use for this rule.<br/>
+          Possible values:
+          <ul>
+              <li><code>manifest_merger = "legacy"</code>: Use the legacy manifest merger. Does not
+                allow features of the android merger like placeholder substitution and tools
+                attributes for defining merge behavior. Removes all
+                <code>&lt;uses-permission&gt;</code> and <code>&lt;uses-permission-sdk-23&gt;</code>
+                tags. Performs a tag-level merge.</li>
+              <li><code>manifest_merger = "android"</code>: Use the android manifest merger. Allows
+                features like placeholder substitution and tools attributes for defining merge
+                behavior. Follows the semantics from
+                <a href="https://developer.android.com/studio/build/manifest-merge.html">
+                the documentation</a> except it has been modified to also remove all
+                <code>&lt;uses-permission&gt;</code> and <code>&lt;uses-permission-sdk-23&gt;</code>
+                tags. Performs an attribute-level merge.</li>
+              <li><code>manifest_merger = "auto"</code>: Merger is controlled by the
+                <a href="../user-manual.html#flag--android_manifest_merger">
+                --android_manifest_merger</a> flag.</li>
+          </ul>
+          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+          .add(
+              attr("manifest_merger", STRING)
+                  .allowedValues(new AllowedValueSet(AndroidManifestMerger.getAttributeValues()))
+                  .value(AndroidManifestMerger.getRuleAttributeDefault()))
           /* <!-- #BLAZE_RULE(android_binary).ATTRIBUTE(manifest_values) -->
           A dictionary of values to be overridden in the manifest. Any instance of ${name} in the
           manifest will be replaced with the value corresponding to name in this dictionary.
@@ -1070,7 +1100,7 @@ public final class AndroidRuleClasses {
     }
 
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
       builder
           .setUndocumented()
           .add(
