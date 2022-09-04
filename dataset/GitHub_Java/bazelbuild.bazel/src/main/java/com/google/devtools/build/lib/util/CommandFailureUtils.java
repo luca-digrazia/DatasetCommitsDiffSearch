@@ -18,7 +18,6 @@ import static java.util.Map.Entry.comparingByKey;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Ordering;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import java.io.File;
 import java.util.Collection;
 import java.util.Comparator;
@@ -41,15 +40,7 @@ public class CommandFailureUtils {
     void describeCommandCwd(String cwd, StringBuilder message);
     void describeCommandEnvPrefix(StringBuilder message, boolean isolated);
     void describeCommandEnvVar(StringBuilder message, Map.Entry<String, String> entry);
-    /**
-     * Formats the command element and adds it to the message.
-     *
-     * @param message the message to modify
-     * @param commandElement the command element to be added to the message
-     * @param isBinary is true if the `commandElement` is the binary to be executed
-     */
-    void describeCommandElement(StringBuilder message, String commandElement, boolean isBinary);
-
+    void describeCommandElement(StringBuilder message, String commandElement);
     void describeCommandExec(StringBuilder message);
   }
 
@@ -84,8 +75,7 @@ public class CommandFailureUtils {
     }
 
     @Override
-    public void describeCommandElement(
-        StringBuilder message, String commandElement, boolean isBinary) {
+    public void describeCommandElement(StringBuilder message, String commandElement) {
       message.append(ShellEscaper.escapeString(commandElement));
     }
 
@@ -124,10 +114,8 @@ public class CommandFailureUtils {
     }
 
     @Override
-    public void describeCommandElement(
-        StringBuilder message, String commandElement, boolean isBinary) {
-      // Replace the forward slashes with back slashes if the `commandElement` is the binary path
-      message.append(isBinary ? commandElement.replace('/', '\\') : commandElement);
+    public void describeCommandElement(StringBuilder message, String commandElement) {
+      message.append(commandElement);
     }
 
     @Override
@@ -139,7 +127,6 @@ public class CommandFailureUtils {
   private static final DescribeCommandImpl describeCommandImpl =
       OS.getCurrent() == OS.WINDOWS ? new WindowsDescribeCommandImpl()
                                     : new LinuxDescribeCommandImpl();
-  private static final int APPROXIMATE_MAXIMUM_MESSAGE_LENGTH = 200;
 
   private CommandFailureUtils() {} // Prevent instantiation.
 
@@ -152,22 +139,17 @@ public class CommandFailureUtils {
    * @param form Form of the command to generate; see the documentation of the
    * {@link CommandDescriptionForm} values.
    */
-  public static String describeCommand(
-      CommandDescriptionForm form,
-      boolean prettyPrintArgs,
+  public static String describeCommand(CommandDescriptionForm form,
       Collection<String> commandLineElements,
-      @Nullable Map<String, String> environment,
-      @Nullable String cwd) {
-
+      @Nullable Map<String, String> environment, @Nullable String cwd) {
     Preconditions.checkNotNull(form);
+    final int APPROXIMATE_MAXIMUM_MESSAGE_LENGTH = 200;
     StringBuilder message = new StringBuilder();
     int size = commandLineElements.size();
     int numberRemaining = size;
-
     if (form == CommandDescriptionForm.COMPLETE) {
       describeCommandImpl.describeCommandBeginIsolate(message);
     }
-
     if (form != CommandDescriptionForm.ABBREVIATED) {
       if (cwd != null) {
         describeCommandImpl.describeCommandCwd(cwd, message);
@@ -213,79 +195,54 @@ public class CommandFailureUtils {
         }
       }
     }
-
-    boolean isFirstArgument = true;
     for (String commandElement : commandLineElements) {
-      if (form == CommandDescriptionForm.ABBREVIATED
-          && message.length() + commandElement.length() > APPROXIMATE_MAXIMUM_MESSAGE_LENGTH) {
-        message
-            .append(" ... (remaining ")
-            .append(numberRemaining)
-            .append(numberRemaining == 1 ? " argument" : " arguments")
-            .append(" skipped)");
+      if (form == CommandDescriptionForm.ABBREVIATED &&
+          message.length() + commandElement.length() > APPROXIMATE_MAXIMUM_MESSAGE_LENGTH) {
+        message.append(
+            " ... (remaining " + numberRemaining + " argument(s) skipped)");
         break;
       } else {
         if (numberRemaining < size) {
-          message.append(prettyPrintArgs ? " \\\n    " : " ");
+          message.append(' ');
         }
-        describeCommandImpl.describeCommandElement(message, commandElement, isFirstArgument);
+        describeCommandImpl.describeCommandElement(message, commandElement);
         numberRemaining--;
       }
-      isFirstArgument = false;
     }
-
     if (form == CommandDescriptionForm.COMPLETE) {
       describeCommandImpl.describeCommandEndIsolate(message);
     }
-
     return message.toString();
   }
 
   /**
-   * Construct an error message that describes a failed command invocation. Currently this returns a
-   * message of the form "error executing command foo bar baz".
+   * Construct an error message that describes a failed command invocation.
+   * Currently this returns a message of the form "error executing command foo
+   * bar baz".
    */
-  public static String describeCommandError(
-      boolean verbose,
-      Collection<String> commandLineElements,
-      Map<String, String> env,
-      String cwd,
-      @Nullable PlatformInfo executionPlatform) {
-
+  public static String describeCommandError(boolean verbose,
+                                            Collection<String> commandLineElements,
+                                            Map<String, String> env, String cwd) {
     CommandDescriptionForm form = verbose
         ? CommandDescriptionForm.COMPLETE
         : CommandDescriptionForm.ABBREVIATED;
-
-    StringBuilder output = new StringBuilder();
-    output.append("error executing command ");
-    if (verbose) {
-      output.append("\n  ");
-    }
-    output.append(
-        describeCommand(form, /* prettyPrintArgs= */ false, commandLineElements, env, cwd));
-    if (verbose && executionPlatform != null) {
-      output.append("\n");
-      output.append("Execution platform: ").append(executionPlatform.label());
-    }
-    return output.toString();
+    return "error executing command " + (verbose ? "\n  " : "")
+        + describeCommand(form, commandLineElements, env, cwd);
   }
 
   /**
-   * Construct an error message that describes a failed command invocation. Currently this returns a
-   * message of the form "foo failed: error executing command /dir/foo bar baz".
+   * Construct an error message that describes a failed command invocation.
+   * Currently this returns a message of the form "foo failed: error executing
+   * command /dir/foo bar baz".
    */
-  public static String describeCommandFailure(
-      boolean verbose,
-      Collection<String> commandLineElements,
-      Map<String, String> env,
-      String cwd,
-      @Nullable PlatformInfo executionPlatform) {
-
+  public static String describeCommandFailure(boolean verbose,
+                                              Collection<String> commandLineElements,
+                                              Map<String, String> env, String cwd) {
     String commandName = commandLineElements.iterator().next();
     // Extract the part of the command name after the last "/", if any.
     String shortCommandName = new File(commandName).getName();
-    return shortCommandName
-        + " failed: "
-        + describeCommandError(verbose, commandLineElements, env, cwd, executionPlatform);
+    return shortCommandName + " failed: " +
+        describeCommandError(verbose, commandLineElements, env, cwd);
   }
+
 }
