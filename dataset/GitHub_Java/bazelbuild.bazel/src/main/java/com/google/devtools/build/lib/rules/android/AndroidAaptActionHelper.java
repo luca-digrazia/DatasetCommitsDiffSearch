@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -65,10 +66,13 @@ public final class AndroidAaptActionHelper {
     if (inputs.isEmpty()) {
       inputs.add(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar());
       inputs.add(manifest);
-      Iterables.addAll(
-          inputs,
-          Iterables.concat(
-              Iterables.transform(resourceContainers, ResourceContainer::getArtifacts)));
+      Iterables.addAll(inputs, Iterables.concat(Iterables.transform(resourceContainers,
+          new Function<ResourceContainer, Iterable<Artifact>>() {
+        @Override
+        public Iterable<Artifact> apply(ResourceContainer container) {
+          return container.getArtifacts();
+        }
+      })));
     }
     return inputs;
   }

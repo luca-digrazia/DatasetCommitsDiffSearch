@@ -37,6 +37,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The specification for a particular extra action type.
@@ -119,6 +120,9 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     // See {@link #createExpandedCommand} for list of supported variables.
     String command = createExpandedCommand(owningRule, actionToShadow, extraActionInfoFile);
 
+    Map<String, String> env = owningRule.getConfiguration().getLocalShellEnvironment();
+    Set<String> clientEnvVars = owningRule.getConfiguration().getVariableShellEnvironment();
+
     CommandHelper commandHelper =
         new CommandHelper(
             owningRule,
@@ -141,7 +145,8 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
             actionToShadow,
             createDummyOutput,
             CommandLine.of(argv),
-            owningRule.getConfiguration().getActionEnvironment(),
+            env,
+            clientEnvVars,
             executionInfo,
             commandMessage,
             label.getName()));
