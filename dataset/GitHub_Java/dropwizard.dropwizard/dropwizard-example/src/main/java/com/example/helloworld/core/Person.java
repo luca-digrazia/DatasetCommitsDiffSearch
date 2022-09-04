@@ -63,12 +63,8 @@ public class Person {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (!(o instanceof Person)) {
-            return false;
-        }
+        if (this == o) return true;
+        if (!(o instanceof Person)) return false;
 
         final Person that = (Person) o;
 
