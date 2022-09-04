@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
@@ -26,7 +27,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
@@ -78,17 +78,17 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
             attr(PORTABLE_PROTO_FILTERS_ATTR, LABEL_LIST)
                 .legacyAllowAnyFileType()
                 .allowedRuleClasses("filegroup")
-                .cfg(HostTransition.INSTANCE))
+                .cfg(HOST))
         .add(
             attr(PROTO_COMPILER_ATTR, LABEL)
                 .allowedFileTypes(FileType.of(".py"), FileType.of(".sh"))
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .singleArtifact()
                 .value(env.getToolsLabel("//tools/objc:protobuf_compiler_wrapper")))
         .add(
             attr(PROTO_COMPILER_SUPPORT_ATTR, LABEL)
                 .legacyAllowAnyFileType()
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .value(env.getToolsLabel("//tools/objc:protobuf_compiler_support")))
         .add(
             attr(PROTO_LIB_ATTR, LABEL)
