@@ -47,7 +47,7 @@ public final class ReturnStatement extends Statement {
 
   @Nullable private final Expression returnExpression;
 
-  ReturnStatement(@Nullable Expression returnExpression) {
+  public ReturnStatement(@Nullable Expression returnExpression) {
     this.returnExpression = returnExpression;
   }
 

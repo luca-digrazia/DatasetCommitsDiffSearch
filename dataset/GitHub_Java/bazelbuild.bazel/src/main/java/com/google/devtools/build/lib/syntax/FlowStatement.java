@@ -35,8 +35,11 @@ public final class FlowStatement extends Statement {
 
   private final Kind kind;
 
-  /** @param kind The label of the statement (either break or continue) */
-  FlowStatement(Kind kind) {
+  /**
+   *
+   * @param kind The label of the statement (either break or continue)
+   */
+  public FlowStatement(Kind kind) {
     this.kind = kind;
   }
 

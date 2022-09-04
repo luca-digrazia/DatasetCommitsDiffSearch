@@ -56,7 +56,9 @@ import javax.annotation.Nullable;
  * respect to this {@code Environment}.
  *
  * <p>{@link Continuation}-s are explicitly represented, but only partly, with another part being
- * implicit in a series of try-catch statements, to maintain the direct style.
+ * implicit in a series of try-catch statements, to maintain the direct style. One notable trick is
+ * how a {@link UserDefinedFunction} implements returning values as the function catching a {@link
+ * ReturnStatement.ReturnException} thrown by a {@link ReturnStatement} in the body.
  *
  * <p>Every {@code Environment} has a {@link Mutability} field, and must be used within a function
  * that creates and closes this {@link Mutability} with the try-with-resource pattern. This {@link
@@ -1237,7 +1239,7 @@ public final class Environment implements Freezable, Debuggable {
     switch (statement.kind()) {
       case ASSIGNMENT:
       case AUGMENTED_ASSIGNMENT:
-        return ((AssignmentStatement) statement).getLHS().doEval(this);
+        return ((AssignmentStatement) statement).getLValue().getExpression().doEval(this);
       case RETURN:
         Expression expr = ((ReturnStatement) statement).getReturnExpression();
         return expr != null ? expr.doEval(this) : Runtime.NONE;

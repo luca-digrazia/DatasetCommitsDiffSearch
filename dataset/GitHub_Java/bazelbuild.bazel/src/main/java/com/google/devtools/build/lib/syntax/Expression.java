@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.events.EventHandler;
 import java.io.IOException;
 
 /**
@@ -25,7 +24,7 @@ import java.io.IOException;
  * slice expressions and starred expressions cannot appear on the LHS. TODO(bazel-team): Add support
  * for assigning to slices (e.g. a[2:6] = [3]).
  */
-public abstract class Expression extends Node {
+public abstract class Expression extends ASTNode {
 
   /**
    * Kind of the expression. This is similar to using instanceof, except that it's more efficient
@@ -35,13 +34,13 @@ public abstract class Expression extends Node {
     BINARY_OPERATOR,
     COMPREHENSION,
     CONDITIONAL,
-    DICT_EXPR,
+    DICTIONARY_LITERAL,
     DOT,
     FUNCALL,
     IDENTIFIER,
     INDEX,
     INTEGER_LITERAL,
-    LIST_EXPR,
+    LIST_LITERAL,
     SLICE,
     STRING_LITERAL,
     UNARY_OPERATOR,
@@ -112,16 +111,4 @@ public abstract class Expression extends Node {
    * and can be used in a switch/case.
    */
   public abstract Kind kind();
-
-  /** Parses an expression. */
-  // TODO(adonovan): remove dependency from syntax -> EventHandler.
-  // A call to Expression.parse either succeeds or fails; there is no useful middle ground, so an
-  // exception is appropriate. The exception would contain the list of errors.
-  // By contrast, a call to BuildFileAST.parse should return both a partial AST and a list of
-  // errors,
-  // and generally it is useful to keep both around, so if we put the errors in the root of the AST,
-  // then client can deal with them however they like, e.g. by sending them to the event handler.
-  public static Expression parse(ParserInputSource input, EventHandler eventHandler) {
-    return Parser.parseExpression(input, eventHandler);
-  }
 }

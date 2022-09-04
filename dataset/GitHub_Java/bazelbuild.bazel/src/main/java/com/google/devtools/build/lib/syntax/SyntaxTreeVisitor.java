@@ -17,8 +17,10 @@ import com.google.devtools.build.lib.syntax.DictionaryLiteral.DictionaryEntryLit
 import com.google.devtools.build.lib.syntax.IfStatement.ConditionalStatements;
 import java.util.List;
 
-/** A visitor for visiting the nodes in the syntax tree left to right, top to bottom. */
-// TODO(adonovan): rename NodeVisitor (and ASTNode to Node).
+/**
+ * A visitor for visiting the nodes in the syntax tree left to right, top to
+ * bottom.
+ */
 public class SyntaxTreeVisitor {
 
   public void visit(ASTNode node) {
@@ -62,8 +64,8 @@ public class SyntaxTreeVisitor {
   }
 
   public void visit(BinaryOperatorExpression node) {
-    visit(node.getX());
-    visit(node.getY());
+    visit(node.getLhs());
+    visit(node.getRhs());
   }
 
   public void visit(FuncallExpression node) {
@@ -74,10 +76,10 @@ public class SyntaxTreeVisitor {
   public void visit(@SuppressWarnings("unused") Identifier node) {}
 
   public void visit(AbstractComprehension node) {
-    for (AbstractComprehension.Clause clause : node.getClauses()) {
+    for (ListComprehension.Clause clause : node.getClauses()) {
       visit(clause.getExpression());
-      if (clause.getLHS() != null) {
-        visit(clause.getLHS());
+      if (clause.getLValue() != null) {
+        visit(clause.getLValue());
       }
     }
     visitAll(node.getOutputExpressions());
@@ -85,7 +87,7 @@ public class SyntaxTreeVisitor {
 
   public void visit(ForStatement node) {
     visit(node.getCollection());
-    visit(node.getLHS());
+    visit(node.getVariable());
     visitBlock(node.getBlock());
   }
 
@@ -103,14 +105,18 @@ public class SyntaxTreeVisitor {
 
   public void visit(@SuppressWarnings("unused") StringLiteral node) {}
 
+  public void visit(LValue node) {
+    visit(node.getExpression());
+  }
+
   public void visit(AssignmentStatement node) {
-    visit(node.getRHS());
-    visit(node.getLHS());
+    visit(node.getExpression());
+    visit(node.getLValue());
   }
 
   public void visit(AugmentedAssignmentStatement node) {
-    visit(node.getRHS());
-    visit(node.getLHS());
+    visit(node.getExpression());
+    visit(node.getLValue());
   }
 
   public void visit(ExpressionStatement node) {
@@ -158,7 +164,7 @@ public class SyntaxTreeVisitor {
   }
 
   public void visit(UnaryOperatorExpression node) {
-    visit(node.getX());
+    visit(node.getOperand());
   }
 
   public void visit(DotExpression node) {

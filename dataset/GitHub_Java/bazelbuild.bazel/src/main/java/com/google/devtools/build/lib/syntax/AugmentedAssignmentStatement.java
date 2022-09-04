@@ -21,19 +21,19 @@ import java.io.IOException;
 public final class AugmentedAssignmentStatement extends Statement {
 
   private final Expression lhs; // same constraint as AssignmentStatement
-  private final TokenKind op;
+  private final Operator operator;
   private final Expression rhs;
 
   /** Constructs an augmented assignment. */
-  public AugmentedAssignmentStatement(TokenKind op, Expression lhs, Expression rhs) {
+  public AugmentedAssignmentStatement(Operator operator, Expression lhs, Expression rhs) {
     this.lhs = lhs;
-    this.op = op;
+    this.operator = operator;
     this.rhs = rhs;
   }
 
   /** Returns the operator of the assignment. */
-  public TokenKind getOperator() {
-    return op;
+  public Operator getOperator() {
+    return operator;
   }
 
   /** Returns the LHS of the assignment. */
@@ -51,7 +51,7 @@ public final class AugmentedAssignmentStatement extends Statement {
     printIndent(buffer, indentLevel);
     lhs.prettyPrint(buffer);
     buffer.append(' ');
-    buffer.append(op.toString());
+    buffer.append(operator.toString());
     buffer.append("= ");
     rhs.prettyPrint(buffer);
     buffer.append('\n');
