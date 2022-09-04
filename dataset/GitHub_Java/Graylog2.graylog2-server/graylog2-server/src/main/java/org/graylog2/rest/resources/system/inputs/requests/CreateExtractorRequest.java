@@ -17,57 +17,36 @@
 package org.graylog2.rest.resources.system.inputs.requests;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.auto.value.AutoValue;
-import org.hibernate.validator.constraints.NotEmpty;
 
 import java.util.Map;
 
 @JsonAutoDetect
-@AutoValue
-public abstract class CreateExtractorRequest {
-    @JsonProperty
-    public abstract String title();
+public class CreateExtractorRequest {
+    public String title;
 
     @JsonProperty("cut_or_copy")
-    public abstract String cutOrCopy();
+    public String cutOrCopy;
 
     @JsonProperty("source_field")
-    public abstract String sourceField();
+    public String sourceField;
 
     @JsonProperty("target_field")
-    public abstract String targetField();
+    public String targetField;
 
     @JsonProperty("extractor_type")
-    public abstract String extractorType();
+    public String extractorType;
 
     @JsonProperty("extractor_config")
-    public abstract Map<String, Object> extractorConfig();
+    public Map<String, Object> extractorConfig;
 
-    @JsonProperty
-    public abstract Map<String, Map<String, Object>> converters();
+    public Map<String, Map<String, Object>> converters;
 
     @JsonProperty("condition_type")
-    public abstract String conditionType();
+    public String conditionType;
 
     @JsonProperty("condition_value")
-    public abstract String conditionValue();
+    public String conditionValue;
 
-    @JsonProperty
-    public abstract int order();
-
-    @JsonCreator
-    public static CreateExtractorRequest create(@JsonProperty("title") @NotEmpty String title,
-                                                @JsonProperty("cut_or_copy") String cutOrCopy,
-                                                @JsonProperty("source_field") @NotEmpty String sourceField,
-                                                @JsonProperty("target_field") @NotEmpty String targetField,
-                                                @JsonProperty("extractor_type") @NotEmpty String extractorType,
-                                                @JsonProperty("extractor_config") Map<String, Object> extractorConfig,
-                                                @JsonProperty("converters") Map<String, Map<String, Object>> converters,
-                                                @JsonProperty("condition_type") String conditionType,
-                                                @JsonProperty("condition_value") String conditionValue,
-                                                @JsonProperty("order") int order) {
-        return new AutoValue_CreateExtractorRequest(title, cutOrCopy, sourceField, targetField, extractorType, extractorConfig, converters, conditionType, conditionValue, order);
-    }
+    public int order;
 }

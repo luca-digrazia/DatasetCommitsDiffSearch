@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.dashboards;
 
@@ -35,17 +35,16 @@ import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.database.ValidationException;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.plugin.Tools;
-import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.dashboards.requests.AddWidgetRequest;
-import org.graylog2.rest.resources.dashboards.requests.CreateDashboardRequest;
-import org.graylog2.rest.resources.dashboards.requests.UpdateDashboardRequest;
+import org.graylog2.rest.resources.dashboards.requests.CreateRequest;
+import org.graylog2.rest.resources.dashboards.requests.UpdateRequest;
+import org.graylog2.rest.resources.dashboards.requests.UpdateWidgetPositionsRequest;
 import org.graylog2.rest.resources.dashboards.requests.UpdateWidgetRequest;
-import org.graylog2.rest.resources.dashboards.requests.WidgetPositions;
-import org.graylog2.rest.resources.dashboards.responses.DashboardList;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
@@ -106,13 +105,13 @@ public class DashboardsResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
-    public Response create(@ApiParam(name = "JSON body", required = true) CreateDashboardRequest cr) throws ValidationException {
+    public Response create(@ApiParam(name = "JSON body", required = true) CreateRequest cr) throws ValidationException {
         restrictToMaster();
 
         // Create dashboard.
         Map<String, Object> dashboardData = Maps.newHashMap();
-        dashboardData.put("title", cr.title());
-        dashboardData.put("description", cr.description());
+        dashboardData.put("title", cr.title);
+        dashboardData.put("description", cr.description);
         dashboardData.put("creator_user_id", getCurrentUser().getName());
         dashboardData.put("created_at", Tools.iso8601());
 
@@ -136,7 +135,7 @@ public class DashboardsResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
-    public DashboardList list() {
+    public Map<String, Object> list() {
         restrictToMaster();
 
         final List<Map<String, Object>> dashboards = Lists.newArrayList();
@@ -146,7 +145,9 @@ public class DashboardsResource extends RestResource {
             }
         }
 
-        return DashboardList.create(dashboards.size(),dashboards);
+        return ImmutableMap.of(
+                "total", dashboards.size(),
+                "dashboards", dashboards);
     }
 
     @GET
@@ -199,16 +200,16 @@ public class DashboardsResource extends RestResource {
     })
     public void update(@ApiParam(name = "dashboardId", required = true)
                        @PathParam("dashboardId") String dashboardId,
-                       @ApiParam(name = "JSON body", required = true) UpdateDashboardRequest cr) throws ValidationException, NotFoundException {
+                       @ApiParam(name = "JSON body", required = true) UpdateRequest cr) throws ValidationException, NotFoundException {
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
         final Dashboard dashboard = dashboardService.load(dashboardId);
-        if (cr.title() != null) {
-            dashboard.setTitle(cr.title());
+        if (cr.title != null) {
+            dashboard.setTitle(cr.title);
         }
 
-        if (cr.description() != null) {
-            dashboard.setDescription(cr.description());
+        if (cr.description != null) {
+            dashboard.setDescription(cr.description);
         }
 
         // Validations are happening here.
@@ -226,12 +227,11 @@ public class DashboardsResource extends RestResource {
     public void setPositions(
             @ApiParam(name = "dashboardId", required = true)
             @PathParam("dashboardId") String dashboardId,
-            @ApiParam(name = "JSON body", required = true)
-            @Valid WidgetPositions uwpr) throws NotFoundException, ValidationException {
+            @ApiParam(name = "JSON body", required = true) UpdateWidgetPositionsRequest uwpr) throws NotFoundException, ValidationException {
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
         final Dashboard dashboard = dashboardService.load(dashboardId);
-        dashboardService.updateWidgetPositions(dashboard, uwpr);
+        dashboardService.updateWidgetPositions(dashboard, uwpr.positions);
     }
 
     @POST
@@ -254,8 +254,8 @@ public class DashboardsResource extends RestResource {
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
         // Bind to streams for reader users and check stream permission.
-        if (awr.config().containsKey("stream_id")) {
-            checkPermission(RestPermissions.STREAMS_READ, (String) awr.config().get("stream_id"));
+        if (awr.config.containsKey("stream_id")) {
+            checkPermission(RestPermissions.STREAMS_READ, (String) awr.config.get("stream_id"));
         } else {
             checkPermission(RestPermissions.SEARCHES_ABSOLUTE);
             checkPermission(RestPermissions.SEARCHES_RELATIVE);
@@ -395,7 +395,7 @@ public class DashboardsResource extends RestResource {
             throw new javax.ws.rs.NotFoundException();
         }
 
-        dashboardService.updateWidgetDescription(dashboard, widget, uwr.description());
+        dashboardService.updateWidgetDescription(dashboard, widget, uwr.description);
 
         LOG.info("Updated description of widget <" + widgetId + "> on dashboard <" + dashboardId + ">. Reason: REST request.");
     }
@@ -431,9 +431,9 @@ public class DashboardsResource extends RestResource {
             throw new javax.ws.rs.NotFoundException();
         }
 
-        dashboardService.updateWidgetCacheTime(dashboard, widget, uwr.cacheTime());
+        dashboardService.updateWidgetCacheTime(dashboard, widget, uwr.cacheTime);
 
         LOG.info("Updated cache time of widget <" + widgetId + "> on dashboard <" + dashboardId + "> to " +
-                "[" + uwr.cacheTime() + "]. Reason: REST request.");
+                "[" + uwr.cacheTime + "]. Reason: REST request.");
     }
 }

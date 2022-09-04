@@ -19,7 +19,6 @@ package org.graylog2.rest.resources.system;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.annotation.Timed;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -44,9 +43,9 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
+import javax.ws.rs.BadRequestException;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
-import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -82,8 +81,8 @@ public class MetricsResource extends RestResource {
     @ApiOperation(value = "Get all metrics",
             notes = "Note that this might return a huge result set.")
     @Produces(MediaType.APPLICATION_JSON)
-    public String metrics() {
-        return json(ImmutableMap.of("metrics", metricRegistry.getMetrics()));
+    public Map<String, Map<String, Metric>> metrics() {
+        return ImmutableMap.of("metrics", metricRegistry.getMetrics());
     }
 
     @GET
@@ -110,9 +109,8 @@ public class MetricsResource extends RestResource {
 
         final Metric metric = metricRegistry.getMetrics().get(metricName);
         if (metric == null) {
-            final String msg = "I do not have a metric called [" + metricName + "].";
-            LOG.debug(msg);
-            throw new NotFoundException(msg);
+            LOG.debug("I do not have a metric called [{}], returning 404.", metricName);
+            throw new NotFoundException();
         }
 
         return metric;
@@ -125,13 +123,16 @@ public class MetricsResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Malformed body")
     })
-    public String multipleMetrics(@ApiParam(name = "Requested metrics", required = true)
-                                  @Valid @NotNull MetricsReadRequest request) {
+    public Map<String, Object> multipleMetrics(@ApiParam(name = "Requested metrics", required = true)
+                                               @Valid @NotNull MetricsReadRequest request) {
         final Map<String, Metric> metrics = metricRegistry.getMetrics();
 
         final List<Map<String, Object>> metricsList = Lists.newArrayList();
+        if (request.metrics == null) {
+            throw new BadRequestException("Metrics cannot be empty");
+        }
 
-        for (String name : request.metrics()) {
+        for (String name : request.metrics) {
             if (!isPermitted(RestPermissions.METRICS_READ, name)) {
                 continue;
             }
@@ -142,9 +143,9 @@ public class MetricsResource extends RestResource {
             }
         }
 
-        return json(ImmutableMap.of(
+        return ImmutableMap.of(
                 "metrics", metricsList,
-                "total", metricsList.size()));
+                "total", metricsList.size());
     }
 
     @GET
@@ -155,8 +156,8 @@ public class MetricsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such metric namespace")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public String byNamespace(@ApiParam(name = "namespace", required = true)
-                              @PathParam("namespace") String namespace) {
+    public Map<String, Object> byNamespace(@ApiParam(name = "namespace", required = true)
+                                           @PathParam("namespace") String namespace) {
         final List<Map<String, Object>> metrics = Lists.newArrayList();
         for (Map.Entry<String, Metric> e : metricRegistry.getMetrics().entrySet()) {
             final String metricName = e.getKey();
@@ -171,14 +172,13 @@ public class MetricsResource extends RestResource {
         }
 
         if (metrics.isEmpty()) {
-            final String msg = "No metrics with namespace [" + namespace + "] found.";
-            LOG.debug(msg);
-            throw new NotFoundException(msg);
+            LOG.debug("No metrics with namespace [{}] found, returning 404.", namespace);
+            throw new NotFoundException();
         }
 
-        return json(ImmutableMap.of(
+        return ImmutableMap.of(
                 "metrics", metrics,
-                "total", metrics.size()));
+                "total", metrics.size());
     }
 
     enum MetricType {
@@ -193,7 +193,7 @@ public class MetricsResource extends RestResource {
     @Timed
     @Path("/{metricName}/history")
     @ApiOperation(value = "Get history of a single metric", notes = "The maximum retention time is currently only 5 minutes.")
-    public String historicSingleMetric(
+    public Map<String, Object> historicSingleMetric(
             @ApiParam(name = "metricName", required = true)
             @PathParam("metricName") String metricName,
             @ApiParam(name = "after", value = "Only values for after this UTC timestamp (1970 epoch)")
@@ -279,18 +279,6 @@ public class MetricsResource extends RestResource {
 
         }
 
-        return json(metricsData);
-    }
-
-    // FIXME Unfortunately this is required at the moment because serialization of Metrics in a Map doesn't seem
-    // to work with ObjectMapper.
-    private String json(Object x) {
-        try {
-
-            return objectMapper.writeValueAsString(x);
-        } catch (JsonProcessingException e) {
-            LOG.error("Error while generating JSON", e);
-            throw new InternalServerErrorException(e);
-        }
+        return metricsData;
     }
 }

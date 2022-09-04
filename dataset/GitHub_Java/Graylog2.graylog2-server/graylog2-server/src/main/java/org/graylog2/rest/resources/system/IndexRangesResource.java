@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.system;
 
@@ -28,7 +28,7 @@ import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
-import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.responses.IndexRangesResponse;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.system.jobs.SystemJob;
@@ -51,6 +51,7 @@ import java.util.List;
 @Api(value = "System/IndexRanges", description = "Index timeranges")
 @Path("/system/indices/ranges")
 public class IndexRangesResource extends RestResource {
+
     private static final Logger LOG = LoggerFactory.getLogger(IndexRangesResource.class);
 
     private final IndexRangeService indexRangeService;
@@ -82,7 +83,11 @@ public class IndexRangesResource extends RestResource {
             ranges.add(range);
         }
 
-        return IndexRangesResponse.create(ranges.size(), ranges);
+        final IndexRangesResponse irp = new IndexRangesResponse();
+        irp.ranges = ranges;
+        irp.total = ranges.size();
+
+        return irp;
     }
 
     @POST
@@ -108,4 +113,5 @@ public class IndexRangesResource extends RestResource {
 
         return Response.accepted().build();
     }
+
 }

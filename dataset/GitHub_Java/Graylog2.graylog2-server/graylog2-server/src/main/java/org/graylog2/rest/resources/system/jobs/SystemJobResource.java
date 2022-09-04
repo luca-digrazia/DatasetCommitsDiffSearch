@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.system.jobs;
 
@@ -25,7 +25,7 @@ import com.wordnik.swagger.annotations.ApiParam;
 import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.jobs.requests.TriggerRequest;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.system.jobs.NoSuchJobException;
@@ -104,7 +104,7 @@ public class SystemJobResource extends RestResource {
         SystemJob job = systemJobManager.getRunningJobs().get(jobId);
         if (job == null) {
             LOG.error("No system job with ID <{}> found.", jobId);
-            throw new NotFoundException("No system job with ID <" + jobId + "> found");
+            throw new NotFoundException();
         }
 
         return job.toMap();
@@ -123,11 +123,11 @@ public class SystemJobResource extends RestResource {
     public Response trigger(@ApiParam(name = "JSON body", required = true)
                             @Valid @NotNull TriggerRequest tr) {
         // TODO cleanup jobId vs jobName checking in permissions
-        checkPermission(RestPermissions.SYSTEMJOBS_CREATE, tr.jobName());
+        checkPermission(RestPermissions.SYSTEMJOBS_CREATE, tr.jobName);
 
         SystemJob job;
         try {
-            job = systemJobFactory.build(tr.jobName());
+            job = systemJobFactory.build(tr.jobName);
         } catch (NoSuchJobException e) {
             LOG.error("Such a system job type does not exist. Returning HTTP 400.");
             throw new BadRequestException(e);
@@ -137,7 +137,7 @@ public class SystemJobResource extends RestResource {
             systemJobManager.submit(job);
         } catch (SystemJobConcurrencyException e) {
             LOG.error("Maximum concurrency level of this job reached. ", e);
-            throw new ForbiddenException("Maximum concurrency level of this job reached", e);
+            throw new ForbiddenException(e);
         }
 
         return Response.accepted().build();

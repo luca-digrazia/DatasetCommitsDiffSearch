@@ -1,22 +1,23 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.messages;
 
 import com.codahale.metrics.annotation.Timed;
+import com.google.common.collect.ImmutableMap;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
@@ -29,8 +30,7 @@ import org.graylog2.indexer.messages.DocumentNotFoundException;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Message;
-import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.rest.resources.messages.responses.MessageTokens;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
@@ -45,6 +45,8 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
+import java.util.List;
+import java.util.Map;
 
 @RequiresAuthentication
 @Api(value = "Messages", description = "Single messages")
@@ -80,23 +82,22 @@ public class MessageResource extends RestResource {
 
             return resultMessage;
         } catch (IndexMissingException e) {
-            final String msg = "Index " + e.index().name() + " does not exist.";
-            LOG.error(msg, e);
-            throw new NotFoundException(msg, e);
+            LOG.error("Index {} does not exist. Returning HTTP 404.", e.index().name());
+            throw new NotFoundException(e);
         } catch (DocumentNotFoundException e) {
-            final String msg = "Message " + messageId + " does not exist in index " + index;
-            LOG.error(msg, e);
-            throw new NotFoundException(msg, e);
+            LOG.error("Message {} does not exist in index {}. Returning HTTP 404.", messageId, index);
+            throw new NotFoundException(e);
         }
     }
 
     private void checkMessageReadPermission(Message message) {
+        boolean permitted = false;
+
         // if user has "admin" privileges, do not check stream permissions
         if (isPermitted(RestPermissions.STREAMS_READ, "*")) {
             return;
         }
 
-        boolean permitted = false;
         for (String streamId : message.getStreamIds()) {
             if (isPermitted(RestPermissions.STREAMS_READ, streamId)) {
                 permitted = true;
@@ -118,17 +119,19 @@ public class MessageResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Specified index does not exist."),
     })
-    public MessageTokens analyze(
+    public Map<String, List<String>> analyze(
             @ApiParam(name = "index", value = "The index the message containing the string is stored in.", required = true)
             @PathParam("index") String index,
             @ApiParam(name = "string", value = "The string to analyze.", required = true)
             @QueryParam("string") @NotEmpty String string) {
+        final List<String> tokens;
         try {
-            return MessageTokens.create(messages.analyze(string, index));
+            tokens = messages.analyze(string, index);
         } catch (IndexMissingException e) {
             LOG.error("Index does not exist. Returning HTTP 404.");
-            throw new NotFoundException("Index " + index + "does not exist.");
+            throw new NotFoundException();
         }
 
+        return ImmutableMap.of("tokens", tokens);
     }
 }

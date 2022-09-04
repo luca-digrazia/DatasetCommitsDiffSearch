@@ -17,68 +17,24 @@
 package org.graylog2.rest.resources.system.ldap.requests;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.auto.value.AutoValue;
 
-import javax.annotation.Nullable;
+import javax.validation.constraints.NotNull;
 import java.net.URI;
 
 @JsonAutoDetect
-@AutoValue
-public abstract class LdapTestConfigRequest {
+public class LdapTestConfigRequest {
 
-    @JsonProperty
-    @Nullable
-    public abstract String systemUsername();
+    public boolean activeDirectory;
+    @NotNull
+    public URI ldapUri;
+    public String systemUsername;
+    public String systemPassword;
+    public boolean useStartTls;
+    public String searchBase;
+    public String searchPattern;
+    public String principal;
+    public String password;
+    public boolean trustAllCertificates;
 
-    @JsonProperty
-    @Nullable
-    public abstract String systemPassword();
-
-    @JsonProperty
-    public abstract URI ldapUri();
-
-    @JsonProperty
-    public abstract boolean useStartTls();
-
-    @JsonProperty
-    public abstract boolean trustAllCertificates();
-
-    @JsonProperty
-    public abstract boolean activeDirectory();
-
-    @JsonProperty
-    @Nullable
-    public abstract String searchBase();
-
-    @JsonProperty
-    @Nullable
-    public abstract String searchPattern();
-
-    @JsonProperty
-    @Nullable
-    public abstract String principal();
-
-    @JsonProperty
-    @Nullable
-    public abstract String password();
-
-    @JsonProperty
-    public abstract boolean testConnectOnly();
-
-    @JsonCreator
-    public static LdapTestConfigRequest create(@JsonProperty("system_username") @Nullable String systemUsername,
-                                               @JsonProperty("system_password") @Nullable String systemPassword,
-                                               @JsonProperty("ldap_uri") URI ldapUri,
-                                               @JsonProperty("use_start_tls") boolean useStartTls,
-                                               @JsonProperty("trust_all_certificates") boolean trustAllCertificates,
-                                               @JsonProperty("active_directory") boolean activeDirectory,
-                                               @JsonProperty("search_base") @Nullable String searchBase,
-                                               @JsonProperty("search_pattern") @Nullable String searchPattern,
-                                               @JsonProperty("principal") @Nullable String principal,
-                                               @JsonProperty("password") @Nullable String password,
-                                               @JsonProperty("test_connect_only") boolean testConnectOnly) {
-        return new AutoValue_LdapTestConfigRequest(systemUsername, systemPassword, ldapUri, useStartTls, trustAllCertificates, activeDirectory, searchBase, searchPattern, principal, password, testConnectOnly);
-    }
+    public boolean testConnectOnly;
 }

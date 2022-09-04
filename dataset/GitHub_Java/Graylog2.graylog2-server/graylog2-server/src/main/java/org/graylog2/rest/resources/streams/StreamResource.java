@@ -37,11 +37,8 @@ import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.rest.resources.RestResource;
-import org.graylog2.rest.resources.streams.requests.CloneStreamRequest;
-import org.graylog2.rest.resources.streams.requests.CreateStreamRequest;
-import org.graylog2.rest.resources.streams.requests.UpdateStreamRequest;
+import org.graylog2.rest.resources.streams.requests.CreateRequest;
 import org.graylog2.rest.resources.streams.responses.StreamListResponse;
-import org.graylog2.rest.resources.streams.responses.TestMatchResponse;
 import org.graylog2.rest.resources.streams.rules.requests.CreateStreamRuleRequest;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.stats.ThroughputStats;
@@ -68,12 +65,9 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static com.google.common.base.MoreObjects.firstNonNull;
 
 @RequiresAuthentication
 @Api(value = "Streams", description = "Manage streams")
@@ -103,7 +97,7 @@ public class StreamResource extends RestResource {
     @RequiresPermissions(RestPermissions.STREAMS_CREATE)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(name = "JSON body", required = true) final CreateStreamRequest cr) throws ValidationException {
+    public Response create(@ApiParam(name = "JSON body", required = true) final CreateRequest cr) throws ValidationException {
         checkPermission(RestPermissions.STREAMS_CREATE);
 
         // Create stream.
@@ -112,10 +106,11 @@ public class StreamResource extends RestResource {
 
         final String id = streamService.save(stream);
 
-        final List<CreateStreamRuleRequest> rules = firstNonNull(cr.rules(), Collections.<CreateStreamRuleRequest>emptyList());
-        for (CreateStreamRuleRequest request : rules) {
-            StreamRule streamRule = streamRuleService.create(id, request);
-            streamRuleService.save(streamRule);
+        if (cr.rules != null && cr.rules.size() > 0) {
+            for (CreateStreamRuleRequest request : cr.rules) {
+                StreamRule streamRule = streamRuleService.create(id, request);
+                streamRuleService.save(streamRule);
+            }
         }
 
         final Map<String, String> result = ImmutableMap.of("stream_id", id);
@@ -131,15 +126,18 @@ public class StreamResource extends RestResource {
     @ApiOperation(value = "Get a list of all streams")
     @Produces(MediaType.APPLICATION_JSON)
     public StreamListResponse get() {
-        final List<Stream> allStreams = streamService.loadAll();
-        final List<Stream> streams = new ArrayList<>(allStreams.size());
-        for (Stream stream : allStreams) {
+        StreamListResponse response = new StreamListResponse();
+        response.streams = new ArrayList<>();
+
+        for (Stream stream : streamService.loadAll()) {
             if (isPermitted(RestPermissions.STREAMS_READ, stream.getId())) {
-                streams.add(stream);
+                response.streams.add(stream);
             }
         }
 
-        return StreamListResponse.create(streams.size(), streams);
+        response.total = response.streams.size();
+
+        return response;
     }
 
     @GET
@@ -148,15 +146,18 @@ public class StreamResource extends RestResource {
     @ApiOperation(value = "Get a list of all enabled streams")
     @Produces(MediaType.APPLICATION_JSON)
     public StreamListResponse getEnabled() throws NotFoundException {
-        final List<Stream> enabledStreams = streamService.loadAllEnabled();
-        final List<Stream> streams = new ArrayList<>(enabledStreams.size());
-        for (Stream stream : enabledStreams) {
+        StreamListResponse response = new StreamListResponse();
+        response.streams = new ArrayList<>();
+
+        for (Stream stream : streamService.loadAllEnabled()) {
             if (isPermitted(RestPermissions.STREAMS_READ, stream.getId())) {
-                streams.add(stream);
+                response.streams.add(stream);
             }
         }
 
-        return StreamListResponse.create(streams.size(), streams);
+        response.total = response.streams.size();
+
+        return response;
     }
 
     @GET
@@ -189,12 +190,12 @@ public class StreamResource extends RestResource {
     public Stream update(@ApiParam(name = "streamId", required = true)
                          @PathParam("streamId") String streamId,
                          @ApiParam(name = "JSON body", required = true)
-                         @Valid @NotNull UpdateStreamRequest cr) throws NotFoundException, ValidationException {
+                         @Valid @NotNull CreateRequest cr) throws NotFoundException, ValidationException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamId);
         final Stream stream = streamService.load(streamId);
 
-        stream.setTitle(cr.title());
-        stream.setDescription(cr.description());
+        stream.setTitle(cr.title);
+        stream.setDescription(cr.description);
 
         streamService.save(stream);
 
@@ -256,10 +257,10 @@ public class StreamResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid or missing Stream id.")
     })
-    public TestMatchResponse testMatch(@ApiParam(name = "streamId", required = true)
-                                       @PathParam("streamId") String streamId,
-                                       @ApiParam(name = "JSON body", required = true)
-                                       @NotNull Map<String, Map<String, Object>> serialisedMessage) throws NotFoundException {
+    public Map<String, Object> testMatch(@ApiParam(name = "streamId", required = true)
+                                         @PathParam("streamId") String streamId,
+                                         @ApiParam(name = "JSON body", required = true)
+                                         @NotNull Map<String, Map<String, Object>> serialisedMessage) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_READ, streamId);
 
         final Stream stream = streamService.load(streamId);
@@ -272,7 +273,9 @@ public class StreamResource extends RestResource {
             rules.put(ruleMatch.getId(), ruleMatches.get(ruleMatch));
         }
 
-        return TestMatchResponse.create(streamRouter.doesStreamMatch(ruleMatches), rules);
+        return ImmutableMap.of(
+                "matches", streamRouter.doesStreamMatch(ruleMatches),
+                "rules", rules);
     }
 
     @POST
@@ -287,7 +290,7 @@ public class StreamResource extends RestResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response cloneStream(@ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId,
-                                @ApiParam(name = "JSON body", required = true) @Valid @NotNull CloneStreamRequest cr) throws ValidationException, NotFoundException {
+                                @ApiParam(name = "JSON body", required = true) @Valid @NotNull CreateRequest cr) throws ValidationException, NotFoundException {
         checkPermission(RestPermissions.STREAMS_CREATE);
         checkPermission(RestPermissions.STREAMS_READ, streamId);
 
@@ -295,8 +298,8 @@ public class StreamResource extends RestResource {
 
         // Create stream.
         final Map<String, Object> streamData = Maps.newHashMap();
-        streamData.put("title", cr.title());
-        streamData.put("description", cr.description());
+        streamData.put("title", cr.title);
+        streamData.put("description", cr.description);
         streamData.put("creator_user_id", getCurrentUser().getName());
         streamData.put("created_at", Tools.iso8601());
 

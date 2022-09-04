@@ -17,30 +17,11 @@
 package org.graylog2.rest.resources.streams.rules.requests;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.auto.value.AutoValue;
 
 @JsonAutoDetect
-@AutoValue
-public abstract class CreateStreamRuleRequest {
-    @JsonProperty
-    public abstract int type();
-
-    @JsonProperty
-    public abstract String value();
-
-    @JsonProperty
-    public abstract String field();
-
-    @JsonProperty
-    public abstract boolean inverted();
-
-    @JsonCreator
-    public static CreateStreamRuleRequest create(@JsonProperty("type") int type,
-                                                 @JsonProperty("value") String value,
-                                                 @JsonProperty("field") String field,
-                                                 @JsonProperty("inverted") boolean inverted) {
-        return new AutoValue_CreateStreamRuleRequest(type, value, field, inverted);
-    }
+public class CreateStreamRuleRequest {
+    public Integer type;
+    public String value;
+    public String field;
+    public Boolean inverted;
 }

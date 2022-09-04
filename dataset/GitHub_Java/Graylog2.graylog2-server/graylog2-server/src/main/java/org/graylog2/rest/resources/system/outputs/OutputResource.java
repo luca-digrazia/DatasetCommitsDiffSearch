@@ -27,17 +27,16 @@ import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.NotFoundException;
+import org.graylog2.database.ValidationException;
 import org.graylog2.outputs.MessageOutputFactory;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.TextField;
-import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugin.streams.Output;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.outputs.AvailableOutputSummary;
 import org.graylog2.security.RestPermissions;
-import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.streams.OutputImpl;
 import org.graylog2.streams.OutputService;
 import org.graylog2.streams.outputs.CreateOutputRequest;
 import org.graylog2.utilities.ConfigurationMapConverter;
@@ -64,7 +63,6 @@ import java.util.Set;
 @Path("/system/outputs")
 public class OutputResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(OutputResource.class);
-    private static final String PASSWORD_ATTRIBUTE = TextField.Attribute.IS_PASSWORD.toString().toLowerCase();
 
     private final OutputService outputService;
     private final MessageOutputFactory messageOutputFactory;
@@ -119,21 +117,16 @@ public class OutputResource extends RestResource {
     })
     public Response create(@ApiParam(name = "JSON body", required = true) CreateOutputRequest csor) throws ValidationException {
         checkPermission(RestPermissions.OUTPUTS_CREATE);
-        final AvailableOutputSummary outputSummary = messageOutputFactory.getAvailableOutputs().get(csor.type());
+        final AvailableOutputSummary outputSummary = messageOutputFactory.getAvailableOutputs().get(csor.type);
 
         if (outputSummary == null) {
             throw new ValidationException("type", "Invalid output type");
         }
 
         // Make sure the config values will be stored with the correct type.
-        final CreateOutputRequest createOutputRequest = CreateOutputRequest.create(
-                csor.title(),
-                csor.type(),
-                ConfigurationMapConverter.convertValues(csor.configuration(), outputSummary.requestedConfiguration()),
-                csor.streams()
-        );
+        csor.configuration = ConfigurationMapConverter.convertValues(csor.configuration, outputSummary.requestedConfiguration);
 
-        final Output output = outputService.create(createOutputRequest, getCurrentUser().getName());
+        final Output output = outputService.create(csor, getCurrentUser().getName());
         final URI outputUri = UriBuilder.fromResource(OutputResource.class)
                 .path("{outputId}")
                 .build(output.getId());
@@ -187,27 +180,17 @@ public class OutputResource extends RestResource {
     }
 
     // This is so ugly!
-    // TODO: Remove this once we implemented proper types for input/output configuration.
+    // TODO: Remove this once we implemented proper types for input/ouput configuration.
     private Map<String, Object> filterPasswordFields(final Output output) throws MessageOutputConfigurationException {
         final Map<String, Object> data = output.asMap();
         final MessageOutput.Factory factory = messageOutputFactory.get(output.getType());
-
-        if (null == factory) {
-            throw new MessageOutputConfigurationException("Couldn't find output of type " + output.getType());
-        }
-
-        final ConfigurationRequest requestedConfiguration;
-        try {
-            requestedConfiguration = factory.getConfig().getRequestedConfiguration();
-        } catch (Exception e) {
-            throw new MessageOutputConfigurationException("Couldn't retrieve requested configuration for output " + output.getTitle());
-        }
+        final ConfigurationRequest requestedConfiguration = factory.getConfig().getRequestedConfiguration();
 
         if (data.containsKey("configuration")) {
             final Map<String, Object> c = (Map<String, Object>) data.get("configuration");
 
             for (Map.Entry<String, Object> entry : c.entrySet()) {
-                if (requestedConfiguration.getField(entry.getKey()).getAttributes().contains(PASSWORD_ATTRIBUTE)) {
+                if (requestedConfiguration.getField(entry.getKey()).getAttributes().contains(TextField.Attribute.IS_PASSWORD.toString().toLowerCase())) {
                     c.put(entry.getKey(), "********");
                 }
             }

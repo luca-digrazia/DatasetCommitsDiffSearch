@@ -1,6 +1,4 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,24 +13,30 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.rest.resources.users.requests;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.hibernate.validator.constraints.Email;
+import org.hibernate.validator.constraints.NotEmpty;
 
 import java.util.List;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
+@JsonAutoDetect
 public class CreateRequest {
-
+    @NotEmpty
     public String username;
+    @NotEmpty
     public String password;
-
+    @Email
+    public String email;
     @JsonProperty("full_name")
-    public String fullName;
-
+    public String fullname;
     public List<String> permissions;
+    public String timezone;
+    public StartpageSummary startpage;
+    @JsonProperty("session_timeout_ms")
+    public Long sessionTimeoutMs;
+
 }

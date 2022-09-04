@@ -47,7 +47,6 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -55,12 +54,12 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
-import java.util.List;
 
 @RequiresAuthentication
 @Api(value = "StreamRules", description = "Manage stream rules")
 @Path("/streams/{streamid}/rules")
 public class StreamRuleResource extends RestResource {
+    private static final Logger LOG = LoggerFactory.getLogger(StreamRuleResource.class);
     private final StreamRuleService streamRuleService;
     private final StreamService streamService;
 
@@ -77,25 +76,27 @@ public class StreamRuleResource extends RestResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response create(@ApiParam(name = "streamid", value = "The stream id this new rule belongs to.", required = true)
-                           @PathParam("streamid") String streamId,
+                           @PathParam("streamid") String streamid,
                            @ApiParam(name = "JSON body", required = true)
                            @Valid @NotNull CreateStreamRuleRequest cr) throws NotFoundException, ValidationException {
-        checkPermission(RestPermissions.STREAMS_EDIT, streamId);
+        checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
-        final Stream stream = streamService.load(streamId);
-        final StreamRule streamRule = streamRuleService.create(streamId, cr);
+        final Stream stream = streamService.load(streamid);
+        final StreamRule streamRule = streamRuleService.create(streamid, cr);
         final String id = streamService.save(streamRule);
 
-        final SingleStreamRuleSummaryResponse response = SingleStreamRuleSummaryResponse.create(id);
+        final SingleStreamRuleSummaryResponse response = new SingleStreamRuleSummaryResponse();
+        response.streamRuleId = id;
 
         final URI streamRuleUri = UriBuilder.fromResource(StreamRuleResource.class)
                 .path("{streamRuleId}")
-                .build(streamId, id);
+                .build(id);
 
         return Response.created(streamRuleUri).entity(response).build();
     }
 
-    @PUT
+    // TODO Change to @PUT
+    @POST
     @Path("/{streamRuleId}")
     @Timed
     @ApiOperation(value = "Update a stream rule")
@@ -109,8 +110,7 @@ public class StreamRuleResource extends RestResource {
                                                   @PathParam("streamid") String streamid,
                                                   @ApiParam(name = "streamRuleId", value = "The stream rule id we are updating", required = true)
                                                   @PathParam("streamRuleId") String streamRuleId,
-                                                  @ApiParam(name = "JSON body", required = true)
-                                                  @Valid @NotNull CreateStreamRuleRequest cr) throws NotFoundException, ValidationException {
+                                                  @ApiParam(name = "JSON body", required = true) CreateStreamRuleRequest cr) throws NotFoundException, ValidationException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
         final StreamRule streamRule;
@@ -120,32 +120,23 @@ public class StreamRuleResource extends RestResource {
             throw new NotFoundException();
         }
 
-        final StreamRuleType streamRuleType = StreamRuleType.fromInteger(cr.type());
+        final StreamRuleType streamRuleType = StreamRuleType.fromInteger(cr.type);
         if (null == streamRuleType) {
-            throw new BadRequestException("Unknown stream rule type " + cr.type());
+            throw new BadRequestException("Unknown stream rule type " + cr.type);
         }
 
-        streamRule.setField(cr.field());
+        streamRule.setField(cr.field);
         streamRule.setType(streamRuleType);
-        streamRule.setInverted(cr.inverted());
-        streamRule.setValue(cr.value());
+        streamRule.setInverted(cr.inverted);
+        streamRule.setValue(cr.value);
 
         streamRuleService.save(streamRule);
+        final String id = streamRule.getId();
 
-        return SingleStreamRuleSummaryResponse.create(streamRule.getId());
-    }
+        final SingleStreamRuleSummaryResponse response = new SingleStreamRuleSummaryResponse();
+        response.streamRuleId = id;
 
-    // TODO Remove after all consumers have been updated
-    @POST
-    @Path("/{streamRuleId}")
-    @Timed
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
-    @Deprecated
-    public SingleStreamRuleSummaryResponse updateDeprecated(@PathParam("streamid") String streamid,
-                                                            @PathParam("streamRuleId") String streamRuleId,
-                                                            @Valid @NotNull CreateStreamRuleRequest cr) throws NotFoundException, ValidationException {
-        return update(streamid, streamRuleId, cr);
+        return response;
     }
 
     @GET
@@ -157,9 +148,12 @@ public class StreamRuleResource extends RestResource {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 
         final Stream stream = streamService.load(streamid);
-        final List<StreamRule> streamRules = streamRuleService.loadForStream(stream);
 
-        return StreamRuleListResponse.create(streamRules.size(), streamRules);
+        final StreamRuleListResponse response = new StreamRuleListResponse();
+        response.streamRules = streamRuleService.loadForStream(stream);
+        response.total = response.streamRules.size();
+
+        return response;
     }
 
     @GET

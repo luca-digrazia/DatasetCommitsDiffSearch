@@ -118,7 +118,6 @@ public class SystemResource extends RestResource {
             fields = indices.getAllMessageFields();
         } else {
             fields = Sets.newHashSet();
-            addStandardFields(fields);
             int i = 0;
             for (String field : indices.getAllMessageFields()) {
                 if (i == limit) {
@@ -129,13 +128,8 @@ public class SystemResource extends RestResource {
                 i++;
             }
         }
-        return ImmutableMap.of("fields", fields);
-    }
 
-    private void addStandardFields(Set<String> fields) {
-        fields.add("source");
-        fields.add("message");
-        fields.add("timestamp");
+        return ImmutableMap.of("fields", fields);
     }
 
     // TODO Change to @POST
@@ -242,8 +236,9 @@ public class SystemResource extends RestResource {
     public ReaderPermissionResponse readerPermissions(
             @ApiParam(name = "username", required = true)
             @PathParam("username") String username) {
-        return ReaderPermissionResponse.create(
-                Ordering.natural().sortedCopy(RestPermissions.readerPermissions(username)));
+        final ReaderPermissionResponse response = new ReaderPermissionResponse();
+        response.permissions = Ordering.natural().sortedCopy(RestPermissions.readerPermissions(username));
+        return response;
     }
 
     @POST

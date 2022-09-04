@@ -19,6 +19,7 @@ package org.graylog2.rest.resources.system.indexer;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
@@ -27,16 +28,13 @@ import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.elasticsearch.action.admin.indices.stats.CommonStats;
+import org.elasticsearch.cluster.routing.ShardRouting;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.indices.IndexStatistics;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.rest.resources.RestResource;
-import org.graylog2.rest.resources.system.indexer.responses.ClosedIndices;
-import org.graylog2.rest.resources.system.indexer.responses.IndexInfo;
-import org.graylog2.rest.resources.system.indexer.responses.IndexStats;
-import org.graylog2.rest.resources.system.indexer.responses.ShardRouting;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.system.jobs.SystemJob;
 import org.graylog2.system.jobs.SystemJobConcurrencyException;
@@ -55,7 +53,10 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+import java.util.Map;
 import java.util.Set;
+
+import static com.google.common.base.Strings.nullToEmpty;
 
 @RequiresAuthentication
 @Api(value = "Indexer/Indices", description = "Index information")
@@ -79,29 +80,37 @@ public class IndicesResource extends RestResource {
     @Path("/{index}")
     @ApiOperation(value = "Get information of an index and its shards.")
     @Produces(MediaType.APPLICATION_JSON)
-    public IndexInfo single(@ApiParam(name = "index") @PathParam("index") String index) {
+    public Map<String, Object> single(@ApiParam(name = "index") @PathParam("index") String index) {
         checkPermission(RestPermissions.INDICES_READ, index);
 
         if (!deflector.isGraylog2Index(index)) {
-            final String msg = "Index [" + index + "] doesn't look like an index managed by Graylog2.";
-            LOG.info(msg);
-            throw new NotFoundException(msg);
+            LOG.info("Index [{}] doesn't look like an index managed by Graylog2.", index);
+            throw new NotFoundException();
         }
 
-        final IndexStatistics stats = indices.getIndexStats(index);
-        if (stats == null) {
-            final String msg = "Index [" + index + "] not found.";
-            LOG.error(msg);
-            throw new NotFoundException(msg);
+        final ImmutableMap.Builder<String, Object> result = ImmutableMap.builder();
+        try {
+            final IndexStatistics stats = indices.getIndexStats(index);
+            if (stats == null) {
+                LOG.error("Index [{}] not found.", index);
+                throw new NotFoundException();
+            }
+
+            final ImmutableList.Builder<Map<String, Object>> routing = ImmutableList.builder();
+            for (ShardRouting shardRouting : stats.getShardRoutings()) {
+                routing.add(shardRouting(shardRouting));
+            }
+
+            result.put("primary_shards", indexStats(stats.getPrimaries()));
+            result.put("all_shards", indexStats(stats.getTotal()));
+            result.put("routing", routing.build());
+            result.put("is_reopened", indices.isReopened(index));
+        } catch (Exception e) {
+            LOG.error("Could not get indices information.", e);
+            throw new InternalServerErrorException(e);
         }
 
-        final ImmutableList.Builder<ShardRouting> routing = ImmutableList.builder();
-        for (org.elasticsearch.cluster.routing.ShardRouting shardRouting : stats.getShardRoutings()) {
-            routing.add(shardRouting(shardRouting));
-        }
-
-        return IndexInfo.create(indexStats(stats.getPrimaries()), indexStats(stats.getTotal()),
-                routing.build(), indices.isReopened(index));
+        return result.build();
     }
 
     @GET
@@ -109,7 +118,7 @@ public class IndicesResource extends RestResource {
     @Path("/closed")
     @ApiOperation(value = "Get a list of closed indices that can be reopened.")
     @Produces(MediaType.APPLICATION_JSON)
-    public ClosedIndices closed() {
+    public Map<String, Object> closed() {
         Set<String> closedIndices;
         try {
             closedIndices = Sets.filter(indices.getClosedIndices(), new Predicate<String>() {
@@ -123,7 +132,9 @@ public class IndicesResource extends RestResource {
             throw new InternalServerErrorException(e);
         }
 
-        return ClosedIndices.create(closedIndices, closedIndices.size());
+        return ImmutableMap.of(
+                "indices", closedIndices,
+                "total", closedIndices.size());
     }
 
     @POST
@@ -146,9 +157,8 @@ public class IndicesResource extends RestResource {
         try {
             systemJobManager.submit(rebuildJob);
         } catch (SystemJobConcurrencyException e) {
-            final String msg = "Concurrency level of this job reached: " + e.getMessage();
-            LOG.error(msg);
-            throw new ForbiddenException(msg);
+            LOG.error("Concurrency level of this job reached: " + e.getMessage());
+            throw new ForbiddenException();
         }
     }
 
@@ -180,9 +190,8 @@ public class IndicesResource extends RestResource {
         try {
             systemJobManager.submit(rebuildJob);
         } catch (SystemJobConcurrencyException e) {
-            final String msg = "Concurrency level of this job reached: " + e.getMessage();
-            LOG.error(msg);
-            throw new ForbiddenException(msg);
+            LOG.error("Concurrency level of this job reached: " + e.getMessage());
+            throw new ForbiddenException();
         }
     }
 
@@ -198,9 +207,8 @@ public class IndicesResource extends RestResource {
         checkPermission(RestPermissions.INDICES_DELETE, index);
 
         if (!deflector.isGraylog2Index(index)) {
-            final String msg = "Index [" + index + "] doesn't look like an index managed by Graylog2.";
-            LOG.info(msg);
-            throw new NotFoundException(msg);
+            LOG.info("Index [{}] doesn't look like an index managed by Graylog2.", index);
+            throw new NotFoundException();
         }
 
         if (deflector.getCurrentActualTargetIndex().equals(index)) {
@@ -215,36 +223,74 @@ public class IndicesResource extends RestResource {
         try {
             systemJobManager.submit(rebuildJob);
         } catch (SystemJobConcurrencyException e) {
-            final String msg = "Concurrency level of this job reached: " + e.getMessage();
-            LOG.error(msg);
-            throw new ForbiddenException(msg);
+            LOG.error("Concurrency level of this job reached: " + e.getMessage());
+            throw new ForbiddenException();
         }
+
     }
 
-    private ShardRouting shardRouting(org.elasticsearch.cluster.routing.ShardRouting route) {
-        return ShardRouting.create(route.shardId().getId(),
-                route.state().name().toLowerCase(),
-                route.active(),
-                route.primary(),
-                route.currentNodeId(),
-                cluster.nodeIdToName(route.currentNodeId()),
-                cluster.nodeIdToHostName(route.currentNodeId()),
-                route.relocatingNodeId());
+    private Map<String, Object> shardRouting(ShardRouting route) {
+        final ImmutableMap.Builder<String, Object> result = ImmutableMap.builder();
+
+        result.put("id", route.shardId().getId());
+        result.put("state", route.state().name().toLowerCase());
+        result.put("active", route.active());
+        result.put("primary", route.primary());
+        result.put("node_id", route.currentNodeId());
+        result.put("node_name", cluster.nodeIdToName(route.currentNodeId()));
+        result.put("node_hostname", cluster.nodeIdToHostName(route.currentNodeId()));
+        result.put("relocating_to", nullToEmpty(route.relocatingNodeId()));
+
+        return result.build();
     }
 
-    private IndexStats indexStats(final CommonStats stats) {
-        return IndexStats.create(
-                IndexStats.TimeAndTotalStats.create(stats.getFlush().getTotal(), stats.getFlush().getTotalTime().getSeconds()),
-                IndexStats.TimeAndTotalStats.create(stats.getGet().getCount(), stats.getGet().getTime().getSeconds()),
-                IndexStats.TimeAndTotalStats.create(stats.getIndexing().getTotal().getIndexCount(), stats.getIndexing().getTotal().getIndexTime().getSeconds()),
-                IndexStats.TimeAndTotalStats.create(stats.getMerge().getTotal(), stats.getMerge().getTotalTime().getSeconds()),
-                IndexStats.TimeAndTotalStats.create(stats.getRefresh().getTotal(), stats.getRefresh().getTotalTime().getSeconds()),
-                IndexStats.TimeAndTotalStats.create(stats.getSearch().getTotal().getQueryCount(), stats.getSearch().getTotal().getQueryTime().getSeconds()),
-                IndexStats.TimeAndTotalStats.create(stats.getSearch().getTotal().getFetchCount(), stats.getSearch().getTotal().getFetchTime().getSeconds()),
-                stats.getSearch().getOpenContexts(),
-                stats.getStore().getSize().getBytes(),
-                stats.getSegments().getCount(),
-                IndexStats.DocsStats.create(stats.getDocs().getCount(), stats.getDocs().getDeleted())
-        );
+    private Map<String, Object> indexStats(final CommonStats stats) {
+        final ImmutableMap.Builder<String, Object> result = ImmutableMap.builder();
+
+        result.put("flush", ImmutableMap.<String, Object>of(
+                "total", stats.getFlush().getTotal(),
+                "time_seconds", stats.getFlush().getTotalTime().getSeconds()
+        ));
+
+        result.put("get", ImmutableMap.<String, Object>of(
+                "total", stats.getGet().getCount(),
+                "time_seconds", stats.getGet().getTime().getSeconds()
+        ));
+
+        result.put("index", ImmutableMap.<String, Object>of(
+                "total", stats.getIndexing().getTotal().getIndexCount(),
+                "time_seconds", stats.getIndexing().getTotal().getIndexTime().getSeconds()
+        ));
+
+        result.put("merge", ImmutableMap.<String, Object>of(
+                "total", stats.getMerge().getTotal(),
+                "time_seconds", stats.getMerge().getTotalTime().getSeconds()
+        ));
+
+        result.put("refresh", ImmutableMap.<String, Object>of(
+                "total", stats.getRefresh().getTotal(),
+                "time_seconds", stats.getRefresh().getTotalTime().getSeconds()
+        ));
+
+        result.put("search_query", ImmutableMap.<String, Object>of(
+                "total", stats.getSearch().getTotal().getQueryCount(),
+                "time_seconds", stats.getSearch().getTotal().getQueryTime().getSeconds()
+        ));
+
+        result.put("search_fetch", ImmutableMap.<String, Object>of(
+                "total", stats.getSearch().getTotal().getFetchCount(),
+                "time_seconds", stats.getSearch().getTotal().getFetchTime().getSeconds()
+        ));
+
+        result.put("open_search_contexts", stats.getSearch().getOpenContexts());
+        result.put("store_size_bytes", stats.getStore().getSize().getBytes());
+        result.put("segments", stats.getSegments().getCount());
+
+        result.put("documents", ImmutableMap.<String, Object>of(
+                "count", stats.getDocs().getCount(),
+                "deleted", stats.getDocs().getDeleted()
+        ));
+
+        return result.build();
     }
 }
