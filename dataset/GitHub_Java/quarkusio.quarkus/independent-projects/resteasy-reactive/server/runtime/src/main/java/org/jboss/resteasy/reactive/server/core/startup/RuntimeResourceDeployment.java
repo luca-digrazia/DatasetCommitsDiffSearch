@@ -184,9 +184,8 @@ public class RuntimeResourceDeployment {
                     "Endpoints that return an AsyncFile cannot have any WriterInterceptor set");
         }
 
-        //spec doesn't seem to test this, but RESTEasy does not run request filters for both root and sub resources (which makes sense)
-        //so only only run request filters for methods that are leaf resources - i.e. have a HTTP method annotation so we ensure only one will run
-        if (method.getHttpMethod() != null) {
+        //spec doesn't seem to test this, but RESTEasy does not run request filters again for sub resources (which makes sense)
+        if (!locatableResource) {
             List<ResourceRequestFilterHandler> containerRequestFilterHandlers = interceptorDeployment
                     .setupRequestFilterHandler();
             if (blockingHandlerIndex.isPresent()) {
@@ -220,9 +219,18 @@ public class RuntimeResourceDeployment {
             }
         }
         // form params can be everywhere (field, beanparam, param)
-        if (method.isFormParamRequired() || method.isMultipart()) {
+        if (method.isFormParamRequired() && !defaultBlocking) {
             // read the body as multipart in one go
-            handlers.add(new FormBodyHandler(bodyParameter != null, executorSupplier));
+            handlers.add(new FormBodyHandler(bodyParameter != null));
+        } else if (method.isMultipart()) {
+            Supplier<ServerRestHandler> multipartHandlerSupplier = customServerRestHandlers.getMultipartHandlerSupplier();
+            if (multipartHandlerSupplier != null) {
+                // multipart needs special body handling
+                handlers.add(multipartHandlerSupplier.get());
+            } else {
+                throw new RuntimeException(
+                        "The current execution environment does not implement a ServerRestHandler for multipart form support");
+            }
         } else if (bodyParameter != null) {
             if (!defaultBlocking) {
                 if (method.isBlocking()) {
