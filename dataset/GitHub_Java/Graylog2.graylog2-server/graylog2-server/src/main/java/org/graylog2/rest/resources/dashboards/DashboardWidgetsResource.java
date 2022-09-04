@@ -18,12 +18,14 @@ package org.graylog2.rest.resources.dashboards;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.ImmutableMap;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.graylog2.audit.AuditEventTypes;
+import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.dashboards.Dashboard;
 import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
@@ -61,7 +63,7 @@ import java.net.URI;
 import java.util.Map;
 
 @RequiresAuthentication
-@Api(value = "Dashboards/Widgets", description = "Manage widgets of an existing dashboard")
+@Api(value = "Legacy/Dashboards/Widgets", description = "Manage widgets of an existing dashboard")
 @Path("/dashboards/{dashboardId}/widgets")
 public class DashboardWidgetsResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(DashboardWidgetsResource.class);
@@ -72,7 +74,10 @@ public class DashboardWidgetsResource extends RestResource {
     private final DashboardService dashboardService;
 
     @Inject
-    public DashboardWidgetsResource(DashboardWidgetCreator dashboardWidgetCreator, ActivityWriter activityWriter, WidgetResultCache widgetResultCache, DashboardService dashboardService) {
+    public DashboardWidgetsResource(DashboardWidgetCreator dashboardWidgetCreator,
+                                    ActivityWriter activityWriter,
+                                    WidgetResultCache widgetResultCache,
+                                    DashboardService dashboardService) {
         this.dashboardWidgetCreator = dashboardWidgetCreator;
         this.activityWriter = activityWriter;
         this.widgetResultCache = widgetResultCache;
@@ -89,6 +94,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 400, message = "Validation error."),
             @ApiResponse(code = 400, message = "No such widget type."),
     })
+    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_CREATE)
     public Response addWidget(
             @ApiParam(name = "dashboardId", required = true)
             @PathParam("dashboardId") String dashboardId,
@@ -104,7 +110,7 @@ public class DashboardWidgetsResource extends RestResource {
             checkPermission(RestPermissions.SEARCHES_KEYWORD);
         }
 
-        DashboardWidget widget;
+        final DashboardWidget widget;
         try {
             widget = dashboardWidgetCreator.fromRequest(awr, getCurrentUser().getName());
 
@@ -123,8 +129,7 @@ public class DashboardWidgetsResource extends RestResource {
         }
 
         final Map<String, String> result = ImmutableMap.of("widget_id", widget.getId());
-        final URI widgetUri = getUriBuilderToSelf().path(DashboardsResource.class)
-                .path("{dashboardId}/widgets/{widgetId}")
+        final URI widgetUri = getUriBuilderToSelf().path(DashboardWidgetsResource.class, "getWidget")
                 .build(dashboardId, widget.getId());
 
         return Response.created(widgetUri).entity(result).build();
@@ -162,6 +167,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
+    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_DELETE)
     public void remove(
             @ApiParam(name = "dashboardId", required = true)
             @PathParam("dashboardId") String dashboardId,
@@ -172,7 +178,6 @@ public class DashboardWidgetsResource extends RestResource {
         final Dashboard dashboard = dashboardService.load(dashboardId);
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
-        this.widgetResultCache.invalidate(widget);
         dashboardService.removeWidget(dashboard, widget);
 
         final String msg = "Deleted widget <" + widgetId + "> from dashboard <" + dashboardId + ">. Reason: REST request.";
@@ -200,8 +205,9 @@ public class DashboardWidgetsResource extends RestResource {
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
         if (widget == null) {
-            LOG.error("Widget not found.");
-            throw new javax.ws.rs.NotFoundException();
+            final String msg = "Widget " + widgetId + " on dashboard " + dashboardId + " not found.";
+            LOG.error(msg);
+            throw new javax.ws.rs.NotFoundException(msg);
         }
 
         return widgetResultCache.getComputationResultForDashboardWidget(widget).asMap();
@@ -216,6 +222,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
+    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_UPDATE)
     public void updateWidget(@ApiParam(name = "dashboardId", required = true)
                              @PathParam("dashboardId") String dashboardId,
                              @ApiParam(name = "widgetId", required = true)
@@ -228,8 +235,9 @@ public class DashboardWidgetsResource extends RestResource {
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
         if (widget == null) {
-            LOG.error("Widget not found.");
-            throw new javax.ws.rs.NotFoundException();
+            final String msg = "Widget " + widgetId + " on dashboard " + dashboardId + " not found.";
+            LOG.error(msg);
+            throw new javax.ws.rs.NotFoundException(msg);
         }
 
         try {
@@ -238,7 +246,6 @@ public class DashboardWidgetsResource extends RestResource {
 
             dashboardService.removeWidget(dashboard, widget);
             dashboardService.addWidget(dashboard, updatedWidget);
-            this.widgetResultCache.invalidate(widget);
         } catch (DashboardWidget.NoSuchWidgetTypeException e2) {
             LOG.error("No such widget type.", e2);
             throw new BadRequestException(e2);
@@ -263,6 +270,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
+    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_UPDATE)
     public void updateDescription(@ApiParam(name = "dashboardId", required = true)
                                   @PathParam("dashboardId") String dashboardId,
                                   @ApiParam(name = "widgetId", required = true)
@@ -275,8 +283,9 @@ public class DashboardWidgetsResource extends RestResource {
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
         if (widget == null) {
-            LOG.error("Widget not found.");
-            throw new javax.ws.rs.NotFoundException();
+            final String msg = "Widget " + widgetId + " on dashboard " + dashboardId + " not found.";
+            LOG.error(msg);
+            throw new javax.ws.rs.NotFoundException(msg);
         }
 
         dashboardService.updateWidgetDescription(dashboard, widget, uwr.description());
@@ -294,6 +303,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
+    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_UPDATE)
     public void updateCacheTime(@ApiParam(name = "dashboardId", required = true)
                                 @PathParam("dashboardId") String dashboardId,
                                 @ApiParam(name = "widgetId", required = true)
@@ -306,12 +316,12 @@ public class DashboardWidgetsResource extends RestResource {
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
         if (widget == null) {
-            LOG.error("Widget not found.");
-            throw new javax.ws.rs.NotFoundException();
+            final String msg = "Widget " + widgetId + " on dashboard " + dashboardId + " not found.";
+            LOG.error(msg);
+            throw new javax.ws.rs.NotFoundException(msg);
         }
 
         dashboardService.updateWidgetCacheTime(dashboard, widget, uwr.cacheTime());
-        this.widgetResultCache.invalidate(widget);
 
         LOG.info("Updated cache time of widget <" + widgetId + "> on dashboard <" + dashboardId + "> to " +
                 "[" + uwr.cacheTime() + "]. Reason: REST request.");

@@ -39,7 +39,6 @@ import org.graylog2.search.SearchQuery;
 import org.graylog2.search.SearchQueryField;
 import org.graylog2.search.SearchQueryParser;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,7 +115,6 @@ public class ViewsResource extends RestResource implements PluginRestResource {
                         final Optional<ViewSharing> viewSharing = viewSharingService.forView(view.id());
 
                         return isPermitted(ViewsRestPermissions.VIEW_READ, view.id())
-                                || (view.type().equals(ViewDTO.Type.DASHBOARD) && isPermitted(RestPermissions.DASHBOARDS_READ, view.id()))
                                 || viewSharing.map(sharing -> isViewSharedForUser.isAllowedToSee(getCurrentUser(), sharing)).orElse(false);
                     },
                     order,
@@ -142,11 +140,9 @@ public class ViewsResource extends RestResource implements PluginRestResource {
         }
 
         final Optional<ViewSharing> viewSharing = viewSharingService.forView(id);
-        final ViewDTO view = loadView(id);
         if (isPermitted(ViewsRestPermissions.VIEW_READ, id)
-                || (view.type().equals(ViewDTO.Type.DASHBOARD) && isPermitted(RestPermissions.DASHBOARDS_READ, view.id()))
                 || viewSharing.map(sharing -> isViewSharedForUser.isAllowedToSee(getCurrentUser(), sharing)).orElse(false)) {
-            return view;
+            return loadView(id);
         }
 
         throw viewNotFoundException(id);
@@ -168,14 +164,7 @@ public class ViewsResource extends RestResource implements PluginRestResource {
     @AuditEvent(type = ViewsAuditEventTypes.VIEW_UPDATE)
     public ViewDTO update(@ApiParam(name="id") @PathParam("id") @NotEmpty String id,
                           @ApiParam @Valid ViewDTO dto) {
-        if (dto.type().equals(ViewDTO.Type.DASHBOARD)) {
-            checkAnyPermission(new String[]{
-                    ViewsRestPermissions.VIEW_EDIT,
-                    RestPermissions.DASHBOARDS_EDIT
-            }, id);
-        } else {
-            checkPermission(ViewsRestPermissions.VIEW_EDIT, id);
-        }
+        checkPermission(ViewsRestPermissions.VIEW_EDIT, id);
         loadView(id);
         return dbService.update(dto.toBuilder().id(id).build());
     }
@@ -195,7 +184,7 @@ public class ViewsResource extends RestResource implements PluginRestResource {
     @ApiOperation("Delete view")
     @AuditEvent(type = ViewsAuditEventTypes.VIEW_DELETE)
     public ViewDTO delete(@ApiParam(name="id") @PathParam("id") @NotEmpty String id) {
-        checkPermission(ViewsRestPermissions.VIEW_EDIT, id);
+        checkPermission(ViewsRestPermissions.VIEW_DELETE, id);
         final ViewDTO dto = loadView(id);
         dbService.delete(id);
         removeUserPermissions(dto);
