@@ -38,7 +38,7 @@ public final class Futures {
                         paramValues.put(entry.getKey(), results[j++].get());
                     }
                     result.complete(paramValues);
-                } catch (Throwable e) {
+                } catch (Exception e) {
                     result.completeExceptionally(e);
                 }
 

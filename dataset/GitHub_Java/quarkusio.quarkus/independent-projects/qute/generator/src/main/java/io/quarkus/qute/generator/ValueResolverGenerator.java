@@ -45,7 +45,6 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
@@ -65,7 +64,6 @@ public class ValueResolverGenerator {
 
     private static final DotName COMPLETION_STAGE = DotName.createSimple(CompletionStage.class.getName());
     private static final DotName OBJECT = DotName.createSimple(Object.class.getName());
-    private static final DotName BOOLEAN = DotName.createSimple(Boolean.class.getName());
 
     public static final String SUFFIX = "_ValueResolver";
     public static final String NESTED_SEPARATOR = "$_";
@@ -74,7 +72,6 @@ public class ValueResolverGenerator {
 
     private static final String GET_PREFIX = "get";
     private static final String IS_PREFIX = "is";
-    private static final String HAS_PREFIX = "has";
 
     public static final String IGNORE_SUPERCLASSES = "ignoreSuperclasses";
     public static final String IGNORE = "ignore";
@@ -220,7 +217,7 @@ public class ValueResolverGenerator {
                 if (methodParams.isEmpty()) {
                     // No params - just invoke the method
                     LOGGER.debugf("Method added %s", method);
-                    try (BytecodeCreator matchScope = createMatchScope(resolve, method.name(), 0, method.returnType(), name,
+                    try (BytecodeCreator matchScope = createMatchScope(resolve, method.name(), 0, name,
                             params, paramsCount)) {
                         ResultHandle ret;
                         boolean hasCompletionStage = !skipMemberType(method.returnType())
@@ -307,8 +304,7 @@ public class ValueResolverGenerator {
 
         LOGGER.debugf("Method added %s", method);
 
-        BytecodeCreator matchScope = createMatchScope(resolve, method.name(), methodParams.size(), method.returnType(), name,
-                params,
+        BytecodeCreator matchScope = createMatchScope(resolve, method.name(), methodParams.size(), name, params,
                 paramsCount);
 
         // Invoke the method
@@ -424,7 +420,7 @@ public class ValueResolverGenerator {
             ResultHandle evalContext) {
 
         LOGGER.debugf("Methods added %s", methods);
-        BytecodeCreator matchScope = createMatchScope(resolve, matchName, matchParamsCount, null,
+        BytecodeCreator matchScope = createMatchScope(resolve, matchName, matchParamsCount,
                 name, params,
                 paramsCount);
         ResultHandle ret = matchScope
@@ -591,7 +587,7 @@ public class ValueResolverGenerator {
     }
 
     private BytecodeCreator createMatchScope(BytecodeCreator bytecodeCreator, String methodName, int methodParams,
-            Type returnType, ResultHandle name, ResultHandle params, ResultHandle paramsCount) {
+            ResultHandle name, ResultHandle params, ResultHandle paramsCount) {
 
         BytecodeCreator matchScope = bytecodeCreator.createScope();
         // Match name
@@ -600,7 +596,7 @@ public class ValueResolverGenerator {
                 name))
                 .falseBranch();
         // Match the property name for getters,  ie. "foo" for "getFoo"
-        if (methodParams == 0 && isGetterName(methodName, returnType)) {
+        if (methodParams == 0 && isGetterName(methodName)) {
             notMatched.ifNonZero(notMatched.invokeVirtualMethod(Descriptors.EQUALS,
                     notMatched.load(getPropertyName(methodName)),
                     name)).falseBranch().breakScope(matchScope);
@@ -609,7 +605,8 @@ public class ValueResolverGenerator {
         }
         // Match number of params
         if (methodParams >= 0) {
-            matchScope.ifIntegerEqual(matchScope.load(methodParams), paramsCount).falseBranch().breakScope(matchScope);
+            matchScope.ifNonZero(matchScope.invokeStaticMethod(Descriptors.INTEGER_COMPARE,
+                    matchScope.load(methodParams), paramsCount)).trueBranch().breakScope(matchScope);
 
         }
         return matchScope;
@@ -728,27 +725,17 @@ public class ValueResolverGenerator {
         return (mod & 0x00001000) != 0;
     }
 
-    static boolean isGetterName(String name, Type returnType) {
-        if (name.startsWith(GET_PREFIX)) {
-            return true;
-        }
-        if (returnType == null
-                || (returnType.name().equals(PrimitiveType.BOOLEAN.name()) || returnType.name().equals(BOOLEAN))) {
-            return name.startsWith(IS_PREFIX) || name.startsWith(HAS_PREFIX);
-        }
-        return false;
+    static boolean isGetterName(String name) {
+        return name.startsWith(GET_PREFIX) || name.startsWith(IS_PREFIX);
     }
 
     public static String getPropertyName(String methodName) {
-        String propertyName = methodName;
         if (methodName.startsWith(GET_PREFIX)) {
-            propertyName = methodName.substring(GET_PREFIX.length(), methodName.length());
+            return decapitalize(methodName.substring(GET_PREFIX.length(), methodName.length()));
         } else if (methodName.startsWith(IS_PREFIX)) {
-            propertyName = methodName.substring(IS_PREFIX.length(), methodName.length());
-        } else if (methodName.startsWith(HAS_PREFIX)) {
-            propertyName = methodName.substring(HAS_PREFIX.length(), methodName.length());
+            return decapitalize(methodName.substring(IS_PREFIX.length(), methodName.length()));
         }
-        return decapitalize(propertyName);
+        return methodName;
     }
 
     static String decapitalize(String name) {

@@ -32,10 +32,6 @@ public class MyService {
         return true;
     }
 
-    public boolean hasItems() {
-        return false;
-    }
-
     public List<String> getList(int limit, String dummy) {
         AtomicInteger idx = new AtomicInteger(0);
         return Stream.generate(() -> "" + idx.getAndIncrement())

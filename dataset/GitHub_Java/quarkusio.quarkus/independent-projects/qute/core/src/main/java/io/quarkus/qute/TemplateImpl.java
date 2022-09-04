@@ -103,12 +103,8 @@ class TemplateImpl implements Template {
                 result.completeExceptionally(t);
             } else {
                 // Sync processing of the result tree - build the output
-                try {
-                    r.process(consumer);
-                    result.complete(null);
-                } catch (Throwable e) {
-                    result.completeExceptionally(e);
-                }
+                r.process(consumer);
+                result.complete(null);
             }
         });
         return result;

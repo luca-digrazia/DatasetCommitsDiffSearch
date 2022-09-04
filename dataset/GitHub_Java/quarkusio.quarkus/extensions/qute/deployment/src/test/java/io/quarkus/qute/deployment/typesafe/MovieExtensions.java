@@ -17,8 +17,4 @@ public class MovieExtensions {
         return ret;
     }
 
-    static boolean negate(boolean val) {
-        return !val;
-    }
-
 }
