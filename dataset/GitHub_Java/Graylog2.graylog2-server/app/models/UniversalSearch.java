@@ -29,8 +29,6 @@ import lib.timeranges.TimeRange;
 import models.api.responses.*;
 import models.api.results.DateHistogramResult;
 import models.api.results.SearchResult;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import play.mvc.Call;
 import play.mvc.Http.Request;
 
@@ -38,10 +36,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
-import static lib.Configuration.apiTimeout;
-
 public class UniversalSearch {
-    private static final Logger log = LoggerFactory.getLogger(UniversalSearch.class);
 
     public static final int PER_PAGE = 100;
     public static final int KEITH = 61;  // http://en.wikipedia.org/wiki/61_(number) -> Keith
@@ -117,10 +112,6 @@ public class UniversalSearch {
 
     public SearchResult search() throws IOException, APIException {
         SearchResultResponse response = doSearch(SearchResultResponse.class, MediaType.JSON_UTF_8, PER_PAGE);
-        if (response == null) {
-            log.error("We should never get an empty result without throwing an IOException.");
-            throw new APIException(null, null, new RuntimeException("Empty search response, this is likely a bug in exception handling."));
-        }
 
         SearchResult result = new SearchResult(
                 query,
@@ -131,7 +122,7 @@ public class UniversalSearch {
                 response.messages,
                 response.fields,
                 response.usedIndices,
-                response.error != null ? response.error : response.genericError
+                response.error
         );
 
         return result;
@@ -148,7 +139,7 @@ public class UniversalSearch {
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
                 .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(apiTimeout("search_universal_histogram", KEITH, TimeUnit.SECONDS))
+                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
         return new DateHistogramResult(response.query, response.time, response.interval, response.results);
     }
@@ -160,7 +151,7 @@ public class UniversalSearch {
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
                 .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(apiTimeout("search_universal_stats", KEITH, TimeUnit.SECONDS))
+                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
     }
 
@@ -171,7 +162,7 @@ public class UniversalSearch {
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
                 .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(apiTimeout("search_universal_terms", KEITH, TimeUnit.SECONDS))
+                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
     }
 
@@ -183,7 +174,7 @@ public class UniversalSearch {
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
                 .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(apiTimeout("search_universal_fieldhistogram", KEITH, TimeUnit.SECONDS))
+                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
     }
 
