@@ -50,9 +50,7 @@ public class EReceiverHolder extends EComponentHolder {
 	@Override
 	protected void setInit() {
 		init = generatedClass.method(PRIVATE, codeModel().VOID, "init_");
-		if (onReceiveMethod == null) {
-			createOnReceive();
-		}
+		createOnReceive();
 	}
 
 	private void createOnReceive() {
