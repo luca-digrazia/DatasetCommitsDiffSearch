@@ -18,6 +18,7 @@ import org.apache.http.HttpHeaders;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
+import org.apache.http.ProtocolException;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.Credentials;
 import org.apache.http.auth.NTCredentials;
@@ -78,6 +79,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.MockitoAnnotations.initMocks;
+
 
 class AnotherHttpClientBuilder extends org.apache.http.impl.client.HttpClientBuilder {
     public static AnotherHttpClientBuilder create() {
@@ -147,6 +150,7 @@ public class HttpClientBuilderTest {
         connectionManager = spy(new InstrumentedHttpClientConnectionManager(metricRegistry, registry));
         apacheBuilder = org.apache.http.impl.client.HttpClientBuilder.create();
         anotherApacheBuilder = spy(AnotherHttpClientBuilder.create());
+        initMocks(this);
     }
 
     @AfterEach
@@ -671,7 +675,7 @@ public class HttpClientBuilderTest {
             @Override
             public boolean isRedirected(HttpRequest httpRequest,
                                         HttpResponse httpResponse,
-                                        HttpContext httpContext) {
+                                        HttpContext httpContext) throws ProtocolException {
                 return false;
             }
 
@@ -679,7 +683,7 @@ public class HttpClientBuilderTest {
             @Nullable
             public HttpUriRequest getRedirect(HttpRequest httpRequest,
                                               HttpResponse httpResponse,
-                                              HttpContext httpContext) {
+                                              HttpContext httpContext) throws ProtocolException {
                 return null;
             }
         };
@@ -756,7 +760,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    public void configureCredentialReturnsNTCredentialsForNTLMConfig() {
+    public void configureCredentialReturnsNTCredentialsForNTLMConfig() throws Exception {
         AuthConfiguration ntlmConfig = new AuthConfiguration("username", "password", "NTLM", "realm", "hostname", "domain", "NT");
 
         Credentials credentials = builder.configureCredentials(ntlmConfig);
@@ -766,7 +770,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    public void configureCredentialReturnsNTCredentialsForBasicConfig() {
+    public void configureCredentialReturnsNTCredentialsForBasicConfig() throws Exception {
         AuthConfiguration ntlmConfig = new AuthConfiguration("username", "password");
 
         Credentials credentials = builder.configureCredentials(ntlmConfig);
