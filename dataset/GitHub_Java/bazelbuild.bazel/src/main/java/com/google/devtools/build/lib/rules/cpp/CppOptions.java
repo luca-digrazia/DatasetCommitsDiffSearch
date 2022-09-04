@@ -246,7 +246,7 @@ public class CppOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_avoid_conflict_dlls",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
       metadataTags = {
@@ -856,7 +856,7 @@ public class CppOptions extends FragmentOptions {
         OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
       },
       help =
-          "If true, Bazel will complain when cc_toolchain.cpu and cc_toolchain.compiler attributes "
+          "If true, Bazel will complain when cc_toolchain.cpu and cc_toolchain.compiler attribtues "
               + "are set "
               + "(see https://github.com/bazelbuild/bazel/issues/7075 for migration instructions).")
   public boolean removeCpuCompilerCcToolchainAttributes;
@@ -1036,20 +1036,6 @@ public class CppOptions extends FragmentOptions {
       help = "If enabled, give distinguishing mnemonic to header processing actions")
   public boolean useCppCompileHeaderMnemonic;
 
-  @Option(
-      name = "incompatible_macos_set_install_name",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "Whether to explicitly set `-install_name` when creating dynamic libraries. "
-              + "See https://github.com/bazelbuild/bazel/issues/12370")
-  public boolean macosSetInstallName;
-
   /** See {@link #targetLibcTopLabel} documentation. * */
   @Override
   public FragmentOptions getNormalized() {
@@ -1137,8 +1123,6 @@ public class CppOptions extends FragmentOptions {
     host.hostLinkoptList = hostLinkoptList;
 
     host.experimentalStarlarkCcImport = experimentalStarlarkCcImport;
-
-    host.macosSetInstallName = macosSetInstallName;
 
     return host;
   }

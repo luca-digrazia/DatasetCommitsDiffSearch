@@ -168,7 +168,7 @@ class ObjcVariablesExtension implements VariablesExtension {
     builder.addStringVariable(
         MODULES_MAPS_DIR_NAME,
         intermediateArtifacts
-            .swiftModuleMap()
+            .moduleMap()
             .getArtifact()
             .getExecPath()
             .getParentDirectory()

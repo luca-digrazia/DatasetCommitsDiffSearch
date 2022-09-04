@@ -14,9 +14,11 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 
 /**
@@ -28,11 +30,16 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     return CppConfiguration.class;
   }
 
+  @Override
+  public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+    return ImmutableSet.of(CppOptions.class);
+  }
+
   /** Creates a new {@link CppConfigurationLoader} instance. */
   public CppConfigurationLoader() {}
 
   @Override
   public CppConfiguration create(BuildOptions options) throws InvalidConfigurationException {
-    return new CppConfiguration(options);
+    return CppConfiguration.create(options);
   }
 }

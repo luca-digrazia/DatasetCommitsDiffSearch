@@ -28,15 +28,14 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import java.util.Map;
 
 /**
  * Implementation of the {@code cc_toolchain_suite} rule.
  *
  * <p>This is currently a no-op because the logic that transforms this rule into something that can
- * be understood by the {@code cc_*} rules is in {@link
- * com.google.devtools.build.lib.rules.cpp.CppConfiguration}.
+ * be understood by the {@code cc_*} rules is in
+ * {@link com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader}.
  */
 public class CcToolchainSuite implements RuleConfiguredTargetFactory {
 
@@ -61,9 +60,6 @@ public class CcToolchainSuite implements RuleConfiguredTargetFactory {
       ccToolchainProvider =
           selectCcToolchain(
               CcToolchainProvider.class,
-              // TOOD(b/17906781): Change this to CcToolchainProvider when CcToolchainProvider isn't
-              // a subclass of ToolchainInfo.
-              ToolchainInfo.PROVIDER,
               ruleContext,
               transformedCpu,
               compiler,
@@ -74,7 +70,6 @@ public class CcToolchainSuite implements RuleConfiguredTargetFactory {
       CcToolchainAttributesProvider selectedAttributes =
           selectCcToolchain(
               CcToolchainAttributesProvider.class,
-              CcToolchainAttributesProvider.PROVIDER,
               ruleContext,
               transformedCpu,
               compiler,
@@ -112,8 +107,6 @@ public class CcToolchainSuite implements RuleConfiguredTargetFactory {
 
   private <T extends HasCcToolchainLabel> T selectCcToolchain(
       Class<T> clazz,
-      // TOOD(b/17906781): Change the type to T when CcToolchainprovider has its own provider type.
-      BuiltinProvider<?> providerType,
       RuleContext ruleContext,
       String cpu,
       String compiler,
@@ -121,7 +114,7 @@ public class CcToolchainSuite implements RuleConfiguredTargetFactory {
       throws RuleErrorException {
     T selectedAttributes = null;
     for (TransitiveInfoCollection dep : ruleContext.getPrerequisiteMap("toolchains").values()) {
-      T attributes = clazz.cast(dep.get(providerType));
+      T attributes = clazz.cast(dep.get(ToolchainInfo.PROVIDER));
       if (attributes != null && attributes.getCcToolchainLabel().equals(selectedCcToolchain)) {
         selectedAttributes = attributes;
         break;
