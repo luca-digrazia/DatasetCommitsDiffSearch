@@ -270,7 +270,7 @@ public final class Main extends NodeRunner {
             serviceManager.startAsync().awaitHealthy();
         } catch (Exception e) {
             try {
-                serviceManager.stopAsync().awaitStopped(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
+                serviceManager.stopAsync().awaitStopped(30, TimeUnit.SECONDS);
             } catch (TimeoutException timeoutException) {
                 LOG.error("Unable to shutdown properly on time. {}", serviceManager.servicesByState());
             }

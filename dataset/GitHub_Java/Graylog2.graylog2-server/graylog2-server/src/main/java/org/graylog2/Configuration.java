@@ -277,9 +277,6 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "stale_master_timeout", validator = PositiveIntegerValidator.class)
     private int staleMasterTimeout = 2000;
 
-    @Parameter(value = "shutdown_timeout", validator = PositiveIntegerValidator.class)
-    private int shutdownTimeout = 30000;
-
     public boolean isMaster() {
         return isMaster;
     }
@@ -618,10 +615,6 @@ public class Configuration extends BaseConfiguration {
 
     public int getStaleMasterTimeout() {
         return staleMasterTimeout;
-    }
-
-    public int getShutdownTimeout() {
-        return shutdownTimeout;
     }
 }
 
