@@ -17,12 +17,12 @@ package com.google.devtools.build.lib.rules.proto;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
+import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -52,7 +52,7 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
         .setOutputToGenfiles()
         .add(
             attr(":proto_compiler", LABEL)
-                .cfg(ExecutionTransitionFactory.create())
+                .cfg(HostTransition.createFactory())
                 .exec()
                 .value(PROTO_COMPILER))
         /* <!-- #BLAZE_RULE(proto_library).ATTRIBUTE(deps) -->
@@ -101,7 +101,7 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
         prefix is added.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("import_prefix", STRING))
-        .advertiseStarlarkProvider(ProtoInfo.PROVIDER.id())
+        .advertiseSkylarkProvider(ProtoInfo.PROVIDER.id())
         .build();
   }
 
@@ -109,7 +109,7 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("proto_library")
-        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
+        .ancestors(BaseRuleClasses.RuleBase.class)
         .factoryClass(BazelProtoLibrary.class)
         .build();
   }
@@ -136,7 +136,7 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
 
 <p>It only contains information about the <code>.proto</code> files directly mentioned by a
 <code>proto_library</code> rule; the collection of transitive descriptor sets is available through
-the <code>[ProtoInfo].transitive_descriptor_sets</code> Starlark provider.
+the <code>[ProtoInfo].transitive_descriptor_sets</code> Skylark provider.
 See documentation in <code>ProtoInfo.java</code>.</p>
 
 <p>Recommended code organization:</p>

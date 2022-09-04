@@ -24,8 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.packages.util.MockProtoSupport;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import org.junit.Before;
@@ -44,16 +42,14 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   public void setUp() throws Exception {
     useConfiguration("--proto_compiler=//proto:compiler");
     scratch.file("proto/BUILD", "licenses(['notice'])", "exports_files(['compiler'])");
-
-    MockProtoSupport.setupWorkspace(scratch);
-    invalidatePackages();
+    ProtoTestHelper.setupWorkspace(this);
   }
 
   @Test
   public void createsDescriptorSets() throws Exception {
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='alias', deps = ['foo'])",
         "proto_library(name='foo', srcs=['foo.proto'])",
         "proto_library(name='alias_to_no_srcs', deps = ['no_srcs'])",
@@ -73,7 +69,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   public void descriptorSets_ruleWithSrcsCallsProtoc() throws Exception {
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='foo', srcs=['foo.proto'])");
     Artifact file = getDescriptorOutput("//x:foo");
 
@@ -87,7 +83,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   /** Asserts that we register a FileWriteAction with empty contents if there are no srcs. */
   @Test
   public void descriptorSets_ruleWithoutSrcsWritesEmptyFile() throws Exception {
-    scratch.file("x/BUILD", TestConstants.LOAD_PROTO_LIBRARY, "proto_library(name='no_srcs')");
+    scratch.file("x/BUILD", ProtoTestHelper.LOAD_PROTO_LIBRARY, "proto_library(name='no_srcs')");
     Action action = getDescriptorWriteAction("//x:no_srcs");
     assertThat(action).isInstanceOf(FileWriteAction.class);
     assertThat(((FileWriteAction) action).getFileContents()).isEmpty();
@@ -104,7 +100,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   public void descriptorSetsDependOnChildren() throws Exception {
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='alias', deps = ['foo'])",
         "proto_library(name='foo', srcs=['foo.proto'], deps = ['bar'])",
         "proto_library(name='bar', srcs=['bar.proto'])",
@@ -139,7 +135,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   public void descriptorSetsAreExposedInProvider() throws Exception {
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='alias', deps = ['foo'])",
         "proto_library(name='foo', srcs=['foo.proto'], deps = ['bar'])",
         "proto_library(name='bar', srcs=['bar.proto'])",
@@ -196,7 +192,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     useConfiguration("--proto_compiler=//proto:compiler", "--strict_proto_deps=error");
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='nodeps', srcs=['nodeps.proto'])",
         "proto_library(name='withdeps', srcs=['withdeps.proto'], deps=[':dep1', ':dep2'])",
         "proto_library(name='depends_on_alias', srcs=['depends_on_alias.proto'], deps=[':alias'])",
@@ -233,7 +229,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
         scratchConfiguredTarget(
             "x",
             "foo",
-            TestConstants.LOAD_PROTO_LIBRARY,
+            ProtoTestHelper.LOAD_PROTO_LIBRARY,
             "proto_library(name='foo', srcs=['foo.proto', 'bar.proto'])");
     Artifact file = getFirstArtifactEndingWith(getFilesToBuild(target), ".proto.bin");
     assertThat(file.getRootRelativePathString()).isEqualTo("x/foo-descriptor-set.proto.bin");
@@ -248,7 +244,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     useConfiguration("--proto_compiler=//proto:compiler", "--strict_proto_deps=off");
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='foo', srcs=['foo.proto'])");
 
     for (String arg :
@@ -261,7 +257,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   public void testStripImportPrefixWithoutDeps() throws Exception {
     scratch.file(
         "third_party/x/foo/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "licenses(['unencumbered'])",
         "proto_library(",
         "    name = 'nodeps',",
@@ -284,7 +280,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   public void testStripImportPrefixWithDepsDuplicate() throws Exception {
     scratch.file(
         "third_party/x/foo/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "licenses(['unencumbered'])",
         "proto_library(",
         "    name = 'withdeps',",
@@ -317,7 +313,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   public void testStripImportPrefixWithDeps() throws Exception {
     scratch.file(
         "third_party/x/foo/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "licenses(['unencumbered'])",
         "proto_library(",
         "    name = 'withdeps',",
@@ -331,7 +327,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
         ")");
     scratch.file(
         "third_party/x/bar/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "licenses(['unencumbered'])",
         "proto_library(",
         "    name = 'dep',",
@@ -361,22 +357,25 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file("/foo/WORKSPACE");
     scratch.file(
         "/foo/x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='x', srcs=['generated.proto'])",
         "genrule(name='g', srcs=[], outs=['generated.proto'], cmd='')");
 
     scratch.file(
         "a/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='a', srcs=['a.proto'], deps=['@foo//x:x'])");
 
+    String genfiles = getTargetConfiguration().getGenfilesFragment().toString();
     ConfiguredTarget a = getConfiguredTarget("//a:a");
     ProtoInfo aInfo = a.get(ProtoInfo.PROVIDER);
-    assertThat(aInfo.getTransitiveProtoSourceRoots()).containsExactly(".", "external/foo");
+    assertThat(aInfo.getTransitiveProtoSourceRoots())
+        .containsExactly(".", genfiles + "/external/foo/x/_virtual_imports/x");
 
     ConfiguredTarget x = getConfiguredTarget("@foo//x:x");
     ProtoInfo xInfo = x.get(ProtoInfo.PROVIDER);
-    assertThat(xInfo.getTransitiveProtoSourceRoots()).containsExactly("external/foo");
+    assertThat(xInfo.getTransitiveProtoSourceRoots())
+        .containsExactly(genfiles + "/external/foo/x/_virtual_imports/x");
   }
 
   @Test
@@ -387,23 +386,23 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
     scratch.file(
         "ad/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='ad', strip_import_prefix='/ad', srcs=['ad.proto'])");
     scratch.file(
         "ae/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='ae', strip_import_prefix='/ae', srcs=['ae.proto'])");
     scratch.file(
         "bd/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='bd', strip_import_prefix='/bd', srcs=['bd.proto'])");
     scratch.file(
         "be/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='be', strip_import_prefix='/be', srcs=['be.proto'])");
     scratch.file(
         "a/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name='a',",
         "    strip_import_prefix='/a',",
@@ -412,7 +411,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
         "    deps=['//ad:ad'])");
     scratch.file(
         "b/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name='b',",
         "    strip_import_prefix='/b',",
@@ -421,7 +420,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
         "    deps=['//bd:bd'])");
     scratch.file(
         "c/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name='c',",
         "    strip_import_prefix='/c',",
@@ -452,7 +451,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file("/yolo_repo/yolo_pkg/yolo.proto");
     scratch.file(
         "/yolo_repo/yolo_pkg/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "  name = 'yolo_proto',",
         "  srcs = ['yolo.proto'],",
@@ -464,7 +463,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
         "main.proto", "syntax = 'proto3'';", "import 'bazel.build/yolo/yolo_pkg/yolo.proto';");
     scratch.file(
         "BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "  name = 'main_proto',",
         "  srcs = ['main.proto'],",
@@ -493,7 +492,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file("/yolo_repo/yolo_pkg_to_be_stripped/yolo_pkg/yolo.proto");
     scratch.file(
         "/yolo_repo/yolo_pkg_to_be_stripped/yolo_pkg/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "  name = 'yolo_proto',",
         "  srcs = ['yolo.proto'],",
@@ -506,7 +505,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
         "main.proto", "syntax = 'proto3'';", "import 'bazel.build/yolo/yolo_pkg/yolo.proto';");
     scratch.file(
         "BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "  name = 'main_proto',",
         "  srcs = ['main.proto'],",
@@ -535,7 +534,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file("/yolo_repo/yolo_pkg_to_be_stripped/yolo_pkg/yolo.proto");
     scratch.file(
         "/yolo_repo/yolo_pkg_to_be_stripped/yolo_pkg/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "  name = 'yolo_proto',",
         "  srcs = ['yolo.proto'],",
@@ -546,7 +545,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file("main.proto", "syntax = 'proto3'';", "import 'yolo_pkg/yolo.proto';");
     scratch.file(
         "BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "  name = 'main_proto',",
         "  srcs = ['main.proto'],",
@@ -575,7 +574,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file("/yolo_repo/yolo_pkg_to_be_stripped/yolo_pkg/yolo.proto");
     scratch.file(
         "/yolo_repo/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "  name = 'yolo_proto',",
         "  srcs = ['yolo_pkg_to_be_stripped/yolo_pkg/yolo.proto'],",
@@ -586,7 +585,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file("main.proto", "syntax = 'proto3'';", "import 'yolo_pkg/yolo.proto';");
     scratch.file(
         "BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "  name = 'main_proto',",
         "  srcs = ['main.proto'],",
@@ -606,7 +605,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file(
         "third_party/a/BUILD",
         "licenses(['unencumbered'])",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'a',",
         "    srcs = ['a.proto'],",
@@ -626,7 +625,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
     scratch.file(
         "a/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'a',",
         "    srcs = ['a.proto'],",
@@ -642,7 +641,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file(
         "third_party/a/b/BUILD",
         "licenses(['unencumbered'])",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -660,7 +659,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file(
         "third_party/a/b/BUILD",
         "licenses(['unencumbered'])",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -681,7 +680,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
     scratch.file(
         "a/b/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -702,7 +701,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
     scratch.file(
         "a/b/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -719,7 +718,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file(
         "third_party/a/b/BUILD",
         "licenses(['unencumbered'])",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -735,7 +734,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file(
         "third_party/a/b/BUILD",
         "licenses(['unencumbered'])",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -754,7 +753,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
     scratch.file(
         "a/b/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -773,7 +772,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
     scratch.file(
         "a/b/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -793,7 +792,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     useConfiguration("--strict_proto_deps=STRICT");
     scratch.file(
         "a/b/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto','c/e.proto'],",
@@ -812,14 +811,14 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     useConfiguration("--strict_proto_deps=STRICT");
     scratch.file(
         "a/b/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
         "    strip_import_prefix = 'c')");
     scratch.file(
         "a/b/e/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'e',",
         "    srcs = ['e.proto'],",
@@ -840,7 +839,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     useConfiguration("--strict_proto_deps=STRICT");
     scratch.file(
         "a/b/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'd',",
         "    srcs = ['c/d.proto'],",
@@ -864,7 +863,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     scratch.file("/foo/WORKSPACE");
     scratch.file(
         "/foo/x/y/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'q',",
         "    srcs = ['z/q.proto'],",
@@ -872,7 +871,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
     scratch.file(
         "a/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+        ProtoTestHelper.LOAD_PROTO_LIBRARY,
         "proto_library(name='a', srcs=['a.proto'], deps=['@foo//x/y:q'])");
 
     Iterable<String> commandLine = paramFileArgsForAction(getDescriptorWriteAction("//a:a"));

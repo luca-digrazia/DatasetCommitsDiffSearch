@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.rules.proto;
 
 import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -34,7 +34,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -50,8 +50,7 @@ public class ProtoCommon {
 
   // Keep in sync with the migration label in
   // https://github.com/bazelbuild/rules_proto/blob/master/proto/defs.bzl.
-  @VisibleForTesting
-  public static final String PROTO_RULES_MIGRATION_LABEL =
+  private static final String PROTO_RULES_MIGRATION_LABEL =
       "__PROTO_RULES_MIGRATION_DO_NOT_USE_WILL_BREAK__";
 
   /**
@@ -122,19 +121,6 @@ public class ProtoCommon {
 
     for (ProtoInfo dep : ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoInfo.PROVIDER)) {
       result.addTransitive(dep.getTransitiveProtoSources());
-    }
-
-    return result.build();
-  }
-
-  private static NestedSet<Artifact> computeTransitiveOriginalProtoSources(
-      RuleContext ruleContext, ImmutableList<Artifact> originalProtoSources) {
-    NestedSetBuilder<Artifact> result = NestedSetBuilder.naiveLinkOrder();
-
-    result.addAll(originalProtoSources);
-
-    for (ProtoInfo dep : ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoInfo.PROVIDER)) {
-      result.addTransitive(dep.getOriginalTransitiveProtoSources());
     }
 
     return result.build();
@@ -475,8 +461,6 @@ public class ProtoCommon {
 
     NestedSet<Artifact> transitiveProtoSources =
         computeTransitiveProtoSources(ruleContext, library.getSources());
-    NestedSet<Artifact> transitiveOriginalProtoSources =
-        computeTransitiveOriginalProtoSources(ruleContext, directProtoSources);
     NestedSet<String> transitiveProtoSourceRoots =
         computeTransitiveProtoSourceRoots(ruleContext, library.getSourceRoot());
 
@@ -506,8 +490,8 @@ public class ProtoCommon {
     ProtoInfo protoInfo =
         new ProtoInfo(
             library.getSources(),
+            directProtoSources,
             library.getSourceRoot(),
-            transitiveOriginalProtoSources,
             transitiveProtoSources,
             transitiveProtoSourceRoots,
             strictImportableProtosForDependents,
