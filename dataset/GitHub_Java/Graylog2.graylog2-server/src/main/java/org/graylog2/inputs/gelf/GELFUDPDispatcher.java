@@ -47,8 +47,6 @@ public class GELFUDPDispatcher extends SimpleChannelHandler {
 
     @Override
     public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
-        server.getMeter(GELFUDPDispatcher.class, "ReceivedDatagrams", "datagrams").mark();
-        
         ChannelBuffer buffer = (ChannelBuffer) e.getMessage();
 
         byte[] readable = new byte[buffer.readableBytes()];
@@ -58,14 +56,12 @@ public class GELFUDPDispatcher extends SimpleChannelHandler {
 
         switch(msg.getGELFType()) {
         case CHUNKED:
-            server.getMeter(GELFUDPDispatcher.class, "DispatchedMessagesChunks", "messages").mark();
             server.getGELFChunkManager().insert(msg);
             break;
         case ZLIB:
         case GZIP:
         case UNCOMPRESSED:
         case UNSUPPORTED:
-            server.getMeter(GELFUDPDispatcher.class, "DispatchedNonChunkedMessages", "messages").mark();
             processor.messageReceived(msg);
             break;
         }
