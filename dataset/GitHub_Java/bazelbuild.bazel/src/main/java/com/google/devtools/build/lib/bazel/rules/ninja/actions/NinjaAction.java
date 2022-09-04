@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -54,15 +53,12 @@ public class NinjaAction extends SpawnAction {
   @Nullable private final Artifact depFile;
   private final ImmutableMap<PathFragment, Artifact> allowedDerivedInputs;
   private final ArtifactRoot derivedOutputRoot;
-  private final NestedSet<Artifact> originalInputs; // This does not include order-only inputs.
-  private final NestedSet<Artifact> orderOnlyInputs;
 
   public NinjaAction(
       ActionOwner owner,
       Root sourceRoot,
       NestedSet<Artifact> tools,
       NestedSet<Artifact> inputs,
-      NestedSet<Artifact> orderOnlyInputs,
       List<? extends Artifact> outputs,
       CommandLines commandLines,
       ActionEnvironment env,
@@ -92,7 +88,6 @@ public class NinjaAction extends SpawnAction {
         /* resultConsumer= */ null);
     this.sourceRoot = sourceRoot;
     this.depFile = depFile;
-
     ImmutableMap.Builder<PathFragment, Artifact> allowedDerivedInputsBuilder =
         ImmutableMap.builder();
     for (Artifact input : inputs.toList()) {
@@ -101,10 +96,7 @@ public class NinjaAction extends SpawnAction {
       }
     }
     this.allowedDerivedInputs = allowedDerivedInputsBuilder.build();
-
     this.derivedOutputRoot = derivedOutputRoot;
-    this.originalInputs = inputs;
-    this.orderOnlyInputs = orderOnlyInputs;
   }
 
   @Override
@@ -121,31 +113,18 @@ public class NinjaAction extends SpawnAction {
       throws EnvironmentalExecException {
     checkOutputsForDirectories(actionExecutionContext);
 
-    if (depFile == null) {
-      // The inputs may have been modified during input discovery to include order-only inputs.
-      // Restore the original inputs to exclude those order-only inputs, so that order-only inputs
-      // do not cause the action to be rerun. This needs to be done when there is no dep file
-      // because updateInputsFromDepfile() will recalculate all the dependencies, and even if an
-      // input is order-only, it will cause a rebuild if it's listed in the depfile.
-      // Note also that this must check if the order-only inputs are empty, because if they are,
-      // discoversInputs() will return false, causing updateInputs() to throw an error.
-      if (!orderOnlyInputs.isEmpty()) {
-        updateInputs(originalInputs);
-      }
-    } else {
+    if (depFile != null) {
       updateInputsFromDepfile(actionExecutionContext);
     }
   }
 
   private void updateInputsFromDepfile(ActionExecutionContext actionExecutionContext)
       throws EnvironmentalExecException {
-
     boolean siblingRepositoryLayout =
         actionExecutionContext
             .getOptions()
             .getOptions(StarlarkSemanticsOptions.class)
             .experimentalSiblingRepositoryLayout;
-
     CppIncludeExtractionContext scanningContext =
         actionExecutionContext.getContext(CppIncludeExtractionContext.class);
     ArtifactResolver artifactResolver = scanningContext.getArtifactResolver();
@@ -163,7 +142,6 @@ public class NinjaAction extends SpawnAction {
         } else {
           execRelativePath = inputPath.asFragment().relativeTo(execRoot.asFragment());
         }
-
         Artifact inputArtifact = null;
         if (allowedDerivedInputs.containsKey(execRelativePath)) {
           // Predeclared generated input.
@@ -191,7 +169,6 @@ public class NinjaAction extends SpawnAction {
                       + "a source input, or a pre-declared generated input",
                   execRelativePath));
         }
-
         inputsBuilder.add(inputArtifact);
       }
       updateInputs(inputsBuilder.build());
@@ -203,7 +180,7 @@ public class NinjaAction extends SpawnAction {
 
   @Override
   public boolean discoversInputs() {
-    return depFile != null || !orderOnlyInputs.isEmpty();
+    return depFile != null;
   }
 
   @Override
@@ -213,12 +190,7 @@ public class NinjaAction extends SpawnAction {
 
   @Override
   public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext) {
-    NestedSet<Artifact> inputs =
-        NestedSetBuilder.<Artifact>stableOrder()
-            .addTransitive(getInputs())
-            .addTransitive(orderOnlyInputs)
-            .build();
-    updateInputs(inputs);
-    return inputs;
+    updateInputs(getInputs());
+    return getInputs();
   }
 }

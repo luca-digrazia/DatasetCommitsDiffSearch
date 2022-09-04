@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.bazel.rules.ninja.actions;
 
 import static java.util.stream.Collectors.joining;
 
+import com.google.common.base.Ascii;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -30,16 +31,21 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.ShToolchain;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
+import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaRule;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaRuleVariable;
+import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaScope;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget;
+import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaVariableValue;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
@@ -156,14 +162,18 @@ public class NinjaActionsHelper {
   }
 
   private void createNinjaAction(NinjaTarget target) throws GenericParsingException {
+    NinjaRule rule = getNinjaRule(target);
     NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
     ImmutableList.Builder<Artifact> outputsBuilder = ImmutableList.builder();
     boolean isAlwaysDirty = fillArtifacts(target, inputsBuilder, outputsBuilder);
 
-    ImmutableSortedMap<NinjaRuleVariable, String> resolvedMap = target.computeRuleVariables();
-    String command = resolvedMap.get(NinjaRuleVariable.COMMAND);
-    maybeCreateRspFile(target.getRuleName(), inputsBuilder, resolvedMap);
+    NinjaScope targetScope = createTargetScope(target);
+    long targetOffset = target.getOffset();
 
+    ImmutableSortedMap<String, List<Pair<Long, String>>> resolvedMap =
+        resolveRuleVariables(targetScope, targetOffset, rule);
+    String command = resolvedMap.get(NinjaRuleVariable.COMMAND.lowerCaseName()).get(0).getSecond();
+    maybeCreateRspFile(rule, inputsBuilder, resolvedMap);
     if (!artifactsHelper.getWorkingDirectory().isEmpty()) {
       command = String.format("cd %s && ", artifactsHelper.getWorkingDirectory()) + command;
     }
@@ -186,7 +196,7 @@ public class NinjaActionsHelper {
             commandLines,
             Preconditions.checkNotNull(ruleContext.getConfiguration()).getActionEnvironment(),
             executionInfo,
-            createProgressMessage(target, resolvedMap, outputs),
+            createProgressMessage(rule, target, resolvedMap, outputs),
             EmptyRunfilesSupplier.INSTANCE,
             isAlwaysDirty,
             depFile,
@@ -206,20 +216,26 @@ public class NinjaActionsHelper {
    *       full command line (which can be surfaced with --subcommands, anyway).
    */
   private static String createProgressMessage(
+      NinjaRule rule,
       NinjaTarget target,
-      ImmutableSortedMap<NinjaRuleVariable, String> ruleVariables,
+      ImmutableSortedMap<String, List<Pair<Long, String>>> resolvedMap,
       List<Artifact> outputs) {
-    String ruleDescription = ruleVariables.get(NinjaRuleVariable.DESCRIPTION);
-    if (ruleDescription != null) {
-      return ruleDescription;
+    String targetDescription = target.getVariables().get("description");
+    if (targetDescription != null) {
+      return targetDescription;
     }
-    // TODO(cparsons): If the target has a "description" variable but the rule has none,
-    // then ruleVariables will have no DESCRIPTION value.
 
-    String ruleName = target.getRuleName();
+    if (!rule.getDescription().isEmpty()) {
+      List<Pair<Long, String>> resolvedDescription =
+          resolvedMap.get(NinjaRuleVariable.DESCRIPTION.lowerCaseName());
+      Preconditions.checkNotNull(resolvedDescription);
+      Preconditions.checkArgument(resolvedDescription.size() == 1);
+      return resolvedDescription.get(0).getSecond();
+    }
+
     StringBuilder messageBuilder = new StringBuilder();
-    if (!ruleName.isEmpty()) {
-      messageBuilder.append("[rule ").append(ruleName).append("] ");
+    if (!rule.getName().isEmpty()) {
+      messageBuilder.append("[rule ").append(rule.getName()).append("] ");
     }
     messageBuilder.append("Outputs: ");
     messageBuilder.append(outputs.stream().map(Artifact::getFilename).collect(joining(", ")));
@@ -251,10 +267,12 @@ public class NinjaActionsHelper {
   }
 
   @Nullable
-  private Artifact getDepfile(ImmutableSortedMap<NinjaRuleVariable, String> ruleVariables)
+  private Artifact getDepfile(ImmutableSortedMap<String, List<Pair<Long, String>>> ruleVariables)
       throws GenericParsingException {
-    String depfileName = ruleVariables.get(NinjaRuleVariable.DEPFILE);
-    if (depfileName != null) {
+    List<Pair<Long, String>> depfilePair =
+        ruleVariables.get(NinjaRuleVariable.DEPFILE.lowerCaseName());
+    if (depfilePair != null) {
+      String depfileName = depfilePair.get(0).getSecond();
       if (!depfileName.trim().isEmpty()) {
         return artifactsHelper.createOutputArtifact(PathFragment.create(depfileName));
       }
@@ -263,23 +281,27 @@ public class NinjaActionsHelper {
   }
 
   private void maybeCreateRspFile(
-      String ruleName,
+      NinjaRule rule,
       NestedSetBuilder<Artifact> inputsBuilder,
-      ImmutableSortedMap<NinjaRuleVariable, String> ruleVariables)
+      ImmutableSortedMap<String, List<Pair<Long, String>>> ruleVariables)
       throws GenericParsingException {
-    String fileName = ruleVariables.get(NinjaRuleVariable.RSPFILE);
-    String contentString = ruleVariables.get(NinjaRuleVariable.RSPFILE_CONTENT);
+    List<Pair<Long, String>> filePair =
+        ruleVariables.get(NinjaRuleVariable.RSPFILE.lowerCaseName());
+    List<Pair<Long, String>> contentPair =
+        ruleVariables.get(NinjaRuleVariable.RSPFILE_CONTENT.lowerCaseName());
 
-    if (fileName == null && contentString == null) {
+    if (filePair == null && contentPair == null) {
       return;
     }
-    if (fileName == null || contentString == null) {
+    if (filePair == null || contentPair == null) {
       ruleContext.ruleError(
           String.format(
-              "Both rspfile and rspfile_content should be defined for rule '%s'.", ruleName));
+              "Both rspfile and rspfile_content should be defined for rule '%s'.", rule.getName()));
       return;
     }
 
+    String fileName = filePair.get(0).getSecond();
+    String contentString = contentPair.get(0).getSecond();
     if (!fileName.trim().isEmpty()) {
       DerivedArtifact rspArtifact =
           artifactsHelper.createOutputArtifact(PathFragment.create(fileName));
@@ -288,6 +310,70 @@ public class NinjaActionsHelper {
       ruleContext.registerAction(fileWriteAction);
       inputsBuilder.add(rspArtifact);
     }
+  }
+
+  /**
+   * Here we resolve the rule's variables with the following assumptions: Rule variables can refer
+   * to target's variables (and file variables). Interdependence between rule variables can happen
+   * only for 'command' variable, for now we ignore other possible dependencies between rule
+   * variables (seems the only other variable which can meaningfully depend on sibling variables is
+   * description, and currently we are ignoring it).
+   *
+   * <p>Also, for resolving rule's variables we are using scope+offset of target, according to
+   * specification (https://ninja-build.org/manual.html#_variable_expansion).
+   *
+   * <p>See {@link NinjaRuleVariable} for the list.
+   */
+  // TODO(cparsons): Refactor rule variables so that they are encapsulated by NinjaRule.
+  private static ImmutableSortedMap<String, List<Pair<Long, String>>> resolveRuleVariables(
+      NinjaScope targetScope, long targetOffset, NinjaRule rule) {
+    ImmutableSortedMap.Builder<String, List<Pair<Long, String>>> builder =
+        ImmutableSortedMap.naturalOrder();
+    for (Map.Entry<NinjaRuleVariable, NinjaVariableValue> entry : rule.getVariables().entrySet()) {
+      NinjaRuleVariable type = entry.getKey();
+      if (NinjaRuleVariable.COMMAND.equals(type)) {
+        // Skip the command variable for now, since its scope expansion semantics allow referencing
+        // other rule variables.
+        continue;
+      }
+      String expandedValue = targetScope.getExpandedValue(targetOffset, entry.getValue());
+      builder.put(Ascii.toLowerCase(type.name()), ImmutableList.of(Pair.of(0L, expandedValue)));
+    }
+
+    // Expand the command variable value with the rule's complete scope.
+    NinjaScope expandedRuleScope = targetScope.createScopeFromExpandedValues(builder.build());
+    String command =
+        expandedRuleScope.getExpandedValue(
+            targetOffset, rule.getVariables().get(NinjaRuleVariable.COMMAND));
+    builder.put(NinjaRuleVariable.COMMAND.lowerCaseName(), ImmutableList.of(Pair.of(0L, command)));
+    return builder.build();
+  }
+
+  private static NinjaScope createTargetScope(NinjaTarget target) {
+    ImmutableSortedMap.Builder<String, List<Pair<Long, String>>> builder =
+        ImmutableSortedMap.naturalOrder();
+    target
+        .getVariables()
+        .forEach((key, value) -> builder.put(key, ImmutableList.of(Pair.of(0L, value))));
+    String inNewline =
+        target.getUsualInputs().stream().map(PathFragment::getPathString).collect(joining("\n"));
+    String out =
+        target.getOutputs().stream().map(PathFragment::getPathString).collect(joining(" "));
+    builder.put("in", ImmutableList.of(Pair.of(0L, inNewline.replace('\n', ' '))));
+    builder.put("in_newline", ImmutableList.of(Pair.of(0L, inNewline)));
+    builder.put("out", ImmutableList.of(Pair.of(0L, out)));
+
+    return target.getScope().createScopeFromExpandedValues(builder.build());
+  }
+
+  private static NinjaRule getNinjaRule(NinjaTarget target) throws GenericParsingException {
+    String ruleName = target.getRuleName();
+    Preconditions.checkState(!"phony".equals(ruleName));
+    NinjaRule rule = target.getScope().findRule(target.getOffset(), ruleName);
+    if (rule == null) {
+      throw new GenericParsingException(String.format("Unknown Ninja rule: '%s'", ruleName));
+    }
+    return rule;
   }
 
   private static ImmutableSortedMap<String, String> createExecutionInfo(RuleContext ruleContext) {
@@ -299,4 +385,5 @@ public class NinjaActionsHelper {
         .modifyExecutionInfo(map, "NinjaRule");
     return map;
   }
+
 }
