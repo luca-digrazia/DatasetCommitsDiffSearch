@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.CompilationHelper;
 import com.google.devtools.build.lib.analysis.FileProvider;
@@ -32,17 +31,22 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.rules.cpp.CcSkyframeCrosstoolSupportFunction.CcSkyframeCrosstoolSupportException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain.AdditionalBuildVariablesComputer;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
+import com.google.devtools.build.skyframe.SkyFunction;
+import com.google.devtools.build.skyframe.SkyKey;
+import com.google.protobuf.TextFormat;
+import com.google.protobuf.TextFormat.ParseException;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
+import javax.annotation.Nullable;
 
 /** Helper responsible for creating CcToolchainProvider */
 public class CcToolchainProviderHelper {
@@ -61,28 +65,61 @@ public class CcToolchainProviderHelper {
   private static final String PACKAGE_END = ")%";
 
   public static CcToolchainProvider getCcToolchainProvider(
-      RuleContext ruleContext, CcToolchainAttributesProvider attributes)
+      RuleContext ruleContext,
+      CcToolchainAttributesProvider attributes,
+      CrosstoolRelease crosstoolFromCcToolchainSuiteProtoAttribute)
       throws RuleErrorException, InterruptedException {
     BuildConfiguration configuration = Preconditions.checkNotNull(ruleContext.getConfiguration());
     CppConfiguration cppConfiguration =
         Preconditions.checkNotNull(configuration.getFragment(CppConfiguration.class));
 
-    CppToolchainInfo toolchainInfo;
-    ImmutableMap<String, PathFragment> toolPaths;
-    try {
-      toolchainInfo =
-          CppToolchainInfo.create(ruleContext.getLabel(), attributes.getCcToolchainConfigInfo());
-      toolPaths =
-          computeToolPaths(
-              attributes.getCcToolchainConfigInfo(),
-              CppToolchainInfo.getToolsDirectory(ruleContext.getLabel()));
-    } catch (EvalException e) {
-      throw ruleContext.throwWithRuleError(e.getMessage());
+    CToolchain toolchain = null;
+    CrosstoolRelease crosstoolFromCrosstoolFile = null;
+
+    if (attributes.getCcToolchainConfigInfo() == null) {
+      ruleContext.ruleError(
+          "cc_toolchain.toolchain_config attribute must be specified. See "
+              + "https://github.com/bazelbuild/bazel/issues/7320 for details.");
     }
+
+    if (attributes.getCcToolchainConfigInfo() == null) {
+      // Is there a toolchain proto available on the target directly?
+      toolchain = parseToolchainFromAttributes(ruleContext, attributes);
+      PackageIdentifier packageWithCrosstoolInIt = null;
+      if (toolchain == null && crosstoolFromCcToolchainSuiteProtoAttribute == null) {
+        packageWithCrosstoolInIt = ruleContext.getLabel().getPackageIdentifier();
+      }
+      if (packageWithCrosstoolInIt != null) {
+        SkyKey crosstoolKey = CcSkyframeCrosstoolSupportValue.key(packageWithCrosstoolInIt);
+        SkyFunction.Environment skyframeEnv = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
+        try {
+          CcSkyframeCrosstoolSupportValue ccSkyframeCrosstoolSupportValue =
+              (CcSkyframeCrosstoolSupportValue)
+                  skyframeEnv.getValueOrThrow(
+                      crosstoolKey, CcSkyframeCrosstoolSupportException.class);
+          if (skyframeEnv.valuesMissing()) {
+            return null;
+          }
+          crosstoolFromCrosstoolFile = ccSkyframeCrosstoolSupportValue.getCrosstoolRelease();
+        } catch (CcSkyframeCrosstoolSupportException e) {
+          throw ruleContext.throwWithRuleError(e.getMessage());
+        }
+      }
+    }
+
+    CppToolchainInfo toolchainInfo =
+        getCppToolchainInfo(
+            ruleContext,
+            cppConfiguration.getTransformedCpuFromOptions(),
+            cppConfiguration.getCompilerFromOptions(),
+            attributes,
+            crosstoolFromCrosstoolFile,
+            toolchain,
+            crosstoolFromCcToolchainSuiteProtoAttribute);
 
     FdoContext fdoContext =
         FdoHelper.getFdoContext(
-            ruleContext, attributes, configuration, cppConfiguration, toolPaths);
+            ruleContext, attributes, configuration, cppConfiguration, toolchainInfo);
     if (fdoContext == null) {
       return null;
     }
@@ -191,7 +228,7 @@ public class CcToolchainProviderHelper {
         builtInIncludeDirectoriesBuilder.build();
 
     return new CcToolchainProvider(
-        getToolchainForSkylark(toolPaths),
+        getToolchainForSkylark(toolchainInfo),
         cppConfiguration,
         toolchainInfo,
         toolchainInfo.getToolsDirectory(),
@@ -231,8 +268,7 @@ public class CcToolchainProviderHelper {
         targetSysroot,
         fdoContext,
         configuration.isHostConfiguration(),
-        attributes.getLicensesProvider(),
-        toolPaths);
+        attributes.getLicensesProvider());
   }
 
   /**
@@ -308,23 +344,22 @@ public class CcToolchainProviderHelper {
     return pathPrefix.getRelative(path);
   }
 
-  private static String getSkylarkValueForTool(
-      Tool tool, ImmutableMap<String, PathFragment> toolPaths) {
-    PathFragment toolPath = getToolPathFragment(toolPaths, tool);
+  private static String getSkylarkValueForTool(Tool tool, CppToolchainInfo cppToolchainInfo) {
+    PathFragment toolPath = cppToolchainInfo.getToolPathFragment(tool);
     return toolPath != null ? toolPath.getPathString() : "";
   }
 
   private static ImmutableMap<String, Object> getToolchainForSkylark(
-      ImmutableMap<String, PathFragment> toolPaths) {
+      CppToolchainInfo cppToolchainInfo) {
     return ImmutableMap.<String, Object>builder()
-        .put("objcopy_executable", getSkylarkValueForTool(Tool.OBJCOPY, toolPaths))
-        .put("compiler_executable", getSkylarkValueForTool(Tool.GCC, toolPaths))
-        .put("preprocessor_executable", getSkylarkValueForTool(Tool.CPP, toolPaths))
-        .put("nm_executable", getSkylarkValueForTool(Tool.NM, toolPaths))
-        .put("objdump_executable", getSkylarkValueForTool(Tool.OBJDUMP, toolPaths))
-        .put("ar_executable", getSkylarkValueForTool(Tool.AR, toolPaths))
-        .put("strip_executable", getSkylarkValueForTool(Tool.STRIP, toolPaths))
-        .put("ld_executable", getSkylarkValueForTool(Tool.LD, toolPaths))
+        .put("objcopy_executable", getSkylarkValueForTool(Tool.OBJCOPY, cppToolchainInfo))
+        .put("compiler_executable", getSkylarkValueForTool(Tool.GCC, cppToolchainInfo))
+        .put("preprocessor_executable", getSkylarkValueForTool(Tool.CPP, cppToolchainInfo))
+        .put("nm_executable", getSkylarkValueForTool(Tool.NM, cppToolchainInfo))
+        .put("objdump_executable", getSkylarkValueForTool(Tool.OBJDUMP, cppToolchainInfo))
+        .put("ar_executable", getSkylarkValueForTool(Tool.AR, cppToolchainInfo))
+        .put("strip_executable", getSkylarkValueForTool(Tool.STRIP, cppToolchainInfo))
+        .put("ld_executable", getSkylarkValueForTool(Tool.LD, cppToolchainInfo))
         .build();
   }
 
@@ -334,6 +369,107 @@ public class CcToolchainProviderHelper {
     }
 
     return libcTopLabel.getPackageFragment();
+  }
+
+  /** Finds an appropriate {@link CppToolchainInfo} for this target. */
+  private static CppToolchainInfo getCppToolchainInfo(
+      RuleContext ruleContext,
+      String cpuFromOptions,
+      String compilerFromOptions,
+      CcToolchainAttributesProvider attributes,
+      CrosstoolRelease crosstoolFromCrosstoolFile,
+      CToolchain toolchainFromCcToolchainAttribute,
+      CrosstoolRelease crosstoolFromCcToolchainSuiteProtoAttribute)
+      throws RuleErrorException, InterruptedException {
+
+    CcToolchainConfigInfo configInfo = attributes.getCcToolchainConfigInfo();
+
+    if (configInfo != null) {
+      try {
+        return CppToolchainInfo.create(ruleContext.getLabel(), configInfo);
+      } catch (EvalException e) {
+        throw ruleContext.throwWithRuleError(e.getMessage());
+      }
+    }
+
+    // Attempt to find a toolchain based on the target attributes, not the configuration.
+    CToolchain toolchain = toolchainFromCcToolchainAttribute;
+    if (toolchain == null) {
+      toolchain =
+          getToolchainFromAttributes(
+              ruleContext,
+              attributes,
+              cpuFromOptions,
+              compilerFromOptions,
+              crosstoolFromCcToolchainSuiteProtoAttribute,
+              crosstoolFromCrosstoolFile);
+    }
+
+    // If we found a toolchain, use it.
+    try {
+      toolchain =
+          CppToolchainInfo.addLegacyFeatures(
+              toolchain,
+              ruleContext
+                  .getAnalysisEnvironment()
+                  .getSkylarkSemantics()
+                  .incompatibleDoNotSplitLinkingCmdline(),
+              CppToolchainInfo.getToolsDirectory(attributes.getCcToolchainLabel()));
+      CcToolchainConfigInfo ccToolchainConfigInfo = CcToolchainConfigInfo.fromToolchain(toolchain);
+      return CppToolchainInfo.create(attributes.getCcToolchainLabel(), ccToolchainConfigInfo);
+    } catch (EvalException e) {
+      throw ruleContext.throwWithRuleError(e.getMessage());
+    }
+  }
+
+  @Nullable
+  private static CToolchain parseToolchainFromAttributes(
+      RuleContext ruleContext, CcToolchainAttributesProvider attributes) throws RuleErrorException {
+    String protoAttribute = StringUtil.emptyToNull(attributes.getProto());
+    if (protoAttribute == null) {
+      return null;
+    }
+
+    CToolchain.Builder builder = CToolchain.newBuilder();
+    try {
+      TextFormat.merge(protoAttribute, builder);
+      return builder.build();
+    } catch (ParseException e) {
+      throw ruleContext.throwWithAttributeError("proto", "Could not parse CToolchain data");
+    }
+  }
+
+  @Nullable
+  private static CToolchain getToolchainFromAttributes(
+      RuleContext ruleContext,
+      CcToolchainAttributesProvider attributes,
+      String cpuFromOptions,
+      String compilerFromOptions,
+      CrosstoolRelease crosstoolFromCcToolchainSuiteProtoAttribute,
+      CrosstoolRelease crosstoolFromCrosstoolFile)
+      throws RuleErrorException {
+    try {
+      CrosstoolRelease crosstoolRelease;
+      if (crosstoolFromCcToolchainSuiteProtoAttribute != null) {
+        // We have cc_toolchain_suite.proto attribute set, let's use it
+        crosstoolRelease = crosstoolFromCcToolchainSuiteProtoAttribute;
+      } else {
+        // We use the proto from the CROSSTOOL file
+        crosstoolRelease = crosstoolFromCrosstoolFile;
+      }
+
+      return CToolchainSelectionUtils.selectCToolchain(
+          attributes.getToolchainIdentifier(),
+          attributes.getCpu(),
+          attributes.getCompiler(),
+          cpuFromOptions,
+          compilerFromOptions,
+          crosstoolRelease);
+    } catch (InvalidConfigurationException e) {
+      ruleContext.throwWithRuleError(
+          String.format("Error while selecting cc_toolchain: %s", e.getMessage()));
+      return null;
+    }
   }
 
   private static ImmutableList<Artifact> getBuiltinIncludes(NestedSet<Artifact> libc) {
@@ -387,62 +523,5 @@ public class CcToolchainProviderHelper {
     variables.addAllNonTransitive(additionalBuildVariablesComputer.apply(buildOptions));
 
     return variables.build();
-  }
-
-  private static ImmutableMap<String, PathFragment> computeToolPaths(
-      CcToolchainConfigInfo ccToolchainConfigInfo, PathFragment crosstoolTopPathFragment)
-      throws EvalException {
-    Map<String, PathFragment> toolPathsCollector = Maps.newHashMap();
-    for (Pair<String, String> tool : ccToolchainConfigInfo.getToolPaths()) {
-      String pathStr = tool.getSecond();
-      if (!PathFragment.isNormalized(pathStr)) {
-        throw new IllegalArgumentException("The include path '" + pathStr + "' is not normalized.");
-      }
-      PathFragment path = PathFragment.create(pathStr);
-      toolPathsCollector.put(tool.getFirst(), crosstoolTopPathFragment.getRelative(path));
-    }
-
-    if (toolPathsCollector.isEmpty()) {
-      // If no paths are specified, we just use the names of the tools as the path.
-      for (CppConfiguration.Tool tool : CppConfiguration.Tool.values()) {
-        toolPathsCollector.put(
-            tool.getNamePart(), crosstoolTopPathFragment.getRelative(tool.getNamePart()));
-      }
-    } else {
-      Iterable<CppConfiguration.Tool> neededTools =
-          Iterables.filter(
-              EnumSet.allOf(CppConfiguration.Tool.class),
-              tool -> {
-                if (tool == CppConfiguration.Tool.DWP) {
-                  // TODO(hlopko): check dwp tool in analysis when per_object_debug_info is enabled.
-                  return false;
-                } else if (tool == CppConfiguration.Tool.LLVM_PROFDATA) {
-                  // TODO(tmsriram): Fix this to check if this is a llvm crosstool
-                  // and return true.  This needs changes to crosstool_config.proto.
-                  return false;
-                } else if (tool == CppConfiguration.Tool.GCOVTOOL
-                    || tool == CppConfiguration.Tool.OBJCOPY) {
-                  // gcov-tool and objcopy are optional, don't check whether they're present
-                  return false;
-                } else {
-                  return true;
-                }
-              });
-      for (CppConfiguration.Tool tool : neededTools) {
-        if (!toolPathsCollector.containsKey(tool.getNamePart())) {
-          throw new EvalException(
-              Location.BUILTIN, "Tool path for '" + tool.getNamePart() + "' is missing");
-        }
-      }
-    }
-    return ImmutableMap.copyOf(toolPathsCollector);
-  }
-
-  /**
-   * Returns the path fragment that is either absolute or relative to the execution root that can be
-   * used to execute the given tool.
-   */
-  static PathFragment getToolPathFragment(ImmutableMap<String, PathFragment> toolPaths, Tool tool) {
-    return toolPaths.get(tool.getNamePart());
   }
 }

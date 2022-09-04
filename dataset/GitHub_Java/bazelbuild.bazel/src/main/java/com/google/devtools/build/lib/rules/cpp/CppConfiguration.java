@@ -665,8 +665,4 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public boolean useStandaloneLtoIndexingCommandLines() {
     return cppOptions.useStandaloneLtoIndexingCommandLines;
   }
-
-  public boolean useSpecificToolFiles() {
-    return cppOptions.useSpecificToolFiles;
-  }
 }

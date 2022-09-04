@@ -21,6 +21,8 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShRuleClasses;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
+import com.google.devtools.build.lib.rules.cpp.CcSkyframeCrosstoolSupportFunction;
+import com.google.devtools.build.lib.rules.cpp.CcSkyframeCrosstoolSupportValue;
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeFdoSupportFunction;
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeFdoSupportValue;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
@@ -366,6 +368,8 @@ public class BazelRulesModule extends BlazeModule {
       BlazeRuntime runtime, BlazeDirectories directories, WorkspaceBuilder builder) {
     builder.addSkyFunction(
         CcSkyframeFdoSupportValue.SKYFUNCTION, new CcSkyframeFdoSupportFunction(directories));
+    builder.addSkyFunction(
+        CcSkyframeCrosstoolSupportValue.SKYFUNCTION, new CcSkyframeCrosstoolSupportFunction());
   }
 
   @Override
