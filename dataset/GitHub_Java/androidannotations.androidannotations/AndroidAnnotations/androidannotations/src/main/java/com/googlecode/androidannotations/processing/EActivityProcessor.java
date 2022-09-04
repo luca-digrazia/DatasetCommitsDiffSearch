@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,7 +21,6 @@ import static com.sun.codemodel.JMod.PUBLIC;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -68,9 +67,9 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
+	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) throws Exception {
 
-		EBeanHolder holder = activitiesHolder.create(element);
+		ActivityHolder holder = activitiesHolder.create(element);
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -80,37 +79,30 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 		String subActivityQualifiedName = annotatedActivityQualifiedName + ModelConstants.GENERATION_SUFFIX;
 
 		int modifiers;
-		boolean isAbstract = element.getModifiers().contains(Modifier.ABSTRACT);
-		if (isAbstract) {
+		if (element.getModifiers().contains(Modifier.ABSTRACT)) {
 			modifiers = JMod.PUBLIC | JMod.ABSTRACT;
 		} else {
 			modifiers = JMod.PUBLIC | JMod.FINAL;
 		}
 
-		holder.eBean = codeModel._class(modifiers, subActivityQualifiedName, ClassType.CLASS);
+		holder.activity = codeModel._class(modifiers, subActivityQualifiedName, ClassType.CLASS);
 
 		JClass annotatedActivity = codeModel.directClass(annotatedActivityQualifiedName);
 
-		holder.eBean._extends(annotatedActivity);
+		holder.activity._extends(annotatedActivity);
 
 		holder.bundleClass = holder.refClass("android.os.Bundle");
 
 		// onCreate
-		int onCreateVisibility;
-		if (isAbstract) {
-			onCreateVisibility = inheritedOnCreateVisibility(typeElement);
-		} else {
-			onCreateVisibility = PUBLIC;
-		}
-		JMethod onCreate = holder.eBean.method(onCreateVisibility, codeModel.VOID, "onCreate");
+		JMethod onCreate = holder.activity.method(PUBLIC, codeModel.VOID, "onCreate");
 		onCreate.annotate(Override.class);
 
 		// beforeSetContentView
-		holder.beforeCreate = holder.eBean.method(PRIVATE, codeModel.VOID, "beforeCreate_");
+		holder.beforeCreate = holder.activity.method(PRIVATE, codeModel.VOID, "beforeCreate_");
 		holder.beforeCreateSavedInstanceStateParam = holder.beforeCreate.param(holder.bundleClass, "savedInstanceState");
 
 		// afterSetContentView
-		holder.afterSetContentView = holder.eBean.method(PRIVATE, codeModel.VOID, "afterSetContentView_");
+		holder.afterSetContentView = holder.activity.method(PRIVATE, codeModel.VOID, "afterSetContentView_");
 
 		JVar onCreateSavedInstanceState = onCreate.param(holder.bundleClass, "savedInstanceState");
 		JBlock onCreateBody = onCreate.body();
@@ -144,7 +136,7 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 
 		// Handling onBackPressed
 		if (hasOnBackPressedMethod(typeElement)) {
-			JMethod onKeyDownMethod = holder.eBean.method(PUBLIC, codeModel.BOOLEAN, "onKeyDown");
+			JMethod onKeyDownMethod = holder.activity.method(PUBLIC, codeModel.BOOLEAN, "onKeyDown");
 			onKeyDownMethod.annotate(Override.class);
 			JVar keyCodeParam = onKeyDownMethod.param(codeModel.INT, "keyCode");
 			JClass keyEventClass = holder.refClass("android.view.KeyEvent");
@@ -182,8 +174,8 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 
 	}
 
-	private void setContentViewMethod(JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {
-		JMethod method = holder.eBean.method(JMod.PUBLIC, codeModel.VOID, "setContentView");
+	private void setContentViewMethod(JCodeModel codeModel, ActivityHolder holder, JType[] paramTypes, String[] paramNames) {
+		JMethod method = holder.activity.method(JMod.PUBLIC, codeModel.VOID, "setContentView");
 		method.annotate(Override.class);
 
 		ArrayList<JVar> params = new ArrayList<JVar>();
@@ -197,36 +189,6 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 			superCall.arg(arg);
 		}
 		body.invoke(holder.afterSetContentView);
-	}
-
-	private int inheritedOnCreateVisibility(TypeElement activityElement) {
-		List<? extends Element> allMembers = getElementUtils().getAllMembers(activityElement);
-
-		List<ExecutableElement> activityInheritedMethods = ElementFilter.methodsIn(allMembers);
-
-		for (ExecutableElement activityInheritedMethod : activityInheritedMethods) {
-			if (isOnCreateMethod(activityInheritedMethod)) {
-				Set<Modifier> modifiers = activityInheritedMethod.getModifiers();
-				for (Modifier modifier : modifiers) {
-					if (modifier == Modifier.PUBLIC) {
-						return JMod.PUBLIC;
-					} else if (modifier == Modifier.PROTECTED) {
-						return JMod.PROTECTED;
-					}
-				}
-				return JMod.PUBLIC;
-			}
-		}
-		return PUBLIC;
-	}
-
-	private boolean isOnCreateMethod(ExecutableElement method) {
-
-		List<? extends VariableElement> parameters = method.getParameters();
-		return method.getSimpleName().toString().equals("onCreate") //
-				&& parameters.size() == 1  //
-				&& parameters.get(0).asType().toString().equals("android.os.Bundle") //
-		;
 	}
 
 	private boolean hasOnBackPressedMethod(TypeElement activityElement) {

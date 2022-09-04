@@ -49,7 +49,7 @@ public class BeforeCreateValidator implements ElementValidator {
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
-		validatorHelper.returnTypeIsVoid(executableElement, valid);
+		validatorHelper.voidReturnType(executableElement, valid);
 		
 		validatorHelper.enclosingElementHasEActivity(element, validatedElements, valid);
 		
