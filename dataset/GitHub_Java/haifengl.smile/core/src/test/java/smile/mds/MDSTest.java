@@ -22,7 +22,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  *
@@ -114,7 +114,7 @@ public class MDSTest {
                 System.out.print(mds.getEigenValues()[i] + " ");
         }
         System.out.println();
-        assertTrue(MathEx.equals(eigs, mds.getEigenValues(), 1E-4));
+        assertTrue(Math.equals(eigs, mds.getEigenValues(), 1E-4));
 
         double[][] coords = mds.getCoordinates();
         for (int i = 0; i < points.length; i++) {
@@ -157,7 +157,7 @@ public class MDSTest {
         };
 
         MDS mds = new MDS(eurodist, 2, true);
-        assertTrue(MathEx.equals(eigs, mds.getEigenValues(), 1E-1));
+        assertTrue(Math.equals(eigs, mds.getEigenValues(), 1E-1));
 
         double[][] coords = mds.getCoordinates();
         for (int i = 0; i < points.length; i++) {

@@ -180,7 +180,6 @@ public class IsoMap {
         }
 
         B.setSymmetric(true);
-
         EVD eigen = B.eigen(d);
 
         DenseMatrix V = eigen.getEigenVectors();

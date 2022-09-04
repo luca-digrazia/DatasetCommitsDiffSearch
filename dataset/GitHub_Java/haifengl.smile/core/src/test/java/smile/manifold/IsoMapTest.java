@@ -1,29 +1,28 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.manifold;
 
+import smile.data.parser.DelimitedTextParser;
+import smile.data.AttributeDataset;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.SwissRoll;
-
+import smile.math.Math;
 import static org.junit.Assert.*;
 
 /**
@@ -32,7 +31,17 @@ import static org.junit.Assert.*;
  */
 public class IsoMapTest {
 
+    AttributeDataset swissroll;
+
     public IsoMapTest() {
+        DelimitedTextParser parser = new DelimitedTextParser();
+        parser.setDelimiter("\t");
+
+        try {
+            swissroll = parser.parse("Swissroll", smile.data.parser.IOUtils.getTestDataFile("manifold/swissroll.txt"));
+        } catch (Exception e) {
+            System.err.println(e);
+        }
     }
 
     @BeforeClass
@@ -54,9 +63,9 @@ public class IsoMapTest {
     /**
      * Test of learn method, of class IsoMap.
      */
-    @Test(expected = Test.None.class)
-    public void test() throws Exception {
-        System.out.println("IsoMap");
+    @Test
+    public void testLearn() {
+        System.out.println("learn");
 
         double[][] points = {
             {-10.656995169781643, 8.724767075729131},
@@ -1061,14 +1070,16 @@ public class IsoMapTest {
             {48.55222793362178, -20.44857359581157}
         };
 
+        double[][] dat = swissroll.toArray(new double[swissroll.size()][]);
         double[][] data = new double[1000][];
-        System.arraycopy(SwissRoll.data, 0, data, 0, data.length);
+        System.arraycopy(dat, 0, data, 0, data.length);
         
-        IsoMap isomap = IsoMap.of(data, 7, 2, false);
+        IsoMap isomap = new IsoMap(data, 2, 7, false);
 
+        double[][] coords = isomap.getCoordinates();
         for (int i = 0; i < points.length; i++) {
             for (int j = 0; j < points[0].length; j++) {
-                assertEquals(Math.abs(points[i][j]), Math.abs(isomap.coordinates[i][j]), 1E-4);
+                assertEquals(Math.abs(points[i][j]), Math.abs(coords[i][j]), 1E-4);
             }
         }
     }

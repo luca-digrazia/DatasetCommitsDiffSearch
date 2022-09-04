@@ -154,6 +154,9 @@ public class LLE {
 
         DenseMatrix C = Matrix.zeros(k, k);
         double[] b = new double[k];
+        for (int i = 0; i < k; i++) {
+            b[i] = 1.0;
+        }
 
         int m = 0;
         for (int i : index) {
@@ -175,7 +178,6 @@ public class LLE {
                 }
             }
 
-            Arrays.fill(b, 1.0);
             LU lu = C.lu(true);
             lu.solve(b);
 
