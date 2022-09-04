@@ -1,5 +1,7 @@
 package io.quarkus.resteasy.reactive.jsonb.runtime.serialisers;
 
+import static org.jboss.resteasy.reactive.server.vertx.providers.serialisers.json.JsonMessageBodyWriterUtil.*;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
@@ -11,11 +13,10 @@ import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 
-import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
-import org.jboss.resteasy.reactive.server.spi.LazyMethod;
-import org.jboss.resteasy.reactive.server.spi.QuarkusRestMessageBodyWriter;
+import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyWriter;
+import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
 
-public class JsonbMessageBodyWriter implements QuarkusRestMessageBodyWriter<Object> {
+public class JsonbMessageBodyWriter extends ServerMessageBodyWriter.AllWriteableMessageBodyWriter {
 
     private final Jsonb json;
 
@@ -25,13 +26,9 @@ public class JsonbMessageBodyWriter implements QuarkusRestMessageBodyWriter<Obje
     }
 
     @Override
-    public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
-        return true;
-    }
-
-    @Override
     public void writeTo(Object o, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType,
             MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream) throws IOException, WebApplicationException {
+        setContentTypeIfNecessary(httpHeaders);
         if (o instanceof String) { // YUK: done in order to avoid adding extra quotes...
             entityStream.write(((String) o).getBytes());
         } else {
@@ -40,19 +37,53 @@ public class JsonbMessageBodyWriter implements QuarkusRestMessageBodyWriter<Obje
     }
 
     @Override
-    public boolean isWriteable(Class<?> type, LazyMethod target, MediaType mediaType) {
-        return true;
+    public void writeResponse(Object o, Type genericType, ServerRequestContext context)
+            throws WebApplicationException, IOException {
+        setContentTypeIfNecessary(context);
+        OutputStream originalStream = context.getOrCreateOutputStream();
+        OutputStream stream = new NoopCloseAndFlushOutputStream(originalStream);
+        if (o instanceof String) { // YUK: done in order to avoid adding extra quotes...
+            stream.write(((String) o).getBytes());
+        } else {
+            json.toJson(o, stream);
+        }
+        // we don't use try-with-resources because that results in writing to the http output without the exception mapping coming into play
+        originalStream.close();
     }
 
-    @Override
-    public void writeResponse(Object o, ResteasyReactiveRequestContext context) throws WebApplicationException, IOException {
-        try (OutputStream stream = context.getOrCreateOutputStream()) {
-            if (o instanceof String) { // YUK: done in order to avoid adding extra quotes...
-                stream.write(((String) o).getBytes());
-            } else {
-                json.toJson(o, stream);
-            }
+    /**
+     * This class is needed because Yasson doesn't give us a way to control if the output stream is going to be closed or not
+     */
+    private static class NoopCloseAndFlushOutputStream extends OutputStream {
+        private final OutputStream delegate;
+
+        public NoopCloseAndFlushOutputStream(OutputStream delegate) {
+            this.delegate = delegate;
         }
 
+        @Override
+        public void flush() {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            delegate.write(b);
+        }
+
+        @Override
+        public void write(byte[] b) throws IOException {
+            delegate.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            delegate.write(b, off, len);
+        }
     }
 }
