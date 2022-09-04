@@ -18,11 +18,6 @@ package org.graylog2.rest.resources.streams;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.bson.types.ObjectId;
@@ -30,11 +25,15 @@ import org.cliffc.high_scale_lib.Counter;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
+import org.graylog2.rest.documentation.annotations.ApiParam;
+import org.graylog2.rest.documentation.annotations.ApiResponse;
+import org.graylog2.rest.documentation.annotations.ApiResponses;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.requests.CreateRequest;
 import org.graylog2.rest.resources.streams.responses.StreamListResponse;
@@ -44,6 +43,8 @@ import org.graylog2.shared.stats.ThroughputStats;
 import org.graylog2.streams.StreamRouter;
 import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +95,7 @@ public class StreamResource extends RestResource {
     @RequiresPermissions(RestPermissions.STREAMS_CREATE)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(name = "JSON body", required = true) final CreateRequest cr) throws ValidationException {
+    public Response create(@ApiParam(title = "JSON body", required = true) final CreateRequest cr) throws ValidationException {
         checkPermission(RestPermissions.STREAMS_CREATE);
 
         // Create stream.
@@ -154,7 +155,7 @@ public class StreamResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Stream get(@ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException {
+    public Stream get(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException {
         if (streamId == null || streamId.isEmpty()) {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);
@@ -174,7 +175,7 @@ public class StreamResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Stream update(@ApiParam(name = "JSON body", required = true) CreateRequest cr, @ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException, ValidationException {
+    public Stream update(@ApiParam(title = "JSON body", required = true) CreateRequest cr, @ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException, ValidationException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamId);
         final Stream stream = streamService.load(streamId);
 
@@ -192,7 +193,7 @@ public class StreamResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Response delete(@ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException {
+    public Response delete(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamId);
         Stream stream = streamService.load(streamId);
         streamService.destroy(stream);
@@ -206,7 +207,7 @@ public class StreamResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid or missing Stream id.")
     })
-    public Response pause(@ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException, ValidationException {
+    public Response pause(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException, ValidationException {
         if (streamId == null || streamId.isEmpty()) {
             LOG.error("Missing streamId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -225,7 +226,7 @@ public class StreamResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid or missing Stream id.")
     })
-    public Response resume(@ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException, ValidationException {
+    public Response resume(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException, ValidationException {
         if (streamId == null || streamId.isEmpty()) {
             LOG.error("Missing streamId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -244,7 +245,7 @@ public class StreamResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid or missing Stream id.")
     })
-    public String testMatch(@ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId, @ApiParam(name = "JSON body", required = true) Map<String, Map<String, Object>> serialisedMessage) throws NotFoundException {
+    public String testMatch(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId, @ApiParam(title = "JSON body", required = true) Map<String, Map<String, Object>> serialisedMessage) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_READ, streamId);
 
         if (serialisedMessage.get("message") == null) {
@@ -277,8 +278,8 @@ public class StreamResource extends RestResource {
     })
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response cloneStream(@ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId,
-                          @ApiParam(name = "JSON body", required = true) CreateRequest cr) throws ValidationException, NotFoundException {
+    public Response cloneStream(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId,
+                          @ApiParam(title = "JSON body", required = true) CreateRequest cr) throws ValidationException, NotFoundException {
         checkPermission(RestPermissions.STREAMS_CREATE);
         checkPermission(RestPermissions.STREAMS_READ, streamId);
 
@@ -289,7 +290,7 @@ public class StreamResource extends RestResource {
         streamData.put("title", cr.title);
         streamData.put("description", cr.description);
         streamData.put("creator_user_id", getCurrentUser().getName());
-        streamData.put("created_at", Tools.iso8601());
+        streamData.put("created_at", new DateTime(DateTimeZone.UTC));
 
         final Stream stream = streamService.create(streamData);
         streamService.pause(stream);
@@ -336,7 +337,7 @@ public class StreamResource extends RestResource {
     @Path("/{streamId}/throughput")
     @ApiOperation(value = "Current throughput of this stream on this node in messages per second")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response oneStreamThroughput(@ApiParam(name="streamId", required = true) @PathParam("streamId") String streamId) {
+    public Response oneStreamThroughput(@ApiParam(title="streamId", required = true) @PathParam("streamId") String streamId) {
         final Map<String, Long> result = Maps.newHashMap();
         result.put("throughput", 0L);
 

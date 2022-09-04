@@ -17,14 +17,8 @@
 package org.graylog2.rest.resources.alarmcallbacks;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfiguration;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
@@ -33,6 +27,7 @@ import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.streams.Stream;
+import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.StreamService;
@@ -40,29 +35,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.InternalServerErrorException;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-import java.net.URI;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "AlarmCallbacks", description = "Manage stream alarm callbacks")
 @Path("/streams/{streamid}/alarmcallbacks")
 public class AlarmCallbackResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(AlarmCallbackResource.class);
-
     private final AlarmCallbackConfigurationService alarmCallbackConfigurationService;
     private final StreamService streamService;
     private final Set<AlarmCallback> availableAlarmCallbacks;
@@ -74,6 +62,7 @@ public class AlarmCallbackResource extends RestResource {
         this.alarmCallbackConfigurationService = alarmCallbackConfigurationService;
         this.streamService = streamService;
         this.availableAlarmCallbacks = availableAlarmCallbacks;
+
     }
 
     // TODO: add permission checks
@@ -82,37 +71,42 @@ public class AlarmCallbackResource extends RestResource {
     @Timed
     @ApiOperation(value = "Get a list of all alarm callbacks for this stream")
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Object> get(@ApiParam(name = "streamid", value = "The id of the stream whose alarm callbacks we want.", required = true)
-                                   @PathParam("streamid") String streamid) throws NotFoundException {
-        final Stream stream = streamService.load(streamid);
+    public Response get(@ApiParam(title = "streamid", description = "The id of the stream whose alarm callbacks we want.", required = true) @PathParam("streamid") String streamid) {
+        Stream stream = null;
+        try {
+            stream = streamService.load(streamid);
+        } catch (NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
 
-        final List<Map<String, Object>> alarmCallbacks = Lists.newArrayList();
+        Map<String, Object> result = Maps.newHashMap();
+        List<Map<String, Object>> alarmCallbacks = Lists.newArrayList();
         for (AlarmCallbackConfiguration callback : alarmCallbackConfigurationService.getForStream(stream)) {
             alarmCallbacks.add(callback.getFields());
         }
 
-        return ImmutableMap.of(
-                "alarmcallbacks", alarmCallbacks,
-                "total", alarmCallbacks.size());
+        result.put("alarmcallbacks", alarmCallbacks);
+        result.put("total", alarmCallbacks.size());
+        return Response.status(Response.Status.OK).entity(json(result)).build();
     }
 
-    @GET
-    @Path("/{alarmCallbackId}")
+    @GET @Path("/{alarmCallbackId}")
     @Timed
     @ApiOperation(value = "Get a single specified alarm callback for this stream")
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Object> get(@ApiParam(name = "streamid", value = "The id of the stream whose alarm callbacks we want.", required = true)
-                                   @PathParam("streamid") String streamid,
-                                   @ApiParam(name = "alarmCallbackId", value = "The alarm callback id we are getting", required = true)
-                                   @PathParam("alarmCallbackId") String alarmCallbackId) throws NotFoundException {
-        final Stream stream = streamService.load(streamid);
-
-        final AlarmCallbackConfiguration result = alarmCallbackConfigurationService.load(alarmCallbackId);
-        if (result == null || !result.getStreamId().equals(stream.getId())) {
-            throw new javax.ws.rs.NotFoundException();
+    public Response get(@ApiParam(title = "streamid", description = "The id of the stream whose alarm callbacks we want.", required = true) @PathParam("streamid") String streamid,
+                        @ApiParam(title = "alarmCallbackId", description = "The alarm callback id we are getting", required = true) @PathParam("alarmCallbackId") String alarmCallbackId) {
+        Stream stream = null;
+        try {
+            stream = streamService.load(streamid);
+        } catch (NotFoundException e) {
+            throw new WebApplicationException(404);
         }
 
-        return result.getFields();
+        AlarmCallbackConfiguration result = alarmCallbackConfigurationService.load(alarmCallbackId);
+        if (result == null || !result.getStreamId().equals(stream.getId()))
+            throw new WebApplicationException(404);
+        return Response.status(Response.Status.OK).entity(json(result.getFields())).build();
     }
 
     @POST
@@ -120,40 +114,50 @@ public class AlarmCallbackResource extends RestResource {
     @ApiOperation(value = "Create an alarm callback")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(name = "streamid", value = "The stream id this new alarm callback belongs to.", required = true)
-                           @PathParam("streamid") String streamid,
-                           @ApiParam(name = "JSON body", required = true) CreateAlarmCallbackRequest cr) throws NotFoundException {
+    public Response create(@ApiParam(title = "streamid", description = "The stream id this new alarm callback belongs to.", required = true) @PathParam("streamid") String streamid,
+                           @ApiParam(title = "JSON body", required = true) String body) {
+        CreateAlarmCallbackRequest cr;
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
-        final Stream stream = streamService.load(streamid);
+        try {
+            cr = objectMapper.readValue(body, CreateAlarmCallbackRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
+        Stream stream;
+        try {
+            stream = streamService.load(streamid);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
 
         final AlarmCallbackConfiguration alarmCallbackConfiguration = alarmCallbackConfigurationService.create(streamid, cr, getCurrentUser().getName());
         alarmCallbackConfiguration.setStream(stream);
 
-        final String id;
+        String id;
         try {
             id = alarmCallbackConfigurationService.save(alarmCallbackConfiguration);
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
-            throw new BadRequestException(e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
-        final Map<String, String> result = ImmutableMap.of("alarmcallback_id", id);
-        final URI alarmCallbackUri = UriBuilder.fromResource(AlarmCallbackResource.class)
-                .path("{alarmCallbackId}")
-                .build(id);
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("alarmcallback_id", id);
 
-        return Response.created(alarmCallbackUri).entity(result).build();
+        return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
 
-    @GET
-    @Path("/available")
+    @GET @Path("/available")
     @Timed
     @ApiOperation(value = "Get a list of all alarm callback types")
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Map<String, Object>> available(@ApiParam(name = "streamid", value = "The id of the stream whose alarm callbacks we want.", required = true)
-                                                      @PathParam("streamid") String streamid) {
-        final Map<String, Object> types = Maps.newHashMapWithExpectedSize(availableAlarmCallbacks.size());
+    public Response available(@ApiParam(title = "streamid", description = "The id of the stream whose alarm callbacks we want.", required = true) @PathParam("streamid") String streamid) {
+        Map<String, Object> result = Maps.newHashMap();
+        Map<String, Object> types = Maps.newHashMap();
+
         for (AlarmCallback availableAlarmCallback : availableAlarmCallbacks) {
             Map<String, Object> type = Maps.newHashMap();
             type.put("requested_configuration", availableAlarmCallback.getRequestedConfiguration().asList());
@@ -161,31 +165,34 @@ public class AlarmCallbackResource extends RestResource {
             types.put(availableAlarmCallback.getClass().getCanonicalName(), type);
         }
 
-        return ImmutableMap.of("types", types);
+        result.put("types", types);
+
+        return Response.status(Response.Status.OK).entity(json(result)).build();
     }
 
-    @DELETE
-    @Path("/{alarmCallbackId}")
-    @Timed
+    @DELETE @Path("/{alarmCallbackId}") @Timed
     @ApiOperation(value = "Delete an alarm callback")
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Alarm callback not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public void delete(@ApiParam(name = "streamid", value = "The stream id this new rule belongs to.", required = true)
-                       @PathParam("streamid") String streamid,
-                       @ApiParam(name = "alarmCallbackId", required = true)
-                       @PathParam("alarmCallbackId") String alarmCallbackId) throws NotFoundException {
-        final Stream stream = streamService.load(streamid);
+    public Response delete(@ApiParam(title = "streamid", description = "The stream id this new rule belongs to.", required = true) @PathParam("streamid") String streamid,
+                           @ApiParam(title = "alarmCallbackId", required = true) @PathParam("alarmCallbackId") String alarmCallbackId) {
 
-        final AlarmCallbackConfiguration result = alarmCallbackConfigurationService.load(alarmCallbackId);
-        if (result == null || !result.getStreamId().equals(stream.getId())) {
-            throw new javax.ws.rs.NotFoundException();
+        Stream stream = null;
+        try {
+            stream = streamService.load(streamid);
+        } catch (NotFoundException e) {
+            throw new WebApplicationException(404);
         }
 
-        if (alarmCallbackConfigurationService.destroy(result) == 0) {
-            LOG.error("Couldn't remove alarm callback with id {}", result.getId());
-            throw new InternalServerErrorException();
-        }
+        AlarmCallbackConfiguration result = alarmCallbackConfigurationService.load(alarmCallbackId);
+        if (result == null || !result.getStreamId().equals(stream.getId()))
+            throw new WebApplicationException(404);
+
+        if (alarmCallbackConfigurationService.destroy(result) > 0)
+            return Response.status(Response.Status.NO_CONTENT).build();
+        else
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
 }

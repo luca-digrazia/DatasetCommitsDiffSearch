@@ -40,6 +40,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class Dashboard {
 
     private static final Logger LOG = LoggerFactory.getLogger(Dashboard.class);
@@ -53,7 +56,6 @@ public class Dashboard {
     private final String description;
     private final DateTime createdAt;
     private final User creatorUser;
-    private final String contentPack;
 
     private final Map<String, DashboardWidget> widgets;
     private final Map<String, WidgetPositionResponse> positions;
@@ -70,7 +72,6 @@ public class Dashboard {
         this.api = api;
         this.positions = dsr.positions == null ? new HashMap<String, WidgetPositionResponse>() : dsr.positions;
         this.widgets = parseWidgets(dsr.widgets);
-        this.contentPack = dsr.contentPack;
     }
 
     public void addWidget(DashboardWidget widget) throws APIException, IOException {
@@ -145,10 +146,6 @@ public class Dashboard {
 
     public User getCreatorUser() {
         return creatorUser;
-    }
-
-    public String getContentPack() {
-        return contentPack;
     }
 
     private Map<String, DashboardWidget> parseWidgets(List<DashboardWidgetResponse> widgetDefinitions) {

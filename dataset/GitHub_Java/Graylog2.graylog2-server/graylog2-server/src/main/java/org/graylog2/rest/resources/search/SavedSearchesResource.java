@@ -19,33 +19,23 @@ package org.graylog2.rest.resources.search;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.ValidationException;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.plugin.Tools;
+import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.search.requests.CreateSavedSearchRequest;
 import org.graylog2.savedsearches.SavedSearch;
 import org.graylog2.savedsearches.SavedSearchImpl;
 import org.graylog2.savedsearches.SavedSearchService;
 import org.graylog2.security.RestPermissions;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -77,7 +67,7 @@ public class SavedSearchesResource extends SearchResource {
     @RequiresPermissions(RestPermissions.SAVEDSEARCHES_CREATE)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(name = "JSON body", required = true) String body) {
+    public Response create(@ApiParam(title = "JSON body", required = true) String body) {
         CreateSavedSearchRequest cr;
 
         try {
@@ -92,7 +82,7 @@ public class SavedSearchesResource extends SearchResource {
         searchData.put("title", cr.title);
         searchData.put("query", cr.query);
         searchData.put("creator_user_id", getCurrentUser().getName());
-        searchData.put("created_at", Tools.iso8601());
+        searchData.put("created_at", new DateTime(DateTimeZone.UTC));
 
         SavedSearch search = new SavedSearchImpl(searchData);
         String id;
@@ -133,7 +123,7 @@ public class SavedSearchesResource extends SearchResource {
             @ApiResponse(code = 404, message = "Saved search not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public String get(@ApiParam(name = "searchId", required = true) @PathParam("searchId") String searchId) {
+    public String get(@ApiParam(title = "searchId", required = true) @PathParam("searchId") String searchId) {
         if (searchId == null || searchId.isEmpty()) {
             LOG.error("Missing searchId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -154,7 +144,7 @@ public class SavedSearchesResource extends SearchResource {
             @ApiResponse(code = 404, message = "Saved search not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Response delete(@ApiParam(name = "searchId", required = true) @PathParam("searchId") String searchId) {
+    public Response delete(@ApiParam(title = "searchId", required = true) @PathParam("searchId") String searchId) {
         if (searchId == null || searchId.isEmpty()) {
             LOG.error("Missing searchId. Returning HTTP 400.");
             throw new WebApplicationException(400);

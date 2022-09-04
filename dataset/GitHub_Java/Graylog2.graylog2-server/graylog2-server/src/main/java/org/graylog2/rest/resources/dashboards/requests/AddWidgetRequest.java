@@ -16,11 +16,8 @@
  */
 package org.graylog2.rest.resources.dashboards.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-
 import java.util.Map;
 
-@JsonAutoDetect
 public class AddWidgetRequest {
     public String description;
     public String type;

@@ -16,13 +16,12 @@
  */
 package org.graylog2.rest.resources.system.inputs.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Map;
 
-@JsonAutoDetect
 public class CreateExtractorRequest {
+
     public String title;
 
     @JsonProperty("cut_or_copy")
@@ -49,4 +48,5 @@ public class CreateExtractorRequest {
     public String conditionValue;
 
     public int order;
+
 }

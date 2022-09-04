@@ -26,5 +26,4 @@ public class CreateRequest {
     public String title;
     public String description;
     public List<CreateStreamRuleRequest> rules;
-    public String contentPack;
 }

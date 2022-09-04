@@ -34,15 +34,15 @@ import org.graylog2.metrics.MetricUtils;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
-import com.wordnik.swagger.annotations.*;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.requests.CreateExtractorRequest;
 import org.graylog2.rest.resources.system.inputs.requests.OrderExtractorsRequest;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.system.activities.Activity;
-import org.graylog2.shared.system.activities.ActivityWriter;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,8 +92,8 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 400, message = "Field the extractor should write on is reserved."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration.")
     })
-    public Response create(@ApiParam(name = "JSON body", required = true) String body,
-                           @ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) throws NotFoundException {
+    public Response create(@ApiParam(title = "JSON body", required = true) String body,
+                           @ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) throws NotFoundException {
         if (inputId == null || inputId.isEmpty()) {
             LOG.error("Missing inputId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -174,7 +174,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public String list(@ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) throws NotFoundException {
+    public String list(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) throws NotFoundException {
         if (inputId == null || inputId.isEmpty()) {
             LOG.error("Missing inputId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -212,8 +212,8 @@ public class ExtractorsResource extends RestResource {
     })
     @Produces(MediaType.APPLICATION_JSON)
     public void terminate(
-            @ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId,
-            @ApiParam(name = "extractorId", required = true) @PathParam("extractorId") String extractorId) throws NotFoundException {
+            @ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId,
+            @ApiParam(title = "extractorId", required = true) @PathParam("extractorId") String extractorId) throws NotFoundException {
         if (isNullOrEmpty(extractorId)) {
             LOG.error("extractorId is missing.");
             throw new BadRequestException("extractorId is missing.");
@@ -262,8 +262,8 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     @Path("order")
-    public Response order(@ApiParam(name = "JSON body", required = true) String body,
-                          @ApiParam(name = "inputId", value = "Persist ID (!) of input.", required = true) @PathParam("inputId") String inputPersistId) throws NotFoundException {
+    public Response order(@ApiParam(title = "JSON body", required = true) String body,
+                          @ApiParam(title = "inputId", description = "Persist ID (!) of input.", required = true) @PathParam("inputId") String inputPersistId) throws NotFoundException {
         if (inputPersistId == null || inputPersistId.isEmpty()) {
             LOG.error("Missing inputId. Returning HTTP 400.");
             throw new WebApplicationException(400);

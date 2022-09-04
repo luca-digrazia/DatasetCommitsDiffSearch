@@ -29,5 +29,4 @@ public class CreateOutputRequest {
     public Map<String, Object> configuration;
     @JsonProperty("streams")
     public Set<String> streams;
-    public String contentPack;
 }
