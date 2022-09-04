@@ -9,7 +9,7 @@ import org.junit.Test;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 
 @SuppressWarnings("unchecked")
 public class DropwizardResourceConfigTest {
@@ -41,10 +41,10 @@ public class DropwizardResourceConfigTest {
         final DropwizardResourceConfig rc = DropwizardResourceConfig.forTesting(new MetricRegistry());
         rc.init(new PackageNamesScanner(new String[]{DummyResource.class.getPackage().getName()}));
 
-        assertThat(rc.getEndpointsInfo()).isEqualTo(String.format("The following paths were found for the configured resources:%n" +
-                "%n" +
+        assertThat(rc.getEndpointsInfo()).isEqualTo("The following paths were found for the configured resources:\n" +
+                "\n" +
                 "    GET     / (io.dropwizard.jersey.dummy.DummyResource)" +
-                "%n"));
+                "\n");
     }
 
     @Path("/dummy")
