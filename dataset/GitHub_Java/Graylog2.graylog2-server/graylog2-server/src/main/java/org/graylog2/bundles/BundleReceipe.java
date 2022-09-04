@@ -412,9 +412,12 @@ public class BundleReceipe {
             final org.graylog2.dashboards.widgets.DashboardWidget widget = createDashboardWidget(dashboardWidget, userName);
             dashboardService.addWidget(dashboard, widget);
 
-            final WidgetPositionRequest widgetPosition = new WidgetPositionRequest(widget.getId(),
-                    dashboardWidget.getRow(), dashboardWidget.getCol());
-            widgetPositions.add(widgetPosition);
+            // Please, kill me...
+            final WidgetPositionRequest positionRequest = new WidgetPositionRequest();
+            positionRequest.id = widget.getId();
+            positionRequest.row = dashboardWidget.getRow();
+            positionRequest.col = dashboardWidget.getCol();
+            widgetPositions.add(positionRequest);
         }
 
         dashboardService.updateWidgetPositions(dashboard, widgetPositions.build());
