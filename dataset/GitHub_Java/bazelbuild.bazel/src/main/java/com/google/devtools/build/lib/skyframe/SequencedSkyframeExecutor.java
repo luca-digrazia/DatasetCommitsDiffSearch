@@ -113,7 +113,7 @@ import javax.annotation.Nullable;
  * A SkyframeExecutor that implicitly assumes that builds can be done incrementally from the most
  * recent build. In other words, builds are "sequenced".
  */
-public final class SequencedSkyframeExecutor extends SkyframeExecutor<BuildDriver> {
+public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
   private static final Logger logger = Logger.getLogger(SequencedSkyframeExecutor.class.getName());
 

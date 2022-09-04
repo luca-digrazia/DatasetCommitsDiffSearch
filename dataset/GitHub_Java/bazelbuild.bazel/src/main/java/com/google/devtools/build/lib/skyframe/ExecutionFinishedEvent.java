@@ -13,52 +13,47 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.auto.value.AutoValue;
+import com.google.common.base.Preconditions;
 import java.time.Duration;
 
 /**
- * Event signaling the end of the execution phase. Contains statistics about the action cache, the
- * metadata cache and about last file save times.
+ * Event signaling the end of the execution phase. Contains statistics about the action cache,
+ * the metadata cache and about last file save times.
  */
-@AutoValue
-public abstract class ExecutionFinishedEvent {
+public class ExecutionFinishedEvent {
   public static final ExecutionFinishedEvent EMPTY =
-      builder()
-          .setOutputDirtyFiles(0)
-          .setOutputModifiedFilesDuringPreviousBuild(0)
-          .setSourceDiffCheckingDuration(Duration.ZERO)
-          .setNumSourceFilesCheckedBecauseOfMissingDiffs(0)
-          .setOutputTreeDiffCheckingDuration(Duration.ZERO)
-          .build();
+      new ExecutionFinishedEvent(0, 0, Duration.ZERO, Duration.ZERO);
 
-  public abstract int outputDirtyFiles();
+  private final int outputDirtyFiles;
+  private final int outputModifiedFilesDuringPreviousBuild;
+  private final Duration sourceDiffCheckingDuration;
+  private final Duration outputTreeDiffCheckingDuration;
 
-  public abstract int outputModifiedFilesDuringPreviousBuild();
-
-  public abstract Duration sourceDiffCheckingDuration();
-
-  public abstract int numSourceFilesCheckedBecauseOfMissingDiffs();
-
-  public abstract Duration outputTreeDiffCheckingDuration();
-
-  static Builder builder() {
-    return new AutoValue_ExecutionFinishedEvent.Builder();
+  ExecutionFinishedEvent(
+      int outputDirtyFiles,
+      int outputModifiedFilesDuringPreviousBuild,
+      Duration sourceDiffCheckingDuration,
+      Duration outputTreeDiffCheckingDuration) {
+    this.outputDirtyFiles = outputDirtyFiles;
+    this.outputModifiedFilesDuringPreviousBuild = outputModifiedFilesDuringPreviousBuild;
+    this.sourceDiffCheckingDuration = Preconditions.checkNotNull(sourceDiffCheckingDuration);
+    this.outputTreeDiffCheckingDuration =
+        Preconditions.checkNotNull(outputTreeDiffCheckingDuration);
   }
 
-  @AutoValue.Builder
-  abstract static class Builder {
-    abstract Builder setOutputDirtyFiles(int outputDirtyFiles);
+  public int getOutputDirtyFiles() {
+    return outputDirtyFiles;
+  }
 
-    abstract Builder setOutputModifiedFilesDuringPreviousBuild(
-        int outputModifiedFilesDuringPreviousBuild);
+  public int getOutputModifiedFilesDuringPreviousBuild() {
+    return outputModifiedFilesDuringPreviousBuild;
+  }
 
-    abstract Builder setSourceDiffCheckingDuration(Duration sourceDiffCheckingDuration);
+  public Duration getSourceDiffCheckingDuration() {
+    return sourceDiffCheckingDuration;
+  }
 
-    abstract Builder setNumSourceFilesCheckedBecauseOfMissingDiffs(
-        int numSourceFilesCheckedBecauseOfMissingDiffs);
-
-    abstract Builder setOutputTreeDiffCheckingDuration(Duration outputTreeDiffCheckingDuration);
-
-    abstract ExecutionFinishedEvent build();
+  public Duration getOutputTreeDiffCheckingDuration() {
+    return outputTreeDiffCheckingDuration;
   }
 }
