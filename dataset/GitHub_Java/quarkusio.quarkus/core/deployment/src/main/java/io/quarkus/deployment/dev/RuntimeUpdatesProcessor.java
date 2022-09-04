@@ -27,19 +27,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
-import org.jboss.jandex.MethodParameterInfo;
 import org.jboss.logging.Logger;
 
 import io.quarkus.bootstrap.runner.Timing;
@@ -49,18 +44,12 @@ import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.dev.spi.HotReplacementContext;
 import io.quarkus.dev.spi.HotReplacementSetup;
-import io.quarkus.runtime.Startup;
-import io.quarkus.runtime.StartupEvent;
 
 public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable {
 
     private static final Logger log = Logger.getLogger(RuntimeUpdatesProcessor.class);
 
     private static final String CLASS_EXTENSION = ".class";
-    private static final DotName STARTUP_NAME = DotName.createSimple(Startup.class.getName());
-    private static final DotName STARTUP_EVENT_NAME = DotName.createSimple(StartupEvent.class.getName());
-    private static final DotName OBSERVES_NAME = DotName.createSimple("javax.enterprise.event.Observes");
-
     static volatile RuntimeUpdatesProcessor INSTANCE;
 
     private final Path applicationRoot;
@@ -97,7 +86,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     private final List<HotReplacementSetup> hotReplacementSetup = new ArrayList<>();
     private final BiConsumer<Set<String>, ClassScanResult> restartCallback;
     private final BiConsumer<DevModeContext.ModuleInfo, String> copyResourceNotification;
-    private final BiFunction<String, byte[], byte[]> classTransformers;
 
     /**
      * The index for the last successful start. Used to determine if the class has changed its structure
@@ -107,15 +95,13 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
 
     public RuntimeUpdatesProcessor(Path applicationRoot, DevModeContext context, ClassLoaderCompiler compiler,
             DevModeType devModeType, BiConsumer<Set<String>, ClassScanResult> restartCallback,
-            BiConsumer<DevModeContext.ModuleInfo, String> copyResourceNotification,
-            BiFunction<String, byte[], byte[]> classTransformers) {
+            BiConsumer<DevModeContext.ModuleInfo, String> copyResourceNotification) {
         this.applicationRoot = applicationRoot;
         this.context = context;
         this.compiler = compiler;
         this.devModeType = devModeType;
         this.restartCallback = restartCallback;
         this.copyResourceNotification = copyResourceNotification;
-        this.classTransformers = classTransformers;
     }
 
     @Override
@@ -216,17 +202,15 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                         byte[] bytes = Files.readAllBytes(i);
                         String name = indexer.index(new ByteArrayInputStream(bytes)).name().toString();
                         defs[index++] = new ClassDefinition(Thread.currentThread().getContextClassLoader().loadClass(name),
-                                classTransformers.apply(name, bytes));
+                                bytes);
                     }
                     Index current = indexer.complete();
-                    boolean ok = containsStartupCode(current);
-                    if (ok) {
-                        for (ClassInfo clazz : current.getKnownClasses()) {
-                            ClassInfo old = lastStartIndex.getClassByName(clazz.name());
-                            if (!ClassComparisonUtil.isSameStructure(clazz, old)) {
-                                ok = false;
-                                break;
-                            }
+                    boolean ok = true;
+                    for (ClassInfo clazz : current.getKnownClasses()) {
+                        ClassInfo old = lastStartIndex.getClassByName(clazz.name());
+                        if (!ClassComparisonUtil.isSameStructure(clazz, old)) {
+                            ok = false;
+                            break;
                         }
                     }
 
@@ -268,25 +252,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                     Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
         }
         return false;
-    }
-
-    private boolean containsStartupCode(Index index) {
-        if (!index.getAnnotations(STARTUP_NAME).isEmpty()) {
-            return false;
-        }
-        List<AnnotationInstance> observesInstances = index.getAnnotations(OBSERVES_NAME);
-        if (!observesInstances.isEmpty()) {
-            for (AnnotationInstance observesInstance : observesInstances) {
-                if (observesInstance.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
-                    MethodParameterInfo methodParameterInfo = observesInstance.target().asMethodParameter();
-                    short paramPos = methodParameterInfo.position();
-                    if (STARTUP_EVENT_NAME.equals(methodParameterInfo.method().parameters().get(paramPos).name())) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
     }
 
     @Override
@@ -477,7 +442,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                 outputPath = rootPath;
                 doCopy = false;
             }
-            if (rootPath == null || outputPath == null) {
+            if (rootPath == null) {
                 continue;
             }
             Path root = Paths.get(rootPath);
