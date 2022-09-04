@@ -1563,7 +1563,6 @@ public final class CcLibraryHelper {
                 LinkerInputs.toLibraryArtifacts(ccLinkingOutputs.getExecutionDynamicLibraries()));
           }
           builder.addLinkOpts(linkopts);
-          builder.addNonCodeInputs(nonCodeLinkerInputs);
         }
       }
     };
