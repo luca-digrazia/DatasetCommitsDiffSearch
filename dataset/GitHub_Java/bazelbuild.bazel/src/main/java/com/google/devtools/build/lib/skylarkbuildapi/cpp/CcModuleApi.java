@@ -588,22 +588,6 @@ public interface CcModuleApi<
             defaultValue = "None",
             type = FileApi.class),
         @Param(
-            name = "pic_objects",
-            doc = "Experimental, do not use",
-            positional = false,
-            named = true,
-            defaultValue = "unbound",
-            type = Sequence.class,
-            generic1 = FileApi.class),
-        @Param(
-            name = "objects",
-            doc = "Experimental, do not use",
-            positional = false,
-            named = true,
-            defaultValue = "unbound",
-            type = Sequence.class,
-            generic1 = FileApi.class),
-        @Param(
             name = "alwayslink",
             doc = "Whether to link the static library/objects in the --whole_archive block.",
             positional = false,
@@ -636,8 +620,6 @@ public interface CcModuleApi<
       Object picStaticLibrary,
       Object dynamicLibrary,
       Object interfaceLibrary,
-      Object picObjectFiles, // Sequence<Artifact> expected
-      Object nopicObjectFiles, // Sequence<Artifact> expected
       boolean alwayslink,
       String dynamicLibraryPath,
       String interfaceLibraryPath,
