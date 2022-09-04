@@ -34,13 +34,12 @@ import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
-import com.google.devtools.build.lib.analysis.DependencyKey;
+import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.DependencyKind;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleContext.InvalidExecGroupException;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
@@ -85,9 +84,9 @@ import com.google.devtools.build.lib.skyframe.SkyFunctionEnvironmentForTesting;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
-import com.google.devtools.build.lib.skyframe.ToolchainContextKey;
 import com.google.devtools.build.lib.skyframe.ToolchainException;
 import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext;
+import com.google.devtools.build.lib.skyframe.UnloadedToolchainContextKey;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -199,11 +198,12 @@ public class BuildViewForTesting {
       Target target, BuildConfiguration config, ExtendedEventHandler eventHandler)
       throws InvalidConfigurationException {
     List<TargetAndConfiguration> node =
-        ImmutableList.of(new TargetAndConfiguration(target, config));
+        ImmutableList.<TargetAndConfiguration>of(new TargetAndConfiguration(target, config));
     Collection<TargetAndConfiguration> configs =
         ConfigurationResolver.getConfigurationsFromExecutor(
                 node,
-                AnalysisUtils.targetsToDeps(new LinkedHashSet<>(node), ruleClassProvider),
+                AnalysisUtils.targetsToDeps(
+                    new LinkedHashSet<TargetAndConfiguration>(node), ruleClassProvider),
                 eventHandler,
                 skyframeExecutor)
             .getTargetsAndConfigs();
@@ -276,14 +276,13 @@ public class BuildViewForTesting {
   }
 
   @VisibleForTesting
-  public OrderedSetMultimap<DependencyKind, DependencyKey>
-      getDirectPrerequisiteDependenciesForTesting(
-          final ExtendedEventHandler eventHandler,
-          final ConfiguredTarget ct,
-          BuildConfigurationCollection configurations,
-          @Nullable ToolchainCollection<ToolchainContext> toolchainContexts)
-          throws EvalException, InterruptedException, InconsistentAspectOrderException,
-              StarlarkTransition.TransitionException, InvalidConfigurationException {
+  public OrderedSetMultimap<DependencyKind, Dependency> getDirectPrerequisiteDependenciesForTesting(
+      final ExtendedEventHandler eventHandler,
+      final ConfiguredTarget ct,
+      BuildConfigurationCollection configurations,
+      @Nullable ToolchainCollection<ToolchainContext> toolchainContexts)
+      throws EvalException, InterruptedException, InconsistentAspectOrderException,
+          StarlarkTransition.TransitionException, InvalidConfigurationException {
 
     Target target = null;
     try {
@@ -371,17 +370,17 @@ public class BuildViewForTesting {
       @Nullable ToolchainCollection<ToolchainContext> toolchainContexts)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException, StarlarkTransition.TransitionException {
-    OrderedSetMultimap<DependencyKind, DependencyKey> depNodeNames =
+    OrderedSetMultimap<DependencyKind, Dependency> depNodeNames =
         getDirectPrerequisiteDependenciesForTesting(
             eventHandler, target, configurations, toolchainContexts);
 
-    ImmutableMultimap<DependencyKey, ConfiguredTargetAndData> cts =
+    ImmutableMultimap<Dependency, ConfiguredTargetAndData> cts =
         skyframeExecutor.getConfiguredTargetMapForTesting(
             eventHandler, target.getConfigurationKey(), ImmutableSet.copyOf(depNodeNames.values()));
 
     OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> result =
         OrderedSetMultimap.create();
-    for (Map.Entry<DependencyKind, DependencyKey> entry : depNodeNames.entries()) {
+    for (Map.Entry<DependencyKind, Dependency> entry : depNodeNames.entries()) {
       result.putAll(entry.getKey(), cts.get(entry.getValue()));
     }
     return result;
@@ -455,17 +454,14 @@ public class BuildViewForTesting {
       BuildConfigurationCollection configurations)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException, ToolchainException,
-          StarlarkTransition.TransitionException, InvalidExecGroupException {
+          StarlarkTransition.TransitionException {
     BuildConfiguration targetConfig =
         skyframeExecutor.getConfiguration(eventHandler, target.getConfigurationKey());
     CachingAnalysisEnvironment env =
         new CachingAnalysisEnvironment(
             getArtifactFactory(),
             skyframeExecutor.getActionKeyContext(),
-            ConfiguredTargetKey.builder()
-                .setLabel(target.getLabel())
-                .setConfiguration(targetConfig)
-                .build(),
+            ConfiguredTargetKey.of(target.getLabel(), targetConfig),
             /*isSystemEnv=*/ false,
             targetConfig.extendedSanityChecks(),
             targetConfig.allowAnalysisFailures(),
@@ -486,7 +482,7 @@ public class BuildViewForTesting {
       BuildConfigurationCollection configurations)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException, ToolchainException,
-          StarlarkTransition.TransitionException, InvalidExecGroupException {
+          StarlarkTransition.TransitionException {
     BuildConfiguration targetConfig =
         skyframeExecutor.getConfiguration(eventHandler, configuredTarget.getConfigurationKey());
     Target target = null;
@@ -505,31 +501,31 @@ public class BuildViewForTesting {
     SkyFunctionEnvironmentForTesting skyfunctionEnvironment =
         skyframeExecutor.getSkyFunctionEnvironmentForTesting(eventHandler);
 
-    Map<String, ToolchainContextKey> toolchainContextKeys = new HashMap<>();
+    Map<String, UnloadedToolchainContextKey> unloadedToolchainContextKeys = new HashMap<>();
     for (Map.Entry<String, ExecGroup> execGroup : execGroups.entrySet()) {
-      toolchainContextKeys.put(
+      unloadedToolchainContextKeys.put(
           execGroup.getKey(),
-          ToolchainContextKey.key()
+          UnloadedToolchainContextKey.key()
               .configurationKey(BuildConfigurationValue.key(targetConfig))
               .requiredToolchainTypeLabels(execGroup.getValue().getRequiredToolchains())
               .build());
     }
     String targetUnloadedToolchainContextKey = "target-unloaded-toolchain-context";
-    toolchainContextKeys.put(
+    unloadedToolchainContextKeys.put(
         targetUnloadedToolchainContextKey,
-        ToolchainContextKey.key()
+        UnloadedToolchainContextKey.key()
             .configurationKey(BuildConfigurationValue.key(targetConfig))
             .requiredToolchainTypeLabels(requiredToolchains)
             .build());
 
     Map<SkyKey, ValueOrException<ToolchainException>> values =
         skyfunctionEnvironment.getValuesOrThrow(
-            toolchainContextKeys.values(), ToolchainException.class);
+            unloadedToolchainContextKeys.values(), ToolchainException.class);
 
     ToolchainCollection.Builder<UnloadedToolchainContext> unloadedToolchainContexts =
         new ToolchainCollection.Builder<>();
-    for (Map.Entry<String, ToolchainContextKey> unloadedToolchainContextKey :
-        toolchainContextKeys.entrySet()) {
+    for (Map.Entry<String, UnloadedToolchainContextKey> unloadedToolchainContextKey :
+        unloadedToolchainContextKeys.entrySet()) {
       UnloadedToolchainContext unloadedToolchainContext =
           (UnloadedToolchainContext) values.get(unloadedToolchainContextKey.getValue()).get();
       String execGroup = unloadedToolchainContextKey.getKey();
@@ -560,7 +556,7 @@ public class BuildViewForTesting {
               target.getPackage().getRepositoryMapping(),
               unloadedToolchainContext.getValue(),
               targetDescription,
-              prerequisiteMap.get(DependencyKind.TOOLCHAIN_DEPENDENCY));
+              prerequisiteMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));
       resolvedToolchainContext.addContext(unloadedToolchainContext.getKey(), toolchainContext);
     }
 
@@ -572,10 +568,7 @@ public class BuildViewForTesting {
             configurations.getHostConfiguration(),
             ruleClassProvider.getPrerequisiteValidator(),
             target.getAssociatedRule().getRuleClassObject().getConfigurationFragmentPolicy(),
-            ConfiguredTargetKey.builder()
-                .setConfiguredTarget(configuredTarget)
-                .setConfigurationKey(configuredTarget.getConfigurationKey())
-                .build())
+            ConfiguredTargetKey.inTargetConfig(configuredTarget))
         .setVisibility(
             NestedSetBuilder.create(
                 Order.STABLE_ORDER,

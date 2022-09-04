@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RepositoryFetchException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -73,7 +72,7 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
     }
 
     String message;
-    if (DependencyKind.isToolchain(dependencyKind)) {
+    if (dependencyKind == TOOLCHAIN_DEPENDENCY) {
       message =
           String.format(
               "Target '%s' depends on toolchain '%s', which cannot be found: %s'",
@@ -127,7 +126,9 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
           Label repositoryLabel;
           try {
             repositoryLabel =
-                Label.create(EXTERNAL_PACKAGE_IDENTIFIER, label.getRepository().strippedName());
+                Label.create(
+                    EXTERNAL_PACKAGE_IDENTIFIER,
+                    label.getPackageIdentifier().getRepository().strippedName());
           } catch (LabelSyntaxException lse) {
             // We're taking the repository name from something that was already
             // part of a label, so it should be valid. If we really get into this
@@ -135,14 +136,17 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
             // label.
             repositoryLabel = label;
           }
-          rootCauses.add(new LoadingFailedCause(repositoryLabel, e.getDetailedExitCode()));
+          rootCauses.add(new LoadingFailedCause(repositoryLabel, e.getMessage()));
           env.getListener()
               .handle(
                   Event.error(
                       TargetUtils.getLocationMaybe(fromTarget),
                       String.format(
                           "%s depends on %s in repository %s which failed to fetch. %s",
-                          fromTarget.getLabel(), label, label.getRepository(), e.getMessage())));
+                          fromTarget.getLabel(),
+                          label,
+                          label.getPackageIdentifier().getRepository(),
+                          e.getMessage())));
           continue;
         }
         @Nullable BuildConfiguration configuration = fromNode.getConfiguration();
@@ -151,7 +155,7 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
           configId =  configuration.getEventId().getConfiguration();
         }
         env.getListener().post(new AnalysisRootCauseEvent(configuration, label, e.getMessage()));
-        rootCauses.add(new AnalysisFailedCause(label, configId, e.getDetailedExitCode()));
+        rootCauses.add(new AnalysisFailedCause(label, configId, e.getMessage()));
         missingEdgeHook(fromTarget, entry.getKey(), label, e);
         continue;
       }
@@ -162,13 +166,11 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
         if (pkg.containsErrors()) {
           NoSuchTargetException e = new NoSuchTargetException(target);
           missingEdgeHook(fromTarget, entry.getKey(), label, e);
-          rootCauses.add(
-              new LoadingFailedCause(
-                  label, DetailedExitCode.of(pkg.contextualizeFailureDetailForTarget(target))));
+          rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
         }
         result.put(label, target);
       } catch (NoSuchTargetException e) {
-        rootCauses.add(new LoadingFailedCause(label, e.getDetailedExitCode()));
+        rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
         missingEdgeHook(fromTarget, entry.getKey(), label, e);
       }
     }

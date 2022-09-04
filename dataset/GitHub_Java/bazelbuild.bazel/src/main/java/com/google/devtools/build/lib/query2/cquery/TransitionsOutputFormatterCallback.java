@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.cquery;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.DependencyKey;
+import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.DependencyKind;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.InconsistentAspectOrderException;
@@ -31,7 +32,6 @@ import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTr
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionUtil;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -113,7 +113,7 @@ class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback {
       if (!(configuredTarget instanceof RuleConfiguredTarget)) {
         continue;
       }
-      OrderedSetMultimap<DependencyKind, DependencyKey> deps;
+      OrderedSetMultimap<DependencyKind, Dependency> deps;
       ImmutableMap<Label, ConfigMatchingProvider> configConditions =
           ((RuleConfiguredTarget) configuredTarget).getConfigConditions();
 
@@ -132,28 +132,28 @@ class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback {
                     /*aspect=*/ null,
                     configConditions,
                     toolchainContexts,
-                    DependencyResolver.shouldUseToolchainTransition(config, target),
                     trimmingTransitionFactory);
       } catch (EvalException | InconsistentAspectOrderException e) {
         throw new InterruptedException(e.getMessage());
       }
-      for (Map.Entry<DependencyKind, DependencyKey> attributeAndDep : deps.entries()) {
+      for (Map.Entry<DependencyKind, Dependency> attributeAndDep : deps.entries()) {
+        // DependencyResolver should only ever return Dependency instances with transitions and not
+        // with explicit configurations
+        Preconditions.checkState(!attributeAndDep.getValue().hasExplicitConfiguration());
         if (attributeAndDep.getValue().getTransition() == NoTransition.INSTANCE
             || attributeAndDep.getValue().getTransition() == NullTransition.INSTANCE) {
           continue;
         }
-        DependencyKey dep = attributeAndDep.getValue();
+        Dependency dep = attributeAndDep.getValue();
         BuildOptions fromOptions = config.getOptions();
         // TODO(bazel-team): support transitions on Starlark-defined build flags. These require
         // Skyframe loading to get flag default values. See ConfigurationResolver.applyTransition
         // for an example of the required logic.
         Collection<BuildOptions> toOptions =
-            dep.getTransition()
-                .apply(TransitionUtil.restrict(dep.getTransition(), fromOptions), eventHandler)
-                .values();
+            dep.getTransition().apply(fromOptions, eventHandler).values();
         String hostConfigurationChecksum = hostConfiguration.checksum();
         String dependencyName;
-        if (attributeAndDep.getKey() == DependencyKind.TOOLCHAIN_DEPENDENCY) {
+        if (attributeAndDep.getKey() == DependencyResolver.TOOLCHAIN_DEPENDENCY) {
           dependencyName = "[toolchain dependency]";
         } else {
           dependencyName = attributeAndDep.getKey().getAttribute().getName();
