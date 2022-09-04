@@ -387,8 +387,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
               artifactValue,
               env);
           if (input.isFileset()) {
-            expandedFilesets.put(
-                input, ActionInputMapHelper.getFilesets(env, (Artifact.SpecialArtifact) input));
+            expandedFilesets.put(input, ActionInputMapHelper.getFilesets(env, input));
           }
         }
       } catch (MissingInputFileException e) {
