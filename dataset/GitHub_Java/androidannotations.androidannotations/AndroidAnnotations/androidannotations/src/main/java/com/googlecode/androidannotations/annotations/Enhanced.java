@@ -30,7 +30,8 @@ import java.lang.annotation.Target;
  * Most annotations are supported in {@link Enhanced} classes
  * 
  */
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)
 public @interface Enhanced {
+	int value() default Id.DEFAULT_VALUE;
 }
