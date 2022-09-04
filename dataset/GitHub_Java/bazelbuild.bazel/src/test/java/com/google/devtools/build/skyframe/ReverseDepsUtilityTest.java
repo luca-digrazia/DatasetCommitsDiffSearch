@@ -14,12 +14,12 @@
 package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Interner;
+import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -28,12 +28,10 @@ import org.junit.runners.Parameterized.Parameters;
 /** Test for {@code ReverseDepsUtility}. */
 @RunWith(Parameterized.class)
 public class ReverseDepsUtilityTest {
-
-  private static final SkyFunctionName NODE_TYPE = SkyFunctionName.create("Type");
   private final int numElements;
 
   @Parameters(name = "numElements-{0}")
-  public static List<Object[]> paramenters() {
+  public static List<Object[]> parameters() {
     List<Object[]> params = new ArrayList<>();
     for (int i = 0; i < 20; i++) {
       params.add(new Object[] {i});
@@ -50,14 +48,13 @@ public class ReverseDepsUtilityTest {
     for (int numRemovals = 0; numRemovals <= numElements; numRemovals++) {
       InMemoryNodeEntry example = new InMemoryNodeEntry();
       for (int j = 0; j < numElements; j++) {
-        ReverseDepsUtility.addReverseDeps(
-            example, Collections.singleton(LegacySkyKey.create(NODE_TYPE, j)));
+        ReverseDepsUtility.addReverseDep(example, Key.create(j));
       }
       // Not a big test but at least check that it does not blow up.
       assertThat(ReverseDepsUtility.toString(example)).isNotEmpty();
       assertThat(ReverseDepsUtility.getReverseDeps(example)).hasSize(numElements);
       for (int i = 0; i < numRemovals; i++) {
-        ReverseDepsUtility.removeReverseDep(example, LegacySkyKey.create(NODE_TYPE, i));
+        ReverseDepsUtility.removeReverseDep(example, Key.create(i));
       }
       assertThat(ReverseDepsUtility.getReverseDeps(example)).hasSize(numElements - numRemovals);
       assertThat(example.getReverseDepsDataToConsolidateForReverseDepsUtil()).isNull();
@@ -69,14 +66,12 @@ public class ReverseDepsUtilityTest {
   public void testAddAllAndRemove() {
     for (int numRemovals = 0; numRemovals <= numElements; numRemovals++) {
       InMemoryNodeEntry example = new InMemoryNodeEntry();
-      List<SkyKey> toAdd = new ArrayList<>();
       for (int j = 0; j < numElements; j++) {
-        toAdd.add(LegacySkyKey.create(NODE_TYPE, j));
+        ReverseDepsUtility.addReverseDep(example, Key.create(j));
       }
-      ReverseDepsUtility.addReverseDeps(example, toAdd);
       assertThat(ReverseDepsUtility.getReverseDeps(example)).hasSize(numElements);
       for (int i = 0; i < numRemovals; i++) {
-        ReverseDepsUtility.removeReverseDep(example, LegacySkyKey.create(NODE_TYPE, i));
+        ReverseDepsUtility.removeReverseDep(example, Key.create(i));
       }
       assertThat(ReverseDepsUtility.getReverseDeps(example)).hasSize(numElements - numRemovals);
       assertThat(example.getReverseDepsDataToConsolidateForReverseDepsUtil()).isNull();
@@ -87,78 +82,70 @@ public class ReverseDepsUtilityTest {
   public void testDuplicateCheckOnGetReverseDeps() {
     InMemoryNodeEntry example = new InMemoryNodeEntry();
     for (int i = 0; i < numElements; i++) {
-      ReverseDepsUtility.addReverseDeps(
-          example, Collections.singleton(LegacySkyKey.create(NODE_TYPE, i)));
+      ReverseDepsUtility.addReverseDep(example, Key.create(i));
     }
     // Should only fail when we call getReverseDeps().
-    ReverseDepsUtility.addReverseDeps(
-        example, Collections.singleton(LegacySkyKey.create(NODE_TYPE, 0)));
-    try {
+    ReverseDepsUtility.addReverseDep(example, Key.create(0));
+    if (numElements == 0) {
+      // Will not throw.
       ReverseDepsUtility.getReverseDeps(example);
-      assertThat(numElements).isEqualTo(0);
-    } catch (Exception expected) {
+    } else {
+      assertThrows(Exception.class, () -> ReverseDepsUtility.getReverseDeps(example));
     }
   }
 
   @Test
   public void doubleAddThenRemove() {
     InMemoryNodeEntry example = new InMemoryNodeEntry();
-    SkyKey key = LegacySkyKey.create(NODE_TYPE, 0);
-    ReverseDepsUtility.addReverseDeps(example, Collections.singleton(key));
+    SkyKey key = Key.create(0);
+    ReverseDepsUtility.addReverseDep(example, key);
     // Should only fail when we call getReverseDeps().
-    ReverseDepsUtility.addReverseDeps(example, Collections.singleton(key));
+    ReverseDepsUtility.addReverseDep(example, key);
     ReverseDepsUtility.removeReverseDep(example, key);
-    try {
-      ReverseDepsUtility.getReverseDeps(example);
-      Assert.fail();
-    } catch (IllegalStateException expected) {
-    }
+    assertThrows(IllegalStateException.class, () -> ReverseDepsUtility.getReverseDeps(example));
   }
 
   @Test
   public void doubleAddThenRemoveCheckedOnSize() {
     InMemoryNodeEntry example = new InMemoryNodeEntry();
-    SkyKey fixedKey = LegacySkyKey.create(NODE_TYPE, 0);
-    SkyKey key = LegacySkyKey.create(NODE_TYPE, 1);
-    ReverseDepsUtility.addReverseDeps(example, ImmutableList.of(fixedKey, key));
+    SkyKey fixedKey = Key.create(0);
+    ReverseDepsUtility.addReverseDep(example, fixedKey);
+    SkyKey key = Key.create(1);
+    ReverseDepsUtility.addReverseDep(example, key);
     // Should only fail when we reach the limit.
-    ReverseDepsUtility.addReverseDeps(example, Collections.singleton(key));
+    ReverseDepsUtility.addReverseDep(example, key);
     ReverseDepsUtility.removeReverseDep(example, key);
     ReverseDepsUtility.checkReverseDep(example, fixedKey);
-    try {
-      ReverseDepsUtility.checkReverseDep(example, fixedKey);
-      Assert.fail();
-    } catch (IllegalStateException expected) {
-    }
+    assertThrows(
+        IllegalStateException.class, () -> ReverseDepsUtility.checkReverseDep(example, fixedKey));
   }
 
   @Test
   public void addRemoveAdd() {
     InMemoryNodeEntry example = new InMemoryNodeEntry();
-    SkyKey fixedKey = LegacySkyKey.create(NODE_TYPE, 0);
-    SkyKey key = LegacySkyKey.create(NODE_TYPE, 1);
-    ReverseDepsUtility.addReverseDeps(example, ImmutableList.of(fixedKey, key));
+    SkyKey fixedKey = Key.create(0);
+    ReverseDepsUtility.addReverseDep(example, fixedKey);
+    SkyKey key = Key.create(1);
+    ReverseDepsUtility.addReverseDep(example, key);
     ReverseDepsUtility.removeReverseDep(example, key);
-    ReverseDepsUtility.addReverseDeps(example, Collections.singleton(key));
+    ReverseDepsUtility.addReverseDep(example, key);
     assertThat(ReverseDepsUtility.getReverseDeps(example)).containsExactly(fixedKey, key);
   }
 
-  @Test
-  public void testMaybeCheck() {
-    InMemoryNodeEntry example = new InMemoryNodeEntry();
-    for (int i = 0; i < numElements; i++) {
-      ReverseDepsUtility.addReverseDeps(
-          example, Collections.singleton(LegacySkyKey.create(NODE_TYPE, i)));
-      // This should always succeed, since the next element is still not present.
-      ReverseDepsUtility.maybeCheckReverseDepNotPresent(
-          example, LegacySkyKey.create(NODE_TYPE, i + 1));
+  private static class Key extends AbstractSkyKey<Integer> {
+    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
+
+    private Key(Integer arg) {
+      super(arg);
     }
-    try {
-      ReverseDepsUtility.maybeCheckReverseDepNotPresent(example, LegacySkyKey.create(NODE_TYPE, 0));
-      // Should only fail if empty or above the checking threshold.
-      assertThat(numElements == 0 || numElements >= ReverseDepsUtility.MAYBE_CHECK_THRESHOLD)
-          .isTrue();
-    } catch (Exception expected) {
+
+    private static Key create(Integer arg) {
+      return interner.intern(new Key(arg));
+    }
+
+    @Override
+    public SkyFunctionName functionName() {
+      return SkyFunctionName.FOR_TESTING;
     }
   }
 }
