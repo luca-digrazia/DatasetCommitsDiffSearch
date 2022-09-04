@@ -14,14 +14,12 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.MapMaker;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException2;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
@@ -68,6 +66,10 @@ class ArtifactNestedSetFunction implements SkyFunction {
    * therefore not populating artifactSkyKeyToValueOrException with X2's member Artifacts. Hence if
    * we clear artifactSkyKeyToValueOrException between build 0 and 1, X2's member artifacts'
    * SkyValues would not be available in the map.
+   *
+   * <p>The map has weak references to keys to prevent memory leaks: if an Artifact no longer
+   * exists, its entry would be automatically removed from the map by the GC. Note that the map
+   * compares the SkyKeys by identity rather than with the .equals method.
    */
   private final ConcurrentMap<SkyKey, ValueOrException2<IOException, ActionExecutionException>>
       artifactSkyKeyToValueOrException;
@@ -83,10 +85,8 @@ class ArtifactNestedSetFunction implements SkyFunction {
 
   private static ArtifactNestedSetFunction singleton = null;
 
-  private static Integer sizeThreshold = null;
-
   private ArtifactNestedSetFunction() {
-    artifactSkyKeyToValueOrException = Maps.newConcurrentMap();
+    artifactSkyKeyToValueOrException = new MapMaker().weakKeys().makeMap();
     nestedSetToSkyKey = new MapMaker().weakKeys().makeMap();
   }
 
@@ -104,12 +104,10 @@ class ArtifactNestedSetFunction implements SkyFunction {
     }
 
     // Evaluate all children.
-    ArrayList<SkyKey> transitiveKeys = new ArrayList<>();
     for (Object transitive : artifactNestedSetKey.transitiveMembers()) {
       nestedSetToSkyKey.putIfAbsent(transitive, new ArtifactNestedSetKey(transitive));
-      transitiveKeys.add(nestedSetToSkyKey.get(transitive));
+      env.getValue(nestedSetToSkyKey.get(transitive));
     }
-    env.getValues(transitiveKeys);
 
     if (env.valuesMissing()) {
       return null;
@@ -117,23 +115,13 @@ class ArtifactNestedSetFunction implements SkyFunction {
 
     // Only commit to the map when every value is present.
     artifactSkyKeyToValueOrException.putAll(directArtifactsEvalResult);
-    return new ArtifactNestedSetValue();
+    return ArtifactNestedSetValue.createOrGetInstance();
   }
 
   public static ArtifactNestedSetFunction getInstance() {
     if (singleton == null) {
-      return createInstance();
+      singleton = new ArtifactNestedSetFunction();
     }
-    return singleton;
-  }
-
-  /**
-   * Creates a new instance. Should only be used in {@code SkyframeExecutor#skyFunctions}. Keeping
-   * this method separated from {@code #getInstance} since sometimes we need to overwrite the
-   * existing instance.
-   */
-  public static ArtifactNestedSetFunction createInstance() {
-    singleton = new ArtifactNestedSetFunction();
     return singleton;
   }
 
@@ -145,33 +133,5 @@ class ArtifactNestedSetFunction implements SkyFunction {
   @Override
   public String extractTag(SkyKey skyKey) {
     return null;
-  }
-
-  /**
-   * Get the threshold to which we evaluate a NestedSet as a Skykey. If sizeThreshold is unset,
-   * return the default value of 0.
-   */
-  public static int getSizeThreshold() {
-    return sizeThreshold == null ? 0 : sizeThreshold;
-  }
-
-  /**
-   * Updates the sizeThreshold value if the existing value differs from newValue.
-   *
-   * @param newValue The new value from --experimental_nested_set_as_skykey_threshold.
-   * @return whether an update was made.
-   */
-  public static boolean sizeThresholdUpdatedTo(int newValue) {
-    // If this is the first time the value is set, it's not considered "updated".
-    if (sizeThreshold == null) {
-      sizeThreshold = newValue;
-      return false;
-    }
-
-    if (sizeThreshold == newValue || (sizeThreshold <= 0 && newValue <= 0)) {
-      return false;
-    }
-    sizeThreshold = newValue;
-    return true;
   }
 }
