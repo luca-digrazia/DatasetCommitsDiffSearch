@@ -302,10 +302,8 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                     m -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
             boolean doCopy = true;
             String rootPath = module.getResourcePath();
-            String outputPath = module.getResourcesOutputPath();
             if (rootPath == null) {
                 rootPath = module.getClassesPath();
-                outputPath = rootPath;
                 doCopy = false;
             }
             if (rootPath == null) {
@@ -315,7 +313,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
             if (!Files.exists(root) || !Files.isReadable(root)) {
                 continue;
             }
-            Path outputDir = Paths.get(outputPath);
+            Path classesDir = Paths.get(module.getClassesPath());
             //copy all modified non hot deployment files over
             if (doCopy) {
                 try {
@@ -325,7 +323,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                         walk.forEach(path -> {
                             try {
                                 Path relative = root.relativize(path);
-                                Path target = outputDir.resolve(relative);
+                                Path target = classesDir.resolve(relative);
                                 seen.remove(target);
                                 if (!watchedFileTimestamps.containsKey(path)) {
                                     moduleResources.add(target);
@@ -368,7 +366,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                             ret.add(path);
                             log.infof("File change detected: %s", file);
                             if (doCopy && !Files.isDirectory(file)) {
-                                Path target = outputDir.resolve(path);
+                                Path target = classesDir.resolve(path);
                                 byte[] data = Files.readAllBytes(file);
                                 try (FileOutputStream out = new FileOutputStream(target.toFile())) {
                                     out.write(data);
@@ -381,7 +379,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                     }
                 } else {
                     watchedFileTimestamps.put(file, 0L);
-                    Path target = outputDir.resolve(path);
+                    Path target = classesDir.resolve(path);
                     try {
                         FileUtil.deleteDirectory(target);
                     } catch (IOException e) {

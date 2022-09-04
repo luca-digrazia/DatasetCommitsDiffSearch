@@ -42,7 +42,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
 
     private static final Logger log = Logger.getLogger(DevModeMain.class);
 
-    private volatile DevModeContext context;
+    private DevModeContext context;
 
     private final List<HotReplacementSetup> hotReplacementSetups = new ArrayList<>();
     private static volatile RunningQuarkusApplication runner;
@@ -52,7 +52,6 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
     private static volatile CuratedApplication curatedApplication;
     private static volatile AugmentAction augmentAction;
     private static volatile boolean restarting;
-    private static volatile boolean firstStartCompleted;
 
     private synchronized void firstStart() {
         ClassLoader old = Thread.currentThread().getContextClassLoader();
@@ -86,7 +85,6 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                             }
                         });
                 runner = start.runMainClass(context.getArgs());
-                firstStartCompleted = true;
             } catch (Throwable t) {
                 deploymentProblem = t;
                 if (context.isAbortOnFailedStart()) {
@@ -129,9 +127,8 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
 
             //ok, we have resolved all the deps
             try {
-                StartupAction start = augmentAction.reloadExistingApplication(firstStartCompleted, changedResources);
+                StartupAction start = augmentAction.reloadExistingApplication(changedResources);
                 runner = start.runMainClass(context.getArgs());
-                firstStartCompleted = true;
             } catch (Throwable t) {
                 deploymentProblem = t;
                 log.error("Failed to start quarkus", t);
