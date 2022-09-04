@@ -38,19 +38,17 @@ import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.database.HostCounterCacheImpl;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.gelf.GELFChunkManager;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.initializers.Initializers;
 import org.graylog2.inputs.InputRegistry;
-import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
-import org.graylog2.plugin.InputHost;
-import org.graylog2.plugin.rest.AnyExceptionClassMapper;
+import org.graylog2.metrics.jersey2.AnyExceptionClassMapper;
 import org.graylog2.metrics.jersey2.MetricsDynamicBinding;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.Version;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.transports.Transport;
 import org.graylog2.plugin.buffers.Buffer;
@@ -65,7 +63,7 @@ import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.realm.LdapRealm;
 import org.graylog2.streams.StreamImpl;
-import org.graylog2.plugin.system.NodeId;
+import org.graylog2.system.NodeId;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJobManager;
@@ -98,7 +96,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class Core implements GraylogServer, InputHost {
+public class Core implements GraylogServer {
 
     private static final Logger LOG = LoggerFactory.getLogger(Core.class);
 
@@ -111,7 +109,7 @@ public class Core implements GraylogServer, InputHost {
     private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
     private ScheduledExecutorService scheduler;
 
-    public static final Version GRAYLOG2_VERSION = ServerVersion.VERSION;
+    public static final Version GRAYLOG2_VERSION = Version.VERSION;
     public static final String GRAYLOG2_CODENAME = "Amigo Humanos (Flipper)";
 
     private Indexer indexer;
@@ -169,7 +167,7 @@ public class Core implements GraylogServer, InputHost {
         this.configuration = configuration; // TODO use dependency injection
 
         if (this.configuration.getRestTransportUri() == null) {
-                String guessedIf;
+                String guessedIf = null;
                 try {
                     guessedIf = Tools.guessPrimaryNetworkAddress().getHostAddress();
                 } catch (Exception e) {
