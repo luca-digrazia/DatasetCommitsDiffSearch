@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.feature;
 
@@ -60,7 +60,7 @@ public class SignalNoiseRatioTest {
             else y[i] = 1;
         }
 
-        double[] ratio = SignalNoiseRatio.of(Iris.x, y);
+        double[] ratio = SignalNoiseRatio.apply(Iris.x, y);
         assertEquals(4, ratio.length);
         assertEquals(0.8743107, ratio[0], 1E-7);
         assertEquals(0.1502717, ratio[1], 1E-7);

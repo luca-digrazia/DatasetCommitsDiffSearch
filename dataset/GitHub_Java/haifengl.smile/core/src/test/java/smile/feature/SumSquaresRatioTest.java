@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,15 +13,15 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.feature;
 
+import smile.validation.Accuracy;
 import smile.classification.LDA;
 import smile.data.Iris;
 import smile.data.USPS;
 import smile.sort.QuickSort;
-import smile.validation.metric.Accuracy;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -57,7 +57,7 @@ public class SumSquaresRatioTest {
     @Test
     public void test() {
         System.out.println("SumSquaresRatio");
-        double[] ratio = SumSquaresRatio.of(Iris.x, Iris.y);
+        double[] ratio = SumSquaresRatio.apply(Iris.x, Iris.y);
         assertEquals(4, ratio.length);
         assertEquals( 1.6226463, ratio[0], 1E-6);
         assertEquals( 0.6444144, ratio[1], 1E-6);
@@ -74,7 +74,7 @@ public class SumSquaresRatioTest {
         double[][] testx = USPS.testx;
         int[] testy = USPS.testy;
 
-        double[] score = SumSquaresRatio.of(x, y);
+        double[] score = SumSquaresRatio.apply(x, y);
         int[] index = QuickSort.sort(score);
 
         int p = 135;
@@ -100,7 +100,7 @@ public class SumSquaresRatioTest {
             prediction[i] = lda.predict(testxx[i]);
         }
 
-        double accuracy = new Accuracy().score(testy, prediction);
+        double accuracy = new Accuracy().measure(testy, prediction);
         System.out.format("SSR %.2f%%%n", 100 * accuracy);
     }
 }
