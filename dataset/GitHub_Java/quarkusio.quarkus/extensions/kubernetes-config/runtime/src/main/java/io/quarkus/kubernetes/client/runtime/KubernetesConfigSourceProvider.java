@@ -17,16 +17,13 @@ class KubernetesConfigSourceProvider implements ConfigSourceProvider {
     private static final Logger log = Logger.getLogger(KubernetesConfigSourceProvider.class);
 
     private final KubernetesConfigSourceConfig config;
-    private final KubernetesConfigBuildTimeConfig buildTimeConfig;
     private final KubernetesClient client;
 
     private final ConfigMapConfigSourceUtil configMapConfigSourceUtil;
     private final SecretConfigSourceUtil secretConfigSourceUtil;
 
-    public KubernetesConfigSourceProvider(KubernetesConfigSourceConfig config, KubernetesConfigBuildTimeConfig buildTimeConfig,
-            KubernetesClient client) {
+    public KubernetesConfigSourceProvider(KubernetesConfigSourceConfig config, KubernetesClient client) {
         this.config = config;
-        this.buildTimeConfig = buildTimeConfig;
         this.client = client;
 
         this.configMapConfigSourceUtil = new ConfigMapConfigSourceUtil();
@@ -41,10 +38,10 @@ class KubernetesConfigSourceProvider implements ConfigSourceProvider {
         }
 
         List<ConfigSource> result = new ArrayList<>();
-        if (config.enabled && config.configMaps.isPresent()) {
+        if (config.configMaps.isPresent()) {
             result.addAll(getConfigMapConfigSources(config.configMaps.get()));
         }
-        if (buildTimeConfig.secretsEnabled && config.secrets.isPresent()) {
+        if (config.secrets.isPresent()) {
             result.addAll(getSecretConfigSources(config.secrets.get()));
         }
         return result;
@@ -54,8 +51,7 @@ class KubernetesConfigSourceProvider implements ConfigSourceProvider {
         List<ConfigSource> result = new ArrayList<>(configMapNames.size());
 
         try {
-            for (int i = 0; i < configMapNames.size(); i++) {
-                String configMapName = configMapNames.get(i);
+            for (String configMapName : configMapNames) {
                 if (log.isDebugEnabled()) {
                     log.debug("Attempting to read ConfigMap " + configMapName);
                 }
@@ -72,8 +68,7 @@ class KubernetesConfigSourceProvider implements ConfigSourceProvider {
                     logMissingOrFail(configMapName, namespace, "ConfigMap", config.failOnMissingConfig);
                 } else {
                     result.addAll(
-                            configMapConfigSourceUtil.toConfigSources(configMap.getMetadata(), configMap.getData(),
-                                    i));
+                            configMapConfigSourceUtil.toConfigSources(configMap.getMetadata().getName(), configMap.getData()));
                     if (log.isDebugEnabled()) {
                         log.debug("Done reading ConfigMap " + configMap.getMetadata().getName());
                     }
@@ -90,8 +85,7 @@ class KubernetesConfigSourceProvider implements ConfigSourceProvider {
         List<ConfigSource> result = new ArrayList<>(secretNames.size());
 
         try {
-            for (int i = 0; i < secretNames.size(); i++) {
-                String secretName = secretNames.get(i);
+            for (String secretName : secretNames) {
                 if (log.isDebugEnabled()) {
                     log.debug("Attempting to read Secret " + secretName);
                 }
@@ -107,7 +101,7 @@ class KubernetesConfigSourceProvider implements ConfigSourceProvider {
                 if (secret == null) {
                     logMissingOrFail(secretName, namespace, "Secret", config.failOnMissingConfig);
                 } else {
-                    result.addAll(secretConfigSourceUtil.toConfigSources(secret.getMetadata(), secret.getData(), i));
+                    result.addAll(secretConfigSourceUtil.toConfigSources(secret.getMetadata().getName(), secret.getData()));
                     if (log.isDebugEnabled()) {
                         log.debug("Done reading Secret " + secret.getMetadata().getName());
                     }
