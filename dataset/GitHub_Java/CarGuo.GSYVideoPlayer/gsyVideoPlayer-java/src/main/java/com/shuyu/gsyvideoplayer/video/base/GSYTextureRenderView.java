@@ -10,7 +10,6 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-
 import com.shuyu.gsyvideoplayer.render.GSYRenderView;
 import com.shuyu.gsyvideoplayer.render.view.GSYVideoGLView;
 import com.shuyu.gsyvideoplayer.render.effect.NoEffect;
@@ -37,19 +36,17 @@ public abstract class GSYTextureRenderView extends FrameLayout implements IGSYSu
     //满屏填充暂停为徒
     protected Bitmap mFullPauseBitmap;
 
-    //GL的滤镜
+    //滤镜
     protected GSYVideoGLView.ShaderInterface mEffectFilter = new NoEffect();
 
-    //GL的自定义渲染
-    protected GSYVideoGLViewBaseRender mRenderer;
-
-    //GL的角度
     protected float[] mMatrixGL = null;
 
     //画面选择角度
     protected int mRotate;
 
-    //GL的布局模式
+    //自定义渲染
+    protected GSYVideoGLViewBaseRender mRenderer;
+
     protected int mMode = GSYVideoGLView.MODE_LAYOUT_SIZE;
 
     public GSYTextureRenderView(@NonNull Context context) {
@@ -153,61 +150,14 @@ public abstract class GSYTextureRenderView extends FrameLayout implements IGSYSu
         mTextureViewContainer.setOnTouchListener(onTouchListener);
         mTextureViewContainer.setOnClickListener(null);
         setSmallVideoTextureView();
+
     }
 
-    public GSYVideoGLView.ShaderInterface getEffectFilter() {
-        return mEffectFilter;
-    }
-
-    /**
-     * 获取渲染的代理层
-     */
-    public GSYRenderView getRenderProxy() {
-        return mTextureView;
-    }
-
-    /**
-     * 设置滤镜效果
-     */
-    public void setEffectFilter(GSYVideoGLView.ShaderInterface effectFilter) {
-        this.mEffectFilter = effectFilter;
-        if (mTextureView != null) {
-            mTextureView.setEffectFilter(effectFilter);
+    protected GSYVideoGLView getGSYVideoGLSView() {
+        if (mTextureView != null && mTextureView.getShowView() instanceof GSYVideoGLView) {
+            return (GSYVideoGLView) mTextureView.getShowView();
         }
-    }
-
-    /**
-     * GL模式下的画面matrix效果
-     *
-     * @param matrixGL 16位长度
-     */
-    public void setMatrixGL(float[] matrixGL) {
-        this.mMatrixGL = matrixGL;
-        if (mTextureView != null) {
-            mTextureView.setMatrixGL(mMatrixGL);
-        }
-    }
-
-    /**
-     * 自定义GL的渲染render
-     */
-    public void setCustomGLRenderer(GSYVideoGLViewBaseRender renderer) {
-        this.mRenderer = renderer;
-        if (mTextureView != null) {
-            mTextureView.setGLRenderer(renderer);
-        }
-    }
-
-    /**
-     * GL布局的绘制模式，利用布局计算大小还是使用render计算大小
-     *
-     * @param mode MODE_LAYOUT_SIZE = 0,  MODE_RENDER_SIZE = 1
-     */
-    public void setGLRenderMode(int mode) {
-        mMode = mode;
-        if (mTextureView != null) {
-            mTextureView.setGLRenderMode(mode);
-        }
+        return null;
     }
 
 
@@ -225,4 +175,71 @@ public abstract class GSYTextureRenderView extends FrameLayout implements IGSYSu
 
     //释放
     protected abstract void releaseSurface(Surface surface);
+
+
+    public GSYVideoGLView.ShaderInterface getEffectFilter() {
+        return mEffectFilter;
+    }
+
+    /**
+     * 获取渲染的代理层
+     */
+    public GSYRenderView getRenderProxy() {
+        return mTextureView;
+    }
+
+    /**
+     * 设置滤镜效果
+     */
+    public void setEffectFilter(GSYVideoGLView.ShaderInterface effectFilter) {
+        this.mEffectFilter = effectFilter;
+        if (mTextureView != null && mTextureView.getShowView() instanceof GSYVideoGLView) {
+            GSYVideoGLView gsyVideoGLView =
+                    (GSYVideoGLView) mTextureView.getShowView();
+            gsyVideoGLView.setEffect(effectFilter);
+        }
+    }
+
+    /**
+     * GL模式下的画面matrix效果
+     *
+     * @param matrixGL 16位长度
+     */
+    public void setMatrixGL(float[] matrixGL) {
+        this.mMatrixGL = matrixGL;
+        if (mTextureView != null && mTextureView.getShowView() instanceof GSYVideoGLView
+                && mMatrixGL != null && mMatrixGL.length == 16) {
+            GSYVideoGLView gsyVideoGLView =
+                    (GSYVideoGLView) mTextureView.getShowView();
+            gsyVideoGLView.setMVPMatrix(mMatrixGL);
+        }
+    }
+
+    /**
+     * 自定义GL的渲染render
+     */
+    public void setCustomGLRenderer(GSYVideoGLViewBaseRender renderer) {
+        this.mRenderer = renderer;
+        if (mTextureView != null && mRenderer != null &&
+                mTextureView.getShowView() instanceof GSYVideoGLView) {
+            GSYVideoGLView gsyVideoGLView =
+                    (GSYVideoGLView) mTextureView.getShowView();
+            gsyVideoGLView.setCustomRenderer(mRenderer);
+        }
+    }
+
+    /**
+     * GL布局的绘制模式，利用布局计算大小还是使用render计算大小
+     *
+     * @param mode MODE_LAYOUT_SIZE = 0,  MODE_RENDER_SIZE = 1
+     */
+    public void setGLRenderMode(int mode) {
+        mMode = mode;
+        if (mTextureView != null && mRenderer != null &&
+                mTextureView.getShowView() instanceof GSYVideoGLView) {
+            GSYVideoGLView gsyVideoGLView = (GSYVideoGLView) mTextureView.getShowView();
+            gsyVideoGLView.setMode(mode);
+        }
+    }
+
 }

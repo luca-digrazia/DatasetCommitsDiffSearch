@@ -82,7 +82,8 @@ public class GSYRenderView {
         if (GSYVideoType.getRenderType() == GSYVideoType.SUFRACE) {
             mShowView = GSYSurfaceView.addSurfaceView(context, textureViewContainer, rotate, gsySurfaceListener);
         } else if (GSYVideoType.getRenderType() == GSYVideoType.GLSURFACE) {
-            mShowView = GSYVideoGLView.addGLView(context, textureViewContainer, rotate, gsySurfaceListener, effect, transform, customRender, mode);
+            mShowView = GSYVideoGLView.addGLView(context, textureViewContainer, rotate, gsySurfaceListener, effect, transform, customRender);
+            setGLRenderMode(mode);
         } else {
             mShowView = GSYTextureView.addTextureView(context, textureViewContainer, rotate, gsySurfaceListener);
         }
@@ -92,30 +93,22 @@ public class GSYRenderView {
 
     /*************************ShowView function start *************************/
 
-    /**
-     * 主要针对TextureView，设置旋转
-     */
     public void setTransform(Matrix transform) {
-        if (mShowView != null)
-            mShowView.setRenderTransform(transform);
+        mShowView.setRenderTransform(transform);
     }
 
     /**
      * 暂停时初始化位图
      */
     public Bitmap initCover() {
-        if (mShowView != null)
-            return mShowView.initCover();
-        return null;
+        return mShowView.initCover();
     }
 
     /**
      * 暂停时初始化位图
      */
     public Bitmap initCoverHigh() {
-        if (mShowView != null)
-            return mShowView.initCoverHigh();
-        return null;
+        return mShowView.initCoverHigh();
     }
 
     /**
@@ -132,8 +125,7 @@ public class GSYRenderView {
      * @param shotHigh 是否需要高清的
      */
     public void taskShotPic(GSYVideoShotListener gsyVideoShotListener, boolean shotHigh) {
-        if (mShowView != null)
-            mShowView.taskShotPic(gsyVideoShotListener, shotHigh);
+        mShowView.taskShotPic(gsyVideoShotListener, shotHigh);
     }
 
     /**
@@ -149,68 +141,24 @@ public class GSYRenderView {
      * @param high 是否需要高清的
      */
     public void saveFrame(final File file, final boolean high, final GSYVideoShotSaveListener gsyVideoShotSaveListener) {
-        if (mShowView != null)
-            mShowView.saveFrame(file, high, gsyVideoShotSaveListener);
+        mShowView.saveFrame(file, high, gsyVideoShotSaveListener);
     }
 
-    /**
-     * 主要针对GL
-     */
     public void onResume() {
-        if (mShowView != null)
-            mShowView.onRenderResume();
+        mShowView.onRenderResume();
     }
 
-    /**
-     * 主要针对GL
-     */
     public void onPause() {
-        if (mShowView != null)
-            mShowView.onRenderPause();
+        mShowView.onRenderPause();
     }
 
-    /**
-     * 主要针对GL
-     */
     public void releaseAll() {
-        if (mShowView != null)
-            mShowView.releaseRenderAll();
+        mShowView.releaseRenderAll();
     }
 
-    /**
-     * 主要针对GL
-     */
     public void setGLRenderMode(int mode) {
-        if (mShowView != null)
-            mShowView.setRenderMode(mode);
+        mShowView.setRenderMode(mode);
     }
-
-    /**
-     * 自定义GL的渲染render
-     */
-    public void setGLRenderer(GSYVideoGLViewBaseRender renderer) {
-        if (mShowView != null)
-            mShowView.setGLRenderer(renderer);
-    }
-
-    /**
-     * GL模式下的画面matrix效果
-     *
-     * @param matrixGL 16位长度
-     */
-    public void setMatrixGL(float[] matrixGL) {
-        if (mShowView != null)
-            mShowView.setGLMVPMatrix(matrixGL);
-    }
-
-    /**
-     * 设置滤镜效果
-     */
-    public void setEffectFilter(GSYVideoGLView.ShaderInterface effectFilter) {
-        if (mShowView != null)
-            mShowView.setGLEffectFilter(effectFilter);
-    }
-
 
     /*************************ShowView function end *************************/
 
