@@ -1,4 +1,6 @@
 /**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,22 +15,25 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
+
 package org.graylog2.inputs.syslog;
 
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.inputs.syslog.SyslogProcessor;
+import org.jboss.netty.channel.socket.DatagramChannel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelHandler;
-import org.jboss.netty.channel.socket.DatagramChannel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 
@@ -44,12 +49,9 @@ public class SyslogDispatcher extends SimpleChannelHandler {
     private SyslogProcessor processor;
     private final Meter receivedMessages;
 
-    public SyslogDispatcher(MetricRegistry metricRegistry,
-                            Buffer processBuffer,
-                            Configuration config,
-                            MessageInput sourceInput) {
-        this.processor = new SyslogProcessor(metricRegistry, processBuffer, config, sourceInput);
-        this.receivedMessages = metricRegistry.meter(name(sourceInput.getUniqueReadableId(), "receivedMessages"));
+    public SyslogDispatcher(InputHost server, Configuration config, MessageInput sourceInput) {
+        this.processor = new SyslogProcessor(server, config, sourceInput);
+        this.receivedMessages = server.metrics().meter(name(sourceInput.getUniqueReadableId(), "receivedMessages"));
     }
 
     @Override
