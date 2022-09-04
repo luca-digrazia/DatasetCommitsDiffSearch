@@ -95,11 +95,12 @@ public class JavaCompileAction extends AbstractAction
   private final ImmutableList<Artifact> sourceJars;
   private final JavaPluginInfo plugins;
 
+  private final ImmutableSet<? extends ActionInput> outputFiles;
   private final NestedSet<Artifact> directJars;
   private final NestedSet<Artifact> mandatoryInputs;
   private final NestedSet<Artifact> transitiveInputs;
   private final NestedSet<Artifact> dependencyArtifacts;
-  private final Artifact outputDepsProto;
+  private final ActionInput outputDepsProto;
   private final JavaClasspathMode classpathMode;
 
   private final JavaCompileExtraActionInfoSupplier extraActionInfoSupplier;
@@ -122,7 +123,7 @@ public class JavaCompileAction extends AbstractAction
       CommandLine flagLine,
       BuildConfiguration configuration,
       NestedSet<Artifact> dependencyArtifacts,
-      Artifact outputDepsProto,
+      ActionInput outputDepsProto,
       JavaClasspathMode classpathMode) {
     super(
         owner,
@@ -147,6 +148,15 @@ public class JavaCompileAction extends AbstractAction
     this.dependencyArtifacts = dependencyArtifacts;
     this.outputDepsProto = outputDepsProto;
     this.classpathMode = classpathMode;
+    ImmutableSet.Builder<ActionInput> outputsBuilder = ImmutableSet.builder();
+    outputsBuilder.addAll(outputs);
+    if (outputDepsProto != null) {
+      // If the outputDepsProto is a proper Artifact, it is already in outputs and has thus been
+      // declared as an output of the action above. Adding it again won't hurt as this is a set.
+      // If we are reading deps protos in memory, add the virtual action output here.
+      outputsBuilder.add(outputDepsProto);
+    }
+    outputFiles = outputsBuilder.build();
   }
 
   @Override
@@ -299,11 +309,10 @@ public class JavaCompileAction extends AbstractAction
                   actionExecutionContext);
 
           SpawnResult spawnResult = Iterables.getOnlyElement(results);
-          InputStream inMemoryOutput = spawnResult.getInMemoryOutput(outputDepsProto);
           try (InputStream input =
-              inMemoryOutput == null
-                  ? outputDepsProto.getPath().getInputStream()
-                  : inMemoryOutput) {
+              (outputDepsProto instanceof Artifact)
+                  ? ((Artifact) outputDepsProto).getPath().getInputStream()
+                  : spawnResult.getInMemoryOutput(outputDepsProto)) {
             if (!Deps.Dependencies.parseFrom(input).getRequiresReducedClasspathFallback()) {
               return ActionResult.create(results);
             }
@@ -416,6 +425,11 @@ public class JavaCompileAction extends AbstractAction
     public Iterable<? extends ActionInput> getInputFiles() {
       return inputs;
     }
+
+    @Override
+    public Collection<? extends ActionInput> getOutputFiles() {
+      return outputFiles;
+    }
   }
 
   @VisibleForTesting
@@ -475,6 +489,6 @@ public class JavaCompileAction extends AbstractAction
   }
 
   public Artifact getOutputDepsProto() {
-    return outputDepsProto;
+    return (outputDepsProto instanceof Artifact) ? (Artifact) outputDepsProto : null;
   }
 }
