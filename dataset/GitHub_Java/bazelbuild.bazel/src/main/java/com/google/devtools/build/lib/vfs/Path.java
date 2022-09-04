@@ -74,7 +74,7 @@ public class Path implements Comparable<Path>, Serializable, FileType.HasFileTyp
   }
 
   private static final OsPathPolicy OS = OsPathPolicy.getFilePathOs();
-  private static final char SEPARATOR = '/';
+  private static final char SEPARATOR = OS.getSeparator();
 
   private String path;
   private int driveStrLength; // 1 on Unix, 3 on Windows
@@ -766,11 +766,7 @@ public class Path implements Comparable<Path>, Serializable, FileType.HasFileTyp
   }
 
   /**
-   * Returns the digest of the file denoted by the current path, following symbolic links. Is not
-   * guaranteed to call {@link #getFastDigest} internally, even if a fast digest is likely
-   * available. Callers should prefer {@link DigestUtils#getDigestWithManualFallback} to this method
-   * unless they know that a fast digest is unavailable and do not need the other features
-   * (disk-read rate-limiting, global cache) that {@link DigestUtils} provides.
+   * Returns the digest of the file denoted by the current path, following symbolic links.
    *
    * @return a new byte array containing the file's digest
    * @throws IOException if the digest could not be computed for any reason
@@ -806,7 +802,7 @@ public class Path implements Comparable<Path>, Serializable, FileType.HasFileTyp
         } else {
           hasher.putChar('-');
         }
-        hasher.putBytes(DigestUtils.getDigestWithManualFallback(path, stat.getSize()));
+        hasher.putBytes(path.getDigest());
       } else if (stat.isDirectory()) {
         hasher.putChar('d').putUnencodedChars(path.getDirectoryDigest());
       } else if (stat.isSymbolicLink()) {
@@ -820,7 +816,7 @@ public class Path implements Comparable<Path>, Serializable, FileType.HasFileTyp
               } else {
                 hasher.putChar('-');
               }
-              hasher.putBytes(DigestUtils.getDigestWithManualFallbackWhenSizeUnknown(resolved));
+              hasher.putBytes(resolved.getDigest());
             } else {
               // link to a non-file: include the link itself in the hash
               hasher.putChar('l').putUnencodedChars(link.toString());
