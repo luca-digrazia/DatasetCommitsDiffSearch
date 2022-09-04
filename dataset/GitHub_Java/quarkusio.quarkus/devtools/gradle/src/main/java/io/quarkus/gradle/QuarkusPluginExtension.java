@@ -5,7 +5,6 @@ import java.util.Set;
 
 import org.gradle.api.Project;
 import org.gradle.api.plugins.JavaPluginConvention;
-import org.gradle.api.tasks.SourceSet;
 
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
@@ -31,7 +30,7 @@ public class QuarkusPluginExtension {
     public File outputDirectory() {
         if (outputDirectory == null)
             outputDirectory = project.getConvention().getPlugin(JavaPluginConvention.class)
-                    .getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getOutput().getClassesDirs().getAsPath();
+                    .getSourceSets().getByName("main").getOutput().getClassesDirs().getAsPath();
 
         return new File(outputDirectory);
     }
@@ -39,7 +38,7 @@ public class QuarkusPluginExtension {
     public File outputConfigDirectory() {
         if (outputConfigDirectory == null) {
             outputConfigDirectory = project.getConvention().getPlugin(JavaPluginConvention.class)
-                    .getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getOutput().getResourcesDir().getAbsolutePath();
+                    .getSourceSets().getByName("main").getOutput().getResourcesDir().getAbsolutePath();
         }
         return new File(outputConfigDirectory);
     }
@@ -47,7 +46,7 @@ public class QuarkusPluginExtension {
     public File sourceDir() {
         if (sourceDir == null) {
             sourceDir = project.getConvention().getPlugin(JavaPluginConvention.class)
-                    .getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getAllJava().getSourceDirectories().getAsPath();
+                    .getSourceSets().getByName("main").getAllJava().getSourceDirectories().getAsPath();
         }
         return new File(sourceDir);
     }
@@ -62,14 +61,14 @@ public class QuarkusPluginExtension {
 
     public String finalName() {
         if (finalName == null || finalName.length() == 0) {
-            this.finalName = String.format("%s-%s", project.getName(), project.getVersion());
+            this.finalName = project.getName() + "-" + project.getVersion();
         }
         return finalName;
     }
 
     public Set<File> resourcesDir() {
         return project.getConvention().getPlugin(JavaPluginConvention.class)
-                .getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getResources().getSrcDirs();
+                .getSourceSets().getByName("main").getResources().getSrcDirs();
     }
 
     public AppArtifact getAppArtifact() {

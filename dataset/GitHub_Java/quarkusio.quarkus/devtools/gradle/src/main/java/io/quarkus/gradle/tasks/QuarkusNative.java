@@ -46,7 +46,7 @@ public class QuarkusNative extends QuarkusTask {
 
     private boolean enableServer = false;
 
-    private boolean enableJni = true;
+    private boolean enableJni = false;
 
     private boolean autoServiceLoaderRegistration = false;
 
@@ -180,7 +180,6 @@ public class QuarkusNative extends QuarkusTask {
         this.enableIsolates = enableIsolates;
     }
 
-    @Optional
     @Input
     public String getGraalvmHome() {
         return graalvmHome;

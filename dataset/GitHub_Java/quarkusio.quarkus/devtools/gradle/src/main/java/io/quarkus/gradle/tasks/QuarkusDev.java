@@ -54,6 +54,7 @@ import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
+import io.quarkus.bootstrap.util.PropertyUtils;
 import io.quarkus.dev.DevModeContext;
 import io.quarkus.dev.DevModeMain;
 import io.quarkus.gradle.QuarkusPluginExtension;
@@ -318,8 +319,6 @@ public class QuarkusDev extends QuarkusTask {
             context.setFrameworkClassesDir(wiringClassesDirectory.getAbsoluteFile());
             context.setCacheDir(new File(getBuildDir(), "transformer-cache").getAbsoluteFile());
 
-            // this is the jar file we will use to launch the dev mode main class
-            context.setDevModeRunnerJarFile(tempFile);
             try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(tempFile))) {
                 out.putNextEntry(new ZipEntry("META-INF/"));
                 Manifest manifest = new Manifest();
@@ -408,9 +407,19 @@ public class QuarkusDev extends QuarkusTask {
         if (filesIncludedInClasspath.add(file)) {
             getProject().getLogger().info("Adding dependency {}", file);
 
-            final URI uri = file.toPath().toAbsolutePath().toUri();
+            URI uri = file.toPath().toAbsolutePath().toUri();
+            String path = uri.getRawPath();
+            if (PropertyUtils.isWindows()) {
+                if (path.length() > 2 && Character.isLetter(path.charAt(0)) && path.charAt(1) == ':') {
+                    path = "/" + path;
+                }
+            }
+            classPathManifest.append(path);
             context.getClassPath().add(toUrl(uri));
-            classPathManifest.append(uri).append(" ");
+            if (file.isDirectory()) {
+                classPathManifest.append("/");
+            }
+            classPathManifest.append(" ");
         }
     }
 
