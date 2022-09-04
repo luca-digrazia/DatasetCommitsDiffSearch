@@ -1,6 +1,6 @@
 package io.quarkus.arc.impl;
 
-import java.util.Iterator;
+import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -13,20 +13,16 @@ final class CollectionHelpers {
         //do not instantiate
     }
 
-    @SuppressWarnings("unchecked")
     static <T> Set<T> toImmutableSmallSet(Set<T> set) {
         if (set == null)
             return null;
         switch (set.size()) {
             case 0:
-                return Set.of();
+                return Collections.emptySet();
             case 1:
-                return Set.of(set.iterator().next());
-            case 2:
-                Iterator<T> it = set.iterator();
-                return Set.of(it.next(), it.next());
+                return Collections.singleton(set.iterator().next());
             default:
-                return (Set<T>) Set.of(set.toArray());
+                return Collections.unmodifiableSet(set);
         }
     }
 
