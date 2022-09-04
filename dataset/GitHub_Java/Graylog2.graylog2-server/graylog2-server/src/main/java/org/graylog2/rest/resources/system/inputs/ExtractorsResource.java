@@ -91,8 +91,7 @@ public class ExtractorsResource extends RestResource {
         this.extractorFactory = extractorFactory;
     }
 
-    @POST
-    @Timed
+    @POST @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Add an extractor to an input")
@@ -121,7 +120,7 @@ public class ExtractorsResource extends RestResource {
         CreateExtractorRequest cer;
         try {
             cer = objectMapper.readValue(body, CreateExtractorRequest.class);
-        } catch (IOException e) {
+        } catch(IOException e) {
             LOG.error("Error while parsing JSON", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
@@ -179,8 +178,7 @@ public class ExtractorsResource extends RestResource {
         return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "List all extractors of an input")
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "No such input on this node.")
@@ -223,7 +221,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "Extractor not found.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public void terminate(
+    public void removeExtractor(
             @ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId,
             @ApiParam(title = "extractorId", required = true) @PathParam("extractorId") String extractorId) throws NotFoundException {
         if (isNullOrEmpty(extractorId)) {
@@ -261,8 +259,7 @@ public class ExtractorsResource extends RestResource {
         activityWriter.write(new Activity(msg, InputsResource.class));
     }
 
-    @POST
-    @Timed
+    @POST @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Update extractor order of an input")
     @ApiResponses(value = {
@@ -282,7 +279,7 @@ public class ExtractorsResource extends RestResource {
         OrderExtractorsRequest oer;
         try {
             oer = objectMapper.readValue(body, OrderExtractorsRequest.class);
-        } catch (IOException e) {
+        } catch(IOException e) {
             LOG.error("Error while parsing JSON", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
@@ -309,18 +306,18 @@ public class ExtractorsResource extends RestResource {
     private Map<String, Object> toMap(Extractor extractor) {
         Map<String, Object> map = Maps.newHashMap();
 
-        map.put(Extractor.FIELD_ID, extractor.getId());
-        map.put(Extractor.FIELD_TITLE, extractor.getTitle());
-        map.put(Extractor.FIELD_TYPE, extractor.getType().toString().toLowerCase());
-        map.put(Extractor.FIELD_CURSOR_STRATEGY, extractor.getCursorStrategy().toString().toLowerCase());
-        map.put(Extractor.FIELD_SOURCE_FIELD, extractor.getSourceField());
-        map.put(Extractor.FIELD_TARGET_FIELD, extractor.getTargetField());
-        map.put(Extractor.FIELD_EXTRACTOR_CONFIG, extractor.getExtractorConfig());
-        map.put(Extractor.FIELD_CREATOR_USER_ID, extractor.getCreatorUserId());
-        map.put(Extractor.FIELD_CONVERTERS, extractor.converterConfigMap());
-        map.put(Extractor.FIELD_CONDITION_TYPE, extractor.getConditionType().toString().toLowerCase());
-        map.put(Extractor.FIELD_CONDITION_VALUE, extractor.getConditionValue());
-        map.put(Extractor.FIELD_ORDER, extractor.getOrder());
+        map.put("id", extractor.getId());
+        map.put("title", extractor.getTitle());
+        map.put("type", extractor.getType().toString().toLowerCase());
+        map.put("cursor_strategy", extractor.getCursorStrategy().toString().toLowerCase());
+        map.put("source_field", extractor.getSourceField());
+        map.put("target_field", extractor.getTargetField());
+        map.put("extractor_config", extractor.getExtractorConfig());
+        map.put("creator_user_id", extractor.getCreatorUserId());
+        map.put("converters", extractor.converterConfigMap());
+        map.put("condition_type", extractor.getConditionType().toString().toLowerCase());
+        map.put("condition_value", extractor.getConditionValue());
+        map.put("order", extractor.getOrder());
 
         map.put("exceptions", extractor.getExceptionCount());
         map.put("converter_exceptions", extractor.getConverterExceptionCount());
