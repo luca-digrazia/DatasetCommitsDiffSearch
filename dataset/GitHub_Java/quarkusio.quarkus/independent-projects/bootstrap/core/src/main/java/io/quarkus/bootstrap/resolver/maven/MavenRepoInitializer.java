@@ -55,8 +55,8 @@ import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.repository.RepositoryPolicy;
 import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
 import org.eclipse.aether.spi.connector.transport.TransporterFactory;
-import org.eclipse.aether.transport.wagon.WagonProvider;
-import org.eclipse.aether.transport.wagon.WagonTransporterFactory;
+import org.eclipse.aether.transport.file.FileTransporterFactory;
+import org.eclipse.aether.transport.http.HttpTransporterFactory;
 import org.eclipse.aether.util.repository.AuthenticationBuilder;
 import org.eclipse.aether.util.repository.DefaultAuthenticationSelector;
 import org.eclipse.aether.util.repository.DefaultMirrorSelector;
@@ -152,8 +152,8 @@ public class MavenRepoInitializer {
         final DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
         if(!offline) {
             locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
-            locator.addService(TransporterFactory.class, WagonTransporterFactory.class);
-            locator.setServices(WagonProvider.class, new BootstrapWagonProvider());
+            locator.addService(TransporterFactory.class, FileTransporterFactory.class);
+            locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
         }
         locator.setServices(ModelBuilder.class, new MavenModelBuilder(wsModelResolver));
         locator.setErrorHandler(new DefaultServiceLocator.ErrorHandler() {
@@ -437,15 +437,7 @@ public class MavenRepoInitializer {
     }
 
     public static String getLocalRepo(Settings settings) {
-        String localRepo = System.getenv("QUARKUS_LOCAL_REPO");
-        if(localRepo != null) {
-            return localRepo;
-        }
-        localRepo = PropertyUtils.getProperty("maven.repo.local");
-        if(localRepo != null) {
-            return localRepo;
-        }
-        localRepo = settings.getLocalRepository();
+        final String localRepo = settings.getLocalRepository();
         return localRepo == null ? getDefaultLocalRepo() : localRepo;
     }
 
