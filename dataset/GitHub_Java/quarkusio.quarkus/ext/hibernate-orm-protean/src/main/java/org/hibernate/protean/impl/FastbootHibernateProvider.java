@@ -26,7 +26,6 @@ import javax.persistence.spi.PersistenceProvider;
 import javax.persistence.spi.PersistenceUnitInfo;
 import javax.persistence.spi.ProviderUtil;
 
-import org.hibernate.boot.registry.BootstrapServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.boot.spi.MetadataImplementor;
@@ -147,7 +146,6 @@ final class FastbootHibernateProvider implements PersistenceProvider  {
 
 			RecordedState rs = PersistenceUnitsHolder.getMetadata( persistenceUnitName );
 
-			final Dialect dialect = rs.getDialect();
 			final MetadataImplementor metadata = rs.getFullMeta();
 
 			final Map<String,Object> configurationValues = rs.getConfigurationProperties();
