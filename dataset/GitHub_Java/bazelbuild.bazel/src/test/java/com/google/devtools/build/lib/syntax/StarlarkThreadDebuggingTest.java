@@ -37,12 +37,10 @@ public class StarlarkThreadDebuggingTest {
 
   // Executes the definition of a trivial function f and returns the function value.
   private static StarlarkFunction defineFunc() throws Exception {
-    return (StarlarkFunction)
-        Starlark.execFile(
-            ParserInput.fromLines("def f(): pass\nf"),
-            FileOptions.DEFAULT,
-            Module.create(),
-            newThread());
+    Module module = Module.create();
+    EvalUtils.exec(
+        ParserInput.fromLines("def f(): pass"), FileOptions.DEFAULT, module, newThread());
+    return (StarlarkFunction) module.getGlobal("f");
   }
 
   @Test
@@ -92,7 +90,7 @@ public class StarlarkThreadDebuggingTest {
                 + "  f()\n"
                 + "g(4, 5, 6)",
             "main.star");
-    Starlark.execFile(input, FileOptions.DEFAULT, module, newThread());
+    EvalUtils.exec(input, FileOptions.DEFAULT, module, newThread());
 
     @SuppressWarnings("unchecked")
     ImmutableList<Debug.Frame> stack = (ImmutableList<Debug.Frame>) result[0];
@@ -212,7 +210,7 @@ public class StarlarkThreadDebuggingTest {
     Module module = Module.withPredeclared(StarlarkSemantics.DEFAULT, ImmutableMap.of("a", 1));
 
     StarlarkThread thread = newThread();
-    Object a = Starlark.execFile(ParserInput.fromLines("a"), FileOptions.DEFAULT, module, thread);
+    Object a = EvalUtils.exec(ParserInput.fromLines("a"), FileOptions.DEFAULT, module, thread);
     assertThat(a).isEqualTo(1);
   }
 
@@ -224,7 +222,7 @@ public class StarlarkThreadDebuggingTest {
         assertThrows(
             SyntaxError.Exception.class,
             () ->
-                Starlark.execFile(
+                EvalUtils.exec(
                     ParserInput.fromLines("b"), FileOptions.DEFAULT, module, newThread()));
 
     assertThat(e).hasMessageThat().isEqualTo("name 'b' is not defined");
@@ -238,11 +236,11 @@ public class StarlarkThreadDebuggingTest {
             StarlarkSemantics.DEFAULT, /*predeclared=*/ ImmutableMap.of("a", "string"));
 
     assertThat(
-            Starlark.execFile(
+            EvalUtils.exec(
                 ParserInput.fromLines("a.startswith('str')"), FileOptions.DEFAULT, module, thread))
         .isEqualTo(true);
-    Starlark.execFile(ParserInput.fromLines("a = 1"), FileOptions.DEFAULT, module, thread);
-    assertThat(Starlark.execFile(ParserInput.fromLines("a"), FileOptions.DEFAULT, module, thread))
+    EvalUtils.exec(ParserInput.fromLines("a = 1"), FileOptions.DEFAULT, module, thread);
+    assertThat(EvalUtils.exec(ParserInput.fromLines("a"), FileOptions.DEFAULT, module, thread))
         .isEqualTo(1);
   }
 }

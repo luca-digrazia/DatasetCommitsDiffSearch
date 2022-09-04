@@ -63,7 +63,6 @@ public final class StarlarkThread {
   private boolean interruptible = true;
 
   long steps; // count of logical computation steps executed so far
-  long stepLimit = Long.MAX_VALUE; // limit on logical computation steps
 
   /**
    * Returns the number of Starlark computation steps executed by this thread according to a
@@ -73,15 +72,6 @@ public final class StarlarkThread {
    */
   public long getExecutedSteps() {
     return steps;
-  }
-
-  /**
-   * Sets the maximum number of Starlark computation steps that may be executed by this thread (see
-   * {@link #getExecutedSteps}). When the step counter reaches or exceeds this value, execution
-   * fails with an EvalException.
-   */
-  public void setMaxExecutionSteps(long steps) {
-    this.stepLimit = steps;
   }
 
   /**
@@ -121,21 +111,14 @@ public final class StarlarkThread {
   static final class Frame implements Debug.Frame {
     final StarlarkThread thread;
     final StarlarkCallable fn; // the called function
-
-    @Nullable
-    final Debug.Debugger dbg = Debug.debugger.get(); // the debugger, if active for this frame
-
+    @Nullable final Debugger dbg = Debug.debugger.get(); // the debugger, if active for this frame
     int compcount = 0; // number of enclosing comprehensions
 
     Object result = Starlark.NONE; // the operand of a Starlark return statement
 
     // Current PC location. Initially fn.getLocation(); for Starlark functions,
-    // it is updated at key points when it may be observed: calls, breakpoints, errors.
+    // it is updated at key points when it may be observed: calls, breakpoints.
     private Location loc;
-
-    // Indicates that setErrorLocation has been called already and the error
-    // location (loc) should not be overrwritten.
-    private boolean errorLocationSet;
 
     // The locals of this frame, if fn is a StarlarkFunction, otherwise empty.
     Map<String, Object> locals;
@@ -150,20 +133,6 @@ public final class StarlarkThread {
     // Updates the PC location in this frame.
     void setLocation(Location loc) {
       this.loc = loc;
-    }
-
-    // Sets location only the first time it is called,
-    // to ensure that the location of the innermost expression
-    // is used for errors.
-    // (Once we switch to a bytecode interpreter, we can afford
-    // to update fr.pc before each fallible operation, but until then
-    // we must materialize Locations only after the fact of failure.)
-    // Sets errorLocationSet.
-    void setErrorLocation(Location loc) {
-      if (!errorLocationSet) {
-        errorLocationSet = true;
-        setLocation(loc);
-      }
     }
 
     @Override
