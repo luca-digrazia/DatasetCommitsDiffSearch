@@ -80,7 +80,10 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     try (ResourceHandle ignored =
         resourceManager.acquireResources(owner, spawn.getLocalResources())) {
       context.report(ProgressStatus.EXECUTING, getName());
-      SandboxedSpawn sandbox = prepareSpawn(spawn, context);
+      SandboxedSpawn sandbox;
+      try (SilentCloseable c = Profiler.instance().profile("SandboxedSpawn.prepareSpawn")) {
+        sandbox = prepareSpawn(spawn, context);
+      }
       return runSpawn(spawn, sandbox, context);
     } catch (IOException e) {
       throw new UserExecException("I/O exception during sandboxed execution", e);
@@ -99,21 +102,14 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       Spawn originalSpawn, SandboxedSpawn sandbox, SpawnExecutionContext context)
       throws IOException, InterruptedException {
     try {
-      try (SilentCloseable c = Profiler.instance().profile("sandbox.createFileSystem")) {
-        sandbox.createFileSystem();
-      }
+      sandbox.createFileSystem();
       FileOutErr outErr = context.getFileOutErr();
-      try (SilentCloseable c = Profiler.instance().profile("context.prefetchInputs")) {
-        context.prefetchInputs();
-      }
+      context.prefetchInputs();
 
-      SpawnResult result;
-      try (SilentCloseable c = Profiler.instance().profile("subprocess.run")) {
-        result = run(originalSpawn, sandbox, context.getTimeout(), outErr);
-      }
+      SpawnResult result = run(originalSpawn, sandbox, context.getTimeout(), outErr);
 
       context.lockOutputFiles();
-      try (SilentCloseable c = Profiler.instance().profile("sandbox.copyOutputs")) {
+      try {
         // We copy the outputs even when the command failed.
         sandbox.copyOutputs(execRoot);
       } catch (IOException e) {
@@ -122,9 +118,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       return result;
     } finally {
       if (!sandboxOptions.sandboxDebug) {
-        try (SilentCloseable c = Profiler.instance().profile("sandbox.delete")) {
-          sandbox.delete();
-        }
+        sandbox.delete();
       }
     }
   }
