@@ -877,7 +877,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               inline_constants = 0,",
         "               resource_files = ['res/values/strings.xml'],",
         "               shrink_resources = 1,",
-        "               resource_configuration_filters = ['en'],",
         "               proguard_specs = ['proguard-spec.pro'],)");
 
     ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android/hello:hello");
@@ -913,9 +912,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         .isEqualTo(flagValue("--rOutput", processingArgs));
     assertThat(flagValue("--primaryManifest", shrinkingArgs))
         .isEqualTo(flagValue("--manifestOutput", processingArgs));
-
-    assertThat(flagValue("--resourceConfigs", shrinkingArgs))
-        .isEqualTo(flagValue("--resourceConfigs", processingArgs));
 
     List<String> packageArgs =
         getGeneratingSpawnActionArgs(getFirstArtifactEndingWith(artifacts, "_hello_proguard.cfg"));
