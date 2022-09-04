@@ -1909,15 +1909,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected Artifact getImplicitOutputArtifact(
       ConfiguredTarget target, SafeImplicitOutputsFunction outputFunction) {
-    return getImplicitOutputArtifact(target, target.getConfiguration(), outputFunction);
-  }
-
-  protected Artifact getImplicitOutputArtifact(
-      ConfiguredTarget target,
-      BuildConfiguration configuration,
-      SafeImplicitOutputsFunction outputFunction) {
     Rule associatedRule = target.getTarget().getAssociatedRule();
     RepositoryName repository = associatedRule.getRepository();
+    BuildConfiguration configuration = target.getConfiguration();
 
     Root root;
     if (associatedRule.hasBinaryOutput()) {
