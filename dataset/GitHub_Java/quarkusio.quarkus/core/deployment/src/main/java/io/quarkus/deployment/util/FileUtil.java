@@ -1,5 +1,6 @@
 package io.quarkus.deployment.util;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.FileVisitResult;
@@ -42,7 +43,13 @@ public class FileUtil {
     }
 
     public static byte[] readFileContents(InputStream inputStream) throws IOException {
-        return inputStream.readAllBytes();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[10000];
+        int r;
+        while ((r = inputStream.read(buf)) > 0) {
+            out.write(buf, 0, r);
+        }
+        return out.toByteArray();
     }
 
     /**
