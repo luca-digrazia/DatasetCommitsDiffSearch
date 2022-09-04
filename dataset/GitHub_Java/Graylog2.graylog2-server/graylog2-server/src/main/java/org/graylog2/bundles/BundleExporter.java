@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -180,7 +179,7 @@ public class BundleExporter {
         for (org.graylog2.plugin.inputs.Converter converter : converters) {
             final Converter converterDescription = new Converter();
             final org.graylog2.plugin.inputs.Converter.Type type =
-                    org.graylog2.plugin.inputs.Converter.Type.valueOf(converter.getType().toUpperCase(Locale.ENGLISH));
+                    org.graylog2.plugin.inputs.Converter.Type.valueOf(converter.getType().toUpperCase());
 
             converterDescription.setType(type);
             converterDescription.setConfiguration(converter.getConfig());
