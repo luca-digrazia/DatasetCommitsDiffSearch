@@ -14,33 +14,29 @@
 package com.google.devtools.build.lib.profiler;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
 import com.sun.management.OperatingSystemMXBean;
 import java.lang.management.ManagementFactory;
-import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /** Thread to collect local cpu usage data and log into JSON profile. */
 public class CollectLocalCpuUsage extends Thread {
   // TODO(twerth): Make these configurable.
-  private static final Duration BUCKET_DURATION = Duration.ofSeconds(1);
+  private static final long BUCKET_SIZE_MILLIS = 1000;
   private static final long LOCAL_CPU_SLEEP_MILLIS = 200;
 
   private volatile boolean stopCpuUsage;
   private volatile boolean profilingStarted;
+  private long cpuProfileStartMillis;
   private TimeSeries localCpuUsage;
-  private Stopwatch stopwatch;
 
   @Override
   public void run() {
-    stopwatch = Stopwatch.createStarted();
-    localCpuUsage =
-        new TimeSeries(
-            /* startTimeMillis= */ stopwatch.elapsed().toMillis(), BUCKET_DURATION.toMillis());
+    cpuProfileStartMillis = System.currentTimeMillis();
+    localCpuUsage = new TimeSeries(cpuProfileStartMillis, BUCKET_SIZE_MILLIS);
     OperatingSystemMXBean bean =
         (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
-    Duration previousElapsed = stopwatch.elapsed();
-    long previousCpuTimeNanos = bean.getProcessCpuTime();
+    long previousTimeMillis = System.currentTimeMillis();
+    long previousCpuTimeMillis = TimeUnit.NANOSECONDS.toMillis(bean.getProcessCpuTime());
     profilingStarted = true;
     while (!stopCpuUsage) {
       try {
@@ -48,13 +44,13 @@ public class CollectLocalCpuUsage extends Thread {
       } catch (InterruptedException e) {
         return;
       }
-      Duration nextElapsed = stopwatch.elapsed();
-      long nextCpuTimeNanos = bean.getProcessCpuTime();
-      double deltaNanos = nextElapsed.minus(previousElapsed).toNanos();
-      double cpuLevel = (nextCpuTimeNanos - previousCpuTimeNanos) / deltaNanos;
-      localCpuUsage.addRange(previousElapsed.toMillis(), nextElapsed.toMillis(), cpuLevel);
-      previousElapsed = nextElapsed;
-      previousCpuTimeNanos = nextCpuTimeNanos;
+      long nextTimeMillis = System.currentTimeMillis();
+      long nextCpuTimeMillis = TimeUnit.NANOSECONDS.toMillis(bean.getProcessCpuTime());
+      double deltaMillis = nextTimeMillis - previousTimeMillis;
+      double cpuLevel = (nextCpuTimeMillis - previousCpuTimeMillis) / deltaMillis;
+      localCpuUsage.addRange(previousTimeMillis, nextTimeMillis, cpuLevel);
+      previousTimeMillis = nextTimeMillis;
+      previousCpuTimeMillis = nextCpuTimeMillis;
     }
   }
 
@@ -69,16 +65,22 @@ public class CollectLocalCpuUsage extends Thread {
       return;
     }
     Preconditions.checkArgument(stopCpuUsage);
-    long endTimeNanos = System.nanoTime();
-    long elapsedNanos = stopwatch.elapsed(TimeUnit.NANOSECONDS);
-    long startTimeNanos = endTimeNanos - elapsedNanos;
-    int len = (int) (elapsedNanos / BUCKET_DURATION.toNanos()) + 1;
+    long currentTimeNanos = System.nanoTime();
+    long currentTimeMillis = System.currentTimeMillis();
+    int len = (int) ((currentTimeMillis - cpuProfileStartMillis) / BUCKET_SIZE_MILLIS) + 1;
+    // Time math is famously unreliable and this class is doing it wrong, occasionally resulting in
+    // a negative len value.
+    // TODO(b/141709559): Rearchitect profiling to use Stopwatch etc. where possible to ensure time
+    // only travels in one direction.
+    len = Math.max(0, len);
     double[] localCpuUsageValues = localCpuUsage.toDoubleArray(len);
     Profiler profiler = Profiler.instance();
     for (int i = 0; i < len; i++) {
-      long eventTimeNanos = startTimeNanos + i * BUCKET_DURATION.toNanos();
+      long timeMillis = cpuProfileStartMillis + i * BUCKET_SIZE_MILLIS;
+      long timeNanos =
+          TimeUnit.MILLISECONDS.toNanos(timeMillis - currentTimeMillis) + currentTimeNanos;
       profiler.logEventAtTime(
-          eventTimeNanos, ProfilerTask.LOCAL_CPU_USAGE, String.valueOf(localCpuUsageValues[i]));
+          timeNanos, ProfilerTask.LOCAL_CPU_USAGE, String.valueOf(localCpuUsageValues[i]));
     }
     localCpuUsage = null;
   }
