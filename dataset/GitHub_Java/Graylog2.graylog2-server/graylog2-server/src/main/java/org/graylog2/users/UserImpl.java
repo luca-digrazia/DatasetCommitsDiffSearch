@@ -22,9 +22,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.apache.shiro.authz.Permission;
-import org.apache.shiro.authz.permission.AllPermission;
-import org.apache.shiro.authz.permission.WildcardPermission;
 import org.bson.types.ObjectId;
 import org.graylog2.Configuration;
 import org.graylog2.database.CollectionName;
@@ -54,7 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Strings.nullToEmpty;
@@ -179,18 +175,6 @@ public class UserImpl extends PersistedImpl implements User {
     }
 
     @Override
-    public Set<Permission> getObjectPermissions() {
-        return getPermissions().stream().map(p -> {
-            if (p.equals("*")) {
-                return new AllPermission();
-            } else {
-                return new WildcardPermission(p);
-            }
-
-        }).collect(Collectors.toSet());
-    }
-
-    @Override
     public void setPermissions(final List<String> permissions) {
         final List<String> perms = Lists.newArrayList(permissions);
         // Do not store the dynamic user self edit permissions
@@ -286,20 +270,20 @@ public class UserImpl extends PersistedImpl implements User {
 
     @Override
     public void setTimeZone(final String timeZone) {
-        DateTimeZone dateTimeZone = null;
-        if (timeZone != null) {
-            try {
-                dateTimeZone = DateTimeZone.forID(timeZone);
-            } catch (IllegalArgumentException e) {
-                LOG.error("Invalid timezone \"{}\", falling back to UTC.", timeZone);
-            }
+        DateTimeZone dateTimeZone;
+        try {
+            dateTimeZone = DateTimeZone.forID(firstNonNull(timeZone, DateTimeZone.UTC.getID()));
+        } catch (IllegalArgumentException e) {
+            LOG.info("Invalid timezone \"{}\", falling back to UTC.", timeZone);
+            dateTimeZone = DateTimeZone.UTC;
         }
+
         setTimeZone(dateTimeZone);
     }
 
     @Override
     public void setTimeZone(final DateTimeZone timeZone) {
-        fields.put(TIMEZONE, timeZone == null ? null : timeZone.getID());
+        fields.put(TIMEZONE, timeZone.getID());
     }
 
     @Override
@@ -392,11 +376,6 @@ public class UserImpl extends PersistedImpl implements User {
         @Override
         public List<String> getPermissions() {
             return Collections.singletonList("*");
-        }
-
-        @Override
-        public Set<Permission> getObjectPermissions() {
-            return Collections.singleton(new AllPermission());
         }
 
         @Override
