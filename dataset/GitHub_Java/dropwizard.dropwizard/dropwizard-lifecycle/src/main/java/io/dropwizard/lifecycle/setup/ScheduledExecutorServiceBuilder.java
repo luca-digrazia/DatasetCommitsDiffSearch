@@ -17,18 +17,14 @@ public class ScheduledExecutorServiceBuilder {
     private ThreadFactory threadFactory;
     private Duration shutdownTime;
     private RejectedExecutionHandler handler;
-    
-    public ScheduledExecutorServiceBuilder(LifecycleEnvironment environment, String nameFormat, ThreadFactory factory) {
+
+    public ScheduledExecutorServiceBuilder(LifecycleEnvironment environment, String nameFormat, boolean useDaemonThreads) {
         this.environment = environment;
         this.nameFormat = nameFormat;
         this.poolSize = 1;
-        this.threadFactory = factory;
+        this.threadFactory = new ThreadFactoryBuilder().setNameFormat(nameFormat).setDaemon(useDaemonThreads).build();
         this.shutdownTime = Duration.seconds(5);
         this.handler = new ThreadPoolExecutor.AbortPolicy();
-    }
-
-    public ScheduledExecutorServiceBuilder(LifecycleEnvironment environment, String nameFormat, boolean useDaemonThreads) {
-    	this(environment, nameFormat, new ThreadFactoryBuilder().setNameFormat(nameFormat).setDaemon(useDaemonThreads).build());
     }
 
     public ScheduledExecutorServiceBuilder threads(int threads) {
