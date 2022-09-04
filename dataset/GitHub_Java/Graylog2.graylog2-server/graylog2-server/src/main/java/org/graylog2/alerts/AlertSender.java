@@ -25,15 +25,12 @@ import org.apache.commons.mail.EmailException;
 import org.apache.commons.mail.SimpleEmail;
 import org.graylog2.Configuration;
 import org.graylog2.Core;
-import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.streams.StreamImpl;
 import org.graylog2.users.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
 
 
 /**
@@ -50,10 +47,37 @@ public class AlertSender {
     }
 
     public void sendEmails(StreamImpl stream, AlertCondition.CheckResult checkResult) throws TransportConfigurationException, EmailException {
-        sendEmails(stream, checkResult, null);
+        if(!core.getConfiguration().isEmailTransportEnabled()) {
+            throw new TransportConfigurationException();
+        }
+
+        if (stream.getAlertReceivers() == null || stream.getAlertReceivers().isEmpty()) {
+            throw new RuntimeException("Stream [" + stream + "] has no alert receivers.");
+        }
+
+        // Send emails to subscribed users.
+        if(stream.getAlertReceivers().get("users") != null) {
+            for (String username : stream.getAlertReceivers().get("users")) {
+                User user = User.load(username, core);
+
+                if(user != null && user.getEmail() != null && !user.getEmail().isEmpty()) {
+                    sendEmail(user.getEmail(), stream, checkResult);
+                }
+            }
+        }
+
+        // Send emails to directly subscribed email addresses.
+        if(stream.getAlertReceivers().get("emails") != null) {
+            for (String email : stream.getAlertReceivers().get("emails")) {
+                if(!email.isEmpty()) {
+                    sendEmail(email, stream, checkResult);
+                }
+            }
+        }
+
     }
 
-    private void sendEmail(String emailAddress, StreamImpl stream, AlertCondition.CheckResult checkResult, List<Message> backlog) throws TransportConfigurationException, EmailException {
+    private void sendEmail(String emailAddress, StreamImpl stream, AlertCondition.CheckResult checkResult) throws TransportConfigurationException, EmailException {
         if(!core.getConfiguration().isEmailTransportEnabled()) {
             throw new TransportConfigurationException();
         }
@@ -76,13 +100,7 @@ public class AlertSender {
         email.setStartTLSEnabled(core.getConfiguration().isEmailTransportUseTls());
         email.setFrom(core.getConfiguration().getEmailTransportFromEmail());
         email.setSubject(buildSubject(stream, checkResult, core.getConfiguration()));
-
-        StringBuilder body = new StringBuilder();
-        body.append(buildBody(stream, checkResult));
-        if (backlog != null) {
-            body.append(buildBacklogSummary(backlog));
-        }
-        email.setMsg(body.toString());
+        email.setMsg(buildBody(stream, checkResult));
         email.addTo(emailAddress);
 
         email.send();
@@ -118,56 +136,5 @@ public class AlertSender {
         return sb.toString();
     }
 
-    private String buildBacklogSummary(List<Message> backlog) {
-        if (backlog == null || backlog.isEmpty())
-            return "";
 
-        StringBuilder sb = new StringBuilder();
-        MessageFormatter messageFormatter = new MessageFormatter();
-
-        sb.append("\n\nLast ");
-        if (backlog.size() > 1)
-            sb.append(backlog.size()).append(" relevant messages:\n");
-        else
-            sb.append("relevant message:\n");
-        sb.append("======================\n\n");
-
-        for (Message message : backlog) {
-            sb.append(messageFormatter.formatForMail(message));
-            sb.append("\n");
-        }
-
-        return sb.toString();
-    }
-
-
-    public void sendEmails(StreamImpl stream, AlertCondition.CheckResult checkResult, List<Message> backlog) throws TransportConfigurationException, EmailException {
-        if(!core.getConfiguration().isEmailTransportEnabled()) {
-            throw new TransportConfigurationException();
-        }
-
-        if (stream.getAlertReceivers() == null || stream.getAlertReceivers().isEmpty()) {
-            throw new RuntimeException("Stream [" + stream + "] has no alert receivers.");
-        }
-
-        // Send emails to subscribed users.
-        if(stream.getAlertReceivers().get("users") != null) {
-            for (String username : stream.getAlertReceivers().get("users")) {
-                User user = User.load(username, core);
-
-                if(user != null && user.getEmail() != null && !user.getEmail().isEmpty()) {
-                    sendEmail(user.getEmail(), stream, checkResult, backlog);
-                }
-            }
-        }
-
-        // Send emails to directly subscribed email addresses.
-        if(stream.getAlertReceivers().get("emails") != null) {
-            for (String email : stream.getAlertReceivers().get("emails")) {
-                if(!email.isEmpty()) {
-                    sendEmail(email, stream, checkResult, backlog);
-                }
-            }
-        }
-    }
 }
