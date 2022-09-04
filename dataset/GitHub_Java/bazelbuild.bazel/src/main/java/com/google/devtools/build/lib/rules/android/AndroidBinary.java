@@ -493,17 +493,19 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     Artifact jarToDex = proguardOutput.getOutputJar();
     DexingOutput dexingOutput =
-        dex(
-            ruleContext,
-            androidSemantics,
-            binaryJar,
-            jarToDex,
-            isBinaryJarFiltered,
-            androidCommon,
-            resourceApk.getMainDexProguardConfig(),
-            resourceClasses,
-            derivedJarFunction,
-            proguardOutputMap);
+        shouldDexWithJack(ruleContext)
+            ? dexWithJack(ruleContext, androidCommon, proguardSpecs)
+            : dex(
+                ruleContext,
+                androidSemantics,
+                binaryJar,
+                jarToDex,
+                isBinaryJarFiltered,
+                androidCommon,
+                resourceApk.getMainDexProguardConfig(),
+                resourceClasses,
+                derivedJarFunction,
+                proguardOutputMap);
 
     NestedSet<Artifact> nativeLibsZips =
         AndroidCommon.collectTransitiveNativeLibsZips(ruleContext).build();
@@ -1192,6 +1194,23 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     }
   }
 
+  static boolean shouldDexWithJack(RuleContext ruleContext) {
+    return ruleContext
+        .getFragment(AndroidConfiguration.class)
+        .isJackUsedForDexing();
+  }
+
+  static DexingOutput dexWithJack(
+      RuleContext ruleContext, AndroidCommon androidCommon, ImmutableList<Artifact> proguardSpecs) {
+    Artifact classesDexZip =
+        androidCommon.compileDexWithJack(
+            getMultidexMode(ruleContext),
+            Optional.fromNullable(
+                ruleContext.getPrerequisiteArtifact("main_dex_list", Mode.TARGET)),
+            proguardSpecs);
+    return new DexingOutput(classesDexZip, null, ImmutableList.of(classesDexZip));
+  }
+
   /** Creates one or more classes.dex files that correspond to {@code proguardedJar}. */
   private static DexingOutput dex(
       RuleContext ruleContext,
@@ -1741,8 +1760,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     return splitResources;
   }
 
+  @Nullable
   private static Artifact createMainDexProguardSpec(RuleContext ruleContext) {
-    return ProguardHelper.getProguardConfigArtifact(ruleContext, "main_dex");
+    return AndroidSdkProvider.fromRuleContext(ruleContext).getAaptSupportsMainDexGeneration()
+        ? ProguardHelper.getProguardConfigArtifact(ruleContext, "main_dex")
+        : null;
   }
 
   /**
