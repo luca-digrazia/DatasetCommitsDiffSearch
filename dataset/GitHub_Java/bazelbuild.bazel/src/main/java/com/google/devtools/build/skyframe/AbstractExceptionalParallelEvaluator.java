@@ -467,10 +467,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
             // Fall through to NEEDS_REBUILDING, since state is now NEEDS_REBUILDING.
           case NEEDS_REBUILDING:
             maybeMarkRebuilding(parentEntry);
-            break;
-          case NEEDS_FORCED_REBUILDING:
-            parentEntry.forceRebuild();
-            break;
+            // Fall through to REBUILDING.
           case REBUILDING:
           case FORCED_REBUILDING:
             break;
