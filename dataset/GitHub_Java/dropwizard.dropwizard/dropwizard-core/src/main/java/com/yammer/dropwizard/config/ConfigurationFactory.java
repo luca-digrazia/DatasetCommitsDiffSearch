@@ -1,16 +1,14 @@
 package com.yammer.dropwizard.config;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TreeTraversingParser;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.yammer.dropwizard.json.ObjectMapperFactory;
+import com.yammer.dropwizard.json.Json;
 import com.yammer.dropwizard.validation.Validator;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.map.DeserializationConfig;
+import org.codehaus.jackson.map.Module;
+import org.codehaus.jackson.node.JsonNodeFactory;
+import org.codehaus.jackson.node.ObjectNode;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,29 +19,30 @@ public class ConfigurationFactory<T> {
 
     private static final String PROPERTY_PREFIX = "dw.";
 
-    public static <T> ConfigurationFactory<T> forClass(Class<T> klass,
-                                                       Validator validator,
-                                                       ObjectMapperFactory objectMapperFactory) {
-        return new ConfigurationFactory<T>(klass, validator, objectMapperFactory);
+    public static <T> ConfigurationFactory<T> forClass(Class<T> klass, Validator validator, Iterable<Module> modules) {
+        return new ConfigurationFactory<T>(klass, validator, modules);
     }
 
     public static <T> ConfigurationFactory<T> forClass(Class<T> klass, Validator validator) {
-        return new ConfigurationFactory<T>(klass, validator, new ObjectMapperFactory());
+        return new ConfigurationFactory<T>(klass, validator, ImmutableList.<Module>of());
     }
 
     private final Class<T> klass;
-    private final ObjectMapper mapper;
+    private final Json json;
     private final Validator validator;
 
-    private ConfigurationFactory(Class<T> klass, Validator validator, ObjectMapperFactory objectMapperFactory) {
+    private ConfigurationFactory(Class<T> klass, Validator validator, Iterable<Module> modules) {
         this.klass = klass;
-        objectMapperFactory.enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-        this.mapper = objectMapperFactory.build(new YAMLFactory());
+        this.json = new Json();
+        json.enable(DeserializationConfig.Feature.FAIL_ON_UNKNOWN_PROPERTIES);
+        for (Module module : modules) {
+            json.registerModule(module);
+        }
         this.validator = validator;
     }
     
     public T build(File file) throws IOException, ConfigurationException {
-        final JsonNode node = mapper.readTree(file);
+        final JsonNode node = parse(file);
         final String filename = file.toString();
         return build(node, filename);
     }
@@ -60,7 +59,7 @@ public class ConfigurationFactory<T> {
                 addOverride(node, configName, System.getProperty(prefName));
             }
         }
-        final T config = mapper.readValue(new TreeTraversingParser(node), klass);
+        final T config = json.readValue(node, klass);
         validate(filename, config);
         return config;
     }
@@ -86,6 +85,13 @@ public class ConfigurationFactory<T> {
                 obj.put(key, value);
             }
         }
+    }
+
+    private JsonNode parse(File file) throws IOException {
+        if (file.getName().endsWith(".yaml") || file.getName().endsWith(".yml")) {
+            return json.readYamlValue(file, JsonNode.class);
+        }
+        return json.readValue(file, JsonNode.class);
     }
 
     private void validate(String file, T config) throws ConfigurationException {

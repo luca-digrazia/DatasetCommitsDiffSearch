@@ -1,19 +1,26 @@
 package com.yammer.dropwizard.config;
 
-import javax.validation.ConstraintViolation;
-import java.io.File;
-import java.util.Set;
-
+/**
+ * An exception thrown where there is an error parsing a configuration object.
+ */
 public class ConfigurationException extends Exception {
-    public <T> ConfigurationException(File file, Set<ConstraintViolation<T>> violations) {
-        super(formatMessage(file, violations));
+    private static final long serialVersionUID = 5325162099634227047L;
+
+    /**
+     * Creates a new {@link ConfigurationException} for the given file with the given errors.
+     *
+     * @param file      the bad configuration file
+     * @param errors    the errors in the file
+     */
+    public ConfigurationException(String file, Iterable<String> errors) {
+        super(formatMessage(file, errors));
     }
 
-    private static <T> String formatMessage(File file, Set<ConstraintViolation<T>> violations) {
-        final StringBuilder msg = new StringBuilder(file.toString()).append(
-                " has the following errors:\n");
-        for (ConstraintViolation<?> v : violations) {
-            msg.append("  * ").append(v.getPropertyPath()).append(" ").append(v.getMessage());
+    private static String formatMessage(String file, Iterable<String> errors) {
+        final StringBuilder msg = new StringBuilder(file)
+                .append(" has the following errors:\n");
+        for (String error : errors) {
+            msg.append("  * ").append(error).append('\n');
         }
         return msg.toString();
     }
