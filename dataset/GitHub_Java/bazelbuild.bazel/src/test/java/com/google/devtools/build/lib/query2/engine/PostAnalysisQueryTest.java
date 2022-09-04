@@ -196,8 +196,7 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
 
     // Check for implicit dependencies (late bound attributes, implicit attributes, platforms)
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
-        .containsAtLeastElementsIn(
-            evalToListOfStrings(explicits + " + " + implicits + " + " + PLATFORM_LABEL));
+        .containsAllIn(evalToListOfStrings(explicits + " + " + implicits + " + " + PLATFORM_LABEL));
 
     helper.setQuerySettings(Setting.NO_IMPLICIT_DEPS);
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
