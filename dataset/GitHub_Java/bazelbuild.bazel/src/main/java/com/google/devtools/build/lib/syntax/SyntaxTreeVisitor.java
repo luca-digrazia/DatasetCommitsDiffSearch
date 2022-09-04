@@ -77,17 +77,17 @@ public class SyntaxTreeVisitor {
 
   public void visit(AbstractComprehension node) {
     for (ListComprehension.Clause clause : node.getClauses()) {
-      visit(clause.getExpression());
       if (clause.getLValue() != null) {
         visit(clause.getLValue());
       }
+      visit(clause.getExpression());
     }
     visitAll(node.getOutputExpressions());
   }
 
   public void visit(ForStatement node) {
-    visit(node.getCollection());
     visit(node.getVariable());
+    visit(node.getCollection());
     visitBlock(node.getBlock());
   }
 
@@ -108,13 +108,13 @@ public class SyntaxTreeVisitor {
   }
 
   public void visit(AssignmentStatement node) {
-    visit(node.getExpression());
     visit(node.getLValue());
+    visit(node.getExpression());
   }
 
   public void visit(AugmentedAssignmentStatement node) {
-    visit(node.getExpression());
     visit(node.getLValue());
+    visit(node.getExpression());
   }
 
   public void visit(ExpressionStatement node) {
@@ -183,8 +183,8 @@ public class SyntaxTreeVisitor {
   public void visit(@SuppressWarnings("unused") Comment node) {}
 
   public void visit(ConditionalExpression node) {
-    visit(node.getCondition());
     visit(node.getThenCase());
+    visit(node.getCondition());
     if (node.getElseCase() != null) {
       visit(node.getElseCase());
     }
