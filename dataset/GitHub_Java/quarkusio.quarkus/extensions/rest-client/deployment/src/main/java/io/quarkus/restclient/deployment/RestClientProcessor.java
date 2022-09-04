@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import javax.enterprise.context.SessionScoped;
 import javax.ws.rs.Path;
@@ -20,7 +19,6 @@ import javax.ws.rs.ext.Providers;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.rest.client.annotation.ClientHeaderParam;
 import org.eclipse.microprofile.rest.client.annotation.RegisterProvider;
 import org.eclipse.microprofile.rest.client.annotation.RegisterProviders;
 import org.eclipse.microprofile.rest.client.ext.DefaultClientHeadersFactoryImpl;
@@ -52,8 +50,6 @@ import io.quarkus.arc.processor.BeanRegistrar;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.ScopeInfo;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -61,12 +57,12 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
-import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.restclient.runtime.RestClientBase;
@@ -91,7 +87,6 @@ class RestClientProcessor {
 
     private static final DotName CLIENT_REQUEST_FILTER = DotName.createSimple(ClientRequestFilter.class.getName());
     private static final DotName CLIENT_RESPONSE_FILTER = DotName.createSimple(ClientResponseFilter.class.getName());
-    private static final DotName CLIENT_HEADER_PARAM = DotName.createSimple(ClientHeaderParam.class.getName());
 
     private static final String PROVIDERS_SERVICE_FILE = "META-INF/services/" + Providers.class.getName();
 
@@ -121,7 +116,7 @@ class RestClientProcessor {
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             RestClientRecorder restClientRecorder) {
 
-        feature.produce(new FeatureBuildItem(Feature.REST_CLIENT));
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.REST_CLIENT));
 
         restClientRecorder.setRestClientBuilderResolver();
 
@@ -141,16 +136,18 @@ class RestClientProcessor {
     }
 
     @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
     void processInterfaces(CombinedIndexBuildItem combinedIndexBuildItem,
+            SslNativeConfigBuildItem sslNativeConfig,
             Capabilities capabilities,
-            PackageConfig packageConfig,
             BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<BeanRegistrarBuildItem> beanRegistrars,
             BuildProducer<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport,
             BuildProducer<ServiceProviderBuildItem> serviceProvider,
-            BuildProducer<RestClientBuildItem> restClient) {
+            BuildProducer<RestClientBuildItem> restClient,
+            RestClientRecorder restClientRecorder) {
 
         // According to the spec only rest client interfaces annotated with RegisterRestClient are registered as beans
         Map<DotName, ClassInfo> interfaces = new HashMap<>();
@@ -168,8 +165,6 @@ class RestClientProcessor {
         for (DotName interfaze : interfaces.keySet()) {
             restClient.produce(new RestClientBuildItem(interfaze.toString()));
         }
-
-        warnAboutNotWorkingFeaturesInNative(packageConfig, interfaces);
 
         for (Map.Entry<DotName, ClassInfo> entry : interfaces.entrySet()) {
             String iName = entry.getKey().toString();
@@ -224,41 +219,9 @@ class RestClientProcessor {
         }));
 
         // Indicates that this extension would like the SSL support to be enabled
-        extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REST_CLIENT));
-    }
+        extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.REST_CLIENT));
 
-    // currently default methods on a rest-client interface
-    // that is annotated with ClientHeaderParam
-    // leads to NPEs (see https://github.com/quarkusio/quarkus/issues/10249)
-    // so lets warn users about its use
-    private void warnAboutNotWorkingFeaturesInNative(PackageConfig packageConfig, Map<DotName, ClassInfo> interfaces) {
-        if (!packageConfig.type.equalsIgnoreCase(PackageConfig.NATIVE)) {
-            return;
-        }
-        Set<DotName> dotNames = new HashSet<>();
-        for (ClassInfo interfaze : interfaces.values()) {
-            if (interfaze.classAnnotation(CLIENT_HEADER_PARAM) != null) {
-                boolean hasDefault = false;
-                for (MethodInfo method : interfaze.methods()) {
-                    if (isDefault(method.flags())) {
-                        hasDefault = true;
-                        break;
-                    }
-                }
-                if (hasDefault) {
-                    dotNames.add(interfaze.name());
-                }
-            }
-        }
-        if (!dotNames.isEmpty()) {
-            log.warnf("rest-client interfaces that contain default methods and are annotated with '@" + CLIENT_HEADER_PARAM
-                    + "' might not work properly in native mode. Offending interfaces are: "
-                    + dotNames.stream().map(d -> "'" + d.toString() + "'").collect(Collectors.joining(", ")));
-        }
-    }
-
-    private static boolean isDefault(short flags) {
-        return ((flags & (Modifier.ABSTRACT | Modifier.PUBLIC | Modifier.STATIC)) == Modifier.PUBLIC);
+        restClientRecorder.setSslEnabled(sslNativeConfig.isEnabled());
     }
 
     private void findInterfaces(IndexView index, Map<DotName, ClassInfo> interfaces, Set<Type> returnTypes,
@@ -321,7 +284,7 @@ class RestClientProcessor {
             final BuiltinScope builtinScope = BuiltinScope.from(scope);
             if (builtinScope != null) { // override default @Dependent scope with user defined one.
                 scopeToUse = builtinScope.getInfo();
-            } else if (capabilities.isPresent(Capability.SERVLET)) {
+            } else if (capabilities.isCapabilityPresent(Capabilities.SERVLET)) {
                 if (scope.equals(SESSION_SCOPED)) {
                     scopeToUse = new ScopeInfo(SESSION_SCOPED, true);
                 }

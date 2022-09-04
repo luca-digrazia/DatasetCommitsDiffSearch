@@ -46,7 +46,6 @@ import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -167,7 +166,7 @@ public class ResteasyCommonProcessor {
         // add the other providers detected
         Set<String> providersToRegister = new HashSet<>(otherProviders);
 
-        if (!capabilities.isPresent(Capability.RESTEASY_JSON)) {
+        if (!capabilities.isCapabilityPresent(Capabilities.RESTEASY_JSON_EXTENSION)) {
 
             boolean needJsonSupport = restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.CONSUMES)
                     || restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.PRODUCES)
@@ -179,11 +178,11 @@ public class ResteasyCommonProcessor {
                                 "information on how to set one.");
             }
         }
-        if (!capabilities.isPresent(Capability.RESTEASY_MUTINY)) {
+        if (!capabilities.isCapabilityPresent(Capabilities.RESTEASY_MUTINY_EXTENSION)) {
             String needsMutinyClasses = mutinySupportNeeded(indexBuildItem);
             if (needsMutinyClasses != null) {
                 LOGGER.warn(
-                        "Quarkus detected the need for Mutiny reactive programming support, however the quarkus-resteasy-mutiny extension "
+                        "Quarkus detected the need for Mutiny reactive programming support, however the quarkus-resteasy-mutiny extension"
                                 + "was not present. Reactive REST endpoints in your application that return Uni or Multi " +
                                 "will not function as you expect until you add this extension. Endpoints that need Mutiny are: "
                                 + needsMutinyClasses);
@@ -251,12 +250,12 @@ public class ResteasyCommonProcessor {
             BuildProducer<AdditionalBeanBuildItem> additionalBean,
             BuildProducer<UnremovableBeanBuildItem> unremovable) {
 
-        if (capabilities.isPresent(Capability.REST_JACKSON)) {
+        if (capabilities.isCapabilityPresent(Capabilities.REST_JACKSON)) {
             registerJsonContextResolver(OBJECT_MAPPER, QUARKUS_OBJECT_MAPPER_CONTEXT_RESOLVER, combinedIndexBuildItem,
                     jaxrsProvider, additionalBean, unremovable);
         }
 
-        if (capabilities.isPresent(Capability.REST_JSONB)) {
+        if (capabilities.isCapabilityPresent(Capabilities.REST_JSONB)) {
             registerJsonContextResolver(JSONB, QUARKUS_JSONB_CONTEXT_RESOLVER, combinedIndexBuildItem, jaxrsProvider,
                     additionalBean, unremovable);
         }
