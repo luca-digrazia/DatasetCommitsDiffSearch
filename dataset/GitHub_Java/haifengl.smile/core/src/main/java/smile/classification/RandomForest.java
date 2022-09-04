@@ -244,7 +244,7 @@ public class RandomForest implements Classifier<double[]> {
          */
         public Trainer setSamplingRates(double subsample) {
             if (subsample <= 0 || subsample > 1) {
-                throw new IllegalArgumentException("Invalid sampling rating: " + subsample);
+                throw new IllegalArgumentException("Invalid sampling fraction: " + subsample);
             }
 
             this.subsample = subsample;
@@ -327,27 +327,13 @@ public class RandomForest implements Classifier<double[]> {
         @Override
         public Tree call() {
             int n = x.length;
-            int k = smile.math.Math.max(y) + 1;
             int[] samples = new int[n];
 
-            // Stratified sampling in case class is unbalanced.
-            // That is, we sample each class separately.
             if (subsample == 1.0) {
                 // Training samples draw with replacement.
-                for (int l = 0; l < k; l++) {
-                    int nj = 0;
-                    ArrayList<Integer> cj = new ArrayList<Integer>();
-                    for (int i = 0; i < n; i++) {
-                        if (y[i] == l) {
-                            cj.add(i);
-                            nj++;
-                        }
-                    }
-
-                    for (int i = 0; i < nj; i++) {
-                        int xi = Math.randomInt(nj);
-                        samples[cj.get(xi)] += classWeight[l];
-                    }
+                for (int i = 0; i < n; i++) {
+                    int xi = Math.randomInt(n);
+                    samples[xi] += classWeight[y[xi]];
                 }
             } else {
                 // Training samples draw without replacement.
@@ -357,25 +343,12 @@ public class RandomForest implements Classifier<double[]> {
                 }
 
                 Math.permutate(perm);
-
-                int[] nc = new int[k];
-                for (int i = 0; i < n; i++) {
-                    nc[y[i]]++;
-                }
-
-                for (int l = 0; l < k; l++) {
-                    int subj = (int) Math.round(nc[l] * subsample);
-                    int count = 0;
-                    for (int i = 0; i < n && count < subj; i++) {
-                        int xi = perm[i];
-                        if (y[xi] == l) {
-                            samples[xi] += classWeight[l];
-                            count++;
-                        }
-                    }
+                int m = (int) (n * 0.632);
+                for (int i = 0; i < m; i++) {
+                    samples[perm[i]] += classWeight[y[perm[i]]];
                 }
             }
-
+            
             DecisionTree tree = new DecisionTree(attributes, x, y, maxNodes, nodeSize, mtry, rule, samples, order);
 
             // estimate OOB error
@@ -470,7 +443,7 @@ public class RandomForest implements Classifier<double[]> {
      * @param nodeSize the minimum size of leaf nodes.
      * @param maxNodes the maximum number of leaf nodes in the tree.
      * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
-     *                  sampling without replacement.
+     *                  samplign without replacement.
      */
     public RandomForest(Attribute[] attributes, double[][] x, int[] y, int ntrees, int maxNodes, int nodeSize, int mtry, double subsample) {
         this(attributes, x, y, ntrees, x.length, 1, mtry, subsample, DecisionTree.SplitRule.GINI);
@@ -489,7 +462,7 @@ public class RandomForest implements Classifier<double[]> {
      * @param nodeSize the minimum size of leaf nodes.
      * @param maxNodes the maximum number of leaf nodes in the tree.
      * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
-     *                  sampling without replacement.
+     *                  samplign without replacement.
      * @param rule Decision tree split rule.
      */
     public RandomForest(Attribute[] attributes, double[][] x, int[] y, int ntrees, int maxNodes, int nodeSize, int mtry, double subsample, DecisionTree.SplitRule rule) {
@@ -509,7 +482,7 @@ public class RandomForest implements Classifier<double[]> {
      * @param nodeSize the minimum size of leaf nodes.
      * @param maxNodes the maximum number of leaf nodes in the tree.
      * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
-     *                  sampling without replacement.
+     *                  samplign without replacement.
      * @param rule Decision tree split rule.
      * @param classWeight Priors of the classes.
      */
@@ -532,10 +505,6 @@ public class RandomForest implements Classifier<double[]> {
 
         if (maxNodes < 2) {
             throw new IllegalArgumentException("Invalid maximum number of leaves: " + maxNodes);
-        }
-
-        if (subsample <= 0 || subsample > 1) {
-            throw new IllegalArgumentException("Invalid sampling rating: " + subsample);
         }
 
         // class label set.
