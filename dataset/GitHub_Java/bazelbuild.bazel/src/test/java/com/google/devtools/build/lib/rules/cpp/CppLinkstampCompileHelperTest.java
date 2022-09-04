@@ -38,7 +38,7 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(mockToolsConfig, "builtin_sysroot: '/usr/local/custom-sysroot'");
-    useConfiguration("--experimental_fix_linkstamp_inputs_bug");
+    useConfiguration();
     scratch.file(
         "x/BUILD",
         "cc_binary(",
@@ -92,7 +92,7 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(mockToolsConfig, "builtin_sysroot: '/usr/local/custom-sysroot'");
-    useConfiguration("--experimental_fix_linkstamp_inputs_bug");
+    useConfiguration();
     scratch.file(
         "x/BUILD",
         "cc_binary(",
@@ -198,7 +198,6 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
         "  srcs = [ 'bar.cc' ],",
         "  linkstamp = 'ls.cc',",
         ")");
-    useConfiguration("--experimental_fix_linkstamp_inputs_bug");
 
     ConfiguredTarget target = getConfiguredTarget("//x:foo");
     Artifact executable = getExecutable(target);
