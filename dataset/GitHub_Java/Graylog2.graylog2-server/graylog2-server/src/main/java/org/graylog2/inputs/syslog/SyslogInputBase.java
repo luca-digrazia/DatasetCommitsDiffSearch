@@ -85,8 +85,24 @@ public class SyslogInputBase extends MessageInput {
     public ConfigurationRequest getRequestedConfiguration() {
         ConfigurationRequest r = new ConfigurationRequest();
 
-        r.addField(ConfigurationRequest.Templates.bindAddress(CK_BIND_ADDRESS));
-        r.addField(ConfigurationRequest.Templates.portNumber(CK_PORT));
+        r.addField(
+                new TextField(
+                        CK_BIND_ADDRESS,
+                        "Bind address",
+                        "0.0.0.0",
+                        "Address to listen on. For example 0.0.0.0 or 127.0.0.1."
+                )
+        );
+
+        r.addField(
+                new NumberField(
+                        CK_PORT,
+                        "Port",
+                        514,
+                        "Port to listen on.",
+                        NumberField.Attribute.IS_PORT_NUMBER
+                )
+        );
 
         r.addField(
                 new BooleanField(
@@ -125,7 +141,7 @@ public class SyslogInputBase extends MessageInput {
 
     @Override
     public boolean isExclusive() {
-        return false;
+        throw new RuntimeException("Must be overridden in syslog input classes.");
     }
 
     @Override
