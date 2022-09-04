@@ -24,8 +24,7 @@ import org.androidannotations.annotations.ResId;
 
 /**
  * Use on {@link java.lang.Integer} or <code>int</code> array fields in any
- * enhanced classes that should be injected with this specific int array
- * resource.
+ * enhanced classes that should be injected with this specific color resource.
  * <p/>
  * The annotation value must be one of R.array.* fields. If the value is not
  * set, the field name will be used as the R.array.* field name.
