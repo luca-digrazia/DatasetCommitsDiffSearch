@@ -64,7 +64,6 @@ import com.googlecode.androidannotations.validation.IsValid;
 
 public class ValidatorHelper {
 
-	private static final String SPRING_REST_TEMPLATE_QUALIFIED_NAME = "org.springframework.web.client.RestTemplate";
 	private static final String ANDROID_VIEW_QUALIFIED_NAME = "android.view.View";
 	private static final String ANDROID_MENU_ITEM_QUALIFIED_NAME = "android.view.MenuItem";
 	private static final String ANDROID_TEXT_VIEW_QUALIFIED_NAME = "android.widget.TextView";
@@ -592,7 +591,7 @@ public class ValidatorHelper {
 	public void hasSpringAndroidJars(Element element, IsValid valid) {
 		Elements elementUtils = annotationHelper.getElementUtils();
 
-		if (elementUtils.getTypeElement(SPRING_REST_TEMPLATE_QUALIFIED_NAME) == null) {
+		if (elementUtils.getTypeElement("org.springframework.web.client.RestTemplate") == null) {
 			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "Could not find the SpringAndroid framework in the classpath, the following class is missing: org.springframework.web.client.RestTemplate");
 		}
@@ -724,8 +723,7 @@ public class ValidatorHelper {
 
 	public void unannotatedMethodReturnsRestTemplate(TypeElement typeElement, IsValid valid) {
 		List<? extends Element> enclosedElements = typeElement.getEnclosedElements();
-		boolean foundGetRestTemplateMethod = false;
-		boolean foundSetRestTemplateMethod = false;
+		boolean foundRestTemplateMethod = false;
 		for (Element enclosedElement : enclosedElements) {
 			if (enclosedElement.getKind() != ElementKind.METHOD) {
 				valid.invalidate();
@@ -743,42 +741,26 @@ public class ValidatorHelper {
 				if (!hasRestAnnotation) {
 					ExecutableElement executableElement = (ExecutableElement) enclosedElement;
 					TypeMirror returnType = executableElement.getReturnType();
-					if (returnType.toString().equals(SPRING_REST_TEMPLATE_QUALIFIED_NAME)) {
-						if (executableElement.getParameters().size() > 0) {
+					if (returnType.toString().equals("org.springframework.web.client.RestTemplate")) {
+						if (executableElement.getThrownTypes().size() > 0) {
 							valid.invalidate();
-							annotationHelper.printError(enclosedElement, "The method returning a RestTemplate should not declare any parameter in a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
+							annotationHelper.printError(enclosedElement, "The method returning a RestTemplate should not declaring throwing any exception in a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
 						} else {
-							if (foundGetRestTemplateMethod) {
+							if (executableElement.getParameters().size() > 0) {
 								valid.invalidate();
-								annotationHelper.printError(enclosedElement, "Only one method should declare returning a RestTemplate in a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
+								annotationHelper.printError(enclosedElement, "The method returning a RestTemplate should not declare any parameter in a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
 							} else {
-								foundGetRestTemplateMethod = true;
-							}
-						}
-					} else if (returnType.getKind() == TypeKind.VOID) {
-						List<? extends VariableElement> parameters = executableElement.getParameters();
-						if (parameters.size() == 1) {
-							VariableElement firstParameter = parameters.get(0);
-							if (firstParameter.asType().toString().equals(SPRING_REST_TEMPLATE_QUALIFIED_NAME)) {
-								if (!foundSetRestTemplateMethod) {
-									foundSetRestTemplateMethod = true;
-								} else {
+								if (foundRestTemplateMethod) {
 									valid.invalidate();
-									annotationHelper.printError(enclosedElement, "You can only have oneRestTemplate setter method on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
-
+									annotationHelper.printError(enclosedElement, "Only one method should declare returning a RestTemplate in a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
+								} else {
+									foundRestTemplateMethod = true;
 								}
-							} else {
-								valid.invalidate();
-								annotationHelper.printError(enclosedElement, "The method to set a RestTemplate should have only one RestTemplate parameter on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
-
 							}
-						} else {
-							valid.invalidate();
-							annotationHelper.printError(enclosedElement, "The method to set a RestTemplate should have only one RestTemplate parameter on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
 						}
 					} else {
 						valid.invalidate();
-						annotationHelper.printError(enclosedElement, "All methods should be annotated in a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface, except the ones that returns or set a RestTemplate");
+						annotationHelper.printError(enclosedElement, "All methods should be annotated in a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface, except the one that returns a RestTemplate");
 					}
 				}
 			}
