@@ -23,16 +23,16 @@ import com.google.auto.value.AutoValue;
 
 @AutoValue
 @JsonTypeName(RelativeRange.RELATIVE)
-public abstract class RelativeRange extends TimeRange {
+abstract class RelativeRange extends TimeRange {
 
     static final String RELATIVE = "relative";
 
     @JsonProperty
     @Override
-    public abstract String type();
+    abstract String type();
 
     @JsonProperty
-    public abstract int range();
+    abstract int range();
 
     @JsonCreator
     static RelativeRange create(@JsonProperty("type") String type, @JsonProperty("range") int range) {

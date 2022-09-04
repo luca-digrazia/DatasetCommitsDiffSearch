@@ -26,7 +26,7 @@ abstract class KeywordRange extends TimeRange {
 
     @JsonProperty
     @Override
-    public abstract String type();
+    abstract String type();
 
     @JsonProperty
     abstract String keyword();
