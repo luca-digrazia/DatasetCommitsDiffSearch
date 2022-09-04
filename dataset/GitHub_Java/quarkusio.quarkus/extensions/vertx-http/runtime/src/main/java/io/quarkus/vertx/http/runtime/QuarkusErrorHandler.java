@@ -71,11 +71,7 @@ public class QuarkusErrorHandler implements Handler<RoutingContext> {
             return;
         }
         if (event.failure() instanceof AuthenticationFailedException) {
-            //generally this should be handled elsewhere
-            //but if we get to this point bad things have happened
-            //so it is better to send a response than to hang
-            event.response().setStatusCode(HttpResponseStatus.UNAUTHORIZED.code()).end();
-            return;
+            return; //handled elsewhere
         }
 
         if (!event.response().headWritten()) {
