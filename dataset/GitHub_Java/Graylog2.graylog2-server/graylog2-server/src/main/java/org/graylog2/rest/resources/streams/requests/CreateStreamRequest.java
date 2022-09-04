@@ -46,6 +46,7 @@ public abstract class CreateStreamRequest {
     public abstract String contentPack();
 
     @JsonProperty
+    @Nullable
     public abstract Stream.MatchingType matchingType();
 
     @JsonCreator
