@@ -96,13 +96,11 @@ import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.undertow.runtime.HttpSessionContext;
 import io.quarkus.undertow.runtime.ServletProducer;
-import io.quarkus.undertow.runtime.ServletRuntimeConfig;
 import io.quarkus.undertow.runtime.ServletSecurityInfoProxy;
 import io.quarkus.undertow.runtime.ServletSecurityInfoSubstitution;
 import io.quarkus.undertow.runtime.UndertowDeploymentRecorder;
 import io.quarkus.undertow.runtime.UndertowHandlersConfServletExtension;
 import io.quarkus.vertx.http.deployment.DefaultRouteBuildItem;
-import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.FilterInfo;
 import io.undertow.servlet.api.HttpMethodSecurityInfo;
@@ -135,12 +133,10 @@ public class UndertowBuildStep {
             List<HttpHandlerWrapperBuildItem> wrappers,
             ShutdownContextBuildItem shutdown,
             Consumer<DefaultRouteBuildItem> undertowProducer,
-            ExecutorBuildItem executorBuildItem, HttpConfiguration httpConfiguration,
-            ServletRuntimeConfig servletRuntimeConfig) throws Exception {
+            ExecutorBuildItem executorBuildItem) throws Exception {
         Handler<HttpServerRequest> ut = recorder.startUndertow(shutdown, executorBuildItem.getExecutorProxy(),
                 servletDeploymentManagerBuildItem.getDeploymentManager(),
-                wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()), httpConfiguration,
-                servletRuntimeConfig);
+                wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
 
         undertowProducer.accept(new DefaultRouteBuildItem(ut));
         return new ServiceStartBuildItem("undertow");
