@@ -35,7 +35,6 @@ public class CompatDecoderFactory<T> implements DecoderFactory<T> {
     }
 
     @Override
-    @NonNull
     public T make() throws IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
         if (bitmapConfig == null) {
             return clazz.newInstance();
