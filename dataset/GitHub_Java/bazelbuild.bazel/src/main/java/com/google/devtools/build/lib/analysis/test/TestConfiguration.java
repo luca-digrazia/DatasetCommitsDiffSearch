@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.MoreCollectors;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.OptionsDiffPredicate;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
@@ -30,6 +31,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.TestTimeout;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDefinition;
@@ -45,25 +47,38 @@ import java.util.Map;
 import java.util.Set;
 
 /** Test-related options. */
+@AutoCodec
 public class TestConfiguration extends Fragment {
-  public static final OptionsDiffPredicate SHOULD_INVALIDATE_FOR_OPTION_DIFF =
-      (options, changedOption, oldValue, newValue) -> {
-        if (TestOptions.TRIM_TEST_CONFIGURATION.equals(changedOption)) {
-          // changes in --trim_test_configuration itself always prompt invalidation
-          return true;
-        }
-        if (!changedOption.getField().getDeclaringClass().equals(TestOptions.class)) {
-          // options outside of TestOptions always prompt invalidation
-          return true;
-        }
-        // other options in TestOptions require invalidation when --trim_test_configuration is off
-        return !options.get(TestOptions.class).trimTestConfiguration;
+  public static final OptionsDiffPredicate HAVE_OPTIONS_AFFECTING_NON_TEST_TARGETS_CHANGED =
+      (diff, options) -> {
+          if (!options.contains(TestOptions.class)) {
+            // if there's a diff and there are no test options, a non-test option definitely changed
+            return true;
+          }
+          if (!options.get(TestOptions.class).trimTestConfiguration) {
+            // if trimTestConfiguration is off, test options affect all targets
+            return true;
+          }
+          for (OptionDefinition changedOption : diff.getFirst().keySet()) {
+            if (TestOptions.TRIM_TEST_CONFIGURATION.equals(changedOption)) {
+              // toggling trimTestConfiguration affects all non-test targets
+              return true;
+            }
+            if (!changedOption.getField().getDeclaringClass().equals(TestOptions.class)) {
+              // only TestOptions are trimmed; options from other classes affect all targets
+              return true;
+            }
+          }
+          return false;
       };
 
   /** Command-line options. */
   public static class TestOptions extends FragmentOptions {
     private static final OptionDefinition TRIM_TEST_CONFIGURATION =
-        OptionsParser.getOptionDefinitionByName(TestOptions.class, "trim_test_configuration");
+        OptionsParser.getOptionDefinitions(TestOptions.class)
+            .stream()
+            .filter(definition -> definition.getOptionName().equals("trim_test_configuration"))
+            .collect(MoreCollectors.onlyElement());
 
     @Option(
         name = "test_timeout",
@@ -110,11 +125,12 @@ public class TestConfiguration extends Fragment {
 
     @Deprecated
     @Option(
-        name = "test_result_expiration",
-        defaultValue = "-1", // No expiration by default.
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help = "This option is deprecated and has no effect.")
+      name = "test_result_expiration",
+      defaultValue = "-1", // No expiration by defualt.
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "This option is deprecated and has no effect."
+    )
     public int testResultExpiration;
 
     @Option(
@@ -166,7 +182,7 @@ public class TestConfiguration extends Fragment {
       allowMultiple = true,
       defaultValue = "1",
       converter = RunsPerTestConverter.class,
-      documentationCategory = OptionDocumentationCategory.TESTING,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Specifies number of times to run each test. If any of those attempts "
@@ -217,20 +233,20 @@ public class TestConfiguration extends Fragment {
     public Label coverageReportGenerator;
 
     @Option(
-        name = "experimental_windows_native_test_wrapper",
+        name = "windows_native_test_wrapper",
+        // Undocumented: this features is under development and not yet ready for production use.
+        // We define the flag to be able to test the feature.
         // Design:
         // https://github.com/laszlocsomor/proposals/blob/win-test-runner/designs/2018-07-18-windows-native-test-runner.md
-        documentationCategory = OptionDocumentationCategory.TESTING,
+        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         // Affects loading and analysis: this flag affects which target Bazel loads and creates test
         // actions with on Windows.
-        effectTags = {
-          OptionEffectTag.LOADING_AND_ANALYSIS,
-          OptionEffectTag.TEST_RUNNER,
-        },
+        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
         defaultValue = "false",
         help =
-            "On Windows: if true, uses the C++ test wrapper to run tests, otherwise uses "
-                + "tools/test/test-setup.sh as on other platforms. On other platforms: no-op.")
+            "Do not use yet, this flag's functionality is not yet implemented. "
+                + "(On Windows: if true, uses the C++ test wrapper to run tests, otherwise uses "
+                + "tools/test/test-setup.sh as on other platforms. On other platforms: no-op.)")
     public boolean windowsNativeTestWrapper;
 
     @Override
@@ -276,7 +292,7 @@ public class TestConfiguration extends Fragment {
   private final TestOptions options;
   private final ImmutableMap<TestTimeout, Duration> testTimeout;
 
-  private TestConfiguration(TestOptions options) {
+  TestConfiguration(TestOptions options) {
     this.options = options;
     this.testTimeout = ImmutableMap.copyOf(options.testTimeout);
   }
@@ -287,9 +303,9 @@ public class TestConfiguration extends Fragment {
         == TestActionBuilder.TestShardingStrategy.EXPERIMENTAL_HEURISTIC) {
       reporter.handle(
           Event.warn(
-              "Heuristic sharding is intended as a one-off experimentation tool for determining "
-                  + "the benefit from sharding certain tests. Please don't keep this option in "
-                  + "your .blazerc or continuous build"));
+              "Heuristic sharding is intended as a one-off experimentation tool for determing the "
+                  + "benefit from sharding certain tests. Please don't keep this option in your "
+                  + ".blazerc or continuous build"));
     }
   }
 

@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
 import com.google.devtools.build.lib.buildtool.OutputDirectoryLinksUtils;
-import com.google.devtools.build.lib.buildtool.PathPrettyPrinter;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
@@ -189,15 +188,16 @@ public class RunCommand implements BlazeCommand  {
     BuildRequestOptions requestOptions = env.getOptions().getOptions(BuildRequestOptions.class);
 
     PathFragment executablePath = executable.getPath().asFragment();
-    PathPrettyPrinter prettyPrinter =
-        OutputDirectoryLinksUtils.getPathPrettyPrinter(
-            requestOptions.getSymlinkPrefix(productName),
-            productName,
+    PathFragment prettyExecutablePath =
+        OutputDirectoryLinksUtils.getPrettyPath(
+            executable.getPath(),
+            env.getWorkspaceName(),
             env.getWorkspace(),
             requestOptions.printWorkspaceInOutputPathsIfNeeded
                 ? env.getWorkingDirectory()
-                : env.getWorkspace());
-    PathFragment prettyExecutablePath = prettyPrinter.getPrettyPath(executable.getPath());
+                : env.getWorkspace(),
+            requestOptions.getSymlinkPrefix(productName),
+            productName);
 
     RunUnder runUnder = env.getOptions().getOptions(BuildConfiguration.Options.class).runUnder;
     // Insert the command prefix specified by the "--run_under=<command-prefix>" option
