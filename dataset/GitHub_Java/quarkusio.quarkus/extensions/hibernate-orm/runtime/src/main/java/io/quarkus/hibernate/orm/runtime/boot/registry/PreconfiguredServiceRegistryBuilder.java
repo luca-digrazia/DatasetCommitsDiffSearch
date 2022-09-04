@@ -81,11 +81,6 @@ public class PreconfiguredServiceRegistryBuilder {
         return this;
     }
 
-    public PreconfiguredServiceRegistryBuilder addIntegrator(Integrator integrator) {
-        integrators.add(integrator);
-        return this;
-    }
-
     public PreconfiguredServiceRegistryBuilder addService(ProvidedService providedService) {
         providedServices.add(providedService);
         return this;
@@ -197,7 +192,7 @@ public class PreconfiguredServiceRegistryBuilder {
         // Disabled: IdentifierGenerators are no longer initiated after Metadata was generated.
         // serviceInitiators.add(MutableIdentifierGeneratorFactoryInitiator.INSTANCE);
 
-        serviceInitiators.add(new QuarkusJtaPlatformInitiator(rs.isJtaPresent()));
+        serviceInitiators.add(QuarkusJtaPlatformInitiator.INSTANCE);
 
         serviceInitiators.add(SessionFactoryServiceRegistryFactoryInitiator.INSTANCE);
 
