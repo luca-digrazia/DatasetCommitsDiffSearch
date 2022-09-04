@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2019 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,9 +16,9 @@
  */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JMod.FINAL;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
+import static com.helger.jcodemodel.JMod.FINAL;
+import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.helger.jcodemodel.JMod.STATIC;
 import static org.androidannotations.helper.ModelConstants.classSuffix;
 
 import java.util.ArrayList;
@@ -28,61 +29,69 @@ import java.util.Map;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.TypeParameterElement;
 
+import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.Option;
 import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.process.ProcessHolder;
+import org.androidannotations.helper.ClassesHolder;
 
-import com.sun.codemodel.ClassType;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JTypeVar;
+import com.helger.jcodemodel.AbstractJClass;
+import com.helger.jcodemodel.EClassType;
+import com.helger.jcodemodel.JCodeModel;
+import com.helger.jcodemodel.JDefinedClass;
+import com.helger.jcodemodel.JTypeVar;
 
 public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 
-	protected final ProcessHolder processHolder;
+	public static final Option OPTION_GENERATE_FINAL_CLASSES = new Option("generateFinalClasses", "true");
+
+	protected final AndroidAnnotationsEnvironment environment;
 	protected JDefinedClass generatedClass;
-	protected JClass annotatedClass;
+	protected AbstractJClass annotatedClass;
 	protected final TypeElement annotatedElement;
 	protected final APTCodeModelHelper codeModelHelper;
 
 	private Map<Class<?>, Object> pluginHolders = new HashMap<>();
 
-	public BaseGeneratedClassHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
-		this.processHolder = processHolder;
+	public BaseGeneratedClassHolder(AndroidAnnotationsEnvironment environment, TypeElement annotatedElement) throws Exception {
+		this.environment = environment;
 		this.annotatedElement = annotatedElement;
-		codeModelHelper = new APTCodeModelHelper();
+		codeModelHelper = new APTCodeModelHelper(environment);
 		setGeneratedClass();
 	}
 
 	protected void setGeneratedClass() throws Exception {
 		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
-		annotatedClass = codeModel().directClass(annotatedElement.asType().toString());
+		annotatedClass = getCodeModel().directClass(annotatedElement.asType().toString());
 
 		if (annotatedElement.getNestingKind().isNested()) {
 			Element enclosingElement = annotatedElement.getEnclosingElement();
-			GeneratedClassHolder enclosingHolder = processHolder.getGeneratedClassHolder(enclosingElement);
+			GeneratedClassHolder enclosingHolder = environment.getGeneratedClassHolder(enclosingElement);
 			String generatedBeanSimpleName = annotatedElement.getSimpleName().toString() + classSuffix();
-			generatedClass = enclosingHolder.getGeneratedClass()._class(PUBLIC | FINAL | STATIC, generatedBeanSimpleName, ClassType.CLASS);
+			int modifier = PUBLIC | STATIC;
+			if (environment.getOptionBooleanValue(OPTION_GENERATE_FINAL_CLASSES)) {
+				modifier |= FINAL;
+			}
+			generatedClass = enclosingHolder.getGeneratedClass()._class(modifier, generatedBeanSimpleName, EClassType.CLASS);
 		} else {
 			String generatedClassQualifiedName = annotatedComponentQualifiedName + classSuffix();
-			generatedClass = codeModel()._class(PUBLIC | FINAL, generatedClassQualifiedName, ClassType.CLASS);
+			int modifier = PUBLIC;
+			if (environment.getOptionBooleanValue(OPTION_GENERATE_FINAL_CLASSES)) {
+				modifier |= FINAL;
+			}
+			generatedClass = getCodeModel()._class(modifier, generatedClassQualifiedName, EClassType.CLASS);
 		}
-		for (TypeParameterElement typeParam : annotatedElement.getTypeParameters()) {
-			JClass bound = codeModelHelper.typeBoundsToJClass(this, typeParam.getBounds());
-			generatedClass.generify(typeParam.getSimpleName().toString(), bound);
-		}
+		codeModelHelper.generify(generatedClass, annotatedElement);
 		setExtends();
-		codeModelHelper.addNonAAAnotations(generatedClass, annotatedElement.getAnnotationMirrors(), this);
+		codeModelHelper.copyNonAAAnnotations(generatedClass, annotatedElement.getAnnotationMirrors());
 	}
 
-	public JClass getAnnotatedClass() {
+	protected AbstractJClass getAnnotatedClass() {
 		return annotatedClass;
 	}
 
 	protected void setExtends() {
-		JClass annotatedComponent = codeModel().directClass(annotatedElement.asType().toString());
+		AbstractJClass annotatedComponent = getCodeModel().directClass(annotatedElement.asType().toString());
 		generatedClass._extends(annotatedComponent);
 	}
 
@@ -97,39 +106,34 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 	}
 
 	@Override
-	public ProcessingEnvironment processingEnvironment() {
-		return processHolder.processingEnvironment();
+	public AndroidAnnotationsEnvironment getEnvironment() {
+		return environment;
 	}
 
-	@Override
-	public ProcessHolder.Classes classes() {
-		return processHolder.classes();
+	protected ProcessingEnvironment getProcessingEnvironment() {
+		return environment.getProcessingEnvironment();
 	}
 
-	@Override
-	public JCodeModel codeModel() {
-		return processHolder.codeModel();
+	protected ClassesHolder.Classes getClasses() {
+		return environment.getClasses();
 	}
 
-	@Override
-	public JClass refClass(String fullyQualifiedClassName) {
-		return processHolder.refClass(fullyQualifiedClassName);
+	protected JCodeModel getCodeModel() {
+		return getEnvironment().getCodeModel();
 	}
 
-	@Override
-	public JClass refClass(Class<?> clazz) {
-		return processHolder.refClass(clazz);
+	protected AbstractJClass getJClass(String fullyQualifiedClassName) {
+		return getEnvironment().getJClass(fullyQualifiedClassName);
 	}
 
-	@Override
-	public JDefinedClass definedClass(String fullyQualifiedClassName) {
-		return processHolder.definedClass(fullyQualifiedClassName);
+	protected AbstractJClass getJClass(Class<?> clazz) {
+		return getEnvironment().getJClass(clazz);
 	}
 
-	public JClass narrow(JClass toNarrow) {
-		List<JClass> classes = new ArrayList<JClass>();
+	public AbstractJClass narrow(AbstractJClass toNarrow) {
+		List<AbstractJClass> classes = new ArrayList<>();
 		for (JTypeVar type : generatedClass.typeParams()) {
-			classes.add(codeModel().directClass(type.name()));
+			classes.add(getCodeModel().directClass(type.name()));
 		}
 		if (classes.isEmpty()) {
 			return toNarrow;

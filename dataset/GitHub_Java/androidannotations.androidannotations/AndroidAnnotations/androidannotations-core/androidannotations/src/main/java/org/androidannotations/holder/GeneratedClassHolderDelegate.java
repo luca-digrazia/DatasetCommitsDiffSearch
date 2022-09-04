@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2019 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,15 +16,14 @@
  */
 package org.androidannotations.holder;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.process.ProcessHolder.Classes;
+import org.androidannotations.helper.ClassesHolder.Classes;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
+import com.helger.jcodemodel.AbstractJClass;
+import com.helger.jcodemodel.JCodeModel;
+import com.helger.jcodemodel.JDefinedClass;
 
 public abstract class GeneratedClassHolderDelegate<T extends GeneratedClassHolder> implements GeneratedClassHolder {
 
@@ -44,37 +44,23 @@ public abstract class GeneratedClassHolderDelegate<T extends GeneratedClassHolde
 	}
 
 	@Override
-	public final ProcessingEnvironment processingEnvironment() {
-		return holder.processingEnvironment();
+	public AndroidAnnotationsEnvironment getEnvironment() {
+		return holder.getEnvironment();
 	}
 
-	@Override
-	public final Classes classes() {
-		return holder.classes();
+	protected final Classes getClasses() {
+		return getEnvironment().getClasses();
 	}
 
-	@Override
-	public final JCodeModel codeModel() {
-		return holder.codeModel();
+	protected final JCodeModel codeModel() {
+		return getEnvironment().getCodeModel();
 	}
 
-	@Override
-	public final JClass refClass(String fullyQualifiedClassName) {
-		return holder.refClass(fullyQualifiedClassName);
+	protected final AbstractJClass refClass(String fullyQualifiedClassName) {
+		return getEnvironment().getJClass(fullyQualifiedClassName);
 	}
 
-	@Override
-	public final JClass refClass(Class<?> clazz) {
-		return holder.refClass(clazz);
-	}
-
-	@Override
-	public final JDefinedClass definedClass(String fullyQualifiedClassName) {
-		return holder.definedClass(fullyQualifiedClassName);
-	}
-
-	@Override
-	public AndroidAnnotationsEnvironment environment() {
-		return holder.environment();
+	protected final AbstractJClass refClass(Class<?> clazz) {
+		return getEnvironment().getJClass(clazz);
 	}
 }

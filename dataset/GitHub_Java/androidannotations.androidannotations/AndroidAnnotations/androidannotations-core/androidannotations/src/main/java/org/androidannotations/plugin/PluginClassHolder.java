@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2019 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,12 +20,12 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.helper.ClassesHolder;
 import org.androidannotations.holder.GeneratedClassHolder;
-import org.androidannotations.process.ProcessHolder;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
+import com.helger.jcodemodel.AbstractJClass;
+import com.helger.jcodemodel.JCodeModel;
+import com.helger.jcodemodel.JDefinedClass;
 
 public class PluginClassHolder<H extends GeneratedClassHolder> {
 
@@ -42,35 +43,32 @@ public class PluginClassHolder<H extends GeneratedClassHolder> {
 		return holder.getGeneratedClass();
 	}
 
-	public JDefinedClass definedClass(String fullyQualifiedClassName) {
-		return holder.definedClass(fullyQualifiedClassName);
-	}
-
-	public ProcessHolder.Classes classes() {
-		return holder.classes();
-	}
-
-	public JClass refClass(String fullyQualifiedClassName) {
-		return holder.refClass(fullyQualifiedClassName);
-	}
-
-	public JClass refClass(Class<?> clazz) {
-		return holder.refClass(clazz);
-	}
-
-	public JCodeModel codeModel() {
-		return holder.codeModel();
-	}
-
-	public ProcessingEnvironment processingEnvironment() {
-		return holder.processingEnvironment();
-	}
-
 	public TypeElement getAnnotatedElement() {
 		return holder.getAnnotatedElement();
 	}
 
 	public AndroidAnnotationsEnvironment environment() {
-		return holder().environment();
+		return holder().getEnvironment();
 	}
+
+	protected AbstractJClass getJClass(String fullyQualifiedClassName) {
+		return environment().getJClass(fullyQualifiedClassName);
+	}
+
+	protected AbstractJClass getJClass(Class<?> clazz) {
+		return environment().getJClass(clazz);
+	}
+
+	protected JCodeModel getCodeModel() {
+		return environment().getCodeModel();
+	}
+
+	protected ProcessingEnvironment getProcessingEnvironment() {
+		return environment().getProcessingEnvironment();
+	}
+
+	protected ClassesHolder.Classes getClasses() {
+		return environment().getClasses();
+	}
+
 }

@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2019 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,23 +16,25 @@
  */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr.cast;
+import static com.helger.jcodemodel.JExpr._null;
+import static com.helger.jcodemodel.JExpr.cast;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpression;
+import org.androidannotations.helper.ClassesHolder;
+
+import com.helger.jcodemodel.AbstractJClass;
+import com.helger.jcodemodel.IJExpression;
+import com.helger.jcodemodel.JBlock;
 
 public abstract class FoundHolder {
 
 	private GeneratedClassHolder holder;
-	private JClass type;
-	private JExpression ref;
+	private AbstractJClass type;
+	private IJExpression ref;
 	private JBlock ifNotNullBlock;
 
 	private boolean ifNotNullCreated = false;
 
-	public FoundHolder(GeneratedClassHolder holder, JClass type, JExpression ref, JBlock block) {
+	public FoundHolder(GeneratedClassHolder holder, AbstractJClass type, IJExpression ref, JBlock block) {
 		this.holder = holder;
 		this.type = type;
 		this.ref = ref;
@@ -42,11 +45,11 @@ public abstract class FoundHolder {
 		return holder;
 	}
 
-	public JExpression getRef() {
+	public IJExpression getRef() {
 		return ref;
 	}
 
-	public JExpression getOrCastRef(JClass type) {
+	public IJExpression getOrCastRef(AbstractJClass type) {
 		if (this.type.equals(type) || getBaseType().equals(type)) {
 			return ref;
 		} else {
@@ -54,7 +57,7 @@ public abstract class FoundHolder {
 		}
 	}
 
-	protected abstract JClass getBaseType();
+	protected abstract AbstractJClass getBaseType();
 
 	public JBlock getIfNotNullBlock() {
 		if (!ifNotNullCreated) {
@@ -62,5 +65,9 @@ public abstract class FoundHolder {
 			ifNotNullCreated = true;
 		}
 		return ifNotNullBlock;
+	}
+
+	protected ClassesHolder.Classes getClasses() {
+		return holder.getEnvironment().getClasses();
 	}
 }

@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2019 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,106 +16,71 @@
  */
 package org.androidannotations;
 
-import org.androidannotations.handler.AnnotationHandler;
-import org.androidannotations.handler.AnnotationHandlers;
-import org.androidannotations.handler.GeneratingAnnotationHandler;
-import org.androidannotations.helper.AndroidManifest;
-import org.androidannotations.helper.OptionsHelper;
-import org.androidannotations.holder.GeneratedClassHolder;
-import org.androidannotations.model.AndroidSystemServices;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.plugin.AndroidAnnotationsPlugin;
-import org.androidannotations.process.ProcessHolder;
-import org.androidannotations.rclass.IRClass;
-
-import javax.annotation.processing.ProcessingEnvironment;
+import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.Set;
 
-public class AndroidAnnotationsEnvironment {
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
 
-	private final ProcessingEnvironment processingEnvironment;
-	private final OptionsHelper options;
-	private final AnnotationHandlers annotationHandlers;
+import org.androidannotations.handler.AnnotationHandler;
+import org.androidannotations.handler.GeneratingAnnotationHandler;
+import org.androidannotations.helper.AndroidManifest;
+import org.androidannotations.helper.ClassesHolder;
+import org.androidannotations.holder.GeneratedClassHolder;
+import org.androidannotations.internal.model.AnnotationElements;
+import org.androidannotations.plugin.AndroidAnnotationsPlugin;
+import org.androidannotations.rclass.IRClass;
 
-	private List<AndroidAnnotationsPlugin> plugins;
+import com.helger.jcodemodel.AbstractJClass;
+import com.helger.jcodemodel.JCodeModel;
+import com.helger.jcodemodel.JDefinedClass;
 
-	private IRClass rClass;
-	private AndroidSystemServices androidSystemServices;
-	private AndroidManifest androidManifest;
+public interface AndroidAnnotationsEnvironment {
 
-	private AnnotationElements validatedElements;
+	ProcessingEnvironment getProcessingEnvironment();
 
-	private ProcessHolder processHolder;
+	Set<String> getSupportedOptions();
 
-	AndroidAnnotationsEnvironment(ProcessingEnvironment processingEnvironment) {
-		this.processingEnvironment = processingEnvironment;
-		options = new OptionsHelper(processingEnvironment);
-		annotationHandlers = new AnnotationHandlers();
-	}
+	String getOptionValue(Option option);
 
-	public void setPlugins(List<AndroidAnnotationsPlugin> plugins) {
-		this.plugins = plugins;
-		for (AndroidAnnotationsPlugin plugin : plugins) {
-			plugin.addHandlers(annotationHandlers, this);
-		}
-	}
+	String getOptionValue(String optionKey);
 
-	public void setAndroidEnvironment(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
-		this.rClass = rClass;
-		this.androidSystemServices = androidSystemServices;
-		this.androidManifest = androidManifest;
-	}
+	boolean getOptionBooleanValue(Option option);
 
-	public void setValidatedElements(AnnotationElements validatedElements) {
-		this.validatedElements = validatedElements;
-	}
+	boolean getOptionBooleanValue(String optionKey);
 
-	public void setProcessHolder(ProcessHolder processHolder) {
-		this.processHolder = processHolder;
-	}
+	Set<String> getSupportedAnnotationTypes();
 
-	public ProcessingEnvironment getProcessingEnvironment() {
-		return processingEnvironment;
-	}
+	List<AnnotationHandler<?>> getHandlers();
 
-	public OptionsHelper getOptions() {
-		return options;
-	}
+	List<AnnotationHandler<?>> getDecoratingHandlers();
 
-	public Set<String> getSupportedAnnotationTypes() {
-		return annotationHandlers.getSupportedAnnotationTypes();
-	}
+	List<GeneratingAnnotationHandler<?>> getGeneratingHandlers();
 
-	public List<AnnotationHandler<? extends GeneratedClassHolder>> getHandlers() {
-		return annotationHandlers.get();
-	}
+	IRClass getRClass();
 
-	public List<AnnotationHandler<? extends GeneratedClassHolder>> getDecoratingHandlers() {
-		return annotationHandlers.getDecorating();
-	}
+	AndroidManifest getAndroidManifest();
 
-	public List<GeneratingAnnotationHandler<? extends GeneratedClassHolder>> getGeneratingHandlers() {
-		return annotationHandlers.getGenerating();
-	}
+	AnnotationElements getExtractedElements();
 
-	public IRClass getRClass() {
-		return rClass;
-	}
+	AnnotationElements getValidatedElements();
 
-	public AndroidSystemServices getAndroidSystemServices() {
-		return androidSystemServices;
-	}
+	JCodeModel getCodeModel();
 
-	public AndroidManifest getAndroidManifest() {
-		return androidManifest;
-	}
+	AbstractJClass getJClass(String fullyQualifiedName);
 
-	public AnnotationElements getValidatedElements() {
-		return validatedElements;
-	}
+	AbstractJClass getJClass(Class<?> clazz);
 
-	public ProcessHolder getProcessHolder() {
-		return processHolder;
-	}
+	JDefinedClass getDefinedClass(String fullyQualifiedName);
+
+	GeneratedClassHolder getGeneratedClassHolder(Element element);
+
+	ClassesHolder.Classes getClasses();
+
+	List<Class<? extends Annotation>> getGeneratingAnnotations();
+
+	boolean isAndroidAnnotation(String annotationQualifiedName);
+
+	List<AndroidAnnotationsPlugin> getPlugins();
 }
