@@ -17,6 +17,7 @@
 package org.graylog2.dashboards;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.bson.types.ObjectId;
 import org.graylog2.dashboards.widgets.DashboardWidget;
@@ -24,24 +25,22 @@ import org.graylog2.database.CollectionName;
 import org.graylog2.database.PersistedImpl;
 import org.graylog2.database.validators.DateValidator;
 import org.graylog2.database.validators.FilledStringValidator;
-import org.graylog2.database.validators.OptionalStringValidator;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.validators.Validator;
 import org.joda.time.DateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 @CollectionName("dashboards")
 public class DashboardImpl extends PersistedImpl implements Dashboard {
-    public static final String FIELD_TITLE = "title";
-    public static final String FIELD_DESCRIPTION = "description";
-    public static final String FIELD_CONTENT_PACK = "content_pack";
-    public static final String FIELD_CREATOR_USER_ID = "creator_user_id";
-    public static final String FIELD_CREATED_AT = "created_at";
+    private static final Logger LOG = LoggerFactory.getLogger(DashboardImpl.class);
+
     public static final String EMBEDDED_WIDGETS = "widgets";
-    public static final String EMBEDDED_POSITIONS = "positions";
+    private static final String TITLE = "title";
+    private static final String DESCRIPTION = "description";
 
     private Map<String, DashboardWidget> widgets = Maps.newHashMap();
 
@@ -55,32 +54,23 @@ public class DashboardImpl extends PersistedImpl implements Dashboard {
 
     @Override
     public String getTitle() {
-        return (String) fields.get(FIELD_TITLE);
+        return (String) fields.get(TITLE);
     }
+
 
     @Override
     public void setTitle(String title) {
-        this.fields.put(FIELD_TITLE, title);
+        this.fields.put(TITLE, title);
     }
 
     @Override
     public String getDescription() {
-        return (String) fields.get(FIELD_DESCRIPTION);
+        return (String) fields.get(DESCRIPTION);
     }
 
     @Override
     public void setDescription(String description) {
-        this.fields.put(FIELD_DESCRIPTION, description);
-    }
-
-    @Override
-    public String getContentPack() {
-        return (String) fields.get(FIELD_CONTENT_PACK);
-    }
-
-    @Override
-    public void setContentPack(String contentPack) {
-        this.fields.put(FIELD_CONTENT_PACK, contentPack);
+        this.fields.put(DESCRIPTION, description);
     }
 
     @Override
@@ -111,11 +101,10 @@ public class DashboardImpl extends PersistedImpl implements Dashboard {
     @Override
     public Map<String, Validator> getValidations() {
         return new HashMap<String, Validator>() {{
-            put(FIELD_TITLE, new FilledStringValidator());
-            put(FIELD_DESCRIPTION, new FilledStringValidator());
-            put(FIELD_CONTENT_PACK, new OptionalStringValidator());
-            put(FIELD_CREATOR_USER_ID, new FilledStringValidator());
-            put(FIELD_CREATED_AT, new DateValidator());
+            put(TITLE, new FilledStringValidator());
+            put(DESCRIPTION, new FilledStringValidator());
+            put("creator_user_id", new FilledStringValidator());
+            put("created_at", new DateValidator());
         }};
     }
 
@@ -131,16 +120,16 @@ public class DashboardImpl extends PersistedImpl implements Dashboard {
 
         // TODO this sucks and should be done somewhere globally.
         result.remove("_id");
-        result.put("id", ((ObjectId) fields.get("_id")).toHexString());
-        result.remove(FIELD_CREATED_AT);
-        result.put(FIELD_CREATED_AT, (Tools.getISO8601String((DateTime) fields.get(FIELD_CREATED_AT))));
+        result.put("id", ((ObjectId) fields.get("_id")).toStringMongod());
+        result.remove("created_at");
+        result.put("created_at", (Tools.getISO8601String((DateTime) fields.get("created_at"))));
 
-        if (!result.containsKey(EMBEDDED_WIDGETS)) {
-            result.put(EMBEDDED_WIDGETS, Collections.emptyList());
+        if (!result.containsKey("widgets")) {
+            result.put("widgets", Lists.newArrayList());
         }
 
-        if (!result.containsKey(EMBEDDED_POSITIONS)) {
-            result.put(EMBEDDED_POSITIONS, Collections.emptyMap());
+        if (!result.containsKey("positions")) {
+            result.put("positions", Maps.newHashMap());
         }
 
         return result;
