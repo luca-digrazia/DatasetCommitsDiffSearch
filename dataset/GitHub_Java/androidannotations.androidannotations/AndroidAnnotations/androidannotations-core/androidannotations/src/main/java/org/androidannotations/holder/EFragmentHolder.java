@@ -21,7 +21,6 @@ import static com.helger.jcodemodel.JExpr.TRUE;
 import static com.helger.jcodemodel.JExpr._new;
 import static com.helger.jcodemodel.JExpr._null;
 import static com.helger.jcodemodel.JExpr._super;
-import static com.helger.jcodemodel.JExpr.cond;
 import static com.helger.jcodemodel.JExpr.invoke;
 import static com.helger.jcodemodel.JExpr.ref;
 import static com.helger.jcodemodel.JMod.PRIVATE;
@@ -39,14 +38,12 @@ import org.androidannotations.holder.ReceiverRegistrationDelegate.IntentFilterDa
 
 import com.helger.jcodemodel.AbstractJClass;
 import com.helger.jcodemodel.IJAssignmentTarget;
-import com.helger.jcodemodel.IJExpression;
 import com.helger.jcodemodel.JBlock;
 import com.helger.jcodemodel.JClassAlreadyExistsException;
 import com.helger.jcodemodel.JDefinedClass;
 import com.helger.jcodemodel.JExpr;
 import com.helger.jcodemodel.JFieldRef;
 import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JInvocation;
 import com.helger.jcodemodel.JMethod;
 import com.helger.jcodemodel.JMod;
 import com.helger.jcodemodel.JVar;
@@ -103,6 +100,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		JBlock onCreateBody = onCreate.body();
 
 		JVar previousNotifier = viewNotifierHelper.replacePreviousNotifier(onCreateBody);
+		setFindViewById();
 		onCreateBody.invoke(getInit()).arg(onCreateSavedInstanceState);
 		onCreateBody.invoke(_super(), onCreate).arg(onCreateSavedInstanceState);
 		onCreateAfterSuperBlock = onCreateBody.blockSimple();
@@ -119,10 +117,20 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		viewNotifierHelper.invokeViewChanged(onViewCreatedBody);
 	}
 
-	public IJExpression getFindViewByIdExpression(JVar idParam) {
+	private void setFindViewById() {
+		JMethod findViewById = generatedClass.method(PUBLIC, getClasses().VIEW, "findViewById");
+		findViewById.annotate(Override.class);
+
+		JVar idParam = findViewById.param(getCodeModel().INT, "id");
+
+		JBlock body = findViewById.body();
+
 		JFieldVar contentView = getContentView();
-		JInvocation invocation = contentView.invoke("findViewById").arg(idParam);
-		return cond(contentView.eq(_null()), _null(), invocation);
+
+		body._if(contentView.eq(_null())) //
+			._then()._return(_null());
+
+		body._return(contentView.invoke(findViewById).arg(idParam));
 	}
 
 	private void setFragmentBuilder() throws JClassAlreadyExistsException {
