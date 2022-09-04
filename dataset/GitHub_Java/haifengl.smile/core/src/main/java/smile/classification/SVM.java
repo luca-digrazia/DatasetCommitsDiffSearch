@@ -883,20 +883,7 @@ public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T>, Serializ
             }
             cleanup();
 
-            if (kernel instanceof LinearKernel) {
-                if (p == 0 && !sv.isEmpty()) {
-                    T x = sv.get(0).x;
-                    if (x instanceof double[]) {
-                        double[] x0 = (double[]) x;
-                        p = x0.length;
-                    } else if (x instanceof float[]) {
-                        float[] x0 = (float[]) x;
-                        p = x0.length;
-                    } else {
-                        throw new UnsupportedOperationException("Unsupported data type for linear kernel.");
-                    }
-                }
-
+            if (kernel instanceof LinearKernel) {                
                 w = new double[p];
 
                 for (SupportVector v : sv) {
