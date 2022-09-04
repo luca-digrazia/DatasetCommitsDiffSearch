@@ -370,7 +370,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
           ruleContext,
           invocations.build(),
           protoProvider.getDirectProtoSources(),
-          protoProvider.getTransitiveProtoSources(),
+          protoProvider.getTransitiveImports(),
           protoProvider.getProtosInDirectDeps(),
           protoProvider.getTransitiveProtoSourceRoots(),
           protoProvider.getDirectProtoSourceRoots(),
