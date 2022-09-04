@@ -24,7 +24,7 @@ public final class NoTransition implements PatchTransition {
   private NoTransition() {}
 
   @Override
-  public BuildOptions patch(BuildOptions options) {
+  public BuildOptions apply(BuildOptions options) {
     return options;
   }
 }

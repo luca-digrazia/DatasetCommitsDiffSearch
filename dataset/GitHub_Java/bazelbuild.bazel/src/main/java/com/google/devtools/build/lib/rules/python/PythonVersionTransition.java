@@ -35,7 +35,7 @@ public class PythonVersionTransition implements PatchTransition {
   }
 
   @Override
-   public BuildOptions patch(BuildOptions options) {
+   public BuildOptions apply(BuildOptions options) {
     PythonOptions pyOptions = options.get(PythonOptions.class);
     // The current Python version is either explicitly set by --force_python or a
     // build-wide default.
