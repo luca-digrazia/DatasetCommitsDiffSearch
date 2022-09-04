@@ -132,19 +132,6 @@ public class DefaultMethodClassFixer extends ClassVisitor {
     return false;
   }
 
-  /**
-   * Returns {@code true} for non-bridge default methods not in {@link #instanceMethods}.
-   */
-  private boolean shouldStub(int access, String name, String desc) {
-    // Ignore private methods, which technically aren't default methods and can only be called from
-    // other methods defined in the interface.  This also ignores lambda body methods, which is fine
-    // as we don't want or need to stub those.  Also ignore bridge methods as javac adds them to
-    // concrete classes as needed anyway and we handle them separately for generated lambda classes.
-    return BitFlags.noneSet(access,
-            Opcodes.ACC_ABSTRACT | Opcodes.ACC_STATIC | Opcodes.ACC_BRIDGE | Opcodes.ACC_PRIVATE)
-        && !instanceMethods.contains(name + ":" + desc);
-  }
-
   private void stubMissingDefaultMethods(ImmutableList<String> interfaces) {
     for (String implemented : interfaces) {
       if (!seenInterfaces.add(implemented)) {
@@ -196,10 +183,12 @@ public class DefaultMethodClassFixer extends ClassVisitor {
     @Override
     public MethodVisitor visitMethod(
         int access, String name, String desc, String signature, String[] exceptions) {
-      if (shouldStub(access, name, desc)) {
+      if (BitFlags.noneSet(access, Opcodes.ACC_ABSTRACT | Opcodes.ACC_STATIC | Opcodes.ACC_BRIDGE)
+          && !instanceMethods.contains(name + ":" + desc)) {
         // Add this method to the class we're desugaring and stub in a body to call the default
         // implementation in the interface's companion class. ijar omits these methods when setting
-        // ACC_SYNTHETIC modifier, so don't.
+        // ACC_SYNTHETIC modifier, so don't. Don't do this for bridge methods, which we handle
+        // separately.
         // Signatures can be wrong, e.g., when type variables are introduced, instantiated, or
         // refined in the class we're processing, so drop them.
         MethodVisitor stubMethod =
@@ -266,7 +255,8 @@ public class DefaultMethodClassFixer extends ClassVisitor {
     @Override
     public MethodVisitor visitMethod(
         int access, String name, String desc, String signature, String[] exceptions) {
-      if (!found && shouldStub(access, name, desc)) {
+      if (BitFlags.noneSet(access, Opcodes.ACC_ABSTRACT | Opcodes.ACC_STATIC | Opcodes.ACC_BRIDGE)
+          && !instanceMethods.contains(name + ":" + desc)) {
         // Found a default method we're not ignoring (instanceMethods at this point contains methods
         // the top-level visited class implements itself).
         found = true;
