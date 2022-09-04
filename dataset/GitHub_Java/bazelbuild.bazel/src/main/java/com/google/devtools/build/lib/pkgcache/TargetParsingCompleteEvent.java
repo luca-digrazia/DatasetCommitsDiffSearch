@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import java.util.Collection;
+import java.util.List;
 import javax.annotation.Nullable;
 
 /** This event is fired just after target pattern evaluation is completed. */
@@ -88,16 +89,16 @@ public class TargetParsingCompleteEvent implements BuildEventWithOrderConstraint
       Collection<Target> targets,
       Collection<Target> filteredTargets,
       Collection<Target> testFilteredTargets,
-      ImmutableList<String> originalTargetPattern,
+      List<String> originalTargetPattern,
       Collection<Target> expandedTargets,
-      ImmutableList<String> failedTargetPatterns,
+      List<String> failedTargetPatterns,
       ImmutableSetMultimap<String, Label> originalPatternsToLabels) {
     this.targets = asThinTargets(targets);
     this.filteredTargets = asThinTargets(filteredTargets);
     this.testFilteredTargets = asThinTargets(testFilteredTargets);
-    this.originalTargetPattern = Preconditions.checkNotNull(originalTargetPattern);
+    this.originalTargetPattern = ImmutableList.copyOf(originalTargetPattern);
     this.expandedTargets = asThinTargets(expandedTargets);
-    this.failedTargetPatterns = Preconditions.checkNotNull(failedTargetPatterns);
+    this.failedTargetPatterns = ImmutableList.copyOf(failedTargetPatterns);
     this.originalPatternsToLabels = originalPatternsToLabels;
   }
 
