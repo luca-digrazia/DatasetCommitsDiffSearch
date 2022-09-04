@@ -113,7 +113,7 @@ public class FilesystemValueChecker {
    */
   public ImmutableBatchDirtyResult getNewAndOldValues(
       Map<SkyKey, SkyValue> valuesMap,
-      Collection<SkyKey> keys,
+      Iterable<SkyKey> keys,
       SkyValueDirtinessChecker dirtinessChecker)
       throws InterruptedException {
     return getDirtyValues(new MapBackedValueFetcher(valuesMap), keys,
@@ -124,11 +124,9 @@ public class FilesystemValueChecker {
    * Returns a {@link Differencer.DiffWithDelta} containing keys that are dirty according to the
    * passed-in {@code dirtinessChecker}.
    */
-  public Differencer.DiffWithDelta getNewAndOldValues(
-      WalkableGraph walkableGraph,
-      Collection<SkyKey> keys,
-      SkyValueDirtinessChecker dirtinessChecker)
-      throws InterruptedException {
+  public Differencer.DiffWithDelta getNewAndOldValues(WalkableGraph walkableGraph,
+      Iterable<SkyKey> keys, SkyValueDirtinessChecker dirtinessChecker)
+          throws InterruptedException {
     return getDirtyValues(new WalkableGraphBackedValueFetcher(walkableGraph), keys,
         dirtinessChecker, /*checkMissingValues=*/true);
   }
@@ -486,7 +484,7 @@ public class FilesystemValueChecker {
 
   private ImmutableBatchDirtyResult getDirtyValues(
       ValueFetcher fetcher,
-      Collection<SkyKey> keys,
+      Iterable<SkyKey> keys,
       final SkyValueDirtinessChecker checker,
       final boolean checkMissingValues)
       throws InterruptedException {
@@ -497,6 +495,7 @@ public class FilesystemValueChecker {
 
     ThrowableRecordingRunnableWrapper wrapper =
         new ThrowableRecordingRunnableWrapper("FilesystemValueChecker#getDirtyValues");
+    final AtomicInteger numKeysScanned = new AtomicInteger(0);
     final AtomicInteger numKeysChecked = new AtomicInteger(0);
     MutableBatchDirtyResult batchResult = new MutableBatchDirtyResult(numKeysChecked);
     ElapsedTimeReceiver elapsedTimeReceiver =
@@ -507,11 +506,12 @@ public class FilesystemValueChecker {
                     "Spent %d ms checking %d filesystem nodes (%d scanned)",
                     TimeUnit.MILLISECONDS.convert(elapsedTimeNanos, TimeUnit.NANOSECONDS),
                     numKeysChecked.get(),
-                    keys.size()));
+                    numKeysScanned.get()));
           }
         };
     try (AutoProfiler prof = AutoProfiler.create(elapsedTimeReceiver)) {
       for (final SkyKey key : keys) {
+        numKeysScanned.incrementAndGet();
         if (!checker.applies(key)) {
           continue;
         }
