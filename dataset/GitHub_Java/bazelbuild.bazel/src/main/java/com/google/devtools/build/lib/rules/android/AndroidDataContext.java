@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidDataContextApi;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -43,7 +42,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 public class AndroidDataContext implements AndroidDataContextApi {
 
   private final Label label;
-  private final RuleContext ruleContext;
+  private final ActionConstructionContext actionConstructionContext;
   private final FilesToRunProvider busybox;
   private final AndroidSdkProvider sdk;
   private final boolean persistentBusyboxToolsEnabled;
@@ -77,7 +76,7 @@ public class AndroidDataContext implements AndroidDataContextApi {
 
   protected AndroidDataContext(
       Label label,
-      RuleContext ruleContext,
+      ActionConstructionContext actionConstructionContext,
       FilesToRunProvider busybox,
       boolean persistentBusyboxToolsEnabled,
       AndroidSdkProvider sdk,
@@ -85,7 +84,7 @@ public class AndroidDataContext implements AndroidDataContextApi {
       boolean useDataBindingV2) {
     this.label = label;
     this.persistentBusyboxToolsEnabled = persistentBusyboxToolsEnabled;
-    this.ruleContext = ruleContext;
+    this.actionConstructionContext = actionConstructionContext;
     this.busybox = busybox;
     this.sdk = sdk;
     this.throwOnResourceConflict = throwOnResourceConflict;
@@ -97,11 +96,7 @@ public class AndroidDataContext implements AndroidDataContextApi {
   }
 
   public ActionConstructionContext getActionConstructionContext() {
-    return ruleContext;
-  }
-
-  public RuleErrorConsumer getRuleErrorConsumer() {
-    return ruleContext;
+    return actionConstructionContext;
   }
 
   public FilesToRunProvider getBusybox() {
@@ -118,41 +113,41 @@ public class AndroidDataContext implements AndroidDataContextApi {
 
   /** Builds and registers a {@link SpawnAction.Builder}. */
   public void registerAction(SpawnAction.Builder spawnActionBuilder) {
-    registerAction(spawnActionBuilder.build(ruleContext));
+    registerAction(spawnActionBuilder.build(actionConstructionContext));
   }
 
   /** Registers one or more actions. */
   public void registerAction(ActionAnalysisMetadata... actions) {
-    ruleContext.registerAction(actions);
+    actionConstructionContext.registerAction(actions);
   }
 
   public Artifact createOutputArtifact(SafeImplicitOutputsFunction function)
       throws InterruptedException {
-    return ruleContext.getImplicitOutputArtifact(function);
+    return actionConstructionContext.getImplicitOutputArtifact(function);
   }
 
   public Artifact getUniqueDirectoryArtifact(String uniqueDirectorySuffix, String relative) {
-    return ruleContext.getUniqueDirectoryArtifact(uniqueDirectorySuffix, relative);
+    return actionConstructionContext.getUniqueDirectoryArtifact(uniqueDirectorySuffix, relative);
   }
 
   public Artifact getUniqueDirectoryArtifact(String uniqueDirectorySuffix, PathFragment relative) {
-    return ruleContext.getUniqueDirectoryArtifact(uniqueDirectorySuffix, relative);
+    return actionConstructionContext.getUniqueDirectoryArtifact(uniqueDirectorySuffix, relative);
   }
 
   public PathFragment getUniqueDirectory(PathFragment fragment) {
-    return ruleContext.getUniqueDirectory(fragment);
+    return actionConstructionContext.getUniqueDirectory(fragment);
   }
 
   public ArtifactRoot getBinOrGenfilesDirectory() {
-    return ruleContext.getBinOrGenfilesDirectory();
+    return actionConstructionContext.getBinOrGenfilesDirectory();
   }
 
   public PathFragment getPackageDirectory() {
-    return ruleContext.getPackageDirectory();
+    return actionConstructionContext.getPackageDirectory();
   }
 
   public AndroidConfiguration getAndroidConfig() {
-    return ruleContext.getConfiguration().getFragment(AndroidConfiguration.class);
+    return actionConstructionContext.getConfiguration().getFragment(AndroidConfiguration.class);
   }
 
   /** Indicates whether Busybox actions should be passed the "--debug" flag */

@@ -13,11 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import java.util.Objects;
 
 /** Android assets that have been merged together with their dependencies. */
@@ -25,45 +23,40 @@ public class MergedAndroidAssets extends ParsedAndroidAssets {
   private final Artifact mergedAssets;
   private final AssetDependencies assetDependencies;
 
-  public static MergedAndroidAssets mergeFrom(
-      RuleContext ruleContext, ParsedAndroidAssets parsed, boolean neverlink)
-      throws InterruptedException {
-    return mergeFrom(ruleContext, parsed, AssetDependencies.fromRuleDeps(ruleContext, neverlink));
-  }
-
-  @VisibleForTesting
   static MergedAndroidAssets mergeFrom(
-      RuleContext ruleContext, ParsedAndroidAssets parsed, AssetDependencies deps)
+      AndroidDataContext dataContext, ParsedAndroidAssets parsed, AssetDependencies deps)
       throws InterruptedException {
 
     Artifact mergedAssets =
-        ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_ASSETS_ZIP);
+        dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_ASSETS_ZIP);
 
-    BusyBoxActionBuilder builder = BusyBoxActionBuilder.create(ruleContext, "MERGE_ASSETS");
-    if (AndroidCommon.getAndroidConfig(ruleContext).throwOnResourceConflict()) {
+    BusyBoxActionBuilder builder = BusyBoxActionBuilder.create(dataContext, "MERGE_ASSETS");
+    if (dataContext.throwOnResourceConflict()) {
       builder.addFlag("--throwOnAssetConflict");
     }
 
     builder
         .addOutput("--assetsOutput", mergedAssets)
-        .addInput("--androidJar", AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar())
         .addInput(
             "--primaryData",
-            AndroidDataConverter.MERGABLE_DATA_CONVERTER.map(parsed),
+            AndroidDataConverter.PARSED_ASSET_CONVERTER.map(parsed),
             Iterables.concat(parsed.getAssets(), ImmutableList.of(parsed.getSymbols())))
         .addTransitiveFlag(
             "--directData",
             deps.getDirectParsedAssets(),
-            AndroidDataConverter.MERGABLE_DATA_CONVERTER)
+            AndroidDataConverter.PARSED_ASSET_CONVERTER)
         .addTransitiveFlag(
-            "--data",
-            deps.getTransitiveParsedAssets(),
-            AndroidDataConverter.MERGABLE_DATA_CONVERTER)
+            "--data", deps.getTransitiveParsedAssets(), AndroidDataConverter.PARSED_ASSET_CONVERTER)
         .addTransitiveInputValues(deps.getTransitiveAssets())
         .addTransitiveInputValues(deps.getTransitiveSymbols())
         .buildAndRegister("Merging Android assets", "AndroidAssetMerger");
 
-    return new MergedAndroidAssets(parsed, mergedAssets, deps);
+    return of(parsed, mergedAssets, deps);
+  }
+
+  static MergedAndroidAssets of(
+      ParsedAndroidAssets parsed, Artifact mergedAssets, AssetDependencies assetDependencies) {
+    return new MergedAndroidAssets(parsed, mergedAssets, assetDependencies);
   }
 
   private MergedAndroidAssets(
@@ -74,13 +67,15 @@ public class MergedAndroidAssets extends ParsedAndroidAssets {
   }
 
   AndroidAssetsInfo toProvider() {
-    // Create a new object to avoid passing around unwanted merge information to the provider
-    ParsedAndroidAssets parsed = new ParsedAndroidAssets(this);
-    return assetDependencies.toInfo(parsed);
+    return assetDependencies.toInfo(this);
   }
 
   public Artifact getMergedAssets() {
     return mergedAssets;
+  }
+
+  public AssetDependencies getAssetDependencies() {
+    return assetDependencies;
   }
 
   @Override

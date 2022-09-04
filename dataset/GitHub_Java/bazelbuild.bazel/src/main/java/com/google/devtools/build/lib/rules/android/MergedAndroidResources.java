@@ -43,7 +43,10 @@ public class MergedAndroidResources extends ParsedAndroidResources {
       AndroidAaptVersion aaptVersion)
       throws InterruptedException {
 
-    boolean useCompiledMerge = aaptVersion == AndroidAaptVersion.AAPT2;
+    AndroidConfiguration androidConfiguration = dataContext.getAndroidConfig();
+
+    boolean useCompiledMerge =
+        aaptVersion == AndroidAaptVersion.AAPT2 && androidConfiguration.skipParsingAction();
 
     Preconditions.checkState(
         !useCompiledMerge || parsed.getCompiledSymbols() != null,

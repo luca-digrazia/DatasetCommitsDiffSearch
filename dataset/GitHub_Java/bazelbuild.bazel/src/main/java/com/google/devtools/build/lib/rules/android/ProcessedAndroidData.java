@@ -184,7 +184,9 @@ public class ProcessedAndroidData {
 
     return builderForNonIncrementalTopLevelTarget(
             dataContext, manifest, manifestValues, aaptVersion)
-        .setUseCompiledResourcesForMerge(aaptVersion == AndroidAaptVersion.AAPT2)
+        .setUseCompiledResourcesForMerge(
+            aaptVersion == AndroidAaptVersion.AAPT2
+                && dataContext.getAndroidConfig().skipParsingAction())
         .setManifestOut(
             dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))
         .setMergedResourcesOut(

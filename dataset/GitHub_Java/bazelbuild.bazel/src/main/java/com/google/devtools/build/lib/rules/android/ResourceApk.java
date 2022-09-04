@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
 import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import java.util.Optional;
 import javax.annotation.Nullable;
@@ -29,7 +28,6 @@ import javax.annotation.Nullable;
  */
 @Immutable
 public final class ResourceApk {
-
   // TODO(bazel-team): The only fields that are legitimately nullable are javaSrcJar and
   // mainDexProguardConfig. The rest are marked as such due to .fromTransitiveResources().
   // It seems like there should be a better way to do this.
@@ -54,8 +52,6 @@ public final class ResourceApk {
   @Nullable private final Artifact mainDexProguardConfig;
   private final DataBindingContext dataBindingContext;
 
-  private final boolean addResourcesClassJarToCompilationClasspath;
-
   public static ResourceApk of(
       ValidatedAndroidResources resources,
       MergedAndroidAssets assets,
@@ -74,8 +70,7 @@ public final class ResourceApk {
         resources.getRTxt(),
         resourceProguardConfig,
         mainDexProguardConfig,
-        resources.asDataBindingContext(),
-        /* addResourcesClassJarToCompilationClasspath= */ true);
+        resources.asDataBindingContext());
   }
 
   private ResourceApk(
@@ -91,8 +86,7 @@ public final class ResourceApk {
       Artifact rTxt,
       @Nullable Artifact resourceProguardConfig,
       @Nullable Artifact mainDexProguardConfig,
-      DataBindingContext dataBindingContext,
-      boolean addResourcesClassJarToCompilationClasspath) {
+      DataBindingContext dataBindingContext) {
     this.resourceApk = resourceApk;
     this.resourceJavaSrcJar = resourceJavaSrcJar;
     this.resourceJavaClassJar = resourceJavaClassJar;
@@ -106,27 +100,6 @@ public final class ResourceApk {
     this.resourceProguardConfig = resourceProguardConfig;
     this.mainDexProguardConfig = mainDexProguardConfig;
     this.dataBindingContext = dataBindingContext;
-    this.addResourcesClassJarToCompilationClasspath = addResourcesClassJarToCompilationClasspath;
-  }
-
-  public static ResourceApk fromAndroidApplicationResourceInfo(
-      AndroidDataContext ctx, AndroidApplicationResourceInfo androidApplicationResourceInfo) {
-    return new ResourceApk(
-        androidApplicationResourceInfo.getResourceApk(),
-        androidApplicationResourceInfo.getResourceJavaSrcJar(),
-        androidApplicationResourceInfo.getResourceJavaClassJar(),
-        /* resourceDeps= */ null,
-        /* assetDeps= */ null,
-        /* validatedResources= */ null,
-        /* primaryResources= */ null,
-        /* primaryAssets= */ null,
-        new ProcessedAndroidManifest(
-            androidApplicationResourceInfo.getManifest(), /* pkg= */ null, /* exported= */ false),
-        /* rTxt= */ null,
-        androidApplicationResourceInfo.getResourceProguardConfig(),
-        androidApplicationResourceInfo.getMainDexProguardConfig(),
-        DataBinding.getDisabledDataBindingContext(ctx),
-        /* addResourcesClassJarToCompilationClasspath= */ false);
   }
 
   ResourceApk withApk(Artifact apk) {
@@ -143,8 +116,7 @@ public final class ResourceApk {
         rTxt,
         resourceProguardConfig,
         mainDexProguardConfig,
-        asDataBindingContext(),
-        /* addResourcesClassJarToCompilationClasspath= */ true);
+        asDataBindingContext());
   }
 
   public Artifact getArtifact() {
@@ -203,8 +175,7 @@ public final class ResourceApk {
         rTxt,
         null,
         null,
-        dataBindingContext,
-        /* addResourcesClassJarToCompilationClasspath= */ true);
+        dataBindingContext);
   }
 
   public Artifact getResourceProguardConfig() {
@@ -225,10 +196,6 @@ public final class ResourceApk {
 
   public DataBindingContext asDataBindingContext() {
     return dataBindingContext;
-  }
-
-  public boolean addResourcesClassJarToCompilationClasspath() {
-    return addResourcesClassJarToCompilationClasspath;
   }
 
   /**
