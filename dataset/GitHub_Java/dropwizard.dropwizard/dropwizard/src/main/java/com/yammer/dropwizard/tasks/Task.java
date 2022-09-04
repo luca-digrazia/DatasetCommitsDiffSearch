@@ -6,8 +6,6 @@ import java.io.PrintWriter;
 
 /**
  * An arbitrary administrative task which can be performed via the internal service interface.
- *
- * @see TaskServlet
  */
 public abstract class Task {
     private final String name;
