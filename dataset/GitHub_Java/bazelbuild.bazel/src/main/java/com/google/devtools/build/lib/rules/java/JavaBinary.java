@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.JAVA_LAUNCHER_LINK;
 import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.STATIC_LINKING_MODE;
 import static com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression.COMPRESSED;
 
@@ -38,6 +37,7 @@ import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.LazyWritePathsFileAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -94,9 +94,13 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     ruleContext.checkSrcsSamePackage(true);
     boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
 
-    if (!createExecutable
-        && ruleContext.attributes().isAttributeValueExplicitlySpecified("launcher")) {
-      ruleContext.ruleError("launcher specified but create_executable is false");
+    if (!createExecutable) {
+      // TODO(cushon): disallow combining launcher=JDK_LAUNCHER_LABEL with create_executable=0
+      // and use isAttributeExplicitlySpecified here
+      Label launcherAttribute = ruleContext.attributes().get("launcher", BuildType.LABEL);
+      if (launcherAttribute != null && !JavaHelper.isJdkLauncher(ruleContext, launcherAttribute)) {
+        ruleContext.ruleError("launcher specified but create_executable is false");
+      }
     }
 
     if (!ruleContext.attributes().get("use_launcher", Type.BOOLEAN)
@@ -147,7 +151,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
               /* requestedFeatures= */ ImmutableSet.<String>builder()
                   .addAll(ruleContext.getFeatures())
                   .add(STATIC_LINKING_MODE)
-                  .add(JAVA_LAUNCHER_LINK)
                   .build(),
               /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
               ccToolchain,

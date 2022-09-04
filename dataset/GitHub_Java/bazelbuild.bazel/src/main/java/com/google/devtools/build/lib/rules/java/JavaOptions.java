@@ -348,7 +348,6 @@ public class JavaOptions extends FragmentOptions {
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "The Java launcher to use when building Java binaries. "
-              + " If this flag is set to the empty string, the JDK launcher is used. "
               + "The \"launcher\" attribute overrides this flag. ")
   public Label javaLauncher;
 
