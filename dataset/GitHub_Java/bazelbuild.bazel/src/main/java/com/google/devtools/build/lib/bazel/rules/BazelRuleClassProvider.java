@@ -82,7 +82,6 @@ import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidDeviceRule;
 import com.google.devtools.build.lib.rules.android.AndroidDeviceScriptFixtureRule;
 import com.google.devtools.build.lib.rules.android.AndroidHostServiceFixtureRule;
-import com.google.devtools.build.lib.rules.android.AndroidInstrumentationInfo;
 import com.google.devtools.build.lib.rules.android.AndroidInstrumentationTestRule;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidLocalTestBaseRule;
@@ -90,7 +89,6 @@ import com.google.devtools.build.lib.rules.android.AndroidNeverlinkAspect;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidToolsDefaultsJarRule;
 import com.google.devtools.build.lib.rules.android.AndroidSkylarkCommon;
-import com.google.devtools.build.lib.rules.android.ApkInfo;
 import com.google.devtools.build.lib.rules.android.DexArchiveAspect;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
@@ -169,8 +167,8 @@ import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.rules.python.PythonOptions;
 import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
 import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
+import com.google.devtools.build.lib.rules.test.SkylarkTestingModule;
 import com.google.devtools.build.lib.rules.test.TestSuiteRule;
-import com.google.devtools.build.lib.rules.test.TestingSupportRules;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import java.io.IOException;
 
@@ -302,6 +300,19 @@ public class BazelRuleClassProvider {
           builder.addConfigurationFragment(new ProtoConfiguration.Loader());
           builder.addRuleDefinition(new BazelProtoLibraryRule());
           builder.addRuleDefinition(new ProtoLangToolchainRule());
+        }
+
+        @Override
+        public ImmutableList<RuleSet> requires() {
+          return ImmutableList.of(CoreRules.INSTANCE);
+        }
+      };
+
+  public static final RuleSet TESTING_SUPPORT =
+      new RuleSet() {
+        @Override
+        public void init(Builder builder) {
+          builder.addSkylarkAccessibleTopLevels("testing", new SkylarkTestingModule());
         }
 
         @Override
@@ -480,9 +491,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AndroidHostServiceFixtureRule());
 
           builder.addSkylarkAccessibleTopLevels("android_common", new AndroidSkylarkCommon());
-          builder.addSkylarkAccessibleTopLevels(ApkInfo.PROVIDER.getName(), ApkInfo.PROVIDER);
-          builder.addSkylarkAccessibleTopLevels(
-              AndroidInstrumentationInfo.PROVIDER.getName(), AndroidInstrumentationInfo.PROVIDER);
 
           try {
             builder.addWorkspaceFilePrefix(
@@ -640,7 +648,7 @@ public class BazelRuleClassProvider {
           PYTHON_RULES,
           OBJC_RULES,
           J2OBJC_RULES,
-          TestingSupportRules.INSTANCE,
+          TESTING_SUPPORT,
           VARIOUS_WORKSPACE_RULES,
           // This rule set is a little special: it needs to depend on every configuration fragment
           // that has Make variables, so we put it last.
