@@ -15,20 +15,15 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.AbstractSkyKey;
-import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.math.BigInteger;
-import javax.annotation.Nullable;
 
 /**
  * A value that represents a package lookup result.
@@ -72,13 +67,8 @@ public abstract class PackageLookupValue implements SkyValue {
   protected PackageLookupValue() {
   }
 
-  public static PackageLookupValue success(
-      RepositoryValue repository, Root root, BuildFileName buildFileName) {
-    return new SuccessfulPackageLookupValue(repository, root, buildFileName);
-  }
-
   public static PackageLookupValue success(Root root, BuildFileName buildFileName) {
-    return new SuccessfulPackageLookupValue(null, root, buildFileName);
+    return new SuccessfulPackageLookupValue(root, buildFileName);
   }
 
   public static PackageLookupValue invalidPackageName(String errorMsg) {
@@ -128,53 +118,23 @@ public abstract class PackageLookupValue implements SkyValue {
     return key(PackageIdentifier.createInMainRepo(directory));
   }
 
-  public static Key key(PackageIdentifier pkgIdentifier) {
+  public static SkyKey key(PackageIdentifier pkgIdentifier) {
     Preconditions.checkArgument(!pkgIdentifier.getRepository().isDefault());
-    return Key.create(pkgIdentifier);
-  }
-
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static class Key extends AbstractSkyKey<PackageIdentifier> {
-    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
-
-    private Key(PackageIdentifier arg) {
-      super(arg);
-    }
-
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static Key create(PackageIdentifier arg) {
-      return interner.intern(new Key(arg));
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.PACKAGE_LOOKUP;
-    }
+    return LegacySkyKey.create(SkyFunctions.PACKAGE_LOOKUP, pkgIdentifier);
   }
 
   /** Successful lookup value. */
+  @AutoCodec
   public static class SuccessfulPackageLookupValue extends PackageLookupValue {
-    /**
-     * The repository value the meaning of the path depends on (e.g., an external repository
-     * controlling a symbolic link the path goes trough). Can be {@code null}, if does not depend
-     * on such a repository; will always be {@code null} for packages in the main repository.
-     */
-    @Nullable private final RepositoryValue repository;
+
     private final Root root;
     private final BuildFileName buildFileName;
 
-    SuccessfulPackageLookupValue(
-        @Nullable RepositoryValue repository, Root root, BuildFileName buildFileName) {
-      this.repository = repository;
+    @AutoCodec.Instantiator
+    @AutoCodec.VisibleForSerialization
+    SuccessfulPackageLookupValue(Root root, BuildFileName buildFileName) {
       this.root = root;
       this.buildFileName = buildFileName;
-    }
-
-    @Nullable
-    public RepositoryValue repository() {
-      return repository;
     }
 
     @Override
@@ -202,32 +162,18 @@ public abstract class PackageLookupValue implements SkyValue {
       throw new IllegalStateException();
     }
 
-    @Nullable
-    @Override
-    public BigInteger getValueFingerprint() {
-      if (repository != null) {
-        return null;
-      }
-      if (buildFileName != BuildFileName.BUILD) {
-        return null;
-      }
-      return root.getFingerprint();
-    }
-
     @Override
     public boolean equals(Object obj) {
       if (!(obj instanceof SuccessfulPackageLookupValue)) {
         return false;
       }
       SuccessfulPackageLookupValue other = (SuccessfulPackageLookupValue) obj;
-      return root.equals(other.root)
-          && buildFileName == other.buildFileName
-          && Objects.equal(repository, other.repository);
+      return root.equals(other.root) && buildFileName == other.buildFileName;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(root.hashCode(), buildFileName.hashCode(), repository);
+      return Objects.hashCode(root.hashCode(), buildFileName.hashCode());
     }
   }
 
@@ -251,19 +197,12 @@ public abstract class PackageLookupValue implements SkyValue {
 
   /** Marker value for no build file found. */
   public static class NoBuildFilePackageLookupValue extends UnsuccessfulPackageLookupValue {
-    private static final BigInteger FINGERPRINT = new BigInteger("14769240659748016902");
-
-    private NoBuildFilePackageLookupValue() {}
+    private NoBuildFilePackageLookupValue() {
+    }
 
     @Override
     ErrorReason getErrorReason() {
       return ErrorReason.NO_BUILD_FILE;
-    }
-
-    @Nullable
-    @Override
-    public BigInteger getValueFingerprint() {
-      return FINGERPRINT;
     }
 
     @Override
@@ -273,10 +212,13 @@ public abstract class PackageLookupValue implements SkyValue {
   }
 
   /** Value indicating the package name was in error. */
+  @AutoCodec
   public static class InvalidNamePackageLookupValue extends UnsuccessfulPackageLookupValue {
 
     private final String errorMsg;
 
+    @AutoCodec.Instantiator
+    @AutoCodec.VisibleForSerialization
     InvalidNamePackageLookupValue(String errorMsg) {
       this.errorMsg = errorMsg;
     }
@@ -312,23 +254,26 @@ public abstract class PackageLookupValue implements SkyValue {
   }
 
   /** Value indicating the package name was in error. */
+  @AutoCodec
   public static class IncorrectRepositoryReferencePackageLookupValue
       extends UnsuccessfulPackageLookupValue {
 
     private final PackageIdentifier invalidPackageIdentifier;
     private final PackageIdentifier correctedPackageIdentifier;
 
+    @AutoCodec.Instantiator
+    @AutoCodec.VisibleForSerialization
     IncorrectRepositoryReferencePackageLookupValue(
         PackageIdentifier invalidPackageIdentifier, PackageIdentifier correctedPackageIdentifier) {
       this.invalidPackageIdentifier = invalidPackageIdentifier;
       this.correctedPackageIdentifier = correctedPackageIdentifier;
     }
 
-    PackageIdentifier getInvalidPackageIdentifier() {
+    public PackageIdentifier getInvalidPackageIdentifier() {
       return invalidPackageIdentifier;
     }
 
-    PackageIdentifier getCorrectedPackageIdentifier() {
+    public PackageIdentifier getCorrectedPackageIdentifier() {
       return correctedPackageIdentifier;
     }
 

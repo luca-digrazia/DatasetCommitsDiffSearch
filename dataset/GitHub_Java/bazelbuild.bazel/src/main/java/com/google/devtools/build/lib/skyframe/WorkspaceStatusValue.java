@@ -13,8 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -26,18 +26,19 @@ import com.google.devtools.build.skyframe.SkyKey;
  */
 // TODO(bazel-team): This seems to be superfluous now, but it cannot be removed without making
 // PrecomputedValue public instead of package-private
-public class WorkspaceStatusValue extends BasicActionLookupValue {
+public class WorkspaceStatusValue extends ActionLookupValue {
   private final Artifact stableArtifact;
   private final Artifact volatileArtifact;
 
   // There should only ever be one BuildInfo value in the graph.
-  @AutoCodec public static final BuildInfoKey BUILD_INFO_KEY = new BuildInfoKey();
+  public static final BuildInfoKey BUILD_INFO_KEY = BuildInfoKey.INSTANCE;
 
   WorkspaceStatusValue(
       Artifact stableArtifact,
       Artifact volatileArtifact,
-      WorkspaceStatusAction workspaceStatusAction) {
-    super(workspaceStatusAction);
+      WorkspaceStatusAction action,
+      boolean removeActionAfterEvaluation) {
+    super(action, removeActionAfterEvaluation);
     this.stableArtifact = stableArtifact;
     this.volatileArtifact = volatileArtifact;
   }
@@ -52,6 +53,9 @@ public class WorkspaceStatusValue extends BasicActionLookupValue {
 
   /** {@link SkyKey} for {@link WorkspaceStatusValue}. */
   public static class BuildInfoKey extends ActionLookupKey {
+    @AutoCodec @AutoCodec.VisibleForSerialization
+    static final BuildInfoKey INSTANCE = new BuildInfoKey();
+
     private BuildInfoKey() {}
 
     @Override

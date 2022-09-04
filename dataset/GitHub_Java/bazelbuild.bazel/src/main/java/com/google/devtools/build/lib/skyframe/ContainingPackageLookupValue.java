@@ -14,15 +14,10 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.skyframe.AbstractSkyKey;
-import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -44,65 +39,10 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
   /** If there is a containing package, returns its package root */
   public abstract Root getContainingPackageRoot();
 
-  public static Key key(PackageIdentifier id) {
+  public static SkyKey key(PackageIdentifier id) {
     Preconditions.checkArgument(!id.getPackageFragment().isAbsolute(), id);
     Preconditions.checkArgument(!id.getRepository().isDefault(), id);
-    return Key.create(id);
-  }
-
-  static String getErrorMessageForLabelCrossingPackageBoundary(
-      Root pkgRoot,
-      Label label,
-      ContainingPackageLookupValue containingPkgLookupValue) {
-    PackageIdentifier containingPkg = containingPkgLookupValue.getContainingPackageName();
-    boolean crossesPackageBoundaryBelow =
-        containingPkg.getSourceRoot().startsWith(label.getPackageIdentifier().getSourceRoot());
-    PathFragment labelNameFragment = PathFragment.create(label.getName());
-    String message = String.format("Label '%s' crosses boundary of %spackage '%s'",
-        label,
-        crossesPackageBoundaryBelow ? "sub" : "",
-        containingPkg);
-    Root containingRoot = containingPkgLookupValue.getContainingPackageRoot();
-    if (pkgRoot.equals(containingRoot)) {
-      PathFragment containingPkgFragment = containingPkg.getPackageFragment();
-      PathFragment labelNameInContainingPackage =
-          crossesPackageBoundaryBelow
-              ? labelNameFragment.subFragment(
-                  containingPkgFragment.segmentCount()
-                      - label.getPackageFragment().segmentCount(),
-                  labelNameFragment.segmentCount())
-              : label.toPathFragment().relativeTo(containingPkgFragment);
-      message += " (perhaps you meant to put the colon here: '";
-      if (containingPkg.getRepository().isDefault() || containingPkg.getRepository().isMain()) {
-        message += "//";
-      }
-      message += containingPkg + ":" + labelNameInContainingPackage + "'?)";
-    } else {
-      message += " (have you deleted " + containingPkg + "/BUILD? "
-          + "If so, use the --deleted_packages=" + containingPkg + " option)";
-    }
-    return message;
-  }
-
-  /** {@link SkyKey} for {@code ContainingPackageLookupValue}. */
-  @AutoCodec
-  public static class Key extends AbstractSkyKey<PackageIdentifier> {
-    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
-
-    private Key(PackageIdentifier arg) {
-      super(arg);
-    }
-
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static Key create(PackageIdentifier arg) {
-      return interner.intern(new Key(arg));
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.CONTAINING_PACKAGE_LOOKUP;
-    }
+    return LegacySkyKey.create(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, id);
   }
 
   public static ContainingPackage withContainingPackage(PackageIdentifier pkgId, Root root) {

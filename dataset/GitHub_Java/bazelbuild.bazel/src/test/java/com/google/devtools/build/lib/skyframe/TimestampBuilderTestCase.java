@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
@@ -220,8 +219,10 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
                     new WorkspaceFileFunction(
                         TestRuleClassProvider.getRuleClassProvider(),
                         TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
-                            .builder(directories)
-                            .build(TestRuleClassProvider.getRuleClassProvider()),
+                            .builder()
+                            .build(
+                                TestRuleClassProvider.getRuleClassProvider(),
+                                scratch.getFileSystem()),
                         directories))
                 .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
                 .put(
@@ -241,7 +242,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
           differencer.inject(
               ImmutableMap.of(
                   ACTION_LOOKUP_KEY,
-                  new BasicActionLookupValue(
+                  new ActionLookupValue(
                       Actions.filterSharedActionsAndThrowActionConflict(
                           actionKeyContext, ImmutableList.copyOf(actions)),
                       false)));
