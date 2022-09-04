@@ -31,11 +31,9 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionPriority.PriorityCategory;
-import com.google.devtools.common.options.OptionValueDescription;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
-import com.google.devtools.common.options.ParsedOptionDescription;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -92,15 +90,9 @@ public abstract class BlazeOptionHandler {
       BlazeCommand command,
       Command commandAnnotation,
       OptionsParser optionsParser,
-      InvocationPolicy invocationPolicy,
-      boolean expandConfigsInPlace) {
-    if (expandConfigsInPlace) {
-      return new InPlaceConfigExpansionRcHandler(
-          runtime, workspace, command, commandAnnotation, optionsParser, invocationPolicy);
-    } else {
-      return new FixPointConfigExpansionRcHandler(
-          runtime, workspace, command, commandAnnotation, optionsParser, invocationPolicy);
-    }
+      InvocationPolicy invocationPolicy) {
+    return new FixPointConfigExpansionRcHandler(
+        runtime, workspace, command, commandAnnotation, optionsParser, invocationPolicy);
   }
 
   // Return options as OptionsProvider so the options can't be easily modified after we've
@@ -329,7 +321,7 @@ public abstract class BlazeOptionHandler {
    * necessary, but this is not the case. This is why we are phasing out this behavior. We will
    * maintain the old behavior to avoid breaking users during a transition period.
    */
-  static final class FixPointConfigExpansionRcHandler extends BlazeOptionHandler {
+  public static final class FixPointConfigExpansionRcHandler extends BlazeOptionHandler {
 
     private FixPointConfigExpansionRcHandler(
         BlazeRuntime runtime,
@@ -406,164 +398,6 @@ public abstract class BlazeOptionHandler {
             .filter(Predicates.not(Predicates.in(knownConfigs)))
             .forEachOrdered(unknownConfigs::add);
       }
-    }
-  }
-
-  /**
-   * Expands the rc's options in {@code <rc options> <command line>} order, with config options
-   * expanded wherever the --config option was mentioned.
-   *
-   * <p>This requires a bit more care than the in-place expansion. We need to be wary of potential
-   * cycles in the definitions of config values, and should warn when a single --config expansion
-   * contradicts itself.
-   */
-  static final class InPlaceConfigExpansionRcHandler extends BlazeOptionHandler {
-
-    private InPlaceConfigExpansionRcHandler(
-        BlazeRuntime runtime,
-        BlazeWorkspace workspace,
-        BlazeCommand command,
-        Command commandAnnotation,
-        OptionsParser optionsParser,
-        InvocationPolicy invocationPolicy) {
-      super(runtime, workspace, command, commandAnnotation, optionsParser, invocationPolicy);
-    }
-
-    @Override
-    void expandConfigOptions(
-        EventHandler eventHandler, ListMultimap<String, RcChunkOfArgs> commandToRcArgs)
-        throws OptionsParsingException {
-
-      OptionValueDescription configValueDescription =
-          optionsParser.getOptionValueDescription("config");
-      if (configValueDescription == null
-          || configValueDescription.getCanonicalInstances() == null) {
-        // No --config values were set, we can avoid this whole thing.
-        return;
-      }
-
-      // Find the base set of configs. This does not include the config options that might be
-      // recursively incuded.
-      ImmutableList<ParsedOptionDescription> configInstances =
-          ImmutableList.copyOf(configValueDescription.getCanonicalInstances());
-
-      // Expand the configs that are mentioned in the input. Flatten these expansions before parsing
-      // them, to preserve order.
-      for (ParsedOptionDescription configInstance : configInstances) {
-        String configValueToExpand = (String) configInstance.getConvertedValue();
-        List<String> expansion = getExpansion(eventHandler, commandToRcArgs, configValueToExpand);
-        optionsParser.parseOptionsFixedAtSpecificPriority(
-            configInstance.getPriority(),
-            String.format("expanded from --%s", configValueToExpand),
-            expansion);
-      }
-    }
-
-    private List<String> getExpansion(
-        EventHandler eventHandler,
-        ListMultimap<String, RcChunkOfArgs> commandToRcArgs,
-        String configToExpand)
-        throws OptionsParsingException {
-      LinkedHashSet<String> configAncestorSet = new LinkedHashSet<>();
-      configAncestorSet.add(configToExpand);
-      List<String> longestChain = new ArrayList<>();
-      List<String> finalExpansion =
-          getExpansion(
-              eventHandler, commandToRcArgs, configAncestorSet, configToExpand, longestChain);
-
-      // In order to prevent warning about a long chain of 13 configs at the 10, 11, 12, and 13
-      // point, we identify the longest chain for this 'high-level' --config found and only warn
-      // about it once. This may mean we missed a fork where each branch was independently long
-      // enough to warn, but the single warning should convey the message reasonably.
-      if (longestChain.size() >= 10) {
-        eventHandler.handle(
-            Event.warn(
-                String.format(
-                    "There is a recursive chain of configs %s configs long: %s. This seems "
-                        + "excessive, and might be hiding errors.",
-                    longestChain.size(), longestChain)));
-      }
-      return finalExpansion;
-    }
-
-    /**
-     * @param configAncestorSet is the chain of configs that have led to this one getting expanded.
-     *     This should only contain the configs that expanded, recursively, to this one, and should
-     *     not contain "siblings," as it is used to detect cycles. {@code build:foo --config=bar},
-     *     {@code build:bar --config=foo}, is a cycle, detected because this list will be [foo, bar]
-     *     when we find another 'foo' to expand. However, {@code build:foo --config=bar}, {@code
-     *     build:foo --config=bar} is not a cycle just because bar is expanded twice, and the 1st
-     *     bar should not be in the parents list of the second bar.
-     * @param longestChain will be populated with the longest inheritance chain of configs.
-     */
-    private List<String> getExpansion(
-        EventHandler eventHandler,
-        ListMultimap<String, RcChunkOfArgs> commandToRcArgs,
-        LinkedHashSet<String> configAncestorSet,
-        String configToExpand,
-        List<String> longestChain)
-        throws OptionsParsingException {
-      List<String> expansion = new ArrayList<>();
-      boolean foundDefinition = false;
-      // The expansion order of rc files is first by command priority, and then in the order the
-      // rc files were read, respecting import statement placement.
-      for (String commandToParse : getCommandNamesToParse(commandAnnotation)) {
-        String configDef = commandToParse + ":" + configToExpand;
-        for (RcChunkOfArgs rcArgs : commandToRcArgs.get(configDef)) {
-          foundDefinition = true;
-          rcfileNotes.add(
-              String.format(
-                  "Found applicable config definition %s in file %s: %s",
-                  configDef, rcArgs.rcFile, String.join(" ", rcArgs.args)));
-
-          // For each arg in the rcARgs chunk, we first check if it is a config, and if so, expand
-          // it in place. We avoid cycles by tracking the parents of this config.
-          for (String arg : rcArgs.args) {
-            expansion.add(arg);
-            if (arg.length() >= 8 && arg.substring(0, 8).equals("--config")) {
-              // We have a config. For sanity, because we don't want to worry about formatting,
-              // we will only accept --config=value, and will not accept value on a following line.
-              int charOfConfigValue = arg.indexOf('=');
-              if (charOfConfigValue < 0) {
-                throw new OptionsParsingException("Config flag was provided without a value.");
-              }
-              String newConfigValue = arg.substring(charOfConfigValue + 1);
-              LinkedHashSet<String> extendedConfigAncestorSet =
-                  new LinkedHashSet<>(configAncestorSet);
-              if (!extendedConfigAncestorSet.add(newConfigValue)) {
-                throw new OptionsParsingException(
-                    String.format(
-                        "Config expansion has a cycle: config value %s expands to itself, "
-                            + "see inheritance chain %s",
-                        newConfigValue, extendedConfigAncestorSet));
-              }
-              if (extendedConfigAncestorSet.size() > longestChain.size()) {
-                longestChain.clear();
-                longestChain.addAll(extendedConfigAncestorSet);
-              }
-
-              expansion.addAll(
-                  getExpansion(
-                      eventHandler,
-                      commandToRcArgs,
-                      extendedConfigAncestorSet,
-                      newConfigValue,
-                      longestChain));
-            }
-          }
-        }
-      }
-
-      if (!foundDefinition) {
-        String warning = "Config value " + configToExpand + " is not defined in any .rc file";
-        CommonCommandOptions commonOptions = optionsParser.getOptions(CommonCommandOptions.class);
-        if (commonOptions.allowUndefinedConfigs) {
-          eventHandler.handle(Event.warn(warning));
-        } else {
-          throw new OptionsParsingException(warning);
-        }
-      }
-      return expansion;
     }
   }
 
