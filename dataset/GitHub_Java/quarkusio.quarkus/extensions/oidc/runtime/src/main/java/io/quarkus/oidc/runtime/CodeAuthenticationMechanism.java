@@ -86,7 +86,7 @@ public class CodeAuthenticationMechanism extends AbstractOidcAuthenticationMecha
         List<Object> scopes = new ArrayList<>();
 
         scopes.add("openid");
-        config.authentication.scopes.ifPresent(scopes::addAll);
+        scopes.addAll(config.authentication.scopes);
 
         params.put("scopes", new JsonArray(scopes));
         params.put("redirect_uri", buildRedirectUri(context));
