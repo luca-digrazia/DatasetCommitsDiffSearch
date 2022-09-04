@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.ParameterFile;
-import com.google.devtools.build.lib.actions.ThreadStateReceiver;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
@@ -1763,8 +1762,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected void assertSameContentsWithCommonElements(Iterable<String> artifacts,
       String[] expectedInputs, Iterable<String> common) {
-    assertThat(artifacts)
-        .containsExactlyElementsIn(Iterables.concat(Lists.newArrayList(expectedInputs), common));
+    assertThat(Iterables.concat(Lists.newArrayList(expectedInputs), common))
+        .containsExactlyElementsIn(artifacts);
   }
 
   /**
@@ -2460,8 +2459,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
           /*actionFileSystem=*/ null,
           /*skyframeDepsResult*/ null,
           NestedSetExpander.DEFAULT,
-          UnixGlob.DEFAULT_SYSCALLS,
-          ThreadStateReceiver.NULL_INSTANCE);
+          UnixGlob.DEFAULT_SYSCALLS);
     }
   }
 }
