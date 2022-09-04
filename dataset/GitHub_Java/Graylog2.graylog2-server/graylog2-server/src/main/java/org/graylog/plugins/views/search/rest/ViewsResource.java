@@ -23,6 +23,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog.plugins.views.audit.ViewsAuditEventTypes;
 import org.graylog.plugins.views.search.views.ViewDTO;
 import org.graylog.plugins.views.search.views.ViewService;
@@ -69,6 +70,7 @@ import static java.util.Locale.ENGLISH;
 @Path("/views")
 @Produces(MediaType.APPLICATION_JSON)
 @RequiresAuthentication
+@RequiresPermissions(ViewsRestPermissions.VIEW_USE)
 public class ViewsResource extends RestResource implements PluginRestResource {
     private static final Logger LOG = LoggerFactory.getLogger(ViewsResource.class);
     private static final ImmutableMap<String, SearchQueryField> SEARCH_FIELD_MAPPING = ImmutableMap.<String, SearchQueryField>builder()
@@ -95,13 +97,13 @@ public class ViewsResource extends RestResource implements PluginRestResource {
     @GET
     @ApiOperation("Get a list of all views")
     public PaginatedResponse<ViewDTO> views(@ApiParam(name = "page") @QueryParam("page") @DefaultValue("1") int page,
-                                            @ApiParam(name = "per_page") @QueryParam("per_page") @DefaultValue("50") int perPage,
-                                            @ApiParam(name = "sort",
-                                                    value = "The field to sort the result on",
-                                                    required = true,
-                                                    allowableValues = "id,title,created_at") @DefaultValue(ViewDTO.FIELD_TITLE) @QueryParam("sort") String sortField,
-                                            @ApiParam(name = "order", value = "The sort direction", allowableValues = "asc, desc") @DefaultValue("asc") @QueryParam("order") String order,
-                                            @ApiParam(name = "query") @QueryParam("query") String query) {
+                                                   @ApiParam(name = "per_page") @QueryParam("per_page") @DefaultValue("50") int perPage,
+                                                   @ApiParam(name = "sort",
+                                                           value = "The field to sort the result on",
+                                                           required = true,
+                                                           allowableValues = "id,title,created_at") @DefaultValue(ViewDTO.FIELD_TITLE) @QueryParam("sort") String sortField,
+                                                   @ApiParam(name = "order", value = "The sort direction", allowableValues = "asc, desc") @DefaultValue("asc") @QueryParam("order") String order,
+                                                   @ApiParam(name = "query") @QueryParam("query") String query) {
 
         if (!ViewDTO.SORT_FIELDS.contains(sortField.toLowerCase(ENGLISH))) {
             sortField = ViewDTO.FIELD_TITLE;
@@ -150,6 +152,7 @@ public class ViewsResource extends RestResource implements PluginRestResource {
 
     @POST
     @ApiOperation("Create a new view")
+    @RequiresPermissions(ViewsRestPermissions.VIEW_CREATE)
     @AuditEvent(type = ViewsAuditEventTypes.VIEW_CREATE)
     public ViewDTO create(@ApiParam @Valid ViewDTO dto) throws ValidationException {
         final String username = getCurrentUser() == null ? null : getCurrentUser().getName();

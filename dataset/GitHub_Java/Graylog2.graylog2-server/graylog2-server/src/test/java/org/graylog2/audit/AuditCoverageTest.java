@@ -18,12 +18,9 @@ package org.graylog2.audit;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import org.graylog.events.audit.EventsAuditEventTypes;
 import org.graylog.plugins.pipelineprocessor.audit.PipelineProcessorAuditEventTypes;
 import org.graylog.plugins.sidecar.audit.SidecarAuditEventTypes;
 import org.graylog.plugins.views.audit.ViewsAuditEventTypes;
-import org.graylog.scheduler.audit.JobSchedulerAuditEventTypes;
-import org.graylog.security.SecurityAuditEventTypes;
 import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.audit.jersey.NoAuditEvent;
 import org.junit.Test;
@@ -53,9 +50,6 @@ public class AuditCoverageTest {
                 .addAll(new PipelineProcessorAuditEventTypes().auditEventTypes())
                 .addAll(new SidecarAuditEventTypes().auditEventTypes())
                 .addAll(new ViewsAuditEventTypes().auditEventTypes())
-                .addAll(new JobSchedulerAuditEventTypes().auditEventTypes())
-                .addAll(new EventsAuditEventTypes().auditEventTypes())
-                .addAll(new SecurityAuditEventTypes().auditEventTypes())
                 .build();
         final Reflections reflections = new Reflections(configurationBuilder);
 
