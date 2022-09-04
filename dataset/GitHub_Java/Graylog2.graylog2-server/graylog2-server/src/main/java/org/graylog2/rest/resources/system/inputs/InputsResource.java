@@ -49,7 +49,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -62,27 +61,22 @@ public class InputsResource extends RestResource {
     @GET
     @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    @Path("/{inputId}")
-    public String single(@PathParam("inputId") String inputId) {
-        MessageInput input = core.inputs().getRunningInputs().get(inputId);
-
-        if (input == null) {
-            LOG.info("Input [{}] not found. Returning HTTP 404.", inputId);
-            throw new WebApplicationException(404);
-        }
-
-        return json(toMap(input));
-
-    }
-
-    @GET
-    @Timed
-    @Produces(MediaType.APPLICATION_JSON)
     public String list() {
         List<Map<String, Object>> inputs = Lists.newArrayList();
 
         for (MessageInput input : core.inputs().getRunningInputs().values()) {
-            inputs.add(toMap(input));
+            Map<String, Object> inputMap = Maps.newHashMap();
+
+            inputMap.put("type", input.getClass().getCanonicalName());
+            inputMap.put("input_id", input.getId());
+            inputMap.put("persist_id", input.getPersistId());
+            inputMap.put("name", input.getName());
+            inputMap.put("title", input.getTitle());
+            inputMap.put("creator_user_id", input.getCreatorUserId());
+            inputMap.put("started_at", Tools.getISO8601String(input.getCreatedAt()));
+            inputMap.put("attributes", input.getAttributesWithMaskedPasswords());
+
+            inputs.add(inputMap);
         }
 
         Map<String, Object> result = Maps.newHashMap();
@@ -125,17 +119,13 @@ public class InputsResource extends RestResource {
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
-        String inputId = UUID.randomUUID().toString();
-
         // Build MongoDB data
         Map<String, Object> inputData = Maps.newHashMap();
-        inputData.put("input_id", inputId);
         inputData.put("title", lr.title);
         inputData.put("type", lr.type);
         inputData.put("creator_user_id", lr.creatorUserId);
         inputData.put("configuration", lr.configuration);
         inputData.put("created_at", createdAt);
-        inputData.put("node_id", core.getNodeId());
 
         // ... and check if it would pass validation. We don't need to go on if it doesn't.
         Input mongoInput = new Input(core, inputData);
@@ -151,7 +141,7 @@ public class InputsResource extends RestResource {
         }
 
         // Launch input. (this will run async and clean up itself in case of an error.)
-        core.inputs().launch(input, inputId);
+        String inputId = core.inputs().launch(input);
 
         // Persist input.
         ObjectId id;
@@ -231,21 +221,6 @@ public class InputsResource extends RestResource {
         result.put("requested_configuration", input.getRequestedConfiguration().asList());
 
         return json(result);
-    }
-
-    private Map<String, Object> toMap(MessageInput input) {
-        Map<String, Object> inputMap = Maps.newHashMap();
-
-        inputMap.put("type", input.getClass().getCanonicalName());
-        inputMap.put("input_id", input.getId());
-        inputMap.put("persist_id", input.getPersistId());
-        inputMap.put("name", input.getName());
-        inputMap.put("title", input.getTitle());
-        inputMap.put("creator_user_id", input.getCreatorUserId());
-        inputMap.put("started_at", Tools.getISO8601String(input.getCreatedAt()));
-        inputMap.put("attributes", input.getAttributesWithMaskedPasswords());
-
-        return inputMap;
     }
 
 
