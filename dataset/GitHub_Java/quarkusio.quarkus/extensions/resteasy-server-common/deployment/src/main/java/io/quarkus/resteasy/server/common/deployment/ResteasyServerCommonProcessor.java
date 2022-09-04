@@ -259,10 +259,6 @@ public class ResteasyServerCommonProcessor {
                 String className = implementor.name().toString();
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, className));
                 scannedResources.putIfAbsent(implementor.name(), implementor);
-
-                if (!implementor.hasNoArgsConstructor()) {
-                    withoutDefaultCtor.put(implementor.name(), implementor);
-                }
             }
         }
 
