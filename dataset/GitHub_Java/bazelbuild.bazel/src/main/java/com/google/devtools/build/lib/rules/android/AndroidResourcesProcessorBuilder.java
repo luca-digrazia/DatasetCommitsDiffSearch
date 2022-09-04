@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
@@ -55,6 +56,13 @@ public class AndroidResourcesProcessorBuilder {
           .withSeparator(ToArg.SeparatorType.COLON_COMMA)
           .toArgConverter();
 
+  private static final ResourceContainerConverter.ToArg RESOURCE_CONTAINER_TO_ARG =
+      ResourceContainerConverter.builder()
+          .include(Includes.ResourceRoots)
+          .include(Includes.Manifest)
+          .withSeparator(ToArg.SeparatorType.COLON_COMMA)
+          .toArgConverter();
+
   private static final ResourceContainerConverter.ToArg RESOURCE_DEP_TO_ARG =
       ResourceContainerConverter.builder()
           .include(Includes.ResourceRoots)
@@ -63,6 +71,8 @@ public class AndroidResourcesProcessorBuilder {
           .include(Includes.SymbolsBin)
           .withSeparator(ToArg.SeparatorType.COLON_COMMA)
           .toArgConverter();
+
+  private ResourceContainer primary;
 
   private ResourceDependencies resourceDependencies;
   private AssetDependencies assetDependencies;
@@ -103,6 +113,15 @@ public class AndroidResourcesProcessorBuilder {
     this.sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
     this.ruleContext = ruleContext;
     this.spawnActionBuilder = new SpawnAction.Builder();
+  }
+
+  /**
+   * The primary resource for merging. This resource will overwrite any resource or data value in
+   * the transitive closure.
+   */
+  public AndroidResourcesProcessorBuilder withPrimary(ResourceContainer primary) {
+    this.primary = primary;
+    return this;
   }
 
   /**
@@ -220,11 +239,12 @@ public class AndroidResourcesProcessorBuilder {
     return this;
   }
 
-  public ResourceContainer build(ResourceContainer primary) {
-    build(
-        primary.getAndroidResources(),
-        primary.getAndroidAssets(),
-        ProcessedAndroidManifest.from(primary));
+  public ResourceContainer build(ActionConstructionContext context) {
+    if (aaptVersion == AndroidAaptVersion.AAPT2) {
+      createAapt2ApkAction(context);
+    } else {
+      createAaptAction(context);
+    }
 
     ResourceContainer.Builder builder =
         primary.toBuilder().setJavaSourceJar(sourceJarOut).setRTxt(rTxtOut).setSymbols(symbols);
@@ -241,50 +261,6 @@ public class AndroidResourcesProcessorBuilder {
     }
 
     return builder.build();
-  }
-
-  public ProcessedAndroidData build(
-      AndroidResources primaryResources,
-      AndroidAssets primaryAssets,
-      StampedAndroidManifest primaryManifest) {
-
-    if (aaptVersion == AndroidAaptVersion.AAPT2) {
-      createAapt2ApkAction(primaryResources, primaryAssets, primaryManifest);
-    } else {
-      createAaptAction(primaryResources, primaryAssets, primaryManifest);
-    }
-
-    // Wrap the new manifest, if any
-    ProcessedAndroidManifest processedManifest =
-        new ProcessedAndroidManifest(
-            manifestOut == null ? primaryManifest.getManifest() : manifestOut,
-            primaryManifest.getPackage(),
-            primaryManifest.isExported());
-
-    // Wrap the parsed resources
-    ParsedAndroidResources parsedResources =
-        ParsedAndroidResources.of(
-            primaryResources,
-            symbols,
-            /* compiledSymbols = */ null,
-            ruleContext.getLabel(),
-            processedManifest);
-
-    // Wrap the parsed and merged assets
-    ParsedAndroidAssets parsedAssets =
-        ParsedAndroidAssets.of(primaryAssets, symbols, ruleContext.getLabel());
-    MergedAndroidAssets mergedAssets =
-        MergedAndroidAssets.of(parsedAssets, mergedResourcesOut, assetDependencies);
-
-    return ProcessedAndroidData.of(
-        parsedResources,
-        mergedAssets,
-        processedManifest,
-        rTxtOut,
-        sourceJarOut,
-        apkOut,
-        dataBindingInfoZip,
-        resourceDependencies);
   }
 
   public AndroidResourcesProcessorBuilder setJavaPackage(String customJavaPackage) {
@@ -325,10 +301,7 @@ public class AndroidResourcesProcessorBuilder {
     return this;
   }
 
-  private void createAapt2ApkAction(
-      AndroidResources primaryResources,
-      AndroidAssets primaryAssets,
-      StampedAndroidManifest primaryManifest) {
+  private void createAapt2ApkAction(ActionConstructionContext context) {
     List<Artifact> outs = new ArrayList<>();
     // TODO(corysmith): Convert to an immutable list builder, as there is no benefit to a NestedSet
     // here, as it will already have been flattened.
@@ -368,7 +341,7 @@ public class AndroidResourcesProcessorBuilder {
       builder.add("--conditionalKeepRules");
     }
 
-    configureCommonFlags(primaryResources, primaryAssets, primaryManifest, outs, inputs, builder);
+    configureCommonFlags(outs, inputs, builder);
 
     ParamFileInfo.Builder paramFileInfo = ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED);
     // Some flags (e.g. --mainData) may specify lists (or lists of lists) separated by special
@@ -393,13 +366,10 @@ public class AndroidResourcesProcessorBuilder {
                 ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
             .setProgressMessage("Processing Android resources for %s", ruleContext.getLabel())
             .setMnemonic("AndroidAapt2")
-            .build(ruleContext));
+            .build(context));
   }
 
-  private void createAaptAction(
-      AndroidResources primaryResources,
-      AndroidAssets primaryAssets,
-      StampedAndroidManifest primaryManifest) {
+  private void createAaptAction(ActionConstructionContext context) {
     List<Artifact> outs = new ArrayList<>();
     // TODO(corysmith): Convert to an immutable list builder, as there is no benefit to a NestedSet
     // here, as it will already have been flattened.
@@ -423,7 +393,7 @@ public class AndroidResourcesProcessorBuilder {
     addAssetDeps(builder, inputs);
 
     builder.addExecPath("--aapt", sdk.getAapt().getExecutable());
-    configureCommonFlags(primaryResources, primaryAssets, primaryManifest, outs, inputs, builder);
+    configureCommonFlags(outs, inputs, builder);
 
     ImmutableList<String> filteredResources =
         resourceFilterFactory.getResourcesToIgnoreInExecution();
@@ -454,7 +424,7 @@ public class AndroidResourcesProcessorBuilder {
                 ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
             .setProgressMessage("Processing Android resources for %s", ruleContext.getLabel())
             .setMnemonic("AaptPackage")
-            .build(ruleContext));
+            .build(context));
   }
 
   private void addAssetDeps(CustomCommandLine.Builder builder, NestedSetBuilder<Artifact> inputs) {
@@ -477,23 +447,12 @@ public class AndroidResourcesProcessorBuilder {
   }
 
   private void configureCommonFlags(
-      AndroidResources primaryResources,
-      AndroidAssets primaryAssets,
-      StampedAndroidManifest primaryManifest,
-      List<Artifact> outs,
-      NestedSetBuilder<Artifact> inputs,
-      Builder builder) {
+      List<Artifact> outs, NestedSetBuilder<Artifact> inputs, Builder builder) {
 
     // Add data
-    builder.add(
-        "--primaryData",
-        String.format(
-            "%s:%s:%s",
-            AndroidDataConverter.rootsToString(primaryResources.getResourceRoots()),
-            AndroidDataConverter.rootsToString(primaryAssets.getAssetRoots()),
-            primaryManifest.getManifest().getExecPathString()));
-    inputs.addAll(primaryResources.getResources());
-    inputs.add(primaryManifest.getManifest());
+    builder.add("--primaryData", RESOURCE_CONTAINER_TO_ARG.map(primary));
+    inputs.addAll(primary.getArtifacts());
+    inputs.add(primary.getManifest());
 
     if (!Strings.isNullOrEmpty(sdk.getBuildToolsVersion())) {
       builder.add("--buildToolsVersion", sdk.getBuildToolsVersion());

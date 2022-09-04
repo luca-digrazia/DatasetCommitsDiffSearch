@@ -143,7 +143,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             && (definesLocalResources
                 || ruleContext.getFragment(AndroidConfiguration.class).fixedResourceNeverlinking());
     ResourceDependencies resourceDeps = ResourceDependencies.fromRuleDeps(ruleContext, isNeverLink);
-    AssetDependencies assetDeps = AssetDependencies.fromRuleDeps(ruleContext, isNeverLink);
 
     final ResourceApk resourceApk;
     if (definesLocalResources) {
@@ -166,7 +165,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         return null;
       }
     } else {
-      resourceApk = ResourceApk.fromTransitiveResources(resourceDeps, assetDeps);
+      resourceApk = ResourceApk.fromTransitiveResources(resourceDeps);
     }
 
     JavaTargetAttributes javaTargetAttributes =
@@ -190,7 +189,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     final ResourceContainer primaryResources;
     final Aar aar;
     if (definesLocalResources) {
-      primaryResources = resourceApk.getPrimaryResources();
+      primaryResources = resourceApk.getPrimaryResource();
       // applicationManifest has already been checked for nullness above in this method
       ApplicationManifest applicationManifest =
           ApplicationManifest.fromExplicitManifest(ruleContext, resourceApk.getManifest());

@@ -535,7 +535,7 @@ public class AndroidResourceProcessingAction {
         }
 
         ResourcesZip.from(processedAndroidData.getResourceDir(), processedAndroidData.getAssetDir())
-            .writeTo(options.resourcesOutput, /* compress= */ false);
+            .writeTo(options.resourcesOutput, false /* compress */);
       }
       logger.fine(
           String.format("Packaging finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
