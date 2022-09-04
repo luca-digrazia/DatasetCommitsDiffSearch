@@ -74,7 +74,6 @@ import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.cache.MetadataInjector;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -155,8 +154,6 @@ public final class SkyframeActionExecutor {
       };
 
   private final ActionKeyContext actionKeyContext;
-  private final MetadataConsumerForMetrics outputArtifactsSeen;
-  private final MetadataConsumerForMetrics outputArtifactsFromActionCache;
   private Reporter reporter;
   private Map<String, String> clientEnv = ImmutableMap.of();
   private Executor executorEngine;
@@ -229,13 +226,9 @@ public final class SkyframeActionExecutor {
 
   SkyframeActionExecutor(
       ActionKeyContext actionKeyContext,
-      MetadataConsumerForMetrics outputArtifactsSeen,
-      MetadataConsumerForMetrics outputArtifactsFromActionCache,
       AtomicReference<ActionExecutionStatusReporter> statusReporterRef,
       Supplier<ImmutableList<Root>> sourceRootSupplier) {
     this.actionKeyContext = actionKeyContext;
-    this.outputArtifactsSeen = outputArtifactsSeen;
-    this.outputArtifactsFromActionCache = outputArtifactsFromActionCache;
     this.statusReporterRef = statusReporterRef;
     this.sourceRootSupplier = sourceRootSupplier;
   }
@@ -322,7 +315,7 @@ public final class SkyframeActionExecutor {
       String relativeOutputPath,
       ActionInputMap inputArtifactData,
       Iterable<Artifact> outputArtifacts,
-      boolean rewindingEnabled) {
+      boolean trackFailedRemoteReads) {
     return outputService.createActionFileSystem(
         executorEngine.getFileSystem(),
         executorEngine.getExecRoot().asFragment(),
@@ -330,7 +323,7 @@ public final class SkyframeActionExecutor {
         sourceRootSupplier.get(),
         inputArtifactData,
         outputArtifacts,
-        rewindingEnabled);
+        trackFailedRemoteReads);
   }
 
   private void updateActionFileSystemContext(
@@ -650,12 +643,7 @@ public final class SkyframeActionExecutor {
       }
 
       // We still need to check the outputs so that output file data is available to the value.
-      // Filesets cannot be cached in the action cache, so it is fine to pass null here.
-      checkOutputs(
-          action,
-          metadataHandler,
-          /*filesetOutputSymlinksForMetrics=*/ null,
-          /*isActionCacheHitForMetrics=*/ true);
+      checkOutputs(action, metadataHandler);
       if (!eventPosted) {
         eventHandler.post(new CachedActionEvent(action, actionStartTime));
       }
@@ -1122,11 +1110,7 @@ public final class SkyframeActionExecutor {
         Preconditions.checkState(action.inputsDiscovered(),
             "Action %s successfully executed, but inputs still not known", action);
 
-        if (!checkOutputs(
-            action,
-            metadataHandler,
-            actionExecutionContext.getOutputSymlinks(),
-            /*isActionCacheHitForMetrics=*/ false)) {
+        if (!checkOutputs(action, metadataHandler)) {
           throw toActionExecutionException(
               "not all outputs were created or valid",
               null,
@@ -1562,11 +1546,7 @@ public final class SkyframeActionExecutor {
    *
    * @return false if some outputs are missing, true - otherwise.
    */
-  private boolean checkOutputs(
-      Action action,
-      MetadataHandler metadataHandler,
-      @Nullable ImmutableList<FilesetOutputSymlink> filesetOutputSymlinksForMetrics,
-      boolean isActionCacheHitForMetrics) {
+  private boolean checkOutputs(Action action, MetadataHandler metadataHandler) {
     boolean success = true;
     for (Artifact output : action.getOutputs()) {
       // getMetadata has the side effect of adding the artifact to the cache if it's not there
@@ -1574,15 +1554,7 @@ public final class SkyframeActionExecutor {
       // call it if we know the artifact is not omitted.
       if (!metadataHandler.artifactOmitted(output)) {
         try {
-          FileArtifactValue metadata = metadataHandler.getMetadata(output);
-
-          addOutputToMetrics(
-              output,
-              metadata,
-              metadataHandler,
-              filesetOutputSymlinksForMetrics,
-              isActionCacheHitForMetrics,
-              action);
+          metadataHandler.getMetadata(output);
         } catch (IOException e) {
           success = false;
           if (output.isTreeArtifact()) {
@@ -1595,48 +1567,6 @@ public final class SkyframeActionExecutor {
       }
     }
     return success;
-  }
-
-  private void addOutputToMetrics(
-      Artifact output,
-      FileArtifactValue metadata,
-      MetadataHandler metadataHandler,
-      @Nullable ImmutableList<FilesetOutputSymlink> filesetOutputSymlinks,
-      boolean isActionCacheHit,
-      Action actionForDebugging)
-      throws IOException {
-    if (metadata == null) {
-      BugReport.sendBugReport(
-          new IllegalStateException(
-              String.format(
-                  "Metadata for %s not present in %s (for %s)",
-                  output, metadataHandler, actionForDebugging)));
-      return;
-    }
-    if (output.isFileset() && filesetOutputSymlinks != null) {
-      outputArtifactsSeen.accumulate(filesetOutputSymlinks);
-    } else if (!output.isTreeArtifact()) {
-      outputArtifactsSeen.accumulate(metadata);
-      if (isActionCacheHit) {
-        outputArtifactsFromActionCache.accumulate(metadata);
-      }
-    } else {
-      TreeArtifactValue treeArtifactValue;
-      try {
-        treeArtifactValue = metadataHandler.getTreeArtifactValue((SpecialArtifact) output);
-      } catch (IOException e) {
-        BugReport.sendBugReport(
-            new IllegalStateException(
-                String.format(
-                    "Unexpected IO exception after metadata %s was retrieved for %s (action %s)",
-                    metadata, output, actionForDebugging)));
-        throw e;
-      }
-      outputArtifactsSeen.accumulate(treeArtifactValue);
-      if (isActionCacheHit) {
-        outputArtifactsFromActionCache.accumulate(treeArtifactValue);
-      }
-    }
   }
 
   /**
