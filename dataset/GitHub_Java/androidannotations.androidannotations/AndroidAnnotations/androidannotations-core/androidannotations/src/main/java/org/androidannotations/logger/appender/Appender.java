@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,7 +20,7 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 
-import org.androidannotations.helper.OptionsHelper;
+import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.logger.Level;
 import org.androidannotations.logger.formatter.Formatter;
 
@@ -27,7 +28,6 @@ public abstract class Appender {
 
 	protected final Formatter formatter;
 	protected ProcessingEnvironment processingEnv;
-	protected OptionsHelper optionsHelper;
 
 	public Appender(Formatter formatter) {
 		this.formatter = formatter;
@@ -37,15 +37,14 @@ public abstract class Appender {
 		return formatter;
 	}
 
-	public void setProcessingEnv(ProcessingEnvironment processingEnv) {
-		this.processingEnv = processingEnv;
-		optionsHelper = new OptionsHelper(processingEnv);
+	public void setEnvironment(AndroidAnnotationsEnvironment environment) {
+		this.processingEnv = environment.getProcessingEnvironment();
 	}
 
 	public abstract void open();
 
 	public abstract void append(Level level, Element element, AnnotationMirror annotationMirror, String message);
 
-	public abstract void close();
+	public abstract void close(boolean lastRound);
 
 }

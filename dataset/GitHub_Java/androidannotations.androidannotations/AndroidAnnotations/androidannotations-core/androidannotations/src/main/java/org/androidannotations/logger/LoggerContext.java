@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,11 +19,11 @@ package org.androidannotations.logger;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 
-import org.androidannotations.helper.OptionsHelper;
+import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.Option;
 import org.androidannotations.logger.appender.Appender;
 import org.androidannotations.logger.appender.ConsoleAppender;
 import org.androidannotations.logger.appender.FileAppender;
@@ -31,8 +32,12 @@ import org.androidannotations.logger.formatter.Formatter;
 
 public final class LoggerContext {
 
+	public static final Option OPTION_LOG_LEVEL = new Option("logLevel", "WARN");
+	public static final Option OPTION_LOG_APPENDER_CONSOLE = new Option("logAppenderConsole", "false");
+	public static final Option OPTION_LOG_APPENDER_FILE = new Option("logAppenderFile", "true");
+
 	private static LoggerContext instance = null;
-	private static final Level DEFAULT_LEVEL = Level.DEBUG;
+	private static final Level DEFAULT_LEVEL = Level.WARN;
 
 	private Level currentLevel = DEFAULT_LEVEL;
 	private List<Appender> appenders = new ArrayList<>();
@@ -68,38 +73,44 @@ public final class LoggerContext {
 		this.currentLevel = currentLevel;
 	}
 
-	public void setProcessingEnv(ProcessingEnvironment processingEnv) {
+	public void setEnvironment(AndroidAnnotationsEnvironment environment) {
 		appenders.clear();
-		OptionsHelper optionsHelper = new OptionsHelper(processingEnv);
-		resolveLogLevel(optionsHelper);
-		addConsoleAppender(optionsHelper);
-		addFileAppender(optionsHelper);
+		resolveLogLevel(environment);
+		addConsoleAppender(environment);
+		addFileAppender(environment);
 		appenders.add(new MessagerAppender());
 
 		for (Appender appender : appenders) {
-			appender.setProcessingEnv(processingEnv);
+			appender.setEnvironment(environment);
 			appender.open();
 		}
 	}
 
-	public void close() {
+	public void close(boolean lastRound) {
 		for (Appender appender : appenders) {
-			appender.close();
+			appender.close(lastRound);
 		}
 	}
 
-	private void resolveLogLevel(OptionsHelper optionsHelper) {
-		setCurrentLevel(optionsHelper.getLogLevel());
+	private void resolveLogLevel(AndroidAnnotationsEnvironment environment) {
+		Level level = Level.WARN;
+		try {
+			level = Level.parse(environment.getOptionValue(OPTION_LOG_LEVEL));
+		} catch (Exception ignored) {
+			// Do nothing, keep the default value;
+		}
+		setCurrentLevel(level);
 	}
 
-	private void addConsoleAppender(OptionsHelper optionsHelper) {
-		if (optionsHelper.shouldUseConsoleAppender()) {
+
+	private void addConsoleAppender(AndroidAnnotationsEnvironment environment) {
+		if (environment.getOptionBooleanValue(OPTION_LOG_APPENDER_CONSOLE)) {
 			appenders.add(new ConsoleAppender());
 		}
 	}
 
-	private void addFileAppender(OptionsHelper optionsHelper) {
-		if (optionsHelper.shouldUseFileAppender()) {
+	private void addFileAppender(AndroidAnnotationsEnvironment environment) {
+		if (environment.getOptionBooleanValue(OPTION_LOG_APPENDER_FILE)) {
 			appenders.add(new FileAppender());
 		}
 	}

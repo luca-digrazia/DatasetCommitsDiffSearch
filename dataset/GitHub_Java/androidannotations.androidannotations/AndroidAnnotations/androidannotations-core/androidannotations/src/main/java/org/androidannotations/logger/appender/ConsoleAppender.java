@@ -27,7 +27,7 @@ import org.androidannotations.logger.formatter.FormatterFull;
 
 public class ConsoleAppender extends Appender {
 
-	private final List<String> errors = new LinkedList<>();
+	private static List<String> errors = new LinkedList<>();
 
 	public ConsoleAppender() {
 		super(new FormatterFull());
@@ -52,6 +52,7 @@ public class ConsoleAppender extends Appender {
 			for (String error : errors) {
 				System.err.println(error);
 			}
+			errors.clear();
 		}
 	}
 
