@@ -31,12 +31,12 @@ import java.io.Writer;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.graylog2.communicator.methods.TwilioCommunicator;
 import org.graylog2.filters.BlacklistFilter;
 import org.graylog2.filters.CounterUpdateFilter;
 import org.graylog2.filters.RewriteFilter;
 import org.graylog2.filters.StreamMatcherFilter;
 import org.graylog2.filters.TokenizerFilter;
+import org.graylog2.healthchecks.MessageFlowHealthCheck;
 import org.graylog2.initializers.*;
 import org.graylog2.inputs.gelf.GELFTCPInput;
 import org.graylog2.inputs.gelf.GELFUDPInput;
@@ -111,19 +111,13 @@ public final class Main {
         }
 
         // Do not use a PID file if the user requested not to
-        if (!commandLineArguments.isNoPidFile()) {
+        if (!commandLineArguments.isNoPidFile())
             savePidFile(commandLineArguments.getPidFile());
-        }
 
         // Le server object. This is where all the magic happens.
         GraylogServer server = new GraylogServer();
         server.initialize(configuration);
 
-        // Register communicator methods.
-        if (configuration.isEnableCommunicationMethodTwilio()) {
-            server.registerCommunicatorMethod(TwilioCommunicator.class);
-        }
-        
         // Register initializers.
         server.registerInitializer(new ServerValueWriterInitializer(server, configuration));
         server.registerInitializer(new DroolsInitializer(server, configuration));
@@ -132,7 +126,9 @@ public final class Main {
         server.registerInitializer(new MessageRetentionInitializer(server));
         if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer(server)); }
         if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer(server)); }
-        server.registerInitializer(new DeflectorThreadsInitializer(server));
+        if (configuration.isEnableHealthCheckHttpApi()) {
+            server.registerInitializer(new HealthCheckHTTPServerInitializer(configuration.getHealthCheckHttpApiPort()));
+        }
 
         // Register inputs.
         if (configuration.isUseGELF()) {
@@ -152,6 +148,9 @@ public final class Main {
 
         // Register outputs.
         server.registerOutput(ElasticSearchOutput.class);
+
+        // Register health checks.
+        server.registerHealthCheck(new MessageFlowHealthCheck(server));
 
         // Blocks until we shut down.
         server.run();
