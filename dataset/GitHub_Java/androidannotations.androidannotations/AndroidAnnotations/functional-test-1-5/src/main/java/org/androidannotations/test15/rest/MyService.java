@@ -219,12 +219,4 @@ public interface MyService {
 	void setRestTemplate(RestTemplate restTemplate);
 
 	void setRootUrl(String test);
-	
-	void setCookie(String cookieName, String value);
-	
-	String getCookie(String cookieName);
-	
-	void setHeader(String headerName, String value);
-	
-	String getHeader(String headerName);
 }
