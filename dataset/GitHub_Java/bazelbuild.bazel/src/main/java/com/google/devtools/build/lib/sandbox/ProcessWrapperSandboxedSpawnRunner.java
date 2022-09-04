@@ -39,21 +39,18 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
   private final String productName;
   private final Path processWrapper;
   private final LocalEnvProvider localEnvProvider;
-  private final int timeoutGraceSeconds;
 
   ProcessWrapperSandboxedSpawnRunner(
       CommandEnvironment cmdEnv,
       BuildRequest buildRequest,
       Path sandboxBase,
-      String productName,
-      int timeoutGraceSeconds) {
+      String productName) {
     super(
         cmdEnv,
         sandboxBase,
         buildRequest.getOptions(SandboxOptions.class));
     this.execRoot = cmdEnv.getExecRoot();
     this.productName = productName;
-    this.timeoutGraceSeconds = timeoutGraceSeconds;
     this.processWrapper = ProcessWrapperRunner.getProcessWrapper(cmdEnv);
     this.localEnvProvider = OS.getCurrent() == OS.DARWIN
         ? new XCodeLocalEnvProvider()
@@ -69,8 +66,7 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
 
     int timeoutSeconds = (int) TimeUnit.MILLISECONDS.toSeconds(policy.getTimeoutMillis());
     List<String> arguments =
-        ProcessWrapperRunner.getCommandLine(
-            processWrapper, spawn.getArguments(), timeoutSeconds, timeoutGraceSeconds);
+        ProcessWrapperRunner.getCommandLine(processWrapper, spawn.getArguments(), timeoutSeconds);
     Map<String, String> environment =
         localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, productName);
 

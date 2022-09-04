@@ -66,10 +66,10 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
   public SpawnResult exec(Spawn spawn, SpawnExecutionPolicy policy)
       throws ExecException, InterruptedException {
     ActionExecutionMetadata owner = spawn.getResourceOwner();
-    policy.report(ProgressStatus.SCHEDULING, getName());
+    policy.report(ProgressStatus.SCHEDULING);
     try (ResourceHandle ignored =
         ResourceManager.instance().acquireResources(owner, spawn.getLocalResources())) {
-      policy.report(ProgressStatus.EXECUTING, getName());
+      policy.report(ProgressStatus.EXECUTING);
       return actuallyExec(spawn, policy);
     } catch (IOException e) {
       throw new UserExecException("I/O exception during sandboxed execution", e);
