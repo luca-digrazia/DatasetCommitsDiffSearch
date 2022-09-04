@@ -292,7 +292,6 @@ public class FakeCcModule
       Object doNotGenerateModuleMap,
       Object codeCoverageEnabled,
       Object hdrsCheckingMode,
-      Object variablesExtension,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
     return null;
@@ -338,7 +337,6 @@ public class FakeCcModule
       Object linkArtifactNameSuffix,
       Object neverLink,
       Object testOnlyTarget,
-      Object variablesExtension,
       StarlarkThread thread)
       throws InterruptedException, EvalException {
     return null;

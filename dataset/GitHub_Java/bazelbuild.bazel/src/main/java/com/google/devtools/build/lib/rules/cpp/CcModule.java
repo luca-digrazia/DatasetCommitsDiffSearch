@@ -430,10 +430,6 @@ public abstract class CcModule
     }
   }
 
-  protected Dict<?, ?> asDict(Object o) {
-    return o == Starlark.UNBOUND ? Dict.empty() : (Dict<?, ?>) o;
-  }
-
   @Nullable
   protected <T> Object asClassImmutableListOrNestedSet(
       Object o, Class<T> tClass, String description) throws EvalException {
@@ -1934,7 +1930,6 @@ public abstract class CcModule
       Object doNotGenerateModuleMapObject,
       Object codeCoverageEnabledObject,
       Object hdrsCheckingModeObject,
-      Object variablesExtension,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
     if (checkObjectsBound(
@@ -1945,8 +1940,7 @@ public abstract class CcModule
         propagateModuleMapToCompileActionObject,
         doNotGenerateModuleMapObject,
         codeCoverageEnabledObject,
-        hdrsCheckingModeObject,
-        variablesExtension)) {
+        hdrsCheckingModeObject)) {
       CcModule.checkPrivateStarlarkificationAllowlist(thread);
     }
 
@@ -2093,9 +2087,6 @@ public abstract class CcModule
     if (!Strings.isNullOrEmpty(stripIncludePrefix)) {
       helper.setStripIncludePrefix(stripIncludePrefix);
     }
-    if (!asDict(variablesExtension).isEmpty()) {
-      helper.addVariableExtension(new UserVariablesExtension(asDict(variablesExtension)));
-    }
     try {
       RuleContext ruleContext = actions.getRuleContext();
       CompilationInfo compilationInfo = helper.compile(ruleContext);
@@ -2123,14 +2114,9 @@ public abstract class CcModule
       Object linkedArtifactNameSuffixObject,
       Object neverLinkObject,
       Object testOnlyTargetObject,
-      Object variablesExtension,
       StarlarkThread thread)
       throws InterruptedException, EvalException {
-    if (checkObjectsBound(
-        linkedArtifactNameSuffixObject,
-        neverLinkObject,
-        testOnlyTargetObject,
-        variablesExtension)) {
+    if (checkObjectsBound(linkedArtifactNameSuffixObject, neverLinkObject, testOnlyTargetObject)) {
       checkPrivateStarlarkificationAllowlist(thread);
     }
     validateLanguage(language);
@@ -2200,9 +2186,6 @@ public abstract class CcModule
                     && actualFeatureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)
                     && CppHelper.useInterfaceSharedLibraries(
                         cppConfiguration, ccToolchainProvider, actualFeatureConfiguration));
-    if (!asDict(variablesExtension).isEmpty()) {
-      helper.addVariableExtension(new UserVariablesExtension(asDict(variablesExtension)));
-    }
     try {
       return helper.link(
           compilationOutputs != null ? compilationOutputs : CcCompilationOutputs.EMPTY);
