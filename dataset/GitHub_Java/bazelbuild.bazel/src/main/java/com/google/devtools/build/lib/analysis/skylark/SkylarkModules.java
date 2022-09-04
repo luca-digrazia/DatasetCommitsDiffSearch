@@ -34,15 +34,16 @@ public final class SkylarkModules {
   /** A bootstrap for non-rules-specific globals of the build API. */
   private static TopLevelBootstrap topLevelBootstrap =
       new TopLevelBootstrap(
-          new BazelBuildApiGlobals(),
-          new SkylarkAttr(),
-          new SkylarkCommandLine(),
-          new SkylarkNativeModule(),
-          new SkylarkRuleClassFunctions(),
+          BazelBuildApiGlobals.class,
+          SkylarkAttr.class,
+          SkylarkCommandLine.class,
+          SkylarkNativeModule.class,
+          SkylarkRuleClassFunctions.class,
           StructProvider.STRUCT,
           OutputGroupInfo.SKYLARK_CONSTRUCTOR,
           ActionsProvider.INSTANCE,
           DefaultInfo.PROVIDER);
+
   /**
    * Adds bindings for skylark built-ins and non-rules-specific globals of the build API to
    * the given environment map builder.

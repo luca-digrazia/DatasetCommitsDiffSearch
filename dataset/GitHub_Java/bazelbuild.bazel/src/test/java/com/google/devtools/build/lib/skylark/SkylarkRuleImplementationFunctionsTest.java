@@ -21,7 +21,6 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
@@ -1337,9 +1336,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     Object provider = configuredTarget.get("proxy");
     assertThat(provider).isInstanceOf(Info.class);
     assertThat(((Info) provider).getProvider().getKey())
-        .isEqualTo(
-            new SkylarkKey(
-                Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "foo_provider"));
+        .isEqualTo(new SkylarkKey(Label.parseAbsolute("//test:foo.bzl"), "foo_provider"));
   }
 
   @Test
@@ -1379,8 +1376,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     Object provider = configuredTarget.get("proxy");
     assertThat(provider).isInstanceOf(Info.class);
     assertThat(((Info) provider).getProvider().getKey())
-        .isEqualTo(
-            new SkylarkKey(Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "FooInfo"));
+        .isEqualTo(new SkylarkKey(Label.parseAbsolute("//test:foo.bzl"), "FooInfo"));
   }
 
   @Test
@@ -1497,9 +1493,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     Object provider = configuredTarget.get("proxy");
     assertThat(provider).isInstanceOf(Info.class);
     assertThat(((Info) provider).getProvider().getKey())
-        .isEqualTo(
-            new SkylarkKey(
-                Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "foo_provider"));
+        .isEqualTo(new SkylarkKey(Label.parseAbsolute("//test:foo.bzl"), "foo_provider"));
     assertThat(((Info) provider).getValue("a")).isEqualTo(123);
   }
 
@@ -1546,9 +1540,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     Object provider = configuredTarget.get("proxy");
     assertThat(provider).isInstanceOf(Info.class);
     assertThat(((Info) provider).getProvider().getKey())
-        .isEqualTo(
-            new SkylarkKey(
-                Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "foo_provider"));
+        .isEqualTo(new SkylarkKey(Label.parseAbsolute("//test:foo.bzl"), "foo_provider"));
   }
 
   @Test
