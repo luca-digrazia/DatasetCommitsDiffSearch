@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.rules.cpp.CcModule.NonCcDepInfo;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,7 +60,7 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
         NestedSetBuilder.wrap(Order.STABLE_ORDER, allOutputs);
     common.addPyExtraActionPseudoAction();
 
-    NestedSet<String> imports = common.collectImports(ruleContext, semantics);
+    NestedSet<PathFragment> imports = common.collectImports(ruleContext, semantics);
     if (ruleContext.hasErrors()) {
       return null;
     }
@@ -76,13 +76,12 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
     runfilesBuilder.addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
 
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
-    common.addCommonTransitiveInfoProviders(builder, semantics, filesToBuild, imports);
+    common.addCommonTransitiveInfoProviders(builder, semantics, filesToBuild);
 
     return builder
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(
-            semantics.buildCcInfoProvider(ruleContext.getPrerequisites("deps", Mode.TARGET)))
-        .addNativeDeclaredProvider(new NonCcDepInfo())
+            semantics.buildCcLinkingInfoProvider(ruleContext.getPrerequisites("deps", Mode.TARGET)))
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfilesBuilder.build()))
         .add(PythonImportsProvider.class, new PythonImportsProvider(imports))
         .build();

@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
@@ -79,7 +78,7 @@ public interface PythonSemantics {
       PyCommon common,
       CcLinkingInfo ccLinkingInfo,
       NestedSet<PathFragment> imports)
-      throws InterruptedException, RuleErrorException;
+      throws InterruptedException;
 
   /**
    * Called at the end of the analysis of {@code py_binary} rules.
