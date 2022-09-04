@@ -403,10 +403,7 @@ public class ExecutionTool {
 
     if (request.isRunningInEmacs()) {
       // The syntax of this message is tightly constrained by lisp/progmodes/compile.el in emacs
-      request
-          .getOutErr()
-          .printErrLn(
-              env.getRuntime().getProductName() + ": Entering directory `" + getExecRoot() + "/'");
+      request.getOutErr().printErrLn("blaze: Entering directory `" + getExecRoot() + "/'");
     }
     boolean buildCompleted = false;
     try {
@@ -448,10 +445,7 @@ public class ExecutionTool {
     } finally {
       env.recordLastExecutionTime();
       if (request.isRunningInEmacs()) {
-        request
-            .getOutErr()
-            .printErrLn(
-                env.getRuntime().getProductName() + ": Leaving directory `" + getExecRoot() + "/'");
+        request.getOutErr().printErrLn("blaze: Leaving directory `" + getExecRoot() + "/'");
       }
       if (buildCompleted) {
         getReporter().handle(Event.progress("Building complete."));

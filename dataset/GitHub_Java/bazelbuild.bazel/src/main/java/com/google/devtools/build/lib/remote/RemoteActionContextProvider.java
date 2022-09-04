@@ -34,19 +34,14 @@ import javax.annotation.Nullable;
  */
 final class RemoteActionContextProvider extends ActionContextProvider {
   private final CommandEnvironment env;
-  private final AbstractRemoteActionCache cache;
+  private final RemoteActionCache cache;
   private final GrpcRemoteExecutor executor;
-  private final DigestUtil digestUtil;
 
-  RemoteActionContextProvider(
-      CommandEnvironment env,
-      @Nullable AbstractRemoteActionCache cache,
-      @Nullable GrpcRemoteExecutor executor,
-      DigestUtil digestUtil) {
+  RemoteActionContextProvider(CommandEnvironment env, @Nullable RemoteActionCache cache,
+      @Nullable GrpcRemoteExecutor executor) {
     this.env = env;
     this.executor = executor;
     this.cache = cache;
-    this.digestUtil = digestUtil;
   }
 
   @Override
@@ -54,35 +49,19 @@ final class RemoteActionContextProvider extends ActionContextProvider {
     ExecutionOptions executionOptions =
         checkNotNull(env.getOptions().getOptions(ExecutionOptions.class));
     RemoteOptions remoteOptions = checkNotNull(env.getOptions().getOptions(RemoteOptions.class));
-    String buildRequestId = env.getBuildRequestId().toString();
-    String commandId = env.getCommandId().toString();
 
-    if (remoteOptions.experimentalRemoteSpawnCache || remoteOptions.experimentalLocalDiskCache) {
-      RemoteSpawnCache spawnCache =
-          new RemoteSpawnCache(
-              env.getExecRoot(),
-              remoteOptions,
-              cache,
-              buildRequestId,
-              commandId,
-              executionOptions.verboseFailures,
-              env.getReporter(),
-              digestUtil);
+    if (remoteOptions.experimentalRemoteSpawnCache) {
+      RemoteSpawnCache spawnCache = new RemoteSpawnCache(env.getExecRoot(), remoteOptions, cache);
       return ImmutableList.of(spawnCache);
     } else {
-      RemoteSpawnRunner spawnRunner =
-          new RemoteSpawnRunner(
-              env.getExecRoot(),
-              remoteOptions,
-              createFallbackRunner(env),
-              executionOptions.verboseFailures,
-              env.getReporter(),
-              buildRequestId,
-              commandId,
-              cache,
-              executor,
-              digestUtil);
-      return ImmutableList.of(new RemoteSpawnStrategy(env.getExecRoot(), spawnRunner));
+      RemoteSpawnRunner spawnRunner = new RemoteSpawnRunner(
+          env.getExecRoot(),
+          remoteOptions,
+          createFallbackRunner(env),
+          executionOptions.verboseFailures,
+          cache,
+          executor);
+      return ImmutableList.of(new RemoteSpawnStrategy(spawnRunner));
     }
   }
 

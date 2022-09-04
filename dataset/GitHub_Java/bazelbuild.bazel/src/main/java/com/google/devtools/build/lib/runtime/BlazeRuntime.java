@@ -63,7 +63,6 @@ import com.google.devtools.build.lib.util.CustomExitCodePublisher;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ProcessUtils;
 import com.google.devtools.build.lib.util.ThreadUtils;
@@ -96,7 +95,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -743,24 +741,12 @@ public final class BlazeRuntime {
       return e.getExitCode().getNumericExitCode();
     }
 
-    ImmutableList.Builder<Pair<String, String>> startupOptionsFromCommandLine =
-        ImmutableList.builder();
-    for (String option : commandLineOptions.getStartupArgs()) {
-      startupOptionsFromCommandLine.add(new Pair<>("", option));
-    }
-
     BlazeCommandDispatcher dispatcher = new BlazeCommandDispatcher(runtime);
 
     try {
       LOG.info(getRequestLogString(commandLineOptions.getOtherArgs()));
-      return dispatcher.exec(
-          policy,
-          commandLineOptions.getOtherArgs(),
-          OutErr.SYSTEM_OUT_ERR,
-          LockingMode.ERROR_OUT,
-          "batch client",
-          runtime.getClock().currentTimeMillis(),
-          Optional.of(startupOptionsFromCommandLine.build()));
+      return dispatcher.exec(policy, commandLineOptions.getOtherArgs(), OutErr.SYSTEM_OUT_ERR,
+          LockingMode.ERROR_OUT, "batch client", runtime.getClock().currentTimeMillis());
     } catch (BlazeCommandDispatcher.ShutdownBlazeServerException e) {
       return e.getExitStatus();
     } catch (InterruptedException e) {
@@ -913,6 +899,9 @@ public final class BlazeRuntime {
     BlazeServerStartupOptions startupOptions = options.getOptions(BlazeServerStartupOptions.class);
     String productName = startupOptions.productName.toLowerCase(Locale.US);
 
+    if (startupOptions.oomMoreEagerlyThreshold != 100) {
+      new RetainedHeapLimiter(startupOptions.oomMoreEagerlyThreshold).install();
+    }
     PathFragment workspaceDirectory = startupOptions.workspaceDirectory;
     PathFragment installBase = startupOptions.installBase;
     PathFragment outputBase = startupOptions.outputBase;
