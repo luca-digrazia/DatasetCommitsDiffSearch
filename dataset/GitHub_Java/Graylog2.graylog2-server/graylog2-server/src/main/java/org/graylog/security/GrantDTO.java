@@ -22,12 +22,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import org.graylog.autovalue.WithBeanGetter;
-import org.graylog2.utilities.GRN;
+import org.graylog.grn.GRN;
 import org.mongojack.Id;
 import org.mongojack.ObjectId;
 
 import javax.annotation.Nullable;
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -57,7 +56,7 @@ public abstract class GrantDTO {
     @JsonProperty(FIELD_GRANTEE)
     public abstract GRN grantee();
 
-    @NotBlank
+    @NotNull
     @JsonProperty(FIELD_CAPABILITY)
     public abstract Capability capability();
 
@@ -79,6 +78,14 @@ public abstract class GrantDTO {
 
     @JsonProperty(FIELD_EXPIRES_AT)
     public abstract Optional<ZonedDateTime> expiresAt();
+
+    public static GrantDTO of(GRN grantee, Capability capability, GRN target) {
+        return GrantDTO.builder()
+                .grantee(grantee)
+                .capability(capability)
+                .target(target)
+                .build();
+    }
 
     public static Builder builder() {
         return Builder.create();
