@@ -12,10 +12,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import org.gradle.api.GradleException;
-import org.gradle.api.file.FileCollection;
 import org.gradle.api.plugins.Convention;
 import org.gradle.api.plugins.JavaPluginConvention;
-import org.gradle.api.tasks.CompileClasspath;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskAction;
 
@@ -31,8 +29,6 @@ public class QuarkusGenerateCode extends QuarkusTask {
 
     public static final String QUARKUS_GENERATED_SOURCES = "quarkus-generated-sources";
     public static final String QUARKUS_TEST_GENERATED_SOURCES = "quarkus-test-generated-sources";
-    // TODO dynamically load generation provider, or make them write code directly in quarkus-generated-sources
-    public static final String[] CODE_GENERATION_PROVIDER = new String[] { "grpc" };
 
     public static final String INIT_AND_RUN = "initAndRun";
     private Set<Path> sourcesDirectories;
@@ -41,16 +37,6 @@ public class QuarkusGenerateCode extends QuarkusTask {
 
     public QuarkusGenerateCode() {
         super("Performs Quarkus pre-build preparations, such as sources generation");
-    }
-
-    /**
-     * Create a dependency on classpath resolution. This makes sure included build are build this task runs.
-     *
-     * @return resolved compile classpath
-     */
-    @CompileClasspath
-    public FileCollection getClasspath() {
-        return QuarkusGradleUtils.getSourceSet(getProject(), SourceSet.MAIN_SOURCE_SET_NAME).getCompileClasspath();
     }
 
     @TaskAction
