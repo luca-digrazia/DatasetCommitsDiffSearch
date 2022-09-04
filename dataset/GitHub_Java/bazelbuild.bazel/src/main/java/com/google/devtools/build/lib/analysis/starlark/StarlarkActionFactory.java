@@ -147,15 +147,18 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     }
 
     if (!fragment.startsWith(ruleContext.getPackageDirectory())) {
-      throw Starlark.errorf(
-          "the output directory '%s' is not under package directory '%s' for target '%s'",
-          fragment, ruleContext.getPackageDirectory(), ruleContext.getLabel());
+      throw new EvalException(
+          String.format(
+              "the output directory '%s' is not under package directory '%s' for target '%s'",
+              fragment, ruleContext.getPackageDirectory(), ruleContext.getLabel()));
     }
 
     Artifact result = ruleContext.getTreeArtifact(fragment, newFileRoot());
     if (!result.isTreeArtifact()) {
-      throw Starlark.errorf(
-          "'%s' has already been declared as a regular file, not directory.", filename);
+      throw new EvalException(
+          null,
+          String.format(
+              "'%s' has already been declared as a regular file, not directory.", filename));
     }
     return result;
   }
@@ -453,6 +456,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       builder.setShellCommand(command);
     } else {
       throw new EvalException(
+          null,
           "expected string or list of strings for command instead of "
               + Starlark.type(commandUnchecked));
     }
@@ -494,6 +498,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
         builder.addCommandLine(args.build(), paramFileInfo);
       } else {
         throw new EvalException(
+            null,
             "expected list of strings or ctx.actions.args() for arguments instead of "
                 + Starlark.type(value));
       }
@@ -539,6 +544,12 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     builder.addOutputs(outputArtifacts);
 
     if (unusedInputsList != Starlark.NONE) {
+      if (!starlarkSemantics.experimentalStarlarkUnusedInputsList()) {
+        throw Starlark.errorf(
+            "'unused_inputs_list' attribute is experimental and disabled by default. "
+                + "This API is in development and subject to change at any time. "
+                + "Use --experimental_starlark_unused_inputs_list to use this experimental API.");
+      }
       if (unusedInputsList instanceof Artifact) {
         builder.setUnusedInputsList(Optional.of((Artifact) unusedInputsList));
       } else {
@@ -567,6 +578,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
           builder.addTool((FilesToRunProvider) toolUnchecked);
         } else {
           throw new EvalException(
+              null,
               "expected value of type 'File or FilesToRunProvider' for "
                   + "a member of parameter 'tools' but got "
                   + Starlark.type(toolUnchecked)
