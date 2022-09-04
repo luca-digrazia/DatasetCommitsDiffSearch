@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.sandbox;
 
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -22,7 +21,6 @@ import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.Spawns;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.exec.apple.XcodeLocalEnvProvider;
@@ -32,13 +30,10 @@ import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
 import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsProvider;
-import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
@@ -72,36 +67,6 @@ final class SandboxActionContextProvider extends ActionContextProvider {
       contexts.add(new ProcessWrapperSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
     }
 
-    SandboxOptions sandboxOptions = options.getOptions(SandboxOptions.class);
-
-    if (sandboxOptions.enableDockerSandbox) {
-      // This strategy uses Docker to execute spawns. It should work on all platforms that support
-      // Docker.
-      getPathToDockerClient(cmdEnv)
-          .ifPresent(
-              dockerClient -> {
-                if (DockerSandboxedSpawnRunner.isSupported(cmdEnv, dockerClient)) {
-                  String defaultImage = sandboxOptions.dockerImage;
-                  boolean useCustomizedImages = sandboxOptions.dockerUseCustomizedImages;
-                  SpawnRunner spawnRunner =
-                      withFallback(
-                          cmdEnv,
-                          new DockerSandboxedSpawnRunner(
-                              cmdEnv,
-                              dockerClient,
-                              sandboxBase,
-                              defaultImage,
-                              timeoutKillDelay,
-                              useCustomizedImages));
-                  contexts.add(new DockerSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
-                }
-              });
-    } else if (sandboxOptions.dockerVerbose) {
-      cmdEnv.getReporter().handle(Event.info(
-          "Docker sandboxing disabled. Use the '--experimental_enable_docker_sandbox' command "
-          + "line option to enable it"));
-    }
-
     // This is the preferred sandboxing strategy on Linux.
     if (LinuxSandboxedSpawnRunner.isSupported(cmdEnv)) {
       SpawnRunner spawnRunner =
@@ -123,32 +88,6 @@ final class SandboxActionContextProvider extends ActionContextProvider {
     return new SandboxActionContextProvider(contexts.build());
   }
 
-  private static Optional<Path> getPathToDockerClient(CommandEnvironment cmdEnv) {
-    String path = cmdEnv.getClientEnv().getOrDefault("PATH", "");
-
-    Splitter pathSplitter =
-        Splitter.on(OS.getCurrent() == OS.WINDOWS ? ';' : ':').trimResults().omitEmptyStrings();
-
-    FileSystem fs = cmdEnv.getRuntime().getFileSystem();
-
-    for (String pathElement : pathSplitter.split(path)) {
-      // Sometimes the PATH contains the non-absolute entry "." - this resolves it against the
-      // current working directory.
-      pathElement = new File(pathElement).getAbsolutePath();
-      try {
-        for (Path dentry : fs.getPath(pathElement).getDirectoryEntries()) {
-          if (dentry.getBaseName().replace(".exe", "").equals("docker")) {
-            return Optional.of(dentry);
-          }
-        }
-      } catch (IOException e) {
-        continue;
-      }
-    }
-
-    return Optional.empty();
-  }
-
   private static SpawnRunner withFallback(CommandEnvironment env, SpawnRunner sandboxSpawnRunner) {
     return new SandboxFallbackSpawnRunner(sandboxSpawnRunner,  createFallbackRunner(env));
   }
@@ -158,7 +97,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
         env.getOptions().getOptions(LocalExecutionOptions.class);
     LocalEnvProvider localEnvProvider =
         OS.getCurrent() == OS.DARWIN
-            ? new XcodeLocalEnvProvider(env.getClientEnv())
+            ? new XcodeLocalEnvProvider(env.getRuntime().getProductName(), env.getClientEnv())
             : new PosixLocalEnvProvider(env.getClientEnv());
     return
         new LocalSpawnRunner(

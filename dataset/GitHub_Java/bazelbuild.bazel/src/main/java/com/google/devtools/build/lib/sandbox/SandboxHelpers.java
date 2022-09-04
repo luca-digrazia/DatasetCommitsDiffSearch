@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -110,7 +111,7 @@ public final class SandboxHelpers {
   }
 
   public static ImmutableSet<PathFragment> getOutputFiles(Spawn spawn) {
-    ImmutableSet.Builder<PathFragment> outputFiles = ImmutableSet.builder();
+    Builder<PathFragment> outputFiles = ImmutableSet.builder();
     for (ActionInput output : spawn.getOutputFiles()) {
       outputFiles.add(PathFragment.create(output.getExecPathString()));
     }
