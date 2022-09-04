@@ -23,10 +23,6 @@ import java.util.TimeZone;
 public class LoggingFactory {
     // initially configure for WARN+ console logging
     public static void bootstrap() {
-        bootstrap(Level.WARN);
-    }
-
-    public static void bootstrap(Level level) {
         hijackJDKLogging();
 
         final Logger root = getCleanRoot();
@@ -36,7 +32,7 @@ public class LoggingFactory {
         formatter.start();
 
         final ThresholdFilter filter = new ThresholdFilter();
-        filter.setLevel(level.toString());
+        filter.setLevel(Level.WARN.toString());
         filter.start();
 
         final ConsoleAppender<ILoggingEvent> appender = new ConsoleAppender<>();
