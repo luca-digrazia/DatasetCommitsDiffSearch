@@ -28,7 +28,7 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
 @ThreadSafe
 final class SimpleWorkerPool extends GenericKeyedObjectPool<WorkerKey, Worker> {
 
-  public SimpleWorkerPool(WorkerFactory factory, GenericKeyedObjectPoolConfig<Worker> config) {
+  public SimpleWorkerPool(WorkerFactory factory, GenericKeyedObjectPoolConfig config) {
     super(factory, config);
   }
 

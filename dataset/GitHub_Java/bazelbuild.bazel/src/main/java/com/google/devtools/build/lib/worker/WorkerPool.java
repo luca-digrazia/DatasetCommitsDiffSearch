@@ -17,69 +17,42 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.concurrent.ThreadSafe;
-import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 
 /**
- * A worker pool that spawns multiple workers and delegates work to them. Allows separate
- * configuration for singleplex and multiplex workers. While the configuration is per mnemonic, the
- * actual pools need to be per WorkerKey, as different WorkerKeys may imply different process
- * startup options.
+ * A worker pool that spawns multiple workers and delegates work to them.
  *
  * <p>This is useful when the worker cannot handle multiple parallel requests on its own and we need
- * to pre-fork a couple of them instead. Multiplex workers <em>can</em> handle multiple parallel
- * requests, but do so through WorkerProxy instances.
+ * to pre-fork a couple of them instead.
  */
 @ThreadSafe
 final class WorkerPool {
-  /** Unless otherwise specified, the max number of workers per WorkerKey. */
-  private static final int DEFAULT_MAX_WORKERS = 4;
-  /** Unless otherwise specified, the max number of multiplex workers per WorkerKey. */
-  private static final int DEFAULT_MAX_MULTIPLEX_WORKERS = 8;
-  /**
-   * How many high-priority workers are currently borrowed. If greater than one, low-priority
-   * workers cannot be borrowed until the high-priority ones are done.
-   */
   private final AtomicInteger highPriorityWorkersInUse = new AtomicInteger(0);
-  /** Which mnemonics create high-priority workers. */
   private final ImmutableSet<String> highPriorityWorkerMnemonics;
-  /** Map of singleplex worker pools, one per mnemonic. */
-  private final ImmutableMap<String, SimpleWorkerPool> workerPools;
-  /** Map of multiplex worker pools, one per mnemonic. */
-  private final ImmutableMap<String, SimpleWorkerPool> multiplexPools;
+  private final ImmutableMap<String, Integer> config;
+  private final ImmutableMap<Integer, SimpleWorkerPool> pools;
 
   /**
    * @param factory worker factory
-   * @param config pool configuration; max number of workers per WorkerKey for each mnemonic; the
-   *     empty string key specifies the default maximum
-   * @param multiplexConfig like {@code config}, but for multiplex workers
+   * @param config pool configuration; max number of workers per worker mnemonic; the empty string
+   *     key specifies the default maximum
    * @param highPriorityWorkers mnemonics of high priority workers
    */
   public WorkerPool(
-      WorkerFactory factory,
-      Map<String, Integer> config,
-      Map<String, Integer> multiplexConfig,
-      Iterable<String> highPriorityWorkers) {
+      WorkerFactory factory, Map<String, Integer> config, Iterable<String> highPriorityWorkers) {
     highPriorityWorkerMnemonics = ImmutableSet.copyOf(highPriorityWorkers);
-    workerPools = createWorkerPools(factory, config, DEFAULT_MAX_WORKERS);
-    multiplexPools = createWorkerPools(factory, multiplexConfig, DEFAULT_MAX_MULTIPLEX_WORKERS);
-  }
-
-  private static ImmutableMap<String, SimpleWorkerPool> createWorkerPools(
-      WorkerFactory factory, Map<String, Integer> config, int defaultMaxWorkers) {
-    ImmutableMap.Builder<String, SimpleWorkerPool> workerPoolsBuilder = ImmutableMap.builder();
-    config.forEach(
-        (key, value) ->
-            workerPoolsBuilder.put(key, new SimpleWorkerPool(factory, makeConfig(value))));
-    if (!config.containsKey("")) {
-      workerPoolsBuilder.put("", new SimpleWorkerPool(factory, makeConfig(defaultMaxWorkers)));
+    this.config = ImmutableMap.copyOf(config);
+    ImmutableMap.Builder<Integer, SimpleWorkerPool> poolsBuilder = ImmutableMap.builder();
+    for (Integer max : new HashSet<>(config.values())) {
+      poolsBuilder.put(max, new SimpleWorkerPool(factory, makeConfig(max)));
     }
-    return workerPoolsBuilder.build();
+    pools = poolsBuilder.build();
   }
 
-  private static WorkerPoolConfig makeConfig(int max) {
+  private WorkerPoolConfig makeConfig(int max) {
     WorkerPoolConfig config = new WorkerPoolConfig();
 
     // It's better to re-use a worker as often as possible and keep it hot, in order to profit
@@ -92,7 +65,8 @@ final class WorkerPool {
     config.setMinIdlePerKey(max);
 
     // Don't limit the total number of worker processes, as otherwise the pool might be full of
-    // workers for one WorkerKey and can't accommodate a worker for another WorkerKey.
+    // e.g. Java workers and could never accommodate another request for a different kind of
+    // worker.
     config.setMaxTotal(-1);
 
     // Wait for a worker to become ready when a thread needs one.
@@ -110,16 +84,15 @@ final class WorkerPool {
   }
 
   private SimpleWorkerPool getPool(WorkerKey key) {
-    if (key.getProxied()) {
-      return multiplexPools.getOrDefault(key.getMnemonic(), multiplexPools.get(""));
-    } else {
-      return workerPools.getOrDefault(key.getMnemonic(), workerPools.get(""));
+    Integer max = config.get(key.getMnemonic());
+    if (max == null) {
+      max = config.get("");
     }
+    return pools.get(max);
   }
 
   /**
-   * Gets a worker. May block indefinitely if too many high-priority workers are in use and the
-   * requested worker is not high priority.
+   * Gets a worker.
    *
    * @param key worker key
    * @return a worker
@@ -190,7 +163,8 @@ final class WorkerPool {
   }
 
   public void close() {
-    workerPools.values().forEach(GenericKeyedObjectPool::close);
-    multiplexPools.values().forEach(GenericKeyedObjectPool::close);
+    for (SimpleWorkerPool pool : pools.values()) {
+      pool.close();
+    }
   }
 }
