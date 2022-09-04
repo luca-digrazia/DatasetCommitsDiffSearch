@@ -61,13 +61,15 @@ import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.gizmo.Gizmo;
 import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
 import io.quarkus.resteasy.common.deployment.ResteasyCommonProcessor.ResteasyCommonConfig;
+import io.quarkus.resteasy.common.deployment.ResteasyDotNames;
 import io.quarkus.resteasy.common.runtime.QuarkusInjectorFactory;
-import io.quarkus.resteasy.common.spi.ResteasyDotNames;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import io.quarkus.resteasy.server.common.runtime.QuarkusResteasyDeployment;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceDefiningAnnotationBuildItem;
@@ -162,6 +164,8 @@ public class ResteasyServerCommonProcessor {
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition,
+            BuildProducer<NativeImageResourceBuildItem> resource,
+            BuildProducer<RuntimeInitializedClassBuildItem> runtimeClasses,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             BuildProducer<ResteasyServerConfigBuildItem> resteasyServerConfig,
             BuildProducer<ResteasyDeploymentBuildItem> resteasyDeployment,
@@ -179,6 +183,8 @@ public class ResteasyServerCommonProcessor {
             Optional<ResteasyServletMappingBuildItem> resteasyServletMappingBuildItem,
             CustomScopeAnnotationsBuildItem scopes) throws Exception {
         IndexView index = combinedIndexBuildItem.getIndex();
+
+        resource.produce(new NativeImageResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
 
         Collection<AnnotationInstance> applicationPaths = index.getAnnotations(ResteasyDotNames.APPLICATION_PATH);
 
@@ -719,8 +725,7 @@ public class ResteasyServerCommonProcessor {
                 } else {
                     //might be a framework class, which should be loadable
                     try {
-                        Class<?> typeClass = Class.forName(annotatedType.name().toString(), false,
-                                Thread.currentThread().getContextClassLoader());
+                        Class<?> typeClass = Class.forName(annotatedType.name().toString());
                         if (typeClass.isInterface()) {
                             proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem(annotatedType.name().toString()));
                         }
@@ -780,29 +785,16 @@ public class ResteasyServerCommonProcessor {
             }
             processedAnnotations.add(instance);
             MethodInfo method = instance.target().asMethod();
-            String source = ResteasyServerCommonProcessor.class.getSimpleName() + " > " + method.declaringClass() + "[" + method
-                    + "]";
+            String source = method.declaringClass() + "[" + method + "]";
 
-            reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem.Builder()
-                    .type(method.returnType())
-                    .index(index)
-                    .ignoreTypePredicate(ResteasyDotNames.IGNORE_TYPE_FOR_REFLECTION_PREDICATE)
-                    .ignoreFieldPredicate(ResteasyDotNames.IGNORE_FIELD_FOR_REFLECTION_PREDICATE)
-                    .ignoreMethodPredicate(ResteasyDotNames.IGNORE_METHOD_FOR_REFLECTION_PREDICATE)
-                    .source(source)
-                    .build());
+            reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType(), index,
+                    ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE, source));
 
             for (short i = 0; i < method.parameters().size(); i++) {
                 Type parameterType = method.parameters().get(i);
                 if (!hasAnnotation(method, i, ResteasyDotNames.CONTEXT)) {
-                    reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem.Builder()
-                            .type(parameterType)
-                            .index(index)
-                            .ignoreTypePredicate(ResteasyDotNames.IGNORE_TYPE_FOR_REFLECTION_PREDICATE)
-                            .ignoreFieldPredicate(ResteasyDotNames.IGNORE_FIELD_FOR_REFLECTION_PREDICATE)
-                            .ignoreMethodPredicate(ResteasyDotNames.IGNORE_METHOD_FOR_REFLECTION_PREDICATE)
-                            .source(source)
-                            .build());
+                    reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(parameterType, index,
+                            ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE, source));
                 }
             }
         }
