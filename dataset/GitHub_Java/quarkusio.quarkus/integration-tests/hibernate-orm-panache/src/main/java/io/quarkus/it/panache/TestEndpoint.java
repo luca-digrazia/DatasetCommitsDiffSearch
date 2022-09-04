@@ -448,7 +448,6 @@ public class TestEndpoint {
 
         Dog dog = new Dog("octave", "dalmatian");
         dog.owner = person;
-        person.dogs.add(dog);
         dog.persist();
 
         return person;
@@ -769,7 +768,6 @@ public class TestEndpoint {
 
         Dog dog = new Dog("octave", "dalmatian");
         dog.owner = person;
-        person.dogs.add(dog);
         dogDao.persist(dog);
 
         return person;
