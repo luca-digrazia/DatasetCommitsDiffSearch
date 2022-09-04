@@ -17,23 +17,19 @@
 
 package com.tencent.angel.ml.math.vector;
 
-import com.tencent.angel.common.Serialize;
 import com.tencent.angel.ml.math.TAbstractVector;
 import com.tencent.angel.ml.math.TVector;
-import com.tencent.angel.ml.matrix.RowType;
 import com.tencent.angel.protobuf.generated.MLProtos;
-import io.netty.buffer.ByteBuf;
 import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
-import java.util.stream.IntStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 /**
  * Sparse double vector with long key.
  */
-public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Serialize{
+public class SparseLongKeyDoubleVector extends TLongDoubleVector {
   private static final Log LOG = LogFactory.getLog(SparseLongKeyDoubleVector.class);
   /** A (long->double) map */
   private volatile Long2DoubleOpenHashMap indexToValueMap;
@@ -117,17 +113,18 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
       return plusBy((SparseLongKeySortedDoubleVector) other);
     else if (other instanceof SparseDummyVector)
       return plusBy((SparseDummyVector) other);
-    else if (other instanceof SparseLongKeyDummyVector)
-      return plusBy((SparseLongKeyDummyVector) other);
+    else if (other instanceof SparseDummyLongKeyVector)
+      return plusBy((SparseDummyLongKeyVector) other);
     throw new UnsupportedOperationException(
       "Unsupportted operation: " + this.getClass().getName() + " plusBy " + other.getClass()
         .getName());
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseLongKeyDoubleVector other) {
-    assert (dim == -1 || dim == other.getLongDim());
+    assert dim == other.dim;
+
     if(indexToValueMap.size() == 0) {
-      indexToValueMap = other.indexToValueMap.clone();
+      indexToValueMap.putAll(other.indexToValueMap);
     } else if(indexToValueMap.size() < other.size()) {
       Long2DoubleOpenHashMap oldMap = indexToValueMap;
       indexToValueMap = other.indexToValueMap.clone();
@@ -153,8 +150,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseDoubleSortedVector other) {
-    assert (dim == -1 || dim == other.getDimension());
-    resize(other.size());
+    assert dim == other.getDimension();
     int [] indexes = other.getIndices();
     double [] values = other.getValues();
     for(int i = 0; i < indexes.length; i++) {
@@ -165,8 +161,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseLongKeySortedDoubleVector other) {
-    assert (dim == -1 || dim == other.getLongDim());
-    resize(other.size());
+    assert dim == other.getDimension();
     long [] indexes = other.getIndexes();
     double [] values = other.getValues();
     for(int i = 0; i < indexes.length; i++) {
@@ -177,8 +172,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseDummyVector other) {
-    assert (dim == -1 || dim == other.getDimension());
-    resize(other.size());
+    assert dim == other.getDimension();
     int [] indexes = other.getIndices();
     for(int i = 0; i < indexes.length; i++) {
       indexToValueMap.addTo(indexes[i], 1);
@@ -187,9 +181,8 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
     return this;
   }
 
-  private SparseLongKeyDoubleVector plusBy(SparseLongKeyDummyVector other) {
-    assert (dim == -1 || dim == other.getDimension());
-    resize(other.size());
+  private SparseLongKeyDoubleVector plusBy(SparseDummyLongKeyVector other) {
+    assert dim == other.getDimension();
     long [] indexes = other.getIndices();
     for(int i = 0; i < indexes.length; i++) {
       indexToValueMap.addTo(indexes[i], 1);
@@ -222,44 +215,34 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
       return plusBy((SparseLongKeySortedDoubleVector) other, x);
     else if (other instanceof SparseDummyVector)
       return plusBy((SparseDummyVector) other, x);
-    else if (other instanceof SparseLongKeyDummyVector)
-      return plusBy((SparseLongKeyDummyVector) other, x);
+    else if (other instanceof SparseDummyLongKeyVector)
+      return plusBy((SparseDummyLongKeyVector) other, x);
     throw new UnsupportedOperationException(
       "Unsupportted operation: " + this.getClass().getName() + " plusBy " + other.getClass()
         .getName());
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseLongKeyDoubleVector other, double x) {
-    assert (dim == -1 || dim == other.getLongDim());
-    if(this.indexToValueMap.isEmpty()) {
-      this.indexToValueMap.putAll(other.getIndexToValueMap());
-    } else {
-      resize(other.size());
+    assert dim == other.dim;
+    if(indexToValueMap.size() < other.size()) {
+      Long2DoubleOpenHashMap oldMap = indexToValueMap;
+      indexToValueMap = new Long2DoubleOpenHashMap(other.size());
+      indexToValueMap.putAll(oldMap);
+    }
 
-      ObjectIterator<Long2DoubleMap.Entry> iter =
-        other.indexToValueMap.long2DoubleEntrySet().fastIterator();
-      Long2DoubleMap.Entry entry = null;
-      while (iter.hasNext()) {
-        entry = iter.next();
-        indexToValueMap.addTo(entry.getLongKey(), entry.getDoubleValue() * x);
-      }
+    ObjectIterator<Long2DoubleMap.Entry> iter =
+      other.indexToValueMap.long2DoubleEntrySet().fastIterator();
+    Long2DoubleMap.Entry entry = null;
+    while (iter.hasNext()) {
+      entry = iter.next();
+      indexToValueMap.addTo(entry.getLongKey(), entry.getDoubleValue() * x);
     }
 
     return this;
   }
 
-  private void resize(int newSize) {
-    if(indexToValueMap.size() < newSize) {
-      Long2DoubleOpenHashMap oldMap = indexToValueMap;
-      indexToValueMap = new Long2DoubleOpenHashMap(newSize);
-      indexToValueMap.putAll(oldMap);
-    }
-  }
-
   private SparseLongKeyDoubleVector plusBy(SparseDoubleSortedVector other, double x) {
-    assert (dim == -1 || dim == other.getDimension());
-    resize(other.size());
-
+    assert dim == other.getDimension();
     int [] indexes = other.getIndices();
     double [] values = other.getValues();
     for(int i = 0; i < indexes.length; i++) {
@@ -270,9 +253,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseLongKeySortedDoubleVector other, double x) {
-    assert (dim == -1 || dim == other.getLongDim());
-    resize(other.size());
-
+    assert dim == other.getDimension();
     long [] indexes = other.getIndexes();
     double [] values = other.getValues();
     for(int i = 0; i < indexes.length; i++) {
@@ -283,9 +264,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseDummyVector other, double x) {
-    assert (dim == -1 || dim == other.getDimension());
-    resize(other.size());
-
+    assert dim == other.getDimension();
     int [] indexes = other.getIndices();
     for(int i = 0; i < indexes.length; i++) {
       indexToValueMap.addTo(indexes[i], x);
@@ -294,10 +273,8 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
     return this;
   }
 
-  private SparseLongKeyDoubleVector plusBy(SparseLongKeyDummyVector other, double x) {
-    assert (dim == -1 || dim == other.getDimension());
-    resize(other.size());
-
+  private SparseLongKeyDoubleVector plusBy(SparseDummyLongKeyVector other, double x) {
+    assert dim == other.getDimension();
     long [] indexes = other.getIndices();
     for(int i = 0; i < indexes.length; i++) {
       indexToValueMap.addTo(indexes[i], x);
@@ -347,7 +324,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private SparseLongKeyDoubleVector plus(SparseLongKeyDoubleVector other, double x) {
-    assert (dim == -1 || dim == other.getLongDim());
+    assert dim == other.dim;
     SparseLongKeyDoubleVector baseVector = null;
     SparseLongKeyDoubleVector streamVector = null;
     if (size() < other.size()) {
@@ -378,15 +355,15 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
       return dot((SparseLongKeySortedDoubleVector) other);
     else if (other instanceof SparseDummyVector)
       return dot((SparseDummyVector) other);
-    else if (other instanceof SparseLongKeyDummyVector)
-      return dot((SparseLongKeyDummyVector) other);
+    else if (other instanceof SparseDummyLongKeyVector)
+      return dot((SparseDummyLongKeyVector) other);
     throw new UnsupportedOperationException(
       "Unsupportted operation: " + this.getClass().getName() + " dot " + other.getClass()
         .getName());
   }
 
   private double dot(SparseLongKeyDoubleVector other) {
-    assert (dim == -1 || dim == other.getLongDim());
+    assert dim == other.dim;
     double ret = 0.0;
     if (size() <= other.size()) {
       ObjectIterator<Long2DoubleMap.Entry> iter =
@@ -403,7 +380,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private double dot(SparseDoubleSortedVector other) {
-    assert (dim == -1 || dim == other.getDimension());
+    assert dim == other.getDimension();
     int [] indexes = other.getIndices();
     double [] values = other.getValues();
     double ret = 0.0;
@@ -415,7 +392,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private double dot(SparseLongKeySortedDoubleVector other) {
-    assert (dim == -1 || dim == other.getLongDim());
+    assert dim == other.getDimension();
     long [] indexes = other.getIndexes();
     double [] values = other.getValues();
     double ret = 0.0;
@@ -427,7 +404,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
   }
 
   private double dot(SparseDummyVector other) {
-    assert (dim == -1 || dim == other.getDimension());
+    assert dim == other.getDimension();
     int [] indexes = other.getIndices();
     double ret = 0.0;
     for(int i = 0; i < indexes.length; i++) {
@@ -437,8 +414,8 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
     return ret;
   }
 
-  private double dot(SparseLongKeyDummyVector other) {
-    assert (dim == -1 || dim == other.getDimension());
+  private double dot(SparseDummyLongKeyVector other) {
+    assert dim == other.getDimension();
     long [] indexes = other.getIndices();
     double ret = 0.0;
     for(int i = 0; i < indexes.length; i++) {
@@ -527,7 +504,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
     ObjectIterator<Long2DoubleMap.Entry> iter =
       indexToValueMap.long2DoubleEntrySet().fastIterator();
     while (iter.hasNext()) {
-      if(iter.next().getDoubleValue() != 0.0)
+      if(iter.next().getDoubleValue() > 0)
         counter++;
     }
 
@@ -554,21 +531,12 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
     return sum;
   }
 
-  @Override public double norm() {
-    ObjectIterator<Long2DoubleMap.Entry> iter = indexToValueMap.long2DoubleEntrySet().iterator();
-    double sum = 0;
-    while (iter.hasNext()) {
-      sum += Math.abs(iter.next().getDoubleValue());
-    }
-    return sum;
-  }
-
   @Override public double sparsity() {
-    return (double)nonZeroNumber() / (double) dim;
+    return nonZeroNumber() / dim;
   }
 
-  @Override public RowType getType() {
-    return RowType.T_DOUBLE_SPARSE_LONGKEY;
+  @Override public MLProtos.RowType getType() {
+    return MLProtos.RowType.T_DOUBLE_SPARSE_LONGKEY;
   }
 
   @Override public int size() {
@@ -587,42 +555,5 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Seri
 
   public Long2DoubleOpenHashMap getIndexToValueMap() {
     return indexToValueMap;
-  }
-
-  @Override
-  public TLongDoubleVector elemUpdate(LongDoubleElemUpdater updater, ElemUpdateParam param) {
-    ObjectIterator<Long2DoubleMap.Entry> iter = indexToValueMap.long2DoubleEntrySet().fastIterator();
-    Long2DoubleMap.Entry entry;
-    while (iter.hasNext()) {
-      entry = iter.next();
-      entry.setValue(updater.action(entry.getLongKey(), entry.getDoubleValue(), param));
-    }
-    return this;
-  }
-
-  @Override
-  public void serialize(ByteBuf buf) {
-    buf.writeLong(dim);
-    buf.writeInt(indexToValueMap.size());
-    indexToValueMap.forEach((key, value) -> {
-      buf.writeLong(key);
-      buf.writeDouble(value);
-    });
-  }
-
-  @Override
-  public void deserialize(ByteBuf buf) {
-    int dim = buf.readInt();
-    int length = buf.readInt();
-    Long2DoubleOpenHashMap data = new Long2DoubleOpenHashMap(dim);
-    IntStream.range(0,length).forEach(i->data.put(buf.readLong(), buf.readDouble()));
-    this.dim = dim;
-    this.indexToValueMap = data;
-
-  }
-
-  @Override
-  public int bufferLen() {
-    return 4 + (8 + 8) * indexToValueMap.size();
   }
 }
