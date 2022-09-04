@@ -18,14 +18,13 @@ package org.graylog2.inputs.codecs;
 
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.plugin.inputs.annotations.Codec;
-import org.graylog2.plugin.inputs.annotations.ConfigClass;
-import org.graylog2.plugin.inputs.annotations.FactoryClass;
+import org.graylog2.plugin.ConfigClass;
+import org.graylog2.plugin.FactoryClass;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.RadioMessage;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.inputs.codecs.AbstractCodec;
+import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.graylog2.plugin.journal.RawMessage;
 import org.joda.time.DateTime;
@@ -38,15 +37,13 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
 
-@Codec(name = "radio-msg", displayName = "Radio Message")
-public class RadioMessageCodec extends AbstractCodec {
+public class RadioMessageCodec implements Codec {
     private static final Logger log = LoggerFactory.getLogger(RadioMessageCodec.class);
 
     private final MessagePack messagePack;
 
     @AssistedInject
     public RadioMessageCodec(@Assisted Configuration configuration, MessagePack messagePack) {
-        super(configuration);
         this.messagePack = messagePack;
     }
 
@@ -84,8 +81,13 @@ public class RadioMessageCodec extends AbstractCodec {
         return null;
     }
 
+    @Override
+    public String getName() {
+        return "Radio Message";
+    }
+
     @FactoryClass
-    public interface Factory extends AbstractCodec.Factory<RadioMessageCodec> {
+    public interface Factory extends Codec.Factory<RadioMessageCodec> {
         @Override
         public RadioMessageCodec create(Configuration configuration);
 
@@ -94,7 +96,7 @@ public class RadioMessageCodec extends AbstractCodec {
     }
 
     @ConfigClass
-    public static class Config implements AbstractCodec.Config {
+    public static class Config implements Codec.Config {
         @Override
         public ConfigurationRequest getRequestedConfiguration() {
             return new ConfigurationRequest();

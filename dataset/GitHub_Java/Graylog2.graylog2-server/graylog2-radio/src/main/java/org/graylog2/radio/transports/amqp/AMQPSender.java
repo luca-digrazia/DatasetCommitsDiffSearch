@@ -27,9 +27,6 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.io.IOException;
 
-import static com.rabbitmq.client.MessageProperties.MINIMAL_BASIC;
-import static com.rabbitmq.client.MessageProperties.MINIMAL_PERSISTENT_BASIC;
-
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
@@ -48,7 +45,6 @@ public class AMQPSender {
     private final String queueType;
     private final String exchangeName;
     private final String routingKey;
-    private boolean amqpPersistentMessagesEnabled;
 
     private Connection connection;
     private Channel channel;
@@ -63,13 +59,11 @@ public class AMQPSender {
                       String queueName,
                       String queueType,
                       String exchangeName,
-                      String routingKey,
-                      boolean amqpPersistentMessagesEnabled) {
+                      String routingKey) {
         this.queueName = queueName;
         this.queueType = queueType;
         this.exchangeName = exchangeName;
         this.routingKey = routingKey;
-        this.amqpPersistentMessagesEnabled = amqpPersistentMessagesEnabled;
         pack = new MessagePack();
 
         this.hostname = hostname;
@@ -89,8 +83,7 @@ public class AMQPSender {
                 configuration.getAmqpQueueName(),
                 configuration.getAmqpQueueType(),
                 configuration.getAmqpExchangeName(),
-                configuration.getAmqpRoutingKey(),
-                configuration.isAmqpPersistentMessagesEnabled());
+                configuration.getAmqpRoutingKey());
     }
 
     public void send(Message msg) throws IOException {
@@ -101,11 +94,7 @@ public class AMQPSender {
         byte[] body = RadioMessage.serialize(pack, msg);
 
         boolean mandatory = true;
-        channel.basicPublish(exchangeName,
-                             routingKey,
-                             mandatory,
-                             amqpPersistentMessagesEnabled ? MINIMAL_PERSISTENT_BASIC : MINIMAL_BASIC,
-                             body);
+        channel.basicPublish(exchangeName, routingKey, mandatory, new AMQP.BasicProperties(), body);
     }
 
     public void connect() throws IOException {
