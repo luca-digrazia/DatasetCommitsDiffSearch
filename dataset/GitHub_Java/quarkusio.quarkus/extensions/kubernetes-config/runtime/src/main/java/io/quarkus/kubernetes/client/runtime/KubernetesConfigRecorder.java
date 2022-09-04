@@ -9,7 +9,6 @@ import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 import org.jboss.logging.Logger;
 
 import io.quarkus.runtime.RuntimeValue;
-import io.quarkus.runtime.TlsConfig;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.AbstractRawDefaultConfigSource;
 
@@ -22,8 +21,7 @@ public class KubernetesConfigRecorder {
 
     public RuntimeValue<ConfigSourceProvider> configSources(KubernetesConfigSourceConfig kubernetesConfigSourceConfig,
             KubernetesConfigBuildTimeConfig buildTimeConfig,
-            KubernetesClientBuildConfig clientConfig,
-            TlsConfig tlsConfig) {
+            KubernetesClientBuildConfig clientConfig) {
         if ((!kubernetesConfigSourceConfig.enabled && !buildTimeConfig.secretsEnabled) || isExplicitlyDisabled()) {
             log.debug(
                     "No attempt will be made to obtain configuration from the Kubernetes API server because the functionality has been disabled via configuration");
@@ -31,7 +29,7 @@ public class KubernetesConfigRecorder {
         }
 
         return new RuntimeValue<>(new KubernetesConfigSourceProvider(kubernetesConfigSourceConfig, buildTimeConfig,
-                KubernetesClientUtils.createClient(clientConfig, tlsConfig)));
+                KubernetesClientUtils.createClient(clientConfig)));
     }
 
     // We don't want to enable the reading of anything if 'quarkus.kubernetes-config.enabled' is EXPLICITLY set to false
@@ -46,11 +44,9 @@ public class KubernetesConfigRecorder {
             if (configSource instanceof AbstractRawDefaultConfigSource) {
                 return false;
             }
-            // don't use configSource.getPropertyNames() as it returns an empty list for env vars
-            String strValue = configSource.getValue(CONFIG_ENABLED_PROPERTY_NAME);
-            if ((strValue != null) && !strValue.isEmpty()) {
+            if (configSource.getPropertyNames().contains(CONFIG_ENABLED_PROPERTY_NAME)) {
                 // TODO: should probably use converter here
-                return !Boolean.parseBoolean(strValue);
+                return !Boolean.parseBoolean(configSource.getValue(CONFIG_ENABLED_PROPERTY_NAME));
             }
         }
         return false;
