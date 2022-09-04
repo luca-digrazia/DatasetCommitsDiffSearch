@@ -13,17 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
+import com.google.auto.value.AutoValue;
 import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Maps.EntryTransformer;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.GroupedList;
-
-import java.util.EnumSet;
+import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
-
 import javax.annotation.Nullable;
 
 /**
@@ -42,8 +42,8 @@ public class NotifyingHelper {
       }
 
       @Override
-      public InvalidatableGraph transform(InvalidatableGraph graph) {
-        return new NotifyingInvalidatableGraph(graph, listener);
+      public QueryableGraph transform(QueryableGraph graph) {
+        return new NotifyingQueryableGraph(graph, listener);
       }
 
       @Override
@@ -74,37 +74,51 @@ public class NotifyingHelper {
     return entry == null ? null : new NotifyingNodeEntry(key, entry);
   }
 
-  static class NotifyingInvalidatableGraph implements InvalidatableGraph {
-    private final InvalidatableGraph delegate;
-    private final NotifyingHelper notifyingHelper;
+  static class NotifyingQueryableGraph implements QueryableGraph {
+    private final QueryableGraph delegate;
+    protected final NotifyingHelper notifyingHelper;
 
-    NotifyingInvalidatableGraph(InvalidatableGraph delegate, Listener graphListener) {
+    NotifyingQueryableGraph(QueryableGraph delegate, Listener graphListener) {
       this.notifyingHelper = new NotifyingHelper(graphListener);
       this.delegate = delegate;
     }
 
-    NotifyingInvalidatableGraph(InvalidatableGraph delegate, NotifyingHelper helper) {
+    NotifyingQueryableGraph(QueryableGraph delegate, NotifyingHelper helper) {
       this.notifyingHelper = helper;
       this.delegate = delegate;
     }
 
     @Override
-    public Map<SkyKey, NodeEntry> getBatch(Iterable<SkyKey> keys) {
-      return Maps.transformEntries(delegate.getBatch(keys), notifyingHelper.wrapEntry);
+    public Map<SkyKey, ? extends NodeEntry> getBatch(
+        @Nullable SkyKey requestor, Reason reason, Iterable<? extends SkyKey> keys)
+        throws InterruptedException {
+      for (SkyKey key : keys) {
+        notifyingHelper.graphListener.accept(key, EventType.GET_BATCH, Order.BEFORE, reason);
+      }
+      return Maps.transformEntries(
+          delegate.getBatch(requestor, reason, keys),
+          notifyingHelper.wrapEntry);
     }
+
+    @Nullable
+    @Override
+    public NodeEntry get(@Nullable SkyKey requestor, Reason reason, SkyKey key)
+        throws InterruptedException {
+      return notifyingHelper.wrapEntry(key, delegate.get(requestor, reason, key));
+    }
+
   }
 
-  static class NotifyingProcessableGraph implements ProcessableGraph {
+  static class NotifyingProcessableGraph
+      extends NotifyingQueryableGraph implements ProcessableGraph {
     protected final ProcessableGraph delegate;
-    protected final NotifyingHelper notifyingHelper;
 
     NotifyingProcessableGraph(ProcessableGraph delegate, Listener graphListener) {
-      this.notifyingHelper = new NotifyingHelper(graphListener);
-      this.delegate = delegate;
+      this(delegate, new NotifyingHelper(graphListener));
     }
 
     NotifyingProcessableGraph(ProcessableGraph delegate, NotifyingHelper helper) {
-      this.notifyingHelper = helper;
+      super(delegate, helper);
       this.delegate = delegate;
     }
 
@@ -114,24 +128,31 @@ public class NotifyingHelper {
     }
 
     @Override
-    public Map<SkyKey, NodeEntry> createIfAbsentBatch(Iterable<SkyKey> keys) {
+    public Map<SkyKey, ? extends NodeEntry> createIfAbsentBatch(
+        @Nullable SkyKey requestor, Reason reason, Iterable<SkyKey> keys)
+        throws InterruptedException {
       for (SkyKey key : keys) {
         notifyingHelper.graphListener.accept(key, EventType.CREATE_IF_ABSENT, Order.BEFORE, null);
       }
-      return Maps.transformEntries(delegate.createIfAbsentBatch(keys), notifyingHelper.wrapEntry);
-    }
-
-    @Override
-    public Map<SkyKey, NodeEntry> getBatchWithFieldHints(
-        Iterable<SkyKey> keys, EnumSet<NodeEntryField> fields) {
       return Maps.transformEntries(
-          delegate.getBatchWithFieldHints(keys, fields), notifyingHelper.wrapEntry);
+          delegate.createIfAbsentBatch(requestor, reason, keys),
+          notifyingHelper.wrapEntry);
     }
 
-    @Nullable
     @Override
-    public NodeEntry get(SkyKey key) {
-      return notifyingHelper.wrapEntry(key, delegate.get(key));
+    public Map<SkyKey, ? extends NodeEntry> getBatch(
+        @Nullable SkyKey requestor, Reason reason, Iterable<? extends SkyKey> keys)
+        throws InterruptedException {
+      for (SkyKey key : keys) {
+        notifyingHelper.graphListener.accept(key, EventType.GET_BATCH, Order.BEFORE, reason);
+      }
+      return super.getBatch(requestor, reason, keys);
+    }
+
+    @Override
+    public DepsReport analyzeDepsDoneness(SkyKey parent, Collection<SkyKey> deps)
+        throws InterruptedException {
+      return delegate.analyzeDepsDoneness(parent, deps);
     }
   }
 
@@ -142,18 +163,23 @@ public class NotifyingHelper {
   public enum EventType {
     CREATE_IF_ABSENT,
     ADD_REVERSE_DEP,
+    ADD_EXTERNAL_DEP,
     REMOVE_REVERSE_DEP,
+    GET_BATCH,
     GET_TEMPORARY_DIRECT_DEPS,
     SIGNAL,
     SET_VALUE,
     MARK_DIRTY,
     MARK_CLEAN,
     IS_CHANGED,
+    GET_DIRTY_STATE,
     GET_VALUE_WITH_METADATA,
     IS_DIRTY,
     IS_READY,
     CHECK_IF_DONE,
-    GET_ALL_DIRECT_DEPS_FOR_INCOMPLETE_NODE
+    ADD_TEMPORARY_DIRECT_DEPS,
+    GET_ALL_DIRECT_DEPS_FOR_INCOMPLETE_NODE,
+    RESET_FOR_RESTART_FROM_SCRATCH,
   }
 
   /**
@@ -169,13 +195,9 @@ public class NotifyingHelper {
   /** Receiver to be informed when an event for a given key occurs. */
   public interface Listener {
     @ThreadSafe
-    void accept(SkyKey key, EventType type, Order order, Object context);
+    void accept(SkyKey key, EventType type, Order order, @Nullable Object context);
 
-    Listener NULL_LISTENER =
-        new Listener() {
-          @Override
-          public void accept(SkyKey key, EventType type, Order order, Object context) {}
-        };
+    Listener NULL_LISTENER = (key, type, order, context) -> {};
   }
 
   private static class ErrorRecordingDelegatingListener implements Listener {
@@ -186,19 +208,21 @@ public class NotifyingHelper {
     }
 
     @Override
-    public void accept(SkyKey key, EventType type, Order order, Object context) {
+    public void accept(SkyKey key, EventType type, Order order, @Nullable Object context) {
       try {
         delegate.accept(key, type, order, context);
       } catch (Exception e) {
         TrackingAwaiter.INSTANCE.injectExceptionAndMessage(
-            e, "In NotifyingGraph: " + Joiner.on(", ").join(key, type, order, context));
+            e,
+            "In NotifyingGraph: "
+                + Joiner.on(", ").join(key, type, order, context == null ? "null" : context));
         throw e;
       }
     }
   }
 
   /** {@link NodeEntry} that informs a {@link Listener} of various method calls. */
-  protected class NotifyingNodeEntry extends DelegatingNodeEntry {
+  protected class NotifyingNodeEntry extends DelegatingNodeEntry implements TestOnlyNodeEntry {
     private final SkyKey myKey;
     private final ThinNodeEntry delegate;
 
@@ -208,7 +232,7 @@ public class NotifyingHelper {
     }
 
     @Override
-    protected NodeEntry getDelegate() {
+    public NodeEntry getDelegate() {
       return (NodeEntry) delegate;
     }
 
@@ -218,7 +242,8 @@ public class NotifyingHelper {
     }
 
     @Override
-    public DependencyState addReverseDepAndCheckIfDone(SkyKey reverseDep) {
+    public DependencyState addReverseDepAndCheckIfDone(SkyKey reverseDep)
+        throws InterruptedException {
       graphListener.accept(myKey, EventType.ADD_REVERSE_DEP, Order.BEFORE, reverseDep);
       DependencyState result = super.addReverseDepAndCheckIfDone(reverseDep);
       graphListener.accept(myKey, EventType.ADD_REVERSE_DEP, Order.AFTER, reverseDep);
@@ -226,7 +251,13 @@ public class NotifyingHelper {
     }
 
     @Override
-    public void removeReverseDep(SkyKey reverseDep) {
+    public void addExternalDep() {
+      super.addExternalDep();
+      graphListener.accept(myKey, EventType.ADD_EXTERNAL_DEP, Order.AFTER, null);
+    }
+
+    @Override
+    public void removeReverseDep(SkyKey reverseDep) throws InterruptedException {
       graphListener.accept(myKey, EventType.REMOVE_REVERSE_DEP, Order.BEFORE, reverseDep);
       super.removeReverseDep(reverseDep);
       graphListener.accept(myKey, EventType.REMOVE_REVERSE_DEP, Order.AFTER, reverseDep);
@@ -239,15 +270,15 @@ public class NotifyingHelper {
     }
 
     @Override
-    public boolean signalDep(Version childVersion) {
-      graphListener.accept(myKey, EventType.SIGNAL, Order.BEFORE, childVersion);
-      boolean result = super.signalDep(childVersion);
-      graphListener.accept(myKey, EventType.SIGNAL, Order.AFTER, childVersion);
+    public boolean signalDep(Version childVersion, @Nullable SkyKey childForDebugging) {
+      graphListener.accept(myKey, EventType.SIGNAL, Order.BEFORE, childForDebugging);
+      boolean result = super.signalDep(childVersion, childForDebugging);
+      graphListener.accept(myKey, EventType.SIGNAL, Order.AFTER, childForDebugging);
       return result;
     }
 
     @Override
-    public Set<SkyKey> setValue(SkyValue value, Version version) {
+    public Set<SkyKey> setValue(SkyValue value, Version version) throws InterruptedException {
       graphListener.accept(myKey, EventType.SET_VALUE, Order.BEFORE, value);
       Set<SkyKey> result = super.setValue(value, version);
       graphListener.accept(myKey, EventType.SET_VALUE, Order.AFTER, value);
@@ -255,17 +286,21 @@ public class NotifyingHelper {
     }
 
     @Override
-    public MarkedDirtyResult markDirty(boolean isChanged) {
-      graphListener.accept(myKey, EventType.MARK_DIRTY, Order.BEFORE, isChanged);
-      MarkedDirtyResult result = super.markDirty(isChanged);
-      graphListener.accept(myKey, EventType.MARK_DIRTY, Order.AFTER, isChanged);
+    public MarkedDirtyResult markDirty(DirtyType dirtyType) throws InterruptedException {
+      graphListener.accept(myKey, EventType.MARK_DIRTY, Order.BEFORE, dirtyType);
+      MarkedDirtyResult result = super.markDirty(dirtyType);
+      graphListener.accept(
+          myKey,
+          EventType.MARK_DIRTY,
+          Order.AFTER,
+          MarkDirtyAfterContext.create(dirtyType, result != null));
       return result;
     }
 
     @Override
-    public Set<SkyKey> markClean() {
+    public NodeValueAndRdepsToSignal markClean() throws InterruptedException {
       graphListener.accept(myKey, EventType.MARK_CLEAN, Order.BEFORE, this);
-      Set<SkyKey> result = super.markClean();
+      NodeValueAndRdepsToSignal result = super.markClean();
       graphListener.accept(myKey, EventType.MARK_CLEAN, Order.AFTER, this);
       return result;
     }
@@ -289,27 +324,69 @@ public class NotifyingHelper {
     }
 
     @Override
-    public SkyValue getValueMaybeWithMetadata() {
+    public DirtyState getDirtyState() {
+      graphListener.accept(myKey, EventType.GET_DIRTY_STATE, Order.BEFORE, this);
+      DirtyState dirtyState = super.getDirtyState();
+      graphListener.accept(myKey, EventType.GET_DIRTY_STATE, Order.AFTER, dirtyState);
+      return dirtyState;
+    }
+
+    @Override
+    public SkyValue getValueMaybeWithMetadata() throws InterruptedException {
       graphListener.accept(myKey, EventType.GET_VALUE_WITH_METADATA, Order.BEFORE, this);
       return super.getValueMaybeWithMetadata();
     }
 
     @Override
-    public DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep) {
+    public DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep)
+        throws InterruptedException {
       graphListener.accept(myKey, EventType.CHECK_IF_DONE, Order.BEFORE, reverseDep);
-      return super.checkIfDoneForDirtyReverseDep(reverseDep);
+      DependencyState dependencyState = super.checkIfDoneForDirtyReverseDep(reverseDep);
+      graphListener.accept(myKey, EventType.CHECK_IF_DONE, Order.AFTER, reverseDep);
+      return dependencyState;
     }
 
     @Override
-    public Iterable<SkyKey> getAllDirectDepsForIncompleteNode() {
+    public Set<SkyKey> addTemporaryDirectDeps(GroupedListHelper<SkyKey> helper) {
+      graphListener.accept(myKey, EventType.ADD_TEMPORARY_DIRECT_DEPS, Order.BEFORE, helper);
+      Set<SkyKey> skyKeys = super.addTemporaryDirectDeps(helper);
+      graphListener.accept(myKey, EventType.ADD_TEMPORARY_DIRECT_DEPS, Order.AFTER, helper);
+      return skyKeys;
+    }
+
+    @Override
+    public Iterable<SkyKey> getAllDirectDepsForIncompleteNode() throws InterruptedException {
       graphListener.accept(
           myKey, EventType.GET_ALL_DIRECT_DEPS_FOR_INCOMPLETE_NODE, Order.BEFORE, this);
       return super.getAllDirectDepsForIncompleteNode();
     }
 
     @Override
+    public void resetForRestartFromScratch() {
+      getDelegate().resetForRestartFromScratch();
+      graphListener.accept(myKey, EventType.RESET_FOR_RESTART_FROM_SCRATCH, Order.AFTER, this);
+    }
+
+    @Override
     public String toString() {
       return MoreObjects.toStringHelper(this).add("delegate", getThinDelegate()).toString();
+    }
+  }
+
+  /**
+   * A pair of {@link ThinNodeEntry.DirtyType} and a bit saying whether the dirtying was successful,
+   * emitted to the graph listener as the context {@link Order#AFTER} a call to {@link
+   * EventType#MARK_DIRTY} a node.
+   */
+  @AutoValue
+  public abstract static class MarkDirtyAfterContext {
+    public abstract ThinNodeEntry.DirtyType dirtyType();
+
+    public abstract boolean actuallyDirtied();
+
+    static MarkDirtyAfterContext create(
+        ThinNodeEntry.DirtyType dirtyType, boolean actuallyDirtied) {
+      return new AutoValue_NotifyingHelper_MarkDirtyAfterContext(dirtyType, actuallyDirtied);
     }
   }
 }
