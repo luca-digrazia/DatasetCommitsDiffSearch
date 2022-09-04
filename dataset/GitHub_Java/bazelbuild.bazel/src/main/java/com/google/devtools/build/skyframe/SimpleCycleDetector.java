@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
-import com.google.devtools.build.skyframe.SkyFunctionEnvironment.UndonePreviouslyRequestedDep;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -78,7 +77,8 @@ public class SimpleCycleDetector implements CycleDetector {
    * value is popped, we know that all the children are finished. We would use null instead, but
    * ArrayDeque does not permit null elements.
    */
-  private static final SkyKey CHILDREN_FINISHED = () -> null;
+  private static final SkyKey CHILDREN_FINISHED =
+      LegacySkyKey.create(SkyFunctionName.create("MARKER"), "MARKER");
 
   /** The max number of cycles we will report to the user for a given root, to avoid OOMing. */
   private static final int MAX_CYCLES = 20;
@@ -154,21 +154,12 @@ public class SimpleCycleDetector implements CycleDetector {
             "Node %s was not successfully evaluated, but had no child errors. NodeEntry: %s",
             key,
             entry);
-        SkyFunctionEnvironment env = null;
-        try {
-          env =
-              new SkyFunctionEnvironment(
-                  key,
-                  directDeps,
-                  Sets.difference(entry.getAllRemainingDirtyDirectDeps(), removedDeps),
-                  evaluatorContext);
-        } catch (UndonePreviouslyRequestedDep undoneDep) {
-          // All children were finished according to the CHILDREN_FINISHED sentinel, and cycle
-          // detection does not do normal SkyFunction evaluation, so no restarting nor child
-          // dirtying was possible.
-          throw new IllegalStateException(
-              "Previously requested dep not done: " + undoneDep.getDepKey(), undoneDep);
-        }
+        SkyFunctionEnvironment env =
+            new SkyFunctionEnvironment(
+                key,
+                directDeps,
+                Sets.difference(entry.getAllRemainingDirtyDirectDeps(), removedDeps),
+                evaluatorContext);
         env.setError(entry, ErrorInfo.fromChildErrors(key, errorDeps));
         env.commit(entry, EnqueueParentBehavior.SIGNAL);
       } else {
