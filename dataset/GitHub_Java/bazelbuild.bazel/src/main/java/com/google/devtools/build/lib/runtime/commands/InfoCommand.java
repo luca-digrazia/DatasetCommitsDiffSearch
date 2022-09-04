@@ -29,10 +29,10 @@ import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -120,9 +120,8 @@ public class InfoCommand implements BlazeCommand {
           // is available here.
           env.setupPackageCache(
               optionsProvider, runtime.getDefaultsPackageContent(optionsProvider));
-          env.getSkyframeExecutor().setConfigurationFragmentFactories(
-              runtime.getConfigurationFragmentFactories());
           // TODO(bazel-team): What if there are multiple configurations? [multi-config]
+          env.getSkyframeExecutor().setConfigurationFactory(runtime.getConfigurationFactory());
           return env.getSkyframeExecutor().getConfiguration(
               env.getReporter(), runtime.createBuildOptions(optionsProvider));
         } catch (InvalidConfigurationException e) {
