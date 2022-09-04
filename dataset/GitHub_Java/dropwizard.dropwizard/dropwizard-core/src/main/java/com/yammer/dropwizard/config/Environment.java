@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.sun.jersey.api.core.ResourceConfig;
 import com.sun.jersey.core.reflection.AnnotatedMethod;
 import com.sun.jersey.core.reflection.MethodList;
+import com.sun.jersey.spi.container.servlet.ServletContainer;
 import com.yammer.dropwizard.AbstractService;
 import com.yammer.dropwizard.jetty.JettyManaged;
 import com.yammer.dropwizard.jetty.NonblockingServletHolder;
@@ -27,6 +28,7 @@ import javax.servlet.http.HttpServlet;
 import javax.ws.rs.HttpMethod;
 import javax.ws.rs.Path;
 import javax.ws.rs.ext.Provider;
+
 import java.util.EventListener;
 import java.util.concurrent.*;
 
@@ -81,7 +83,7 @@ public class Environment extends AbstractLifeCycle {
         this.tasks = ImmutableSet.builder();
         this.lifeCycle = new AggregateLifeCycle();
         
-        final HttpServlet jerseyContainer = service.getJerseyContainer(config);
+        HttpServlet jerseyContainer = service.getJerseyContainer(config);
         if (jerseyContainer != null) {
             addServlet(jerseyContainer, configuration.getHttpConfiguration().getRootPath()).setInitOrder(Integer.MAX_VALUE);
         }
