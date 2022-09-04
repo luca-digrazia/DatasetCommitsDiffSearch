@@ -29,47 +29,22 @@ public final class Spawns {
    * Returns {@code true} if the result of {@code spawn} may be cached.
    */
   public static boolean mayBeCached(Spawn spawn) {
-    return !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_CACHE)
-        && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.LOCAL);
+    return !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_CACHE);
   }
 
-  /** Returns {@code true} if the result of {@code spawn} may be cached remotely. */
-  public static boolean mayBeCachedRemotely(Spawn spawn) {
-    return mayBeCached(spawn)
-        && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_REMOTE)
-        && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_REMOTE_CACHE);
-  }
-
-  /** Returns {@code true} if {@code spawn} may be executed remotely. */
-  public static boolean mayBeExecutedRemotely(Spawn spawn) {
-    return ExecutionRequirements.maybeExecutedRemotely(spawn.getExecutionInfo().keySet());
-  }
-
-  /** Returns whether a Spawn can be executed in a sandbox environment. */
   public static boolean mayBeSandboxed(Spawn spawn) {
     return !spawn.getExecutionInfo().containsKey(ExecutionRequirements.LEGACY_NOSANDBOX)
         && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_SANDBOX)
         && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.LOCAL);
   }
 
-  /** Returns whether a Spawn needs network access in order to run successfully. */
-  public static boolean requiresNetwork(Spawn spawn, boolean defaultSandboxDisallowNetwork) {
-    if (spawn.getExecutionInfo().containsKey(ExecutionRequirements.BLOCK_NETWORK)) {
-      return false;
-    }
-    if (spawn.getExecutionInfo().containsKey(ExecutionRequirements.REQUIRES_NETWORK)) {
-      return true;
-    }
-
-    return defaultSandboxDisallowNetwork;
+  public static boolean requiresNetwork(Spawn spawn) {
+    return !spawn.getExecutionInfo().containsKey(ExecutionRequirements.BLOCK_NETWORK);
   }
 
-  /**
-   * Returns whether a Spawn claims to support being executed with the persistent worker strategy
-   * according to its execution info tags.
-   */
-  public static boolean supportsWorkers(Spawn spawn) {
-    return "1".equals(spawn.getExecutionInfo().get(ExecutionRequirements.SUPPORTS_WORKERS));
+  public static boolean mayBeExecutedRemotely(Spawn spawn) {
+    return !spawn.getExecutionInfo().containsKey(ExecutionRequirements.LOCAL)
+        && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_REMOTE);
   }
 
   /**
@@ -114,29 +89,17 @@ public final class Spawns {
   }
 
   /** Convert a spawn into a Bourne shell command. */
-  public static String asShellCommand(Spawn spawn, Path workingDirectory, boolean prettyPrintArgs) {
-    return asShellCommand(
-        spawn.getArguments(),
-        workingDirectory,
-        spawn.getEnvironment(),
-        prettyPrintArgs);
+  public static String asShellCommand(Spawn spawn, Path workingDirectory) {
+    return asShellCommand(spawn.getArguments(), workingDirectory, spawn.getEnvironment());
   }
 
   /** Convert a working dir + environment map + arg list into a Bourne shell command. */
   public static String asShellCommand(
-      Collection<String> arguments,
-      Path workingDirectory,
-      Map<String, String> environment,
-      boolean prettyPrintArgs) {
-
+      Collection<String> arguments, Path workingDirectory, Map<String, String> environment) {
     // We print this command out in such a way that it can safely be
     // copied+pasted as a Bourne shell command.  This is extremely valuable for
     // debugging.
     return CommandFailureUtils.describeCommand(
-        CommandDescriptionForm.COMPLETE,
-        prettyPrintArgs,
-        arguments,
-        environment,
-        workingDirectory.getPathString());
+        CommandDescriptionForm.COMPLETE, arguments, environment, workingDirectory.getPathString());
   }
 }
