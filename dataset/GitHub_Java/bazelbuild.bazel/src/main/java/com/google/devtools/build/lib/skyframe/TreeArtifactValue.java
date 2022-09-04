@@ -42,7 +42,7 @@ import javax.annotation.Nullable;
  * {@link TreeFileArtifact}s.
  */
 @AutoCodec
-public class TreeArtifactValue implements SkyValue {
+class TreeArtifactValue implements SkyValue {
   private static final Function<Artifact, PathFragment> PARENT_RELATIVE_PATHS =
       new Function<Artifact, PathFragment>() {
         @Override
@@ -231,13 +231,12 @@ public class TreeArtifactValue implements SkyValue {
   }
 
   /**
-   * Recursively get all child files in a directory (excluding child directories themselves, but
-   * including all files in them).
-   *
-   * @throws IOException if there is any problem reading or validating outputs under the given tree
-   *     artifact.
+   * Recursively get all child files in a directory
+   * (excluding child directories themselves, but including all files in them).
+   * @throws IOException if there is any problem reading or validating outputs under the given
+   *     tree artifact.
    */
-  public static Set<PathFragment> explodeDirectory(Path treeArtifactPath) throws IOException {
+  static Set<PathFragment> explodeDirectory(Path treeArtifactPath) throws IOException {
     ImmutableSet.Builder<PathFragment> explodedDirectory = ImmutableSet.builder();
     explodeDirectory(treeArtifactPath, PathFragment.EMPTY_FRAGMENT, explodedDirectory);
     return explodedDirectory.build();

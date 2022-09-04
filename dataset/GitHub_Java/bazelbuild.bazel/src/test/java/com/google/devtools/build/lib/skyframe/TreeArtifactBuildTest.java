@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.ActionInputHelper.treeFileArtifact;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -152,7 +152,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   }
 
   @Test
-  public void testInputTreeArtifactMetadataProvider() throws Exception {
+  public void testInputTreeArtifactPerActionFileCache() throws Exception {
     TouchingTestAction actionOne = new TouchingTestAction(outOneFileOne, outOneFileTwo);
     registerAction(actionOne);
 
@@ -163,10 +163,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
           @Override
           public ActionResult execute(ActionExecutionContext actionExecutionContext) {
             try {
-              // Check the metadata provider for input TreeFileArtifacts.
-              MetadataProvider metadataProvider = actionExecutionContext.getMetadataProvider();
-              assertThat(metadataProvider.getMetadata(outOneFileOne).getType().isFile()).isTrue();
-              assertThat(metadataProvider.getMetadata(outOneFileTwo).getType().isFile()).isTrue();
+              // Check the file cache for input TreeFileArtifacts.
+              MetadataProvider fileCache = actionExecutionContext.getMetadataProvider();
+              assertThat(fileCache.getMetadata(outOneFileOne).getType().isFile()).isTrue();
+              assertThat(fileCache.getMetadata(outOneFileTwo).getType().isFile()).isTrue();
 
               // Touch the action output.
               touchFile(normalOutput);
@@ -420,13 +420,17 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     };
 
     registerAction(failureOne);
-    assertThrows(BuildFailedException.class, () -> buildArtifact(outOne));
-    // not all outputs were created
-    List<Event> errors =
-        ImmutableList.copyOf(Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
-    assertThat(errors).hasSize(2);
-    assertThat(errors.get(0).getMessage()).contains("not present on disk");
-    assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+    try {
+      buildArtifact(outOne);
+      fail(); // Should have thrown
+    } catch (BuildFailedException e) {
+      //not all outputs were created
+      List<Event> errors = ImmutableList.copyOf(
+          Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
+      assertThat(errors).hasSize(2);
+      assertThat(errors.get(0).getMessage()).contains("not present on disk");
+      assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+    }
 
     TreeArtifactTestAction failureTwo = new TreeArtifactTestAction(
         Runnables.doNothing(), outTwoFileOne, outTwoFileTwo) {
@@ -447,12 +451,16 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     registerAction(failureTwo);
     storingEventHandler.clear();
-    assertThrows(BuildFailedException.class, () -> buildArtifact(outTwo));
-    errors =
-        ImmutableList.copyOf(Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
-    assertThat(errors).hasSize(2);
-    assertThat(errors.get(0).getMessage()).contains("not present on disk");
-    assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+    try {
+      buildArtifact(outTwo);
+      fail(); // Should have thrown
+    } catch (BuildFailedException e) {
+      List<Event> errors = ImmutableList.copyOf(
+          Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
+      assertThat(errors).hasSize(2);
+      assertThat(errors.get(0).getMessage()).contains("not present on disk");
+      assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+    }
   }
 
   private static void checkDirectoryPermissions(Path path) throws IOException {
@@ -554,13 +562,17 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     registerAction(action);
 
-    assertThrows(BuildFailedException.class, () -> buildArtifact(action.getSoleOutput()));
-    List<Event> errors =
-        ImmutableList.copyOf(Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
+    try {
+      buildArtifact(action.getSoleOutput());
+      fail(); // Should have thrown
+    } catch (BuildFailedException e) {
+      List<Event> errors = ImmutableList.copyOf(
+          Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
       assertThat(errors).hasSize(2);
       assertThat(errors.get(0).getMessage()).contains(
           "Failed to resolve relative path links/link");
-    assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+      assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+    }
   }
 
   @Test
@@ -590,12 +602,16 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     registerAction(action);
 
-    assertThrows(BuildFailedException.class, () -> buildArtifact(action.getSoleOutput()));
-    List<Event> errors =
-        ImmutableList.copyOf(Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
+    try {
+      buildArtifact(action.getSoleOutput());
+      fail(); // Should have thrown
+    } catch (BuildFailedException e) {
+      List<Event> errors = ImmutableList.copyOf(
+          Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
       assertThat(errors).hasSize(2);
       assertThat(errors.get(0).getMessage()).contains("Failed to resolve relative path links/link");
-    assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+      assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+    }
   }
 
   @Test
@@ -652,14 +668,18 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     registerAction(action);
 
-    assertThrows(BuildFailedException.class, () -> buildArtifact(action.getSoleOutput()));
-    List<Event> errors =
-        ImmutableList.copyOf(Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
+    try {
+      buildArtifact(action.getSoleOutput());
+      fail(); // Should have thrown
+    } catch (BuildFailedException e) {
+      List<Event> errors = ImmutableList.copyOf(
+          Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
       assertThat(errors).hasSize(2);
       assertThat(errors.get(0).getMessage()).contains(
           "A TreeArtifact may not contain relative symlinks whose target paths traverse "
           + "outside of the TreeArtifact");
-    assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+      assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+    }
   }
 
   @Test
@@ -692,14 +712,18 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     registerAction(action);
 
-    assertThrows(BuildFailedException.class, () -> buildArtifact(action.getSoleOutput()));
-    List<Event> errors =
-        ImmutableList.copyOf(Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
+    try {
+      buildArtifact(action.getSoleOutput());
+      fail(); // Should have thrown
+    } catch (BuildFailedException e) {
+      List<Event> errors = ImmutableList.copyOf(
+          Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
       assertThat(errors).hasSize(2);
       assertThat(errors.get(0).getMessage()).contains(
           "A TreeArtifact may not contain relative symlinks whose target paths traverse "
               + "outside of the TreeArtifact");
-    assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+      assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
+    }
   }
 
   // This is more a smoke test than anything, because it turns out that:
@@ -813,9 +837,12 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
         new DummyActionTemplateExpansionFunction(
             actionKeyContext, ImmutableList.of(generateOutputAction, noGenerateOutputAction));
 
-    BuildFailedException e =
-        assertThrows(BuildFailedException.class, () -> buildArtifact(artifact2));
-    assertThat(e).hasMessageThat().contains("not all outputs were created or valid");
+    try {
+      buildArtifact(artifact2);
+      fail("Expected BuildFailedException");
+    } catch (BuildFailedException e) {
+      assertThat(e).hasMessageThat().contains("not all outputs were created or valid");
+    }
   }
 
   @Test
@@ -854,9 +881,12 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
         new DummyActionTemplateExpansionFunction(
             actionKeyContext, ImmutableList.of(generateOutputAction, throwingAction));
 
-    BuildFailedException e =
-        assertThrows(BuildFailedException.class, () -> buildArtifact(artifact2));
-    assertThat(e).hasMessageThat().contains("Throwing dummy action");
+    try {
+      buildArtifact(artifact2);
+      fail("Expected BuildFailedException");
+    } catch (BuildFailedException e) {
+      assertThat(e).hasMessageThat().contains("Throwing dummy action");
+    }
   }
 
   @Test
@@ -894,9 +924,12 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
         new DummyActionTemplateExpansionFunction(
             actionKeyContext, ImmutableList.of(throwingAction, anotherThrowingAction));
 
-    BuildFailedException e =
-        assertThrows(BuildFailedException.class, () -> buildArtifact(artifact2));
-    assertThat(e).hasMessageThat().contains("Throwing dummy action");
+    try {
+      buildArtifact(artifact2);
+      fail("Expected BuildFailedException");
+    } catch (BuildFailedException e) {
+      assertThat(e).hasMessageThat().contains("Throwing dummy action");
+    }
   }
 
   @Test
@@ -915,9 +948,12 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
         artifact1, artifact2);
     registerAction(actionTemplate);
 
-    BuildFailedException e =
-        assertThrows(BuildFailedException.class, () -> buildArtifact(artifact2));
-    assertThat(e).hasMessageThat().contains("Throwing dummy action");
+    try {
+      buildArtifact(artifact2);
+      fail("Expected BuildFailedException");
+    } catch (BuildFailedException e) {
+      assertThat(e).hasMessageThat().contains("Throwing dummy action");
+    }
   }
 
   @Test
