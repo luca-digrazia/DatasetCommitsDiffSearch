@@ -19,8 +19,10 @@
  */
 package org.graylog2.periodical;
 
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
+import com.mongodb.DBObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
 import org.graylog2.indexer.DeflectorInformation;
 
 /**
@@ -28,14 +30,14 @@ import org.graylog2.indexer.DeflectorInformation;
  */
 public class DeflectorInformationWriterThread implements Runnable {
 
-    private static final Logger LOG = Logger.getLogger(DeflectorInformationWriterThread.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DeflectorInformationWriterThread.class);
     
     public static final int INITIAL_DELAY = 0;
     public static final int PERIOD = 5;
     
-    private final GraylogServer graylogServer;
+    private final Core graylogServer;
     
-    public DeflectorInformationWriterThread(GraylogServer graylogServer) {
+    public DeflectorInformationWriterThread(Core graylogServer) {
         this.graylogServer = graylogServer;
     }
     
@@ -60,10 +62,31 @@ public class DeflectorInformationWriterThread implements Runnable {
         // List of indexes and number of messages in them.
         i.addIndices(graylogServer.getDeflector().getAllDeflectorIndices());
         
+        // Recent index information.
+        i.setRecentIndex(graylogServer.getIndexer().getRecentIndex());
+        i.setRecentIndexStorageType(graylogServer.getIndexer().getRecentIndexStorageType());
+        
         // Last updated from which node?
         i.setCallingNode(graylogServer.getServerId());
         
         graylogServer.getMongoBridge().writeDeflectorInformation(i.getAsDatabaseObject());
+        
+        // Clean up index range. Just in case if it got out of sync.
+        cleanIndexRanges();
+    }
+    
+    private void cleanIndexRanges() {
+        for (DBObject range : graylogServer.getMongoBridge().getIndexDateRanges()) {
+            try {
+                String indexName = (String) range.get("index");
+                if (!graylogServer.getIndexer().indexExists(indexName)) {
+                    LOG.info("Index <{}> does not exist. Syncing index ranges by removing this range.", indexName);
+                    graylogServer.getMongoBridge().removeIndexDateRange(indexName);
+                }
+            } catch(Exception e) {
+                LOG.error("Could not try to sync index range. Skipping this range.", e);
+            }
+        }
     }
     
 }

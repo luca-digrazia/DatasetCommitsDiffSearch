@@ -20,14 +20,13 @@
 
 package org.graylog2.database;
 
-import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import java.util.List;
 import org.graylog2.Core;
-import org.graylog2.plugin.Tools;
+import org.graylog2.Tools;
 import org.graylog2.activities.Activity;
 import org.graylog2.buffers.BufferWatermark;
 import org.joda.time.DateTime;
@@ -84,27 +83,21 @@ public class MongoBridge {
         }
     }
 
-    public void writeThroughput(String serverId, int current) {
-        BasicDBObject totalQuery = new BasicDBObject();
-        totalQuery.put("server_id", serverId);
-        totalQuery.put("type", "total_throughput");
+    public void writeThroughput(String serverId, int current, int highest) {
+        BasicDBObject query = new BasicDBObject();
+        query.put("server_id", serverId);
+        query.put("type", "total_throughput");
 
-        BasicDBObject totalUpdate = new BasicDBObject();
-        totalUpdate.put("$set", new BasicDBObject("current", current));
-
-        BasicDBObject highestQuery = new BasicDBObject();
-        highestQuery.put("server_id", serverId);
-        highestQuery.put("type", "total_throughput");
-        highestQuery.put("highest", new BasicDBObject("$lt", current));
-
-        BasicDBObject highestUpdate = new BasicDBObject();
-        highestUpdate.put("$set", new BasicDBObject("highest", current));
+        BasicDBObject update = new BasicDBObject();
+        update.put("server_id", serverId);
+        update.put("type", "total_throughput");
+        update.put("current", current);
+        update.put("highest", highest);
 
         DBCollection coll = getConnection().getDatabase().getCollection("server_values");
-        coll.update(totalQuery, totalUpdate, true, false);
-        coll.update(highestQuery, highestUpdate, true, false);
+        coll.update(query, update, true, false);
     }
-
+    
     public void writeBufferWatermarks(String serverId, BufferWatermark outputBuffer, BufferWatermark processBuffer) {
         BasicDBObject query = new BasicDBObject();
         query.put("server_id", serverId);
@@ -183,18 +176,8 @@ public class MongoBridge {
         coll.remove(new BasicDBObject());
         
         for (Map<String, Object> plugin : plugins) {
-            writeSinglePluginInformation(plugin, collection);
+            coll.insert(new BasicDBObject(plugin));
         }
-    }
-    
-    public void writeSinglePluginInformation(Map<String, Object> plugin, String collection) {
-        DBCollection coll = connection.getDatabase().getCollection(collection);
-
-        DBObject query = new BasicDBObject();
-        query.put("typeclass", plugin.get("typeclass"));
-        
-        // Upsert, because there might be a plugin already and we don't purge for single.
-        coll.update(query, new BasicDBObject(plugin), true, false);
     }
     
     public void writeIndexDateRange(String indexName, int startDate) {
