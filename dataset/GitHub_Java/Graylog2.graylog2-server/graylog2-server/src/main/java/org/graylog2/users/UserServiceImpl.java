@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
@@ -43,67 +44,69 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     private final Configuration configuration;
 
     @Inject
-    public UserServiceImpl(final MongoConnection mongoConnection, final Configuration configuration) {
+    public UserServiceImpl(MongoConnection mongoConnection, Configuration configuration) {
         super(mongoConnection);
         this.configuration = configuration;
     }
 
     @Override
-    public User load(final String username) {
+    public User load(String username) {
         LOG.debug("Loading user {}", username);
-
         // special case for the locally defined user, we don't store that in MongoDB.
         if (configuration.getRootUsername().equals(username)) {
             LOG.debug("User {} is the built-in admin user", username);
             return new UserImpl.LocalAdminUser(configuration);
         }
 
-        final DBObject query = new BasicDBObject();
+        DBObject query = new BasicDBObject();
         query.put(UserImpl.USERNAME, username);
 
-        final List<DBObject> result = query(UserImpl.class, query);
-        if (result == null || result.isEmpty()) {
+        List<DBObject> result = query(UserImpl.class, query);
+
+        if (result == null) {
+            return null;
+        }
+        if (result.size() == 0) {
             return null;
         }
 
         if (result.size() > 1) {
-            final String msg = "There was more than one matching user for username " + username + ". This should never happen.";
-            LOG.error(msg);
-            throw new RuntimeException(msg);
+            LOG.error("There was more than one matching user. This should never happen.");
+            throw new RuntimeException("There was more than one matching user. This should never happen.");
         }
-
         final DBObject userObject = result.get(0);
-        final Object userId = userObject.get("_id");
 
-        LOG.debug("Loaded user {}/{} from MongoDB", username, userId);
+        final Object userId = userObject.get("_id");
+        LOG.debug("Loaded user {}/{}from MongoDB", username, userId);
         return new UserImpl((ObjectId) userId, userObject.toMap());
     }
 
     @Override
     public User create() {
-        return new UserImpl(Maps.<String, Object>newHashMap());
+        Map<String, Object> fields = Maps.newHashMap();
+        return new UserImpl(fields);
     }
 
     @Override
     public List<User> loadAll() {
-        final DBObject query = new BasicDBObject();
-        final List<DBObject> result = query(UserImpl.class, query);
+        List<User> users = Lists.newArrayList();
 
-        final List<User> users = Lists.newArrayList();
+        DBObject query = new BasicDBObject();
+        List<DBObject> result = query(UserImpl.class, query);
+
         for (DBObject dbObject : result) {
             users.add(new UserImpl((ObjectId) dbObject.get("_id"), dbObject.toMap()));
         }
-
         return users;
     }
 
     @Override
     public User syncFromLdapEntry(LdapEntry userEntry, LdapSettings ldapSettings, String username) {
-        UserImpl user = (UserImpl) load(username);
-
+        UserImpl user = (UserImpl)load(username);
         // create new user object if necessary
         if (user == null) {
-            user = new UserImpl(Maps.<String, Object>newHashMap());
+            Map<String, Object> fields = Maps.newHashMap();
+            user = new UserImpl(fields);
         }
 
         // update user attributes from ldap entry
@@ -115,27 +118,20 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
             LOG.error("Cannot save user.", e);
             return null;
         }
-
         return user;
     }
 
     @Override
     public void updateFromLdap(UserImpl user, LdapEntry userEntry, LdapSettings ldapSettings, String username) {
         final String displayNameAttribute = ldapSettings.getDisplayNameAttribute();
+        final String fullname = userEntry.get(displayNameAttribute);
+        user.setFullName(fullname);
         user.setName(username);
-        user.setFullName(userEntry.get(displayNameAttribute));
         user.setExternal(true);
-
-        final String email = userEntry.getEmail();
-        if (isNullOrEmpty(email)) {
-            LOG.debug("No email address found for user {} in LDAP. Using {}@localhost", username, username);
-            user.setEmail(username + "@localhost");
-        } else {
-            user.setEmail(email);
-        }
+        user.setEmail(userEntry.getEmail());
 
         // TODO This is a crude hack until we have a proper way to distinguish LDAP users from normal users
-        if (isNullOrEmpty(user.getHashedPassword())) {
+        if(isNullOrEmpty(user.getHashedPassword())) {
             user.setHashedPassword("User synced from LDAP.");
         }
 
@@ -144,6 +140,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         if (user.getPermissions() == null) {
             if (ldapSettings.getDefaultGroup().equals("reader")) {
                 user.setPermissions(Lists.newArrayList(RestPermissions.readerPermissions(username)));
+
             } else {
                 user.setPermissions(Lists.<String>newArrayList("*"));
             }
@@ -152,11 +149,9 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
     @Override
     public <T extends Persisted> String save(T model) throws ValidationException {
-        if (model instanceof UserImpl.LocalAdminUser) {
+        if (model instanceof UserImpl.LocalAdminUser)
             throw new IllegalStateException("Cannot modify local root user, this is a bug.");
-        }
-
-        return super.save(model);
+        return super.save(model);    //To change body of overridden methods use File | Settings | File Templates.
     }
 
     @Override

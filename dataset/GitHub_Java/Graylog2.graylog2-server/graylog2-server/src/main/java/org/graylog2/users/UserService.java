@@ -1,6 +1,4 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,7 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.users;
 
 import org.graylog2.database.PersistedService;
@@ -25,18 +22,16 @@ import org.graylog2.security.ldap.LdapSettings;
 
 import java.util.List;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
 public interface UserService extends PersistedService {
     User load(String username);
+
     User create();
 
     List<User> loadAll();
 
     User syncFromLdapEntry(LdapEntry userEntry, LdapSettings ldapSettings, String username);
 
-    void updateFromLdap(User user, LdapEntry userEntry, LdapSettings ldapSettings, String username);
+    void updateFromLdap(UserImpl user, LdapEntry userEntry, LdapSettings ldapSettings, String username);
 
     User getAdminUser();
 }
