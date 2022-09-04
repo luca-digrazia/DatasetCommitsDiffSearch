@@ -28,7 +28,6 @@ import org.joda.time.Period;
 
 import java.io.File;
 import java.util.List;
-import java.util.Locale;
 
 public class ElasticsearchConfiguration {
     @Parameter(value = "elasticsearch_cluster_name")
@@ -115,6 +114,9 @@ public class ElasticsearchConfiguration {
     @Parameter(value = "disable_index_optimization")
     private boolean disableIndexOptimization = false;
 
+    @Parameter(value = "disable_index_range_calculation")
+    private boolean disableIndexRangeCalculation = true;
+
     @Parameter(value = "index_optimization_max_num_segments", validator = PositiveIntegerValidator.class)
     private int indexOptimizationMaxNumSegments = 1;
 
@@ -186,7 +188,7 @@ public class ElasticsearchConfiguration {
     }
 
     public String getIndexPrefix() {
-        return indexPrefix.toLowerCase(Locale.ENGLISH);
+        return indexPrefix.toLowerCase();
     }
 
     public int getMaxNumberOfIndices() {
@@ -239,6 +241,10 @@ public class ElasticsearchConfiguration {
 
     public boolean isDisableIndexOptimization() {
         return disableIndexOptimization;
+    }
+
+    public boolean isDisableIndexRangeCalculation() {
+        return disableIndexRangeCalculation;
     }
 
     public String getPathData() {

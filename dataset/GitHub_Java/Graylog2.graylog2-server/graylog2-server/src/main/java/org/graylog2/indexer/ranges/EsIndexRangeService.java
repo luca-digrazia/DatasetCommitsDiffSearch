@@ -16,7 +16,6 @@
  */
 package org.graylog2.indexer.ranges;
 
-import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
@@ -55,9 +54,7 @@ import org.graylog2.indexer.esplugin.IndexChangeMonitor;
 import org.graylog2.indexer.esplugin.IndicesDeletedEvent;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.searches.TimestampStats;
-import org.graylog2.metrics.CacheStatsSet;
 import org.graylog2.plugin.Tools;
-import org.graylog2.shared.metrics.MetricUtils;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -88,8 +85,7 @@ public class EsIndexRangeService implements IndexRangeService {
                                ObjectMapper objectMapper,
                                Indices indices,
                                Deflector deflector,
-                               EventBus eventBus,
-                               MetricRegistry metricRegistry) {
+                               EventBus eventBus) {
         this.client = client;
         this.objectMapper = objectMapper;
         this.indices = indices;
@@ -107,11 +103,7 @@ public class EsIndexRangeService implements IndexRangeService {
                 return indexRange;
             }
         };
-        this.cache = CacheBuilder.<String, IndexRange>newBuilder()
-                .recordStats()
-                .build(cacheLoader);
-
-        MetricUtils.safelyRegisterAll(metricRegistry, new CacheStatsSet(cache));
+        this.cache = CacheBuilder.<String, IndexRange>newBuilder().build(cacheLoader);
 
         // This sucks. We need to bridge Elasticsearch's and our own Guice injector.
         IndexChangeMonitor.setEventBus(eventBus);
