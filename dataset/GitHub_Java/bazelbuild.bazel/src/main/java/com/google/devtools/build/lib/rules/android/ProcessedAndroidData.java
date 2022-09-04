@@ -67,6 +67,7 @@ public class ProcessedAndroidData {
       ResourceFilterFactory resourceFilterFactory,
       List<String> noCompressExtensions,
       boolean crunchPng,
+      boolean dataBindingEnabled,
       @Nullable Artifact featureOf,
       @Nullable Artifact featureAfter,
       DataBindingContext dataBindingContext)
@@ -89,9 +90,12 @@ public class ProcessedAndroidData {
                 AndroidBinary.createMainDexProguardSpec(
                     dataContext.getLabel(), dataContext.getActionConstructionContext()))
             .conditionalKeepRules(conditionalKeepRules)
+            .setDataBindingInfoZip(
+                dataBindingEnabled
+                    ? DataBinding.getLayoutInfoFile(dataContext.getActionConstructionContext())
+                    : null)
             .setFeatureOf(featureOf)
             .setFeatureAfter(featureAfter);
-    dataBindingContext.supplyLayoutInfo(builder::setDataBindingInfoZip);
     return buildActionForBinary(
         dataContext,
         dataBindingContext,

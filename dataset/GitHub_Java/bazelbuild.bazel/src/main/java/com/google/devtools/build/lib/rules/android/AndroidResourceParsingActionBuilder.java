@@ -19,7 +19,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
+import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
 
@@ -34,7 +34,7 @@ public class AndroidResourceParsingActionBuilder {
   private AndroidAssets assets = AndroidAssets.empty();
 
   // The symbols file is a required output
-  @Nullable private Artifact output;
+  private Artifact output;
 
   // Optional outputs
   @Nullable private Artifact compiledSymbols;
@@ -89,12 +89,10 @@ public class AndroidResourceParsingActionBuilder {
     Iterable<Artifact> resourceArtifacts =
         Iterables.concat(assets.getAssets(), resources.getResources());
 
-    if (output != null) {
-      BusyBoxActionBuilder.create(dataContext, "PARSE")
-          .addInput("--primaryData", resourceDirectories, resourceArtifacts)
-          .addOutput("--output", output)
-          .buildAndRegister("Parsing Android resources", "AndroidResourceParser");
-    }
+    BusyBoxActionBuilder.create(dataContext, "PARSE")
+        .addInput("--primaryData", resourceDirectories, resourceArtifacts)
+        .addOutput("--output", output)
+        .buildAndRegister("Parsing Android resources", "AndroidResourceParser");
 
     if (compiledSymbols != null) {
       BusyBoxActionBuilder compiledBuilder =
@@ -146,5 +144,27 @@ public class AndroidResourceParsingActionBuilder {
     build(dataContext);
 
     return ParsedAndroidAssets.of(assets, output, compiledSymbols, dataContext.getLabel());
+  }
+
+  /**
+   * Builds and registers the action, and updates the given resourceContainer with the output
+   * symbols.
+   */
+  public ResourceContainer buildAndUpdate(
+      AndroidDataContext dataContext, ResourceContainer resourceContainer) {
+    build(dataContext);
+
+    ResourceContainer.Builder builder =
+        resourceContainer
+            .toBuilder()
+            .setSymbols(output)
+            .setAndroidAssets(assets)
+            .setAndroidResources(resources);
+
+    if (compiledSymbols != null) {
+      builder.setCompiledSymbols(compiledSymbols);
+    }
+
+    return builder.build();
   }
 }

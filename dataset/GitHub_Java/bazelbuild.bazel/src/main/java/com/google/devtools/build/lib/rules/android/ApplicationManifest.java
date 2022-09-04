@@ -34,9 +34,9 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidManifestMerger;
-import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.rules.android.ResourceContainer.Builder.JavaPackageSource;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -371,7 +371,6 @@ public final class ApplicationManifest {
   public ResourceApk packTestWithDataAndResources(
       RuleContext ruleContext,
       AndroidDataContext dataContext,
-      DataBindingContext dataBindingContext,
       Artifact resourceApk,
       ResourceDependencies resourceDeps,
       @Nullable Artifact rTxt,
@@ -431,8 +430,7 @@ public final class ApplicationManifest {
                     AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
             .build(dataContext, processed);
 
-    return ResourceApk.of(
-        finalContainer, resourceDeps, proguardCfg, mainDexProguardCfg, dataBindingContext);
+    return ResourceApk.of(finalContainer, resourceDeps, proguardCfg, mainDexProguardCfg);
   }
 
   /** Packages up the manifest with resource and assets from the LocalResourceContainer. */
@@ -496,7 +494,7 @@ public final class ApplicationManifest {
             .setStaticLibraryOut(merged.getStaticLibrary())
             .build(dataContext, merged);
 
-    return ResourceApk.of(processed, resourceDeps, DataBinding.contextFrom(ruleContext));
+    return ResourceApk.of(processed, resourceDeps);
   }
 
   /* Creates an incremental apk from assets and data. */
@@ -554,8 +552,7 @@ public final class ApplicationManifest {
 
     // Intentionally skip building an R class JAR - incremental binaries handle this separately.
 
-    return ResourceApk.of(
-        processed, resourceDeps, proguardCfg, null, DataBinding.contextFrom(ruleContext));
+    return ResourceApk.of(processed, resourceDeps, proguardCfg, null);
   }
 
   /** Packages up the manifest with resource and assets from the rule and dependent resources. */
@@ -563,7 +560,6 @@ public final class ApplicationManifest {
   public ResourceApk packBinaryWithDataAndResources(
       RuleContext ruleContext,
       AndroidDataContext dataContext,
-      DataBindingContext dataBindingContext,
       Artifact resourceApk,
       ResourceDependencies resourceDeps,
       @Nullable Artifact rTxt,
@@ -575,6 +571,7 @@ public final class ApplicationManifest {
       boolean conditionalKeepRules,
       Artifact manifestOut,
       Artifact mergedResources,
+      @Nullable Artifact dataBindingInfoZip,
       @Nullable Artifact featureOf,
       @Nullable Artifact featureAfter)
       throws InterruptedException, RuleErrorException {
@@ -607,7 +604,7 @@ public final class ApplicationManifest {
           "resource cycle shrinking can only be enabled for builds with aapt2");
     }
 
-    final AndroidResourcesProcessorBuilder androidResourcesProcessorBuilder =
+    ResourceContainer processed =
         new AndroidResourcesProcessorBuilder()
             .setLibrary(false)
             .setApkOut(resourceContainer.getApk())
@@ -621,10 +618,8 @@ public final class ApplicationManifest {
             .withResourceDependencies(resourceDeps)
             .setProguardOut(proguardCfg)
             .setMainDexProguardOut(mainDexProguardCfg)
-            .conditionalKeepRules(conditionalKeepRules);
-    dataBindingContext.supplyLayoutInfo(androidResourcesProcessorBuilder::setDataBindingInfoZip);
-    ResourceContainer processed =
-        androidResourcesProcessorBuilder
+            .conditionalKeepRules(conditionalKeepRules)
+            .setDataBindingInfoZip(dataBindingInfoZip)
             .setApplicationId(manifestValues.get("applicationId"))
             .setVersionCode(manifestValues.get("versionCode"))
             .setVersionName(manifestValues.get("versionName"))
@@ -647,8 +642,7 @@ public final class ApplicationManifest {
                     AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
             .build(dataContext, processed);
 
-    return ResourceApk.of(
-        finalContainer, resourceDeps, proguardCfg, mainDexProguardCfg, dataBindingContext);
+    return ResourceApk.of(finalContainer, resourceDeps, proguardCfg, mainDexProguardCfg);
   }
 
   public ResourceApk packLibraryWithDataAndResources(
@@ -659,7 +653,7 @@ public final class ApplicationManifest {
       Artifact symbols,
       Artifact manifestOut,
       Artifact mergedResources,
-      DataBindingContext dataBindingContext)
+      @Nullable Artifact dataBindingInfoZip)
       throws InterruptedException, RuleErrorException {
     AndroidResources resources = AndroidResources.from(ruleContext, "resource_files");
     AndroidAssets assets = AndroidAssets.from(ruleContext);
@@ -689,7 +683,7 @@ public final class ApplicationManifest {
                   AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_LIBRARY_APK));
     }
 
-    final ResourceContainer resourceContainer = builder.build();
+    ResourceContainer resourceContainer = builder.build();
 
     Artifact rJavaClassJar =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR);
@@ -707,31 +701,33 @@ public final class ApplicationManifest {
             .setOutput(resourceContainer.getSymbols())
             .setCompiledSymbolsOutput(resourceContainer.getCompiledSymbols());
 
-    if (resourceContainer.getCompiledSymbols() != null) {
+    if (dataBindingInfoZip != null && resourceContainer.getCompiledSymbols() != null) {
+      PathFragment unusedInfo = dataBindingInfoZip.getRootRelativePath();
       // TODO(corysmith): Centralize the data binding processing and zipping into a single
       // action. Data binding processing needs to be triggered here as well as the merger to
       // avoid aapt2 from throwing an error during compilation.
-      dataBindingContext.supplyLayoutInfo(
-          layoutInfo ->
-              parsingBuilder
-                  .setDataBindingInfoZip(
-                      ruleContext.getUniqueDirectoryArtifact("dummydatabinding", "unused.zip"))
-                  .setManifest(resourceContainer.getManifest())
-                  .setJavaPackage(resourceContainer.getJavaPackage()));
+      parsingBuilder
+          .setDataBindingInfoZip(
+              ruleContext.getDerivedArtifact(
+                  unusedInfo.replaceName(unusedInfo.getBaseName() + "_unused.zip"),
+                  dataBindingInfoZip.getRoot()))
+          .setManifest(resourceContainer.getManifest())
+          .setJavaPackage(resourceContainer.getJavaPackage());
     }
-    ResourceContainer parsedResourceContainer =
-        parsingBuilder.buildAndUpdate(dataContext, resourceContainer);
+    resourceContainer = parsingBuilder.buildAndUpdate(dataContext, resourceContainer);
 
     ResourceContainer merged =
         new AndroidResourceMergingActionBuilder()
-            .setJavaPackage(parsedResourceContainer.getJavaPackage())
+            .setJavaPackage(resourceContainer.getJavaPackage())
             .withDependencies(resourceDeps)
             .setThrowOnResourceConflict(androidConfiguration.throwOnResourceConflict())
             .setUseCompiledMerge(skipParsingAction)
+            .setDataBindingInfoZip(dataBindingInfoZip)
             .setMergedResourcesOut(mergedResources)
             .setManifestOut(manifestOut)
             .setClassJarOut(rJavaClassJar)
-            .build(dataContext, parsedResourceContainer);
+            .setDataBindingInfoZip(dataBindingInfoZip)
+            .build(dataContext, resourceContainer);
 
     ResourceContainer processed =
         new AndroidResourceValidatorActionBuilder()
@@ -740,16 +736,16 @@ public final class ApplicationManifest {
             .setMergedResources(mergedResources)
             .setRTxtOut(merged.getRTxt())
             .setSourceJarOut(merged.getJavaSourceJar())
-            .setApkOut(parsedResourceContainer.getApk())
-            .withDependencies(resourceDeps)
+            .setApkOut(resourceContainer.getApk())
             // aapt2 related artifacts. Will be generated if the targetAaptVersion is AAPT2.
+            .withDependencies(resourceDeps)
             .setCompiledSymbols(merged.getCompiledSymbols())
             .setAapt2RTxtOut(merged.getAapt2RTxt())
             .setAapt2SourceJarOut(merged.getAapt2JavaSourceJar())
             .setStaticLibraryOut(merged.getStaticLibrary())
             .build(dataContext, merged);
 
-    return ResourceApk.of(processed, resourceDeps, dataBindingContext);
+    return ResourceApk.of(processed, resourceDeps);
   }
 
   public Artifact getManifest() {

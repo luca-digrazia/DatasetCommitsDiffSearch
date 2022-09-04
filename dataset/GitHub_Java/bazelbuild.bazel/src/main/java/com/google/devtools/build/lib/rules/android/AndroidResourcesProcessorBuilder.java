@@ -233,17 +233,16 @@ public class AndroidResourcesProcessorBuilder {
   public ResourceApk buildWithoutLocalResources(
       AndroidDataContext dataContext,
       StampedAndroidManifest manifest,
-      DataBindingContext dataBindingContext) {
+      DataBindingContext androidDataContext) {
 
     build(
-        dataContext, AndroidResources.empty(), AndroidAssets.empty(), manifest, dataBindingContext);
+        dataContext, AndroidResources.empty(), AndroidAssets.empty(), manifest, androidDataContext);
 
     return ResourceApk.fromTransitiveResources(
         resourceDependencies,
         assetDependencies,
         manifest.withProcessedManifest(manifestOut == null ? manifest.getManifest() : manifestOut),
-        rTxtOut,
-        dataBindingContext);
+        rTxtOut);
   }
 
   public ResourceContainer build(

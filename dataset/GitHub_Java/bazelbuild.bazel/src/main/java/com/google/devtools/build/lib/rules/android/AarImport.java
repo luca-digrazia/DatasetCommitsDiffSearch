@@ -108,7 +108,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
                   ruleContext,
                   dataContext,
                   manifest,
-                  DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
+                  DataBinding.contextFrom(ruleContext),
                   neverlink);
       MergedAndroidAssets mergedAssets =
           AndroidAssets.forAarImport(assets)

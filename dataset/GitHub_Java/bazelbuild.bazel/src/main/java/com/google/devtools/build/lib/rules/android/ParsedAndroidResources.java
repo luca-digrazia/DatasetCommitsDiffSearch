@@ -63,11 +63,7 @@ public class ParsedAndroidResources extends AndroidResources
             isAapt2
                 ? dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS)
                 : null)
-        .build(
-            dataContext,
-            dataBindingContext.processResources(resources),
-            manifest,
-            dataBindingContext);
+        .build(dataContext, resources, manifest, dataBindingContext);
   }
 
   @VisibleForTesting

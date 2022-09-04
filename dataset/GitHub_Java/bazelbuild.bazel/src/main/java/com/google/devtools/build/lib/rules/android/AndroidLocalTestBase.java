@@ -122,7 +122,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
           applicationManifest.packBinaryWithDataAndResources(
               ruleContext,
               dataContext,
-              DataBinding.contextFrom(ruleContext),
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
               resourceDependencies,
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
@@ -134,6 +133,9 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
               /* conditionalKeepRules= */ false,
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP),
+              DataBinding.isEnabled(ruleContext)
+                  ? DataBinding.getLayoutInfoFile(ruleContext)
+                  : null,
               null, /* featureOfArtifact */
               null /* featureAfterArtifact */);
     }

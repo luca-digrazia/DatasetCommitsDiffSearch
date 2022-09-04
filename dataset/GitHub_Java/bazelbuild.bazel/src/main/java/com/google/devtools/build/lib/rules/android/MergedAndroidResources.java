@@ -56,7 +56,7 @@ public class MergedAndroidResources extends ParsedAndroidResources {
         new AndroidResourceMergingActionBuilder()
             .setJavaPackage(parsed.getJavaPackage())
             .withDependencies(resourceDeps)
-            .setThrowOnResourceConflict(dataContext.throwOnResourceConflict())
+            .setThrowOnResourceConflict(androidConfiguration.throwOnResourceConflict())
             .setUseCompiledMerge(useCompiledMerge);
 
     parsed.asDataBindingContext().supplyLayoutInfo(builder::setDataBindingInfoZip);
@@ -107,15 +107,6 @@ public class MergedAndroidResources extends ParsedAndroidResources {
     this.manifest = manifest;
   }
 
-  /**
-   * Gets an Artifact containing a zip of merged resources.
-   *
-   * <p>If assets were processed together with resources, the zip will also contain merged assets.
-   *
-   * @deprecated This artifact is produced by an often-expensive action and should not be used if
-   *     another option is available. Furthermore, it will be replaced by flat files once we
-   *     completely move to aapt2.
-   */
   @Deprecated
   public Artifact getMergedResources() {
     return mergedResources;
@@ -177,7 +168,7 @@ public class MergedAndroidResources extends ParsedAndroidResources {
 
   @Override
   public boolean equals(Object object) {
-    if (!super.equals(object) || !(object instanceof MergedAndroidResources)) {
+    if (!super.equals(object)) {
       return false;
     }
 

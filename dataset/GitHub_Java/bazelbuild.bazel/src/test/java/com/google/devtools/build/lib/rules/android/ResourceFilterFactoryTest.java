@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.truth.BooleanSubject;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -38,22 +39,34 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ResourceFilterFactoryTest extends ResourceTestBase {
 
-  private NestedSet<ValidatedAndroidResources> getResources(ImmutableList<Artifact>... resources)
-      throws Exception {
-    NestedSetBuilder<ValidatedAndroidResources> builder = NestedSetBuilder.naiveLinkOrder();
+  private NestedSet<ValidatedAndroidData> getResourceContainers(
+      ImmutableList<Artifact>... resources) throws Exception {
+    NestedSetBuilder<ValidatedAndroidData> builder = NestedSetBuilder.naiveLinkOrder();
     for (ImmutableList<Artifact> resourceList : resources) {
-      builder.add(getResources(resourceList));
+      builder.add(getResourceContainer(resourceList));
     }
     return builder.build();
   }
 
-  private ValidatedAndroidResources getResources(ImmutableList<Artifact> resources)
+  private ResourceContainer getResourceContainer(ImmutableList<Artifact> resources)
       throws Exception {
-    return makeValidatedResourcesFor(
-        resources,
-        /* includeAapt2Outs = */ true,
-        new ProcessedAndroidManifest(getOutput("manifest"), "com.some.pkg", /* exported = */ false),
-        ResourceDependencies.empty());
+    // Get dummy objects for irrelevant values required by the builder.
+    Artifact manifest = getResource("manifest");
+
+    // Include a hashCode of the resources in the label. A hack in ResourceContainer currently means
+    // that class has a limited hashCode method that doesn't take resources into account.
+    // TODO(bazel-team): Remove this hack once that one no longer exists.
+    Label label =
+        Label.create(
+            manifest.getOwnerLabel().getPackageName(), "resourceContainer_" + resources.hashCode());
+
+    return ResourceContainer.builder()
+        .setAndroidResources(
+            AndroidResources.forResources(errorConsumer, resources, "resource_files"))
+        .setLabel(label)
+        .setManifestExported(false)
+        .setManifest(manifest)
+        .build();
   }
 
   @Test
@@ -350,10 +363,10 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
     ResourceDependencies resourceDependencies =
         ResourceDependencies.empty()
             .withResources(
-                getResources(
+                getResourceContainers(
                     ImmutableList.of(transitiveResourceToDiscard),
                     ImmutableList.of(transitiveResourceToKeep)),
-                getResources(
+                getResourceContainers(
                     ImmutableList.of(directResourceToDiscard),
                     ImmutableList.of(directResourceToKeep)),
                 new NestedSetBuilder<Artifact>(Order.NAIVE_LINK_ORDER)
@@ -379,36 +392,36 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
 
     // TODO: Remove - assert was same order before
     assertThat(resourceDependencies.getTransitiveResources())
-        .containsAtLeast(directResourceToKeep, transitiveResourceToKeep)
+        .containsAllOf(directResourceToKeep, transitiveResourceToKeep)
         .inOrder();
 
     assertThat(filteredResourceDeps.getTransitiveResources())
         .containsExactly(directResourceToKeep, transitiveResourceToKeep)
         .inOrder();
 
-    List<ValidatedAndroidResources> directContainers =
+    List<ValidatedAndroidData> directContainers =
         filteredResourceDeps.getDirectResourceContainers().toList();
     assertThat(directContainers).hasSize(2);
 
-    ValidatedAndroidResources directToDiscard = directContainers.get(0);
+    ValidatedAndroidData directToDiscard = directContainers.get(0);
     assertThat(directToDiscard.getResources()).isEmpty();
     assertThat(directToDiscard.getResourceRoots()).isEmpty();
 
-    ValidatedAndroidResources directToKeep = directContainers.get(1);
+    ValidatedAndroidData directToKeep = directContainers.get(1);
     assertThat(directToKeep.getResources()).containsExactly(directResourceToKeep);
     assertThat(directToKeep.getResourceRoots())
         .containsExactly(
             directResourceToKeep.getExecPath().getParentDirectory().getParentDirectory());
 
-    List<ValidatedAndroidResources> transitiveContainers =
+    List<ValidatedAndroidData> transitiveContainers =
         filteredResourceDeps.getTransitiveResourceContainers().toList();
     assertThat(transitiveContainers).hasSize(2);
 
-    ValidatedAndroidResources transitiveToDiscard = transitiveContainers.get(0);
+    ValidatedAndroidData transitiveToDiscard = transitiveContainers.get(0);
     assertThat(transitiveToDiscard.getResources()).isEmpty();
     assertThat(transitiveToDiscard.getResourceRoots()).isEmpty();
 
-    ValidatedAndroidResources transitiveToKeep = transitiveContainers.get(1);
+    ValidatedAndroidData transitiveToKeep = transitiveContainers.get(1);
     assertThat(transitiveToKeep.getResources()).containsExactly(transitiveResourceToKeep);
     assertThat(transitiveToKeep.getResourceRoots())
         .containsExactly(

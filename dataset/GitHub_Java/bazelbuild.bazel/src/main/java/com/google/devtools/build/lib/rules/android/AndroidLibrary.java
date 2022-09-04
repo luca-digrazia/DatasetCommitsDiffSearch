@@ -135,6 +135,13 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     AndroidIdlHelper.maybeAddSupportLibProguardConfigs(ruleContext, proguardConfigsbuilder);
     NestedSet<Artifact> transitiveProguardConfigs = proguardConfigsbuilder.build();
 
+    // JavaCommon and AndroidCommon contain shared helper classes between java_* and android_*
+    // rules respectively.
+    JavaCommon javaCommon =
+        AndroidCommon.createJavaCommonWithAndroidDataBinding(ruleContext, javaSemantics, true);
+    javaSemantics.checkRule(ruleContext, javaCommon);
+    AndroidCommon androidCommon = new AndroidCommon(javaCommon);
+
     AndroidConfiguration androidConfig = AndroidCommon.getAndroidConfig(ruleContext);
 
     // "Resources" here include actual resources (xmls, drawables, etc), assets, and the manifest.
@@ -198,7 +205,9 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
                 ruleContext.getImplicitOutputArtifact(
                     AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
                 ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP),
-                DataBinding.contextFrom(ruleContext));
+                DataBinding.isEnabled(ruleContext)
+                    ? DataBinding.getLayoutInfoFile(ruleContext)
+                    : null);
       }
       if (ruleContext.hasErrors()) {
         return null;
@@ -213,14 +222,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
               assetDeps,
               StampedAndroidManifest.createEmpty(ruleContext, /* exported = */ false));
     }
-
-    // JavaCommon and AndroidCommon contain shared helper classes between java_* and android_*
-    // rules respectively.
-    JavaCommon javaCommon =
-        AndroidCommon.createJavaCommonWithAndroidDataBinding(
-            ruleContext, javaSemantics, resourceApk.asDataBindingContext(), /* isLibrary */ true);
-    javaSemantics.checkRule(ruleContext, javaCommon);
-    AndroidCommon androidCommon = new AndroidCommon(javaCommon);
 
     // As android_library makes use of the Java rule compilation pipeline, we collect all
     // Java-related information here to be passed into the JavaSourceInfoProvider later.
