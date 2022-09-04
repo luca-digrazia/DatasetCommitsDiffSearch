@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.remote.merkletree.InputTree.DirectoryNode;
 import com.google.devtools.build.lib.remote.merkletree.InputTree.FileNode;
@@ -140,17 +139,17 @@ public class InputTreeTest {
     Path barPath = dirPath.getRelative("bar.cc");
     FileSystemUtils.writeContentAsLatin1(barPath, "bar");
     ActionInput bar = ActionInputHelper.fromPath(barPath.relativeTo(execRoot));
-    metadata.put(bar, FileArtifactValue.createFromFileSystem(barPath));
+    metadata.put(bar, FileArtifactValue.createShareable(barPath));
 
     dirPath.getRelative("fizz").createDirectoryAndParents();
     Path buzzPath = dirPath.getRelative("fizz/buzz.cc");
     FileSystemUtils.writeContentAsLatin1(dirPath.getRelative("fizz/buzz.cc"), "buzz");
     ActionInput buzz = ActionInputHelper.fromPath(buzzPath.relativeTo(execRoot));
-    metadata.put(buzz, FileArtifactValue.createFromFileSystem(buzzPath));
+    metadata.put(buzz, FileArtifactValue.createShareable(buzzPath));
 
-    Artifact dir = ActionsTestUtil.createArtifact(artifactRoot, dirPath);
+    Artifact dir = new Artifact(dirPath, artifactRoot);
     sortedInputs.put(dirPath.relativeTo(execRoot), dir);
-    metadata.put(dir, FileArtifactValue.createFromFileSystem(dirPath));
+    metadata.put(dir, FileArtifactValue.createShareable(dirPath));
 
     InputTree tree =
         InputTree.build(sortedInputs, new StaticMetadataProvider(metadata), execRoot, digestUtil);
@@ -203,10 +202,10 @@ public class InputTreeTest {
     Path p = execRoot.getRelative(path);
     p.getParentDirectory().createDirectoryAndParents();
     FileSystemUtils.writeContentAsLatin1(p, content);
-    Artifact a = ActionsTestUtil.createArtifact(artifactRoot, p);
+    Artifact a = new Artifact(p, artifactRoot);
 
     sortedInputs.put(PathFragment.create(path), a);
-    metadata.put(a, FileArtifactValue.createForTesting(a));
+    metadata.put(a, FileArtifactValue.create(a));
     return a;
   }
 
