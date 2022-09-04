@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.Set;
 
 import org.jboss.builder.item.BuildItem;
@@ -109,14 +108,6 @@ public final class BuildChainBuilder {
         return this;
     }
 
-    public BuildChainBuilder loadProviders(ClassLoader classLoader) throws ChainBuildException {
-        final ArrayList<BuildProvider> list = new ArrayList<>();
-        final ServiceLoader<BuildProvider> serviceLoader = ServiceLoader.load(BuildProvider.class, classLoader);
-        for (final BuildProvider provider : serviceLoader) {
-            provider.installInto(this);
-        }
-        return this;
-    }
     /**
      * Declare a final item that will be consumable after the build step chain completes.  This may be any item
      * that is produced in the chain.
@@ -199,7 +190,7 @@ public final class BuildChainBuilder {
             for (Map.Entry<ItemId, Consume> entry : stepBuilder.getConsumes().entrySet()) {
                 final Consume consume = entry.getValue();
                 final ItemId id = entry.getKey();
-                if (! consume.getFlags().contains(ConsumeFlag.OPTIONAL) && !id.isMulti()) {
+                if (! consume.getFlags().contains(ConsumeFlag.OPTIONAL)) {
                     if (! initialIds.contains(id) && ! allProduces.containsKey(id)) {
                         throw new ChainBuildException("No producers for required item " + id);
                     }
@@ -233,7 +224,7 @@ public final class BuildChainBuilder {
     }
 
     private void cycleCheck(BuildStepBuilder builder, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked, final Map<BuildStepBuilder, Set<BuildStepBuilder>> dependencies) throws ChainBuildException {
-        if (! checked.contains(builder)) {
+        if (checked.add(builder)) {
             if (! visited.add(builder)) {
                 throw new ChainBuildException("Cycle detected: " + visited);
             }
@@ -243,7 +234,6 @@ public final class BuildChainBuilder {
                 visited.remove(builder);
             }
         }
-        checked.add(builder);
     }
 
     private void addOne(final Map<ItemId, List<Produce>> allProduces, final Set<BuildStepBuilder> included, final ArrayDeque<BuildStepBuilder> toAdd, final ItemId idToAdd, Set<BuildStepBuilder> dependencies) throws ChainBuildException {
