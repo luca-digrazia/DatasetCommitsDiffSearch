@@ -405,24 +405,26 @@ public final class JavaCompileAction extends SpawnAction {
     }
 
     private String getArtifactOwnerGeneralizedLabel(Artifact artifact) {
-      // The simple case can simply return the label,
-      // avoiding any concatenation or StringBuilder garbage
       ArtifactOwner owner = checkNotNull(artifact.getArtifactOwner(), artifact);
+      StringBuilder result = new StringBuilder();
       Label label = owner.getLabel();
-      boolean isDefaultOrMain =
+      result.append(
           label.getPackageIdentifier().getRepository().isDefault()
-              || label.getPackageIdentifier().getRepository().isMain();
-      String result =
-          isDefaultOrMain ? label.toString() : "@" + label; // Escape '@' prefix for .params file.
+                  || label.getPackageIdentifier().getRepository().isMain()
+              ? label.toString()
+              // Escape '@' prefix for .params file.
+              : "@" + label);
+
       if (owner instanceof AspectValue.AspectKey) {
         AspectValue.AspectKey aspectOwner = (AspectValue.AspectKey) owner;
         ImmutableCollection<String> injectingRuleKind =
             aspectOwner.getParameters().getAttribute(INJECTING_RULE_KIND_PARAMETER_KEY);
         if (injectingRuleKind.size() == 1) {
-          result += ' ' + getOnlyElement(injectingRuleKind);
+          result.append(' ').append(getOnlyElement(injectingRuleKind));
         }
       }
-      return result;
+
+      return result.toString();
     }
   }
 

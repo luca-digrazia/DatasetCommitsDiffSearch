@@ -227,6 +227,7 @@ public final class JavaCompilationHelper {
     builder.setStrictJavaDeps(attributes.getStrictJavaDeps());
     builder.setDirectJars(attributes.getDirectJars());
     builder.setCompileTimeDependencyArtifacts(attributes.getCompileTimeDependencyArtifacts());
+    builder.setRuleKind(attributes.getRuleKind());
     builder.setTargetLabel(
         attributes.getTargetLabel() == null
             ? ruleContext.getLabel() : attributes.getTargetLabel());
@@ -405,6 +406,7 @@ public final class JavaCompilationHelper {
     builder.setStrictJavaDeps(attributes.getStrictJavaDeps());
     builder.setCompileTimeDependencyArtifacts(attributes.getCompileTimeDependencyArtifacts());
     builder.setDirectJars(attributes.getDirectJars());
+    builder.setRuleKind(attributes.getRuleKind());
     builder.setTargetLabel(attributes.getTargetLabel());
     builder.setAdditionalInputs(NestedSetBuilder.wrap(Order.LINK_ORDER, additionalJavaBaseInputs));
     builder.setJavacJar(javaToolchain.getJavac());

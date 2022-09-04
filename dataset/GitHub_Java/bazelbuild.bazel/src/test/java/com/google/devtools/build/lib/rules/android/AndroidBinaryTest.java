@@ -1641,23 +1641,16 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     // Only transitive resources need to be ignored when filtered,, and there aren't any here.
     assertThat(resourceArguments(directResources)).doesNotContain("--prefilteredResources");
 
-    // Validate resource filters are passed to execution
+    // Validate resource filters are not passed to execution, since they were applied in analysis
     List<String> args = resourceArguments(directResources);
-
-    // Remove whitespace and quotes from the resourceConfigurationFilters attribute value to get the
-    // value we expect to pass to the resource processing action
-    String fixedResourceConfigFilters = resourceConfigurationFilters.replaceAll("[ ']", "");
-    if (resourceConfigurationFilters.isEmpty()) {
-      assertThat(args).containsNoneOf("--resourceConfigs", fixedResourceConfigFilters);
-    } else {
-      assertThat(args).containsAllOf("--resourceConfigs", fixedResourceConfigFilters).inOrder();
-    }
-
+    assertThat(args)
+        .doesNotContain(ResourceFilterFactory.RESOURCE_CONFIGURATION_FILTERS_NAME);
+    assertThat(args).doesNotContain(ResourceFilterFactory.DENSITIES_NAME);
     if (densities.isEmpty()) {
-      assertThat(args).containsNoneOf("--densities", densities);
+      assertThat(args).doesNotContain("--densitiesForManifest");
     } else {
       // We still expect densities only for the purposes of adding information to manifests
-      assertThat(args).containsAllOf("--densities", densities).inOrder();
+      assertThat(args).containsAllOf("--densitiesForManifest", densities);
     }
   }
 
@@ -2446,6 +2439,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    adb = 'adb',",
         "    aidl = 'aidl',",
         "    android_jar = 'android.jar',",
+        "    annotations_jar = 'annotations_jar',",
         "    apksigner = 'apksigner',",
         "    dx = 'dx',",
         "    framework_aidl = 'framework_aidl',",
@@ -2483,6 +2477,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    adb = 'adb',",
         "    aidl = 'aidl',",
         "    android_jar = 'android.jar',",
+        "    annotations_jar = 'annotations_jar',",
         "    apksigner = 'apksigner',",
         "    dx = 'dx',",
         "    framework_aidl = 'framework_aidl',",
@@ -3350,6 +3345,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    adb = 'adb',",
         "    aidl = 'aidl',",
         "    android_jar = 'android.jar',",
+        "    annotations_jar = 'annotations_jar',",
         "    apksigner = 'apksigner',",
         "    dx = 'dx',",
         "    framework_aidl = 'framework_aidl',",
@@ -3968,59 +3964,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         getFilesToBuild(binary), "_proguard.jar");
 
     checkProguardLibJars(action, getAndroidJarPath());
-  }
-
-  @Test
-  public void testApkInfoAccessibleFromSkylark() throws Exception {
-    scratch.file(
-        "java/com/google/android/BUILD",
-        "load(':postprocess.bzl', 'postprocess')",
-        "android_binary(name = 'b1',",
-        "               srcs = ['b1.java'],",
-        "               manifest = 'AndroidManifest.xml')",
-        "postprocess(name = 'postprocess', dep = ':b1')");
-    scratch.file(
-        "java/com/google/android/postprocess.bzl",
-        "def _impl(ctx):",
-        "  return [DefaultInfo(files=depset([ctx.attr.dep[ApkInfo].signed_apk]))]",
-        "postprocess = rule(implementation=_impl,",
-        "              attrs={'dep': attr.label(providers=[ApkInfo])})");
-    ConfiguredTarget postprocess = getConfiguredTarget("//java/com/google/android:postprocess");
-    assertThat(postprocess).isNotNull();
-    assertThat(
-            ActionsTestUtil.prettyArtifactNames(
-                postprocess.getProvider(FilesToRunProvider.class).getFilesToRun()))
-        .containsExactly("java/com/google/android/b1.apk");
-  }
-
-  @Test
-  public void testInstrumentationInfoAccessibleFromSkylark() throws Exception {
-    scratch.file(
-        "java/com/google/android/instr/BUILD",
-        "load(':instr.bzl', 'instr')",
-        "android_binary(name = 'b1',",
-        "               srcs = ['b1.java'],",
-        "               instruments = ':b2',",
-        "               manifest = 'AndroidManifest.xml')",
-        "android_binary(name = 'b2',",
-        "               srcs = ['b2.java'],",
-        "               manifest = 'AndroidManifest.xml')",
-        "instr(name = 'instr', dep = ':b1')");
-    scratch.file(
-        "java/com/google/android/instr/instr.bzl",
-        "def _impl(ctx):",
-        "  target = ctx.attr.dep[AndroidInstrumentationInfo].target_apk",
-        "  instr = ctx.attr.dep[AndroidInstrumentationInfo].instrumentation_apk",
-        "  return [DefaultInfo(files=depset([target,instr]))]",
-        "instr = rule(implementation=_impl,",
-        "             attrs={'dep': attr.label(providers=[AndroidInstrumentationInfo])})");
-    ConfiguredTarget instr = getConfiguredTarget("//java/com/google/android/instr");
-    assertThat(instr).isNotNull();
-    assertThat(
-            ActionsTestUtil.prettyArtifactNames(
-                instr.getProvider(FilesToRunProvider.class).getFilesToRun()))
-        .containsExactly(
-            "java/com/google/android/instr/b1.apk", "java/com/google/android/instr/b2.apk");
   }
 
   @Test
