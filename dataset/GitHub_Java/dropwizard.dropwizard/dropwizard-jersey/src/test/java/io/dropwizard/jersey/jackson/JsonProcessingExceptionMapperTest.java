@@ -111,6 +111,11 @@ public class JsonProcessingExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
+    public void returnsA400ForNonDeserializableRequestEntities() throws Exception {
+        assertEndpointReturns400("ok", new UnknownRepresentation(100));
+    }
+
+    @Test
     public void returnsA400ForWrongInputType() throws Exception {
         assertEndpointReturns400("ok", "false");
     }

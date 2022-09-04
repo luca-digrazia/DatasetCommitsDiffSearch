@@ -8,9 +8,7 @@ import io.dropwizard.views.ViewRenderExceptionMapper;
 import io.dropwizard.views.ViewRenderer;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.test.JerseyTest;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -21,12 +19,12 @@ import javax.ws.rs.core.MediaType;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 /**
  * Test class for {@link MustacheViewRenderer} configured to load Mustache
  * templates from the file system.
- *
+ * 
  * @since 1.1.0
  */
 public class MustacheViewRendererFileSystemTest extends JerseyTest {
@@ -63,18 +61,6 @@ public class MustacheViewRendererFileSystemTest extends JerseyTest {
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
-    }
-
-    @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
-    }
-
-    @Override
     protected Application configure() {
         ResourceConfig config = DropwizardResourceConfig.forTesting();
         final ViewRenderer renderer = new MustacheViewRenderer();
@@ -86,33 +72,43 @@ public class MustacheViewRendererFileSystemTest extends JerseyTest {
     }
 
     @Test
-    public void rendersViewsWithAbsoluteTemplatePaths() {
+    public void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
         final String response = target("/test/absolute").request().get(String.class);
         assertThat(response).isEqualTo("Woop woop. yay\n");
     }
 
     @Test
-    public void rendersViewsWithRelativeTemplatePaths() {
+    public void rendersViewsWithRelativeTemplatePaths() throws Exception {
         final String response = target("/test/relative").request().get(String.class);
         assertThat(response).isEqualTo("Ok.\n");
     }
 
     @Test
-    public void returnsA500ForViewsWithBadTemplatePaths() {
-        assertThatExceptionOfType(WebApplicationException.class)
-            .isThrownBy(() -> target("/test/bad").request().get(String.class))
-            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(500))
-            .satisfies(e -> assertThat(e.getResponse().readEntity(String.class))
-                .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG));
+    public void returnsA500ForViewsWithBadTemplatePaths() throws Exception {
+        try {
+            target("/test/bad").request().get(String.class);
+            failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
+            assertThat(e.getResponse().getStatus())
+                    .isEqualTo(500);
+
+            assertThat(e.getResponse().readEntity(String.class))
+                    .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG);
+        }
     }
 
     @Test
-    public void returnsA500ForViewsThatCantCompile() {
-        assertThatExceptionOfType(WebApplicationException.class)
-            .isThrownBy(() -> target("/test/error").request().get(String.class))
-            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(500))
-            .satisfies(e -> assertThat(e.getResponse().readEntity(String.class))
-                .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG));
+    public void returnsA500ForViewsThatCantCompile() throws Exception {
+        try {
+            target("/test/error").request().get(String.class);
+            failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
+            assertThat(e.getResponse().getStatus())
+                    .isEqualTo(500);
+
+            assertThat(e.getResponse().readEntity(String.class))
+                .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG);
+        }
     }
 
 }

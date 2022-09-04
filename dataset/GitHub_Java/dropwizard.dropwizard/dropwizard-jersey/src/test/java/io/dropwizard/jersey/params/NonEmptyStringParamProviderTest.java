@@ -3,7 +3,7 @@ package io.dropwizard.jersey.params;
 
 import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -21,25 +21,25 @@ public class NonEmptyStringParamProviderTest extends AbstractJerseyTest {
     }
 
     @Test
-    void shouldReturnDefaultMessageWhenNonExistent() {
+    public void shouldReturnDefaultMessageWhenNonExistent() {
         String response = target("/non-empty/string").request().get(String.class);
         assertThat(response).isEqualTo("Hello");
     }
 
     @Test
-    void shouldReturnDefaultMessageWhenEmptyString() {
+    public void shouldReturnDefaultMessageWhenEmptyString() {
         String response = target("/non-empty/string").queryParam("message", "").request().get(String.class);
         assertThat(response).isEqualTo("Hello");
     }
 
     @Test
-    void shouldReturnDefaultMessageWhenNull() {
+    public void shouldReturnDefaultMessageWhenNull() {
         String response = target("/non-empty/string").queryParam("message").request().get(String.class);
         assertThat(response).isEqualTo("Hello");
     }
 
     @Test
-    void shouldReturnMessageWhenSpecified() {
+    public void shouldReturnMessageWhenSpecified() {
         String response = target("/non-empty/string").queryParam("message", "Goodbye").request().get(String.class);
         assertThat(response).isEqualTo("Goodbye");
     }

@@ -10,7 +10,7 @@ import org.glassfish.jersey.test.ServletDeploymentContext;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.glassfish.jersey.test.spi.TestContainerException;
 import org.glassfish.jersey.test.spi.TestContainerFactory;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.Invocation;
@@ -40,7 +40,7 @@ public class HttpSessionFactoryTest extends AbstractJerseyTest {
     }
 
     @Test
-    void passesInHttpSessions() throws Exception {
+    public void passesInHttpSessions() throws Exception {
         Response firstResponse = target("/session/").request(MediaType.TEXT_PLAIN)
                 .post(Entity.entity("Mr. Peeps", MediaType.TEXT_PLAIN));
 

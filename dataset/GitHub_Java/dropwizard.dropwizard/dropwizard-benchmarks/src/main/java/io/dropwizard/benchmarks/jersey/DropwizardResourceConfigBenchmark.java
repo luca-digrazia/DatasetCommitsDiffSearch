@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 public class DropwizardResourceConfigBenchmark {
 
-    private final DropwizardResourceConfig dropwizardResourceConfig = DropwizardResourceConfig.forTesting();
+    private DropwizardResourceConfig dropwizardResourceConfig = DropwizardResourceConfig.forTesting();
 
     @Setup
     public void setUp() throws Exception {
@@ -92,13 +92,11 @@ public class DropwizardResourceConfigBenchmark {
         @DELETE
         @Path("{id}")
         public void delete(@PathParam("id") String id) {
-            // stub implementation
         }
 
         @PUT
         @Path("{id}")
         public void update(@PathParam("id") String id, String asset) {
-            // stub implementation
         }
     }
 
@@ -109,28 +107,24 @@ public class DropwizardResourceConfigBenchmark {
         @Path("{assetId}/clusters/{code}/start")
         public void start(@PathParam("assetId") String assetId,
                                       @PathParam("code") String code) {
-            // stub implementation
         }
 
         @POST
         @Path("{assetId}/clusters/{code}/complete")
         public void complete(@PathParam("assetId") String assetId,
                                          @PathParam("code") String code) {
-            // stub implementation
         }
 
         @POST
         @Path("{assetId}/clusters/{code}/abort")
         public void abort(@PathParam("assetId") String assetId,
                                       @PathParam("code") String code) {
-            // stub implementation
         }
 
         @POST
         @Path("{assetId}/clusters/{code}/delete")
         public void delete(@PathParam("assetId") String assetId,
                                        @PathParam("code") String code) {
-            // stub implementation
         }
 
         @GET
@@ -163,7 +157,6 @@ public class DropwizardResourceConfigBenchmark {
         @DELETE
         @Path("{code}")
         public void delete(@PathParam("code") String code) {
-            // stub implementation
         }
     }
 }

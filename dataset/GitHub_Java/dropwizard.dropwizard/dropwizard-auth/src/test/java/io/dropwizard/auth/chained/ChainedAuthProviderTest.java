@@ -13,7 +13,7 @@ import io.dropwizard.auth.util.AuthUtil;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
 import org.glassfish.jersey.test.TestProperties;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.core.HttpHeaders;
 import java.security.Principal;
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ChainedAuthProviderTest extends AuthBaseTest<ChainedAuthProviderTest.ChainedAuthTestResourceConfig> {
     private static final String BEARER_USER = "A12B3C4D";
     public static class ChainedAuthTestResourceConfig extends DropwizardResourceConfig {
-
+        @SuppressWarnings("unchecked")
         public ChainedAuthTestResourceConfig() {
             super();
 
@@ -42,13 +42,13 @@ public class ChainedAuthProviderTest extends AuthBaseTest<ChainedAuthProviderTes
                 .buildAuthFilter();
 
             property(TestProperties.CONTAINER_PORT, "0");
-            register(new AuthValueFactoryProvider.Binder<>(Principal.class));
+            register(new AuthValueFactoryProvider.Binder(Principal.class));
             register(new AuthDynamicFeature(new ChainedAuthFilter<>(buildHandlerList(basicAuthFilter, oAuthFilter))));
             register(RolesAllowedDynamicFeature.class);
             register(AuthResource.class);
         }
 
-        @SuppressWarnings("rawtypes")
+        @SuppressWarnings("unchecked")
         public List<AuthFilter> buildHandlerList(AuthFilter<BasicCredentials, Principal> basicAuthFilter,
                                                  AuthFilter<String, Principal> oAuthFilter) {
             return Arrays.asList(basicAuthFilter, oAuthFilter);
@@ -56,7 +56,7 @@ public class ChainedAuthProviderTest extends AuthBaseTest<ChainedAuthProviderTes
     }
 
     @Test
-    void transformsBearerCredentialsToPrincipals() throws Exception {
+    public void transformsBearerCredentialsToPrincipals() throws Exception {
         assertThat(target("/test/admin").request()
             .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + " " + BEARER_USER)
             .get(String.class))

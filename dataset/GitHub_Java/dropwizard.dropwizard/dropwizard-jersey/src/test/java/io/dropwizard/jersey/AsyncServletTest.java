@@ -1,7 +1,7 @@
 package io.dropwizard.jersey;
 
 import io.dropwizard.jersey.dummy.DummyResource;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.MediaType;
@@ -18,7 +18,7 @@ public class AsyncServletTest extends AbstractJerseyTest {
     }
 
     @Test
-    void testAsyncResponse() {
+    public void testAsyncResponse() {
         final Response response = target("/async").request(MediaType.TEXT_PLAIN_TYPE).get();
 
         assertThat(response.getStatus()).isEqualTo(200);

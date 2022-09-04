@@ -8,9 +8,7 @@ import io.dropwizard.views.ViewRenderExceptionMapper;
 import io.dropwizard.views.ViewRenderer;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.test.JerseyTest;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -57,18 +55,6 @@ public class MustacheViewRendererTest extends JerseyTest {
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
-    }
-
-    @Override
-    @AfterEach
-    public void tearDown() throws Exception {
-        super.tearDown();
-    }
-
-    @Override
     protected Application configure() {
         ResourceConfig config = DropwizardResourceConfig.forTesting();
         final ViewRenderer renderer = new MustacheViewRenderer();
@@ -79,19 +65,19 @@ public class MustacheViewRendererTest extends JerseyTest {
     }
 
     @Test
-    void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
+    public void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
         final String response = target("/test/absolute").request().get(String.class);
         assertThat(response).isEqualTo("Woop woop. yay\n");
     }
 
     @Test
-    void rendersViewsWithRelativeTemplatePaths() throws Exception {
+    public void rendersViewsWithRelativeTemplatePaths() throws Exception {
         final String response = target("/test/relative").request().get(String.class);
         assertThat(response).isEqualTo("Ok.\n");
     }
 
     @Test
-    void returnsA500ForViewsWithBadTemplatePaths() throws Exception {
+    public void returnsA500ForViewsWithBadTemplatePaths() throws Exception {
         try {
             target("/test/bad").request().get(String.class);
             failBecauseExceptionWasNotThrown(WebApplicationException.class);
@@ -105,7 +91,7 @@ public class MustacheViewRendererTest extends JerseyTest {
     }
 
     @Test
-    void returnsA500ForViewsThatCantCompile() throws Exception {
+    public void returnsA500ForViewsThatCantCompile() throws Exception {
         try {
             target("/test/error").request().get(String.class);
             failBecauseExceptionWasNotThrown(WebApplicationException.class);
@@ -119,14 +105,14 @@ public class MustacheViewRendererTest extends JerseyTest {
     }
 
     @Test
-    void cacheByDefault() {
+    public void cacheByDefault() {
         MustacheViewRenderer mustacheViewRenderer = new MustacheViewRenderer();
         mustacheViewRenderer.configure(Collections.emptyMap());
         assertThat(mustacheViewRenderer.isUseCache()).isTrue();
     }
 
     @Test
-    void canDisableCache() {
+    public void canDisableCache() {
         MustacheViewRenderer mustacheViewRenderer = new MustacheViewRenderer();
         mustacheViewRenderer.configure(Collections.singletonMap("cache", "false"));
         assertThat(mustacheViewRenderer.isUseCache()).isFalse();

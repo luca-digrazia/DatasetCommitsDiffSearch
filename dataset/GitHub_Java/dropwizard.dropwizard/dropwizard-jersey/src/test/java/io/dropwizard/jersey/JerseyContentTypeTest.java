@@ -1,7 +1,7 @@
 package io.dropwizard.jersey;
 
 import io.dropwizard.jersey.dummy.DummyResource;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.MediaType;
@@ -18,7 +18,7 @@ public class JerseyContentTypeTest extends AbstractJerseyTest {
     }
 
     @Test
-    void testValidContentType() {
+    public void testValidContentType() {
         final Response response = target("/").request(MediaType.TEXT_PLAIN_TYPE).get();
 
         assertThat(response.getStatus()).isEqualTo(200);
@@ -26,7 +26,7 @@ public class JerseyContentTypeTest extends AbstractJerseyTest {
     }
 
     @Test
-    void testInvalidContentType() {
+    public void testInvalidContentType() {
         final Response response = target("/").request("foo").get();
 
         assertThat(response.getStatus()).isEqualTo(406);

@@ -3,7 +3,7 @@ package io.dropwizard.jersey.caching;
 import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import org.glassfish.jersey.server.ResourceConfig;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.HttpHeaders;
@@ -21,7 +21,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void immutableResponsesHaveCacheControlHeaders() throws Exception {
+    public void immutableResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/immutable").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
@@ -29,7 +29,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void privateResponsesHaveCacheControlHeaders() throws Exception {
+    public void privateResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/private").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
@@ -37,7 +37,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void maxAgeResponsesHaveCacheControlHeaders() throws Exception {
+    public void maxAgeResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/max-age").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
@@ -45,7 +45,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void noCacheResponsesHaveCacheControlHeaders() throws Exception {
+    public void noCacheResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/no-cache").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
@@ -53,7 +53,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void noStoreResponsesHaveCacheControlHeaders() throws Exception {
+    public void noStoreResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/no-store").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
@@ -61,7 +61,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void noTransformResponsesHaveCacheControlHeaders() throws Exception {
+    public void noTransformResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/no-transform").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
@@ -69,7 +69,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void mustRevalidateResponsesHaveCacheControlHeaders() throws Exception {
+    public void mustRevalidateResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/must-revalidate").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
@@ -77,7 +77,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void proxyRevalidateResponsesHaveCacheControlHeaders() throws Exception {
+    public void proxyRevalidateResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/proxy-revalidate").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
@@ -85,7 +85,7 @@ public class CacheControlledResponseFeatureTest extends AbstractJerseyTest {
     }
 
     @Test
-    void sharedMaxAgeResponsesHaveCacheControlHeaders() throws Exception {
+    public void sharedMaxAgeResponsesHaveCacheControlHeaders() throws Exception {
         final Response response = target("/caching/shared-max-age").request().get();
 
         assertThat(response.getHeaders().get(HttpHeaders.CACHE_CONTROL))
