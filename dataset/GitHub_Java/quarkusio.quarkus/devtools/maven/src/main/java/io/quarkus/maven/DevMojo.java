@@ -21,7 +21,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,11 +37,9 @@ import org.aesh.terminal.Connection;
 import org.aesh.terminal.utils.ANSI;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
-import org.apache.maven.model.BuildBase;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
-import org.apache.maven.model.Profile;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.BuildPluginManager;
@@ -77,7 +74,6 @@ import org.eclipse.aether.util.artifact.JavaScopes;
 import io.quarkus.bootstrap.devmode.DependenciesFilter;
 import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.model.AppModel;
-import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.bootstrap.resolver.maven.options.BootstrapMavenOptions;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
 import io.quarkus.deployment.dev.DevModeContext;
@@ -359,7 +355,7 @@ public class DevMojo extends AbstractMojo {
                     nextCheck = System.currentTimeMillis() + 100;
                     if (!runner.alive()) {
                         restoreTerminalState();
-                        if (!runner.isExpectedExitValue()) {
+                        if (runner.exitValue() != 0) {
                             throw new MojoExecutionException("Dev mode process did not complete successfully");
                         }
                         return;
@@ -579,14 +575,13 @@ public class DevMojo extends AbstractMojo {
 
     private void addProject(MavenDevModeLauncher.Builder builder, LocalProject localProject, boolean root) throws Exception {
 
-        String projectDirectory;
-        Set<Path> sourcePaths;
+        String projectDirectory = null;
+        Set<String> sourcePaths = null;
         String classesPath = null;
-        Set<Path> resourcePaths;
-        Set<Path> testSourcePaths;
+        String resourcePath = null;
+        Set<String> testSourcePaths = null;
         String testClassesPath = null;
-        Set<Path> testResourcePaths;
-        List<Profile> activeProfiles = Collections.emptyList();
+        String testResourcePath = null;
 
         final MavenProject mavenProject = session.getProjectMap().get(
                 String.format("%s:%s:%s", localProject.getGroupId(), localProject.getArtifactId(), localProject.getVersion()));
@@ -594,13 +589,15 @@ public class DevMojo extends AbstractMojo {
             projectDirectory = localProject.getDir().toAbsolutePath().toString();
             Path sourcePath = localProject.getSourcesSourcesDir().toAbsolutePath();
             if (Files.isDirectory(sourcePath)) {
-                sourcePaths = Collections.singleton(sourcePath);
+                sourcePaths = Collections.singleton(
+                        sourcePath.toString());
             } else {
                 sourcePaths = Collections.emptySet();
             }
             Path testSourcePath = localProject.getTestSourcesSourcesDir().toAbsolutePath();
             if (Files.isDirectory(testSourcePath)) {
-                testSourcePaths = Collections.singleton(testSourcePath);
+                testSourcePaths = Collections.singleton(
+                        testSourcePath.toString());
             } else {
                 testSourcePaths = Collections.emptySet();
             }
@@ -609,14 +606,13 @@ public class DevMojo extends AbstractMojo {
             sourcePaths = mavenProject.getCompileSourceRoots().stream()
                     .map(Paths::get)
                     .filter(Files::isDirectory)
-                    .map(Path::toAbsolutePath)
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
+                    .map(src -> src.toAbsolutePath().toString())
+                    .collect(Collectors.toSet());
             testSourcePaths = mavenProject.getTestCompileSourceRoots().stream()
                     .map(Paths::get)
                     .filter(Files::isDirectory)
-                    .map(Path::toAbsolutePath)
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
-            activeProfiles = mavenProject.getActiveProfiles();
+                    .map(src -> src.toAbsolutePath().toString())
+                    .collect(Collectors.toSet());
         }
         Path sourceParent = localProject.getSourcesDir().toAbsolutePath();
 
@@ -628,32 +624,16 @@ public class DevMojo extends AbstractMojo {
         if (Files.isDirectory(testClassesDir)) {
             testClassesPath = testClassesDir.toAbsolutePath().toString();
         }
-        resourcePaths = localProject.getResourcesSourcesDirs().toList().stream()
-                .map(Path::toAbsolutePath)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        testResourcePaths = localProject.getTestResourcesSourcesDirs().toList().stream()
-                .map(Path::toAbsolutePath)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        // Add the resources and test resources from the profiles
-        for (Profile profile : activeProfiles) {
-            final BuildBase build = profile.getBuild();
-            if (build != null) {
-                resourcePaths.addAll(
-                        build.getResources().stream()
-                                .map(Resource::getDirectory)
-                                .map(localProject::resolveRelativeToBaseDir)
-                                .map(Path::toAbsolutePath)
-                                .collect(Collectors.toList()));
-                testResourcePaths.addAll(
-                        build.getTestResources().stream()
-                                .map(Resource::getDirectory)
-                                .map(localProject::resolveRelativeToBaseDir)
-                                .map(Path::toAbsolutePath)
-                                .collect(Collectors.toList()));
-            }
+        Path resourcesSourcesDir = localProject.getResourcesSourcesDir();
+        if (Files.isDirectory(resourcesSourcesDir)) {
+            resourcePath = resourcesSourcesDir.toAbsolutePath().toString();
+        }
+        Path testResourcesSourcesDir = localProject.getTestResourcesSourcesDir();
+        if (Files.isDirectory(testResourcesSourcesDir)) {
+            testResourcePath = testResourcesSourcesDir.toAbsolutePath().toString();
         }
 
-        if (classesPath == null && (!sourcePaths.isEmpty() || !resourcePaths.isEmpty())) {
+        if (classesPath == null && (!sourcePaths.isEmpty() || resourcePath != null)) {
             throw new MojoExecutionException("Hot reloadable dependency " + localProject.getAppArtifact()
                     + " has not been compiled yet (the classes directory " + classesDir + " does not exist)");
         }
@@ -663,17 +643,16 @@ public class DevMojo extends AbstractMojo {
         DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo.Builder().setAppArtifactKey(localProject.getKey())
                 .setName(localProject.getArtifactId())
                 .setProjectDirectory(projectDirectory)
-                .setSourcePaths(PathsCollection.from(sourcePaths))
+                .setSourcePaths(sourcePaths)
                 .setClassesPath(classesPath)
                 .setResourcesOutputPath(classesPath)
-                .setResourcePaths(PathsCollection.from(resourcePaths))
-                .setSourceParents(PathsCollection.of(sourceParent.toAbsolutePath()))
+                .setResourcePath(resourcePath)
+                .setSourceParents(Collections.singleton(sourceParent.toAbsolutePath().toString()))
                 .setPreBuildOutputDir(targetDir.resolve("generated-sources").toAbsolutePath().toString())
                 .setTargetDir(targetDir.toAbsolutePath().toString())
-                .setTestSourcePaths(PathsCollection.from(testSourcePaths))
+                .setTestSourcePaths(testSourcePaths)
                 .setTestClassesPath(testClassesPath)
-                .setTestResourcesOutputPath(testClassesPath)
-                .setTestResourcePaths(PathsCollection.from(testResourcePaths))
+                .setTestResourcePath(testResourcePath)
                 .build();
 
         if (root) {
@@ -702,11 +681,6 @@ public class DevMojo extends AbstractMojo {
 
         int exitValue() {
             return process == null ? -1 : process.exitValue();
-        }
-
-        boolean isExpectedExitValue() {
-            // '130' is what the process exits with in remote-dev mode under bash
-            return exitValue() == 0 || exitValue() == 130;
         }
 
         void run() throws Exception {
