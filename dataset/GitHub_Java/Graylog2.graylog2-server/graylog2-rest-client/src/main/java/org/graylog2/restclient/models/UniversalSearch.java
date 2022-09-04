@@ -1,35 +1,34 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
 import com.google.common.net.MediaType;
-import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ApiRequestBuilder;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
-import org.graylog2.restclient.models.api.responses.*;
-import org.graylog2.restclient.models.api.responses.system.indices.IndexSummaryResponse;
+import org.graylog2.restclient.models.api.responses.DateHistogramResponse;
+import org.graylog2.restclient.models.api.responses.FieldHistogramResponse;
+import org.graylog2.restclient.models.api.responses.FieldStatsResponse;
+import org.graylog2.restclient.models.api.responses.FieldTermsResponse;
+import org.graylog2.restclient.models.api.responses.SearchResultResponse;
 import org.graylog2.restclient.models.api.results.DateHistogramResult;
 import org.graylog2.restclient.models.api.results.SearchResult;
 import org.graylog2.restroutes.PathMethod;
@@ -39,7 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.util.List;
+import java.io.InputStream;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -108,6 +107,15 @@ public class UniversalSearch {
     }
 
     private <T> T doSearch(Class<T> clazz, MediaType mediaType, int pageSize, Set<String> selectedFields) throws APIException, IOException {
+        final ApiRequestBuilder<T> builder = getSearchRequestBuilder(clazz, pageSize, selectedFields);
+        return builder
+                .accept(mediaType)
+                .timeout(KEITH, TimeUnit.SECONDS)
+                .expect(200, 400)
+                .execute();
+    }
+
+    private <T> ApiRequestBuilder<T> getSearchRequestBuilder(Class<T> clazz, int pageSize, Set<String> selectedFields) {
         PathMethod pathMethod;
         switch (timeRange.getType()) {
             case ABSOLUTE:
@@ -127,17 +135,12 @@ public class UniversalSearch {
                 .queryParam("query", query)
                 .queryParam("limit", pageSize)
                 .queryParam("offset", page * pageSize)
-                .queryParam("filter", (filter == null ? "*" : filter))
                 .queryParam("sort", order.toApiParam());
+        addFilterQueryParam(builder);
         if (selectedFields != null && !selectedFields.isEmpty()) {
             builder.queryParam("fields", Joiner.on(',').skipNulls().join(selectedFields));
         }
-        final T result = builder
-                .accept(mediaType)
-                .timeout(KEITH, TimeUnit.SECONDS)
-                .expect(200, 400)
-                .execute();
-        return result;
+        return builder;
     }
 
     public SearchResult search() throws IOException, APIException {
@@ -147,7 +150,7 @@ public class UniversalSearch {
             throw new APIException(null, null, new RuntimeException("Empty search response, this is likely a bug in exception handling."));
         }
 
-        SearchResult result = new SearchResult(
+        return new SearchResult(
                 query,
                 response.builtQuery,
                 timeRange,
@@ -156,17 +159,20 @@ public class UniversalSearch {
                 response.messages,
                 response.fields,
                 response.usedIndices,
-                response.error != null ? response.error : response.genericError,
                 response.getFromDataTime(),
                 response.getToDataTime(),
                 fieldMapper
         );
-
-        return result;
     }
 
-    public String searchAsCsv(Set<String> selectedFields) throws IOException, APIException {
-        return doSearch(String.class, MediaType.CSV_UTF_8, 10_000, selectedFields);  // TODO make use of streaming support in the server.
+    public InputStream searchAsCsv(Set<String> selectedFields) throws IOException, APIException {
+        final ApiRequestBuilder<String> builder = getSearchRequestBuilder(String.class,
+                                                                          Integer.MAX_VALUE,
+                                                                          selectedFields);
+        return builder.accept(MediaType.CSV_UTF_8)
+                .timeout(Long.MAX_VALUE, TimeUnit.SECONDS) // never time out
+                .expect(200, 400)
+                .executeStreaming();
     }
 
     public DateHistogramResult dateHistogram(String interval) throws IOException, APIException {
@@ -184,13 +190,13 @@ public class UniversalSearch {
             default:
                 throw new RuntimeException("Invalid time range type!");
         }
-        DateHistogramResponse response = api.path(routePath, DateHistogramResponse.class)
+        final ApiRequestBuilder<DateHistogramResponse> builder = api.path(routePath, DateHistogramResponse.class)
                 .queryParam("interval", interval)
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
-                .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(apiTimeout("search_universal_histogram", KEITH, TimeUnit.SECONDS))
-                .execute();
+                .timeout(apiTimeout("search_universal_histogram", KEITH, TimeUnit.SECONDS));
+        addFilterQueryParam(builder);
+        final DateHistogramResponse response = builder.execute();
         return new DateHistogramResult(
                 response.query,
                 response.time,
@@ -216,13 +222,13 @@ public class UniversalSearch {
             default:
                 throw new RuntimeException("Invalid time range type!");
         }
-        return api.path(routePath, FieldStatsResponse.class)
+        final ApiRequestBuilder<FieldStatsResponse> builder = api.path(routePath, FieldStatsResponse.class)
                 .queryParam("field", field)
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
-                .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(apiTimeout("search_universal_stats", KEITH, TimeUnit.SECONDS))
-                .execute();
+                .timeout(apiTimeout("search_universal_stats", KEITH, TimeUnit.SECONDS));
+        addFilterQueryParam(builder);
+        return builder.execute();
     }
 
     public FieldTermsResponse fieldTerms(String field) throws IOException, APIException {
@@ -240,16 +246,16 @@ public class UniversalSearch {
             default:
                 throw new RuntimeException("Invalid time range type!");
         }
-        return api.path(routePath, FieldTermsResponse.class)
+        final ApiRequestBuilder<FieldTermsResponse> builder = api.path(routePath, FieldTermsResponse.class)
                 .queryParam("field", field)
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
-                .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(apiTimeout("search_universal_terms", KEITH, TimeUnit.SECONDS))
-                .execute();
+                .timeout(apiTimeout("search_universal_terms", KEITH, TimeUnit.SECONDS));
+        addFilterQueryParam(builder);
+        return builder.execute();
     }
 
-    public FieldHistogramResponse fieldHistogram(String field, String interval) throws IOException, APIException {
+    public FieldHistogramResponse fieldHistogram(String field, String interval, boolean isCardinality) throws IOException, APIException {
         PathMethod routePath;
         switch (timeRange.getType()) {
             case ABSOLUTE:
@@ -264,14 +270,21 @@ public class UniversalSearch {
             default:
                 throw new RuntimeException("Invalid time range type!");
         }
-        return api.path(routePath, FieldHistogramResponse.class)
+        final ApiRequestBuilder<FieldHistogramResponse> builder = api.path(routePath, FieldHistogramResponse.class)
                 .queryParam("field", field)
                 .queryParam("interval", interval)
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
-                .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(apiTimeout("search_universal_fieldhistogram", KEITH, TimeUnit.SECONDS))
-                .execute();
+                .queryParam("cardinality", Boolean.toString(isCardinality))
+                .timeout(apiTimeout("search_universal_fieldhistogram", KEITH, TimeUnit.SECONDS));
+        addFilterQueryParam(builder);
+        return builder.execute();
+    }
+
+    private void addFilterQueryParam(ApiRequestBuilder<?> builder) {
+        if (filter != null) {
+            builder.queryParam("filter", filter);
+        }
     }
 
     public SearchSort getOrder() {
