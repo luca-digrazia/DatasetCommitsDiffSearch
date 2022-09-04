@@ -109,10 +109,7 @@ public class RestPermissions {
             MESSAGES_READ,
             METRICS_READ,
             SYSTEM_READ,
-            THROUGHPUT_READ,
-            SAVEDSEARCHES_CREATE,
-            SAVEDSEARCHES_EDIT,
-            SAVEDSEARCHES_READ
+            THROUGHPUT_READ
     );
 
     public static Set<String> readerPermissions(String username) {
