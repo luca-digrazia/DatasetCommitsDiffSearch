@@ -23,54 +23,58 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 /**
  * Runfiles provider for C++ targets.
  *
- * <p>Contains two {@link Runfiles} objects: one for the statically linked binary and one for the
- * dynamically linked binary. Both contain dynamic libraries needed at runtime and data
- * dependencies.
+ * <p>Contains two {@link Runfiles} objects: one for the eventual statically linked binary and one
+ * for the one that uses shared libraries. Data dependencies are present in both.
  */
 @Immutable
 @AutoCodec
 public final class CcRunfiles {
 
-  private final Runfiles runfilesForLinkingStatically;
-  private final Runfiles runfilesForLinkingDynamically;
+  private final Runfiles dynamicLibrariesForLinkingStatically;
+  private final Runfiles dynamicLibrariesForLinkingDynamically;
 
   @AutoCodec.Instantiator
-  public CcRunfiles(Runfiles runfilesForLinkingStatically, Runfiles runfilesForLinkingDynamically) {
-    this.runfilesForLinkingStatically = runfilesForLinkingStatically;
-    this.runfilesForLinkingDynamically = runfilesForLinkingDynamically;
+  public CcRunfiles(
+      Runfiles dynamicLibrariesForLinkingStatically,
+      Runfiles dynamicLibrariesForLinkingDynamically) {
+    this.dynamicLibrariesForLinkingStatically = dynamicLibrariesForLinkingStatically;
+    this.dynamicLibrariesForLinkingDynamically = dynamicLibrariesForLinkingDynamically;
   }
 
-  public Runfiles getRunfilesForLinkingStatically() {
-    return runfilesForLinkingStatically;
+  public Runfiles getDynamicLibrariesForLinkingStatically() {
+    return dynamicLibrariesForLinkingStatically;
   }
 
-  public Runfiles getRunfilesForLinkingDynamically() {
-    return runfilesForLinkingDynamically;
+  public Runfiles getDynamicLibrariesForLinkingDynamically() {
+    return dynamicLibrariesForLinkingDynamically;
   }
 
   /**
    * Returns a function that gets the static C++ runfiles from a {@link TransitiveInfoCollection} or
    * the empty runfiles instance if it does not contain that provider.
    */
-  public static final Function<TransitiveInfoCollection, Runfiles> RUNFILES_FOR_LINKING_STATICALLY =
-      input -> {
-        CcLinkingInfo provider = input.get(CcLinkingInfo.PROVIDER);
-        CcRunfiles ccRunfiles = provider == null ? null : provider.getCcRunfiles();
-        return ccRunfiles == null ? Runfiles.EMPTY : ccRunfiles.getRunfilesForLinkingStatically();
-      };
+  public static final Function<TransitiveInfoCollection, Runfiles>
+      DYNAMIC_LIBRARIES_FOR_LINKING_STATICALLY =
+          input -> {
+            CcLinkingInfo provider = input.get(CcLinkingInfo.PROVIDER);
+            CcRunfiles ccRunfiles = provider == null ? null : provider.getCcRunfiles();
+            return ccRunfiles == null
+                ? Runfiles.EMPTY
+                : ccRunfiles.getDynamicLibrariesForLinkingStatically();
+          };
 
   /**
    * Returns a function that gets the shared C++ runfiles from a {@link TransitiveInfoCollection} or
    * the empty runfiles instance if it does not contain that provider.
    */
   public static final Function<TransitiveInfoCollection, Runfiles>
-      RUNFILES_FOR_LINKING_DYNAMICALLY =
+      DYNAMIC_LIBRARIES_FOR_LINKING_DYNAMICALLY =
           input -> {
             CcLinkingInfo provider = input.get(CcLinkingInfo.PROVIDER);
             CcRunfiles ccRunfiles = provider == null ? null : provider.getCcRunfiles();
             return ccRunfiles == null
                 ? Runfiles.EMPTY
-                : ccRunfiles.getRunfilesForLinkingDynamically();
+                : ccRunfiles.getDynamicLibrariesForLinkingDynamically();
           };
 
   /**
@@ -79,6 +83,8 @@ public final class CcRunfiles {
    */
   public static final Function<TransitiveInfoCollection, Runfiles> runfilesFunction(
       boolean linkingStatically) {
-    return linkingStatically ? RUNFILES_FOR_LINKING_STATICALLY : RUNFILES_FOR_LINKING_DYNAMICALLY;
+    return linkingStatically
+        ? DYNAMIC_LIBRARIES_FOR_LINKING_STATICALLY
+        : DYNAMIC_LIBRARIES_FOR_LINKING_DYNAMICALLY;
   }
 }
