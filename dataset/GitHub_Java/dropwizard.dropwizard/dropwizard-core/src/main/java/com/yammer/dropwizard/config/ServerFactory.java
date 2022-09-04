@@ -207,24 +207,24 @@ public class ServerFactory {
 
     private SecurityHandler basicAuthHandler(String username, String password) {
 
-        final HashLoginService loginService = new HashLoginService();
-        loginService.putUser(username, Credential.getCredential(password), new String[] {"user"});
-        loginService.setName("admin");
+        HashLoginService l = new HashLoginService();
+        l.putUser(username, Credential.getCredential(password), new String[] {"user"});
+        l.setName("admin");
 
-        final Constraint constraint = new Constraint();
+        Constraint constraint = new Constraint();
         constraint.setName(Constraint.__BASIC_AUTH);
         constraint.setRoles(new String[]{"user"});
         constraint.setAuthenticate(true);
 
-        final ConstraintMapping constraintMapping = new ConstraintMapping();
-        constraintMapping.setConstraint(constraint);
-        constraintMapping.setPathSpec("/*");
+        ConstraintMapping cm = new ConstraintMapping();
+        cm.setConstraint(constraint);
+        cm.setPathSpec("/*");
 
-        final ConstraintSecurityHandler csh = new ConstraintSecurityHandler();
+        ConstraintSecurityHandler csh = new ConstraintSecurityHandler();
         csh.setAuthenticator(new BasicAuthenticator());
         csh.setRealmName("admin");
-        csh.addConstraintMapping(constraintMapping);
-        csh.setLoginService(loginService);
+        csh.addConstraintMapping(cm);
+        csh.setLoginService(l);
 
         return csh;
 
