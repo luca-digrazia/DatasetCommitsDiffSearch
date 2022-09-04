@@ -36,11 +36,11 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
+import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.TreeMap;
 
 /**
@@ -106,10 +106,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
         ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT, ObjcProtoProvider.class);
 
     Map<String, NestedSet<Artifact>> outputGroupCollector = new TreeMap<>();
-    for (Entry<BuildConfiguration, CcToolchainProvider> childConfigAndToolchain :
-        childConfigurationsAndToolchains.entrySet()) {
-      BuildConfiguration childConfig = childConfigAndToolchain.getKey();
-      CcToolchainProvider childToolchain = childConfigAndToolchain.getValue();
+    for (BuildConfiguration childConfig : childConfigurationsAndToolchains.keySet()) {
       Iterable<ObjcProtoProvider> objcProtoProviders = objcProtoProvidersMap.get(childConfig);
       ProtobufSupport protoSupport =
           new ProtobufSupport(
@@ -145,7 +142,6 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
           new CompilationSupport.Builder()
               .setRuleContext(ruleContext)
               .setConfig(childConfig)
-              .setToolchainProvider(childToolchain)
               .setOutputGroupCollector(outputGroupCollector)
               .build();
 
@@ -208,13 +204,18 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
       List<TransitiveInfoCollection> propagatedDeps,
       Optional<ObjcProvider> protosObjcProvider) {
 
-    CompilationArtifacts compilationArtifacts = new CompilationArtifacts.Builder().build();
+    CompilationArtifacts compilationArtifacts =
+        CompilationSupport.compilationArtifacts(ruleContext, intermediateArtifacts);
 
     return new ObjcCommon.Builder(ruleContext, buildConfiguration)
         .setCompilationAttributes(
             CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
         .setCompilationArtifacts(compilationArtifacts)
+        .setResourceAttributes(new ResourceAttributes(ruleContext))
+        .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
         .addDeps(propagatedDeps)
+        .addDepObjcProviders(
+            ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR))
         .addDepObjcProviders(protosObjcProvider.asSet())
         .setIntermediateArtifacts(intermediateArtifacts)
         .setAlwayslink(false)
