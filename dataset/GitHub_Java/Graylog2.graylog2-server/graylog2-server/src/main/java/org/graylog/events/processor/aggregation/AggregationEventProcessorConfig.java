@@ -201,8 +201,8 @@ public abstract class AggregationEventProcessorConfig implements EventProcessorC
             .groupBy(groupBy())
             .series(series())
             .conditions(conditions().orElse(null))
-            .executeEveryMs(executeEveryMs())
-            .searchWithinMs(searchWithinMs())
+            .executeEveryMs(ValueReference.of(executeEveryMs()))
+            .searchWithinMs(ValueReference.of(searchWithinMs()))
             .build();
     }
 

@@ -21,7 +21,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.graylog.events.contentpack.entities.NotificationEntity;
 import org.graylog.events.notifications.DBNotificationService;
 import org.graylog.events.notifications.NotificationDto;
-import org.graylog.events.notifications.NotificationResourceHandler;
 import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.contentpacks.facades.EntityFacade;
 import org.graylog2.contentpacks.model.ModelId;
@@ -48,15 +47,12 @@ public class NotificationFacade implements EntityFacade<NotificationDto> {
 
     private final ObjectMapper objectMapper;
     private final DBNotificationService notificationService;
-    private final NotificationResourceHandler notificationResourceHandler;
 
     @Inject
     public NotificationFacade(ObjectMapper objectMapper,
-                              NotificationResourceHandler notificationResourceHandler,
                               DBNotificationService notificationService) {
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
-        this.notificationResourceHandler = notificationResourceHandler;
     }
 
     @Override
@@ -92,7 +88,7 @@ public class NotificationFacade implements EntityFacade<NotificationDto> {
                                                  Map<EntityDescriptor, Object> nativeEntities) {
         final NotificationEntity entity = objectMapper.convertValue(entityV1.data(), NotificationEntity.class);
         final NotificationDto notificationDto = entity.toNativeEntity(parameters, nativeEntities);
-        final NotificationDto savedDto = notificationResourceHandler.create(notificationDto);
+        final NotificationDto savedDto = notificationService.save(notificationDto);
         return NativeEntity.create(entityV1.id(), savedDto.id(), ModelTypes.NOTIFICATION_V1, savedDto.title(), savedDto);
     }
 
@@ -104,7 +100,7 @@ public class NotificationFacade implements EntityFacade<NotificationDto> {
 
     @Override
     public void delete(NotificationDto nativeEntity) {
-        notificationResourceHandler.delete(nativeEntity.id());
+        notificationService.delete(nativeEntity.id());
     }
 
     @Override
