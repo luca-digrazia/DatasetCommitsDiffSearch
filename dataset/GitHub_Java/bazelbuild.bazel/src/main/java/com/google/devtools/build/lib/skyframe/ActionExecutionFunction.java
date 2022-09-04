@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.AlreadyReportedActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
@@ -42,7 +43,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -191,9 +191,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
 
     ActionExecutionValue result;
     try {
-      result =
-          checkCacheAndExecuteIfNeeded(
-              action, state, env, clientEnv, actionLookupData, sharedActionAlreadyRan);
+      result = checkCacheAndExecuteIfNeeded(action, state, env, clientEnv, actionLookupData);
     } catch (ActionExecutionException e) {
       // Remove action from state map in case it's there (won't be unless it discovers inputs).
       stateMap.remove(action);
@@ -283,8 +281,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     }
 
     @Override
-    public Map<PathFragment, Root> findPackageRootsForFiles(Iterable<PathFragment> execPaths)
-        throws InterruptedException {
+    public Map<PathFragment, ArtifactRoot> findPackageRootsForFiles(
+        Iterable<PathFragment> execPaths) throws InterruptedException {
       Preconditions.checkState(keysRequested.isEmpty(),
           "resolver should only be called once: %s %s", keysRequested, execPaths);
       // Create SkyKeys list based on execPaths.
@@ -313,7 +311,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         return null;
       }
 
-      Map<PathFragment, Root> result = new HashMap<>();
+      Map<PathFragment, ArtifactRoot> result = new HashMap<>();
       for (PathFragment path : execPaths) {
         if (!depKeys.containsKey(path)) {
           continue;
@@ -324,7 +322,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
           // We have found corresponding root for current execPath.
           result.put(
               path,
-              SkyframeExecutor.maybeTransformRootForRepository(
+              ArtifactRoot.computeSourceRoot(
                   value.getContainingPackageRoot(),
                   value.getContainingPackageName().getRepository()));
         } else {
@@ -334,6 +332,15 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       }
       return result;
     }
+
+    @Override
+    @Nullable
+    public Map<PathFragment, ArtifactRoot> findPackageRoots(Iterable<PathFragment> execPaths)
+        throws InterruptedException {
+      // call sites for this implementation of PackageRootResolver shouldn't be passing in
+      // directories.
+      return findPackageRootsForFiles(execPaths);
+    }
   }
 
   private ActionExecutionValue checkCacheAndExecuteIfNeeded(
@@ -341,20 +348,13 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       ContinuationState state,
       Environment env,
       Map<String, String> clientEnv,
-      ActionLookupData actionLookupData,
-      boolean sharedActionAlreadyRan)
+      ActionLookupData actionLookupData)
       throws ActionExecutionException, InterruptedException {
     // If this is a shared action and the other action is the one that executed, we must use that
     // other action's value, provided here, since it is populated with metadata for the outputs.
-    if (sharedActionAlreadyRan) {
-      return skyframeActionExecutor.executeAction(
-          env.getListener(),
-          action,
-          /* metadataHandler= */ null,
-          /* actionStartTime= */ -1,
-          /* actionExecutionContext= */ null,
-          actionLookupData,
-          /* inputDiscoveryRan= */ false);
+    if (!state.hasArtifactData()) {
+      return skyframeActionExecutor
+          .executeAction(env.getListener(), action, null, -1, null, actionLookupData);
     }
     // This may be recreated if we discover inputs.
     ActionMetadataHandler metadataHandler = new ActionMetadataHandler(state.inputArtifactData,
@@ -438,13 +438,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       if (!state.hasExecutedAction()) {
         state.value =
             skyframeActionExecutor.executeAction(
-                env.getListener(),
-                action,
-                metadataHandler,
-                actionStartTime,
-                actionExecutionContext,
-                actionLookupData,
-                /* inputDiscoveryRan= */ true);
+                env.getListener(), action, metadataHandler, actionStartTime, actionExecutionContext,
+                actionLookupData);
       }
     } catch (IOException e) {
       throw new ActionExecutionException(
