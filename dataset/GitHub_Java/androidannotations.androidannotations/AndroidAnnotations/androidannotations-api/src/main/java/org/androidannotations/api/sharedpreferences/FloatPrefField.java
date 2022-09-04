@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,14 +17,20 @@ package org.androidannotations.api.sharedpreferences;
 
 import android.content.SharedPreferences;
 
-public final class FloatPrefField extends AbstractPrefField<Float> {
+public final class FloatPrefField extends AbstractPrefField {
 
-	FloatPrefField(SharedPreferences sharedPreferences, String key, Float defaultValue) {
-		super(sharedPreferences, key, defaultValue);
+	private final float defaultValue;
+
+	FloatPrefField(SharedPreferences sharedPreferences, String key, float defaultValue) {
+		super(sharedPreferences, key);
+		this.defaultValue = defaultValue;
 	}
 
-	@Override
-	public Float getOr(Float defaultValue) {
+	public float get() {
+		return getOr(defaultValue);
+	}
+
+	public float getOr(float defaultValue) {
 		try {
 			return sharedPreferences.getFloat(key, defaultValue);
 		} catch (ClassCastException e) {
@@ -34,16 +40,14 @@ public final class FloatPrefField extends AbstractPrefField<Float> {
 				String value = sharedPreferences.getString(key, "" + defaultValue);
 				return Float.parseFloat(value);
 			} catch (Exception e2) {
-				// our recovery bit failed. The problem is elsewhere. Send the
-				// original error
+				// our  recovery bit failed. The problem is elsewhere. Send the original error
 				throw e;
 			}
 		}
 
 	}
 
-	@Override
-	protected void putInternal(Float value) {
+	public void put(float value) {
 		apply(edit().putFloat(key, value));
 	}
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,14 +17,20 @@ package org.androidannotations.api.sharedpreferences;
 
 import android.content.SharedPreferences;
 
-public final class LongPrefField extends AbstractPrefField<Long> {
+public final class LongPrefField extends AbstractPrefField {
 
-	LongPrefField(SharedPreferences sharedPreferences, String key, Long defaultValue) {
-		super(sharedPreferences, key, defaultValue);
+	private final long defaultValue;
+
+	LongPrefField(SharedPreferences sharedPreferences, String key, long defaultValue) {
+		super(sharedPreferences, key);
+		this.defaultValue = defaultValue;
 	}
 
-	@Override
-	public Long getOr(Long defaultValue) {
+	public long get() {
+		return getOr(defaultValue);
+	}
+
+	public long getOr(long defaultValue) {
 		try {
 			return sharedPreferences.getLong(key, defaultValue);
 		} catch (ClassCastException e) {
@@ -34,15 +40,13 @@ public final class LongPrefField extends AbstractPrefField<Long> {
 				String value = sharedPreferences.getString(key, "" + defaultValue);
 				return Long.parseLong(value);
 			} catch (Exception e2) {
-				// our recovery bit failed. The problem is elsewhere. Send the
-				// original error
+				// our  recovery bit failed. The problem is elsewhere. Send the original error
 				throw e;
 			}
 		}
 	}
 
-	@Override
-	protected void putInternal(Long value) {
+	public void put(long value) {
 		apply(edit().putLong(key, value));
 	}
 
