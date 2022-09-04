@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
-import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import org.junit.Test;
@@ -33,7 +32,6 @@ public class ToolchainTypeTest extends BuildViewTestCase {
   public void testCcTargetsDependOnCcToolchainAutomatically() throws Exception {
     scratch.file(
         "a/BUILD",
-        "load(':cc_toolchain_config.bzl', 'cc_toolchain_config')",
         "filegroup(",
         "   name='empty')",
         "package(default_visibility=['//visibility:public'])",
@@ -45,6 +43,7 @@ public class ToolchainTypeTest extends BuildViewTestCase {
         ")",
         "cc_toolchain(",
         "    name = 'b',",
+        "    cpu = 'banana',",
         "    all_files = ':empty',",
         "    ar_files = ':empty',",
         "    as_files = ':empty',",
@@ -53,9 +52,16 @@ public class ToolchainTypeTest extends BuildViewTestCase {
         "    linker_files = ':empty',",
         "    strip_files = ':empty',",
         "    objcopy_files = ':empty',",
-        "    toolchain_config = ':toolchain_config',",
-        ")",
-        "cc_toolchain_config(name = 'toolchain_config')",
+        "    proto='''",
+        "      toolchain_identifier: 'banana'",
+        "      abi_version: 'banana'",
+        "      abi_libc_version: 'banana'",
+        "      compiler: 'banana'",
+        "      host_system_name: 'banana'",
+        "      target_system_name: 'banana'",
+        "      target_cpu: 'banana'",
+        "      target_libc: 'banana'",
+        "    ''')",
         "toolchain(",
         "   name = 'toolchain_b',",
         "   toolchain_type = '" + TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain_type',",
@@ -63,7 +69,6 @@ public class ToolchainTypeTest extends BuildViewTestCase {
         "   target_compatible_with = [':mock_value'],",
         ")");
 
-    scratch.file("a/cc_toolchain_config.bzl", MockCcSupport.EMPTY_CC_TOOLCHAIN);
     useConfiguration(
         "--incompatible_enable_cc_toolchain_resolution",
         "--experimental_platforms=//a:mock-platform",
@@ -77,7 +82,7 @@ public class ToolchainTypeTest extends BuildViewTestCase {
             .write();
     CppCompileAction compileAction =
         (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/cclib/a.o", cclibrary));
-    assertThat(compileAction.getArguments()).contains("foobar-mock-abi-version-for-k8");
+    assertThat(compileAction.getArguments()).contains("foobar-banana");
 
     ConfiguredTarget ccbinary =
         ScratchAttributeWriter.fromLabelString(this, "cc_binary", "//ccbin")
@@ -86,7 +91,7 @@ public class ToolchainTypeTest extends BuildViewTestCase {
             .write();
     compileAction =
         (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/ccbin/a.o", ccbinary));
-    assertThat(compileAction.getArguments()).contains("foobar-mock-abi-version-for-k8");
+    assertThat(compileAction.getArguments()).contains("foobar-banana");
 
     ConfiguredTarget cctest =
         ScratchAttributeWriter.fromLabelString(this, "cc_test", "//cctest")
@@ -95,6 +100,6 @@ public class ToolchainTypeTest extends BuildViewTestCase {
             .write();
     compileAction =
         (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/cctest/a.o", cctest));
-    assertThat(compileAction.getArguments()).contains("foobar-mock-abi-version-for-k8");
+    assertThat(compileAction.getArguments()).contains("foobar-banana");
   }
 }

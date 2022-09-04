@@ -773,20 +773,13 @@ public class CppOptions extends FragmentOptions {
   public boolean disableRuntimesFilegroups;
 
   @Option(
-      name = "incompatible_disable_crosstool_file",
-      defaultValue = "false",
+      name = "experimental_enable_cc_toolchain_config_info",
+      defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
-        OptionMetadataTag.INCOMPATIBLE_CHANGE
-      },
-      help =
-          "If true, Bazel will not allow using the CROSSTOOL file for cc toolchain"
-              + " configuration. Instead, cc_toolchain should have a toolchain_config attribute"
-              + " that points to a rule written in Starlark that provides a CcToolchainConfigInfo"
-              + " provider. See https://github.com/bazelbuild/bazel/issues/7320 for more info.")
-  public boolean disableCrosstool;
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help = "If true, Bazel will allow creating a CcToolchainConfigInfo.")
+  public boolean enableCcToolchainConfigInfoFromSkylark;
 
   @Option(
       name = "experimental_includes_attribute_subpackage_traversal",
@@ -906,6 +899,7 @@ public class CppOptions extends FragmentOptions {
     host.inmemoryDotdFiles = inmemoryDotdFiles;
 
     host.doNotUseCpuTransformer = doNotUseCpuTransformer;
+    host.enableCcToolchainConfigInfoFromSkylark = enableCcToolchainConfigInfoFromSkylark;
     host.disableGenruleCcToolchainDependency = disableGenruleCcToolchainDependency;
     host.disableEmittingStaticLibgcc = disableEmittingStaticLibgcc;
     host.disableDepsetInUserFlags = disableDepsetInUserFlags;
@@ -914,7 +908,6 @@ public class CppOptions extends FragmentOptions {
     host.disableLegacyCcProvider = disableLegacyCcProvider;
     host.removeCpuCompilerCcToolchainAttributes = removeCpuCompilerCcToolchainAttributes;
     host.disableLegacyCrosstoolFields = disableLegacyCrosstoolFields;
-    host.disableCrosstool = disableCrosstool;
     host.enableCcToolchainResolution = enableCcToolchainResolution;
     return host;
   }

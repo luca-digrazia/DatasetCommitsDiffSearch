@@ -96,8 +96,6 @@ public class CcToolchainSuite implements RuleConfiguredTargetFactory {
       }
     }
 
-    CcCommon.reportInvalidOptions(ruleContext, cppConfiguration, ccToolchainProvider);
-
     TemplateVariableInfo templateVariableInfo =
         CcToolchain.createMakeVariableProvider(
             ccToolchainProvider,

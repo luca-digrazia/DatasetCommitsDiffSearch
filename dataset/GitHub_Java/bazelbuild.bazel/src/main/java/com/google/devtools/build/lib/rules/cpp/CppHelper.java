@@ -833,9 +833,9 @@ public class CppHelper {
   }
 
   public static CcNativeLibraryProvider collectNativeCcLibraries(
-      List<? extends TransitiveInfoCollection> deps, List<LibraryToLinkWrapper> libraries) {
-    NestedSetBuilder<LibraryToLinkWrapper> result = NestedSetBuilder.linkOrder();
-    result.addAll(libraries);
+      List<? extends TransitiveInfoCollection> deps, CcLinkingOutputs ccLinkingOutputs) {
+    NestedSetBuilder<LinkerInput> result = NestedSetBuilder.linkOrder();
+    result.addAll(ccLinkingOutputs.getDynamicLibrariesForLinking());
     for (CcNativeLibraryProvider dep :
         AnalysisUtils.getProviders(deps, CcNativeLibraryProvider.class)) {
       result.addTransitive(dep.getTransitiveCcNativeLibraries());
