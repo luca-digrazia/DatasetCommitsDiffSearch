@@ -22,11 +22,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 /** Common utilities for Skylark rules related to Android. */
 @SkylarkModule(
     name = "android_common",
-    doc =
-        "Do not use this module. It is intended for migration purposes only. If you depend on it, "
-            + "you will be broken when it is removed."
-            + "Common utilities and functionality related to Android rules.",
-    documented = false)
+    doc = "Common utilities and functionality related to Android rules.")
 public interface AndroidSkylarkCommonApi<FileT extends FileApi> {
 
   @SkylarkCallable(
@@ -43,15 +39,16 @@ public interface AndroidSkylarkCommonApi<FileT extends FileApi> {
               + "The source directory is a prefix of resource's relative path up to "
               + "a directory that designates resource kind (cf. "
               + "http://developer.android.com/guide/topics/resources/providing-resources.html).",
-      documented = false,
       parameters = {
         @Param(
             name = "resource",
             doc = "The android resource file.",
             positional = true,
             named = false,
-            type = FileApi.class)
-      })
+            type = FileApi.class
+        )
+      }
+  )
   PathFragment getSourceDirectoryRelativePathFromResource(FileT resource);
 
   @SkylarkCallable(
@@ -59,7 +56,6 @@ public interface AndroidSkylarkCommonApi<FileT extends FileApi> {
       doc =
           "A configuration for rule attributes that compiles native code according to "
               + "the --fat_apk_cpu and --android_crosstool_top flags.",
-      documented = false,
       structField = true)
   AndroidSplitTransititionApi getAndroidSplitTransition();
 }
