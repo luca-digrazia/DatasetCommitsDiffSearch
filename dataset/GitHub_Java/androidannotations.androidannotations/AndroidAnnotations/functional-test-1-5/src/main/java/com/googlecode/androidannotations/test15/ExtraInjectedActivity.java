@@ -33,11 +33,5 @@ public class ExtraInjectedActivity extends Activity {
 
 	@Extra("listExtra")
 	List<String> listExtra;
-	
-	@Extra("intExtra")
-	int intExtra;
-	
-	@Extra("byteArrayExtra")
-	byte[] byteArrayExtra;
 
 }

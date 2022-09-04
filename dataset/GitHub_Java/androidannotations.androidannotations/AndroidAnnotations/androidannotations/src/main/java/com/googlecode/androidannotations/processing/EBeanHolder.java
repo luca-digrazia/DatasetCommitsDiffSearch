@@ -35,9 +35,6 @@ public class EBeanHolder {
 	 */
 	public JVar beforeCreateSavedInstanceStateParam;
 	public JMethod init;
-	/**
-	 * Only defined on activities and components potentially depending on activity (@EViewGroup, @Enhanced)
-	 */
 	public JMethod afterSetContentView;
 	public JBlock extrasNotNullBlock;
 	public JVar extras;
@@ -50,20 +47,16 @@ public class EBeanHolder {
 
 	public JSwitch onOptionsItemSelectedSwitch;
 	public JVar onOptionsItemSelectedItem;
-
+	
 	public JExpression contextRef;
-	/**
-	 * Should not be used by inner annotations that target services, broadcast
-	 * receivers, and content providers
-	 */
 	public JBlock initIfActivityBody;
 	public JExpression initActivityRef;
-
+	
 	/**
 	 * Only defined in activities
 	 */
 	public JDefinedClass intentBuilderClass;
-
+	
 	/**
 	 * Only defined in activities
 	 */
