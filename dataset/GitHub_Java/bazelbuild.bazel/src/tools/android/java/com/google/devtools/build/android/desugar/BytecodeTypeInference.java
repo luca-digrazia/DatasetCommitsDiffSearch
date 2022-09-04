@@ -15,6 +15,11 @@ package com.google.devtools.build.android.desugar;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.DOUBLE;
+import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.FLOAT;
+import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.INT;
+import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.LONG;
+import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.TOP;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
@@ -104,41 +109,41 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.ICONST_3:
       case Opcodes.ICONST_4:
       case Opcodes.ICONST_5:
-        push(InferredType.INT);
+        push(INT);
         break;
       case Opcodes.LCONST_0:
       case Opcodes.LCONST_1:
-        push(InferredType.LONG);
-        push(InferredType.TOP);
+        push(LONG);
+        push(TOP);
         break;
       case Opcodes.FCONST_0:
       case Opcodes.FCONST_1:
       case Opcodes.FCONST_2:
-        push(InferredType.FLOAT);
+        push(FLOAT);
         break;
       case Opcodes.DCONST_0:
       case Opcodes.DCONST_1:
-        push(InferredType.DOUBLE);
-        push(InferredType.TOP);
+        push(DOUBLE);
+        push(TOP);
         break;
       case Opcodes.IALOAD:
       case Opcodes.BALOAD:
       case Opcodes.CALOAD:
       case Opcodes.SALOAD:
         pop(2);
-        push(InferredType.INT);
+        push(INT);
         break;
       case Opcodes.LALOAD:
       case Opcodes.D2L:
         pop(2);
-        push(InferredType.LONG);
-        push(InferredType.TOP);
+        push(LONG);
+        push(TOP);
         break;
       case Opcodes.DALOAD:
       case Opcodes.L2D:
         pop(2);
-        push(InferredType.DOUBLE);
-        push(InferredType.TOP);
+        push(DOUBLE);
+        push(TOP);
         break;
       case Opcodes.AALOAD:
         InferredType arrayType = pop(2);
@@ -254,7 +259,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.FCMPL:
       case Opcodes.FCMPG:
         pop(2);
-        push(InferredType.INT);
+        push(INT);
         break;
 
       case Opcodes.LADD:
@@ -266,45 +271,45 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.LOR:
       case Opcodes.LXOR:
         pop(4);
-        push(InferredType.LONG);
-        push(InferredType.TOP);
+        push(LONG);
+        push(TOP);
         break;
 
       case Opcodes.LSHL:
       case Opcodes.LSHR:
       case Opcodes.LUSHR:
         pop(3);
-        push(InferredType.LONG);
-        push(InferredType.TOP);
+        push(LONG);
+        push(TOP);
         break;
       case Opcodes.I2L:
       case Opcodes.F2L:
         pop();
-        push(InferredType.LONG);
-        push(InferredType.TOP);
+        push(LONG);
+        push(TOP);
         break;
       case Opcodes.I2F:
         pop();
-        push(InferredType.FLOAT);
+        push(FLOAT);
         break;
 
       case Opcodes.LCMP:
       case Opcodes.DCMPG:
       case Opcodes.DCMPL:
         pop(4);
-        push(InferredType.INT);
+        push(INT);
         break;
 
       case Opcodes.I2D:
       case Opcodes.F2D:
         pop();
-        push(InferredType.DOUBLE);
-        push(InferredType.TOP);
+        push(DOUBLE);
+        push(TOP);
         break;
       case Opcodes.F2I:
       case Opcodes.ARRAYLENGTH:
         pop();
-        push(InferredType.INT);
+        push(INT);
         break;
       case Opcodes.FALOAD:
       case Opcodes.FADD:
@@ -315,7 +320,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.L2F:
       case Opcodes.D2F:
         pop(2);
-        push(InferredType.FLOAT);
+        push(FLOAT);
         break;
 
       case Opcodes.DADD:
@@ -324,8 +329,8 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.DDIV:
       case Opcodes.DREM:
         pop(4);
-        push(InferredType.DOUBLE);
-        push(InferredType.TOP);
+        push(DOUBLE);
+        push(TOP);
         break;
       default:
         throw new RuntimeException("Unhandled opcode " + opcode);
@@ -338,7 +343,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
     switch (opcode) {
       case Opcodes.BIPUSH:
       case Opcodes.SIPUSH:
-        push(InferredType.INT);
+        push(INT);
         break;
       case Opcodes.NEWARRAY:
         pop();
@@ -381,18 +386,18 @@ public final class BytecodeTypeInference extends MethodVisitor {
   public void visitVarInsn(int opcode, int var) {
     switch (opcode) {
       case Opcodes.ILOAD:
-        push(InferredType.INT);
+        push(INT);
         break;
       case Opcodes.LLOAD:
-        push(InferredType.LONG);
-        push(InferredType.TOP);
+        push(LONG);
+        push(TOP);
         break;
       case Opcodes.FLOAD:
-        push(InferredType.FLOAT);
+        push(FLOAT);
         break;
       case Opcodes.DLOAD:
-        push(InferredType.DOUBLE);
-        push(InferredType.TOP);
+        push(DOUBLE);
+        push(TOP);
         break;
       case Opcodes.ALOAD:
         push(getLocalVariableType(var));
@@ -410,7 +415,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
         {
           InferredType type = pop(2);
           setLocalVariableTypes(var, type);
-          setLocalVariableTypes(var + 1, InferredType.TOP);
+          setLocalVariableTypes(var + 1, TOP);
           break;
         }
       case Opcodes.RET:
@@ -438,7 +443,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
         break;
       case Opcodes.INSTANCEOF:
         pop();
-        push(InferredType.INT);
+        push(INT);
         break;
       default:
         throw new RuntimeException("Unhandled opcode " + opcode);
@@ -546,15 +551,15 @@ public final class BytecodeTypeInference extends MethodVisitor {
   @Override
   public void visitLdcInsn(Object cst) {
     if (cst instanceof Integer) {
-      push(InferredType.INT);
+      push(INT);
     } else if (cst instanceof Float) {
-      push(InferredType.FLOAT);
+      push(FLOAT);
     } else if (cst instanceof Long) {
-      push(InferredType.LONG);
-      push(InferredType.TOP);
+      push(LONG);
+      push(TOP);
     } else if (cst instanceof Double) {
-      push(InferredType.DOUBLE);
-      push(InferredType.TOP);
+      push(DOUBLE);
+      push(TOP);
     } else if (cst instanceof String) {
       pushDescriptor("Ljava/lang/String;");
     } else if (cst instanceof Type) {
@@ -569,7 +574,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
 
   @Override
   public void visitIincInsn(int var, int increment) {
-    setLocalVariableTypes(var, InferredType.INT);
+    setLocalVariableTypes(var, INT);
     super.visitIincInsn(var, increment);
   }
 
@@ -688,18 +693,18 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case 'B':
       case 'S':
       case 'I':
-        push(InferredType.INT);
+        push(INT);
         break;
       case 'F':
-        push(InferredType.FLOAT);
+        push(FLOAT);
         break;
       case 'D':
         push(InferredType.DOUBLE);
-        push(InferredType.TOP);
+        push(TOP);
         break;
       case 'J':
         push(InferredType.LONG);
-        push(InferredType.TOP);
+        push(TOP);
         break;
       case 'L':
       case '[':
@@ -744,7 +749,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
 
   private final void setLocalVariableTypes(int index, InferredType type) {
     while (localVariableSlots.size() <= index) {
-      localVariableSlots.add(InferredType.TOP);
+      localVariableSlots.add(TOP);
     }
     localVariableSlots.set(index, type);
   }
@@ -797,18 +802,18 @@ public final class BytecodeTypeInference extends MethodVisitor {
         case Type.CHAR:
         case Type.SHORT:
         case Type.INT:
-          types.add(InferredType.INT);
+          types.add(INT);
           break;
         case Type.FLOAT:
-          types.add(InferredType.FLOAT);
+          types.add(FLOAT);
           break;
         case Type.LONG:
-          types.add(InferredType.LONG);
-          types.add(InferredType.TOP);
+          types.add(LONG);
+          types.add(TOP);
           break;
         case Type.DOUBLE:
-          types.add(InferredType.DOUBLE);
-          types.add(InferredType.TOP);
+          types.add(DOUBLE);
+          types.add(TOP);
           break;
         case Type.ARRAY:
         case Type.OBJECT:
@@ -845,11 +850,11 @@ public final class BytecodeTypeInference extends MethodVisitor {
   /** Convert the type in stack map frame to inference type. */
   private InferredType convertTypeInStackMapFrame(Object typeInStackMapFrame) {
     if (typeInStackMapFrame == Opcodes.TOP) {
-      return InferredType.TOP;
+      return TOP;
     } else if (typeInStackMapFrame == Opcodes.INTEGER) {
-      return InferredType.INT;
+      return INT;
     } else if (typeInStackMapFrame == Opcodes.FLOAT) {
-      return InferredType.FLOAT;
+      return FLOAT;
     } else if (typeInStackMapFrame == Opcodes.DOUBLE) {
       return InferredType.DOUBLE;
     } else if (typeInStackMapFrame == Opcodes.LONG) {

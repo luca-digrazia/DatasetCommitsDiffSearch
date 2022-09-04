@@ -17,7 +17,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.devtools.build.android.desugar.io.BitFlags;
 import javax.annotation.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.Attribute;
@@ -67,16 +66,8 @@ public class Java7Compatibility extends ClassVisitor {
     this.superName = superName;
     this.interfaces = interfaces;
     isInterface = BitFlags.isSet(access, Opcodes.ACC_INTERFACE);
-    // ASM uses the high 16 bits for the minor version:
-    // https://asm.ow2.io/javadoc/org/objectweb/asm/ClassVisitor.html#visit-int-int-java.lang.String-java.lang.String-java.lang.String-java.lang.String:A-
-    // See https://github.com/bazelbuild/bazel/issues/6299 for an example of a class file with a
-    // non-zero minor version.
-    int major = version & 0xffff;
-    if (major > Opcodes.V1_7) {
-      version = Opcodes.V1_7;
-    }
     super.visit(
-        version,
+        Math.min(version, Opcodes.V1_7),
         access,
         name,
         signature,

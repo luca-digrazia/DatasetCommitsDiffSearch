@@ -19,7 +19,6 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.android.desugar.io.BitFlags;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import org.objectweb.asm.AnnotationVisitor;
@@ -192,7 +191,7 @@ class LambdaClassFixer extends ClassVisitor {
           getInternalName(),
           "<init>",
           checkNotNull(desc, "didn't see a constructor for %s", getInternalName()),
-          /*isInterface=*/ false);
+          /*itf=*/ false);
       codeBuilder.visitFieldInsn(
           Opcodes.PUTSTATIC, getInternalName(), SINGLETON_FIELD_NAME, singletonFieldDesc);
       codeBuilder.visitInsn(Opcodes.RETURN);
