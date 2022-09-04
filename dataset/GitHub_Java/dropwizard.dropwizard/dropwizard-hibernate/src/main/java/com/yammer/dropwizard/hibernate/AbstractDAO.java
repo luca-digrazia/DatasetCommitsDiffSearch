@@ -1,6 +1,5 @@
 package com.yammer.dropwizard.hibernate;
 
-import com.yammer.dropwizard.util.Generics;
 import org.hibernate.*;
 
 import java.io.Serializable;
@@ -16,16 +15,17 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public class AbstractDAO<E> {
     private final SessionFactory provider;
-    private final Class<?> entityClass;
+    private final Class<E> entityClass;
 
     /**
      * Creates a new DAO with a given session provider.
      *
      * @param provider    a session provider
+     * @param entityClass the entity class this DAO manages
      */
-    public AbstractDAO(SessionFactory provider) {
+    public AbstractDAO(SessionFactory provider, Class<E> entityClass) {
         this.provider = checkNotNull(provider);
-        this.entityClass = Generics.getTypeParameter(getClass());
+        this.entityClass = checkNotNull(entityClass);
     }
 
     /**
@@ -63,9 +63,8 @@ public class AbstractDAO<E> {
      *
      * @return the entity class managed by this DAO
      */
-    @SuppressWarnings("unchecked")
     public Class<E> getEntityClass() {
-        return (Class<E>) entityClass;
+        return entityClass;
     }
 
     /**
