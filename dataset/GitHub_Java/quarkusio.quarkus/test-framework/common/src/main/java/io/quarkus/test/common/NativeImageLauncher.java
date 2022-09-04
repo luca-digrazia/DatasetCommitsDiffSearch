@@ -49,7 +49,7 @@ public class NativeImageLauncher implements Closeable {
         this.port = port;
     }
 
-    public void start() throws IOException {
+    public void start() throws Exception {
 
         String path = System.getProperty("native.image.path");
         if (path == null) {
@@ -59,7 +59,8 @@ public class NativeImageLauncher implements Closeable {
         args.add(path);
         args.add("-Dquarkus.http.port=" + port);
         args.add("-Dtest.url=" + TestHTTPResourceManager.getUri());
-        args.add("-Dquarkus.log.file.path=" + PropertyTestUtil.getLogFileLocation());
+        //args.add("-Dquarkus.log.file.path=target/quarkus.log");
+        PropertyTestUtil.setLogFileProperty();
 
         System.out.println("Executing " + args);
 
