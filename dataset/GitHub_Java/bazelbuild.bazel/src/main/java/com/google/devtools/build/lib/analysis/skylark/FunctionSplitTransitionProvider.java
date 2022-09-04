@@ -63,27 +63,21 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
   private final EventHandler eventHandler;
   private final List<String> inputs;
   private final List<String> expectedOutputs;
-  private final boolean isForAnalysisTesting;
 
-  public FunctionSplitTransitionProvider(
-      BaseFunction transitionFunction,
-      SkylarkSemantics semantics,
-      EventHandler eventHandler,
-      List<String> inputs,
-      List<String> expectedOutputs,
-      boolean isForAnalysisTesting) {
+  public FunctionSplitTransitionProvider(BaseFunction transitionFunction,
+      SkylarkSemantics semantics, EventHandler eventHandler,
+      List<String> inputs, List<String> expectedOutputs) {
     this.transitionFunction = transitionFunction;
     this.semantics = semantics;
     this.eventHandler = eventHandler;
     this.inputs = inputs;
     this.expectedOutputs = expectedOutputs;
-    this.isForAnalysisTesting = isForAnalysisTesting;
   }
 
   @Override
   public SplitTransition apply(AttributeMap attributeMap) {
-    return new FunctionSplitTransition(
-        transitionFunction, semantics, eventHandler, inputs, expectedOutputs, isForAnalysisTesting);
+    return new FunctionSplitTransition(transitionFunction, semantics, eventHandler, inputs,
+        expectedOutputs);
   }
 
   private static class FunctionSplitTransition implements SplitTransition {
@@ -92,21 +86,14 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
     private final EventHandler eventHandler;
     private final List<String> inputs;
     private final List<String> expectedOutputs;
-    private final boolean isForAnalysisTesting;
 
-    public FunctionSplitTransition(
-        BaseFunction transitionFunction,
-        SkylarkSemantics semantics,
-        EventHandler eventHandler,
-        List<String> inputs,
-        List<String> expectedOutputs,
-        boolean isForAnalysisTesting) {
+    public FunctionSplitTransition(BaseFunction transitionFunction, SkylarkSemantics semantics,
+        EventHandler eventHandler, List<String> inputs, List<String> expectedOutputs) {
       this.transitionFunction = transitionFunction;
       this.semantics = semantics;
       this.eventHandler = eventHandler;
       this.inputs = inputs;
       this.expectedOutputs = expectedOutputs;
-      this.isForAnalysisTesting = isForAnalysisTesting;
     }
 
     @Override
@@ -372,10 +359,6 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
 
       BuildConfiguration.Options buildConfigOptions;
       buildConfigOptions = buildOptions.get(BuildConfiguration.Options.class);
-
-      if (isForAnalysisTesting) {
-        buildConfigOptions.evaluatingForAnalysisTest = true;
-      }
       updateOutputDirectoryNameFragment(buildConfigOptions, transition);
     }
 
