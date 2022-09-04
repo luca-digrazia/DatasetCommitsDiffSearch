@@ -32,12 +32,14 @@ public class TypesTest {
         DotName producerName = DotName.createSimple(Producer.class.getName());
         ClassInfo fooClass = index.getClassByName(fooName);
         Map<ClassInfo, Map<TypeVariable, Type>> resolvedTypeVariables = new HashMap<>();
-        BeanDeployment dummyDeployment = dummyDeployment(index);
 
         // Baz, Foo<String>, Object
         Set<Type> bazTypes = Types.getTypeClosure(index.getClassByName(bazName), null,
                 Collections.emptyMap(),
-                dummyDeployment,
+                new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                        Collections.emptyList(),
+                        Collections.emptyList(), null,
+                        false, Collections.emptyList(), Collections.emptyMap(), Collections.emptyList(), false),
                 resolvedTypeVariables::put);
         assertEquals(3, bazTypes.size());
         assertTrue(bazTypes.contains(Type.create(bazName, Kind.CLASS)));
@@ -52,7 +54,10 @@ public class TypesTest {
         resolvedTypeVariables.clear();
         // Foo<T>, Object
         Set<Type> fooTypes = Types.getClassBeanTypeClosure(fooClass,
-                dummyDeployment);
+                new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                        Collections.emptyList(),
+                        Collections.emptyList(), null,
+                        false, Collections.emptyList(), Collections.emptyMap(), Collections.emptyList(), false));
         assertEquals(2, fooTypes.size());
         for (Type t : fooTypes) {
             if (t.kind().equals(Kind.PARAMETERIZED_TYPE)) {
@@ -66,21 +71,20 @@ public class TypesTest {
         MethodInfo producerMethod = producerClass.method(producersName);
         // Object is the sole type
         Set<Type> producerMethodTypes = Types.getProducerMethodTypeClosure(producerMethod,
-                dummyDeployment);
+                new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                        Collections.emptyList(),
+                        Collections.emptyList(), null,
+                        false, Collections.emptyList(), Collections.emptyMap(), Collections.emptyList(), false));
         assertEquals(1, producerMethodTypes.size());
 
         // Object is the sole type
         FieldInfo producerField = producerClass.field(producersName);
         Set<Type> producerFieldTypes = Types.getProducerFieldTypeClosure(producerField,
-                dummyDeployment);
+                new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                        Collections.emptyList(),
+                        Collections.emptyList(), null,
+                        false, Collections.emptyList(), Collections.emptyMap(), Collections.emptyList(), false));
         assertEquals(1, producerFieldTypes.size());
-    }
-
-    BeanDeployment dummyDeployment(IndexView index) {
-        return new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(), null,
-                false, Collections.emptyList(), Collections.emptyMap(), Collections.emptyList(), false, false, null);
     }
 
     static class Foo<T> {

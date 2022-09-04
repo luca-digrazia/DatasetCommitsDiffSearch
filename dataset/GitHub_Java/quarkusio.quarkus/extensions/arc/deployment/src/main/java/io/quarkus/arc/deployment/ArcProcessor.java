@@ -26,7 +26,6 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem;
 import io.quarkus.arc.deployment.ContextRegistrationPhaseBuildItem.ContextConfiguratorBuildItem;
-import io.quarkus.arc.deployment.ObserverRegistrationPhaseBuildItem.ObserverConfiguratorBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassNameExclusion;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
@@ -39,7 +38,6 @@ import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.BytecodeTransformer;
 import io.quarkus.arc.processor.ContextConfigurator;
 import io.quarkus.arc.processor.ContextRegistrar;
-import io.quarkus.arc.processor.ObserverConfigurator;
 import io.quarkus.arc.processor.ReflectionRegistration;
 import io.quarkus.arc.processor.ResourceOutput;
 import io.quarkus.arc.runtime.AdditionalBean;
@@ -105,14 +103,12 @@ public class ArcProcessor {
             List<ApplicationClassPredicateBuildItem> applicationClassPredicates,
             List<AdditionalBeanBuildItem> additionalBeans,
             List<BeanRegistrarBuildItem> beanRegistrars,
-            List<ObserverRegistrarBuildItem> observerRegistrars,
             List<ContextRegistrarBuildItem> contextRegistrars,
             List<BeanDeploymentValidatorBuildItem> beanDeploymentValidators,
             List<ResourceAnnotationBuildItem> resourceAnnotations,
             List<BeanDefiningAnnotationBuildItem> additionalBeanDefiningAnnotations,
             List<UnremovableBeanBuildItem> removalExclusions,
             Optional<TestClassPredicateBuildItem> testClassPredicate,
-            Capabilities capabilities,
             BuildProducer<FeatureBuildItem> feature) {
 
         if (!arcConfig.isRemoveUnusedBeansFieldValid()) {
@@ -128,7 +124,7 @@ public class ArcProcessor {
         BeanProcessor.Builder builder = BeanProcessor.builder();
         IndexView applicationClassesIndex = applicationArchivesBuildItem.getRootArchive().getIndex();
         builder.setApplicationClassPredicate(new AbstractCompositeApplicationClassesPredicate<DotName>(
-                applicationClassesIndex, generatedClassNames, applicationClassPredicates, testClassPredicate) {
+                applicationClassesIndex, generatedClassNames, applicationClassPredicates) {
             @Override
             protected DotName getDotName(DotName dotName) {
                 return dotName;
@@ -195,9 +191,6 @@ public class ArcProcessor {
         for (BeanRegistrarBuildItem item : beanRegistrars) {
             builder.addBeanRegistrar(item.getBeanRegistrar());
         }
-        for (ObserverRegistrarBuildItem item : observerRegistrars) {
-            builder.addObserverRegistrar(item.getObserverRegistrar());
-        }
         for (ContextRegistrarBuildItem item : contextRegistrars) {
             builder.addContextRegistrar(item.getContextRegistrar());
         }
@@ -207,7 +200,7 @@ public class ArcProcessor {
         builder.setRemoveUnusedBeans(arcConfig.shouldEnableBeanRemoval());
         if (arcConfig.shouldOnlyKeepAppBeans()) {
             builder.addRemovalExclusion(new AbstractCompositeApplicationClassesPredicate<BeanInfo>(
-                    applicationClassesIndex, generatedClassNames, applicationClassPredicates, testClassPredicate) {
+                    applicationClassesIndex, generatedClassNames, applicationClassPredicates) {
                 @Override
                 protected DotName getDotName(BeanInfo bean) {
                     return bean.getBeanClass();
@@ -239,7 +232,6 @@ public class ArcProcessor {
             });
         }
         builder.setRemoveFinalFromProxyableMethods(arcConfig.removeFinalForProxyableMethods);
-        builder.setJtaCapabilities(capabilities.isCapabilityPresent(Capabilities.TRANSACTIONS));
 
         BeanProcessor beanProcessor = builder.build();
         ContextRegistrar.RegistrationContext context = beanProcessor.registerCustomContexts();
@@ -262,42 +254,36 @@ public class ArcProcessor {
                 contextRegistrationPhase.getBeanProcessor());
     }
 
-    // PHASE 3 - register synthetic observers
+    // PHASE 3 - initialize and validate the bean deployment
     @BuildStep
-    public ObserverRegistrationPhaseBuildItem registerSyntheticObservers(BeanRegistrationPhaseBuildItem beanRegistrationPhase,
-            List<BeanConfiguratorBuildItem> beanConfigurators) {
-
-        for (BeanConfiguratorBuildItem configurator : beanConfigurators) {
-            // Just make sure the configurator is processed
-            configurator.getValues().forEach(BeanConfigurator::done);
-        }
-
-        return new ObserverRegistrationPhaseBuildItem(beanRegistrationPhase.getBeanProcessor().registerSyntheticObservers(),
-                beanRegistrationPhase.getBeanProcessor());
-    }
-
-    // PHASE 4 - initialize and validate the bean deployment
-    @BuildStep
-    public ValidationPhaseBuildItem validate(ObserverRegistrationPhaseBuildItem observerRegistrationPhase,
-            List<ObserverConfiguratorBuildItem> observerConfigurators,
+    public ValidationPhaseBuildItem validate(BeanRegistrationPhaseBuildItem beanRegistrationPhase,
+            List<BeanConfiguratorBuildItem> beanConfigurators,
             BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformer) {
 
-        for (ObserverConfiguratorBuildItem configurator : observerConfigurators) {
-            // Just make sure the configurator is processed
-            configurator.getValues().forEach(ObserverConfigurator::done);
+        for (BeanConfiguratorBuildItem beanConfigurator : beanConfigurators) {
+            for (BeanConfigurator<?> value : beanConfigurator.getValues()) {
+                // Just make sure the configurator is processed
+                value.done();
+            }
         }
 
-        observerRegistrationPhase.getBeanProcessor().initialize(new Consumer<BytecodeTransformer>() {
+        beanRegistrationPhase.getBeanProcessor().initialize(new Consumer<BytecodeTransformer>() {
             @Override
             public void accept(BytecodeTransformer t) {
                 bytecodeTransformer.produce(new BytecodeTransformerBuildItem(t.getClassToTransform(), t.getVisitorFunction()));
             }
         });
-        return new ValidationPhaseBuildItem(observerRegistrationPhase.getBeanProcessor().validate(),
-                observerRegistrationPhase.getBeanProcessor());
+        return new ValidationPhaseBuildItem(beanRegistrationPhase.getBeanProcessor().validate(),
+                beanRegistrationPhase.getBeanProcessor());
     }
 
-    // PHASE 5 - generate resources and initialize the container
+    @BuildStep
+    List<AdditionalApplicationArchiveMarkerBuildItem> marker() {
+        return Arrays.asList(new AdditionalApplicationArchiveMarkerBuildItem("META-INF/beans.xml"),
+                new AdditionalApplicationArchiveMarkerBuildItem("META-INF/services/javax.enterprise.inject.spi.Extension"));
+    }
+
+    // PHASE 4 - generate resources and initialize the container
     @BuildStep
     @Record(STATIC_INIT)
     public BeanContainerBuildItem generateResources(ArcRecorder recorder, ShutdownContextBuildItem shutdown,
@@ -367,12 +353,6 @@ public class ArcProcessor {
     }
 
     @BuildStep
-    List<AdditionalApplicationArchiveMarkerBuildItem> marker() {
-        return Arrays.asList(new AdditionalApplicationArchiveMarkerBuildItem("META-INF/beans.xml"),
-                new AdditionalApplicationArchiveMarkerBuildItem("META-INF/services/javax.enterprise.inject.spi.Extension"));
-    }
-
-    @BuildStep
     @Record(value = RUNTIME_INIT)
     void setupExecutor(ExecutorBuildItem executor, ArcRecorder recorder) {
         recorder.initExecutor(executor.getExecutorProxy());
@@ -388,18 +368,15 @@ public class ArcProcessor {
         private final IndexView applicationClassesIndex;
         private final Set<DotName> generatedClassNames;
         private final List<ApplicationClassPredicateBuildItem> applicationClassPredicateBuildItems;
-        private final Optional<TestClassPredicateBuildItem> testClassPredicate;
 
         protected abstract DotName getDotName(T t);
 
         private AbstractCompositeApplicationClassesPredicate(IndexView applicationClassesIndex,
                 Set<DotName> generatedClassNames,
-                List<ApplicationClassPredicateBuildItem> applicationClassPredicateBuildItems,
-                Optional<TestClassPredicateBuildItem> testClassPredicate) {
+                List<ApplicationClassPredicateBuildItem> applicationClassPredicateBuildItems) {
             this.applicationClassesIndex = applicationClassesIndex;
             this.generatedClassNames = generatedClassNames;
             this.applicationClassPredicateBuildItems = applicationClassPredicateBuildItems;
-            this.testClassPredicate = testClassPredicate;
         }
 
         @Override
@@ -411,17 +388,12 @@ public class ArcProcessor {
             if (generatedClassNames.contains(dotName)) {
                 return true;
             }
-            String className = dotName.toString();
             if (!applicationClassPredicateBuildItems.isEmpty()) {
+                String className = dotName.toString();
                 for (ApplicationClassPredicateBuildItem predicate : applicationClassPredicateBuildItems) {
                     if (predicate.test(className)) {
                         return true;
                     }
-                }
-            }
-            if (testClassPredicate.isPresent()) {
-                if (testClassPredicate.get().getPredicate().test(className)) {
-                    return true;
                 }
             }
             return false;

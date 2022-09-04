@@ -12,7 +12,6 @@ import io.quarkus.arc.processor.BeanRegistrar;
 import io.quarkus.arc.processor.ContextRegistrar;
 import io.quarkus.arc.processor.InjectionPointsTransformer;
 import io.quarkus.arc.processor.InterceptorBindingRegistrar;
-import io.quarkus.arc.processor.ObserverRegistrar;
 import io.quarkus.arc.processor.ObserverTransformer;
 import io.quarkus.arc.processor.ResourceOutput;
 import java.io.File;
@@ -66,7 +65,6 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
         private final List<Class<?>> beanClasses;
         private final List<Class<? extends Annotation>> resourceAnnotations;
         private final List<BeanRegistrar> beanRegistrars;
-        private final List<ObserverRegistrar> observerRegistrars;
         private final List<ContextRegistrar> contextRegistrars;
         private final List<InterceptorBindingRegistrar> interceptorBindingRegistrars;
         private final List<AnnotationsTransformer> annotationsTransformers;
@@ -82,7 +80,6 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
             beanClasses = new ArrayList<>();
             resourceAnnotations = new ArrayList<>();
             beanRegistrars = new ArrayList<>();
-            observerRegistrars = new ArrayList<>();
             contextRegistrars = new ArrayList<>();
             interceptorBindingRegistrars = new ArrayList<>();
             annotationsTransformers = new ArrayList<>();
@@ -110,11 +107,6 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
 
         public Builder beanRegistrars(BeanRegistrar... registrars) {
             Collections.addAll(this.beanRegistrars, registrars);
-            return this;
-        }
-
-        public Builder observerRegistrars(ObserverRegistrar... registrars) {
-            Collections.addAll(this.observerRegistrars, registrars);
             return this;
         }
 
@@ -165,9 +157,9 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
 
         public ArcTestContainer build() {
             return new ArcTestContainer(resourceReferenceProviders, beanClasses, resourceAnnotations, beanRegistrars,
-                    observerRegistrars, contextRegistrars, interceptorBindingRegistrars, annotationsTransformers,
-                    injectionsPointsTransformers,
-                    observerTransformers, beanDeploymentValidators, shouldFail, removeUnusedBeans, exclusions);
+                    contextRegistrars, interceptorBindingRegistrars, annotationsTransformers, injectionsPointsTransformers,
+                    observerTransformers,
+                    beanDeploymentValidators, shouldFail, removeUnusedBeans, exclusions);
         }
 
     }
@@ -179,8 +171,6 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
     private final List<Class<? extends Annotation>> resourceAnnotations;
 
     private final List<BeanRegistrar> beanRegistrars;
-
-    private final List<ObserverRegistrar> observerRegistrars;
 
     private final List<ContextRegistrar> contextRegistrars;
 
@@ -202,7 +192,6 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
 
     public ArcTestContainer(Class<?>... beanClasses) {
         this(Collections.emptyList(), Arrays.asList(beanClasses), Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyList(),
                 Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
                 Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false, false,
                 Collections.emptyList());
@@ -210,8 +199,7 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
 
     public ArcTestContainer(List<Class<?>> resourceReferenceProviders, List<Class<?>> beanClasses,
             List<Class<? extends Annotation>> resourceAnnotations,
-            List<BeanRegistrar> beanRegistrars, List<ObserverRegistrar> observerRegistrars,
-            List<ContextRegistrar> contextRegistrars,
+            List<BeanRegistrar> beanRegistrars, List<ContextRegistrar> contextRegistrars,
             List<InterceptorBindingRegistrar> bindingRegistrars,
             List<AnnotationsTransformer> annotationsTransformers, List<InjectionPointsTransformer> ipTransformers,
             List<ObserverTransformer> observerTransformers,
@@ -221,7 +209,6 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
         this.beanClasses = beanClasses;
         this.resourceAnnotations = resourceAnnotations;
         this.beanRegistrars = beanRegistrars;
-        this.observerRegistrars = observerRegistrars;
         this.contextRegistrars = contextRegistrars;
         this.bindingRegistrars = bindingRegistrars;
         this.annotationsTransformers = annotationsTransformers;
@@ -319,23 +306,36 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
                 }
             }
 
-            BeanProcessor.Builder builder = BeanProcessor.builder()
+            BeanProcessor.Builder beanProcessorBuilder = BeanProcessor.builder()
                     .setName(testClass.getSimpleName())
-                    .setIndex(BeanArchives.buildBeanArchiveIndex(getClass().getClassLoader(), index));
+                    .setIndex(BeanArchives.buildBeanArchiveIndex(index));
             if (!resourceAnnotations.isEmpty()) {
-                builder.addResourceAnnotations(resourceAnnotations.stream()
+                beanProcessorBuilder.addResourceAnnotations(resourceAnnotations.stream()
                         .map(c -> DotName.createSimple(c.getName()))
                         .collect(Collectors.toList()));
             }
-            beanRegistrars.forEach(builder::addBeanRegistrar);
-            observerRegistrars.forEach(builder::addObserverRegistrar);
-            contextRegistrars.forEach(builder::addContextRegistrar);
-            bindingRegistrars.forEach(builder::addInterceptorbindingRegistrar);
-            annotationsTransformers.forEach(builder::addAnnotationTransformer);
-            injectionPointsTransformers.forEach(builder::addInjectionPointTransformer);
-            observerTransformers.forEach(builder::addObserverTransformer);
-            beanDeploymentValidators.forEach(builder::addBeanDeploymentValidator);
-            builder.setOutput(new ResourceOutput() {
+            for (BeanRegistrar registrar : beanRegistrars) {
+                beanProcessorBuilder.addBeanRegistrar(registrar);
+            }
+            for (ContextRegistrar registrar : contextRegistrars) {
+                beanProcessorBuilder.addContextRegistrar(registrar);
+            }
+            for (InterceptorBindingRegistrar registrar : bindingRegistrars) {
+                beanProcessorBuilder.addInterceptorbindingRegistrar(registrar);
+            }
+            for (AnnotationsTransformer annotationsTransformer : annotationsTransformers) {
+                beanProcessorBuilder.addAnnotationTransformer(annotationsTransformer);
+            }
+            for (InjectionPointsTransformer injectionPointsTransformer : injectionPointsTransformers) {
+                beanProcessorBuilder.addInjectionPointTransformer(injectionPointsTransformer);
+            }
+            for (ObserverTransformer observerTransformer : observerTransformers) {
+                beanProcessorBuilder.addObserverTransformer(observerTransformer);
+            }
+            for (BeanDeploymentValidator validator : beanDeploymentValidators) {
+                beanProcessorBuilder.addBeanDeploymentValidator(validator);
+            }
+            beanProcessorBuilder.setOutput(new ResourceOutput() {
 
                 @Override
                 public void writeResource(Resource resource) throws IOException {
@@ -358,12 +358,12 @@ public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
                     }
                 }
             });
-            builder.setRemoveUnusedBeans(removeUnusedBeans);
+            beanProcessorBuilder.setRemoveUnusedBeans(removeUnusedBeans);
             for (Predicate<BeanInfo> exclusion : exclusions) {
-                builder.addRemovalExclusion(exclusion);
+                beanProcessorBuilder.addRemovalExclusion(exclusion);
             }
 
-            BeanProcessor beanProcessor = builder.build();
+            BeanProcessor beanProcessor = beanProcessorBuilder.build();
 
             try {
                 beanProcessor.process();

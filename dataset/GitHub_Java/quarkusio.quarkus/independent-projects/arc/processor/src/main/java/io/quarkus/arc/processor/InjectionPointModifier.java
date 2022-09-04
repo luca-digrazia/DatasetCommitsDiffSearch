@@ -40,7 +40,7 @@ public class InjectionPointModifier {
         return transformationContext.getQualifiers();
     }
 
-    static class TransformationContextImpl extends AnnotationsTransformationContext<Set<AnnotationInstance>>
+    class TransformationContextImpl extends AnnotationsTransformationContext<Set<AnnotationInstance>>
             implements InjectionPointsTransformer.TransformationContext {
 
         public TransformationContextImpl(BuildContext buildContext, AnnotationTarget target,
