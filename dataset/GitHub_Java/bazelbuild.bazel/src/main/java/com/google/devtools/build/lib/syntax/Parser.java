@@ -481,7 +481,7 @@ public class Parser {
 
   // funcall_suffix ::= '(' arg_list? ')'
   private Expression parseFuncallSuffix(int start, Expression function) {
-    ImmutableList<Argument.Passed> args = ImmutableList.of();
+    List<Argument.Passed> args = Collections.emptyList();
     expect(TokenKind.LPAREN);
     int end;
     if (token.kind == TokenKind.RPAREN) {
@@ -509,8 +509,8 @@ public class Parser {
   }
 
   // arg_list ::= ( (arg ',')* arg ','? )?
-  private ImmutableList<Argument.Passed> parseFuncallArguments() {
-    ImmutableList<Argument.Passed> arguments = parseFunctionArguments(this::parseFuncallArgument);
+  private List<Argument.Passed> parseFuncallArguments() {
+    List<Argument.Passed> arguments = parseFunctionArguments(this::parseFuncallArgument);
     try {
       Argument.validateFuncallArguments(arguments);
     } catch (Argument.ArgumentException e) {
