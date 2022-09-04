@@ -405,7 +405,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
     CcToolchainProvider ccProvider =
         new CcToolchainProvider(
-            getToolchainForSkylark(toolchainInfo),
             cppConfiguration,
             toolchain,
             toolchainInfo,
@@ -449,7 +448,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             .addNativeDeclaredProvider(makeVariableInfo)
             .addProvider(
                 fdoSupport.getFdoSupport().createFdoSupportProvider(ruleContext, profileArtifact))
-            .setFilesToBuild(crosstool)
+            .setFilesToBuild(new NestedSetBuilder<Artifact>(Order.STABLE_ORDER).build())
             .addProvider(RunfilesProvider.simple(Runfiles.EMPTY));
 
     // If output_license is specified on the cc_toolchain rule, override the transitive licenses
@@ -486,25 +485,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     }
 
     return builder.build();
-  }
-
-  private static String getSkylarkValueForTool(Tool tool, CppToolchainInfo cppToolchainInfo) {
-    PathFragment toolPath = cppToolchainInfo.getToolPathFragment(tool);
-    return toolPath != null ? toolPath.getPathString() : "";
-  }
-
-  private static ImmutableMap<String, Object> getToolchainForSkylark(
-      CppToolchainInfo cppToolchainInfo) {
-    return ImmutableMap.<String, Object>builder()
-        .put("objcopy_executable", getSkylarkValueForTool(Tool.OBJCOPY, cppToolchainInfo))
-        .put("compiler_executable", getSkylarkValueForTool(Tool.GCC, cppToolchainInfo))
-        .put("preprocessor_executable", getSkylarkValueForTool(Tool.CPP, cppToolchainInfo))
-        .put("nm_executable", getSkylarkValueForTool(Tool.NM, cppToolchainInfo))
-        .put("objdump_executable", getSkylarkValueForTool(Tool.OBJDUMP, cppToolchainInfo))
-        .put("ar_executable", getSkylarkValueForTool(Tool.AR, cppToolchainInfo))
-        .put("strip_executable", getSkylarkValueForTool(Tool.STRIP, cppToolchainInfo))
-        .put("ld_executable", getSkylarkValueForTool(Tool.LD, cppToolchainInfo))
-        .build();
   }
 
   private CToolchain getToolchainFromAttributes(
