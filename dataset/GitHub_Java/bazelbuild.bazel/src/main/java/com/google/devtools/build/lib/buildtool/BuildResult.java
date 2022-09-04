@@ -17,11 +17,8 @@ package com.google.devtools.build.lib.buildtool;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileCompression;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
 import com.google.devtools.build.lib.buildeventstream.BuildToolLogs;
 import com.google.devtools.build.lib.buildeventstream.BuildToolLogs.LogFileEntry;
@@ -43,8 +40,6 @@ import javax.annotation.Nullable;
 public final class BuildResult {
   private long startTimeMillis = 0; // milliseconds since UNIX epoch.
   private long stopTimeMillis = 0;
-
-  private boolean wasSuspended = false;
 
   private Throwable crash = null;
   private boolean catastrophe = false;
@@ -89,16 +84,6 @@ public final class BuildResult {
       throw new IllegalStateException("BuildRequest has not been serviced");
     }
     return (stopTimeMillis - startTimeMillis) / 1000.0;
-  }
-
-  /** Record if the build was suspended (SIGSTOP or hardware put to sleep). */
-  public void setWasSuspended(boolean wasSuspended) {
-    this.wasSuspended = wasSuspended;
-  }
-
-  /** Whether the build was suspended (SIGSTOP or hardware put to sleep). */
-  public boolean getWasSuspended() {
-    return wasSuspended;
   }
 
   public void setExitCondition(ExitCode exitCondition) {
@@ -296,7 +281,7 @@ public final class BuildResult {
    */
   public static final class BuildToolLogCollection {
     private final List<Pair<String, ByteString>> directValues = new ArrayList<>();
-    private final List<Pair<String, ListenableFuture<String>>> futureUris = new ArrayList<>();
+    private final List<Pair<String, String>> directUris = new ArrayList<>();
     private final List<LogFileEntry> localFiles = new ArrayList<>();
     private boolean frozen;
 
@@ -318,30 +303,24 @@ public final class BuildResult {
 
     public BuildToolLogCollection addUri(String name, String uri) {
       Preconditions.checkState(!frozen);
-      this.futureUris.add(Pair.of(name, Futures.immediateFuture(uri)));
-      return this;
-    }
-
-    public BuildToolLogCollection addUriFuture(String name, ListenableFuture<String> uriFuture) {
-      Preconditions.checkState(!frozen);
-      this.futureUris.add(Pair.of(name, uriFuture));
+      this.directUris.add(Pair.of(name, uri));
       return this;
     }
 
     public BuildToolLogCollection addLocalFile(String name, Path path) {
-      return addLocalFile(name, path, LocalFileType.LOG, LocalFileCompression.NONE);
+      return addLocalFile(name, path, LocalFileType.LOG);
     }
 
     public BuildToolLogCollection addLocalFile(
-        String name, Path path, LocalFileType localFileType, LocalFileCompression compression) {
+        String name, Path path, LocalFileType localFileType) {
       Preconditions.checkState(!frozen);
-      this.localFiles.add(new LogFileEntry(name, path, localFileType, compression));
+      this.localFiles.add(new LogFileEntry(name, path, localFileType));
       return this;
     }
 
     public BuildToolLogs toEvent() {
       Preconditions.checkState(frozen);
-      return new BuildToolLogs(directValues, futureUris, localFiles);
+      return new BuildToolLogs(directValues, directUris, localFiles);
     }
 
     /** For debugging. */
@@ -349,7 +328,7 @@ public final class BuildResult {
     public String toString() {
       return MoreObjects.toStringHelper(this)
           .add("directValues", directValues)
-          .add("futureUris", futureUris)
+          .add("directUris", directUris)
           .add("localFiles", localFiles)
           .toString();
     }

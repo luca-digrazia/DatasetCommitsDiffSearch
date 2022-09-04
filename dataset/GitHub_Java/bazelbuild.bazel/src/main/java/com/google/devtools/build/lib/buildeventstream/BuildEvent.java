@@ -44,7 +44,6 @@ public interface BuildEvent extends ChainableEvent, ExtendedEventHandler.Postabl
       OUTPUT,
       SUCCESSFUL_TEST_OUTPUT,
       FAILED_TEST_OUTPUT,
-      COVERAGE_OUTPUT,
       STDOUT,
       STDERR,
       LOG,
