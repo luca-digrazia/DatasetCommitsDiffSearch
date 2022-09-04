@@ -240,16 +240,15 @@ public interface NodeEntry extends ThinNodeEntry {
    * dirtied and checks its dep on child. child signals parent with version v2. That should not in
    * and of itself trigger a rebuild, since parent has already rebuilt with child at v2.
    *
+   *
    * @param childVersion If this entry {@link #isDirty()} and the last version at which this entry
-   *     was evaluated did not include the changes at version {@code childVersion} (for instance, if
-   *     {@code childVersion} is after the last version at which this entry was evaluated), then
-   *     this entry records that one of its children has changed since it was last evaluated. Thus,
-   *     the next call to {@link #getDirtyState()} will return {@link DirtyState#NEEDS_REBUILDING}.
-   * @param childForDebugging for use in debugging (can be used to identify specific children that
-   *     invalidate this node)
+   * was evaluated did not include the changes at version {@code childVersion} (for instance, if
+   * {@code childVersion} is after the last version at which this entry was evaluated), then this
+   * entry records that one of its children has changed since it was last evaluated. Thus, the next
+   * call to {@link #getDirtyState()} will return {@link DirtyState#NEEDS_REBUILDING}.
    */
   @ThreadSafe
-  boolean signalDep(Version childVersion, @Nullable SkyKey childForDebugging);
+  boolean signalDep(Version childVersion);
 
   /**
    * Marks this entry as up-to-date at this version.

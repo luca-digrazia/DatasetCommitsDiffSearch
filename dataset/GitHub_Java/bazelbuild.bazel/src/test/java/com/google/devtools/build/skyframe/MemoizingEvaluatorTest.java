@@ -5192,13 +5192,7 @@ public class MemoizingEvaluatorTest {
     public <T extends SkyValue> EvaluationResult<T> eval(
         boolean keepGoing, int numThreads, SkyKey... keys) throws InterruptedException {
       assertThat(getModifiedValues()).isEmpty();
-      EvaluationContext evaluationContext =
-          EvaluationContext.newBuilder()
-              .setKeepGoing(keepGoing)
-              .setNumThreads(numThreads)
-              .setEventHander(reporter)
-              .build();
-      return driver.evaluate(ImmutableList.copyOf(keys), evaluationContext);
+      return driver.evaluate(ImmutableList.copyOf(keys), keepGoing, numThreads, reporter);
     }
 
     public <T extends SkyValue> EvaluationResult<T> eval(boolean keepGoing, SkyKey... keys)
