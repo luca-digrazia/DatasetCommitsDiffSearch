@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.math.random;
 
 /**
@@ -26,41 +24,41 @@ public interface RandomNumberGenerator {
     /**
      * Initialize the random generator with a seed.
      */
-    void setSeed(long seed);
+    public void setSeed(long seed);
 
     /**
      * Returns up to 32 random bits.
      */
-    int next(int numbits);
+    public int next(int numbits);
 
     /**
      * Returns the next pseudorandom, uniformly distributed int value
      * from this random number generator's sequence.
      */
-    int nextInt();
-
+    public int nextInt();
+    
     /**
      * Returns a pseudorandom, uniformly distributed int value
      * between 0 (inclusive) and the specified value (exclusive),
      * drawn from this random number generator's sequence.
      */
-    int nextInt(int n);
-
+    public int nextInt(int n);
+    
     /**
      * Returns the next pseudorandom, uniformly distributed long value
      * from this random number generator's sequence.
      */
-    long nextLong();
-
+    public long nextLong();
+    
     /**
      * Returns the next pseudorandom, uniformly distributed double value
      * between 0.0 and 1.0 from this random number generator's sequence.
      */
-    double nextDouble();
-
+    public double nextDouble();
+    
     /**
      * Returns a vector of pseudorandom, uniformly distributed double values
      * between 0.0 and 1.0 from this random number generator's sequence.
      */
-    void nextDoubles(double[] d);
+    public void nextDoubles(double[] d);
 }
