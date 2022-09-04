@@ -14,13 +14,13 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
@@ -42,9 +42,37 @@ public class ParallelEvaluator extends AbstractExceptionalParallelEvaluator<Runt
       EventFilter storedEventFilter,
       ErrorInfoManager errorInfoManager,
       boolean keepGoing,
+      int threadCount,
+      DirtyTrackingProgressReceiver progressReceiver,
+      GraphInconsistencyReceiver graphInconsistencyReceiver) {
+    super(
+        graph,
+        graphVersion,
+        skyFunctions,
+        reporter,
+        emittedEventState,
+        storedEventFilter,
+        errorInfoManager,
+        keepGoing,
+        progressReceiver,
+        graphInconsistencyReceiver,
+        () -> AbstractQueueVisitor.createExecutorService(threadCount),
+        new SimpleCycleDetector(),
+        EvaluationVersionBehavior.MAX_CHILD_VERSIONS);
+  }
+
+  public ParallelEvaluator(
+      ProcessableGraph graph,
+      Version graphVersion,
+      ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
+      final ExtendedEventHandler reporter,
+      EmittedEventState emittedEventState,
+      EventFilter storedEventFilter,
+      ErrorInfoManager errorInfoManager,
+      boolean keepGoing,
       DirtyTrackingProgressReceiver progressReceiver,
       GraphInconsistencyReceiver graphInconsistencyReceiver,
-      Supplier<ExecutorService> executorService,
+      ExecutorService executorService,
       CycleDetector cycleDetector,
       EvaluationVersionBehavior evaluationVersionBehavior) {
     super(
@@ -58,7 +86,7 @@ public class ParallelEvaluator extends AbstractExceptionalParallelEvaluator<Runt
         keepGoing,
         progressReceiver,
         graphInconsistencyReceiver,
-        executorService,
+        () -> executorService,
         cycleDetector,
         evaluationVersionBehavior);
   }
