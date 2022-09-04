@@ -22,12 +22,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkModules;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
+import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.BazelStarlarkContext;
-import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.rules.platform.PlatformCommon;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.GlobalFrame;
@@ -70,10 +70,8 @@ public abstract class SkylarkTestCase extends BuildViewTestCase {
         BazelStarlarkContext context =
             new BazelStarlarkContext(
                 TestConstants.TOOLS_REPOSITORY,
-                /*fragmentNameToClass=*/ null,
                 /*repoMapping=*/ ImmutableMap.of(),
-                new SymbolGenerator<>(new Object()),
-                /*analysisRuleLabel=*/ null);
+                new SymbolGenerator<>(new Object()));
         // This Environment has no PackageContext, so attempts to create a rule will fail.
         // Rule creation is tested by SkylarkIntegrationTest.
         Environment env =

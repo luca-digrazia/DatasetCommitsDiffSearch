@@ -20,6 +20,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
+import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -39,7 +41,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
@@ -117,7 +119,7 @@ public class WorkspaceFactory {
     this.workspaceDir = workspaceDir;
     this.defaultSystemJavabaseDir = defaultSystemJavabaseDir;
     this.environmentExtensions = environmentExtensions;
-    this.ruleFactory = new RuleFactory(ruleClassProvider);
+    this.ruleFactory = new RuleFactory(ruleClassProvider, AttributeContainer::new);
     this.workspaceGlobals = new WorkspaceGlobals(allowOverride, ruleFactory);
     this.workspaceFunctions =
         WorkspaceFactory.createWorkspaceFunctions(
@@ -126,14 +128,14 @@ public class WorkspaceFactory {
 
   @VisibleForTesting
   void parseForTesting(
-      ParserInput source,
+      ParserInputSource source,
       StarlarkSemantics starlarkSemantics,
       @Nullable StoredEventHandler localReporter)
       throws BuildFileContainsErrorsException, InterruptedException {
     if (localReporter == null) {
       localReporter = new StoredEventHandler();
     }
-    BuildFileAST buildFileAST = BuildFileAST.parse(source, localReporter);
+    BuildFileAST buildFileAST = BuildFileAST.parseBuildFile(source, localReporter);
     if (buildFileAST.containsErrors()) {
       throw new BuildFileContainsErrorsException(
           LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, "Failed to parse " + source.getPath());
@@ -152,19 +154,18 @@ public class WorkspaceFactory {
    * the //external package.
    */
   public void execute(
-      BuildFileAST file,
+      BuildFileAST ast,
       Map<String, Extension> importedExtensions,
       StarlarkSemantics starlarkSemantics,
       WorkspaceFileValue.WorkspaceFileKey workspaceFileKey)
       throws InterruptedException {
-    Preconditions.checkNotNull(file);
+    Preconditions.checkNotNull(ast);
     Preconditions.checkNotNull(importedExtensions);
-    execute(
-        file, importedExtensions, starlarkSemantics, new StoredEventHandler(), workspaceFileKey);
+    execute(ast, importedExtensions, starlarkSemantics, new StoredEventHandler(), workspaceFileKey);
   }
 
   private void execute(
-      BuildFileAST file,
+      BuildFileAST ast,
       @Nullable Map<String, Extension> importedExtensions,
       StarlarkSemantics starlarkSemantics,
       StoredEventHandler localReporter,
@@ -203,10 +204,8 @@ public class WorkspaceFactory {
       }
     }
 
-    if (!ValidationEnvironment.validateFile(
-            file, workspaceEnv, /*isBuildFile=*/ true, localReporter)
-        || !PackageFactory.checkBuildSyntax(file, localReporter)
-        || !file.exec(workspaceEnv, localReporter)) {
+    if (!ValidationEnvironment.checkBuildSyntax(ast.getStatements(), localReporter, workspaceEnv)
+        || !ast.exec(workspaceEnv, localReporter)) {
       localReporter.handle(Event.error("Error evaluating WORKSPACE file"));
     }
 
@@ -370,7 +369,7 @@ public class WorkspaceFactory {
       }
       workspaceEnv.setThreadLocal(
           PackageFactory.PackageContext.class,
-          new PackageFactory.PackageContext(builder, null, localReporter));
+          new PackageFactory.PackageContext(builder, null, localReporter, AttributeContainer::new));
     } catch (EvalException e) {
       throw new AssertionError(e);
     }
@@ -403,7 +402,7 @@ public class WorkspaceFactory {
   }
 
   static ClassObject newNativeModule(RuleClassProvider ruleClassProvider, String version) {
-    RuleFactory ruleFactory = new RuleFactory(ruleClassProvider);
+    RuleFactory ruleFactory = new RuleFactory(ruleClassProvider, AttributeContainer::new);
     WorkspaceGlobals workspaceGlobals = new WorkspaceGlobals(false, ruleFactory);
     return WorkspaceFactory.newNativeModule(
         WorkspaceFactory.createWorkspaceFunctions(false, ruleFactory, workspaceGlobals), version);

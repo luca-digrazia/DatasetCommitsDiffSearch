@@ -31,9 +31,11 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.Mutability.Freezable;
 import com.google.devtools.build.lib.syntax.Mutability.MutabilityException;
+import com.google.devtools.build.lib.syntax.Parser.ParsingLevel;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.SpellChecker;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -46,7 +48,6 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.function.Predicate;
 import javax.annotation.Nullable;
 
 /**
@@ -69,8 +70,9 @@ import javax.annotation.Nullable;
  * <p>One creates an Environment using the {@link #builder} function, then populates it with {@link
  * #setup} and sometimes {@link #setupOverride}, before to evaluate code in it with {@link
  * BuildFileAST#eval}, or with {@link BuildFileAST#exec} (where the AST was obtained by passing a
- * {@link ValidationEnvironment} constructed from the Environment to {@link BuildFileAST#parse}.
- * When the computation is over, the frozen Environment can still be queried with {@link #lookup}.
+ * {@link ValidationEnvironment} constructed from the Environment to {@link
+ * BuildFileAST#parseBuildFile} or {@link BuildFileAST#parseSkylarkFile}). When the computation is
+ * over, the frozen Environment can still be queried with {@link #lookup}.
  */
 // TODO(adonovan): further steps for Environmental remediation:
 // This class should be renamed StarlarkThread, for that is what it is.
@@ -115,7 +117,7 @@ import javax.annotation.Nullable;
 // Once the API is small and sound, we can start to represent all
 // the lexical frames within a single function using just an array,
 // indexed by a small integer computed during the validation pass.
-public final class Environment implements Freezable {
+public final class Environment implements Freezable, Debuggable {
 
   /**
    * A mapping of bindings, either mutable or immutable according to an associated {@link
@@ -124,10 +126,10 @@ public final class Environment implements Freezable {
    *
    * <p>Any non-frozen {@link Frame} must have the same {@link Mutability} as the current {@link
    * Environment}, to avoid interference from other evaluation contexts. For example, a {@link
-   * StarlarkFunction} will close over the global frame of the {@link Environment} in which it was
-   * defined. When the function is called from other {@link Environment}s (possibly simultaneously),
-   * that global frame must already be frozen; a new local {@link Frame} is created to represent the
-   * lexical scope of the function.
+   * UserDefinedFunction} will close over the global frame of the {@link Environment} in which it
+   * was defined. When the function is called from other {@link Environment}s (possibly
+   * simultaneously), that global frame must already be frozen; a new local {@link Frame} is created
+   * to represent the lexical scope of the function.
    *
    * <p>A {@link Frame} can have an associated "parent" {@link Frame}, which is used in {@link #get}
    * and {@link #getTransitiveBindings()}
@@ -883,7 +885,7 @@ public final class Environment implements Freezable {
    * Returns if calling the supplied function would be a recursive call, or in other words if the
    * supplied function is already on the stack.
    */
-  boolean isRecursiveCall(StarlarkFunction function) {
+  boolean isRecursiveCall(UserDefinedFunction function) {
     for (Continuation k = continuation; k != null; k = k.continuation) {
       // TODO(adonovan): compare code, not closure values, otherwise
       // one can defeat this check by writing the Y combinator.
@@ -1222,53 +1224,45 @@ public final class Environment implements Freezable {
   }
 
   private static final class EvalEventHandler implements EventHandler {
-    List<Event> messages = new ArrayList<>();
+    List<String> messages = new ArrayList<>();
 
     @Override
     public void handle(Event event) {
       if (event.getKind() == EventKind.ERROR) {
-        messages.add(event);
+        messages.add(event.getMessage());
       }
     }
   }
 
-  /** Evaluates a Skylark statement in this environment. (Debugger API) */
-  // TODO(adonovan): push this up into the debugger once the eval API is finalized.
-  public Object debugEval(ParserInput input) throws EvalException, InterruptedException {
-    EvalEventHandler handler = new EvalEventHandler();
-    Expression expr = Expression.parse(input, handler);
-    if (!handler.messages.isEmpty()) {
-      Event ev = handler.messages.get(0);
-      throw new EvalException(ev.getLocation(), ev.getMessage());
+  @Override
+  public Object evaluate(String contents) throws EvalException, InterruptedException {
+    ParserInputSource input =
+        ParserInputSource.create(contents, PathFragment.create("<debug eval>"));
+    EvalEventHandler eventHandler = new EvalEventHandler();
+    Statement statement = Parser.parseStatement(input, eventHandler, ParsingLevel.LOCAL_LEVEL);
+    if (!eventHandler.messages.isEmpty()) {
+      throw new EvalException(statement.getLocation(), eventHandler.messages.get(0));
     }
-    return Eval.eval(this, expr);
+    // TODO(bazel-team): move statement handling code to Eval
+    // deal with the most common case first
+    if (statement.kind() == Statement.Kind.EXPRESSION) {
+      return ((ExpressionStatement) statement).getExpression().doEval(this);
+    }
+    // all other statement types are executed directly
+    Eval.fromEnvironment(this).exec(statement);
+    switch (statement.kind()) {
+      case ASSIGNMENT:
+      case AUGMENTED_ASSIGNMENT:
+        return ((AssignmentStatement) statement).getLHS().doEval(this);
+      case RETURN:
+        Expression expr = ((ReturnStatement) statement).getReturnExpression();
+        return expr != null ? expr.doEval(this) : Runtime.NONE;
+      default:
+        return Runtime.NONE;
+    }
   }
 
-  /** Executes a Skylark file (sequence of statements) in this environment. (Debugger API) */
-  // TODO(adonovan): push this up into the debugger once the exec API is finalized.
-  public void debugExec(ParserInput input) throws EvalException, InterruptedException {
-    EvalEventHandler handler = new EvalEventHandler();
-    BuildFileAST file = BuildFileAST.parse(input, handler);
-    if (!handler.messages.isEmpty()) {
-      Event ev = handler.messages.get(0);
-      throw new EvalException(ev.getLocation(), ev.getMessage());
-    }
-    for (Statement stmt : file.getStatements()) {
-      if (stmt instanceof LoadStatement) {
-        throw new EvalException(null, "cannot execute load statements in debugger");
-      }
-    }
-    ValidationEnvironment.validateFile(file, this, /*isBuildFile=*/ false);
-    Eval.execStatements(this, file.getStatements());
-  }
-
-  /**
-   * Returns the stack frames corresponding of the context's current (paused) state. (Debugger API)
-   *
-   * <p>For all stack frames except the innermost, location information is retrieved from the
-   * current context. The innermost frame's location must be supplied as {@code currentLocation} by
-   * the caller.
-   */
+  @Override
   public ImmutableList<DebugFrame> listFrames(Location currentLocation) {
     ImmutableList.Builder<DebugFrame> frameListBuilder = ImmutableList.builder();
 
@@ -1301,16 +1295,7 @@ public final class Environment implements Freezable {
     return frameListBuilder.build();
   }
 
-  /**
-   * Given a requested stepping behavior, returns a predicate over the context that tells the
-   * debugger when to pause. (Debugger API)
-   *
-   * <p>The predicate will return true if we are at the next statement where execution should pause,
-   * and it will return false if we are not yet at that statement. No guarantee is made about the
-   * predicate's return value after we have reached the desired statement.
-   *
-   * <p>A null return value indicates that no further pausing should occur.
-   */
+  @Override
   @Nullable
   public ReadyToPause stepControl(Stepping stepping) {
     final Continuation pausedContinuation = continuation;
@@ -1328,34 +1313,6 @@ public final class Environment implements Freezable {
         return pausedContinuation == null ? null : env -> isOutside(env, pausedContinuation);
     }
     throw new IllegalArgumentException("Unsupported stepping type: " + stepping);
-  }
-
-  /** See stepControl (Debugger API) */
-  public interface ReadyToPause extends Predicate<Environment> {}
-
-  /**
-   * Describes the stepping behavior that should occur when execution of a thread is continued.
-   * (Debugger API)
-   */
-  public enum Stepping {
-    /** Continue execution without stepping. */
-    NONE,
-    /**
-     * If the thread is paused on a statement that contains a function call, step into that
-     * function. Otherwise, this is the same as OVER.
-     */
-    INTO,
-    /**
-     * Step over the current statement and any functions that it may call, stopping at the next
-     * statement in the same frame. If no more statements are available in the current frame, same
-     * as OUT.
-     */
-    OVER,
-    /**
-     * Continue execution until the current frame has been exited and then pause. If we are
-     * currently in the outer-most frame, same as NONE.
-     */
-    OUT,
   }
 
   /** Returns true if {@code env} is in a parent frame of {@code pausedContinuation}. */

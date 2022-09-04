@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
-import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.FunctionSplitTransitionWhitelist;
@@ -72,7 +71,6 @@ import com.google.devtools.build.lib.packages.SkylarkDefinedAspect;
 import com.google.devtools.build.lib.packages.SkylarkExportable;
 import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
-import com.google.devtools.build.lib.packages.StarlarkCallbackHelper;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -87,11 +85,11 @@ import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
-import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -273,7 +271,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
   @SuppressWarnings({"rawtypes", "unchecked"}) // castMap produces
   // an Attribute.Builder instead of a Attribute.Builder<?> but it's OK.
   public BaseFunction rule(
-      StarlarkFunction implementation,
+      BaseFunction implementation,
       Boolean test,
       Object attrs,
       Object implicitOutputs,
@@ -328,10 +326,10 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     }
 
     if (implicitOutputs != Runtime.NONE) {
-      if (implicitOutputs instanceof StarlarkFunction) {
-        StarlarkCallbackHelper callback =
-            new StarlarkCallbackHelper(
-                (StarlarkFunction) implicitOutputs, ast, funcallEnv.getSemantics(), bazelContext);
+      if (implicitOutputs instanceof BaseFunction) {
+        BaseFunction func = (BaseFunction) implicitOutputs;
+        SkylarkCallbackFunction callback =
+            new SkylarkCallbackFunction(func, ast, funcallEnv.getSemantics(), context);
         builder.setImplicitOutputsFunction(
             new SkylarkImplicitOutputsFunctionWithCallback(callback, ast.getLocation()));
       } else {
@@ -491,7 +489,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
 
   @Override
   public SkylarkAspect aspect(
-      StarlarkFunction implementation,
+      BaseFunction implementation,
       SkylarkList<?> attributeAspects,
       Object attrs,
       SkylarkList<?> requiredAspectProvidersArg,
