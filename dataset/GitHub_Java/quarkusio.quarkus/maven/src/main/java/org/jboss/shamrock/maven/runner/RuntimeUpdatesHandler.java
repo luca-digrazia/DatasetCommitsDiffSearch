@@ -27,7 +27,7 @@ public class RuntimeUpdatesHandler implements HttpHandler {
 
     private static final long TWO_SECONDS = 2000;
 
-    private volatile HttpHandler next;
+    private final HttpHandler next;
     private final Path classesDir;
     private final Path sourcesDir;
     private volatile long nextUpdate;
@@ -69,7 +69,6 @@ public class RuntimeUpdatesHandler implements HttpHandler {
                 try {
                     if (doScan()) {
                         //TODO: this should be handled better
-                        next = UndertowDeploymentTemplate.ROOT_HANDLER;
                         UndertowDeploymentTemplate.ROOT_HANDLER.handleRequest(exchange);
                         return;
                     }
