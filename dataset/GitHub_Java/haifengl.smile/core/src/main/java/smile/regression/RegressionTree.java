@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.regression;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -75,9 +74,7 @@ import smile.util.MulticoreExecutor;
  *  
  * @author Haifeng Li
  */
-public class RegressionTree implements Regression<double[]>, Serializable {
-    private static final long serialVersionUID = 1L;
-
+public class RegressionTree implements Regression<double[]> {
     /**
      * The attributes of independent variable.
      */
