@@ -213,7 +213,7 @@ public class CriticalPathComputer {
   /** Creates a CriticalPathComponent and adds the duration of input discovery and changes phase. */
   @Subscribe
   @AllowConcurrentEvents
-  public void discoverInputs(DiscoveredInputsEvent event) throws InterruptedException {
+  public void discoverInputs(DiscoveredInputsEvent event) {
     CriticalPathComponent stats =
         tryAddComponent(createComponent(event.getAction(), event.getStartTimeNanos()));
     stats.addSpawnResult(event.getMetrics(), null, "", /* wasRemote=*/ false);
@@ -228,7 +228,7 @@ public class CriticalPathComputer {
    */
   @Subscribe
   @AllowConcurrentEvents
-  public void actionStarted(ActionStartedEvent event) throws InterruptedException {
+  public void actionStarted(ActionStartedEvent event) {
     Action action = event.getAction();
     tryAddComponent(createComponent(action, event.getNanoTimeStart())).startRunning();
   }
@@ -242,7 +242,7 @@ public class CriticalPathComputer {
    */
   @Subscribe
   @AllowConcurrentEvents
-  public void middlemanAction(ActionMiddlemanEvent event) throws InterruptedException {
+  public void middlemanAction(ActionMiddlemanEvent event) {
     Action action = event.getAction();
     CriticalPathComponent component =
         tryAddComponent(createComponent(action, event.getNanoTimeStart()));
@@ -256,8 +256,7 @@ public class CriticalPathComputer {
    * @return The component to be used for updating the time stats.
    */
   @SuppressWarnings("ReferenceEquality")
-  private CriticalPathComponent tryAddComponent(CriticalPathComponent newComponent)
-      throws InterruptedException {
+  private CriticalPathComponent tryAddComponent(CriticalPathComponent newComponent) {
     Action newAction = newComponent.getAction();
     Artifact primaryOutput = newAction.getPrimaryOutput();
     CriticalPathComponent storedComponent =
@@ -303,7 +302,7 @@ public class CriticalPathComputer {
    */
   @Subscribe
   @AllowConcurrentEvents
-  public void actionCached(CachedActionEvent event) throws InterruptedException {
+  public void actionCached(CachedActionEvent event) {
     Action action = event.getAction();
     CriticalPathComponent component =
         tryAddComponent(createComponent(action, event.getNanoTimeStart()));
