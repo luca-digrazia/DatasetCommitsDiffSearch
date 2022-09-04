@@ -2,8 +2,8 @@ package io.quarkus.platform.descriptor.loader.json.impl;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -14,7 +14,6 @@ import io.quarkus.dependencies.Category;
 import io.quarkus.dependencies.Extension;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.ResourceInputStreamConsumer;
-import io.quarkus.platform.descriptor.loader.json.ResourceLoader;
 import io.quarkus.platform.tools.DefaultMessageWriter;
 import io.quarkus.platform.tools.MessageWriter;
 
@@ -38,10 +37,6 @@ public class QuarkusJsonPlatformDescriptor implements QuarkusPlatformDescriptor 
         bomGroupId = bom.groupId;
         bomArtifactId = bom.artifactId;
         bomVersion = bom.version;
-    }
-
-    public void setQuarkusCoreVersion(String quarkusVersion) {
-        this.quarkusVersion = quarkusVersion;
     }
 
     public void setExtensions(List<Extension> extensions) {
@@ -104,14 +99,12 @@ public class QuarkusJsonPlatformDescriptor implements QuarkusPlatformDescriptor 
         if (resourceLoader == null) {
             throw new IllegalStateException("Resource loader has not been provided");
         }
-        try {
-            return resourceLoader.loadResource(name, is -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                    return reader.lines().collect(Collectors.joining("\n"));
-                }
-            });
+        try (InputStream is = resourceLoader.getResourceAsStream(name)) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+                return reader.lines().collect(Collectors.joining("\n"));
+            }
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to load " + name, e);
+            throw new RuntimeException("Failed to resolve template " + name, e);
         }
     }
 
@@ -121,7 +114,9 @@ public class QuarkusJsonPlatformDescriptor implements QuarkusPlatformDescriptor 
         if (resourceLoader == null) {
             throw new IllegalStateException("Resource loader has not been provided");
         }
-        return resourceLoader.loadResource(name, consumer);
+        try (InputStream is = resourceLoader.getResourceAsStream(name)) {
+            return consumer.handle(is);
+        }
     }
 
     @Override
