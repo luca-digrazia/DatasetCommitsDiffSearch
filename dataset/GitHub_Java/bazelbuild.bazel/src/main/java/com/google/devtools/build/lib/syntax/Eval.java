@@ -233,8 +233,6 @@ final class Eval {
       fr.dbg.before(fr.thread, loc); // location is now redundant since it's in the thread
     }
 
-    fr.thread.steps++;
-
     try {
       return execDispatch(fr, st);
     } catch (EvalException ex) {
@@ -275,8 +273,6 @@ final class Eval {
    */
   private static void assign(StarlarkThread.Frame fr, Expression lhs, Object value)
       throws EvalException, InterruptedException {
-    fr.thread.steps++;
-
     if (lhs instanceof Identifier) {
       // x = ...
       assignIdentifier(fr, (Identifier) lhs, value);
@@ -398,7 +394,6 @@ final class Eval {
       }
 
     } else if (lhs instanceof ListExpression) {
-      // TODO(adonovan): make this a static error.
       Location loc = stmt.getStartLocation(); // TODO(adonovan): use operator location
       throw new EvalException(loc, "cannot perform augmented assignment on a list literal");
 
@@ -425,8 +420,6 @@ final class Eval {
 
   private static Object eval(StarlarkThread.Frame fr, Expression expr)
       throws EvalException, InterruptedException {
-    fr.thread.steps++;
-
     try {
       return doEval(fr, expr);
     } catch (EvalException ex) {
