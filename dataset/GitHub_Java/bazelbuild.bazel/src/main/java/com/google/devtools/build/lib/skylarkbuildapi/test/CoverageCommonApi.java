@@ -76,8 +76,8 @@ public interface CoverageCommonApi<RuleContextT extends SkylarkRuleContextApi>
       useLocation = true)
   public InstrumentedFilesInfoApi instrumentedFilesInfo(
       RuleContextT skylarkRuleContext,
-      SkylarkList<?> sourceAttributes, // <String> expected
-      SkylarkList<?> dependencyAttributes, // <String> expected
+      SkylarkList<String> sourceAttributes,
+      SkylarkList<String> dependencyAttributes,
       Object extensions,
       Location location)
       throws EvalException;
