@@ -10,11 +10,7 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.context.internal.ManagedSessionContext;
 import org.junit.rules.ExternalResource;
 
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.Callable;
 
 /**
