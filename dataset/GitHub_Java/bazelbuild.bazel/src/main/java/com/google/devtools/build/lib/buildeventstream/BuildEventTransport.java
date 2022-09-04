@@ -46,31 +46,14 @@ public interface BuildEventTransport {
 
   /**
    * Initiates a close. Callers may listen to the returned future to be notified when the close is
-   * complete i.e. wait for all build events to be sent and acknowledged. The future may contain any
-   * information about possible transport errors.
+   * complete i.e. wait for all build events to be sent. The future may contain any information
+   * about possible transport errors.
    *
    * <p>This method might be called multiple times without any effect after the first call.
    *
-   * <p>This method should not throw any exceptions, but the returned Future might.
+   * <p>This method should not throw any exceptions.
    */
   ListenableFuture<Void> close();
-
-  /**
-   * Returns the status of half-close. Callers may listen to the return future to be notified when
-   * the half-close is complete
-   *
-   * <p>Half-close indicates that all client-side data is transmitted but still waiting on
-   * server-side acknowledgement. The client must buffer the information in case the server fails to
-   * acknowledge.
-   *
-   * <p>Implementations may choose to return the full close Future via {@link #close()} if there is
-   * no sensible half-close state.
-   *
-   * <p>This should be only called after {@link #close()}.
-   */
-  default ListenableFuture<Void> getHalfCloseFuture() {
-    return close();
-  }
 
   @VisibleForTesting
   @Nullable

@@ -47,7 +47,8 @@ public enum BuildEventTransportFactory {
         BuildEventProtocolOptions protocolOptions,
         BuildEventArtifactUploader uploader,
         Consumer<AbruptExitException> exitFunc,
-        ArtifactGroupNamer namer) {
+        ArtifactGroupNamer namer)
+        throws IOException {
       return new TextFormatFileTransport(
           options.getBuildEventTextFile(), protocolOptions, uploader, exitFunc, namer);
     }
@@ -70,7 +71,8 @@ public enum BuildEventTransportFactory {
         BuildEventProtocolOptions protocolOptions,
         BuildEventArtifactUploader uploader,
         Consumer<AbruptExitException> exitFunc,
-        ArtifactGroupNamer namer) {
+        ArtifactGroupNamer namer)
+        throws IOException {
       return new BinaryFormatFileTransport(
           options.getBuildEventBinaryFile(), protocolOptions, uploader, exitFunc, namer);
     }
@@ -93,7 +95,8 @@ public enum BuildEventTransportFactory {
         BuildEventProtocolOptions protocolOptions,
         BuildEventArtifactUploader uploader,
         Consumer<AbruptExitException> exitFunc,
-        ArtifactGroupNamer namer) {
+        ArtifactGroupNamer namer)
+        throws IOException {
       return new JsonFormatFileTransport(
           options.getBuildEventJsonFile(), protocolOptions, uploader, exitFunc, namer);
     }
@@ -132,7 +135,8 @@ public enum BuildEventTransportFactory {
       Consumer<AbruptExitException> exitFunc,
       BuildEventProtocolOptions protocolOptions,
       Supplier<BuildEventArtifactUploader> uploaderSupplier,
-      ArtifactGroupNamer namer) {
+      ArtifactGroupNamer namer)
+      throws IOException {
     BuildEventStreamOptions bepOptions =
         checkNotNull(
             env.getOptions().getOptions(BuildEventStreamOptions.class),
@@ -160,7 +164,8 @@ public enum BuildEventTransportFactory {
       BuildEventProtocolOptions protocolOptions,
       BuildEventArtifactUploader uploader,
       Consumer<AbruptExitException> exitFunc,
-      ArtifactGroupNamer namer);
+      ArtifactGroupNamer namer)
+      throws IOException;
 
   protected abstract boolean usePathConverter(BuildEventStreamOptions options);
 }

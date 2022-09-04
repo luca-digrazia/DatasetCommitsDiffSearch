@@ -106,14 +106,14 @@ public final class ExtraLinkTimeLibraries {
   public BuildLibraryOutput buildLibraries(
       RuleContext ruleContext, boolean staticMode, boolean forDynamicLibrary)
       throws InterruptedException, RuleErrorException {
-    NestedSetBuilder<CcLinkingContext.LinkerInput> linkerInputs = NestedSetBuilder.linkOrder();
+    NestedSetBuilder<LibraryToLink> librariesToLink = NestedSetBuilder.linkOrder();
     NestedSetBuilder<Artifact> runtimeLibraries = NestedSetBuilder.linkOrder();
     for (ExtraLinkTimeLibrary extraLibrary : getExtraLibraries()) {
       BuildLibraryOutput buildLibraryOutput =
           extraLibrary.buildLibraries(ruleContext, staticMode, forDynamicLibrary);
-      linkerInputs.addTransitive(buildLibraryOutput.getLinkerInputs());
+      librariesToLink.addTransitive(buildLibraryOutput.getLibrariesToLink());
       runtimeLibraries.addTransitive(buildLibraryOutput.getRuntimeLibraries());
     }
-    return new BuildLibraryOutput(linkerInputs.build(), runtimeLibraries.build());
+    return new BuildLibraryOutput(librariesToLink.build(), runtimeLibraries.build());
   }
 }

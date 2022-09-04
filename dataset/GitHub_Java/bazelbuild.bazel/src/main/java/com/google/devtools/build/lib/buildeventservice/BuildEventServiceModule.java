@@ -96,11 +96,9 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   @Override
   public void beforeCommand(CommandEnvironment commandEnvironment) {
-    T besOptions = commandEnvironment.getOptions().getOptions(optionsClass());
-
     // Reset to null in case afterCommand was not called.
     this.outErr = null;
-    if (!whitelistedCommands(besOptions).contains(commandEnvironment.getCommandName())) {
+    if (!whitelistedCommands().contains(commandEnvironment.getCommandName())) {
       return;
     }
 
@@ -108,7 +106,8 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
     if (streamer != null) {
       commandEnvironment.getReporter().addHandler(streamer);
       commandEnvironment.getEventBus().register(streamer);
-      int bufferSize = besOptions.besOuterrBufferSize;
+      int bufferSize =
+          commandEnvironment.getOptions().getOptions(optionsClass()).besOuterrBufferSize;
 
       final SynchronizedOutputStream out = new SynchronizedOutputStream(bufferSize);
       final SynchronizedOutputStream err = new SynchronizedOutputStream(bufferSize);
@@ -324,7 +323,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   protected abstract void clearBesClient();
 
-  protected abstract Set<String> whitelistedCommands(T besOptions);
+  protected abstract Set<String> whitelistedCommands();
 
   protected Set<String> keywords(
       T besOptions, @Nullable OptionsParsingResult startupOptionsProvider) {

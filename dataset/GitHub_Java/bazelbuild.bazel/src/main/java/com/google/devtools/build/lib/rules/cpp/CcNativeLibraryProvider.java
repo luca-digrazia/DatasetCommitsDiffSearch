@@ -14,13 +14,10 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.devtools.build.lib.collect.nestedset.Depset;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
-import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcNativeLibraryProviderApi;
 
 /**
  * A target that provides native libraries in the transitive closure of its deps that are needed for
@@ -28,22 +25,11 @@ import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcNativeLibraryProvide
  */
 @Immutable
 @AutoCodec
-public final class CcNativeLibraryProvider extends NativeInfo
-    implements CcNativeLibraryProviderApi {
-
-  public static final BuiltinProvider<CcNativeLibraryProvider> PROVIDER =
-      new BuiltinProvider<CcNativeLibraryProvider>(
-          "CcNativeLibraryProvider", CcNativeLibraryProvider.class) {};
-
+public final class CcNativeLibraryProvider implements TransitiveInfoProvider {
   private final NestedSet<LibraryToLink> transitiveCcNativeLibraries;
 
   public CcNativeLibraryProvider(NestedSet<LibraryToLink> transitiveCcNativeLibraries) {
     this.transitiveCcNativeLibraries = transitiveCcNativeLibraries;
-  }
-
-  @Override
-  public BuiltinProvider<CcNativeLibraryProvider> getProvider() {
-    return PROVIDER;
   }
 
   /**
@@ -54,10 +40,5 @@ public final class CcNativeLibraryProvider extends NativeInfo
    */
   public NestedSet<LibraryToLink> getTransitiveCcNativeLibraries() {
     return transitiveCcNativeLibraries;
-  }
-
-  @Override
-  public Depset getTransitiveCcNativeLibrariesStarlark() {
-    return Depset.of(LibraryToLink.TYPE, getTransitiveCcNativeLibraries());
   }
 }

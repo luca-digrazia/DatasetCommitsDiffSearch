@@ -602,6 +602,14 @@ public final class CcToolchainProvider extends ToolchainInfo
     return toolchainInfo.supportsEmbeddedRuntimes();
   }
 
+  /**
+   * Returns whether the toolchain supports EXEC_ORIGIN libraries resolution.
+   */
+  public boolean supportsExecOrigin() {
+    // We're rolling out support for this in the same release that also supports embedded runtimes.
+    return toolchainInfo.supportsEmbeddedRuntimes();
+  }
+
   /** Returns whether the toolchain supports the --start-lib/--end-lib options. */
   public boolean supportsStartEndLib(FeatureConfiguration featureConfiguration) {
     return toolchainInfo.supportsStartEndLib()
