@@ -129,11 +129,7 @@ public class JarClassPathElement implements ClassPathElement {
                 Enumeration<JarEntry> entries = jarFile.entries();
                 while (entries.hasMoreElements()) {
                     JarEntry entry = entries.nextElement();
-                    if (entry.getName().endsWith("/")) {
-                        paths.add(entry.getName().substring(0, entry.getName().length() - 1));
-                    } else {
-                        paths.add(entry.getName());
-                    }
+                    paths.add(entry.getName());
                 }
                 return paths;
             }
