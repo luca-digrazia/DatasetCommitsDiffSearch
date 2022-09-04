@@ -29,8 +29,6 @@ import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
-import org.graylog2.plugin.configuration.fields.DropdownField;
-import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
@@ -56,8 +54,6 @@ public class JsonPathInput extends MessageInput {
     private static final String CK_PATH = "path";
     private static final String CK_SOURCE = "source";
     private static final String CK_HEADERS = "headers";
-    private static final String CK_TIMEUNIT = "timeunit";
-    private static final String CK_INTERVAL = "interval";
 
     private JsonPath jsonPath;
 
@@ -69,7 +65,8 @@ public class JsonPathInput extends MessageInput {
     /*
      * TODO:
      *
-     *   - add custom fields
+     *   - make interval configurable
+     *   - make it work with *all* releases from asset list
      *
      */
 
@@ -92,38 +89,34 @@ public class JsonPathInput extends MessageInput {
         Runnable task = new Runnable() {
             @Override
             public void run() {
+                // Fetch JSON.
+                String json;
                 try {
-                    // Fetch JSON.
-                    String json;
-                    try {
-                        Collector collector = new Collector(
-                                config.getString(CK_URL),
-                                parseHeaders(config.getString(CK_HEADERS)),
-                                inputId
-                        );
+                    Collector collector = new Collector(
+                            config.getString(CK_URL),
+                            parseHeaders(config.getString(CK_HEADERS)),
+                            inputId
+                    );
 
-                        json = collector.getJson();
-                    } catch(Exception e) {
-                        LOG.error("Could not fetch JSON for JsonPathInput <{}>.", inputId, e);
-                        return;
-                    }
-
-                    // Extract desired data from it.
-                    Selector selector = new Selector(jsonPath);
-                    Map<String, Object> fields = selector.read(json);
-
-                    Message m = new Message(selector.buildShortMessage(fields), config.getString(CK_SOURCE), Tools.getUTCTimestampWithMilliseconds());
-                    m.addFields(fields);
-
-                    // Add to buffer.
-                    graylogServer.getProcessBuffer().insertCached(m, parentInput);
+                    json = collector.getJson();
                 } catch(Exception e) {
-                    LOG.error("Could not run collector for JsonPathInput <{}>.", inputId, e);
+                    LOG.debug("Could not fetch JSON for JsonPathInput <{}>.", inputId, e);
+                    return;
                 }
+
+                // Extract desired data from it.
+                Selector selector = new Selector(jsonPath);
+                Map<String, Object> fields = selector.read(json);
+
+                Message m = new Message(selector.buildShortMessage(fields), config.getString(CK_SOURCE), Tools.getUTCTimestampWithMilliseconds());
+                m.addFields(fields);
+
+                // Add to buffer.
+                graylogServer.getProcessBuffer().insertCached(m, parentInput);
             }
         };
 
-        scheduledFuture = scheduler.scheduleAtFixedRate(task, 0, config.getInt(CK_INTERVAL), TimeUnit.valueOf(config.getString(CK_TIMEUNIT)));
+        scheduledFuture = scheduler.scheduleAtFixedRate(task, 0, 30, TimeUnit.SECONDS);
     }
 
     @Override
@@ -170,22 +163,6 @@ public class JsonPathInput extends MessageInput {
                 ConfigurationField.Optional.OPTIONAL
         ));
 
-        r.addField(new NumberField(
-                CK_INTERVAL,
-                "Interval",
-                1,
-                "Time between every collector run. Select a time unit in the corresponding dropdown. Example: Run every 5 minutes.",
-                ConfigurationField.Optional.NOT_OPTIONAL
-        ));
-
-        r.addField(new DropdownField(
-                CK_TIMEUNIT,
-                "Interval time unit",
-                TimeUnit.MINUTES.toString(),
-                DropdownField.ValueTemplates.timeUnits(),
-                ConfigurationField.Optional.NOT_OPTIONAL
-        ));
-
         return r;
     }
 
@@ -210,11 +187,7 @@ public class JsonPathInput extends MessageInput {
     }
 
     protected boolean checkConfig(Configuration config) {
-        return config.stringIsSet(CK_URL)
-                && config.stringIsSet(CK_PATH)
-                && config.stringIsSet(CK_SOURCE)
-                && config.stringIsSet(CK_TIMEUNIT)
-                && config.intIsSet(CK_INTERVAL);
+        return config.stringIsSet(CK_URL) && config.stringIsSet(CK_PATH) && config.stringIsSet(CK_SOURCE);
     }
 
     public static Map<String, String> parseHeaders(String headerString) {
