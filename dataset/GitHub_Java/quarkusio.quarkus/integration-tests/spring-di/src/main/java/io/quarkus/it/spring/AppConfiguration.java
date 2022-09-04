@@ -1,10 +1,14 @@
 package io.quarkus.it.spring;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.inject.Named;
 import javax.inject.Singleton;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 import org.springframework.web.context.annotation.RequestScope;
 
 @Configuration
@@ -33,11 +37,43 @@ public class AppConfiguration {
         return new AnotherRequestBean();
     }
 
+    @Bean
+    @CustomPrototype
+    public CustomPrototypeBean beanWithCustomPrototype() {
+        return new CustomPrototypeBean();
+    }
+
+    private AtomicInteger prototypeBeanCounter = new AtomicInteger(0);
+
+    @Bean
+    @Scope(scopeName = "prototype")
+    public PrototypeBean prototypeBean() {
+        return new PrototypeBean(prototypeBeanCounter.getAndIncrement());
+    }
+
     private static class SingletonBean {
 
     }
 
     private static class AnotherRequestBean {
+
+    }
+
+    public static class PrototypeBean {
+
+        public final int index;
+
+        public PrototypeBean(int index) {
+            this.index = index;
+        }
+    }
+
+    public static class CustomPrototypeBean {
+
+    }
+
+    @Named
+    public static class NamedBean {
 
     }
 }
