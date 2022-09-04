@@ -78,7 +78,7 @@ public final class CcLinkingHelper {
 
     @Override
     public CcLinkingInfo getCcLinkingInfo() {
-      return (CcLinkingInfo) providers.get(CcLinkingInfo.PROVIDER.getKey());
+      return (CcLinkingInfo) providers.getProvider(CcLinkingInfo.PROVIDER.getKey());
     }
 
     @Override
@@ -742,7 +742,6 @@ public final class CcLinkingHelper {
       result.addAllLtoArtifacts(dynamicLinkActionBuilder.getAllLtoBackendArtifacts());
     }
     CppLinkAction dynamicLinkAction = dynamicLinkActionBuilder.build();
-    result.addLinkActionInputs(dynamicLinkAction.getInputs());
     env.registerAction(dynamicLinkAction);
 
     LibraryToLink dynamicLibrary = dynamicLinkAction.getOutputLibrary();
