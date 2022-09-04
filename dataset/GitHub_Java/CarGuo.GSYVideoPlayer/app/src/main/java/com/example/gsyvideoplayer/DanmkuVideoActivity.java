@@ -103,7 +103,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
             public void onPrepared(String url, Object... objects) {
                 super.onPrepared(url, objects);
                 //开始播放了才能旋转和全屏
-                orientationUtils.setEnable(danmakuVideoPlayer.isRotateWithSystem());
+                orientationUtils.setEnable(true);
                 isPlay = true;
                 getDanmu();
             }
@@ -181,9 +181,6 @@ public class DanmkuVideoActivity extends AppCompatActivity {
     }
 
 
-    /**
-     * orientationUtils 和  detailPlayer.onConfigurationChanged 方法是用于触发屏幕旋转的
-     */
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
