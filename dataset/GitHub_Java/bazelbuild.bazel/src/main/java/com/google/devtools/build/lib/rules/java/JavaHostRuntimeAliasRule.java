@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.rules.LateBoundAlias.CommonAliasRule;
 
 /** Implementation of the {@code java_runtime_alias} rule. */
-public class JavaHostRuntimeAliasRule extends CommonAliasRule {
+public class JavaHostRuntimeAliasRule extends CommonAliasRule<JavaConfiguration> {
   public JavaHostRuntimeAliasRule() {
     super("java_host_runtime_alias", JavaSemantics::hostJdkAttribute, JavaConfiguration.class);
   }
@@ -29,8 +29,6 @@ public class JavaHostRuntimeAliasRule extends CommonAliasRule {
   @Override
   protected Attribute.Builder<Label> makeAttribute(RuleDefinitionEnvironment environment) {
     Attribute.Builder<Label> builder = super.makeAttribute(environment);
-    return builder
-        .cfg(HostTransition.INSTANCE)
-        .mandatoryProviders(JavaRuntimeInfo.PROVIDER.id());
+    return builder.cfg(HostTransition.INSTANCE).mandatoryProviders(JavaRuntimeInfo.PROVIDER.id());
   }
 }

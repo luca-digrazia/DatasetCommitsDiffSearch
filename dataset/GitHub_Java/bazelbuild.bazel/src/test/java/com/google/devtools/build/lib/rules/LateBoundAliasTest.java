@@ -25,11 +25,13 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.LateBoundAlias.CommonAliasRule;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
+import java.io.IOException;
 import javax.annotation.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -90,7 +92,7 @@ public class LateBoundAliasTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testResolveNullTarget() throws Exception {
+  public void testResolveNullTarget() throws IOException, LabelSyntaxException {
     scratch.file("a/BUILD", "test_rule_name(name='alias')");
 
     ConfiguredTarget alias = getConfiguredTarget("//a:alias");
@@ -99,7 +101,7 @@ public class LateBoundAliasTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testNullTargetCanBeDependant() throws Exception {
+  public void testNullTargetCanBeDependant() throws IOException, LabelSyntaxException {
     scratch.file(
         "a/BUILD",
         "test_rule_name(name='alias')",

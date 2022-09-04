@@ -14,11 +14,20 @@
 
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.rules.LateBoundAlias.CommonAliasRule;
 
-/** Implementation of the {@code java_toolchain_alias} rule. */
-public class JavaToolchainAliasRule extends CommonAliasRule<JavaConfiguration> {
-  public JavaToolchainAliasRule() {
-    super("java_toolchain_alias", JavaSemantics::javaToolchainAttribute, JavaConfiguration.class);
+/** Implementation of the {@code java_runtime_alias} rule. */
+public class JavaRuntimeAliasRule extends CommonAliasRule<JavaConfiguration> {
+  public JavaRuntimeAliasRule() {
+    super("java_runtime_alias", JavaSemantics::jvmAttribute, JavaConfiguration.class);
+  }
+
+  @Override
+  protected Attribute.Builder<Label> makeAttribute(RuleDefinitionEnvironment environment) {
+    Attribute.Builder<Label> builder = super.makeAttribute(environment);
+    return builder.mandatoryProviders(JavaRuntimeInfo.PROVIDER.id());
   }
 }
