@@ -22,9 +22,6 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Maps;
-import com.google.common.hash.HashCode;
-import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.Marshaller.Context;
 import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.protobuf.GeneratedMessage;
@@ -35,10 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 
@@ -67,15 +61,30 @@ class Marshallers {
   }
 
   private Marshaller getMatchingMarshaller(DeclaredType type) {
-    return marshallers
-        .stream()
-        .filter(marshaller -> marshaller.matches(type))
-        .findFirst()
-        .orElseThrow(
-            () ->
-                new IllegalArgumentException(
-                    "No marshaller for: " + ((TypeElement) type.asElement()).getQualifiedName()));
+    return marshallers.stream().filter(marshaller -> marshaller.matches(type)).findFirst().get();
   }
+
+  private static final Marshaller CODEC_MARSHALLER =
+      new Marshaller() {
+        @Override
+        public boolean matches(DeclaredType type) {
+          // TODO(shahan): check for getCodec or CODEC.
+          // CODEC is the final fallback for all Marshallers so this returns true.
+          return true;
+        }
+
+        @Override
+        public void addSerializationCode(Context context) {
+          context.builder.addStatement(
+              "$T.CODEC.serialize($L, codedOut)", context.getTypeName(), context.name);
+        }
+
+        @Override
+        public void addDeserializationCode(Context context) {
+          context.builder.addStatement(
+              "$L = $T.CODEC.deserialize(codedIn)", context.name, context.getTypeName());
+        }
+      };
 
   private final Marshaller enumMarshaller =
       new Marshaller() {
@@ -422,26 +431,6 @@ class Marshallers {
         }
       };
 
-  /** Since we cannot add a codec to {@link HashCode}, it needs to be supported natively. */
-  private final Marshaller hashCodeMarshaller =
-      new Marshaller() {
-        @Override
-        public boolean matches(DeclaredType type) {
-          return matchesType(type, HashCode.class);
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          context.builder.addStatement("codedOut.writeByteArrayNoTag($L.asBytes())", context.name);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          context.builder.addStatement(
-              "$L = $T.fromBytes(codedIn.readByteArray())", context.name, HashCode.class);
-        }
-      };
-
   private final Marshaller protoMarshaller =
       new Marshaller() {
         @Override
@@ -461,39 +450,6 @@ class Marshallers {
         }
       };
 
-  private final Marshaller codecMarshaller =
-      new Marshaller() {
-        @Override
-        public boolean matches(DeclaredType type) {
-          return getCodec(type).isPresent();
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          context.builder.addStatement(
-              "$T.CODEC.serialize($L, codedOut)", context.getTypeName(), context.name);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          TypeMirror codecType = getCodec(context.type).get().asType();
-          if (isSubtypeErased(codecType, ObjectCodec.class)) {
-            context.builder.addStatement(
-                "$L = $T.CODEC.deserialize(codedIn)", context.name, context.getTypeName());
-          } else if (isSubtypeErased(codecType, InjectingObjectCodec.class)) {
-            context.builder.addStatement(
-                "$L = $T.CODEC.deserialize(dependency, codedIn)",
-                context.name,
-                context.getTypeName());
-          } else {
-            throw new IllegalArgumentException(
-                "CODEC field of "
-                    + ((TypeElement) context.type.asElement()).getQualifiedName()
-                    + " is neither ObjectCodec nor InjectingCodec");
-          }
-        }
-      };
-
   private final ImmutableList<Marshaller> marshallers =
       ImmutableList.of(
           enumMarshaller,
@@ -505,9 +461,8 @@ class Marshallers {
           mapMarshaller,
           multimapMarshaller,
           patternMarshaller,
-          hashCodeMarshaller,
           protoMarshaller,
-          codecMarshaller);
+          CODEC_MARSHALLER);
 
   /** True when {@code type} has the same type as {@code clazz}. */
   private boolean matchesType(TypeMirror type, Class<?> clazz) {
@@ -525,24 +480,8 @@ class Marshallers {
         .isSameType(env.getTypeUtils().erasure(type), env.getTypeUtils().erasure(getType(clazz)));
   }
 
-  /** True when erasure of {@code type} is a subtype of the erasure of {@code clazz}. */
-  private boolean isSubtypeErased(TypeMirror type, Class<?> clazz) {
-    return env.getTypeUtils()
-        .isSubtype(env.getTypeUtils().erasure(type), env.getTypeUtils().erasure(getType(clazz)));
-  }
-
   /** Returns the TypeMirror corresponding to {@code clazz}. */
   private TypeMirror getType(Class<?> clazz) {
     return env.getElementUtils().getTypeElement((clazz.getCanonicalName())).asType();
-  }
-
-  private static java.util.Optional<? extends Element> getCodec(DeclaredType type) {
-    return type.asElement()
-        .getEnclosedElements()
-        .stream()
-        .filter(t -> t.getModifiers().contains(Modifier.STATIC))
-        .filter(t -> t.getSimpleName().contentEquals("CODEC"))
-        .filter(t -> t.getKind() == ElementKind.FIELD)
-        .findAny();
   }
 }
