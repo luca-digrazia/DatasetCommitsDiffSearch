@@ -14,12 +14,11 @@
 package com.google.devtools.build.lib.vfs.inmemoryfs;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.testutil.TestThread;
-import com.google.devtools.build.lib.testutil.TestThread.TestRunnable;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
@@ -73,46 +72,48 @@ public class InMemoryFileSystemTest extends SymlinkAwareFileSystemTest {
     final AtomicInteger baseSelector = new AtomicInteger();
 
     // 1) Define the intended path structure.
-    TestRunnable pathCreator =
-        () -> {
-          Path base = testFS.getPath("/base" + baseSelector.getAndIncrement());
-          base.createDirectory();
+    class PathCreator extends TestThread {
+      @Override
+      public void runTest() throws Exception {
+        Path base = testFS.getPath("/base" + baseSelector.getAndIncrement());
+        base.createDirectory();
 
-          for (int i = 0; i < NUM_TO_WRITE; i++) {
-            Path subdir1 = base.getRelative("subdir1_" + i);
-            subdir1.createDirectory();
-            Path subdir2 = base.getRelative("subdir2_" + i);
-            subdir2.createDirectory();
+        for (int i = 0; i < NUM_TO_WRITE; i++) {
+          Path subdir1 = base.getRelative("subdir1_" + i);
+          subdir1.createDirectory();
+          Path subdir2 = base.getRelative("subdir2_" + i);
+          subdir2.createDirectory();
 
-            Path file = base.getRelative("somefile" + i);
-            writeToFile(file, TEST_FILE_DATA);
+          Path file = base.getRelative("somefile" + i);
+          writeToFile(file, TEST_FILE_DATA);
 
-            subdir1.setReadable(true);
-            subdir2.setReadable(false);
-            file.setReadable(true);
+          subdir1.setReadable(true);
+          subdir2.setReadable(false);
+          file.setReadable(true);
 
-            subdir1.setWritable(false);
-            subdir2.setWritable(true);
-            file.setWritable(false);
+          subdir1.setWritable(false);
+          subdir2.setWritable(true);
+          file.setWritable(false);
 
-            subdir1.setExecutable(false);
-            subdir2.setExecutable(true);
-            file.setExecutable(false);
+          subdir1.setExecutable(false);
+          subdir2.setExecutable(true);
+          file.setExecutable(false);
 
-            subdir1.setLastModifiedTime(100);
-            subdir2.setLastModifiedTime(200);
-            file.setLastModifiedTime(300);
+          subdir1.setLastModifiedTime(100);
+          subdir2.setLastModifiedTime(200);
+          file.setLastModifiedTime(300);
 
-            Path symlink = base.getRelative("symlink" + i);
-            symlink.createSymbolicLink(file);
-          }
-        };
+          Path symlink = base.getRelative("symlink" + i);
+          symlink.createSymbolicLink(file);
+        }
+      }
+    }
 
     // 2) Construct the tree.
     Collection<TestThread> threads =
         Lists.newArrayListWithCapacity(NUM_THREADS_FOR_CONCURRENCY_TESTS);
     for (int i = 0; i < NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
-      TestThread thread = new TestThread(pathCreator);
+      TestThread thread = new PathCreator();
       thread.start();
       threads.add(thread);
     }
@@ -121,55 +122,56 @@ public class InMemoryFileSystemTest extends SymlinkAwareFileSystemTest {
     }
 
     // 3) Define the validation logic.
-    TestRunnable pathValidator =
-        () -> {
-          Path base = testFS.getPath("/base" + baseSelector.getAndIncrement());
-          assertThat(base.exists()).isTrue();
-          assertThat(base.getRelative("notreal").exists()).isFalse();
+    class PathValidator extends TestThread {
+      @Override
+      public void runTest() throws Exception {
+        Path base = testFS.getPath("/base" + baseSelector.getAndIncrement());
+        assertThat(base.exists()).isTrue();
+        assertThat(base.getRelative("notreal").exists()).isFalse();
 
-          for (int i = 0; i < NUM_TO_WRITE; i++) {
-            Path subdir1 = base.getRelative("subdir1_" + i);
-            assertThat(subdir1.exists()).isTrue();
-            assertThat(subdir1.isDirectory()).isTrue();
-            assertThat(subdir1.isReadable()).isTrue();
-            assertThat(subdir1.isWritable()).isFalse();
-            assertThat(subdir1.isExecutable()).isFalse();
-            assertThat(subdir1.getLastModifiedTime()).isEqualTo(100);
+        for (int i = 0; i < NUM_TO_WRITE; i++) {
+          Path subdir1 = base.getRelative("subdir1_" + i);
+          assertThat(subdir1.exists()).isTrue();
+          assertThat(subdir1.isDirectory()).isTrue();
+          assertThat(subdir1.isReadable()).isTrue();
+          assertThat(subdir1.isWritable()).isFalse();
+          assertThat(subdir1.isExecutable()).isFalse();
+          assertThat(subdir1.getLastModifiedTime()).isEqualTo(100);
 
-            Path subdir2 = base.getRelative("subdir2_" + i);
-            assertThat(subdir2.exists()).isTrue();
-            assertThat(subdir2.isDirectory()).isTrue();
-            assertThat(subdir2.isReadable()).isFalse();
-            assertThat(subdir2.isWritable()).isTrue();
-            assertThat(subdir2.isExecutable()).isTrue();
-            assertThat(subdir2.getLastModifiedTime()).isEqualTo(200);
+          Path subdir2 = base.getRelative("subdir2_" + i);
+          assertThat(subdir2.exists()).isTrue();
+          assertThat(subdir2.isDirectory()).isTrue();
+          assertThat(subdir2.isReadable()).isFalse();
+          assertThat(subdir2.isWritable()).isTrue();
+          assertThat(subdir2.isExecutable()).isTrue();
+          assertThat(subdir2.getLastModifiedTime()).isEqualTo(200);
 
-            Path file = base.getRelative("somefile" + i);
-            assertThat(file.exists()).isTrue();
-            assertThat(file.isFile()).isTrue();
-            assertThat(file.isReadable()).isTrue();
-            assertThat(file.isWritable()).isFalse();
-            assertThat(file.isExecutable()).isFalse();
-            assertThat(file.getLastModifiedTime()).isEqualTo(300);
-            try (BufferedReader reader =
-                new BufferedReader(
-                    new InputStreamReader(file.getInputStream(), Charset.defaultCharset()))) {
-              assertThat(reader.readLine()).isEqualTo(TEST_FILE_DATA);
-              assertThat(reader.readLine()).isNull();
-            }
-
-            Path symlink = base.getRelative("symlink" + i);
-            assertThat(symlink.exists()).isTrue();
-            assertThat(symlink.isSymbolicLink()).isTrue();
-            assertThat(symlink.readSymbolicLink()).isEqualTo(file.asFragment());
+          Path file = base.getRelative("somefile" + i);
+          assertThat(file.exists()).isTrue();
+          assertThat(file.isFile()).isTrue();
+          assertThat(file.isReadable()).isTrue();
+          assertThat(file.isWritable()).isFalse();
+          assertThat(file.isExecutable()).isFalse();
+          assertThat(file.getLastModifiedTime()).isEqualTo(300);
+          try (BufferedReader reader = new BufferedReader(
+              new InputStreamReader(file.getInputStream(), Charset.defaultCharset()))) {
+            assertThat(reader.readLine()).isEqualTo(TEST_FILE_DATA);
+            assertThat(reader.readLine()).isNull();
           }
-        };
+
+          Path symlink = base.getRelative("symlink" + i);
+          assertThat(symlink.exists()).isTrue();
+          assertThat(symlink.isSymbolicLink()).isTrue();
+          assertThat(symlink.readSymbolicLink()).isEqualTo(file.asFragment());
+        }
+      }
+    }
 
     // 4) Validate the results.
     baseSelector.set(0);
     threads = Lists.newArrayListWithCapacity(NUM_THREADS_FOR_CONCURRENCY_TESTS);
     for (int i = 0; i < NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
-      TestThread thread = new TestThread(pathValidator);
+      TestThread thread = new PathValidator();
       thread.start();
       threads.add(thread);
     }
@@ -187,29 +189,31 @@ public class InMemoryFileSystemTest extends SymlinkAwareFileSystemTest {
     final AtomicInteger baseSelector = new AtomicInteger();
 
     // 1) Define the intended path structure.
-    TestRunnable pathCreator =
-        () -> {
-          final int threadId = baseSelector.getAndIncrement();
-          Path base = testFS.getPath("/common_dir");
-          base.createDirectory();
+    class PathCreator extends TestThread {
+      @Override
+      public void runTest() throws Exception {
+        final int threadId = baseSelector.getAndIncrement();
+        Path base = testFS.getPath("/common_dir");
+        base.createDirectory();
 
-          for (int i = 0; i < NUM_TO_WRITE; i++) {
-            Path file = base.getRelative("somefile_" + threadId + "_" + i);
-            writeToFile(file, TEST_FILE_DATA);
-            file.setReadable(i % 2 == 0);
-            file.setWritable(i % 3 == 0);
-            file.setExecutable(i % 4 == 0);
-            file.setLastModifiedTime(i);
-            Path symlink = base.getRelative("symlink_" + threadId + "_" + i);
-            symlink.createSymbolicLink(file);
-          }
-        };
+        for (int i = 0; i < NUM_TO_WRITE; i++) {
+          Path file = base.getRelative("somefile_" + threadId + "_" + i);
+          writeToFile(file, TEST_FILE_DATA);
+          file.setReadable(i % 2 == 0);
+          file.setWritable(i % 3 == 0);
+          file.setExecutable(i % 4 == 0);
+          file.setLastModifiedTime(i);
+          Path symlink = base.getRelative("symlink_" + threadId + "_" + i);
+          symlink.createSymbolicLink(file);
+        }
+      }
+    }
 
     // 2) Create the files.
     Collection<TestThread> threads =
         Lists.newArrayListWithCapacity(NUM_THREADS_FOR_CONCURRENCY_TESTS);
     for (int i = 0; i < NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
-      TestThread thread = new TestThread(pathCreator);
+      TestThread thread = new PathCreator();
       thread.start();
       threads.add(thread);
     }
@@ -218,41 +222,42 @@ public class InMemoryFileSystemTest extends SymlinkAwareFileSystemTest {
     }
 
     // 3) Define the validation logic.
-    TestRunnable pathValidator =
-        () -> {
-          final int threadId = baseSelector.getAndIncrement();
-          Path base = testFS.getPath("/common_dir");
-          assertThat(base.exists()).isTrue();
+    class PathValidator extends TestThread {
+      @Override
+      public void runTest() throws Exception {
+        final int threadId = baseSelector.getAndIncrement();
+        Path base = testFS.getPath("/common_dir");
+        assertThat(base.exists()).isTrue();
 
-          for (int i = 0; i < NUM_TO_WRITE; i++) {
-            Path file = base.getRelative("somefile_" + threadId + "_" + i);
-            assertThat(file.exists()).isTrue();
-            assertThat(file.isFile()).isTrue();
-            assertThat(file.isReadable()).isEqualTo(i % 2 == 0);
-            assertThat(file.isWritable()).isEqualTo(i % 3 == 0);
-            assertThat(file.isExecutable()).isEqualTo(i % 4 == 0);
-            assertThat(file.getLastModifiedTime()).isEqualTo(i);
-            if (file.isReadable()) {
-              try (BufferedReader reader =
-                  new BufferedReader(
-                      new InputStreamReader(file.getInputStream(), Charset.defaultCharset()))) {
-                assertThat(reader.readLine()).isEqualTo(TEST_FILE_DATA);
-                assertThat(reader.readLine()).isNull();
-              }
+        for (int i = 0; i < NUM_TO_WRITE; i++) {
+          Path file = base.getRelative("somefile_" + threadId + "_" + i);
+          assertThat(file.exists()).isTrue();
+          assertThat(file.isFile()).isTrue();
+          assertThat(file.isReadable()).isEqualTo(i % 2 == 0);
+          assertThat(file.isWritable()).isEqualTo(i % 3 == 0);
+          assertThat(file.isExecutable()).isEqualTo(i % 4 == 0);
+          assertThat(file.getLastModifiedTime()).isEqualTo(i);
+          if (file.isReadable()) {
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(file.getInputStream(), Charset.defaultCharset()))) {
+              assertThat(reader.readLine()).isEqualTo(TEST_FILE_DATA);
+              assertThat(reader.readLine()).isNull();
             }
-
-            Path symlink = base.getRelative("symlink_" + threadId + "_" + i);
-            assertThat(symlink.exists()).isTrue();
-            assertThat(symlink.isSymbolicLink()).isTrue();
-            assertThat(symlink.readSymbolicLink()).isEqualTo(file.asFragment());
           }
-        };
+
+          Path symlink = base.getRelative("symlink_" + threadId + "_" + i);
+          assertThat(symlink.exists()).isTrue();
+          assertThat(symlink.isSymbolicLink()).isTrue();
+          assertThat(symlink.readSymbolicLink()).isEqualTo(file.asFragment());
+        }
+      }
+    }
 
     // 4) Validate the results.
     baseSelector.set(0);
     threads = Lists.newArrayListWithCapacity(NUM_THREADS_FOR_CONCURRENCY_TESTS);
     for (int i = 0; i < NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
-      TestThread thread = new TestThread(pathValidator);
+      TestThread thread = new PathValidator();
       thread.start();
       threads.add(thread);
     }
@@ -278,26 +283,28 @@ public class InMemoryFileSystemTest extends SymlinkAwareFileSystemTest {
     }
 
     // 2) Define our deletion strategy.
-    TestRunnable fileDeleter =
-        () -> {
-          for (int i = 0; i < NUM_TO_WRITE / NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
-            int whichFile = baseSelector.getAndIncrement();
-            Path file = base.getRelative("file" + whichFile);
-            if (whichFile % 25 != 0) {
-              assertThat(file.delete()).isTrue();
-            } else {
-              // Throw another concurrent access point into the mix.
-              file.setExecutable(whichFile % 2 == 0);
-            }
-            assertThat(base.getRelative("doesnotexist" + whichFile).delete()).isFalse();
+    class FileDeleter extends TestThread {
+      @Override
+      public void runTest() throws Exception {
+        for (int i = 0; i < NUM_TO_WRITE / NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
+          int whichFile = baseSelector.getAndIncrement();
+          Path file = base.getRelative("file" + whichFile);
+          if (whichFile % 25 != 0) {
+            assertThat(file.delete()).isTrue();
+          } else {
+            // Throw another concurrent access point into the mix.
+            file.setExecutable(whichFile % 2 == 0);
           }
-        };
+          assertThat(base.getRelative("doesnotexist" + whichFile).delete()).isFalse();
+        }
+      }
+    }
 
     // 3) Delete some files.
     Collection<TestThread> threads =
         Lists.newArrayListWithCapacity(NUM_THREADS_FOR_CONCURRENCY_TESTS);
     for (int i = 0; i < NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
-      TestThread thread = new TestThread(fileDeleter);
+      TestThread thread = new FileDeleter();
       thread.start();
       threads.add(thread);
     }
@@ -334,27 +341,29 @@ public class InMemoryFileSystemTest extends SymlinkAwareFileSystemTest {
     }
 
     // 2) Define our renaming strategy.
-    TestRunnable fileDeleter =
-        () -> {
-          for (int i = 0; i < NUM_TO_WRITE / NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
-            int whichFile = baseSelector.getAndIncrement();
-            Path file = base.getRelative("file" + whichFile);
-            if (whichFile % 25 != 0) {
-              Path newName = base.getRelative("newname" + whichFile);
-              file.renameTo(newName);
-            } else {
-              // Throw another concurrent access point into the mix.
-              file.setExecutable(whichFile % 2 == 0);
-            }
-            assertThat(base.getRelative("doesnotexist" + whichFile).delete()).isFalse();
+    class FileDeleter extends TestThread {
+      @Override
+      public void runTest() throws Exception {
+        for (int i = 0; i < NUM_TO_WRITE / NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
+          int whichFile = baseSelector.getAndIncrement();
+          Path file = base.getRelative("file" + whichFile);
+          if (whichFile % 25 != 0) {
+            Path newName = base.getRelative("newname" + whichFile);
+            file.renameTo(newName);
+          } else {
+            // Throw another concurrent access point into the mix.
+            file.setExecutable(whichFile % 2 == 0);
           }
-        };
+          assertThat(base.getRelative("doesnotexist" + whichFile).delete()).isFalse();
+        }
+      }
+    }
 
     // 3) Rename some files.
     Collection<TestThread> threads =
         Lists.newArrayListWithCapacity(NUM_THREADS_FOR_CONCURRENCY_TESTS);
     for (int i = 0; i < NUM_THREADS_FOR_CONCURRENCY_TESTS; i++) {
-      TestThread thread = new TestThread(fileDeleter);
+      TestThread thread = new FileDeleter();
       thread.start();
       threads.add(thread);
     }
@@ -385,8 +394,12 @@ public class InMemoryFileSystemTest extends SymlinkAwareFileSystemTest {
     Path b = testFS.getPath(bName);
     a.createSymbolicLink(PathFragment.create(bName));
     b.createSymbolicLink(PathFragment.create(aName));
-    IOException e = assertThrows(IOException.class, () -> a.stat());
-    assertThat(e).hasMessageThat().isEqualTo(aName + " (Too many levels of symbolic links)");
+    try {
+      a.stat();
+      fail("Expected IOException");
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().isEqualTo(aName + " (Too many levels of symbolic links)");
+    }
   }
 
   @Test
@@ -396,7 +409,11 @@ public class InMemoryFileSystemTest extends SymlinkAwareFileSystemTest {
 
     Path a = testFS.getPath(aName);
     a.createSymbolicLink(PathFragment.create(aName));
-    IOException e = assertThrows(IOException.class, () -> a.stat());
-    assertThat(e).hasMessageThat().isEqualTo(aName + " (Too many levels of symbolic links)");
+    try {
+      a.stat();
+      fail("Expected IOException");
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().isEqualTo(aName + " (Too many levels of symbolic links)");
+    }
   }
 }

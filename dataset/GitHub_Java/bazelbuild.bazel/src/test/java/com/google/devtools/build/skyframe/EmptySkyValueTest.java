@@ -14,7 +14,7 @@
 package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -31,10 +31,12 @@ public class EmptySkyValueTest {
   public void testNotSerializable() throws IOException {
     ObjectOutputStream objOut = new ObjectOutputStream(new ByteArrayOutputStream());
 
-    UnsupportedOperationException e =
-        assertThrows(
-            UnsupportedOperationException.class, () -> objOut.writeObject(EmptySkyValue.INSTANCE));
-    assertThat(e).hasMessageThat().isEqualTo("Java serialization not supported");
+    try {
+      objOut.writeObject(EmptySkyValue.INSTANCE);
+      fail("Expected exception");
+    } catch (UnsupportedOperationException e) {
+      assertThat(e).hasMessageThat().isEqualTo("Java serialization not supported");
+    }
   }
 
 }

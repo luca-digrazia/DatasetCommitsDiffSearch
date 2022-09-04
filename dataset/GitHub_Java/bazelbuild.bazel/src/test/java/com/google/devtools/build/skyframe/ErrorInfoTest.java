@@ -14,7 +14,6 @@
 package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -57,8 +56,8 @@ public class ErrorInfoTest {
         isTransitivelyTransient);
 
     assertThat(errorInfo.getRootCauses()).containsExactly(causeOfException);
-    assertThat(errorInfo.getException()).isSameInstanceAs(exception);
-    assertThat(errorInfo.getRootCauseOfException()).isSameInstanceAs(causeOfException);
+    assertThat(errorInfo.getException()).isSameAs(exception);
+    assertThat(errorInfo.getRootCauseOfException()).isSameAs(causeOfException);
     assertThat(errorInfo.getCycleInfo()).isEmpty();
     assertThat(errorInfo.isDirectlyTransient()).isEqualTo(isDirectlyTransient);
     assertThat(errorInfo.isTransitivelyTransient()).isEqualTo(
@@ -137,8 +136,8 @@ public class ErrorInfoTest {
     // For simplicity we test the current implementation detail that we choose the first non-null
     // (exception, cause) pair that we encounter. This isn't necessarily a requirement of the
     // interface, but it makes the test convenient and is a way to document the current behavior.
-    assertThat(errorInfo.getException()).isSameInstanceAs(exception1);
-    assertThat(errorInfo.getRootCauseOfException()).isSameInstanceAs(causeOfException1);
+    assertThat(errorInfo.getException()).isSameAs(exception1);
+    assertThat(errorInfo.getRootCauseOfException()).isSameAs(causeOfException1);
 
     assertThat(errorInfo.getCycleInfo()).containsExactly(
         new CycleInfo(
@@ -150,41 +149,39 @@ public class ErrorInfoTest {
 
   @Test
   public void testCannotCreateErrorInfoWithoutExceptionOrCycle() {
-    // Brittle, but confirms we failed for the right reason.
-    IllegalStateException e =
-        assertThrows(
-            IllegalStateException.class,
-            () ->
-                new ErrorInfo(
-                    NestedSetBuilder.<SkyKey>emptySet(Order.COMPILE_ORDER),
-                    /*exception=*/ null,
-                    /*rootCauseOfException=*/ null,
-                    ImmutableList.<CycleInfo>of(),
-                    false,
-                    false,
-                    false));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo("At least one of exception and cycles must be non-null/empty, respectively");
+    try {
+      new ErrorInfo(
+          NestedSetBuilder.<SkyKey>emptySet(Order.COMPILE_ORDER),
+          /*exception=*/ null,
+          /*rootCauseOfException=*/ null,
+          ImmutableList.<CycleInfo>of(),
+          false,
+          false,
+          false);
+    } catch (IllegalStateException e) {
+      // Brittle, but confirms we failed for the right reason.
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo("At least one of exception and cycles must be non-null/empty, respectively");
+    }
   }
 
   @Test
   public void testCannotCreateErrorInfoWithExceptionButNoRootCause() {
-    // Brittle, but confirms we failed for the right reason.
-    IllegalStateException e =
-        assertThrows(
-            IllegalStateException.class,
-            () ->
-                new ErrorInfo(
-                    NestedSetBuilder.<SkyKey>emptySet(Order.COMPILE_ORDER),
-                    new IOException("foo"),
-                    /*rootCauseOfException=*/ null,
-                    ImmutableList.<CycleInfo>of(),
-                    false,
-                    false,
-                    false));
-    assertThat(e)
-        .hasMessageThat()
-        .startsWith("exception and rootCauseOfException must both be null or non-null");
+    try {
+      new ErrorInfo(
+          NestedSetBuilder.<SkyKey>emptySet(Order.COMPILE_ORDER),
+          new IOException("foo"),
+          /*rootCauseOfException=*/ null,
+          ImmutableList.<CycleInfo>of(),
+          false,
+          false,
+          false);
+    } catch (IllegalStateException e) {
+      // Brittle, but confirms we failed for the right reason.
+      assertThat(e)
+          .hasMessageThat()
+          .startsWith("exception and rootCauseOfException must both be null or non-null");
+    }
   }
 }
