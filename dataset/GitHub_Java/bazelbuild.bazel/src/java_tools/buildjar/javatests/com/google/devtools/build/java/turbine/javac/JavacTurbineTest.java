@@ -341,7 +341,9 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJars(ImmutableList.of(libA.toString(), libB.toString()));
+    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
+    optionsBuilder.addDirectJarToTarget(libB.toString(), "//lib:b");
+    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -480,7 +482,10 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString(), libD.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJars(ImmutableList.of(libA.toString()));
+    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
+    optionsBuilder.addIndirectJarToTarget(libB.toString(), "//lib:b");
+    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
+    optionsBuilder.addIndirectJarToTarget(libD.toString(), "//lib:d");
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -571,7 +576,10 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString(), libD.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJars(ImmutableList.of(libA.toString()));
+    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
+    optionsBuilder.addIndirectJarToTarget(libB.toString(), "//lib:b");
+    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
+    optionsBuilder.addIndirectJarToTarget(libD.toString(), "//lib:d");
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -1062,7 +1070,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
         "}");
 
     optionsBuilder.addClassPathEntries(Collections.singleton(deps.toString()));
-    optionsBuilder.addDirectJars(ImmutableList.of(deps.toString()));
+    optionsBuilder.addDirectJarToTarget(deps.toString(), "//deps");
 
     compile();
     Map<String, byte[]> outputs = collectOutputs();
@@ -1084,6 +1092,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     addSourceLines(
         "Hello.java", "import " + Lib.class.getCanonicalName() + ";", "class Hello extends Lib {}");
 
+    optionsBuilder.addIndirectJarToTarget(lib.toString(), "//lib");
     optionsBuilder.addClassPathEntries(ImmutableList.of(lib.toString()));
 
     optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
