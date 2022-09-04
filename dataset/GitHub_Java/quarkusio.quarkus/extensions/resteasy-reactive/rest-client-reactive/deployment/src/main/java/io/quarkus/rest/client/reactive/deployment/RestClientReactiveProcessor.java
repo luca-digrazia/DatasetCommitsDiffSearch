@@ -58,9 +58,6 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ConfigurationTypeBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.util.AsmUtil;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
@@ -68,7 +65,6 @@ import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.jaxrs.client.reactive.deployment.JaxrsClientReactiveEnricherBuildItem;
 import io.quarkus.jaxrs.client.reactive.deployment.RestClientDefaultConsumesBuildItem;
 import io.quarkus.jaxrs.client.reactive.deployment.RestClientDefaultProducesBuildItem;
-import io.quarkus.jaxrs.client.reactive.deployment.RestClientDisableSmartDefaultProduces;
 import io.quarkus.rest.client.reactive.runtime.AnnotationRegisteredProviders;
 import io.quarkus.rest.client.reactive.runtime.HeaderCapturingServerFilter;
 import io.quarkus.rest.client.reactive.runtime.HeaderContainer;
@@ -102,28 +98,9 @@ class RestClientReactiveProcessor {
 
     @BuildStep
     void setUpDefaultMediaType(BuildProducer<RestClientDefaultConsumesBuildItem> consumes,
-            BuildProducer<RestClientDefaultProducesBuildItem> produces,
-            BuildProducer<RestClientDisableSmartDefaultProduces> disableSmartProduces,
-            RestClientReactiveConfig config) {
+            BuildProducer<RestClientDefaultProducesBuildItem> produces) {
         consumes.produce(new RestClientDefaultConsumesBuildItem(MediaType.APPLICATION_JSON, 10));
         produces.produce(new RestClientDefaultProducesBuildItem(MediaType.APPLICATION_JSON, 10));
-        if (config.disableSmartProduces) {
-            disableSmartProduces.produce(new RestClientDisableSmartDefaultProduces());
-        }
-    }
-
-    @BuildStep
-    void registerRestClientListenerForTracing(
-            Capabilities capabilities,
-            BuildProducer<NativeImageResourceBuildItem> resource,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
-        if (capabilities.isPresent(Capability.SMALLRYE_OPENTRACING)) {
-            resource.produce(new NativeImageResourceBuildItem(
-                    "META-INF/services/org.eclipse.microprofile.rest.client.spi.RestClientListener"));
-            reflectiveClass
-                    .produce(new ReflectiveClassBuildItem(true, false, false,
-                            "io.smallrye.opentracing.SmallRyeRestClientListener"));
-        }
     }
 
     @BuildStep
@@ -324,14 +301,21 @@ class RestClientReactiveProcessor {
                         //      return ((InterfaceClass)this.getDelegate()).get();
                         // }
                         MethodCreator methodCreator = classCreator.getMethodCreator(MethodDescriptor.of(method));
-                        methodCreator.setSignature(AsmUtil.getSignatureIfRequired(method));
 
                         // copy method annotations, there can be interceptors bound to them:
                         for (AnnotationInstance annotation : method.annotations()) {
                             if (annotation.target().kind() == AnnotationTarget.Kind.METHOD
                                     && !BUILTIN_HTTP_ANNOTATIONS_TO_METHOD.containsKey(annotation.name())
                                     && !ResteasyReactiveDotNames.PATH.equals(annotation.name())) {
-                                methodCreator.addAnnotation(annotation);
+                                AnnotationValue value = annotation.value();
+                                if (value != null && value.kind() == AnnotationValue.Kind.ARRAY
+                                        && value.componentKind() == AnnotationValue.Kind.NESTED) {
+                                    for (AnnotationInstance annotationInstance : value.asNestedArray()) {
+                                        methodCreator.addAnnotation(annotationInstance);
+                                    }
+                                } else {
+                                    methodCreator.addAnnotation(annotation);
+                                }
                             }
                         }
 
