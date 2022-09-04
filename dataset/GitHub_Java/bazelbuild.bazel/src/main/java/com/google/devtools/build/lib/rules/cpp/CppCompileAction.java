@@ -1221,7 +1221,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    * Extracts all module (.pcm) files from potentialModules and returns a Variables object where
    * their exec paths are added to the value "module_files".
    */
-  public static CcToolchainVariables getOverwrittenVariables(NestedSet<Artifact> potentialModules) {
+  private static CcToolchainVariables getOverwrittenVariables(
+      NestedSet<Artifact> potentialModules) {
     ImmutableList.Builder<String> usedModulePaths = ImmutableList.builder();
     for (Artifact input : potentialModules.toList()) {
       if (input.isFileType(CppFileTypes.CPP_MODULE)) {
@@ -1232,6 +1233,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     variableBuilder.addStringSequenceVariable(
         CompileBuildVariables.MODULE_FILES.getVariableName(), usedModulePaths.build());
     return variableBuilder.build();
+  }
+
+  public CcToolchainVariables getOverwrittenVariables() {
+    return overwrittenVariables;
   }
 
   @Override
