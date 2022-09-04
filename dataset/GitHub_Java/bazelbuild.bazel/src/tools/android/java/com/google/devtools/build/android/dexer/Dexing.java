@@ -118,16 +118,6 @@ class Dexing {
     )
     public boolean printWarnings;
 
-    @Option(
-        name = "min_sdk_version",
-        defaultValue = "13", // dx's default is DexFormat.API_NO_EXTENDED_OPCODES = 13
-        category = "misc",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        allowMultiple = false,
-        help = "Min sdk version.")
-    public int minSdkVersion;
-
     public CfOptions toCfOptions(DxContext context) {
       CfOptions result = new CfOptions();
       result.localInfo = this.localInfo;
@@ -145,7 +135,6 @@ class Dexing {
     public DexOptions toDexOptions() {
       DexOptions result = new DexOptions();
       result.forceJumbo = false; // dx's default
-      result.minSdkVersion = minSdkVersion;
       return result;
     }
   }
@@ -155,17 +144,10 @@ class Dexing {
    */
   @AutoValue
   abstract static class DexingKey {
-
     static DexingKey create(
-        boolean localInfo,
-        boolean optimize,
-        int positionInfo,
-        int minSdkVersion,
-        byte[] classfileContent) {
-
+        boolean localInfo, boolean optimize, int positionInfo, byte[] classfileContent) {
       // TODO(bazel-team): Maybe we can use a minimal collision hash instead of full content
-      return new AutoValue_Dexing_DexingKey(
-          localInfo, optimize, positionInfo, minSdkVersion, classfileContent);
+      return new AutoValue_Dexing_DexingKey(localInfo, optimize, positionInfo, classfileContent);
     }
 
     /** Returns whether {@link CfOptions#localInfo local variable information} is included. */
@@ -176,9 +158,6 @@ class Dexing {
 
     /** Returns how much line number information is emitted as a {@link PositionList} constant. */
     abstract int positionInfo();
-
-    /** Returns the min sdk version that the dex code was created for. */
-    abstract int minSdkVersion();
 
     /** Returns the class file to dex, <b>not</b> the dexed class. Don't modify the return value! */
     @SuppressWarnings("mutable") abstract byte[] classfileContent();
@@ -229,10 +208,6 @@ class Dexing {
 
   public DexingKey getDexingKey(byte[] classfile) {
     return DexingKey.create(
-        cfOptions.localInfo,
-        cfOptions.optimize,
-        cfOptions.positionInfo,
-        dexOptions.minSdkVersion,
-        classfile);
+        cfOptions.localInfo, cfOptions.optimize, cfOptions.positionInfo, classfile);
   }
 }

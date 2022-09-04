@@ -132,7 +132,7 @@ public class DexConversionEnqueuerTest {
     assertThat(f.isDone()).isTrue();
     assertThat(f.get().getEntry().getName()).isEqualTo(filename + ".dex");
     assertThat(f.get().getEntry().getTime()).isEqualTo(FILE_TIME);
-    assertThat(f.get().getContent()).isSameInstanceAs(dexcode);
+    assertThat(f.get().getContent()).isSameAs(dexcode);
   }
 
   private byte[] testConvertClassToDex() throws Exception {
@@ -151,7 +151,7 @@ public class DexConversionEnqueuerTest {
     Dex dex = new Dex(dexcode);
     assertThat(dex.classDefs()).hasSize(1);
     assertThat(cache.getIfPresent(DexingKey.create(false, false, PositionList.LINES, bytecode)))
-        .isSameInstanceAs(dexcode);
+        .isSameAs(dexcode);
     assertThat(cache.getIfPresent(DexingKey.create(false, false, PositionList.NONE, bytecode)))
         .isNull();
     assertThat(cache.getIfPresent(DexingKey.create(true, false, PositionList.LINES, bytecode)))
