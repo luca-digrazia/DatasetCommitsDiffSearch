@@ -89,17 +89,11 @@ public class HibernateOrmConfig {
      * Pluggable strategy contract for applying physical naming rules for database object names.
      *
      * Class name of the Hibernate PhysicalNamingStrategy implementation
+     *
+     * @asciidoclet
      */
     @ConfigItem
     Optional<String> physicalNamingStrategy;
-
-    /**
-     * Pluggable strategy for applying implicit naming rules when an explicit name is not given.
-     *
-     * Class name of the Hibernate ImplicitNamingStrategy implementation
-     */
-    @ConfigItem
-    Optional<String> implicitNamingStrategy;
 
     /**
      * Query related configuration.
@@ -136,35 +130,17 @@ public class HibernateOrmConfig {
     public Map<String, HibernateOrmConfigCache> cache;
 
     /**
-     * Whether statistics collection is enabled. If 'metrics.enabled' is true, then the default here is
-     * considered true, otherwise the default is false.
+     * Whether statistics collection is enabled.
      */
-    @ConfigItem
-    public Optional<Boolean> statistics;
-
-    /**
-     * Whether or not metrics are published in case the smallrye-metrics extension is present (default to false).
-     */
-    @ConfigItem(name = "metrics.enabled", defaultValue = "false")
-    public boolean metricsEnabled;
-
-    /**
-     * The default in Quarkus is for 2nd level caching to be enabled,
-     * and a good implementation is already integrated for you.
-     * <p>
-     * Just cherry-pick which entities should be using the cache.
-     * <p>
-     * Set this to false to disable all 2nd level caches.
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean secondLevelCachingEnabled;
+    @ConfigItem(defaultValue = "false")
+    public boolean statistics;
 
     public boolean isAnyPropertySet() {
         return dialect.isPresent() ||
                 dialectStorageEngine.isPresent() ||
                 sqlLoadScript.isPresent() ||
                 batchFetchSize > 0 ||
-                statistics.isPresent() ||
+                statistics ||
                 query.isAnyPropertySet() ||
                 database.isAnyPropertySet() ||
                 jdbc.isAnyPropertySet() ||
@@ -233,17 +209,10 @@ public class HibernateOrmConfig {
         @ConfigItem
         public Optional<String> charset;
 
-        /**
-         * Whether Hibernate should quote all identifiers.
-         */
-        @ConfigItem(defaultValue = "false")
-        public boolean globallyQuotedIdentifiers;
-
         public boolean isAnyPropertySet() {
             return !"none".equals(generation) || defaultCatalog.isPresent() || defaultSchema.isPresent()
                     || generationHaltOnError
-                    || charset.isPresent()
-                    || globallyQuotedIdentifiers;
+                    || charset.isPresent();
         }
     }
 
