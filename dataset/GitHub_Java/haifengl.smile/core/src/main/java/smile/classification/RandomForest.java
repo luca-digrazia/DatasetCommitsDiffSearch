@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
 import smile.data.NumericAttribute;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.util.MulticoreExecutor;
 import smile.util.SmileUtils;
 import smile.validation.Accuracy;
@@ -339,7 +339,7 @@ public class RandomForest implements SoftClassifier<double[]> {
         @Override
         public Tree call() {
             int n = x.length;
-            int k = MathEx.max(y) + 1;
+            int k = smile.math.Math.max(y) + 1;
             int[] samples = new int[n];
 
             // Stratified sampling in case class is unbalanced.
@@ -360,7 +360,7 @@ public class RandomForest implements SoftClassifier<double[]> {
                     // But we switch to down sampling, which seems has better performance.
                     int size = nj / classWeight[l];
                     for (int i = 0; i < size; i++) {
-                        int xi = MathEx.randomInt(nj);
+                        int xi = Math.randomInt(nj);
                         samples[cj.get(xi)] += 1; //classWeight[l];
                     }
                 }
@@ -371,7 +371,7 @@ public class RandomForest implements SoftClassifier<double[]> {
                     perm[i] = i;
                 }
 
-                MathEx.permutate(perm);
+                Math.permutate(perm);
 
                 int[] nc = new int[k];
                 for (int i = 0; i < n; i++) {
@@ -629,7 +629,7 @@ public class RandomForest implements SoftClassifier<double[]> {
         }
 
         // class label set.
-        int[] labels = MathEx.unique(y);
+        int[] labels = Math.unique(y);
         Arrays.sort(labels);
         
         for (int i = 0; i < labels.length; i++) {
@@ -681,7 +681,7 @@ public class RandomForest implements SoftClassifier<double[]> {
         
         int m = 0;
         for (int i = 0; i < n; i++) {
-            int pred = MathEx.whichMax(prediction[i]);
+            int pred = Math.whichMax(prediction[i]);
             if (prediction[i][pred] > 0) {
                 m++;
                 if (pred != y[i]) {
@@ -770,7 +770,7 @@ public class RandomForest implements SoftClassifier<double[]> {
             y[tree.tree.predict(x)]++;
         }
         
-        return MathEx.whichMax(y);
+        return Math.whichMax(y);
     }
     
     @Override
@@ -790,8 +790,8 @@ public class RandomForest implements SoftClassifier<double[]> {
             }
         }
 
-        MathEx.unitize1(posteriori);
-        return MathEx.whichMax(y);
+        Math.unitize1(posteriori);
+        return Math.whichMax(y);
     }    
     
     /**
@@ -814,7 +814,7 @@ public class RandomForest implements SoftClassifier<double[]> {
         for (int i = 0; i < T; i++) {
             for (int j = 0; j < n; j++) {
                 prediction[j][trees.get(i).tree.predict(x[j])]++;
-                label[j] = MathEx.whichMax(prediction[j]);
+                label[j] = Math.whichMax(prediction[j]);
             }
 
             accuracy[i] = measure.measure(y, label);
@@ -843,7 +843,7 @@ public class RandomForest implements SoftClassifier<double[]> {
         for (int i = 0; i < T; i++) {
             for (int j = 0; j < n; j++) {
                 prediction[j][trees.get(i).tree.predict(x[j])]++;
-                label[j] = MathEx.whichMax(prediction[j]);
+                label[j] = Math.whichMax(prediction[j]);
             }
 
             for (int j = 0; j < m; j++) {
