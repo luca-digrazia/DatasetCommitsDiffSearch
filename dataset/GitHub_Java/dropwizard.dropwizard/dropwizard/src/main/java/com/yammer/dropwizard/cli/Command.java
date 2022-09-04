@@ -1,6 +1,5 @@
 package com.yammer.dropwizard.cli;
 
-import com.google.common.base.Optional;
 import com.yammer.dropwizard.AbstractService;
 import com.yammer.dropwizard.util.JarLocation;
 import org.apache.commons.cli.*;
@@ -108,17 +107,9 @@ public abstract class Command {
                           String[] arguments) throws Exception {
         final CommandLine cmdLine = new GnuParser().parse(getOptionsWithHelp(), checkNotNull(arguments));
         if (cmdLine.hasOption("help")) {
-            printHelp();
+            UsagePrinter.printCommandHelp(this);
         } else {
             run(checkNotNull(service), cmdLine);
         }
-    }
-
-    protected final void printHelp() {
-        UsagePrinter.printCommandHelp(this);
-    }
-
-    protected final void printHelp(String message) {
-        UsagePrinter.printCommandHelp(this, Optional.fromNullable(message));
     }
 }
