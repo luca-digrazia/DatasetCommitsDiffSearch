@@ -81,7 +81,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
@@ -303,7 +302,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     // We'll set the name later, pass the empty string for now.
     RuleClass.Builder builder = new RuleClass.Builder("", type, true, parent);
     ImmutableList<Pair<String, SkylarkAttr.Descriptor>> attributes =
-        attrObjectToAttributesList(attrs, ast.getLocation(), funcallEnv);
+        attrObjectToAttributesList(attrs, ast);
 
     if (skylarkTestable) {
       builder.setSkylarkTestable();
@@ -409,20 +408,8 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     return new SkylarkRuleFunction(builder, type, attributes, ast.getLocation());
   }
 
-  private static void checkAttributeName(Location loc, Environment env, String name)
-      throws EvalException {
-    if (env.getSemantics().incompatibleRestrictAttributeNames() && !Identifier.isValid(name)) {
-      throw new EvalException(
-          loc,
-          "attribute name `"
-              + name
-              + "` is not a valid identfier. "
-              + "This check can be disabled with `--incompatible_restrict_attribute_names=false`.");
-    }
-  }
-
-  private static ImmutableList<Pair<String, Descriptor>> attrObjectToAttributesList(
-      Object attrs, Location loc, Environment env) throws EvalException {
+  protected static ImmutableList<Pair<String, Descriptor>> attrObjectToAttributesList(
+      Object attrs, FuncallExpression ast) throws EvalException {
     ImmutableList.Builder<Pair<String, Descriptor>> attributes = ImmutableList.builder();
 
     if (attrs != Runtime.NONE) {
@@ -430,8 +417,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
           castMap(attrs, String.class, Descriptor.class, "attrs").entrySet()) {
         Descriptor attrDescriptor = attr.getValue();
         AttributeValueSource source = attrDescriptor.getValueSource();
-        checkAttributeName(loc, env, attr.getKey());
-        String attrName = source.convertToNativeName(attr.getKey(), loc);
+        String attrName = source.convertToNativeName(attr.getKey(), ast.getLocation());
         attributes.add(Pair.of(attrName, attrDescriptor));
       }
     }
@@ -516,7 +502,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     }
 
     ImmutableList<Pair<String, SkylarkAttr.Descriptor>> descriptors =
-        attrObjectToAttributesList(attrs, ast.getLocation(), funcallEnv);
+        attrObjectToAttributesList(attrs, ast);
     ImmutableList.Builder<Attribute> attributes = ImmutableList.builder();
     ImmutableSet.Builder<String> requiredParams = ImmutableSet.builder();
     for (Pair<String, Descriptor> nameDescriptorPair : descriptors) {
@@ -717,20 +703,11 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
             throw new EvalException(
                 location, "_whitelist_function_transition attribute must have a default value");
           }
-          Label defaultLabel = (Label) attr.getDefaultValueUnchecked();
-          // Check the label value for package and target name, to make sure this works properly
-          // in Bazel where it is expected to be found under @bazel_tools.
-          if (!defaultLabel
-                  .getPackageName()
-                  .equals(FunctionSplitTransitionWhitelist.WHITELIST_LABEL.getPackageName())
-              || !defaultLabel
-                  .getName()
-                  .equals(FunctionSplitTransitionWhitelist.WHITELIST_LABEL.getName())) {
+          if (!attr.getDefaultValueUnchecked()
+              .equals(FunctionSplitTransitionWhitelist.WHITELIST_LABEL)) {
             throw new EvalException(
                 location,
-                "_whitelist_function_transition attribute ("
-                    + defaultLabel
-                    + ") does not have the expected value "
+                "_whitelist_function_transition attribute does not have the expected value "
                     + FunctionSplitTransitionWhitelist.WHITELIST_LABEL);
           }
           hasFunctionTransitionWhitelist = true;
@@ -812,5 +789,18 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     } catch (LabelValidator.BadLabelException | LabelSyntaxException | ExecutionException e) {
       throw new EvalException(loc, "Illegal absolute label syntax: " + labelString);
     }
+  }
+
+  @Override
+  public SkylarkFileType fileType(SkylarkList types, Location loc, Environment env)
+      throws EvalException {
+    if (env.getSemantics().incompatibleDisallowFileType()) {
+      throw new EvalException(
+          loc,
+          "FileType function is not available. You may use a list of strings instead. "
+              + "You can temporarily reenable the function by passing the flag "
+              + "--incompatible_disallow_filetype=false");
+    }
+    return SkylarkFileType.of(types.getContents(String.class, "types"));
   }
 }
