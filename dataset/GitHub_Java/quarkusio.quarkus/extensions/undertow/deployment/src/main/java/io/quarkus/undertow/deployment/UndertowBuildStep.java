@@ -38,7 +38,6 @@ import java.util.stream.Collectors;
 
 import javax.annotation.security.DeclareRoles;
 import javax.annotation.security.RunAs;
-import javax.enterprise.context.SessionScoped;
 import javax.inject.Inject;
 import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.annotation.ServletSecurity;
@@ -91,8 +90,6 @@ import org.jboss.metadata.web.spec.WebMetaData;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
-import io.quarkus.arc.deployment.ContextRegistrarBuildItem;
-import io.quarkus.arc.processor.ContextRegistrar;
 import io.quarkus.deployment.ApplicationArchive;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -112,7 +109,6 @@ import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.undertow.runtime.HttpConfig;
-import io.quarkus.undertow.runtime.HttpSessionContext;
 import io.quarkus.undertow.runtime.ServletProducer;
 import io.quarkus.undertow.runtime.ServletSecurityInfoProxy;
 import io.quarkus.undertow.runtime.ServletSecurityInfoSubstitution;
@@ -161,17 +157,8 @@ public class UndertowBuildStep {
     }
 
     @BuildStep
-    void integrateCdi(BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            BuildProducer<ContextRegistrarBuildItem> contextRegistrars,
-            BuildProducer<ListenerBuildItem> listeners) {
-        additionalBeans.produce(new AdditionalBeanBuildItem(ServletProducer.class));
-        contextRegistrars.produce(new ContextRegistrarBuildItem(new ContextRegistrar() {
-            @Override
-            public void register(RegistrationContext registrationContext) {
-                registrationContext.configure(SessionScoped.class).normal().contextClass(HttpSessionContext.class).done();
-            }
-        }));
-        listeners.produce(new ListenerBuildItem(HttpSessionContext.class.getName()));
+    AdditionalBeanBuildItem httpProducers() {
+        return new AdditionalBeanBuildItem(ServletProducer.class);
     }
 
     @BuildStep
@@ -179,6 +166,7 @@ public class UndertowBuildStep {
         return SubstrateConfigBuildItem.builder()
                 .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerResponseConduit")
                 .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerRequestConduit")
+
                 .build();
     }
 
@@ -231,7 +219,6 @@ public class UndertowBuildStep {
     public ServletDeploymentManagerBuildItem build(ApplicationArchivesBuildItem applicationArchivesBuildItem,
             List<ServletBuildItem> servlets,
             List<FilterBuildItem> filters,
-            List<ListenerBuildItem> listeners,
             List<ServletInitParamBuildItem> initParams,
             List<ServletContextAttributeBuildItem> contextParams,
             UndertowDeploymentTemplate template, RecorderContext context,
@@ -428,10 +415,6 @@ public class UndertowBuildStep {
         }
         for (ServletExtensionBuildItem i : extensions) {
             template.addServletExtension(deployment, i.getValue());
-        }
-        for (ListenerBuildItem i : listeners) {
-            reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, i.getListenerClass()));
-            template.registerListener(deployment, context.classProxy(i.getListenerClass()), bc.getValue());
         }
         return new ServletDeploymentManagerBuildItem(template.bootServletContainer(deployment, bc.getValue()));
 
