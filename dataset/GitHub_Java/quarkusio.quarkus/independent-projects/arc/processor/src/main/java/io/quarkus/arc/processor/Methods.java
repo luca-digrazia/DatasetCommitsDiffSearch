@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import java.lang.reflect.Modifier;
@@ -76,22 +92,19 @@ final class Methods {
     }
 
     private static boolean skipForClientProxy(MethodInfo method) {
-        if (Modifier.isStatic(method.flags()) || Modifier.isPrivate(method.flags())) {
+        short flags = method.flags();
+        String className = method.declaringClass().name().toString();
+        if (Modifier.isFinal(flags) && !className.startsWith("java.")) {
+            LOGGER.warn(String.format("Method %s.%s() is final, skipped during generation of corresponding client proxy",
+                    className, method.name()));
+        }
+        if (Modifier.isStatic(flags) || Modifier.isFinal(flags) || Modifier.isPrivate(flags)) {
             return true;
         }
         if (IGNORED_METHODS.contains(method.name())) {
             return true;
         }
         if (method.declaringClass().name().equals(DotNames.OBJECT)) {
-            return true;
-        }
-        if (Modifier.isFinal(method.flags())) {
-            String className = method.declaringClass().name().toString();
-            if (!className.startsWith("java.")) {
-                LOGGER.warn(
-                        String.format("Method %s.%s() is final, skipped during generation of the corresponding client proxy",
-                                className, method.name()));
-            }
             return true;
         }
         return false;
@@ -111,23 +124,12 @@ final class Methods {
             Set<AnnotationInstance> merged = new HashSet<>();
             merged.addAll(methodLevelBindings);
             for (AnnotationInstance classLevelBinding : classLevelBindings) {
-                if (methodLevelBindings.isEmpty()
-                        || methodLevelBindings.stream().noneMatch(a -> classLevelBinding.name().equals(a.name()))) {
+                if (methodLevelBindings.stream().noneMatch(a -> classLevelBinding.name().equals(a.name()))) {
                     merged.add(classLevelBinding);
                 }
             }
             if (!merged.isEmpty()) {
-                if (Modifier.isFinal(method.flags())) {
-                    String className = method.declaringClass().name().toString();
-                    if (!className.startsWith("java.")) {
-                        LOGGER.warn(
-                                String.format(
-                                        "Method %s.%s() is final, skipped during generation of the corresponding intercepted subclass",
-                                        className, method.name()));
-                    }
-                } else {
-                    candidates.computeIfAbsent(new Methods.MethodKey(method), key -> merged);
-                }
+                candidates.computeIfAbsent(new Methods.MethodKey(method), key -> merged);
             }
         }
         if (classInfo.superClassType() != null) {
@@ -139,7 +141,14 @@ final class Methods {
     }
 
     private static boolean skipForSubclass(MethodInfo method) {
-        if (Modifier.isStatic(method.flags())) {
+        short flags = method.flags();
+        String className = method.declaringClass().name().toString();
+        if (Modifier.isFinal(flags) && !className.startsWith("java.")) {
+            LOGGER.warn(
+                    String.format("Method %s.%s() is final, skipped during generation of corresponding intercepted subclass",
+                            className, method.name()));
+        }
+        if (Modifier.isStatic(flags) || Modifier.isFinal(flags)) {
             return true;
         }
         if (IGNORED_METHODS.contains(method.name())) {
@@ -148,7 +157,6 @@ final class Methods {
         if (method.declaringClass().name().equals(DotNames.OBJECT)) {
             return true;
         }
-        // We intentionally do not skip final methods here - these are handled later
         return false;
     }
 

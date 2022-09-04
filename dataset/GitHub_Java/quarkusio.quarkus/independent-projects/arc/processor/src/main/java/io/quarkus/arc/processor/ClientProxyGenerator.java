@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
@@ -39,8 +55,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
     static final String CLIENT_PROXY_SUFFIX = "_ClientProxy";
 
     static final String DELEGATE_METHOD_NAME = "arc$delegate";
-    static final String GET_CONTEXTUAL_INSTANCE_METHOD_NAME = "arc_contextualInstance";
-    static final String GET_BEAN = "arc_bean";
+    static final String GET_CONTEXTUAL_INSTANCE_METHOD_NAME = "getContextualInstance";
 
     private final Predicate<DotName> applicationClassPredicate;
 
@@ -87,7 +102,6 @@ public class ClientProxyGenerator extends AbstractGenerator {
         createConstructor(clientProxy, beanClassName, superClass, beanField.getFieldDescriptor());
         implementDelegate(clientProxy, providerTypeName, beanField.getFieldDescriptor());
         implementGetContextualInstance(clientProxy, providerTypeName);
-        implementGetBean(clientProxy, beanField.getFieldDescriptor());
 
         for (MethodInfo method : getDelegatingMethods(bean)) {
 
@@ -209,12 +223,6 @@ public class ClientProxyGenerator extends AbstractGenerator {
                 creator.invokeVirtualMethod(
                         MethodDescriptor.ofMethod(clientProxy.getClassName(), DELEGATE_METHOD_NAME, providerTypeName),
                         creator.getThis()));
-    }
-
-    void implementGetBean(ClassCreator clientProxy, FieldDescriptor beanField) {
-        MethodCreator creator = clientProxy.getMethodCreator(GET_BEAN, InjectableBean.class)
-                .setModifiers(Modifier.PUBLIC);
-        creator.returnValue(creator.readInstanceField(beanField, creator.getThis()));
     }
 
     Collection<MethodInfo> getDelegatingMethods(BeanInfo bean) {

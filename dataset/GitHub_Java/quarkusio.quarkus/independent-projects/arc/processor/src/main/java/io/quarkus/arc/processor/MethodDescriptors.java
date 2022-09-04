@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import io.quarkus.arc.Arc;
@@ -10,6 +26,7 @@ import io.quarkus.arc.InjectableInterceptor;
 import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.InvocationContextImpl;
 import io.quarkus.arc.InvocationContextImpl.InterceptorInvocation;
+import io.quarkus.arc.LazyValue;
 import io.quarkus.arc.Reflections;
 import io.quarkus.gizmo.MethodDescriptor;
 import java.lang.reflect.Constructor;
@@ -149,6 +166,8 @@ final class MethodDescriptors {
 
     static final MethodDescriptor CONTEXT_GET_IF_PRESENT = MethodDescriptor.ofMethod(Context.class, "get", Object.class,
             Contextual.class);
+
+    static final MethodDescriptor LAZY_VALUE_GET = MethodDescriptor.ofMethod(LazyValue.class, "get", Object.class);
 
     private MethodDescriptors() {
     }
