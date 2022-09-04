@@ -5,6 +5,7 @@ import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_VOLATILE;
 
+import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableContext;
@@ -30,6 +31,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import javax.enterprise.context.spi.Contextual;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
@@ -274,17 +276,22 @@ public class ClientProxyGenerator extends AbstractGenerator {
         }
 
         ResultHandle beanHandle = creator.readInstanceField(beanField, creator.getThis());
+        ResultHandle contextHandle;
 
         if (BuiltinScope.APPLICATION.is(bean.getScope())) {
-            // Application context is stored in a field and is always active
-            creator.returnValue(creator.invokeStaticMethod(MethodDescriptors.CLIENT_PROXIES_GET_APP_SCOPED_DELEGATE,
-                    creator.readInstanceField(
-                            FieldDescriptor.of(clientProxy.getClassName(), CONTEXT_FIELD, InjectableContext.class),
-                            creator.getThis()),
-                    beanHandle));
+            // Application context stored in a field and is always active
+            contextHandle = creator.readInstanceField(
+                    FieldDescriptor.of(clientProxy.getClassName(), CONTEXT_FIELD, InjectableContext.class), creator.getThis());
+
+            creator.returnValue(creator.invokeInterfaceMethod(
+                    MethodDescriptor.ofMethod(InjectableContext.class, "getOrCreate", Object.class, Contextual.class),
+                    contextHandle, beanHandle));
         } else {
-            creator.returnValue(creator.invokeStaticMethod(MethodDescriptors.CLIENT_PROXIES_GET_DELEGATE,
-                    beanHandle));
+            // Arc.container()
+            ResultHandle container = creator.invokeStaticMethod(MethodDescriptors.ARC_CONTAINER);
+            creator.returnValue(creator.invokeInterfaceMethod(
+                    MethodDescriptor.ofMethod(ArcContainer.class, "normalScopedInstance", Object.class, InjectableBean.class),
+                    container, beanHandle));
         }
     }
 
