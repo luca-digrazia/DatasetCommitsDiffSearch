@@ -23,7 +23,6 @@ import play.data.validation.Constraints;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 
 public class ChangeUserRequest extends ApiRequest {
     @Constraints.Required
@@ -87,7 +86,7 @@ public class ChangeUserRequest extends ApiRequest {
         this.startpage = new ChangeStartpageRequest();
 
         if(user.getStartpage() != null) {
-            this.startpage.type = user.getStartpage().getType().toString().toLowerCase(Locale.ENGLISH);
+            this.startpage.type = user.getStartpage().getType().toString().toLowerCase();
             this.startpage.id = user.getStartpage().getId();
         }
         this.sessionTimeoutMs = user.getSessionTimeoutMs();
