@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.blackbox.junit;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.blackbox.bazel.BlackBoxTestEnvironmentImpl;
 import com.google.devtools.build.lib.blackbox.bazel.CrossToolsSetup;
 import com.google.devtools.build.lib.blackbox.bazel.CxxToolsSetup;
@@ -46,7 +47,7 @@ import org.junit.rules.TestName;
  */
 public abstract class AbstractBlackBoxTest {
   public static final List<ToolsSetup> DEFAULT_TOOLS =
-      ImmutableList.of(
+      Lists.newArrayList(
           new DefaultToolsSetup(),
           new JavaToolsSetup(),
           new CxxToolsSetup(),
@@ -92,7 +93,7 @@ public abstract class AbstractBlackBoxTest {
   }
 
   /**
-   * Prepares the test environment for the test method and set the test context.
+   * Prepare the test environment for the test method and set the test context .
    *
    * @param tools all {@link ToolsSetup} to be called during environment initialization
    * @throws Exception if any {@link ToolsSetup} call fails
