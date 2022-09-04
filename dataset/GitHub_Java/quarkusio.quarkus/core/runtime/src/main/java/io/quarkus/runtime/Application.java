@@ -1,13 +1,29 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.runtime;
 
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
 
-import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.graalvm.nativeimage.ImageInfo;
+import org.jboss.logging.Logger;
+import org.jboss.threads.Locks;
 import org.wildfly.common.Assert;
-import org.wildfly.common.lock.Locks;
 
 import io.quarkus.runtime.graal.DiagnosticPrinter;
 import sun.misc.Signal;
@@ -36,13 +52,6 @@ public abstract class Application {
 
     private int state = ST_INITIAL;
     private volatile boolean shutdownRequested;
-    private static volatile Application currentApplication;
-
-    /**
-     * The generated config code will install a new resolver, we save the original one here and make sure
-     * to restore it on shutdown.
-     */
-    private final static ConfigProviderResolver originalResolver = ConfigProviderResolver.instance();
 
     /**
      * Construct a new instance.
@@ -60,7 +69,6 @@ public abstract class Application {
      *           letting the user hook into it.
      */
     public final void start(String[] args) {
-        currentApplication = this;
         final Lock stateLock = this.stateLock;
         stateLock.lock();
         try {
@@ -157,8 +165,6 @@ public abstract class Application {
         try {
             doStop();
         } finally {
-            currentApplication = null;
-            ConfigProviderResolver.setInstance(originalResolver);
             stateLock.lock();
             try {
                 state = ST_STOPPED;
@@ -168,10 +174,6 @@ public abstract class Application {
                 stateLock.unlock();
             }
         }
-    }
-
-    public static Application currentApplication() {
-        return currentApplication;
     }
 
     protected abstract void doStop();
