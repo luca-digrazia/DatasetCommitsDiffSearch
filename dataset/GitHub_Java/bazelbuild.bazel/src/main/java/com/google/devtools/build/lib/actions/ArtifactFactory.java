@@ -171,11 +171,7 @@ public class ArtifactFactory implements ArtifactResolver {
         sourceArtifactRoots, "Not initialized for %s %s %s", execPath, root, owner);
     return getArtifact(
         Preconditions.checkNotNull(
-            sourceArtifactRoots.get(root),
-            "%s has no ArtifactRoot (%s) in %s",
-            root,
-            execPath,
-            sourceArtifactRoots),
+            sourceArtifactRoots.get(root), "%s has no ArtifactRoot (%s)", root, execPath),
         execPath,
         owner,
         null);
