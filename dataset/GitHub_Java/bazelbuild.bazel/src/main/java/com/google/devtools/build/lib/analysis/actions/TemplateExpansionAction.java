@@ -47,7 +47,6 @@ import java.util.stream.StreamSupport;
 /**
  * Action to expand a template and write the expanded content to a file.
  */
-@AutoCodec
 @Immutable // if all substitutions are immutable
 public final class TemplateExpansionAction extends AbstractFileWriteAction {
 
