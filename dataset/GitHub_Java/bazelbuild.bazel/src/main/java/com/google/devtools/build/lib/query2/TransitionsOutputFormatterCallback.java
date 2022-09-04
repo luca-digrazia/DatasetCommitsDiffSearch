@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -50,12 +51,15 @@ import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.TargetAccessor;
+import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.output.CqueryOptions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -66,45 +70,48 @@ import java.util.stream.Collectors;
  * Output formatter that prints {@link ConfigurationTransition} information for rule configured
  * targets in the results of a cquery call.
  */
-public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback {
+public class TransitionsOutputFormatterCallback
+    extends ThreadSafeOutputFormatterCallback<ConfiguredTarget> {
 
-  protected final ConfiguredTargetAccessor accessor;
-  protected final SkyframeExecutor skyframeExecutor;
-  protected final BuildConfiguration hostConfiguration;
-
+  private final ConfiguredTargetAccessor accessor;
+  private final SkyframeExecutor skyframeExecutor;
+  private final BuildConfiguration hostConfiguration;
+  private final CqueryOptions.Transitions transitions;
   private final HashMap<Label, Target> partialResultMap;
 
-  @Override
-  public String getName() {
-    return "transitions";
-  }
+  private PrintStream printStream = null;
+  private final List<String> result = new ArrayList<>();
 
   /**
    * @param accessor provider of query result configured targets.
+   * @param transitions a value of {@link CqueryOptions.Transitions} enum that signals how verbose
+   *     the transition information should be.
    * @param out output stream. This is nullable for testing purposes since tests directly access
    *     result.
    */
-  TransitionsOutputFormatterCallback(
+  public TransitionsOutputFormatterCallback(
       TargetAccessor<ConfiguredTarget> accessor,
-      CqueryOptions options,
+      CqueryOptions.Transitions transitions,
       OutputStream out,
       SkyframeExecutor skyframeExecutor,
       BuildConfiguration hostConfiguration) {
-    super(options, out);
     this.accessor = (ConfiguredTargetAccessor) accessor;
     this.skyframeExecutor = skyframeExecutor;
     this.hostConfiguration = hostConfiguration;
+    Preconditions.checkArgument(
+        !transitions.equals(CqueryOptions.Transitions.NONE),
+        "This formatter callback should never be constructed if "
+            + "CqueryOptions.Transitions == NONE.");
+    this.transitions = transitions;
+    if (out != null) {
+      this.printStream = new PrintStream(out);
+    }
     this.partialResultMap = Maps.newHashMap();
   }
 
   @Override
   public void processOutput(Iterable<ConfiguredTarget> partialResult)
       throws IOException, InterruptedException {
-    CqueryOptions.Transitions verbosity = options.transitions;
-    Preconditions.checkArgument(
-        !verbosity.equals(CqueryOptions.Transitions.NONE),
-        "Instead of using --output=transitions, set the --transition flag explicitly to 'lite' or"
-            + "'full'");
     partialResult.forEach(
         ct -> partialResultMap.put(ct.getLabel(), accessor.getTargetFromConfiguredTarget(ct)));
     for (ConfiguredTarget configuredTarget : partialResult) {
@@ -179,7 +186,7 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
                         })
                         .collect(Collectors.joining(", ")))
                 .concat(")"));
-        if (verbosity == CqueryOptions.Transitions.LITE) {
+        if (transitions == CqueryOptions.Transitions.LITE) {
           continue;
         }
         OptionsDiff diff = new OptionsDiff();
@@ -206,6 +213,22 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
       }
     }
     return output;
+  }
+
+  private void addResult(String string) {
+    result.add(string);
+  }
+
+  @VisibleForTesting
+  public List<String> getResult() {
+    return result;
+  }
+
+  @Override
+  public void close(boolean failFast) throws InterruptedException, IOException {
+    if (!failFast && printStream != null) {
+      result.forEach(printStream::println);
+    }
   }
 
   private class FormatterDependencyResolver extends DependencyResolver {
