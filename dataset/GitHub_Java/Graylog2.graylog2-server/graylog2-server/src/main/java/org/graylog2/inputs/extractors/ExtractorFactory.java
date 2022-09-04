@@ -18,7 +18,6 @@ package org.graylog2.inputs.extractors;
 
 import com.codahale.metrics.MetricRegistry;
 import org.graylog2.ConfigurationException;
-import org.graylog2.grok.GrokPatternService;
 import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
 
@@ -31,12 +30,10 @@ import java.util.Map;
  */
 public class ExtractorFactory {
     private final MetricRegistry metricRegistry;
-    private final GrokPatternService grokPatternService;
 
     @Inject
-    public ExtractorFactory(MetricRegistry metricRegistry, GrokPatternService grokPatternService) {
+    public ExtractorFactory(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
-        this.grokPatternService = grokPatternService;
     }
 
     public Extractor factory(String id,
@@ -63,7 +60,7 @@ public class ExtractorFactory {
             case COPY_INPUT:
                 return new CopyInputExtractor(metricRegistry, id, title, order, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters, conditionType, conditionValue);
             case GROK:
-                return new GrokExtractor(metricRegistry, grokPatternService.loadAll(), id, title, order, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters, conditionType, conditionValue);
+                return new GrokExtractor(metricRegistry, id, title, order, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters, conditionType, conditionValue);
             default:
                 throw new NoSuchExtractorException();
         }
