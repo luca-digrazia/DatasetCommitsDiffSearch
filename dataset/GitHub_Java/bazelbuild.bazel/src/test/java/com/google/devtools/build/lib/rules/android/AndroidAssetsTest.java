@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,7 +36,8 @@ public class AndroidAssetsTest extends ResourceTestBase {
     RuleContext ruleContext = getRuleContext();
     AndroidAssets assets = getLocalAssets();
 
-    ParsedAndroidAssets parsed = assets.parse(AndroidDataContext.forNative(ruleContext));
+    ParsedAndroidAssets parsed =
+        assets.parse(AndroidDataContext.forNative(ruleContext), AndroidAaptVersion.AAPT2);
 
     // Assets should be unchanged
     assertThat(parsed.getAssets()).isEqualTo(assets.getAssets());
@@ -61,7 +63,8 @@ public class AndroidAssetsTest extends ResourceTestBase {
   @Test
   public void testMergeNoDeps() throws Exception {
     RuleContext ruleContext = getRuleContext();
-    ParsedAndroidAssets parsed = getLocalAssets().parse(AndroidDataContext.forNative(ruleContext));
+    ParsedAndroidAssets parsed =
+        getLocalAssets().parse(AndroidDataContext.forNative(ruleContext), AndroidAaptVersion.AAPT2);
     MergedAndroidAssets merged = assertMerge(ruleContext, parsed, AssetDependencies.empty());
 
     // The assets can be correctly built into a provider
@@ -78,7 +81,8 @@ public class AndroidAssetsTest extends ResourceTestBase {
   @Test
   public void testMergeNeverlink() throws Exception {
     RuleContext ruleContext = getRuleContext();
-    ParsedAndroidAssets parsed = getLocalAssets().parse(AndroidDataContext.forNative(ruleContext));
+    ParsedAndroidAssets parsed =
+        getLocalAssets().parse(AndroidDataContext.forNative(ruleContext), AndroidAaptVersion.AAPT2);
     AssetDependencies deps = makeDeps(ruleContext, /* neverlink = */ true);
 
     MergedAndroidAssets merged = assertMerge(ruleContext, parsed, deps);
@@ -97,7 +101,8 @@ public class AndroidAssetsTest extends ResourceTestBase {
   @Test
   public void testMergeAapt2() throws Exception {
     RuleContext ruleContext = getRuleContext();
-    ParsedAndroidAssets parsed = getLocalAssets().parse(AndroidDataContext.forNative(ruleContext));
+    ParsedAndroidAssets parsed =
+        getLocalAssets().parse(AndroidDataContext.forNative(ruleContext), AndroidAaptVersion.AAPT2);
     AssetDependencies deps = makeDeps(ruleContext, /* neverlink = */ false);
 
     MergedAndroidAssets merged = assertMerge(ruleContext, parsed, deps);
