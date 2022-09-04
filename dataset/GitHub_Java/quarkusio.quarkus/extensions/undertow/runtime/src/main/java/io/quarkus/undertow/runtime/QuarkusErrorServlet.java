@@ -47,10 +47,9 @@ public class QuarkusErrorServlet extends HttpServlet {
             resp.getWriter().write(jsonPayload.toString());
         } else {
             //We default to HTML representation
-            String escapedDetails = escapeHtml(details);
             resp.setContentType("text/html");
             resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            final TemplateHtmlBuilder htmlBuilder = new TemplateHtmlBuilder("Internal Server Error", escapedDetails, details);
+            final TemplateHtmlBuilder htmlBuilder = new TemplateHtmlBuilder("Internal Server Error", details, details);
             if (showStack && exception != null) {
                 htmlBuilder.stack(exception);
             }
@@ -62,12 +61,12 @@ public class QuarkusErrorServlet extends HttpServlet {
         StringWriter stringWriter = new StringWriter();
         exception.printStackTrace(new PrintWriter(stringWriter));
 
-        return stringWriter.toString().trim();
+        return escapeHtml(stringWriter.toString().trim());
     }
 
     private static String generateHeaderMessage(final Throwable exception, String uuid) {
-        return String.format("Error handling %s, %s: %s", uuid, exception.getClass().getName(),
-                extractFirstLine(exception.getMessage()));
+        return escapeHtml(String.format("Error handling %s, %s: %s", uuid, exception.getClass().getName(),
+                extractFirstLine(exception.getMessage())));
     }
 
     private static String extractFirstLine(final String message) {
