@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.regex.Pattern;
@@ -126,7 +125,7 @@ public class CppLinkstampCompileHelper {
   }
 
   private static CcToolchainVariables getVariables(
-      RuleErrorConsumer ruleErrorConsumer,
+      RuleContext ruleContext,
       Artifact sourceFile,
       Artifact outputFile,
       String labelReplacement,
@@ -144,7 +143,7 @@ public class CppLinkstampCompileHelper {
         featureConfiguration.actionIsConfigured(CppActionNames.LINKSTAMP_COMPILE));
 
     return CompileBuildVariables.setupVariablesOrReportRuleError(
-        ruleErrorConsumer,
+        ruleContext,
         featureConfiguration,
         ccToolchainProvider,
         sourceFile.getExecPathString(),

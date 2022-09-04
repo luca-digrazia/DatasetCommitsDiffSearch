@@ -1692,10 +1692,14 @@ public class CcToolchainFeatures implements Serializable {
     }
     return selectablesByName.get(name);
   }
-
+  
   @VisibleForTesting
   Collection<String> getActivatableNames() {
-    return selectablesByName.keySet();
+    Collection<String> featureNames = new HashSet<>();
+    for (CrosstoolSelectable selectable : selectables) {
+      featureNames.add(selectable.getName());
+    }
+    return featureNames;
   }
 
   /**

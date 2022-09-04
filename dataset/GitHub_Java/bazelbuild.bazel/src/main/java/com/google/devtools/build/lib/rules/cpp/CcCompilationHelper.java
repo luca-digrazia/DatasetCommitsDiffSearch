@@ -24,9 +24,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
+import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -238,15 +240,16 @@ public final class CcCompilationHelper {
   private ImmutableList<String> copts = ImmutableList.of();
   private CoptsFilter coptsFilter = CoptsFilter.alwaysPasses();
   private final Set<String> defines = new LinkedHashSet<>();
+  private final List<TransitiveInfoCollection> deps = new ArrayList<>();
   private final List<CcCompilationContext> ccCompilationContexts = new ArrayList<>();
   private Set<PathFragment> looseIncludeDirs = ImmutableSet.of();
   private final List<PathFragment> systemIncludeDirs = new ArrayList<>();
-  private final List<PathFragment> quoteIncludeDirs = new ArrayList<>();
   private final List<PathFragment> includeDirs = new ArrayList<>();
 
   private HeadersCheckingMode headersCheckingMode = HeadersCheckingMode.LOOSE;
   private boolean fake;
 
+  private boolean checkDepsGenerateCpp = true;
   private final SourceCategory sourceCategory;
   private final List<VariablesExtension> variablesExtensions = new ArrayList<>();
   @Nullable private CppModuleMap cppModuleMap;
@@ -255,11 +258,12 @@ public final class CcCompilationHelper {
   private final FeatureConfiguration featureConfiguration;
   private final CcToolchainProvider ccToolchain;
   private final FdoContext fdoContext;
+  private boolean useDeps = true;
   private boolean generateModuleMap = true;
   private String purpose = null;
   private boolean generateNoPicAction;
   private boolean generatePicAction;
-  private boolean isCodeCoverageEnabled = true;
+  private boolean allowCoverageInstrumentation = true;
   private String stripIncludePrefix = null;
   private String includePrefix = null;
 
@@ -362,9 +366,11 @@ public final class CcCompilationHelper {
 
     setCopts(Iterables.concat(common.getCopts(), additionalCopts));
     addDefines(common.getDefines());
+    addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET));
     setLooseIncludeDirs(common.getLooseIncludeDirs());
     addSystemIncludeDirs(common.getSystemIncludeDirs());
     setCoptsFilter(common.getCoptsFilter());
+    setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext));
     return this;
   }
 
@@ -566,6 +572,19 @@ public final class CcCompilationHelper {
     return this;
   }
 
+  /**
+   * Adds the given targets as dependencies - this can include explicit dependencies on other rules
+   * (like from a "deps" attribute) and also implicit dependencies on runtime libraries.
+   */
+  public CcCompilationHelper addDeps(Iterable<? extends TransitiveInfoCollection> deps) {
+    this.ccCompilationContexts.addAll(
+        Streams.stream(AnalysisUtils.getProviders(deps, CcInfo.PROVIDER))
+            .map(CcInfo::getCcCompilationContext)
+            .collect(ImmutableList.toImmutableList()));
+    Iterables.addAll(this.deps, deps);
+    return this;
+  }
+
   /** For adding CC compilation infos that affect compilation, e.g: from dependencies. */
   public CcCompilationHelper addCcCompilationContexts(
       Iterable<CcCompilationContext> ccCompilationContexts) {
@@ -587,15 +606,6 @@ public final class CcCompilationHelper {
    */
   public CcCompilationHelper addSystemIncludeDirs(Iterable<PathFragment> systemIncludeDirs) {
     Iterables.addAll(this.systemIncludeDirs, systemIncludeDirs);
-    return this;
-  }
-
-  /**
-   * Adds the given directories to the quote include directories (they are passed with {@code
-   * "-iquote"} to the compiler); these are also passed to dependent rules.
-   */
-  public CcCompilationHelper addQuoteIncludeDirs(Iterable<PathFragment> quoteIncludeDirs) {
-    Iterables.addAll(this.quoteIncludeDirs, quoteIncludeDirs);
     return this;
   }
 
@@ -645,6 +655,23 @@ public final class CcCompilationHelper {
     return this;
   }
 
+  /**
+   * Disables checking that the deps actually are C++ rules.
+   */
+  public CcCompilationHelper setCheckDepsGenerateCpp(boolean checkDepsGenerateCpp) {
+    this.checkDepsGenerateCpp = checkDepsGenerateCpp;
+    return this;
+  }
+
+  /**
+   * Causes actions generated from this CcCompilationHelper not to use build semantics (includes,
+   * headers, srcs) from dependencies.
+   */
+  public CcCompilationHelper doNotUseDeps() {
+    this.useDeps = false;
+    return this;
+  }
+
   /** Whether to generate no-PIC actions. */
   public CcCompilationHelper setGenerateNoPicAction(boolean generateNoPicAction) {
     this.generateNoPicAction = generateNoPicAction;
@@ -685,9 +712,8 @@ public final class CcCompilationHelper {
     return this;
   }
 
-  public CcCompilationHelper setCodeCoverageEnabled(boolean codeCoverageEnabled) {
-    this.isCodeCoverageEnabled = codeCoverageEnabled;
-    return this;
+  public void setAllowCoverageInstrumentation(boolean allowCoverageInstrumentation) {
+    this.allowCoverageInstrumentation = allowCoverageInstrumentation;
   }
 
   /**
@@ -696,6 +722,9 @@ public final class CcCompilationHelper {
    * @throws RuleErrorException
    */
   public CompilationInfo compile() throws RuleErrorException {
+    if (checkDepsGenerateCpp) {
+      CppHelper.checkProtoLibrariesInDeps(ruleErrorConsumer, deps);
+    }
 
     if (!generatePicAction && !generateNoPicAction) {
       ruleErrorConsumer.ruleError("Either PIC or no PIC actions have to be created.");
@@ -937,8 +966,11 @@ public final class CcCompilationHelper {
           publicHeaders.virtualToOriginalHeaders);
     }
 
-    ccCompilationContextBuilder.mergeDependentCcCompilationContexts(ccCompilationContexts);
-    mergeToolchainDependentCcCompilationContext(ccToolchain, ccCompilationContextBuilder);
+    if (useDeps) {
+      ccCompilationContextBuilder.mergeDependentCcCompilationContexts(ccCompilationContexts);
+    }
+    mergeToolchainDependentCcCompilationContext(
+        ruleContext, ccToolchain, ccCompilationContextBuilder);
 
     // But defines come after those inherited from deps.
     ccCompilationContextBuilder.addDefines(defines);
@@ -1017,7 +1049,8 @@ public final class CcCompilationHelper {
       }
     }
     ccCompilationContextBuilder.setPurpose(purpose);
-    ccCompilationContextBuilder.addQuoteIncludeDirs(quoteIncludeDirs);
+
+    semantics.setupCcCompilationContext(ruleContext, ccCompilationContextBuilder);
     return ccCompilationContextBuilder.build();
   }
 
@@ -1094,16 +1127,11 @@ public final class CcCompilationHelper {
         !featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_WITHOUT_EXTERN_MODULE));
   }
 
-  public static CcCompilationContext getStlCcCompilationContext(RuleContext ruleContext) {
+  private static CcInfo getStlDependency(RuleContext ruleContext) {
     if (ruleContext.attributes().has("$stl", BuildType.LABEL)) {
-      CcInfo ccInfo = ruleContext.getPrerequisite("$stl", Mode.TARGET, CcInfo.PROVIDER);
-      if (ccInfo != null) {
-        return ccInfo.getCcCompilationContext();
-      } else {
-        return CcCompilationContext.EMPTY;
-      }
+      return ruleContext.getPrerequisite("$stl", Mode.TARGET, CcInfo.PROVIDER);
     } else {
-      return CcCompilationContext.EMPTY;
+      return null;
     }
   }
 
@@ -1113,6 +1141,10 @@ public final class CcCompilationHelper {
         ccCompilationContexts.stream()
             .map(CPP_DEPS_TO_MODULES)
             .collect(toCollection(ArrayList::new));
+    CcInfo stl = getStlDependency(ruleContext);
+    if (stl != null) {
+      result.add(stl.getCcCompilationContext().getCppModuleMap());
+    }
 
     if (ccToolchain != null) {
       result.add(ccToolchain.getCcInfo().getCcCompilationContext().getCppModuleMap());
@@ -1310,7 +1342,7 @@ public final class CcCompilationHelper {
                     : ArtifactCategory.OBJECT_FILE,
                 ccCompilationContext.getCppModuleMap(),
                 /* addObject= */ true,
-                isCodeCoverageEnabled,
+                isCodeCoverageEnabled(),
                 // The source action does not generate dwo when it has bitcode
                 // output (since it isn't generating a native object with debug
                 // info). In that case the LtoBackendAction will generate the dwo.
@@ -1531,7 +1563,7 @@ public final class CcCompilationHelper {
             ruleErrorConsumer, ccToolchain, ArtifactCategory.COVERAGE_DATA_FILE, outputName);
     // TODO(djasper): This is now duplicated. Refactor the various create..Action functions.
     Artifact gcnoFile =
-        isCodeCoverageEnabled
+        isCodeCoverageEnabled()
             ? CppHelper.getCompileOutputArtifact(
                 actionConstructionContext, label, gcnoFileName, configuration)
             : null;
@@ -1901,12 +1933,14 @@ public final class CcCompilationHelper {
   }
 
   /** Returns true iff code coverage is enabled for the given target. */
-  public static boolean isCodeCoverageEnabled(RuleContext ruleContext) {
-    BuildConfiguration configuration = ruleContext.getConfiguration();
+  public boolean isCodeCoverageEnabled() {
+    if (!allowCoverageInstrumentation) {
+      return false;
+    }
     if (configuration.isCodeCoverageEnabled()) {
       // If rule is matched by the instrumentation filter, enable instrumentation
       if (InstrumentedFilesCollector.shouldIncludeLocalSources(
-          configuration, ruleContext.getLabel(), ruleContext.isTestTarget())) {
+          configuration, label, ruleContext.isTestTarget())) {
         return true;
       }
       // At this point the rule itself is not matched by the instrumentation filter. However, we
@@ -2042,8 +2076,17 @@ public final class CcCompilationHelper {
    * using the "$stl" (or, historically, ":stl") attribute.
    */
   private static void mergeToolchainDependentCcCompilationContext(
+      RuleContext ruleContext,
       CcToolchainProvider toolchain,
       CcCompilationContext.Builder ccCompilationContextBuilder) {
+    CcInfo stl = getStlDependency(ruleContext);
+    if (stl != null) {
+      CcCompilationContext ccCompilationContext = stl.getCcCompilationContext();
+      if (ccCompilationContext != null) {
+        ccCompilationContextBuilder.mergeDependentCcCompilationContext(ccCompilationContext);
+      }
+    }
+
     if (toolchain != null) {
       ccCompilationContextBuilder.mergeDependentCcCompilationContext(
           toolchain.getCcCompilationContext());

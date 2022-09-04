@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery.DotdPruningMode;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.List;
 
 /**
  * CppSemantics for objc builds.
@@ -123,12 +122,14 @@ public class ObjcCppSemantics implements CppSemantics {
   }
 
   @Override
-  public List<PathFragment> getQuoteIncludes(RuleContext ruleContext) {
-    ImmutableList.Builder<PathFragment> quoteIncludes = ImmutableList.builder();
+  public void setupCcCompilationContext(
+      RuleContext ruleContext, CcCompilationContext.Builder ccCompilationContextBuilder) {
     // The genfiles root of each child configuration must be added to the compile action so that
     // generated headers can be resolved.
-    return ImmutableList.copyOf(
-        ObjcCommon.userHeaderSearchPaths(objcProvider, ruleContext.getConfiguration()));
+    for (PathFragment iquotePath :
+        ObjcCommon.userHeaderSearchPaths(objcProvider, ruleContext.getConfiguration())) {
+      ccCompilationContextBuilder.addQuoteIncludeDir(iquotePath);
+    }
   }
 
   @Override

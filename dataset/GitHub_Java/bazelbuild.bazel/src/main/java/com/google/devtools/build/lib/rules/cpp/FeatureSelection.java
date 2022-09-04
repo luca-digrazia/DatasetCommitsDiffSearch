@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProv
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CrosstoolSelectable;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Feature;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,6 +47,10 @@ class FeatureSelection {
    * useful, or because the user required them (for example through the command line).
    */
   private final ImmutableSet<CrosstoolSelectable> requestedSelectables;
+
+  /** All features requested by the user regardless of whether they exist in CROSSTOOLs or not. */
+  private final ImmutableSet<String> requestedFeatures;
+
   /**
    * The currently enabled selectable; during feature selection, we first put all selectables
    * reachable via an 'implies' edge into the enabled selectable set, and than prune that set from
@@ -101,6 +106,9 @@ class FeatureSelection {
    */
   private final ImmutableMultimap<CrosstoolSelectable, CrosstoolSelectable> requiredBy;
 
+  /** Location of the cc_toolchain in use. */
+  private final PathFragment ccToolchainPath;
+
   FeatureSelection(
       ImmutableSet<String> requestedFeatures,
       ImmutableMap<String, CrosstoolSelectable> selectablesByName,
@@ -110,7 +118,9 @@ class FeatureSelection {
       ImmutableMultimap<CrosstoolSelectable, CrosstoolSelectable> impliedBy,
       ImmutableMultimap<CrosstoolSelectable, ImmutableSet<CrosstoolSelectable>> requires,
       ImmutableMultimap<CrosstoolSelectable, CrosstoolSelectable> requiredBy,
-      ImmutableMap<String, ActionConfig> actionConfigsByActionName) {
+      ImmutableMap<String, ActionConfig> actionConfigsByActionName,
+      PathFragment ccToolchainPath) {
+    this.requestedFeatures = requestedFeatures;
     ImmutableSet.Builder<CrosstoolSelectable> builder = ImmutableSet.builder();
     for (String name : requestedFeatures) {
       if (selectablesByName.containsKey(name)) {
@@ -125,6 +135,7 @@ class FeatureSelection {
     this.requires = requires;
     this.requiredBy = requiredBy;
     this.actionConfigsByActionName = actionConfigsByActionName;
+    this.ccToolchainPath = ccToolchainPath;
   }
 
   /**
@@ -179,7 +190,11 @@ class FeatureSelection {
     }
 
     return new FeatureConfiguration(
-        enabledFeaturesInOrder, enabledActionConfigNames.build(), actionConfigsByActionName);
+        requestedFeatures,
+        enabledFeaturesInOrder,
+        enabledActionConfigNames.build(),
+        actionConfigsByActionName,
+        ccToolchainPath);
   }
 
   /**
