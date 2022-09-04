@@ -40,7 +40,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
-import com.google.common.xml.XmlEscapers;
 import com.google.devtools.build.android.AndroidResourceOutputs.UniqueZipBuilder;
 import com.google.protobuf.ByteString;
 import java.io.Closeable;
@@ -322,10 +321,7 @@ public class ProtoApk implements Closeable {
 
     private void quote(ByteString bytes) throws IOException {
       QUOTE.writeTo(out);
-      out.write(
-          XmlEscapers.xmlAttributeEscaper()
-              .escape(bytes.toStringUtf8())
-              .getBytes(StandardCharsets.UTF_8));
+      bytes.writeTo(out);
       QUOTE.writeTo(out);
     }
 
