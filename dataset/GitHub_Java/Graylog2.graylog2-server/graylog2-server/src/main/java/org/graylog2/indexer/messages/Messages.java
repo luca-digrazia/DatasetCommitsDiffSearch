@@ -16,8 +16,6 @@
  */
 package org.graylog2.indexer.messages;
 
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
 import com.github.joschi.jadconfig.util.Duration;
 import com.github.rholder.retry.RetryException;
 import com.github.rholder.retry.Retryer;
@@ -54,7 +52,6 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
-import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 @Singleton
@@ -74,13 +71,11 @@ public class Messages {
 
     private final Client c;
     private final String deflectorName;
-    private final Meter invalidTimestampMeter;
 
     @Inject
-    public Messages(Client client, ElasticsearchConfiguration configuration, MetricRegistry metricRegistry) {
+    public Messages(Client client, ElasticsearchConfiguration configuration) {
         this.c = client;
         this.deflectorName = Deflector.buildName(configuration.getIndexPrefix());
-        invalidTimestampMeter = metricRegistry.meter(name(Messages.class, "invalid-timestamps"));
     }
 
     public ResultMessage get(String messageId, String index) throws DocumentNotFoundException {
@@ -118,7 +113,7 @@ public class Messages {
 
         final BulkRequestBuilder requestBuilder = c.prepareBulk().setConsistencyLevel(WriteConsistencyLevel.ONE);
         for (Message msg : messages) {
-            requestBuilder.add(buildIndexRequest(indexName, msg.toElasticSearchObject(invalidTimestampMeter), msg.getId()));
+            requestBuilder.add(buildIndexRequest(indexName, msg.toElasticSearchObject(), msg.getId()));
         }
 
         final BulkResponse response = runBulkRequest(requestBuilder.request());
