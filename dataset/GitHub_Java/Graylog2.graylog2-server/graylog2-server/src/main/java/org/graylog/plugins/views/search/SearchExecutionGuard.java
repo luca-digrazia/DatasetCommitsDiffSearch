@@ -1,31 +1,30 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog.plugins.views.search;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.Sets;
 import org.graylog.plugins.views.search.errors.MissingCapabilitiesException;
 import org.graylog.plugins.views.search.views.PluginMetadataSummary;
 import org.graylog2.plugin.PluginMetaData;
+import org.graylog2.shared.rest.exceptions.MissingStreamPermissionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.ForbiddenException;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -43,41 +42,24 @@ public class SearchExecutionGuard {
     }
 
     public void check(Search search, Predicate<String> hasReadPermissionForStream) {
-        checkStreamPermissions(search, hasReadPermissionForStream);
+        checkUserIsPermittedToSeeStreams(search.streamIdsForPermissionsCheck(), hasReadPermissionForStream);
 
         checkMissingRequirements(search);
     }
 
-    private void checkStreamPermissions(Search search, Predicate<String> hasReadPermissionForStream) {
-        final Set<String> usedStreamIds = usedStreamIdsFrom(search);
-
-        checkUserIsPermittedToSeeStreams(usedStreamIds, hasReadPermissionForStream);
-    }
-
-    private Set<String> usedStreamIdsFrom(Search search) {
-        final Set<String> usedStreamIds = search.queries().stream()
-                .map(Query::usedStreamIds)
-                .reduce(Sets::union)
-                .orElseThrow(() -> new RuntimeException("Failed to get used stream IDs from query"));
-
-        if (usedStreamIds.isEmpty())
-            throw new IllegalArgumentException("Can't authorize a search with no streams");
-
-        return usedStreamIds;
-    }
-
-    private void checkUserIsPermittedToSeeStreams(Set<String> streamIds, Predicate<String> hasReadPermissionForStream) {
+    public void checkUserIsPermittedToSeeStreams(Set<String> streamIds, Predicate<String> hasReadPermissionForStream) {
         final Predicate<String> isForbidden = hasReadPermissionForStream.negate();
         final Set<String> forbiddenStreams = streamIds.stream().filter(isForbidden).collect(Collectors.toSet());
 
         if (!forbiddenStreams.isEmpty()) {
-            throwExceptionWithoutMentioningStreamIds(forbiddenStreams);
+            throwExceptionMentioningStreamIds(forbiddenStreams);
         }
     }
 
-    private void throwExceptionWithoutMentioningStreamIds(Set<String> forbiddenStreams) {
+    private void throwExceptionMentioningStreamIds(Set<String> forbiddenStreams) {
         LOG.warn("Not executing search, it is referencing inaccessible streams: [" + Joiner.on(',').join(forbiddenStreams) + "]");
-        throw new ForbiddenException("The search is referencing at least one stream you are not permitted to see.");
+        throw new MissingStreamPermissionException("The search is referencing at least one stream you are not permitted to see.",
+                forbiddenStreams);
     }
 
     private void checkMissingRequirements(Search search) {
