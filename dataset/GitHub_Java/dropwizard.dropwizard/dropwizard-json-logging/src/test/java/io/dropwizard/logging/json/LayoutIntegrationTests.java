@@ -21,11 +21,9 @@ import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.RequestLog;
 import org.eclipse.jetty.server.Response;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 import org.slf4j.LoggerFactory;
-import org.slf4j.Marker;
-import org.slf4j.MarkerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -52,7 +50,7 @@ public class LayoutIntegrationTests {
     private final YamlConfigurationFactory<ConsoleAppenderFactory> yamlFactory = new YamlConfigurationFactory<>(
         ConsoleAppenderFactory.class, BaseValidator.newValidator(), objectMapper, "dw-json-log");
 
-    @BeforeEach
+    @Before
     public void setUp() {
         objectMapper.getSubtypeResolver().registerSubtypes(AccessJsonLayoutBaseFactory.class, EventJsonLayoutBaseFactory.class);
     }
@@ -78,8 +76,7 @@ public class LayoutIntegrationTests {
             EventAttribute.MESSAGE,
             EventAttribute.LOGGER_NAME,
             EventAttribute.EXCEPTION,
-            EventAttribute.TIMESTAMP,
-            EventAttribute.CALLER_DATA);
+            EventAttribute.TIMESTAMP);
         assertThat(factory.isFlattenMdc()).isTrue();
         assertThat(factory.getCustomFieldNames()).containsOnly(entry("timestamp", "@timestamp"));
         assertThat(factory.getAdditionalFields()).containsOnly(entry("service-name", "user-service"),
@@ -110,8 +107,7 @@ public class LayoutIntegrationTests {
             AccessAttribute.REQUEST_PARAMETERS,
             AccessAttribute.REQUEST_CONTENT,
             AccessAttribute.TIMESTAMP,
-            AccessAttribute.USER_AGENT,
-            AccessAttribute.PATH_QUERY);
+            AccessAttribute.USER_AGENT);
         assertThat(factory.getResponseHeaders()).containsOnly("X-Request-Id");
         assertThat(factory.getRequestHeaders()).containsOnly("User-Agent", "X-Request-Id");
         assertThat(factory.getCustomFieldNames()).containsOnly(entry("statusCode", "status_code"),
@@ -133,7 +129,6 @@ public class LayoutIntegrationTests {
         assertThat(factory.getIncludes()).contains(EventAttribute.LEVEL,
             EventAttribute.THREAD_NAME,
             EventAttribute.MDC,
-            EventAttribute.MARKER,
             EventAttribute.LOGGER_NAME,
             EventAttribute.MESSAGE,
             EventAttribute.EXCEPTION,
@@ -147,8 +142,7 @@ public class LayoutIntegrationTests {
         try {
             System.setOut(new PrintStream(redirectedStream));
             defaultLoggingFactory.configure(new MetricRegistry(), "json-log-test");
-            Marker marker = MarkerFactory.getMarker("marker");
-            LoggerFactory.getLogger("com.example.app").info(marker, "Application log");
+            LoggerFactory.getLogger("com.example.app").info("Application log");
             Thread.sleep(100); // Need to wait, because the logger is async
 
             JsonNode jsonNode = objectMapper.readTree(redirectedStream.toString());
@@ -156,7 +150,6 @@ public class LayoutIntegrationTests {
             assertThat(jsonNode.get("timestamp").isTextual()).isTrue();
             assertThat(jsonNode.get("level").asText()).isEqualTo("INFO");
             assertThat(jsonNode.get("logger").asText()).isEqualTo("com.example.app");
-            assertThat(jsonNode.get("marker").asText()).isEqualTo("marker");
             assertThat(jsonNode.get("message").asText()).isEqualTo("Application log");
         } finally {
             System.setOut(old);
