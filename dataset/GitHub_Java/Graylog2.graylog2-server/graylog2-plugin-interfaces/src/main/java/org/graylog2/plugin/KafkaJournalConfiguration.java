@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 Graylog, Inc.
+ * Copyright (c) 2012 TORCH GmbH
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,7 @@ public class KafkaJournalConfiguration {
 
     @Parameter(value = "message_journal_dir", required = true)
     @JsonProperty("directory")
-    private File messageJournalDir = new File("data/journal");
+    private File messageJournalDir = new File("journal");
 
     @Parameter("message_journal_segment_size")
     @JsonProperty("segment_size")
