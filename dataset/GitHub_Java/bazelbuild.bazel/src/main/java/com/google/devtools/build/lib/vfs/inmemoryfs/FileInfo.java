@@ -26,7 +26,6 @@ import java.nio.channels.ReadableByteChannel;
  */
 @ThreadSafe
 public abstract class FileInfo extends InMemoryContentInfo {
-
   protected FileInfo(Clock clock) {
     super(clock);
   }
@@ -55,7 +54,7 @@ public abstract class FileInfo extends InMemoryContentInfo {
 
   public abstract InputStream getInputStream() throws IOException;
 
-  public ReadableByteChannel createReadableByteChannel() {
+  public ReadableByteChannel createReadableByteChannel() throws IOException {
     throw new UnsupportedOperationException();
   }
 

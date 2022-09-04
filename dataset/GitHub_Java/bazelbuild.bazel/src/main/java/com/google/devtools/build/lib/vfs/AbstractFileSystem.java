@@ -19,10 +19,10 @@ import static java.nio.file.StandardOpenOption.READ;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.vfs.DigestHashFunction.DefaultHashFunctionNotSetException;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -37,18 +37,20 @@ public abstract class AbstractFileSystem extends FileSystem {
   protected static final String ERR_PERMISSION_DENIED = " (Permission denied)";
   protected static final Profiler profiler = Profiler.instance();
 
+  public AbstractFileSystem() throws DefaultHashFunctionNotSetException {}
+
   public AbstractFileSystem(DigestHashFunction digestFunction) {
     super(digestFunction);
   }
 
   @Override
-  protected InputStream getInputStream(PathFragment path) throws IOException {
+  protected InputStream getInputStream(Path path) throws IOException {
     // This loop is a workaround for an apparent bug in FileInputStream.open, which delegates
     // ultimately to JVM_Open in the Hotspot JVM.  This call is not EINTR-safe, so we must do the
     // retry here.
     for (; ; ) {
       try {
-        return createMaybeProfiledInputStream(path);
+        return createFileInputStream(path);
       } catch (FileNotFoundException e) {
         if (e.getMessage().endsWith("(Interrupted system call)")) {
           continue;
@@ -59,13 +61,8 @@ public abstract class AbstractFileSystem extends FileSystem {
     }
   }
 
-  /** Allows the mapping of PathFragment to InputStream to be overridden in subclasses. */
-  protected InputStream createFileInputStream(PathFragment path) throws IOException {
-    return new FileInputStream(path.toString());
-  }
-
   /** Returns either normal or profiled FileInputStream. */
-  private InputStream createMaybeProfiledInputStream(PathFragment path) throws IOException {
+  private InputStream createFileInputStream(Path path) throws FileNotFoundException {
     final String name = path.toString();
     if (profiler.isActive()
         && (profiler.isProfiling(ProfilerTask.VFS_READ)
@@ -73,18 +70,18 @@ public abstract class AbstractFileSystem extends FileSystem {
       long startTime = Profiler.nanoTimeMaybe();
       try {
         // Replace default FileInputStream instance with the custom one that does profiling.
-        return new ProfiledInputStream(createFileInputStream(path), name);
+        return new ProfiledFileInputStream(name);
       } finally {
         profiler.logSimpleTask(startTime, ProfilerTask.VFS_OPEN, name);
       }
     } else {
       // Use normal FileInputStream instance if profiler is not enabled.
-      return createFileInputStream(path);
+      return new FileInputStream(path.toString());
     }
   }
 
   @Override
-  protected ReadableByteChannel createReadableByteChannel(PathFragment path) throws IOException {
+  protected ReadableByteChannel createReadableByteChannel(Path path) throws IOException {
     final String name = path.toString();
     if (profiler.isActive()
         && (profiler.isProfiling(ProfilerTask.VFS_READ)
@@ -101,30 +98,14 @@ public abstract class AbstractFileSystem extends FileSystem {
     }
   }
 
-  @Override
-  protected boolean createWritableDirectory(PathFragment path) throws IOException {
-    FileStatus stat = statNullable(path, /*followSymlinks=*/ false);
-    if (stat == null) {
-      return createDirectory(path);
-    }
-
-    if (!stat.isDirectory()) {
-      throw new IOException(path + " (Not a directory)");
-    }
-
-    chmod(path, 0777);
-    return false;
-  }
-
   /**
    * Returns either normal or profiled FileOutputStream. Should be used by subclasses to create
    * default OutputStream instance.
    */
-  protected OutputStream createFileOutputStream(PathFragment path, boolean append, boolean internal)
+  protected OutputStream createFileOutputStream(Path path, boolean append)
       throws FileNotFoundException {
     final String name = path.toString();
-    if (!internal
-        && profiler.isActive()
+    if (profiler.isActive()
         && (profiler.isProfiling(ProfilerTask.VFS_WRITE)
             || profiler.isProfiling(ProfilerTask.VFS_OPEN))) {
       long startTime = Profiler.nanoTimeMaybe();
@@ -139,10 +120,9 @@ public abstract class AbstractFileSystem extends FileSystem {
   }
 
   @Override
-  protected OutputStream getOutputStream(PathFragment path, boolean append, boolean internal)
-      throws IOException {
+  protected OutputStream getOutputStream(Path path, boolean append) throws IOException {
     try {
-      return createFileOutputStream(path, append, internal);
+      return createFileOutputStream(path, append);
     } catch (FileNotFoundException e) {
       // Why does it throw a *FileNotFoundException* if it can't write?
       // That does not make any sense! And its in a completely different
@@ -154,18 +134,11 @@ public abstract class AbstractFileSystem extends FileSystem {
     }
   }
 
-  @Override
-  protected OutputStream getOutputStream(PathFragment path, boolean append) throws IOException {
-    return getOutputStream(path, append, /* internal= */ false);
-  }
-
-  private static final class ProfiledInputStream extends FilterInputStream {
-    private final InputStream impl;
+  private static final class ProfiledFileInputStream extends FileInputStream {
     private final String name;
 
-    public ProfiledInputStream(InputStream impl, String name) {
-      super(impl);
-      this.impl = impl;
+    public ProfiledFileInputStream(String name) throws FileNotFoundException {
+      super(name);
       this.name = name;
     }
 
@@ -173,7 +146,9 @@ public abstract class AbstractFileSystem extends FileSystem {
     public int read() throws IOException {
       long startTime = Profiler.nanoTimeMaybe();
       try {
-        return impl.read();
+        // Note that FileInputStream#read() does *not* call any of our overridden methods,
+        // so there's no concern with double counting here.
+        return super.read();
       } finally {
         profiler.logSimpleTask(startTime, ProfilerTask.VFS_READ, name);
       }
@@ -188,7 +163,7 @@ public abstract class AbstractFileSystem extends FileSystem {
     public int read(byte[] b, int off, int len) throws IOException {
       long startTime = Profiler.nanoTimeMaybe();
       try {
-        return impl.read(b, off, len);
+        return super.read(b, off, len);
       } finally {
         profiler.logSimpleTask(startTime, ProfilerTask.VFS_READ, name);
       }
