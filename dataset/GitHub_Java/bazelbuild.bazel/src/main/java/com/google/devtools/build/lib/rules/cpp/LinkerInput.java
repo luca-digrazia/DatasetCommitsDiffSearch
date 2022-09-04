@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.Artifact;
  * embedded objects and if so, the list of the object files themselves.
  */
 public interface LinkerInput {
-
   /**
    * Returns the type of the linker input.
    */

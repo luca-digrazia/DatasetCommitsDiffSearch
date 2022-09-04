@@ -1284,8 +1284,7 @@ public final class CcCompilationHelper {
                 // The source action does not generate dwo when it has bitcode
                 // output (since it isn't generating a native object with debug
                 // info). In that case the LtoBackendAction will generate the dwo.
-                ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration),
-                bitcodeOutput,
+                ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration) && !bitcodeOutput,
                 isGenerateDotdFile(sourceArtifact));
             break;
         }
@@ -1353,7 +1352,6 @@ public final class CcCompilationHelper {
             /* ccRelativeName= */ null,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
-            /* isUsingFission= */ false,
             /* dwoFile= */ null,
             /* ltoIndexingFile= */ null,
             /* additionalBuildVariables= */ ImmutableMap.of()));
@@ -1413,7 +1411,6 @@ public final class CcCompilationHelper {
       PathFragment ccRelativeName,
       CppModuleMap cppModuleMap,
       Artifact gcnoFile,
-      boolean isUsingFission,
       Artifact dwoFile,
       Artifact ltoIndexingFile,
       ImmutableMap<String, String> additionalBuildVariables) {
@@ -1439,7 +1436,6 @@ public final class CcCompilationHelper {
         toPathString(sourceFile),
         toPathString(builder.getOutputFile()),
         toPathString(gcnoFile),
-        isUsingFission,
         toPathString(dwoFile),
         toPathString(ltoIndexingFile),
         ImmutableList.of(),
@@ -1528,7 +1524,6 @@ public final class CcCompilationHelper {
             ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
             gcnoFile,
-            generateDwo,
             dwoFile,
             /* ltoIndexingFile= */ null,
             /* additionalBuildVariables= */ ImmutableMap.of()));
@@ -1582,7 +1577,6 @@ public final class CcCompilationHelper {
             /* ccRelativeName= */ null,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
-            /* isUsingFission= */ false,
             /* dwoFile= */ null,
             /* ltoIndexingFile= */ null,
             /* additionalBuildVariables= */ ImmutableMap.of()));
@@ -1614,7 +1608,6 @@ public final class CcCompilationHelper {
         /* addObject= */ false,
         /* enableCoverage= */ false,
         /* generateDwo= */ false,
-        /* bitcodeOutput= */ false,
         isGenerateDotdFile(moduleMapArtifact));
   }
 
@@ -1629,7 +1622,6 @@ public final class CcCompilationHelper {
       boolean addObject,
       boolean enableCoverage,
       boolean generateDwo,
-      boolean bitcodeOutput,
       boolean generateDotd)
       throws RuleErrorException {
     ImmutableList.Builder<Artifact> directOutputs = new ImmutableList.Builder<>();
@@ -1647,6 +1639,10 @@ public final class CcCompilationHelper {
           usePic,
           generateDotd);
     } else {
+      boolean bitcodeOutput =
+          featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
+              && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename());
+
       // Create PIC compile actions (same as no-PIC, but use -fPIC and
       // generate .pic.o, .pic.d, .pic.gcno instead of .o, .d, .gcno.)
       if (generatePicAction) {
@@ -1663,8 +1659,7 @@ public final class CcCompilationHelper {
                 ? CppHelper.getCompileOutputArtifact(
                     actionConstructionContext, label, gcnoFileName, configuration)
                 : null;
-        Artifact dwoFile =
-            generateDwo && !bitcodeOutput ? getDwoFile(picBuilder.getOutputFile()) : null;
+        Artifact dwoFile = generateDwo ? getDwoFile(picBuilder.getOutputFile()) : null;
         Artifact ltoIndexingFile =
             bitcodeOutput ? getLtoIndexingFile(picBuilder.getOutputFile()) : null;
 
@@ -1676,7 +1671,6 @@ public final class CcCompilationHelper {
                 ccRelativeName,
                 ccCompilationContext.getCppModuleMap(),
                 gcnoFile,
-                generateDwo,
                 dwoFile,
                 ltoIndexingFile,
                 /* additionalBuildVariables= */ ImmutableMap.of()));
@@ -1739,7 +1733,7 @@ public final class CcCompilationHelper {
                     actionConstructionContext, label, gcnoFileName, configuration)
                 : null;
 
-        Artifact noPicDwoFile = generateDwo && !bitcodeOutput ? getDwoFile(noPicOutputFile) : null;
+        Artifact noPicDwoFile = generateDwo ? getDwoFile(noPicOutputFile) : null;
         Artifact ltoIndexingFile =
             bitcodeOutput ? getLtoIndexingFile(builder.getOutputFile()) : null;
 
@@ -1751,7 +1745,6 @@ public final class CcCompilationHelper {
                 ccRelativeName,
                 cppModuleMap,
                 gcnoFile,
-                generateDwo,
                 noPicDwoFile,
                 ltoIndexingFile,
                 /* additionalBuildVariables= */ ImmutableMap.of()));
@@ -1864,7 +1857,6 @@ public final class CcCompilationHelper {
             ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
-            /* isUsingFission= */ false,
             /* dwoFile= */ null,
             /* ltoIndexingFile= */ null,
             /* additionalBuildVariables= */ ImmutableMap.of()));
@@ -1980,7 +1972,6 @@ public final class CcCompilationHelper {
             ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
-            /* isUsingFission= */ false,
             /* dwoFile= */ null,
             /* ltoIndexingFile= */ null,
             ImmutableMap.of(
@@ -2006,7 +1997,6 @@ public final class CcCompilationHelper {
             ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
-            /* isUsingFission= */ false,
             /* dwoFile= */ null,
             /* ltoIndexingFile= */ null,
             ImmutableMap.of(

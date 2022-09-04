@@ -430,11 +430,10 @@ public class CompilationSupport {
                 ccToolchain,
                 fdoContext,
                 buildConfiguration)
-            .addCcLinkingContexts(
-                CppHelper.getLinkingContextsFromDeps(
-                    ImmutableList.copyOf(ruleContext.getPrerequisites("deps", Mode.TARGET))))
+            .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
             .setLinkedArtifactNameSuffix(intermediateArtifacts.archiveFileNameSuffix())
             .setNeverLink(true)
+            .setCheckDepsGenerateCpp(false)
             .addVariableExtension(extensionBuilder.build());
 
     if (linkType != null) {

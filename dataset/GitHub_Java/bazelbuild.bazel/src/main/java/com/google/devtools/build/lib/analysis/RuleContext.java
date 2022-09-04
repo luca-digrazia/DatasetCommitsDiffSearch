@@ -1154,9 +1154,7 @@ public final class RuleContext extends TargetContext
       throw new IllegalStateException(getRuleClassNameForLogging() + " attribute " + attributeName
         + " is not a label type attribute");
     }
-    // TODO(https://github.com/bazelbuild/bazel/issues/7814): Refactor this to be more clear and
-    // not require a specific ConfigurationTransition.
-    ConfigurationTransition transition = attributeDefinition.getConfigurationTransition(null);
+    ConfigurationTransition transition = attributeDefinition.getConfigurationTransition();
     if (mode == Mode.HOST) {
       if (!(transition instanceof PatchTransition)) {
         throw new IllegalStateException(getRule().getLocation() + ": "

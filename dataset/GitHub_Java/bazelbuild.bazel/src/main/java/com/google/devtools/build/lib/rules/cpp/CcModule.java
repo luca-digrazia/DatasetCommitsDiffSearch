@@ -52,7 +52,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.WithFeatureSe
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.Expandable;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringValueParser;
 import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
 import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
@@ -86,7 +86,7 @@ public class CcModule
         FeatureConfiguration,
         CcCompilationContext,
         CcLinkingContext,
-        LibraryToLink,
+        LibraryToLinkWrapper,
         CcToolchainVariables,
         SkylarkRuleContext,
         CcToolchainConfigInfo> {
@@ -318,7 +318,7 @@ public class CcModule
   }
 
   /**
-   * This method returns a {@link LibraryToLink} object that will be used to contain linking
+   * This method returns a {@link LibraryToLinkWrapper} object that will be used to contain linking
    * artifacts and information for a single library that will later be used by a linking action.
    *
    * @param actionsObject SkylarkActionFactory
@@ -333,7 +333,7 @@ public class CcModule
    * @throws InterruptedException
    */
   @Override
-  public LibraryToLink createLibraryLinkerInput(
+  public LibraryToLinkWrapper createLibraryLinkerInput(
       Object actionsObject,
       Object featureConfigurationObject,
       Object ccToolchainProviderObject,
@@ -457,7 +457,7 @@ public class CcModule
           "Must pass at least one of the following parameters: static_library, pic_static_library, "
               + "dynamic_library and interface_library.");
     }
-    return LibraryToLink.builder()
+    return LibraryToLinkWrapper.builder()
         .setLibraryIdentifier(CcLinkingOutputs.libraryIdentifierOf(notNullArtifactForIdentifier))
         .setStaticLibrary(staticLibrary)
         .setPicStaticLibrary(picStaticLibrary)
@@ -538,7 +538,7 @@ public class CcModule
       StarlarkContext context)
       throws EvalException {
     @SuppressWarnings("unchecked")
-    SkylarkList<LibraryToLink> librariesToLink =
+    SkylarkList<LibraryToLinkWrapper> librariesToLink =
         nullIfNone(librariesToLinkObject, SkylarkList.class);
     @SuppressWarnings("unchecked")
     SkylarkList<String> userLinkFlags = nullIfNone(userLinkFlagsObject, SkylarkList.class);
@@ -698,16 +698,16 @@ public class CcModule
             .setNeverLink(neverLink);
     try {
       CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
-      ImmutableList<LibraryToLink> libraryToLink = ImmutableList.of();
+      ImmutableList<LibraryToLinkWrapper> libraryToLinkWrapper = ImmutableList.of();
       if (!ccCompilationOutputs.isEmpty()) {
         ccLinkingOutputs = helper.link(ccCompilationOutputs);
         if (!neverLink && !ccLinkingOutputs.isEmpty()) {
-          libraryToLink = ImmutableList.of(ccLinkingOutputs.getLibraryToLink());
+          libraryToLinkWrapper = ImmutableList.of(ccLinkingOutputs.getLibraryToLink());
         }
       }
       CcLinkingContext ccLinkingContext =
-          helper.buildCcLinkingContextFromLibrariesToLink(
-              libraryToLink, CcCompilationContext.EMPTY);
+          helper.buildCcLinkingContextFromLibraryToLinkWrappers(
+              libraryToLinkWrapper, CcCompilationContext.EMPTY);
       return new LinkingInfo(ccLinkingContext, ccLinkingOutputs);
     } catch (RuleErrorException e) {
       throw new EvalException(ruleContext.getRule().getLocation(), e);
@@ -893,10 +893,7 @@ public class CcModule
         }
       }
 
-      CppPlatform platform =
-          targetLibc.equals(CppActionConfigs.MACOS_TARGET_LIBC)
-              ? CppPlatform.MAC
-              : CppPlatform.LINUX;
+      CppPlatform platform = targetLibc.equals("macos") ? CppPlatform.MAC : CppPlatform.LINUX;
       for (CToolchain.Feature feature :
           CppActionConfigs.getLegacyFeatures(
               platform,

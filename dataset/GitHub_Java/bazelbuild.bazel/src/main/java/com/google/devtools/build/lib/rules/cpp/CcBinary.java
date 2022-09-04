@@ -382,9 +382,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                   fdoContext,
                   ruleContext.getConfiguration())
               .fromCommon(common)
-              .addCcLinkingContexts(
-                  CppHelper.getLinkingContextsFromDeps(
-                      ImmutableList.of(CppHelper.mallocForTarget(ruleContext))))
+              .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
               .emitInterfaceSharedLibraries(true)
               .setAlwayslink(false);
       ccLinkingOutputs = linkingHelper.link(ccCompilationOutputs);

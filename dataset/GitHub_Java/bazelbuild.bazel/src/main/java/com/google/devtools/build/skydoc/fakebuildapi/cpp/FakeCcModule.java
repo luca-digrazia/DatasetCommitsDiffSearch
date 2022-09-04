@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CompilationInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.FeatureConfigurationApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkWrapperApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LinkingInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.Environment;
@@ -43,14 +43,14 @@ public class FakeCcModule
     implements BazelCcModuleApi<
         FileApi,
         SkylarkRuleContextApi,
-        CcToolchainProviderApi<FeatureConfigurationApi>,
+        CcToolchainProviderApi,
         FeatureConfigurationApi,
         CompilationInfoApi,
         CcCompilationContextApi,
         CcCompilationOutputsApi,
         LinkingInfoApi,
         CcLinkingContextApi,
-        LibraryToLinkApi,
+        LibraryToLinkWrapperApi,
         CcToolchainVariablesApi,
         CcToolchainConfigInfoApi> {
 
@@ -60,11 +60,8 @@ public class FakeCcModule
   }
 
   @Override
-  public FeatureConfigurationApi configureFeatures(
-      Object ruleContextOrNone,
-      CcToolchainProviderApi<FeatureConfigurationApi> toolchain,
-      SkylarkList<String> requestedFeatures,
-      SkylarkList<String> unsupportedFeatures)
+  public FeatureConfigurationApi configureFeatures(CcToolchainProviderApi toolchain,
+      SkylarkList<String> requestedFeatures, SkylarkList<String> unsupportedFeatures)
       throws EvalException {
     return null;
   }
@@ -122,7 +119,7 @@ public class FakeCcModule
   }
 
   @Override
-  public LibraryToLinkApi createLibraryLinkerInput(
+  public LibraryToLinkWrapperApi createLibraryLinkerInput(
       Object actions,
       Object featureConfiguration,
       Object ccToolchainProvider,
@@ -171,7 +168,7 @@ public class FakeCcModule
   public CompilationInfoApi compile(
       SkylarkRuleContextApi skylarkRuleContext,
       FeatureConfigurationApi skylarkFeatureConfiguration,
-      CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
+      CcToolchainProviderApi skylarkCcToolchainProvider,
       SkylarkList<FileApi> sources,
       SkylarkList<FileApi> headers,
       Object skylarkIncludes,
@@ -185,7 +182,7 @@ public class FakeCcModule
   public LinkingInfoApi link(
       SkylarkRuleContextApi skylarkRuleContext,
       FeatureConfigurationApi skylarkFeatureConfiguration,
-      CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
+      CcToolchainProviderApi skylarkCcToolchainProvider,
       CcCompilationOutputsApi ccCompilationOutputs,
       Object skylarkLinkopts,
       Object dynamicLibrary,

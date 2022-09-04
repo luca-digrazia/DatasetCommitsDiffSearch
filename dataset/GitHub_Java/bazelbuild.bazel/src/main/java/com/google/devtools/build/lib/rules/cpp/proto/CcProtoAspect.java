@@ -316,7 +316,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
     }
 
     private CcLinkingHelper initializeLinkingHelper(
-        FeatureConfiguration featureConfiguration, ImmutableList<TransitiveInfoCollection> deps) {
+        FeatureConfiguration featureConfiguration, List<TransitiveInfoCollection> deps) {
       CcToolchainProvider toolchain = ccToolchain(ruleContext);
       CcLinkingHelper helper =
           new CcLinkingHelper(
@@ -326,7 +326,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               toolchain,
               toolchain.getFdoContext(),
               ruleContext.getConfiguration());
-      helper.addCcLinkingContexts(CppHelper.getLinkingContextsFromDeps(deps));
+      helper.addDeps(deps);
       // TODO(dougk): Configure output artifact with action_config
       // once proto compile action is configurable from the crosstool.
       if (!toolchain.supportsDynamicLinker(featureConfiguration)) {

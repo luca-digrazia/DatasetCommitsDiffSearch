@@ -34,14 +34,14 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 public interface BazelCcModuleApi<
         FileT extends FileApi,
         SkylarkRuleContextT extends SkylarkRuleContextApi,
-        CcToolchainProviderT extends CcToolchainProviderApi<FeatureConfigurationT>,
+        CcToolchainProviderT extends CcToolchainProviderApi,
         FeatureConfigurationT extends FeatureConfigurationApi,
         CompilationInfoT extends CompilationInfoApi,
         CcCompilationContextT extends CcCompilationContextApi,
         CcCompilationOutputsT extends CcCompilationOutputsApi,
         LinkingInfoT extends LinkingInfoApi,
         LinkingContextT extends CcLinkingContextApi,
-        LibraryToLinkT extends LibraryToLinkApi,
+        LibraryToLinkWrapperT extends LibraryToLinkWrapperApi,
         CcToolchainVariablesT extends CcToolchainVariablesApi,
         CcToolchainConfigInfoT extends CcToolchainConfigInfoApi>
     extends CcModuleApi<
@@ -49,7 +49,7 @@ public interface BazelCcModuleApi<
         FeatureConfigurationT,
         CcCompilationContextT,
         LinkingContextT,
-        LibraryToLinkT,
+        LibraryToLinkWrapperT,
         CcToolchainVariablesT,
         SkylarkRuleContextT,
         CcToolchainConfigInfoT> {
