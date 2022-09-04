@@ -19,10 +19,10 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
+import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /** Rule definition for the {@code android_instrumentation_test} rule. */
@@ -52,10 +52,10 @@ public class AndroidInstrumentationTestBaseRule implements RuleDefinition {
             attr("target_device", LABEL)
                 .mandatory()
                 .exec()
-                .cfg(ExecutionTransitionFactory.create())
+                .cfg(HostTransition.createFactory())
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 .mandatoryProviders(
-                    StarlarkProviderIdentifier.forKey(AndroidDeviceBrokerInfo.PROVIDER.getKey())))
+                    SkylarkProviderIdentifier.forKey(AndroidDeviceBrokerInfo.PROVIDER.getKey())))
         /* <!-- #BLAZE_RULE(android_instrumentation_test).ATTRIBUTE(support_apks) -->
         Other APKs to install on the device before the instrumentation test starts.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
@@ -72,7 +72,7 @@ public class AndroidInstrumentationTestBaseRule implements RuleDefinition {
         .add(
             attr("$test_entry_point", LABEL)
                 .exec()
-                .cfg(ExecutionTransitionFactory.create())
+                .cfg(HostTransition.createFactory())
                 .value(
                     environment.getToolsLabel("//tools/android:instrumentation_test_entry_point")))
         .build();
