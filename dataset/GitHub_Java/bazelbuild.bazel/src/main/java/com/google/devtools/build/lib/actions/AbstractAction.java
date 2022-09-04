@@ -63,16 +63,10 @@ import javax.annotation.concurrent.GuardedBy;
   name = "Action",
   category = SkylarkModuleCategory.BUILTIN,
   doc =
-      "An action created during rule analysis."
-          + "<p>This object is visible for the purpose of testing, and may be obtained from an "
-          + "<a href=\"globals.html#Actions\">Actions</a> provider. It is normally not necessary "
-          + "to access <code>Action</code> objects or their fields within a rule's implementation "
-          + "function. You may instead want to see the "
-          + "<a href='../rules.$DOC_EXT#actions'>Rules page</a> for a general discussion of how to "
-          + "use actions when defining custom rules, or the <a href='actions.html'>API reference"
-          + "</a> for creating actions."
-          + "<p>Some fields of this object are only applicable for certain kinds of actions. "
-          + "Fields that are inapplicable are set to <code>None</code>."
+      "An action created on a <a href=\"ctx.html\">ctx</a> object. You can retrieve these "
+          + "using the <a href=\"globals.html#Actions\">Actions</a> provider. Some fields are only "
+          + "applicable for certain kinds of actions. Fields that are inapplicable are set to "
+          + "<code>None</code>."
 )
 public abstract class AbstractAction implements Action, SkylarkValue {
   /**
@@ -303,11 +297,6 @@ public abstract class AbstractAction implements Action, SkylarkValue {
         + getOutputs() + "]" + ")";
   }
 
-  @SkylarkCallable(
-      name = "mnemonic",
-      structField = true,
-      doc = "The mnemonic for this action."
-  )
   @Override
   public abstract String getMnemonic();
 
@@ -631,17 +620,6 @@ public abstract class AbstractAction implements Action, SkylarkValue {
       allowReturnNones = true)
   public SkylarkDict<String, String> getSkylarkSubstitutions() {
     return null;
-  }
-
-  @SkylarkCallable(
-      name = "env",
-      structField = true,
-      doc = "The 'fixed' environment variables for this action. This includes only environment "
-          + "settings which are explicitly set by the action definition, and thus omits settings "
-          + "which are only pre-set in the execution environment."
-  )
-  public SkylarkDict<String, String> getEnv() {
-    return SkylarkDict.copyOf(null, env.getFixedEnv());
   }
 
   @Override

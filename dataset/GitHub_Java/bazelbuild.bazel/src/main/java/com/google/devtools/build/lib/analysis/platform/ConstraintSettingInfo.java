@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.platform;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
@@ -24,6 +25,9 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FunctionSignature;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.Fingerprint;
 
 /** Provider for a platform constraint setting that is available to be fulfilled. */
@@ -38,9 +42,30 @@ public class ConstraintSettingInfo extends NativeInfo {
   /** Name used in Skylark for accessing this provider. */
   public static final String SKYLARK_NAME = "ConstraintSettingInfo";
 
+  private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
+      FunctionSignature.WithValues.create(
+          FunctionSignature.of(
+              /*numMandatoryPositionals=*/ 1,
+              /*numOptionalPositionals=*/ 0,
+              /*numMandatoryNamedOnly*/ 0,
+              /*starArg=*/ false,
+              /*kwArg=*/ false,
+              /*names=*/ "label"),
+          /*defaultValues=*/ null,
+          /*types=*/ ImmutableList.<SkylarkType>of(SkylarkType.of(Label.class)));
+
   /** Skylark constructor and identifier for this provider. */
   public static final NativeProvider<ConstraintSettingInfo> PROVIDER =
-      new NativeProvider<ConstraintSettingInfo>(ConstraintSettingInfo.class, SKYLARK_NAME) {};
+      new NativeProvider<ConstraintSettingInfo>(
+          ConstraintSettingInfo.class, SKYLARK_NAME, SIGNATURE) {
+        @Override
+        protected ConstraintSettingInfo createInstanceFromSkylark(Object[] args, Location loc)
+            throws EvalException {
+          // Based on SIGNATURE above, the args are label.
+          Label label = (Label) args[0];
+          return ConstraintSettingInfo.create(label, loc);
+        }
+      };
 
   private final Label label;
 
