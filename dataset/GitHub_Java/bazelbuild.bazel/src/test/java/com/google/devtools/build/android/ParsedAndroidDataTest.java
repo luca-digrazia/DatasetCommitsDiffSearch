@@ -21,7 +21,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.jimfs.Jimfs;
-import com.google.common.truth.Subject;
+import com.google.common.truth.FailureStrategy;
+import com.google.common.truth.SubjectFactory;
 import com.google.common.truth.Truth;
 import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.FullyQualifiedName.Factory;
@@ -663,6 +664,12 @@ public class ParsedAndroidDataTest {
     }
   }
 
-  final Subject.Factory<ParsedAndroidDataSubject, ParsedAndroidData> parsedAndroidData =
-      ParsedAndroidDataSubject::new;
+  final SubjectFactory<ParsedAndroidDataSubject, ParsedAndroidData> parsedAndroidData =
+      new SubjectFactory<ParsedAndroidDataSubject, ParsedAndroidData>() {
+        @Override
+        public ParsedAndroidDataSubject getSubject(FailureStrategy fs, ParsedAndroidData that) {
+          return new ParsedAndroidDataSubject(fs, that);
+        }
+      };
+
 }
