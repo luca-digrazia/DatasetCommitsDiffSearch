@@ -46,7 +46,6 @@ import java.lang.annotation.Target;
  *
  * @see Rest
  * @see Post
- * @see Part
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.PARAMETER)
