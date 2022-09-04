@@ -23,23 +23,91 @@ import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import lib.APIException;
 import lib.ApiClient;
-import models.api.responses.system.ESClusterHealthResponse;
-import models.api.responses.system.ServerJVMStatsResponse;
-import models.api.responses.system.ServerThroughputResponse;
+import lib.ServerNodes;
+import models.api.requests.SystemJobTriggerRequest;
+import models.api.responses.system.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import play.libs.F;
+import play.mvc.Http;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 public class ClusterService {
     private static final Logger log = LoggerFactory.getLogger(ClusterService.class);
     private final ApiClient api;
+    private final SystemJob.Factory systemJobFactory;
+    private final ServerNodes serverNodes;
 
     @Inject
-    private ClusterService(ApiClient api) {
+    private ClusterService(ApiClient api, SystemJob.Factory systemJobFactory, ServerNodes serverNodes) {
         this.api = api;
+        this.systemJobFactory = systemJobFactory;
+        this.serverNodes = serverNodes;
+    }
+
+    public void triggerSystemJob(SystemJob.Type type, User user) throws IOException, APIException {
+        api.post()
+                .path("/system/jobs")
+                .body(new SystemJobTriggerRequest(type, user))
+                .expect(Http.Status.ACCEPTED)
+                .execute();
+    }
+
+    public List<Notification> allNotifications() throws IOException, APIException {
+        GetNotificationsResponse r = api.get(GetNotificationsResponse.class).path("/system/notifications").execute();
+
+        List<Notification> notifications = Lists.newArrayList();
+        for (NotificationSummaryResponse notification : r.notifications) {
+            try {
+                notifications.add(new Notification(notification));
+            } catch(IllegalArgumentException e) {
+                play.Logger.warn("There is a notification type we can't handle: [" + notification.type + "]");
+                continue;
+            }
+        }
+
+        return notifications;
+    }
+
+    public void deleteNotification(Notification.Type type) throws APIException, IOException {
+        api.delete()
+                .path("/system/notifications/{0}", type.toString().toLowerCase())
+                .expect(204)
+                .execute();
+    }
+
+    public List<SystemMessage> getSystemMessages(int page) throws IOException, APIException {
+        GetSystemMessagesResponse r = api.get(GetSystemMessagesResponse.class)
+                .path("/system/messages")
+                .queryParam("page", page)
+                .execute();
+        List<SystemMessage> messages = Lists.newArrayList();
+        for (SystemMessageSummaryResponse message : r.messages) {
+            messages.add(new SystemMessage(message));
+        }
+
+        return messages;
+    }
+
+    public int getNumberOfSystemMessages() throws IOException, APIException {
+        return api.get(GetSystemMessagesResponse.class).path("/system/messages").execute().total;
+    }
+
+    public List<SystemJob> allSystemJobs() throws IOException, APIException {
+        List<SystemJob> jobs = Lists.newArrayList();
+
+        for(Node node : serverNodes.all()) {
+            GetSystemJobsResponse r = api.get(GetSystemJobsResponse.class).node(node).path("/system/jobs").execute();
+
+            for (SystemJobSummaryResponse job : r.jobs) {
+                jobs.add(systemJobFactory.fromSummaryResponse(job));
+            }
+        }
+
+        return jobs;
     }
 
     public ESClusterHealth getESClusterHealth() {
@@ -54,24 +122,32 @@ public class ClusterService {
         return null;
     }
 
-    public List<ServerJVMStats> getClusterJvmStats() {
-        List<ServerJVMStats> result = Lists.newArrayList();
-        Collection<ServerJVMStatsResponse> rs = api.get(ServerJVMStatsResponse.class).fromAllNodes().path("/system/jvm").executeOnAll();
+    public List<NodeJVMStats> getClusterJvmStats() {
+        List<NodeJVMStats> result = Lists.newArrayList();
+        Map<Node, ClusterEntityJVMStatsResponse> rs = api.get(ClusterEntityJVMStatsResponse.class).fromAllNodes().path("/system/jvm").executeOnAll();
 
-        for (ServerJVMStatsResponse r : rs) {
-            result.add(new ServerJVMStats(r));
+        for (Map.Entry<Node, ClusterEntityJVMStatsResponse> entry : rs.entrySet()) {
+            if (entry.getValue() == null) {
+                log.warn("Skipping failed jvm stats request for node {}", entry.getKey());
+                continue;
+            }
+            result.add(new NodeJVMStats(entry.getValue()));
         }
 
         return result;
     }
 
-    public int getClusterThroughput() {
-        final Collection<ServerThroughputResponse> responses =
-                api.get(ServerThroughputResponse.class).fromAllNodes().path("/system/throughput").executeOnAll();
+    public F.Tuple<Integer, Integer> getClusterThroughput() {
+        final Map<Node, NodeThroughputResponse> responses =
+                api.get(NodeThroughputResponse.class).fromAllNodes().path("/system/throughput").executeOnAll();
         int t = 0;
-        for (ServerThroughputResponse r : responses) {
-            t += r.throughput;
+        for (Map.Entry<Node, NodeThroughputResponse> entry : responses.entrySet()) {
+            if (entry.getValue() == null) {
+                log.warn("Skipping failed throughput request for node {}", entry.getKey());
+                continue;
+            }
+            t += entry.getValue().throughput;
         }
-        return t;
+        return F.Tuple(t, responses.size());
     }
 }
