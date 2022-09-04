@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.buildtool;
 
-import static com.google.devtools.build.lib.platform.SuspendCounter.suspendCount;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -48,9 +46,9 @@ import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsProvider;
-import com.google.devtools.common.options.RegexPatternOption;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 /**
  * Provides the bulk of the implementation of the 'blaze build' command.
@@ -66,8 +64,8 @@ public class BuildTool {
 
   private static Logger logger = Logger.getLogger(BuildTool.class.getName());
 
-  protected final CommandEnvironment env;
-  protected final BlazeRuntime runtime;
+  protected CommandEnvironment env;
+  protected BlazeRuntime runtime;
 
   /**
    * Constructs a BuildTool.
@@ -80,7 +78,8 @@ public class BuildTool {
   }
 
   /**
-   * The crux of the build system: builds the targets specified in the request.
+   * The crux of the build system. Builds the targets specified in the request using the specified
+   * Executor.
    *
    * <p>Performs loading, analysis and execution for the specified set of targets, honoring the
    * configuration options in the BuildRequest. Returns normally iff successful, throws an exception
@@ -111,6 +110,10 @@ public class BuildTool {
     try (SilentCloseable c = Profiler.instance().profile("createBuildOptions")) {
       buildOptions = runtime.createBuildOptions(request);
     }
+    // Sync the package manager before sending the BuildStartingEvent in runLoadingPhase()
+    try (SilentCloseable c = Profiler.instance().profile("setupPackageCache")) {
+      env.setupPackageCache(request);
+    }
 
     ExecutionTool executionTool = null;
     boolean catastrophe = false;
@@ -138,8 +141,8 @@ public class BuildTool {
 
       initializeOutputFilter(request);
 
-      AnalysisResult analysisResult =
-          AnalysisPhaseRunner.execute(env, request, buildOptions, validator);
+      AnalysisPhaseRunner analysisPhaseRunner = new AnalysisPhaseRunner(env);
+      AnalysisResult analysisResult = analysisPhaseRunner.execute(request, buildOptions, validator);
 
       // We cannot move the executionTool down to the execution phase part since it does set up the
       // symlinks for tools.
@@ -263,7 +266,6 @@ public class BuildTool {
       BuildRequest request, TargetValidator validator) {
     BuildResult result = new BuildResult(request.getStartTime());
     maybeSetStopOnFirstFailure(request, result);
-    int startSuspendCount = suspendCount();
     Throwable catastrophe = null;
     ExitCode exitCode = ExitCode.BLAZE_INTERNAL_ERROR;
     try {
@@ -320,7 +322,7 @@ public class BuildTool {
       catastrophe = throwable;
       Throwables.propagate(throwable);
     } finally {
-      stopRequest(result, catastrophe, exitCode, startSuspendCount);
+      stopRequest(result, catastrophe, exitCode);
     }
 
     return result;
@@ -340,11 +342,9 @@ public class BuildTool {
    * Initializes the output filter to the value given with {@code --output_filter}.
    */
   private void initializeOutputFilter(BuildRequest request) {
-    RegexPatternOption outputFilterOption = request.getBuildOptions().outputFilter;
-    if (outputFilterOption != null) {
-      getReporter()
-          .setOutputFilter(
-              OutputFilter.RegexOutputFilter.forPattern(outputFilterOption.regexPattern()));
+    Pattern outputFilter = request.getBuildOptions().outputFilter;
+    if (outputFilter != null) {
+      getReporter().setOutputFilter(OutputFilter.RegexOutputFilter.forPattern(outputFilter));
     }
   }
 
@@ -357,17 +357,12 @@ public class BuildTool {
    *
    * <p>This logs the build result, cleans up and stops the clock.
    *
-   * @param result result to update
-   * @param crash any unexpected {@link RuntimeException} or {@link Error}. May be null
-   * @param exitCondition a suggested exit condition from either the build logic or a thrown
-   *     exception somewhere along the way
-   * @param startSuspendCount number of suspensions before the build started
+   * @param crash Any unexpected RuntimeException or Error. May be null
+   * @param exitCondition A suggested exit condition from either the build logic or
+   *        a thrown exception somewhere along the way.
    */
-  public void stopRequest(
-      BuildResult result, Throwable crash, ExitCode exitCondition, int startSuspendCount) {
+  public void stopRequest(BuildResult result, Throwable crash, ExitCode exitCondition) {
     Preconditions.checkState((crash == null) || !exitCondition.equals(ExitCode.SUCCESS));
-    int stopSuspendCount = suspendCount();
-    Preconditions.checkState(startSuspendCount <= stopSuspendCount);
     result.setUnhandledThrowable(crash);
     result.setExitCondition(exitCondition);
     InterruptedException ie = null;
@@ -379,7 +374,6 @@ public class BuildTool {
     }
     // The stop time has to be captured before we send the BuildCompleteEvent.
     result.setStopTime(runtime.getClock().currentTimeMillis());
-    result.setWasSuspended(stopSuspendCount > startSuspendCount);
     env.getEventBus()
         .post(
             new BuildCompleteEvent(

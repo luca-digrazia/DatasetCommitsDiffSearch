@@ -101,16 +101,7 @@ public interface MemoizingEvaluator {
    * guaranteed to be at the same version.
    */
   default void noteEvaluationsAtSameVersionMayBeFinished(ExtendedEventHandler eventHandler)
-      throws InterruptedException {
-    postLoggingStats(eventHandler);
-  }
-
-  /**
-   * Tells the evaluator to post any logging statistics that it may have accumulated over the last
-   * sequence of evaluations. Normally called internally by {@link
-   * #noteEvaluationsAtSameVersionMayBeFinished}.
-   */
-  default void postLoggingStats(ExtendedEventHandler eventHandler) {}
+      throws InterruptedException {}
 
   /**
    * Returns the done (without error) values in the graph.
