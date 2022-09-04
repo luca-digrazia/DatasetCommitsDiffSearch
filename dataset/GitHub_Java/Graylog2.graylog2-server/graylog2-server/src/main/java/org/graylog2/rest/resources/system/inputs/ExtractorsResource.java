@@ -26,8 +26,8 @@ import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.ConfigurationException;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.auditlog.Actions;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
@@ -82,7 +82,6 @@ public class ExtractorsResource extends RestResource {
     private final ActivityWriter activityWriter;
     private final MetricRegistry metricRegistry;
     private final ExtractorFactory extractorFactory;
-    private final ConverterFactory converterFactory;
     private final PersistedInputs persistedInputs;
 
     @Inject
@@ -90,13 +89,11 @@ public class ExtractorsResource extends RestResource {
                               final ActivityWriter activityWriter,
                               final MetricRegistry metricRegistry,
                               final ExtractorFactory extractorFactory,
-                              final ConverterFactory converterFactory,
                               final PersistedInputs persistedInputs) {
         this.inputService = inputService;
         this.activityWriter = activityWriter;
         this.metricRegistry = metricRegistry;
         this.extractorFactory = extractorFactory;
-        this.converterFactory = converterFactory;
         this.persistedInputs = persistedInputs;
     }
 
@@ -112,7 +109,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 400, message = "Field the extractor should write on is reserved."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration.")
     })
-    @AuditEvent(type = AuditEventTypes.EXTRACTOR_CREATE)
+    @AuditLog(object = "extractor", captureRequestEntity = true, captureResponseEntity = true)
     public Response create(@ApiParam(name = "inputId", required = true)
                            @PathParam("inputId") String inputId,
                            @ApiParam(name = "JSON body", required = true)
@@ -156,7 +153,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 400, message = "Field the extractor should write on is reserved."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration.")
     })
-    @AuditEvent(type = AuditEventTypes.EXTRACTOR_UPDATE)
+    @AuditLog(object = "extractor", captureRequestEntity = true, captureResponseEntity = true)
     public ExtractorSummary update(@ApiParam(name = "inputId", required = true)
                                       @PathParam("inputId") String inputId,
                                       @ApiParam(name = "extractorId", required = true)
@@ -169,8 +166,9 @@ public class ExtractorsResource extends RestResource {
         final Extractor originalExtractor = inputService.getExtractor(mongoInput, extractorId);
         final Extractor extractor = buildExtractorFromRequest(cer, originalExtractor.getId());
 
+        inputService.removeExtractor(mongoInput, originalExtractor.getId());
         try {
-            inputService.updateExtractor(mongoInput, extractor);
+            inputService.addExtractor(mongoInput, extractor);
         } catch (ValidationException e) {
             LOG.error("Extractor persist validation failed.", e);
             throw new BadRequestException(e);
@@ -241,7 +239,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "Extractor not found.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditEvent(type = AuditEventTypes.EXTRACTOR_DELETE)
+    @AuditLog(object = "extractor")
     public void terminate(
             @ApiParam(name = "inputId", required = true)
             @PathParam("inputId") String inputId,
@@ -274,7 +272,7 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     @Path("order")
-    @AuditEvent(type = AuditEventTypes.EXTRACTOR_ORDER_UPDATE)
+    @AuditLog(action = Actions.UPDATE, object = "extractor order", captureRequestEntity = true, captureResponseEntity = true)
     public void order(@ApiParam(name = "inputId", value = "Persist ID (!) of input.", required = true)
                       @PathParam("inputId") String inputPersistId,
                       @ApiParam(name = "JSON body", required = true) OrderExtractorsRequest oer) throws NotFoundException {
@@ -300,30 +298,13 @@ public class ExtractorsResource extends RestResource {
     }
 
     private ExtractorSummary toSummary(Extractor extractor) {
-        final ExtractorMetrics metrics = ExtractorMetrics.create(
-                MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getCompleteTimerName())),
-                MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getConditionTimerName())),
-                MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getExecutionTimerName())),
-                MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getConverterTimerName())),
-                metricRegistry.getCounters().get(extractor.getConditionHitsCounterName()).getCount(),
-                metricRegistry.getCounters().get(extractor.getConditionMissesCounterName()).getCount());
+        final ExtractorMetrics metrics = ExtractorMetrics.create(MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getTotalTimerName())),
+                MetricUtils.buildTimerMap(metricRegistry.getTimers().get(extractor.getConverterTimerName())));
 
-        return ExtractorSummary.create(
-                extractor.getId(),
-                extractor.getTitle(),
-                extractor.getType().toString().toLowerCase(Locale.ENGLISH),
-                extractor.getCursorStrategy().toString().toLowerCase(Locale.ENGLISH),
-                extractor.getSourceField(),
-                extractor.getTargetField(),
-                extractor.getExtractorConfig(),
-                extractor.getCreatorUserId(),
-                extractor.converterConfigMap(),
-                extractor.getConditionType().toString().toLowerCase(Locale.ENGLISH),
-                extractor.getConditionValue(),
-                extractor.getOrder(),
-                extractor.getExceptionCount(),
-                extractor.getConverterExceptionCount(),
-                metrics);
+        return ExtractorSummary.create(extractor.getId(), extractor.getTitle(), extractor.getType().toString().toLowerCase(Locale.ENGLISH), extractor.getCursorStrategy().toString().toLowerCase(Locale.ENGLISH),
+                extractor.getSourceField(), extractor.getTargetField(), extractor.getExtractorConfig(), extractor.getCreatorUserId(), extractor.converterConfigMap(),
+                extractor.getConditionType().toString().toLowerCase(Locale.ENGLISH), extractor.getConditionValue(), extractor.getOrder(), extractor.getExceptionCount(),
+                extractor.getConverterExceptionCount(), metrics);
     }
 
     private List<Converter> loadConverters(Map<String, Map<String, Object>> requestConverters) {
@@ -331,7 +312,7 @@ public class ExtractorsResource extends RestResource {
 
         for (Map.Entry<String, Map<String, Object>> c : requestConverters.entrySet()) {
             try {
-                converters.add(converterFactory.create(Converter.Type.valueOf(c.getKey().toUpperCase(Locale.ENGLISH)), c.getValue()));
+                converters.add(ConverterFactory.factory(Converter.Type.valueOf(c.getKey().toUpperCase(Locale.ENGLISH)), c.getValue()));
             } catch (ConverterFactory.NoSuchConverterException e) {
                 LOG.warn("No such converter [" + c.getKey() + "]. Skipping.", e);
             } catch (ConfigurationException e) {
