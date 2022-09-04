@@ -74,7 +74,6 @@ public final class AndroidBinaryMobileInstall {
       incrementalResourceApk =
           ProcessedAndroidData.processIncrementalBinaryDataFrom(
                   ruleContext,
-                  dataContext,
                   manifest.addMobileInstallStubApplication(ruleContext),
                   ruleContext.getImplicitOutputArtifact(
                       AndroidRuleClasses.ANDROID_INCREMENTAL_RESOURCES_APK),
@@ -87,7 +86,6 @@ public final class AndroidBinaryMobileInstall {
       splitResourceApk =
           ProcessedAndroidData.processIncrementalBinaryDataFrom(
                   ruleContext,
-                  dataContext,
                   manifest.createSplitManifest(ruleContext, "android_resources", false),
                   getMobileInstallArtifact(ruleContext, "android_resources.ap_"),
                   "incremental_split",

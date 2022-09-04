@@ -30,7 +30,8 @@ public class MergedAndroidAssets extends ParsedAndroidAssets {
     Artifact mergedAssets =
         dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_ASSETS_ZIP);
 
-    BusyBoxActionBuilder builder = BusyBoxActionBuilder.create(dataContext, "MERGE_ASSETS");
+    BusyBoxActionBuilder builder =
+        BusyBoxActionBuilder.create(dataContext.getRuleContext(), "MERGE_ASSETS");
     if (dataContext.getAndroidConfig().throwOnResourceConflict()) {
       builder.addFlag("--throwOnAssetConflict");
     }

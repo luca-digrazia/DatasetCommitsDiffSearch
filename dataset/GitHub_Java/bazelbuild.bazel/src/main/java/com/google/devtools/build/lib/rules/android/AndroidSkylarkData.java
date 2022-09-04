@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkErrorReporter;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -139,7 +138,7 @@ public abstract class AndroidSkylarkData {
       pkg = AndroidManifest.getDefaultPackage(ctx.getRuleContext());
     }
     return ResourceApk.processFromTransitiveLibraryData(
-            ctx,
+            ctx.getRuleContext(),
             ResourceDependencies.fromProviders(deps, /* neverlink = */ neverlink),
             AssetDependencies.empty(),
             StampedAndroidManifest.createEmpty(ctx.getRuleContext(), pkg, /* exported = */ false))
@@ -249,8 +248,6 @@ public abstract class AndroidSkylarkData {
                 "Defaults to False. If passed as True, these assets will not be inherited by"
                     + " targets that depend on this one.")
       },
-      useLocation = true,
-      useEnvironment = true,
       doc =
           "Merges this target's assets together with assets inherited from dependencies. Note that,"
               + " by default, actions for validating the merge are created but may not be called."
@@ -261,14 +258,11 @@ public abstract class AndroidSkylarkData {
       Object assets,
       Object assetsDir,
       SkylarkList<AndroidAssetsInfo> deps,
-      boolean neverlink,
-      Location location,
-      Environment env)
+      boolean neverlink)
       throws EvalException, InterruptedException {
-    try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
+    try {
       return AndroidAssets.from(
-              errorReporter,
+              ctx.getRuleContext(),
               listFromNoneable(assets, ConfiguredTarget.class),
               isNone(assetsDir) ? null : PathFragment.create(fromNoneable(assetsDir, String.class)))
           .process(ctx, AssetDependencies.fromProviders(deps.getImmutableList(), neverlink))
@@ -319,8 +313,6 @@ public abstract class AndroidSkylarkData {
                 "Defaults to False. If True, processes data binding expressions in layout"
                     + " resources."),
       },
-      useLocation = true,
-      useEnvironment = true,
       doc =
           "Merges this target's resources together with resources inherited from dependencies."
               + " Returns a dict of provider type to actual info, with elements for"
@@ -336,16 +328,14 @@ public abstract class AndroidSkylarkData {
       SkylarkList<ConfiguredTarget> resources,
       SkylarkList<AndroidResourcesInfo> deps,
       boolean neverlink,
-      boolean enableDataBinding,
-      Location location,
-      Environment env)
+      boolean enableDataBinding)
       throws EvalException, InterruptedException {
-    try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
-      AndroidAaptVersion aaptVersion = ctx.getAndroidConfig().getAndroidAaptVersion();
+    try {
+      AndroidAaptVersion aaptVersion =
+          AndroidCommon.getAndroidConfig(ctx.getRuleContext()).getAndroidAaptVersion();
 
       ValidatedAndroidResources validated =
-          AndroidResources.from(errorReporter, getFileProviders(resources), "resources")
+          AndroidResources.from(ctx.getRuleContext(), getFileProviders(resources), "resources")
               .process(
                   ctx,
                   manifest.asStampedManifest(),
@@ -459,7 +449,7 @@ public abstract class AndroidSkylarkData {
     }
 
     return Aar.makeAar(
-            ctx,
+            ctx.getRuleContext(),
             resources,
             assets,
             resourcesInfo.getManifest(),
@@ -575,7 +565,6 @@ public abstract class AndroidSkylarkData {
                 "Dependency targets. Providers will be extracted from these dependencies for each"
                     + " type of data."),
       },
-      useLocation = true,
       useEnvironment = true,
       doc =
           "Performs full processing of data for android_library or similar rules. Returns a dict"
@@ -593,7 +582,6 @@ public abstract class AndroidSkylarkData {
       boolean enableDataBinding,
       SkylarkList<ConfiguredTarget> proguardSpecs,
       SkylarkList<ConfiguredTarget> deps,
-      Location location,
       Environment env)
       throws InterruptedException, EvalException {
 
@@ -633,12 +621,10 @@ public abstract class AndroidSkylarkData {
               listFromNoneableOrEmpty(resources, ConfiguredTarget.class),
               resourceDeps,
               neverlink,
-              enableDataBinding,
-              location,
-              env);
+              enableDataBinding);
 
       resourcesInfo = (AndroidResourcesInfo) resourceOutput.get(AndroidResourcesInfo.PROVIDER);
-      assetsInfo = mergeAssets(ctx, assets, assetsDir, assetDeps, neverlink, location, env);
+      assetsInfo = mergeAssets(ctx, assets, assetsDir, assetDeps, neverlink);
 
       infoBuilder.putAll(resourceOutput);
     }
@@ -694,7 +680,8 @@ public abstract class AndroidSkylarkData {
       SkylarkList<ConfiguredTarget> deps)
       throws InterruptedException {
 
-    AndroidAaptVersion aaptVersion = ctx.getAndroidConfig().getAndroidAaptVersion();
+    AndroidAaptVersion aaptVersion =
+        AndroidCommon.getAndroidConfig(ctx.getRuleContext()).getAndroidAaptVersion();
 
     ValidatedAndroidResources validatedResources =
         AndroidResources.forAarImport(resources)
@@ -801,8 +788,6 @@ public abstract class AndroidSkylarkData {
                 "Dependency targets. Providers will be extracted from these dependencies for each"
                     + " type of data."),
       },
-      useLocation = true,
-      useEnvironment = true,
       doc =
           "Processes resources, assets, and manifests for android_local_test and returns a dict"
               + " from provider type to the appropriate provider.")
@@ -815,12 +800,8 @@ public abstract class AndroidSkylarkData {
       Object customPackage,
       String aaptVersionString,
       SkylarkDict<String, String> rawManifestValues,
-      SkylarkList<ConfiguredTarget> deps,
-      Location location,
-      Environment env)
+      SkylarkList<ConfiguredTarget> deps)
       throws InterruptedException, EvalException {
-    try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
 
     AndroidManifest rawManifest =
         AndroidManifest.from(
@@ -829,13 +810,15 @@ public abstract class AndroidSkylarkData {
             fromNoneable(customPackage, String.class),
             /* exportsManifest = */ false);
 
+    try {
       ResourceApk resourceApk =
           AndroidLocalTestBase.buildResourceApk(
-              ctx,
+              ctx.getRuleContext(),
               rawManifest,
-              AndroidResources.from(errorReporter, getFileProviders(resources), "resource_files"),
+              AndroidResources.from(
+                  ctx.getRuleContext(), getFileProviders(resources), "resource_files"),
               AndroidAssets.from(
-                  errorReporter,
+                  ctx.getRuleContext(),
                   listFromNoneable(assets, ConfiguredTarget.class),
                   isNone(assetsDir)
                       ? null
@@ -845,7 +828,10 @@ public abstract class AndroidSkylarkData {
               AssetDependencies.fromProviders(
                   getProviders(deps, AndroidAssetsInfo.PROVIDER), /* neverlink = */ false),
               ApplicationManifest.getManifestValues(ctx.getRuleContext(), rawManifestValues),
-              AndroidAaptVersion.chooseTargetAaptVersion(ctx, errorReporter, aaptVersionString));
+              AndroidAaptVersion.chooseTargetAaptVersion(
+                  ctx.getRuleContext(),
+                  AndroidCommon.getAndroidConfig(ctx.getRuleContext()),
+                  aaptVersionString));
 
       return getNativeInfosFrom(resourceApk, ctx.getLabel());
     } catch (RuleErrorException e) {
@@ -906,8 +892,6 @@ public abstract class AndroidSkylarkData {
                 "The version of aapt to use. Defaults to 'auto'. 'aapt' and 'aapt2' are also"
                     + " supported."),
       },
-      useLocation = true,
-      useEnvironment = true,
       doc =
           "Returns a wrapper object containing various settings shared across multiple methods for"
               + " processing binary data.")
@@ -917,16 +901,15 @@ public abstract class AndroidSkylarkData {
       SkylarkList<String> resourceConfigurationFilters,
       SkylarkList<String> densities,
       SkylarkList<String> rawNoCompressExtensions,
-      String aaptVersionString,
-      Location location,
-      Environment env)
+      String aaptVersionString)
       throws EvalException {
+    AndroidConfiguration androidConfig = AndroidCommon.getAndroidConfig(ctx.getRuleContext());
 
     AndroidAaptVersion aaptVersion;
-    try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
+    try {
       aaptVersion =
-          AndroidAaptVersion.chooseTargetAaptVersion(ctx, errorReporter, aaptVersionString);
+          AndroidAaptVersion.chooseTargetAaptVersion(
+              ctx.getRuleContext(), androidConfig, aaptVersionString);
     } catch (RuleErrorException e) {
       throw new EvalException(Location.BUILTIN, e);
     }
@@ -934,7 +917,7 @@ public abstract class AndroidSkylarkData {
     return new BinaryDataSettings(
         aaptVersion,
         fromNoneableOrDefault(
-            shrinkResources, Boolean.class, ctx.getAndroidConfig().useAndroidResourceShrinking()),
+            shrinkResources, Boolean.class, androidConfig.useAndroidResourceShrinking()),
         ResourceFilterFactory.from(aaptVersion, resourceConfigurationFilters, densities),
         ctx.getRuleContext()
             .getExpander()
@@ -946,17 +929,15 @@ public abstract class AndroidSkylarkData {
    * Helper method to get default {@link
    * com.google.devtools.build.lib.rules.android.AndroidSkylarkData.BinaryDataSettings}.
    */
-  private BinaryDataSettings defaultBinaryDataSettings(
-      AndroidDataContext ctx, Location location, Environment env) throws EvalException {
+  private BinaryDataSettings defaultBinaryDataSettings(AndroidDataContext ctx)
+      throws EvalException {
     return makeBinarySettings(
         ctx,
         Runtime.NONE,
         SkylarkList.createImmutable(ImmutableList.of()),
         SkylarkList.createImmutable(ImmutableList.of()),
         SkylarkList.createImmutable(ImmutableList.of()),
-        "auto",
-        location,
-        env);
+        "auto");
   }
 
   @SkylarkModule(
@@ -1089,8 +1070,6 @@ public abstract class AndroidSkylarkData {
                 "Defaults to False. If True, processes data binding expressions in layout"
                     + " resources."),
       },
-      useLocation = true,
-      useEnvironment = true,
       doc =
           "Processes resources, assets, and manifests for android_binary and returns the"
               + " appropriate providers.")
@@ -1106,16 +1085,12 @@ public abstract class AndroidSkylarkData {
       String manifestMerger,
       Object maybeSettings,
       boolean crunchPng,
-      boolean dataBindingEnabled,
-      Location location,
-      Environment env)
-      throws InterruptedException, EvalException {
-    try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
+      boolean dataBindingEnabled)
+      throws InterruptedException, RuleErrorException, EvalException {
 
     BinaryDataSettings settings =
         fromNoneableOrDefault(
-            maybeSettings, BinaryDataSettings.class, defaultBinaryDataSettings(ctx, location, env));
+            maybeSettings, BinaryDataSettings.class, defaultBinaryDataSettings(ctx));
 
     AndroidManifest rawManifest =
         AndroidManifest.from(
@@ -1139,44 +1114,37 @@ public abstract class AndroidSkylarkData {
             manifestValues,
             ApplicationManifest.useLegacyMerging(ctx.getRuleContext(), manifestMerger));
 
-      ResourceApk resourceApk =
-          ProcessedAndroidData.processBinaryDataFrom(
-                  ctx,
-                  errorReporter,
-                  stampedManifest,
-                  AndroidBinary.shouldShrinkResourceCycles(
-                      ctx.getAndroidConfig(), errorReporter, settings.shrinkResources),
-                  manifestValues,
-                  settings.aaptVersion,
-                  AndroidResources.from(
-                      errorReporter, getFileProviders(resources), "resource_files"),
-                  AndroidAssets.from(
-                      errorReporter,
-                      listFromNoneable(assets, ConfiguredTarget.class),
-                      isNone(assetsDir)
-                          ? null
-                          : PathFragment.create(fromNoneable(assetsDir, String.class))),
-                  resourceDeps,
-                  AssetDependencies.fromProviders(
-                      getProviders(deps, AndroidAssetsInfo.PROVIDER), /* neverlink = */ false),
-                  settings.resourceFilterFactory,
-                  settings.noCompressExtensions,
-                  crunchPng,
-                  dataBindingEnabled,
-                  /* featureOf = */ null,
-                  /* featureAfter = */ null)
-              .generateRClass(ctx, settings.aaptVersion);
+    ResourceApk resourceApk =
+        ProcessedAndroidData.processBinaryDataFrom(
+                ctx.getRuleContext(),
+                stampedManifest,
+                AndroidBinary.shouldShrinkResourceCycles(
+                    ctx.getRuleContext(), settings.shrinkResources),
+                manifestValues,
+                settings.aaptVersion,
+                AndroidResources.from(
+                    ctx.getRuleContext(), getFileProviders(resources), "resource_files"),
+                AndroidAssets.from(
+                    ctx.getRuleContext(),
+                    listFromNoneable(assets, ConfiguredTarget.class),
+                    isNone(assetsDir)
+                        ? null
+                        : PathFragment.create(fromNoneable(assetsDir, String.class))),
+                resourceDeps,
+                AssetDependencies.fromProviders(
+                    getProviders(deps, AndroidAssetsInfo.PROVIDER), /* neverlink = */ false),
+                settings.resourceFilterFactory,
+                settings.noCompressExtensions,
+                crunchPng,
+                dataBindingEnabled)
+            .generateRClass(ctx.getRuleContext(), settings.aaptVersion);
 
-      return AndroidBinaryDataInfo.of(
-          resourceApk.getArtifact(),
-          resourceApk.getResourceProguardConfig(),
-          resourceApk.toResourceInfo(ctx.getLabel()),
-          resourceApk.toAssetsInfo(ctx.getLabel()).get(),
-          resourceApk.toManifestInfo().get());
-
-    } catch (RuleErrorException e) {
-      throw new EvalException(location, e);
-    }
+    return AndroidBinaryDataInfo.of(
+        resourceApk.getArtifact(),
+        resourceApk.getResourceProguardConfig(),
+        resourceApk.toResourceInfo(ctx.getLabel()),
+        resourceApk.toAssetsInfo(ctx.getLabel()).get(),
+        resourceApk.toManifestInfo().get());
   }
 
   @SkylarkCallable(
@@ -1225,8 +1193,6 @@ public abstract class AndroidSkylarkData {
                 "Additional proguard specs that should be added for top-level targets. This  value"
                     + " is controlled by Java configuration."),
       },
-      useLocation = true,
-      useEnvironment = true,
       doc =
           "Possibly shrinks the data APK by removing resources that were marked as unused during"
               + " proguarding.")
@@ -1238,13 +1204,11 @@ public abstract class AndroidSkylarkData {
       Object maybeSettings,
       SkylarkList<ConfiguredTarget> deps,
       SkylarkList<ConfiguredTarget> localProguardSpecs,
-      SkylarkList<ConfiguredTarget> extraProguardSpecs,
-      Location location,
-      Environment env)
+      SkylarkList<ConfiguredTarget> extraProguardSpecs)
       throws EvalException, InterruptedException {
     BinaryDataSettings settings =
         fromNoneableOrDefault(
-            maybeSettings, BinaryDataSettings.class, defaultBinaryDataSettings(ctx, location, env));
+            maybeSettings, BinaryDataSettings.class, defaultBinaryDataSettings(ctx));
 
     if (!settings.shrinkResources) {
       return binaryDataInfo;
@@ -1252,7 +1216,7 @@ public abstract class AndroidSkylarkData {
 
     ImmutableList<Artifact> proguardSpecs =
         AndroidBinary.getProguardSpecs(
-            ctx,
+            ctx.getRuleContext(),
             getAndroidSemantics(),
             binaryDataInfo.getResourceProguardConfig(),
             binaryDataInfo.getManifestInfo().getManifest(),
@@ -1271,7 +1235,7 @@ public abstract class AndroidSkylarkData {
 
     Optional<Artifact> maybeShrunkApk =
         AndroidBinary.maybeShrinkResources(
-            ctx,
+            ctx.getRuleContext(),
             binaryDataInfo.getResourcesInfo().getDirectAndroidResources().toList().get(0),
             ResourceDependencies.fromProviders(
                 getProviders(deps, AndroidResourcesInfo.PROVIDER), /* neverlink = */ false),
