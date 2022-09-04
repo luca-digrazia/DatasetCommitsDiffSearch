@@ -30,35 +30,22 @@ import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Servi
 public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws ActionConflictException, RuleErrorException {
-    ProtoCommon.checkRuleHasValidMigrationTag(ruleContext);
-    ProtoInfo protoInfo =
-        ProtoCommon.createProtoInfo(
-            ruleContext,
-            ruleContext.getFragment(ProtoConfiguration.class).generatedProtosInVirtualImports());
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
-
-    ProtoCompileActionBuilder.writeDescriptorSet(ruleContext, protoInfo, Services.ALLOW);
+  public ConfiguredTarget create(RuleContext ruleContext) throws ActionConflictException {
+    ProtoSourcesProvider protoProvider = ProtoCommon.createProtoProvider(ruleContext);
+    ProtoCompileActionBuilder.writeDescriptorSet(ruleContext, protoProvider, Services.ALLOW);
 
     Runfiles dataRunfiles =
-        ProtoCommon.createDataRunfilesProvider(protoInfo.getTransitiveProtoSources(), ruleContext)
-            .addArtifact(protoInfo.getDirectDescriptorSet())
+        ProtoCommon.createDataRunfilesProvider(
+                protoProvider.getTransitiveProtoSources(), ruleContext)
+            .addArtifact(protoProvider.getDirectDescriptorSet())
             .build();
 
-    RuleConfiguredTargetBuilder builder =
-        new RuleConfiguredTargetBuilder(ruleContext)
-            .setFilesToBuild(
-                NestedSetBuilder.create(STABLE_ORDER, protoInfo.getDirectDescriptorSet()))
-            .addProvider(RunfilesProvider.withData(Runfiles.EMPTY, dataRunfiles))
-            .addNativeDeclaredProvider(protoInfo);
-
-    if (ruleContext.getFragment(ProtoConfiguration.class).enableLegacyProvider()) {
-      builder.addSkylarkTransitiveInfo(ProtoInfo.LEGACY_SKYLARK_NAME, protoInfo);
-    }
-
-    return builder.build();
+    return new RuleConfiguredTargetBuilder(ruleContext)
+        .setFilesToBuild(
+            NestedSetBuilder.create(STABLE_ORDER, protoProvider.getDirectDescriptorSet()))
+        .addProvider(RunfilesProvider.withData(Runfiles.EMPTY, dataRunfiles))
+        .addProvider(ProtoSourcesProvider.class, protoProvider)
+        .addSkylarkTransitiveInfo(ProtoSourcesProvider.SKYLARK_NAME, protoProvider)
+        .build();
   }
 }

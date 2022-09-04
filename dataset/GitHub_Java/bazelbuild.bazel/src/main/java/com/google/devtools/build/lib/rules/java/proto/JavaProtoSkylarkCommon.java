@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
+import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Exports;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Services;
@@ -42,7 +43,7 @@ public class JavaProtoSkylarkCommon
       String protoToolchainAttr,
       String flavour)
       throws EvalException {
-    ProtoInfo protoInfo = target.get(ProtoInfo.PROVIDER);
+    ProtoInfo protoInfo = target.getProvider(ProtoInfo.class);
     ProtoCompileActionBuilder.registerActions(
         skylarkRuleContext.getRuleContext(),
         ImmutableList.of(
@@ -60,7 +61,7 @@ public class JavaProtoSkylarkCommon
 
   @Override
   public boolean hasProtoSources(ConfiguredTarget target) {
-    return !target.get(ProtoInfo.PROVIDER).getDirectProtoSources().isEmpty();
+    return !target.getProvider(ProtoInfo.class).getDirectProtoSources().isEmpty();
   }
 
   @Override
@@ -73,6 +74,19 @@ public class JavaProtoSkylarkCommon
             JavaCompilationArgsProvider.class,
             JavaInfo.getProvider(JavaCompilationArgsProvider.class, runtime))
         .build();
+  }
+
+  @Override
+  // TODO(b/78512644): migrate callers to passing explicit proto javacopts or using custom
+  // toolchains, and delete
+  public ImmutableList<String> getJavacOpts(
+      SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) throws EvalException {
+    ConfiguredTarget javaToolchainConfigTarget =
+        (ConfiguredTarget) checkNotNull(skylarkRuleContext.getAttr().getValue(javaToolchainAttr));
+    JavaToolchainProvider toolchain =
+        checkNotNull(JavaToolchainProvider.from(javaToolchainConfigTarget));
+
+    return ProtoJavacOpts.constructJavacOpts(skylarkRuleContext.getRuleContext(), toolchain);
   }
 
   private static ProtoLangToolchainProvider getProtoToolchainProvider(

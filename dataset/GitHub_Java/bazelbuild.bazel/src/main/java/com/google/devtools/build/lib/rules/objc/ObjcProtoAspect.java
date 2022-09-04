@@ -48,10 +48,7 @@ public class ObjcProtoAspect extends SkylarkNativeAspect implements ConfiguredAs
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase,
-      RuleContext ruleContext,
-      AspectParameters parameters,
-      String toolsRepository)
+      ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException, ActionConflictException {
     ConfiguredAspect.Builder aspectBuilder = new ConfiguredAspect.Builder(
         this, parameters, ruleContext);
@@ -73,7 +70,7 @@ public class ObjcProtoAspect extends SkylarkNativeAspect implements ConfiguredAs
 
       // Gather up all the dependency protos depended by this target.
       Iterable<ProtoInfo> protoInfos =
-          ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoInfo.PROVIDER);
+          ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoInfo.class);
 
       for (ProtoInfo protoInfo : protoInfos) {
         aspectObjcProtoProvider.addProtoGroup(protoInfo.getTransitiveProtoSources());

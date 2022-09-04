@@ -222,6 +222,7 @@ final class ProtobufSupport {
             .setIntermediateArtifacts(getUniqueIntermediateArtifactsForSourceCompile())
             .setCompilationAttributes(new CompilationAttributes.Builder().build())
             .setToolchainProvider(toolchain)
+            .doNotUseDeps()
             .doNotUsePch()
             .build();
 

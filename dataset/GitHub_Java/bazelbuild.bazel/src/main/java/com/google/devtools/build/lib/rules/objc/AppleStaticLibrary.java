@@ -49,12 +49,21 @@ import java.util.TreeMap;
 public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
 
   /**
-   * Set of {@link ObjcProvider} values which are propagated from dependencies to dependers by this
-   * rule.
+   * Set of {@link ObjcProvider} values which are propagated from dependencies to dependers by
+   * this rule.
    */
   private static final ImmutableSet<Key<?>> PROPAGATE_KEYS =
       ImmutableSet.<Key<?>>of(
-          ObjcProvider.SDK_DYLIB, ObjcProvider.SDK_FRAMEWORK, ObjcProvider.WEAK_SDK_FRAMEWORK);
+          ObjcProvider.ASSET_CATALOG,
+          ObjcProvider.BUNDLE_FILE,
+          ObjcProvider.SDK_DYLIB,
+          ObjcProvider.SDK_FRAMEWORK,
+          ObjcProvider.STORYBOARD,
+          ObjcProvider.STRINGS,
+          ObjcProvider.WEAK_SDK_FRAMEWORK,
+          ObjcProvider.XCDATAMODEL,
+          ObjcProvider.XIB,
+          ObjcProvider.XCASSETS_DIR);
 
   @VisibleForTesting
   static final String UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT =
@@ -145,7 +154,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
               .subtractSubtrees(
                   cpuToObjcAvoidDepsMap.get(childCpu),
                   cpuToCcAvoidDepsMap.get(childCpu).stream()
-                      .map(CcInfo::getCcLinkingContext)
+                      .map(CcInfo::getCcLinkingInfo)
                       .collect(ImmutableList.toImmutableList()));
 
       librariesToLipo.add(intermediateArtifacts.strippedSingleArchitectureLibrary());
@@ -165,7 +174,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
               objcProvider,
               intermediateArtifacts.strippedSingleArchitectureLibrary(),
               childToolchain,
-              childToolchain.getFdoContext())
+              childToolchain.getFdoProvider())
           .validateAttributes();
       ruleContext.assertNoErrors();
 
