@@ -866,8 +866,8 @@ public class Path
    *
    * @throws IOException if the file was not found or could not be opened for reading
    */
-  public ReadableByteChannel createReadableByteChannel() throws IOException {
-    return fileSystem.createReadableByteChannel(this);
+  public ReadableByteChannel createChannel() throws IOException {
+    return fileSystem.createChannel(this);
   }
 
   /**

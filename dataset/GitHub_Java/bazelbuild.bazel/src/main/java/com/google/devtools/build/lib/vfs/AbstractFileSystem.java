@@ -14,8 +14,6 @@
 //
 package com.google.devtools.build.lib.vfs;
 
-import static java.nio.file.StandardOpenOption.READ;
-
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -28,7 +26,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
-import java.util.EnumSet;
 
 /** This class implements the FileSystem interface using direct calls to the UNIX filesystem. */
 @ThreadSafe
@@ -81,7 +78,7 @@ public abstract class AbstractFileSystem extends FileSystem {
   }
 
   @Override
-  protected ReadableByteChannel createReadableByteChannel(Path path) throws IOException {
+  protected ReadableByteChannel createChannel(Path path) throws IOException {
     final String name = path.toString();
     if (profiler.isActive()
         && (profiler.isProfiling(ProfilerTask.VFS_READ)
@@ -89,7 +86,7 @@ public abstract class AbstractFileSystem extends FileSystem {
       long startTime = Profiler.nanoTimeMaybe();
       try {
         // Currently, we do not proxy ReadableByteChannel for profiling.
-        return Files.newByteChannel(java.nio.file.Paths.get(name), EnumSet.of(READ));
+        return Files.newByteChannel(java.nio.file.Paths.get(name));
       } finally {
         profiler.logSimpleTask(startTime, ProfilerTask.VFS_OPEN, name);
       }

@@ -89,9 +89,9 @@ class RemoteActionFileSystem extends DelegateFileSystem {
   }
 
   @Override
-  protected ReadableByteChannel createReadableByteChannel(Path path) throws IOException {
+  protected ReadableByteChannel createChannel(Path path) throws IOException {
     downloadFileIfRemote(path);
-    return super.createReadableByteChannel(path);
+    return super.createChannel(path);
   }
 
   @Override
