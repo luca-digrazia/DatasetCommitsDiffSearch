@@ -16,11 +16,8 @@ package com.google.devtools.build.skyframe;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.util.GroupedList;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -38,7 +35,6 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
   // #getValueOrUntypedExceptions.
   protected boolean errorMightHaveBeenFound = false;
   @Nullable private final GroupedList<SkyKey> temporaryDirectDeps;
-  @Nullable protected List<ListenableFuture<?>> externalDeps;
 
   public AbstractSkyFunctionEnvironment(@Nullable GroupedList<SkyKey> temporaryDirectDeps) {
     this.temporaryDirectDeps = temporaryDirectDeps;
@@ -305,18 +301,6 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
 
   @Override
   public boolean valuesMissing() {
-    return valuesMissing || (externalDeps != null);
-  }
-
-  @Override
-  public void dependOnFuture(ListenableFuture<?> future) {
-    if (future.isDone()) {
-      // No need to track a dependency on something that's already done.
-      return;
-    }
-    if (externalDeps == null) {
-      externalDeps = new ArrayList<>();
-    }
-    externalDeps.add(future);
+    return valuesMissing;
   }
 }
