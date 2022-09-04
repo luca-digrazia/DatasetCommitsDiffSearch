@@ -3,10 +3,8 @@ package io.quarkus.maven.it;
 import static io.quarkus.maven.it.ApplicationNameAndVersionTestUtil.assertApplicationPropertiesSetCorrectly;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.junit.Assert.assertEquals;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Arrays;
@@ -16,9 +14,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.maven.shared.invoker.MavenInvocationException;
@@ -52,10 +47,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         String pkg = DevModeTestUtils.getHttpResponse("/app/hello/package");
         assertThat(pkg).isEqualTo("org.acme");
 
-        //make sure the proper profile is set
-        String profile = DevModeTestUtils.getHttpResponse("/app/hello/profile");
-        assertThat(profile).isEqualTo("dev");
-
         //make sure webjars work
         DevModeTestUtils.getHttpResponse("webjars/bootstrap/3.1.0/css/bootstrap.min.css");
 
@@ -73,34 +64,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         IntStream.range(0, 10).forEach(i -> {
             assertThat(DevModeTestUtils.getStrictHttpResponse("/hello", 200)).isTrue();
         });
-    }
-
-    @Test
-    public void testThatInitialMavenResourceFilteringWorks() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic-resource-filtering", "projects/project-classic-resource-filtering");
-
-        //also test that a zipfile must not be filtered because of nonFilteredFileExtensions configuration
-        //as initProject() would already corrupt the zipfile, it has to be created _after_ initProject()
-        try (ZipOutputStream zipOut = new ZipOutputStream(
-                new FileOutputStream(new File(testDir, "src/main/resources/test.zip")))) {
-            ZipEntry zipEntry = new ZipEntry("test.txt");
-            zipOut.putNextEntry(zipEntry);
-            zipOut.write("test".getBytes());
-        }
-
-        run(false);
-
-        //make sure that a simple HTTP GET request always works
-        IntStream.range(0, 10).forEach(i -> {
-            assertThat(DevModeTestUtils.getStrictHttpResponse("/hello", 200)).isTrue();
-        });
-
-        //try to open the copied test.zip (which will fail if it was filtered)
-        File copiedTestZipFile = new File(testDir, "target/classes/test.zip");
-        assertThat(copiedTestZipFile).exists();
-        try (ZipFile zipFile = new ZipFile(copiedTestZipFile)) {
-            //everything is fine once we get here (ZipFile is still readable)
-        }
     }
 
     @Test
@@ -148,54 +111,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Now edit the pom.xml to trigger the dev mode restart
         final File pomSource = new File(testDir, "pom.xml");
         filter(pomSource, Collections.singletonMap("<!-- insert test dependencies here -->",
-                "        <dependency>\n" +
-                        "            <groupId>io.quarkus</groupId>\n" +
-                        "            <artifactId>quarkus-smallrye-openapi</artifactId>\n" +
-                        "        </dependency>"));
-
-        // Wait until we get the updated responses
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("hello " + uuid));
-
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello/greeting").contains(uuid));
-
-    }
-
-    @Test
-    public void testAlternatePom() throws Exception {
-        testDir = initProject("projects/classic", "projects/project-classic-alternate-pom");
-
-        File pom = new File(testDir, "pom.xml");
-        if (!pom.exists()) {
-            throw new IllegalStateException("Failed to locate project's pom.xml at " + pom);
-        }
-        final String alternatePomName = "alternate-pom.xml";
-        File alternatePom = new File(testDir, alternatePomName);
-        if (alternatePom.exists()) {
-            alternatePom.delete();
-        }
-        pom.renameTo(alternatePom);
-        if (pom.exists()) {
-            throw new IllegalStateException(pom + " was expected to be renamed to " + alternatePom);
-        }
-        runAndCheck("-f", alternatePomName);
-
-        // Edit a Java file too
-        final File javaSource = new File(testDir, "src/main/java/org/acme/HelloResource.java");
-        final String uuid = UUID.randomUUID().toString();
-        filter(javaSource, Collections.singletonMap("return \"hello\";", "return \"hello " + uuid + "\";"));
-
-        // edit the application.properties too
-        final File applicationProps = new File(testDir, "src/main/resources/application.properties");
-        filter(applicationProps, Collections.singletonMap("greeting=bonjour", "greeting=" + uuid + ""));
-
-        // Now edit the pom.xml to trigger the dev mode restart
-        filter(alternatePom, Collections.singletonMap("<!-- insert test dependencies here -->",
                 "        <dependency>\n" +
                         "            <groupId>io.quarkus</groupId>\n" +
                         "            <artifactId>quarkus-smallrye-openapi</artifactId>\n" +
@@ -333,16 +248,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
-    }
-
-    @Test
-    public void testTestScopedLocalProjectDependency() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/test-module-dependency");
-        final String projectVersion = System.getProperty("project.version");
-        run(true, "-Dquarkus.platform.version=" + projectVersion,
-                "-Dquarkus-plugin.version=" + projectVersion);
-
-        assertEquals("Test class is not visible", DevModeTestUtils.getHttpResponse("/hello"));
     }
 
     @Test
@@ -761,24 +666,5 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         runAndCheck();
 
         assertThat(running.log()).doesNotContain("The project's sources directory does not exist");
-    }
-
-    @Test
-    public void testThatTheApplicationIsNotStartedWithoutBuildGoal() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic-no-build");
-        run(true);
-
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(30, TimeUnit.SECONDS)
-                .until(() -> running.log().contains("skipping quarkus:dev as this is assumed to be a support library"));
-    }
-
-    @Test
-    public void testThatTheApplicationIsStartedWithoutBuildGoalWhenNotEnforced() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic-no-build", "projects/classic-no-build-not-enforced");
-        runAndCheck("-Dquarkus.enforceBuildGoal=false");
-
-        assertThat(running.log()).doesNotContain("skipping quarkus:dev as this is assumed to be a support library");
     }
 }

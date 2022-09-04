@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.file.Files;
@@ -25,7 +26,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -430,7 +430,7 @@ public class DevMojo extends AbstractMojo {
         return null;
     }
 
-    private void addProject(DevModeContext devModeContext, LocalProject localProject, boolean root) {
+    private void addProject(DevModeContext devModeContext, LocalProject localProject) {
 
         String projectDirectory = null;
         Set<String> sourcePaths = null;
@@ -472,15 +472,16 @@ public class DevMojo extends AbstractMojo {
                 sourcePaths,
                 classesPath,
                 resourcePath);
-        if (root) {
-            devModeContext.setApplicationRoot(moduleInfo);
-        } else {
-            devModeContext.getAdditionalModules().add(moduleInfo);
-        }
+        devModeContext.getModules().add(moduleInfo);
     }
 
-    private void addToClassPaths(StringBuilder classPathManifest, File file) {
+    private void addToClassPaths(StringBuilder classPathManifest, DevModeContext classPath, File file) {
         final URI uri = file.toPath().toAbsolutePath().toUri();
+        try {
+            classPath.getClassPath().add(uri.toURL());
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
+        }
         classPathManifest.append(uri).append(" ");
     }
 
@@ -553,15 +554,26 @@ public class DevMojo extends AbstractMojo {
             devModeContext.getBuildSystemProperties().putIfAbsent("quarkus.application.version", project.getVersion());
 
             devModeContext.setSourceEncoding(getSourceEncoding());
+            devModeContext.setSourceJavaVersion(source);
+            devModeContext.setTargetJvmVersion(target);
 
             // Set compilation flags.  Try the explicitly given configuration first.  Otherwise,
             // refer to the configuration of the Maven Compiler Plugin.
-            final Optional<Xpp3Dom> compilerPluginConfiguration = findCompilerPluginConfiguration();
             if (compilerArgs != null) {
                 devModeContext.setCompilerOptions(compilerArgs);
-            } else if (compilerPluginConfiguration.isPresent()) {
-                final Xpp3Dom compilerPluginArgsConfiguration = compilerPluginConfiguration.get().getChild("compilerArgs");
-                if (compilerPluginArgsConfiguration != null) {
+            } else {
+                for (Plugin plugin : project.getBuildPlugins()) {
+                    if (!plugin.getKey().equals("org.apache.maven.plugins:maven-compiler-plugin")) {
+                        continue;
+                    }
+                    Xpp3Dom compilerPluginConfiguration = (Xpp3Dom) plugin.getConfiguration();
+                    if (compilerPluginConfiguration == null) {
+                        continue;
+                    }
+                    Xpp3Dom compilerPluginArgsConfiguration = compilerPluginConfiguration.getChild("compilerArgs");
+                    if (compilerPluginArgsConfiguration == null) {
+                        continue;
+                    }
                     List<String> compilerPluginArgs = new ArrayList<>();
                     for (Xpp3Dom argConfiguration : compilerPluginArgsConfiguration.getChildren()) {
                         compilerPluginArgs.add(argConfiguration.getValue());
@@ -572,24 +584,7 @@ public class DevMojo extends AbstractMojo {
                         compilerPluginArgs.add(compilerPluginArgsConfiguration.getValue().trim());
                     }
                     devModeContext.setCompilerOptions(compilerPluginArgs);
-                }
-            }
-            if (source != null) {
-                devModeContext.setSourceJavaVersion(source);
-            } else if (compilerPluginConfiguration.isPresent()) {
-                final Xpp3Dom javacSourceVersion = compilerPluginConfiguration.get().getChild("source");
-                if (javacSourceVersion != null && javacSourceVersion.getValue() != null
-                        && !javacSourceVersion.getValue().trim().isEmpty()) {
-                    devModeContext.setSourceJavaVersion(javacSourceVersion.getValue().trim());
-                }
-            }
-            if (target != null) {
-                devModeContext.setTargetJvmVersion(target);
-            } else if (compilerPluginConfiguration.isPresent()) {
-                final Xpp3Dom javacTargetVersion = compilerPluginConfiguration.get().getChild("target");
-                if (javacTargetVersion != null && javacTargetVersion.getValue() != null
-                        && !javacTargetVersion.getValue().trim().isEmpty()) {
-                    devModeContext.setTargetJvmVersion(javacTargetVersion.getValue().trim());
+                    break;
                 }
             }
 
@@ -597,12 +592,12 @@ public class DevMojo extends AbstractMojo {
             final LocalProject localProject;
             if (noDeps) {
                 localProject = LocalProject.load(outputDirectory.toPath());
-                addProject(devModeContext, localProject, true);
+                addProject(devModeContext, localProject);
                 pomFiles.add(localProject.getDir().resolve("pom.xml"));
             } else {
                 localProject = LocalProject.loadWorkspace(outputDirectory.toPath());
                 for (LocalProject project : filterExtensionDependencies(localProject)) {
-                    addProject(devModeContext, project, project == localProject);
+                    addProject(devModeContext, project);
                     pomFiles.add(project.getDir().resolve("pom.xml"));
                 }
             }
@@ -610,11 +605,18 @@ public class DevMojo extends AbstractMojo {
             addQuarkusDevModeDeps(classPathManifest, devModeContext);
 
             args.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
+            //wiring devmode is used for CDI beans that are not part of the user application (i.e. beans in 3rd party jars)
+            //we need this because these beans cannot be loaded by the runtime class loader, they must be loaded by the platform
+            //class loader
+            File wiringClassesDirectory = new File(buildDir, "wiring-devmode");
+            wiringClassesDirectory.mkdirs();
+
+            addToClassPaths(classPathManifest, devModeContext, wiringClassesDirectory);
 
             //in most cases these are not used, however they need to be present for some
             //parent-first cases such as logging
             for (Artifact appDep : project.getArtifacts()) {
-                addToClassPaths(classPathManifest, appDep.getFile());
+                addToClassPaths(classPathManifest, devModeContext, appDep.getFile());
             }
 
             //now we need to build a temporary jar to actually run
@@ -627,6 +629,8 @@ public class DevMojo extends AbstractMojo {
             }
             getLog().debug("Executable jar: " + tempFile.getAbsolutePath());
 
+            devModeContext.getClassesRoots().add(outputDirectory.getAbsoluteFile());
+            devModeContext.setFrameworkClassesDir(wiringClassesDirectory.getAbsoluteFile());
             devModeContext.setCacheDir(new File(buildDir, "transformer-cache").getAbsoluteFile());
 
             // this is the jar file we will use to launch the dev mode main class
@@ -732,7 +736,7 @@ public class DevMojo extends AbstractMojo {
                 //we only use the launcher for launching from the IDE, we need to exclude it
                 if (!(appDep.getArtifact().getGroupId().equals("io.quarkus")
                         && appDep.getArtifact().getArtifactId().equals("quarkus-ide-launcher"))) {
-                    addToClassPaths(classPathManifest, appDep.getArtifact().getFile());
+                    addToClassPaths(classPathManifest, devModeContext, appDep.getArtifact().getFile());
                 }
             }
         }
@@ -859,18 +863,5 @@ public class DevMojo extends AbstractMojo {
             }
         }
         return ret;
-    }
-
-    private Optional<Xpp3Dom> findCompilerPluginConfiguration() {
-        for (final Plugin plugin : project.getBuildPlugins()) {
-            if (!plugin.getKey().equals("org.apache.maven.plugins:maven-compiler-plugin")) {
-                continue;
-            }
-            final Xpp3Dom compilerPluginConfiguration = (Xpp3Dom) plugin.getConfiguration();
-            if (compilerPluginConfiguration != null) {
-                return Optional.of(compilerPluginConfiguration);
-            }
-        }
-        return Optional.empty();
     }
 }
