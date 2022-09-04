@@ -643,22 +643,6 @@ public class JavaOptions extends FragmentOptions {
       help = "This flag is a noop and scheduled for removal.")
   public boolean dontCollectSoArtifacts;
 
-  @Option(
-      name = "experimental_publish_javacclinkparamsinfo",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.NO_OP},
-      help = "Deprecated no-op.")
-  public boolean experimentalPublishJavaCcLinkParamsInfo;
-
-  @Option(
-      name = "experimental_enable_jspecify",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Enable experimental jspecify integration.")
-  public boolean experimentalEnableJspecify;
-
   Label defaultJavaBase() {
     return Label.parseAbsoluteUnchecked(DEFAULT_JAVABASE);
   }

@@ -155,6 +155,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
 
+    semantics.addProviders(ruleContext, common, outputs.genSource(), builder);
     if (generatedExtensionRegistryProvider != null) {
       builder.addNativeDeclaredProvider(generatedExtensionRegistryProvider);
     }
@@ -172,11 +173,11 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> proguardSpecs = new ProguardLibrary(ruleContext).collectProguardSpecs();
 
-    JavaPluginInfo javaPluginInfo =
+    JavaPluginInfoProvider pluginInfoProvider =
         isJavaPluginRule
             // For java_plugin we create the provider with content retrieved from the rule
             // attributes.
-            ? common.createJavaPluginInfo(ruleContext)
+            ? common.getJavaPluginInfoProvider(ruleContext)
             // For java_library we add the transitive plugins from plugins and exported_plugins
             // attrs.
             : JavaCommon.getTransitivePlugins(ruleContext);
@@ -187,7 +188,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
             .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
             .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
             // TODO(bazel-team): this should only happen for java_plugin
-            .javaPluginInfo(javaPluginInfo)
+            .addProvider(JavaPluginInfoProvider.class, pluginInfoProvider)
             .addTransitiveOnlyRuntimeJars(common.getDependencies())
             .setRuntimeJars(javaArtifacts.getRuntimeJars())
             .setJavaConstraints(JavaCommon.getConstraints(ruleContext))
