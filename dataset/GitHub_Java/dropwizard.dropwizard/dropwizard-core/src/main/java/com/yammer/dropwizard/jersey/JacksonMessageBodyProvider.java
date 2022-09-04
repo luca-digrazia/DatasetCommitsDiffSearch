@@ -1,61 +1,55 @@
 package com.yammer.dropwizard.jersey;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider;
 import com.google.common.collect.ImmutableList;
-import com.yammer.dropwizard.json.Json;
+import com.yammer.dropwizard.validation.InvalidEntityException;
+import com.yammer.dropwizard.validation.Validated;
 import com.yammer.dropwizard.validation.Validator;
-import org.eclipse.jetty.io.EofException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.validation.Valid;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
+import javax.validation.groups.Default;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.ext.MessageBodyReader;
-import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.Provider;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 
-// TODO: 10/12/11 <coda> -- write tests for JacksonMessageBodyProvider
-// TODO: 10/12/11 <coda> -- write docs for JacksonMessageBodyProvider
-
+/**
+ * A Jersey provider which enables using Jackson to parse request entities into objects and generate
+ * response entities from objects. Any request entity method parameters annotated with
+ * {@code @Valid} are validated, and an informative 422 Unprocessable Entity response is returned
+ * should the entity be invalid.
+ *
+ * (Essentially, extends {@link JacksonJaxbJsonProvider} with validation and support for
+ * {@link JsonIgnoreType}.)
+ */
 @Provider
-@Produces("application/json")
-@Consumes("application/json")
-public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
-                                                   MessageBodyWriter<Object> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(JacksonMessageBodyProvider.class);
+public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
     private static final Validator VALIDATOR = new Validator();
-    private static final Response.StatusType UNPROCESSABLE_ENTITY = new Response.StatusType() {
-        @Override
-        public int getStatusCode() {
-            return 422;
-        }
 
-        @Override
-        public Response.Status.Family getFamily() {
-            return Response.Status.Family.CLIENT_ERROR;
-        }
+    /**
+ 	 * The default group array used in case any of the validate methods is called without a group.
+ 	 */
+ 	 private static final Class<?>[] DEFAULT_GROUP_ARRAY = new Class<?>[] { Default.class };
 
-        @Override
-        public String getReasonPhrase() {
-            return "Unprocessable Entity";
-        }
-    };
+    public JacksonMessageBodyProvider(ObjectMapper mapper) {
+        setMapper(mapper);
+    }
+
+    public JacksonMessageBodyProvider() {
+        super();
+    }
 
     @Override
     public boolean isReadable(Class<?> type,
                               Type genericType,
                               Annotation[] annotations,
                               MediaType mediaType) {
-        return Json.canDeserialize(type);
+        return !isIgnored(type) && super.isReadable(type, genericType, annotations, mediaType);
     }
 
     @Override
@@ -64,26 +58,36 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
                            Annotation[] annotations,
                            MediaType mediaType,
                            MultivaluedMap<String, String> httpHeaders,
-                           InputStream entityStream) throws IOException, WebApplicationException {
-        boolean validating = false;
-        for (Annotation annotation : annotations) {
-            validating = validating || (annotation.annotationType() == Valid.class);
-        }
+                           InputStream entityStream) throws IOException {
+        return validate(annotations, super.readFrom(type,
+                                            genericType,
+                                            annotations,
+                                            mediaType,
+                                            httpHeaders,
+                                            entityStream));
+    }
 
-        final Object value = Json.read(entityStream, genericType);
-        if (validating) {
-            final ImmutableList<String> errors = VALIDATOR.validate(value);
-            if (!errors.isEmpty()) {
-                final StringBuilder msg = new StringBuilder("The request entity had the following errors:\n");
-                for (String error : errors) {
-                    msg.append("  * ").append(error).append('\n');
-                }
-                throw new WebApplicationException(Response.status(UNPROCESSABLE_ENTITY)
-                                                          .entity(msg.toString())
-                                                          .type(MediaType.TEXT_PLAIN_TYPE)
-                                                          .build());
+    private Object validate(Annotation[] annotations, Object value) {
+        Class<?>[] classes = null;
+
+        for(Annotation annotation : annotations) {
+            if(annotation.annotationType() == Valid.class) {
+                classes = DEFAULT_GROUP_ARRAY;
+                break;
+            } else if(annotation.annotationType() == Validated.class) {
+                classes = ((Validated) annotation).value();
+                break;
             }
         }
+
+        if(classes != null) {
+            final ImmutableList<String> errors = VALIDATOR.validate(value, classes);
+            if(!errors.isEmpty()) {
+                throw new InvalidEntityException("The request entity had the following errors:",
+                                                 errors);
+            }
+        }
+
         return value;
     }
 
@@ -92,32 +96,11 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
                                Type genericType,
                                Annotation[] annotations,
                                MediaType mediaType) {
-        return Json.canSerialize(type);
+        return !isIgnored(type) && super.isWriteable(type, genericType, annotations, mediaType);
     }
 
-    @Override
-    public long getSize(Object t,
-                        Class<?> type,
-                        Type genericType,
-                        Annotation[] annotations,
-                        MediaType mediaType) {
-        return -1;
-    }
-
-    @Override
-    public void writeTo(Object t,
-                        Class<?> type,
-                        Type genericType,
-                        Annotation[] annotations,
-                        MediaType mediaType,
-                        MultivaluedMap<String, Object> httpHeaders,
-                        OutputStream entityStream) throws IOException, WebApplicationException {
-        try {
-            Json.write(entityStream, t);
-        } catch (EofException ignored) {
-            // we don't care about these
-        } catch (IOException e) {
-            LOGGER.error("Error writing response", e);
-        }
+    private boolean isIgnored(Class<?> type) {
+        final JsonIgnoreType ignore = type.getAnnotation(JsonIgnoreType.class);
+        return (ignore != null) && ignore.value();
     }
 }
