@@ -52,12 +52,12 @@ public class BuildEventServiceOptions extends OptionsBase {
 
   @Option(
     name = "bes_best_effort",
-    defaultValue = "false",
+    defaultValue = "true",
     documentationCategory = OptionDocumentationCategory.LOGGING,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help =
         "Specifies whether a failure to upload the BES protocol should also result in a build "
-            + "failure. If 'false', bazel exits with ExitCode.PUBLISH_ERROR. (defaults to 'false')."
+            + "failure. If 'false', bazel exits with ExitCode.PUBLISH_ERROR. (defaults to 'true')."
   )
   public boolean besBestEffort;
 
