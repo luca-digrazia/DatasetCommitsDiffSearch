@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
+import static java.util.stream.Collectors.toSet;
 
 import com.android.builder.core.VariantConfiguration;
 import com.google.common.collect.ImmutableList;
@@ -35,7 +36,6 @@ import java.io.File;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -99,7 +99,14 @@ public class Aapt2ResourceShrinkingAction {
               .profileUsing(profiler)
               .dependencies(ImmutableList.of(StaticLibrary.from(aapt2ConfigOptions.androidJar)));
 
-      final Set<String> packages = new HashSet<>(resourcesZip.asPackages());
+      final Set<String> packages =
+          options
+              .dependencyManifests
+              .stream()
+              .map(Path::toFile)
+              .map(manifestToPackageUsing(executorService))
+              .map(futureToString())
+              .collect(toSet());
 
       if (aapt2ShrinkOptions.useProtoApk) {
         try (final ShrunkProtoApk shrunk =
