@@ -54,6 +54,12 @@ public enum OptionDocumentationCategory {
   /** This option's primary purpose is to affect the verbosity, format or location of logging. */
   LOGGING,
 
+  /**
+   * This option affects how strictly Bazel enforces valid build inputs (rule definitions,
+   * flag combinations, etc).
+   */
+  INPUT_STRICTNESS,
+
   /** This option deals with how to go about executing the build. */
   EXECUTION_STRATEGY,
 
@@ -79,6 +85,12 @@ public enum OptionDocumentationCategory {
   SIGNING,
 
   /**
+   * This option affects semantics of the skylark language or the build API accessible to BUILD
+   * files, .bzl files, or WORKSPACE files.
+   */
+  STARLARK_SEMANTICS,
+
+  /**
    * This option dictates information about the test environment or test runner.
    */
   TESTING,
@@ -90,4 +102,17 @@ public enum OptionDocumentationCategory {
    * based on execution-environment requirements.
    */
   TOOLCHAIN,
+
+  /** This option relates to query output and semantics. */
+  QUERY,
+
+  /**
+   * This option specifies or alters a generic input to a Bazel command. This category should only
+   * be used if the input is generic and does not fall into other categories, such as toolchain-
+   * specific inputs.
+   */
+  GENERIC_INPUTS,
+
+  /** A category of options to configure Bazel's remote caching and execution capabilities. */
+  REMOTE,
 }
