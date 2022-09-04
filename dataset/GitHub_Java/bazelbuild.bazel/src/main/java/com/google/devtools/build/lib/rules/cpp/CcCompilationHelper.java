@@ -292,11 +292,11 @@ public final class CcCompilationHelper {
     this.configuration = buildConfiguration;
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
     setGenerateNoPicAction(
-        !ccToolchain.usePicForDynamicLibraries(cppConfiguration, featureConfiguration)
-            || !CppHelper.usePicForBinaries(ccToolchain, cppConfiguration, featureConfiguration));
+        !ccToolchain.usePicForDynamicLibraries(featureConfiguration)
+            || !CppHelper.usePicForBinaries(ccToolchain, featureConfiguration));
     setGeneratePicAction(
-        ccToolchain.usePicForDynamicLibraries(cppConfiguration, featureConfiguration)
-            || CppHelper.usePicForBinaries(ccToolchain, cppConfiguration, featureConfiguration));
+        ccToolchain.usePicForDynamicLibraries(featureConfiguration)
+            || CppHelper.usePicForBinaries(ccToolchain, featureConfiguration));
     this.ruleErrorConsumer = actionConstructionContext.getRuleErrorConsumer();
     this.actionRegistry = Preconditions.checkNotNull(actionRegistry);
     this.label = Preconditions.checkNotNull(label);
@@ -715,7 +715,7 @@ public final class CcCompilationHelper {
     Map<String, NestedSet<Artifact>> outputGroups = new TreeMap<>();
     outputGroups.put(OutputGroupInfo.TEMP_FILES, ccCompilationOutputs.getTemps());
     boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
-    boolean usePic = ccToolchain.usePicForDynamicLibraries(cppConfiguration, featureConfiguration);
+    boolean usePic = ccToolchain.usePicForDynamicLibraries(featureConfiguration);
     outputGroups.put(
         OutputGroupInfo.FILES_TO_COMPILE,
         ccCompilationOutputs.getFilesToCompile(processHeadersInDependencies, usePic));
@@ -1343,7 +1343,7 @@ public final class CcCompilationHelper {
     SpecialArtifact outputFiles =
         CppHelper.getCompileOutputTreeArtifact(
             actionConstructionContext, label, sourceArtifact, outputName, usePic);
-    // Dotd file output is specified in the execution phase.
+    // TODO(rduan): Dotd file output is not supported yet.
     builder.setOutputs(outputFiles, /* dotdFile= */ null);
     builder.setVariables(
         setupCompileBuildVariables(
@@ -1363,8 +1363,6 @@ public final class CcCompilationHelper {
         new CppCompileActionTemplate(
             sourceArtifact,
             outputFiles,
-            CppHelper.getDotdOutputTreeArtifact(
-                actionConstructionContext, label, sourceArtifact, outputName, usePic),
             builder,
             ccToolchain,
             outputCategories,
