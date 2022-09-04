@@ -72,7 +72,7 @@ class SaveHandler extends DataHandler {
 	 * @param collection
 	 *            Holds all models to persist.
 	 */
-	<T extends DataSupport> void onSaveAll(Collection<T> collection) {
+	void onSaveAll(Collection<?> collection) {
 		if (collection != null && collection.size() > 0) {
 			DataSupport[] array = collection.toArray(new DataSupport[0]);
 			DataSupport firstObj = array[0];
