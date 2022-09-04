@@ -17,6 +17,13 @@ public class KubernetesClientProducer {
     @DefaultBean
     @Singleton
     @Produces
+    public Config config(KubernetesClientBuildConfig buildConfig) {
+        return KubernetesClientUtils.createConfig(buildConfig);
+    }
+
+    @DefaultBean
+    @Singleton
+    @Produces
     public KubernetesClient kubernetesClient(Config config) {
         client = new DefaultKubernetesClient(config);
         return client;
