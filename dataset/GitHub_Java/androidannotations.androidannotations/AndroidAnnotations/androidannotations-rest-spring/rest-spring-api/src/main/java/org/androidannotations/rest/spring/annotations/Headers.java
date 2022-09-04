@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -33,7 +32,9 @@ import java.lang.annotation.Target;
  * &#064;Rest(converters = MappingJacksonHttpMessageConverter.class)
  * public interface MyRestClient {
  * 
- * 	&#064;Headers({ &#064;Header(name = &quot;keep-alive&quot;, value = &quot;300&quot;), &#064;Header(name = &quot;cache-control&quot;, value = &quot;64000&quot;) })
+ * 	&#064;Headers({
+ * 		&#064;Header(name = &quot;keep-alive&quot;, value = &quot;300&quot;),
+ * 		&#064;Header(name = &quot;cache-control&quot;, value = &quot;64000&quot;)})
  * 	&#064;Post(&quot;/test&quot;)
  * 	void testRoute();
  * }
@@ -46,11 +47,5 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface Headers {
-
-	/**
-	 * The set of added HTTP headers.
-	 *
-	 * @return the headers
-	 */
 	Header[] value();
 }

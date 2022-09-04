@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -46,18 +45,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface Header {
-
-	/**
-	 * The name of the header.
-	 * 
-	 * @return the name of the header
-	 */
 	String name();
 
-	/**
-	 * The value of the header.
-	 * 
-	 * @return the value of the header
-	 */
 	String value();
 }
