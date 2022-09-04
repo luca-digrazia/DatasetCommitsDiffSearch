@@ -21,7 +21,6 @@ import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.codecs.JsonPathCodec;
 import org.graylog2.inputs.transports.HttpPollTransport;
-import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.inputs.codecs.Codec;
@@ -33,18 +32,16 @@ public class JsonPathInput2 extends MessageInput2 {
     public JsonPathInput2(@Assisted Configuration configuration,
                           @Assisted Transport transport,
                           @Assisted Codec codec,
-                          MetricRegistry metricRegistry,
-                          LocalMetricRegistry localRegistry) {
-        super(metricRegistry, transport, codec, localRegistry);
+                          MetricRegistry metricRegistry) {
+        super(metricRegistry, transport, codec);
     }
 
     @AssistedInject
     public JsonPathInput2(@Assisted Configuration configuration,
                           HttpPollTransport.Factory transport,
                           JsonPathCodec.Factory codec,
-                          MetricRegistry metricRegistry,
-                          LocalMetricRegistry localRegistry) {
-        super(metricRegistry, transport.create(configuration), codec.create(configuration), localRegistry);
+                          MetricRegistry metricRegistry) {
+        super(metricRegistry, transport.create(configuration), codec.create(configuration));
     }
 
     @Override

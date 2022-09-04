@@ -233,9 +233,8 @@ public class HttpPollTransport extends ThrottleableTransport {
     }
 
     @Override
-    public com.codahale.metrics.MetricSet getMetricSet() {
+    public void setupMetrics(MessageInput2 input) {
         // TODO do we need any metrics here?
-        return null;
     }
 
 
