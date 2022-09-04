@@ -24,7 +24,8 @@ public class PeopleResource {
     @POST
     @Transactional
     public Person createPerson(Person person) {
-        return peopleDAO.create(person);
+        final long personId = peopleDAO.create(person);
+        return peopleDAO.findById(personId);
     }
 
     @GET

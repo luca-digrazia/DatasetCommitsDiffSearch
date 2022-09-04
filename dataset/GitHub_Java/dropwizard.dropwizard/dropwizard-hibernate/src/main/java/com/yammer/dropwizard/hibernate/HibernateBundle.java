@@ -30,9 +30,6 @@ public abstract class HibernateBundle<T extends Configuration> extends Configure
         final DatabaseConfiguration dbConfig = getDatabaseConfiguration(configuration);
         this.sessionFactory = new SessionFactoryFactory(environment).build(dbConfig, packages);
         environment.addProvider(new TransactionalResourceMethodDispatchAdapter(sessionFactory));
-        environment.addHealthCheck(new SessionFactoryHealthCheck("hibernate",
-                                                                 sessionFactory,
-                                                                 dbConfig.getValidationQuery()));
     }
 
     public SessionFactory getSessionFactory() {

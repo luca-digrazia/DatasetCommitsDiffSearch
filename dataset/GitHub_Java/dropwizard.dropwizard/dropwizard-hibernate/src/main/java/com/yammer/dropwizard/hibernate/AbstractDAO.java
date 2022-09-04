@@ -61,7 +61,7 @@ public class AbstractDAO<E> {
     /**
      * Returns the entity class managed by this DAO.
      *
-     * @return the entity class managed by this DAO
+     * @return this DAO's entity class
      */
     public Class<E> getEntityClass() {
         return entityClass;
@@ -69,7 +69,7 @@ public class AbstractDAO<E> {
 
     /**
      * Convenience method to return a single instance that matches the criteria, or null if the
-     * criteria returns no results.
+     * critera returns no results.
      *
      * @param criteria the {@link Criteria} query to run
      * @return the single result or {@code null}
@@ -108,7 +108,7 @@ public class AbstractDAO<E> {
     }
 
     /**
-     * Get the results of a query.
+     * Get the results of aquery.
      *
      * @param query the query to run
      * @return the list of matched query results
@@ -148,21 +148,5 @@ public class AbstractDAO<E> {
     protected E persist(E entity) throws HibernateException {
         currentSession().saveOrUpdate(checkNotNull(entity));
         return entity;
-    }
-
-    /**
-     * Force initialization of a proxy or persistent collection.
-     * <p/>
-     * Note: This only ensures initialization of a proxy object or collection;
-     * it is not guaranteed that the elements INSIDE the collection will be initialized/materialized.
-     *
-     * @param proxy a persistable object, proxy, persistent collection or {@code null}
-     * @throws HibernateException if we can't initialize the proxy at this time, eg. the {@link Session} was closed
-     */
-    protected <T> T initialize(T proxy) throws HibernateException {
-        if (!Hibernate.isInitialized(proxy)) {
-            Hibernate.initialize(proxy);
-        }
-        return proxy;
     }
 }
