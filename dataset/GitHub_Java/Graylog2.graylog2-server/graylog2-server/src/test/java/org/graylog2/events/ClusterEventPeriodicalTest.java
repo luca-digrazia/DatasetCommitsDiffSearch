@@ -93,7 +93,7 @@ public class ClusterEventPeriodicalTest {
     @Spy
     private EventBus serverEventBus;
     @Spy
-    private ClusterEventBus clusterEventBus;
+    private EventBus clusterEventBus;
     private MongoConnection mongoConnection;
     private ClusterEventPeriodical clusterEventPeriodical;
 
@@ -124,7 +124,7 @@ public class ClusterEventPeriodicalTest {
 
     @Test
     public void clusterEventServiceRegistersItselfWithClusterEventBus() throws Exception {
-        verify(clusterEventBus, times(1)).registerClusterEventSubscriber(clusterEventPeriodical);
+        verify(clusterEventBus, times(1)).register(clusterEventPeriodical);
     }
 
     @Test
