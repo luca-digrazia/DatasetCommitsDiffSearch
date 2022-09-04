@@ -17,17 +17,17 @@ package com.google.devtools.build.lib.analysis.test;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Artifacts;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
+import com.google.devtools.build.lib.analysis.actions.DeterministicWriter;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.io.IOException;
@@ -35,26 +35,24 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.util.Arrays;
+import javax.annotation.Nullable;
 
 /**
  * Writes a manifest of instrumented source and metadata files.
  */
 @Immutable
 final class InstrumentedFileManifestAction extends AbstractFileWriteAction {
-  private static final Function<Artifact, String> TO_EXEC_PATH = new Function<Artifact, String>() {
-    @Override
-    public String apply(Artifact artifact) {
-      return artifact.getExecPathString();
-    }
-  };
-
   private static final String GUID = "3833f0a3-7ea1-4d9f-b96f-66eff4c922b0";
 
   private final NestedSet<Artifact> files;
 
   @VisibleForTesting
   InstrumentedFileManifestAction(ActionOwner owner, NestedSet<Artifact> files, Artifact output) {
-    super(owner, /*inputs=*/Artifact.NO_ARTIFACTS, output, /*makeExecutable=*/false);
+    super(
+        owner,
+        /*inputs=*/ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        output,
+        /*makeExecutable=*/ false);
     this.files = files;
   }
 
@@ -65,7 +63,7 @@ final class InstrumentedFileManifestAction extends AbstractFileWriteAction {
       public void writeOutputFile(OutputStream out) throws IOException {
         // Sort the exec paths before writing them out.
         String[] fileNames =
-            Iterables.toArray(Iterables.transform(files, TO_EXEC_PATH), String.class);
+            files.toList().stream().map(Artifact::getExecPathString).toArray(String[]::new);
         Arrays.sort(fileNames);
         try (Writer writer = new OutputStreamWriter(out, ISO_8859_1)) {
           for (String name : fileNames) {
@@ -78,12 +76,14 @@ final class InstrumentedFileManifestAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
-    Fingerprint f = new Fingerprint();
-    f.addString(GUID);
-    // Not sorting here is probably cheaper, though it might lead to unnecessary re-execution.
-    f.addStrings(Iterables.transform(files, TO_EXEC_PATH));
-    return f.hexDigestAndReset();
+  protected void computeKey(
+      ActionKeyContext actionKeyContext,
+      @Nullable Artifact.ArtifactExpander artifactExpander,
+      Fingerprint fp) {
+    // TODO(b/150305897): use addUUID?
+    fp.addString(GUID);
+    // TODO(b/150308417): Not sorting is probably cheaper, might lead to unnecessary re-execution.
+    Artifacts.addToFingerprint(fp, files.toList());
   }
 
   /**
@@ -97,8 +97,6 @@ final class InstrumentedFileManifestAction extends AbstractFileWriteAction {
    */
   public static Artifact getInstrumentedFileManifest(RuleContext ruleContext,
       NestedSet<Artifact> additionalSourceFiles, NestedSet<Artifact> metadataFiles) {
-    // Instrumented manifest makes sense only for rules with binary output.
-    Preconditions.checkState(ruleContext.getRule().hasBinaryOutput());
     Artifact instrumentedFileManifest = ruleContext.getBinArtifact(
         ruleContext.getTarget().getName()  + ".instrumented_files");
 
