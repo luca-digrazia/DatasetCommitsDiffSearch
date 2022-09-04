@@ -638,12 +638,11 @@ public class FileSystemUtils {
       return false;
     }
     try {
-      while (!toRemove.isEmpty()) {
+      for (; toRemove.segmentCount() > 0; toRemove = toRemove.getParentDirectory()) {
         Path p = base.getRelative(toRemove);
         if (p.exists()) {
           p.delete();
         }
-        toRemove = toRemove.getParentDirectory();
       }
     } catch (IOException e) {
       return false;
