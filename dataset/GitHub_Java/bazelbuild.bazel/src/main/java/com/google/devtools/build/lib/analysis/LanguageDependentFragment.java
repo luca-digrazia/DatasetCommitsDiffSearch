@@ -15,11 +15,9 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-
-import java.util.Set;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import java.util.Objects;
 
 /**
  * Transitive info provider for rules that behave differently when used from
@@ -33,6 +31,7 @@ import java.util.Set;
  * <p>This provider is not really a roll-up of transitive information.
  */
 @Immutable
+@AutoCodec
 public final class LanguageDependentFragment implements TransitiveInfoProvider {
   /**
    * A language that can be supported by a multi-language configured target.
@@ -40,9 +39,11 @@ public final class LanguageDependentFragment implements TransitiveInfoProvider {
    * <p>Note that no {@code hashCode}/{@code equals} methods are provided, because these
    * objects are expected to be compared for object identity, which is the default.
    */
+  @AutoCodec
   public static final class LibraryLanguage {
     private final String displayName;
 
+    @AutoCodec.Instantiator
     public LibraryLanguage(String displayName) {
       this.displayName = displayName;
     }
@@ -51,23 +52,27 @@ public final class LanguageDependentFragment implements TransitiveInfoProvider {
     public String toString() {
       return displayName;
     }
+
+    @Override
+    public boolean equals(Object other) {
+      if (!(other instanceof LibraryLanguage)) {
+        return false;
+      }
+      LibraryLanguage otherLanguage = (LibraryLanguage) other;
+      return Objects.equals(displayName, otherLanguage.displayName);
+    }
+
+    @Override
+    public int hashCode() {
+      return displayName.hashCode();
+    }
   }
 
-  private final Label label;
   private final ImmutableSet<LibraryLanguage> languages;
 
-  public LanguageDependentFragment(Label label, Set<LibraryLanguage> languages) {
-    this.label = label;
-    this.languages = ImmutableSet.copyOf(languages);
-  }
-
-  /**
-   * Returns the label that is associated with this piece of information.
-   *
-   * <p>This is usually the label of the target that provides the information.
-   */
-  public Label getLabel() {
-    return label;
+  @AutoCodec.Instantiator
+  public LanguageDependentFragment(ImmutableSet<LibraryLanguage> languages) {
+    this.languages = languages;
   }
 
   /**
@@ -76,34 +81,5 @@ public final class LanguageDependentFragment implements TransitiveInfoProvider {
    */
   public ImmutableSet<LibraryLanguage> getSupportedLanguages() {
     return languages;
-  }
-
-  /**
-   * Routines for verifying that dependency provide the right output.
-   */
-  public static final class Checker {
-    /**
-     * Checks that given dep supports the given language.
-     */
-    public static boolean depSupportsLanguage(
-        RuleContext context, LanguageDependentFragment dep, LibraryLanguage language) {
-      if (dep.getSupportedLanguages().contains(language)) {
-        return true;
-      } else {
-        context.attributeError(
-            "deps", String.format("'%s' does not produce output for %s", dep.getLabel(), language));
-        return false;
-      }
-    }
-
-    /**
-     * Checks that all LanguageDependentFragment support the given language.
-     */
-    public static void depsSupportsLanguage(RuleContext context, LibraryLanguage language) {
-      for (LanguageDependentFragment dep :
-               context.getPrerequisites("deps", Mode.TARGET, LanguageDependentFragment.class)) {
-        depSupportsLanguage(context, dep, language);
-      }
-    }
   }
 }

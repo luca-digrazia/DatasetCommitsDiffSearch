@@ -398,43 +398,29 @@ public class CppHelper {
     final Function<TransitiveInfoCollection, Runfiles> runfilesForLinkingDynamically =
         input -> {
           CcInfo provider = input.get(CcInfo.PROVIDER);
-          if (provider == null) {
-            return Runfiles.EMPTY;
-          } else {
-            // Cannot add libraries directly because the nested set has link order.
-            NestedSet<Artifact> dynamicLibrariesForRuntime =
-                NestedSetBuilder.<Artifact>stableOrder()
-                    .addTransitive(
-                        provider
-                            .getCcLinkingInfo()
-                            .getDynamicModeParamsForExecutable()
-                            .getDynamicLibrariesForRuntime())
-                    .build();
-            return new Runfiles.Builder(ruleContext.getWorkspaceName())
-                .addTransitiveArtifacts(dynamicLibrariesForRuntime)
-                .build();
-          }
+          return provider == null
+              ? Runfiles.EMPTY
+              : new Runfiles.Builder(ruleContext.getWorkspaceName())
+                  .addTransitiveArtifacts(
+                      provider
+                          .getCcLinkingInfo()
+                          .getDynamicModeParamsForExecutable()
+                          .getDynamicLibrariesForRuntime())
+                  .build();
         };
 
     final Function<TransitiveInfoCollection, Runfiles> runfilesForLinkingStatically =
         input -> {
           CcInfo provider = input.get(CcInfo.PROVIDER);
-          if (provider == null) {
-            return Runfiles.EMPTY;
-          } else {
-            // Cannot add libraries directly because the nested set has link order.
-            NestedSet<Artifact> dynamicLibrariesForRuntime =
-                NestedSetBuilder.<Artifact>stableOrder()
-                    .addTransitive(
-                        provider
-                            .getCcLinkingInfo()
-                            .getStaticModeParamsForExecutable()
-                            .getDynamicLibrariesForRuntime())
-                    .build();
-            return new Runfiles.Builder(ruleContext.getWorkspaceName())
-                .addTransitiveArtifacts(dynamicLibrariesForRuntime)
-                .build();
-          }
+          return provider == null
+              ? Runfiles.EMPTY
+              : new Runfiles.Builder(ruleContext.getWorkspaceName())
+                  .addTransitiveArtifacts(
+                      provider
+                          .getCcLinkingInfo()
+                          .getStaticModeParamsForExecutable()
+                          .getDynamicLibrariesForRuntime())
+                  .build();
         };
     return linkingStatically ? runfilesForLinkingStatically : runfilesForLinkingDynamically;
   }

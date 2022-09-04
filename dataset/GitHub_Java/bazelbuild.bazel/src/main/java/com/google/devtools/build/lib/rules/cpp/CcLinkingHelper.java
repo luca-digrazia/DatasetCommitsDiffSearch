@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.LanguageDependentFragment;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -281,7 +282,9 @@ public final class CcLinkingHelper {
   }
 
   /**
-   * Disables checking that the deps actually are C++ rules.
+   * Disables checking that the deps actually are C++ rules. By default, the {@link #link} method
+   * uses {@link LanguageDependentFragment.Checker#depSupportsLanguage} to check that all deps
+   * provide C++ providers.
    */
   public CcLinkingHelper setCheckDepsGenerateCpp(boolean checkDepsGenerateCpp) {
     this.checkDepsGenerateCpp = checkDepsGenerateCpp;
@@ -643,7 +646,13 @@ public final class CcLinkingHelper {
     Artifact soInterface = null;
     if (CppHelper.useInterfaceSharedObjects(cppConfiguration, ccToolchain)
         && emitInterfaceSharedObjects) {
-      soInterface = getLinkedArtifact(LinkTargetType.INTERFACE_DYNAMIC_LIBRARY);
+      soInterface =
+          CppHelper.getLinkedArtifact(
+              ruleContext,
+              ccToolchain,
+              configuration,
+              LinkTargetType.INTERFACE_DYNAMIC_LIBRARY,
+              linkedArtifactNameSuffix);
       // TODO(b/28946988): Remove this hard-coded flag.
       if (!featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
         sonameLinkopts =
