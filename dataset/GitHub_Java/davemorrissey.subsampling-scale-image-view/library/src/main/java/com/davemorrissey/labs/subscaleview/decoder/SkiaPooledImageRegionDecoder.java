@@ -17,8 +17,6 @@ import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
-
 import java.io.File;
 import java.io.FileFilter;
 import java.io.InputStream;
@@ -79,13 +77,10 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
     }
 
     public SkiaPooledImageRegionDecoder(Bitmap.Config bitmapConfig) {
-        Bitmap.Config globalBitmapConfig = SubsamplingScaleImageView.getPreferredBitmapConfig();
-        if (bitmapConfig != null) {
-            this.bitmapConfig = bitmapConfig;
-        } else if (globalBitmapConfig != null) {
-            this.bitmapConfig = globalBitmapConfig;
-        } else {
+        if (bitmapConfig == null) {
             this.bitmapConfig = Bitmap.Config.RGB_565;
+        } else {
+            this.bitmapConfig = bitmapConfig;
         }
     }
 
