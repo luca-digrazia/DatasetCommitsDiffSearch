@@ -66,6 +66,7 @@ import com.google.devtools.build.lib.rules.java.JavaGenJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
+import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraCompileArgs;
 import com.google.devtools.build.lib.rules.objc.J2ObjcSource.SourceType;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
@@ -277,8 +278,12 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                 ? new ExtraCompileArgs("-fno-strict-overflow", "-fobjc-arc-exceptions")
                 : new ExtraCompileArgs("-fno-strict-overflow", "-fobjc-weak");
 
-        compilationSupport.registerCompileAndArchiveActions(
-            common, extraCompileArgs, ImmutableList.<PathFragment>of());
+        compilationSupport
+            .registerCompileAndArchiveActions(
+                common, extraCompileArgs, ImmutableList.<PathFragment>of())
+            .registerFullyLinkAction(
+                common.getObjcProvider(),
+                ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB));
         ccCompilationContext = compilationSupport.getCcCompilationContext();
       } catch (RuleErrorException e) {
         ruleContext.ruleError(e.getMessage());
@@ -310,24 +315,33 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       throws InterruptedException, ActionConflictException {
     JavaCompilationArgsProvider compilationArgsProvider =
         JavaInfo.getProvider(JavaCompilationArgsProvider.class, base);
+    JavaSourceInfoProvider sourceInfoProvider =
+            JavaInfo.getProvider(JavaSourceInfoProvider.class, base);
     JavaGenJarsProvider genJarProvider = JavaInfo.getProvider(JavaGenJarsProvider.class, base);
     ImmutableSet.Builder<Artifact> javaSourceFilesBuilder = ImmutableSet.builder();
     ImmutableSet.Builder<Artifact> javaSourceJarsBuilder = ImmutableSet.builder();
-
-    for (Artifact srcArtifact : ruleContext.getPrerequisiteArtifacts("srcs").list()) {
-      String srcFilename = srcArtifact.getExecPathString();
-      if (JavaSemantics.SOURCE_JAR.apply(srcFilename)) {
-        javaSourceJarsBuilder.add(srcArtifact);
-      } else if (JavaSemantics.JAVA_SOURCE.apply(srcFilename)) {
-        javaSourceFilesBuilder.add(srcArtifact);
+    if (ruleContext
+        .getConfiguration()
+        .getFragment(J2ObjcConfiguration.class)
+        .dontUseJavaSourceInfoProvider()) {
+      for (Artifact srcArtifact : ruleContext.getPrerequisiteArtifacts("srcs").list()) {
+        String srcFilename = srcArtifact.getExecPathString();
+        if (JavaSemantics.SOURCE_JAR.apply(srcFilename)) {
+          javaSourceJarsBuilder.add(srcArtifact);
+        } else if (JavaSemantics.JAVA_SOURCE.apply(srcFilename)) {
+          javaSourceFilesBuilder.add(srcArtifact);
+        }
       }
-    }
-    Artifact srcJar =
-        ruleContext.attributes().has("srcjar")
-            ? ruleContext.getPrerequisiteArtifact("srcjar")
-            : null;
-    if (srcJar != null) {
-      javaSourceJarsBuilder.add(srcJar);
+      Artifact srcJar =
+          ruleContext.attributes().has("srcjar")
+              ? ruleContext.getPrerequisiteArtifact("srcjar")
+              : null;
+      if (srcJar != null) {
+        javaSourceJarsBuilder.add(srcJar);
+      }
+    } else if (sourceInfoProvider != null) {
+      javaSourceFilesBuilder.addAll(sourceInfoProvider.getSourceFiles());
+      javaSourceJarsBuilder.addAll(sourceInfoProvider.getSourceJars());
     }
 
     if (genJarProvider != null && genJarProvider.getGenSourceJar() != null) {
