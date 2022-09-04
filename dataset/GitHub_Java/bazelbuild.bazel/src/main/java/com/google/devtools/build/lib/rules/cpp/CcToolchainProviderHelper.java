@@ -56,7 +56,9 @@ public class CcToolchainProviderHelper {
    * compilation.
    */
   static final ImmutableList<PathFragment> BUILTIN_INCLUDE_FILE_SUFFIXES =
-      ImmutableList.of(PathFragment.create("include/stdc-predef.h"));
+      ImmutableList.of(
+          PathFragment.create("include/stdc-predef.h"),
+          PathFragment.create("android/_predefined_api_level.h"));
 
   private static final String SYSROOT_START = "%sysroot%/";
   private static final String WORKSPACE_START = "%workspace%/";

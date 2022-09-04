@@ -174,19 +174,12 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     CcLinkingHelper linkingHelper =
         new CcLinkingHelper(
                 ruleContext,
-                ruleContext.getLabel(),
-                ruleContext,
-                ruleContext,
                 semantics,
                 featureConfiguration,
                 ccToolchain,
                 fdoContext,
-                ruleContext.getConfiguration(),
-                ruleContext.getFragment(CppConfiguration.class),
-                ruleContext.getSymbolGenerator())
-            .fromCommon(ruleContext, common)
-            .setGrepIncludes(CppHelper.getGrepIncludes(ruleContext))
-            .setTestOrTestOnlyTarget(ruleContext.isTestOnlyTarget())
+                ruleContext.getConfiguration())
+            .fromCommon(common)
             .addLinkopts(common.getLinkopts())
             .emitInterfaceSharedLibraries(true)
             .setAlwayslink(alwaysLink)

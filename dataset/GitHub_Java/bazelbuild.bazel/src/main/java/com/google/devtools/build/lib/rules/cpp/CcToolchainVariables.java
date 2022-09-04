@@ -23,6 +23,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -34,7 +35,6 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.util.Pair;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -64,7 +64,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
      *
      * @param variables binding of variable names to their values for a single flag expansion.
      */
-    String expand(CcToolchainVariables variables) throws ExpansionException;
+    String expand(CcToolchainVariables variables);
 
     String getString();
   }
@@ -121,7 +121,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     }
 
     @Override
-    public String expand(CcToolchainVariables variables) throws ExpansionException {
+    public String expand(CcToolchainVariables variables) {
       // We check all variables in FlagGroup.expandCommandLine.
       // If we arrive here with the variable not being available, the variable was provided, but
       // the nesting level of the NestedSequence was deeper than the nesting level of the flag
@@ -292,14 +292,13 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     void expand(
         CcToolchainVariables variables,
         @Nullable ArtifactExpander expander,
-        List<String> commandLine)
-        throws ExpansionException;
+        List<String> commandLine);
   }
 
   /** An empty variables instance. */
   public static final CcToolchainVariables EMPTY = builder().build();
 
-  private Map<String, Pair<VariableValue, String>> cache;
+  private Map<String, VariableValue> cache;
 
   /**
    * Retrieves a {@link StringSequence} variable named {@code variableName} from {@code variables}
@@ -308,12 +307,10 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
    * <p>Throws {@link ExpansionException} when the variable is not a {@link StringSequence}.
    */
   public static final ImmutableList<String> toStringList(
-      CcToolchainVariables variables, String variableName) throws ExpansionException {
-    ImmutableList.Builder<String> result = ImmutableList.builder();
-    for (VariableValue value : variables.getSequenceVariable(variableName)) {
-      result.add(value.getStringValue(variableName));
-    }
-    return result.build();
+      CcToolchainVariables variables, String variableName) {
+    return Streams.stream(variables.getSequenceVariable(variableName))
+        .map(variable -> variable.getStringValue(variableName))
+        .collect(ImmutableList.toImmutableList());
   }
 
   /**
@@ -323,12 +320,11 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
    * @throws ExpansionException when no such variable or no such field are present, or when
    *     accessing a field of non-structured variable
    */
-  VariableValue getVariable(String name) throws ExpansionException {
+  VariableValue getVariable(String name) {
     return lookupVariable(name, /* throwOnMissingVariable= */ true, /* expander= */ null);
   }
 
-  VariableValue getVariable(String name, @Nullable ArtifactExpander expander)
-      throws ExpansionException {
+  VariableValue getVariable(String name, @Nullable ArtifactExpander expander) {
     return lookupVariable(name, /* throwOnMissingVariable= */ true, expander);
   }
 
@@ -340,46 +336,31 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
    *     reason why variable was not found)
    */
   private VariableValue lookupVariable(
-      String name, boolean throwOnMissingVariable, @Nullable ArtifactExpander expander)
-      throws ExpansionException {
+      String name, boolean throwOnMissingVariable, @Nullable ArtifactExpander expander) {
     if (cache == null) {
       cache = Maps.newConcurrentMap();
     }
-    Pair<VariableValue, String> variableOrError =
+    VariableValue variable =
         cache.computeIfAbsent(
             name,
             n -> {
               VariableValue nonStructuredVariable = getNonStructuredVariable(n);
               if (nonStructuredVariable != null) {
-                return Pair.of(nonStructuredVariable, null);
+                return nonStructuredVariable;
               }
-              try {
-                VariableValue structuredVariable =
-                    getStructureVariable(n, throwOnMissingVariable, expander);
-                return Pair.of(structuredVariable, null);
-              } catch (ExpansionException e) {
-                if (throwOnMissingVariable) {
-                  return Pair.of(null, e.getMessage());
-                } else {
-                  throw new IllegalStateException(
-                      "Should not happen - call to getStructuredVariable threw when asked not to.",
-                      e);
-                }
-              }
+              VariableValue structuredVariable =
+                  getStructureVariable(n, throwOnMissingVariable, expander);
+              return structuredVariable;
             });
-    if (variableOrError.first == null && throwOnMissingVariable) {
+    if (variable == null && throwOnMissingVariable) {
       throw new ExpansionException(
-          variableOrError.second != null
-              ? variableOrError.second
-              : String.format(
-                  "Invalid toolchain configuration: Cannot find variable named '%s'.", name));
+          String.format("Invalid toolchain configuration: Cannot find variable named '%s'.", name));
     }
-    return variableOrError.first;
+    return variable;
   }
 
   private VariableValue getStructureVariable(
-      String name, boolean throwOnMissingVariable, @Nullable ArtifactExpander expander)
-      throws ExpansionException {
+      String name, boolean throwOnMissingVariable, @Nullable ArtifactExpander expander) {
     if (!name.contains(".")) {
       return null;
     }
@@ -400,7 +381,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
 
     while (!fieldsToAccess.empty()) {
       String field = fieldsToAccess.pop();
-      variable = variable.getFieldValue(structPath, field, expander, throwOnMissingVariable);
+      variable = variable.getFieldValue(structPath, field, expander);
       if (variable == null) {
         if (throwOnMissingVariable) {
           throw new ExpansionException(
@@ -416,32 +397,26 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     return variable;
   }
 
-  public String getStringVariable(String variableName) throws ExpansionException {
+  public String getStringVariable(String variableName) {
     return getVariable(variableName, /* expander= */ null).getStringValue(variableName);
   }
 
-  public Iterable<? extends VariableValue> getSequenceVariable(String variableName)
-      throws ExpansionException {
+  public Iterable<? extends VariableValue> getSequenceVariable(String variableName) {
     return getVariable(variableName, /* expander= */ null).getSequenceValue(variableName);
   }
 
   public Iterable<? extends VariableValue> getSequenceVariable(
-      String variableName, @Nullable ArtifactExpander expander) throws ExpansionException {
+      String variableName, @Nullable ArtifactExpander expander) {
     return getVariable(variableName, expander).getSequenceValue(variableName);
   }
 
   /** Returns whether {@code variable} is set. */
-  public boolean isAvailable(String variable) {
+  boolean isAvailable(String variable) {
     return isAvailable(variable, /* expander= */ null);
   }
 
   boolean isAvailable(String variable, @Nullable ArtifactExpander expander) {
-    try {
-      return lookupVariable(variable, /* throwOnMissingVariable= */ false, expander) != null;
-    } catch (ExpansionException e) {
-      throw new IllegalStateException(
-          "Should not happen - call to lookupVariable threw when asked not to.");
-    }
+    return lookupVariable(variable, /* throwOnMissingVariable= */ false, expander) != null;
   }
 
   abstract Map<String, VariableValue> getVariablesMap();
@@ -468,7 +443,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
      *
      * @param variableName name of the variable value at hand, for better exception message.
      */
-    String getStringValue(String variableName) throws ExpansionException;
+    String getStringValue(String variableName);
 
     /**
      * Returns Iterable value of the variable, if the variable type can be converted to a Iterable
@@ -476,8 +451,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
      *
      * @param variableName name of the variable value at hand, for better exception message.
      */
-    Iterable<? extends VariableValue> getSequenceValue(String variableName)
-        throws ExpansionException;
+    Iterable<? extends VariableValue> getSequenceValue(String variableName);
 
     /**
      * Returns value of the field, if the variable is of struct type or throw exception if it is not
@@ -485,14 +459,10 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
      *
      * @param variableName name of the variable value at hand, for better exception message.
      */
-    VariableValue getFieldValue(String variableName, String field) throws ExpansionException;
+    VariableValue getFieldValue(String variableName, String field);
 
     VariableValue getFieldValue(
-        String variableName,
-        String field,
-        @Nullable ArtifactExpander expander,
-        boolean throwOnMissingVariable)
-        throws ExpansionException;
+        String variableName, String field, @Nullable ArtifactExpander expander);
 
     /** Returns true if the variable is truthy */
     boolean isTruthy();
@@ -513,32 +483,22 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     public abstract boolean isTruthy();
 
     @Override
-    public VariableValue getFieldValue(String variableName, String field)
-        throws ExpansionException {
-      return getFieldValue(
-          variableName, field, /* expander= */ null, /* throwOnMissingVariable= */ true);
+    public VariableValue getFieldValue(String variableName, String field) {
+      return getFieldValue(variableName, field, /* expander= */ null);
     }
 
     @Override
     public VariableValue getFieldValue(
-        String variableName,
-        String field,
-        @Nullable ArtifactExpander expander,
-        boolean throwOnMissingVariable)
-        throws ExpansionException {
-      if (throwOnMissingVariable) {
-        throw new ExpansionException(
-            String.format(
-                "Invalid toolchain configuration: Cannot expand variable '%s.%s': variable '%s' is "
-                    + "%s, expected structure",
-                variableName, field, variableName, getVariableTypeName()));
-      } else {
-        return null;
-      }
+        String variableName, String field, @Nullable ArtifactExpander expander) {
+      throw new ExpansionException(
+          String.format(
+              "Invalid toolchain configuration: Cannot expand variable '%s.%s': variable '%s' is "
+                  + "%s, expected structure",
+              variableName, field, variableName, getVariableTypeName()));
     }
 
     @Override
-    public String getStringValue(String variableName) throws ExpansionException {
+    public String getStringValue(String variableName) {
       throw new ExpansionException(
           String.format(
               "Invalid toolchain configuration: Cannot expand variable '%s': expected string, "
@@ -547,8 +507,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     }
 
     @Override
-    public Iterable<? extends VariableValue> getSequenceValue(String variableName)
-        throws ExpansionException {
+    public Iterable<? extends VariableValue> getSequenceValue(String variableName) {
       throw new ExpansionException(
           String.format(
               "Invalid toolchain configuration: Cannot expand variable '%s': expected sequence, "
@@ -740,10 +699,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
 
     @Override
     public VariableValue getFieldValue(
-        String variableName,
-        String field,
-        @Nullable ArtifactExpander expander,
-        boolean throwOnMissingVariable) {
+        String variableName, String field, @Nullable ArtifactExpander expander) {
       Preconditions.checkNotNull(field);
       if (NAME_FIELD_NAME.equals(field) && !type.equals(Type.OBJECT_FILE_GROUP)) {
         return new StringValue(name);
@@ -976,10 +932,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
 
     @Override
     public VariableValue getFieldValue(
-        String variableName,
-        String field,
-        @Nullable ArtifactExpander expander,
-        boolean throwOnMissingVariable) {
+        String variableName, String field, @Nullable ArtifactExpander expander) {
       if (value.containsKey(field)) {
         return value.get(field);
       } else {

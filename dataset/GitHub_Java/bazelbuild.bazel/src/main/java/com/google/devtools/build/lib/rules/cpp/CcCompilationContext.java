@@ -53,6 +53,7 @@ import javax.annotation.Nullable;
  */
 @Immutable
 @AutoCodec
+// TODO(b/77669139): Rename to CcCompilationContext.
 public final class CcCompilationContext implements CcCompilationContextApi {
   /** An empty {@code CcCompilationContext}. */
   public static final CcCompilationContext EMPTY =
@@ -255,7 +256,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     // We'd prefer for these types to use ImmutableSet/ImmutableMap. However, constructing these is
     // substantially more costly in a way that shows up in profiles.
     Map<PathFragment, Artifact> pathToLegalOutputArtifact = new HashMap<>();
-    ImmutableList<HeaderInfo> infos = transitiveHeaderInfos.toList();
+    Collection<HeaderInfo> infos = transitiveHeaderInfos.toCollection();
     Set<Artifact> modularHeaders = CompactHashSet.createWithExpectedSize(infos.size());
     for (HeaderInfo transitiveHeaderInfo : infos) {
       boolean isModule = createModularHeaders && transitiveHeaderInfo.getModule(usePic) != null;

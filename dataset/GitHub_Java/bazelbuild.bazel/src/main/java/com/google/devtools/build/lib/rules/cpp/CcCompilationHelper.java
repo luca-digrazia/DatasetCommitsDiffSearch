@@ -94,15 +94,10 @@ public final class CcCompilationHelper {
       FeatureConfiguration featureConfiguration,
       FdoContext fdoContext,
       String fdoInstrument,
-      String csFdoInstrument,
       CppConfiguration cppConfiguration) {
     if (featureConfiguration.isEnabled(CppRuleClasses.FDO_INSTRUMENT)) {
       variablesBuilder.put(
           CompileBuildVariables.FDO_INSTRUMENT_PATH.getVariableName(), fdoInstrument);
-    }
-    if (featureConfiguration.isEnabled(CppRuleClasses.CS_FDO_INSTRUMENT)) {
-      variablesBuilder.put(
-          CompileBuildVariables.CS_FDO_INSTRUMENT_PATH.getVariableName(), csFdoInstrument);
     }
 
     // FDO is disabled -> do nothing.
@@ -131,7 +126,7 @@ public final class CcCompilationHelper {
               branchFdoProfile.getProfileArtifact().getExecPathString());
         }
         if (featureConfiguration.isEnabled(CppRuleClasses.FDO_OPTIMIZE)) {
-          if (branchFdoProfile.isLlvmFdo() || branchFdoProfile.isLlvmCSFdo()) {
+          if (branchFdoProfile.isLlvmFdo()) {
             variablesBuilder.put(
                 CompileBuildVariables.FDO_PROFILE_PATH.getVariableName(),
                 branchFdoProfile.getProfileArtifact().getExecPathString());
@@ -268,6 +263,7 @@ public final class CcCompilationHelper {
   private String stripIncludePrefix = null;
   private String includePrefix = null;
 
+  // TODO(plf): Pull out of class.
   private CcCompilationContext ccCompilationContext;
 
   private final RuleErrorConsumer ruleErrorConsumer;
@@ -720,20 +716,17 @@ public final class CcCompilationHelper {
       CcToolchainProvider ccToolchain,
       FeatureConfiguration featureConfiguration,
       RuleContext ruleContext) {
-    ImmutableMap.Builder<String, NestedSet<Artifact>> outputGroupsBuilder = ImmutableMap.builder();
-    outputGroupsBuilder.put(OutputGroupInfo.TEMP_FILES, ccCompilationOutputs.getTemps());
+    Map<String, NestedSet<Artifact>> outputGroups = new TreeMap<>();
+    outputGroups.put(OutputGroupInfo.TEMP_FILES, ccCompilationOutputs.getTemps());
     boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
     boolean usePic = ccToolchain.usePicForDynamicLibraries(cppConfiguration, featureConfiguration);
-    outputGroupsBuilder.put(
+    outputGroups.put(
         OutputGroupInfo.FILES_TO_COMPILE,
         ccCompilationOutputs.getFilesToCompile(processHeadersInDependencies, usePic));
-    outputGroupsBuilder.put(
+    outputGroups.put(
         OutputGroupInfo.COMPILATION_PREREQUISITES,
         CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContext));
-    outputGroupsBuilder.putAll(
-        CcCommon.createSaveFeatureStateArtifacts(
-            cppConfiguration, featureConfiguration, ruleContext));
-    return outputGroupsBuilder.build();
+    return outputGroups;
   }
 
   @Immutable
@@ -1121,7 +1114,7 @@ public final class CcCompilationHelper {
   }
 
   /** @return the no-PIC header module artifact for the current target. */
-  private Artifact.DerivedArtifact getHeaderModule(Artifact moduleMapArtifact) {
+  private Artifact getHeaderModule(Artifact moduleMapArtifact) {
     PathFragment objectDir = CppHelper.getObjDirectory(label);
     PathFragment outputName =
         objectDir.getRelative(moduleMapArtifact.getRootRelativePath().getBaseName());
@@ -1129,7 +1122,7 @@ public final class CcCompilationHelper {
   }
 
   /** @return the pic header module artifact for the current target. */
-  private Artifact.DerivedArtifact getPicHeaderModule(Artifact moduleMapArtifact) {
+  private Artifact getPicHeaderModule(Artifact moduleMapArtifact) {
     PathFragment objectDir = CppHelper.getObjDirectory(label);
     PathFragment outputName =
         objectDir.getRelative(moduleMapArtifact.getRootRelativePath().getBaseName());
@@ -1444,7 +1437,6 @@ public final class CcCompilationHelper {
           featureConfiguration,
           fdoContext,
           cppConfiguration.getFdoInstrument(),
-          cppConfiguration.getCSFdoInstrument(),
           cppConfiguration);
     }
     return CompileBuildVariables.setupVariablesOrReportRuleError(

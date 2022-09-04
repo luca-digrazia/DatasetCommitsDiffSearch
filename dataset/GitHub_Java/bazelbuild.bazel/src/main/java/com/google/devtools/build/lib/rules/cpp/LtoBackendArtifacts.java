@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory;
@@ -87,8 +86,7 @@ public final class LtoBackendArtifacts {
       FdoContext fdoContext,
       boolean usePic,
       boolean generateDwo,
-      List<String> userCompileFlags)
-      throws RuleErrorException {
+      List<String> userCompileFlags) {
     this.bitcodeFile = bitcodeFile;
     PathFragment obj = ltoOutputRootPrefix.getRelative(bitcodeFile.getRootRelativePath());
 
@@ -136,8 +134,7 @@ public final class LtoBackendArtifacts {
       FdoContext fdoContext,
       boolean usePic,
       boolean generateDwo,
-      List<String> userCompileFlags)
-      throws RuleErrorException {
+      List<String> userCompileFlags) {
     this.bitcodeFile = bitcodeFile;
 
     PathFragment obj = ltoOutputRootPrefix.getRelative(bitcodeFile.getRootRelativePath());
@@ -196,8 +193,7 @@ public final class LtoBackendArtifacts {
       BuildConfiguration configuration,
       LinkArtifactFactory linkArtifactFactory,
       List<String> userCompileFlags,
-      Map<PathFragment, Artifact> bitcodeFiles)
-      throws RuleErrorException {
+      Map<PathFragment, Artifact> bitcodeFiles) {
     LtoBackendAction.Builder builder = new LtoBackendAction.Builder();
 
     builder.addInput(bitcodeFile);
@@ -224,7 +220,7 @@ public final class LtoBackendArtifacts {
 
     // The command-line doesn't specify the full path to clang++, so we set it in the
     // environment.
-    PathFragment compiler = ccToolchain.getToolPathFragment(Tool.GCC, ruleContext);
+    PathFragment compiler = ccToolchain.getToolPathFragment(Tool.GCC);
 
     builder.setExecutable(compiler);
     CcToolchainVariables.Builder buildVariablesBuilder =

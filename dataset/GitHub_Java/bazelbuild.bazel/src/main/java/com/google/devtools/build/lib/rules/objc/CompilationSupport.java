@@ -1134,7 +1134,7 @@ public class CompilationSupport {
       ExtraLinkArgs extraLinkArgs,
       Iterable<Artifact> extraLinkInputs,
       CcToolchainProvider toolchain)
-      throws InterruptedException, RuleErrorException {
+      throws InterruptedException {
     Iterable<Artifact> prunedJ2ObjcArchives =
         computeAndStripPrunedJ2ObjcArchives(
             j2ObjcEntryClassProvider, j2ObjcMappingFileProvider, objcProvider);
@@ -1306,8 +1306,7 @@ public class CompilationSupport {
    * @param outputArchive the output artifact for this action
    */
   public CompilationSupport registerFullyLinkAction(
-      ObjcProvider objcProvider, Artifact outputArchive)
-      throws InterruptedException, RuleErrorException {
+      ObjcProvider objcProvider, Artifact outputArchive) throws InterruptedException {
     return registerFullyLinkAction(
         objcProvider, outputArchive, toolchain, toolchain.getFdoContext());
   }
@@ -1327,7 +1326,7 @@ public class CompilationSupport {
       Artifact outputArchive,
       @Nullable CcToolchainProvider ccToolchain,
       @Nullable FdoContext fdoContext)
-      throws InterruptedException, RuleErrorException {
+      throws InterruptedException {
     Preconditions.checkNotNull(ccToolchain);
     Preconditions.checkNotNull(fdoContext);
     PathFragment labelName = PathFragment.create(ruleContext.getLabel().getName());

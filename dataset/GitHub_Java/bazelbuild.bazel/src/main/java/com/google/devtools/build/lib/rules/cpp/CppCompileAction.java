@@ -487,18 +487,7 @@ public class CppCompileAction extends AbstractAction
     Preconditions.checkArgument(!sourceFile.isFileType(CppFileTypes.CPP_MODULE));
 
     if (additionalInputs == null) {
-      List<String> options;
-      try {
-        options = getCompilerOptions();
-      } catch (CommandLineExpansionException e) {
-        throw new ActionExecutionException(
-            "failed to generate compile command for rule '"
-                + getOwner().getLabel()
-                + ": "
-                + e.getMessage(),
-            this,
-            /* catastrophe= */ false);
-      }
+      List<String> options = getCompilerOptions();
       commandLineKey = computeCommandLineKey(options);
       List<PathFragment> systemIncludeDirs = getSystemIncludeDirs(options);
       additionalInputs =
@@ -641,7 +630,7 @@ public class CppCompileAction extends AbstractAction
   }
 
   @VisibleForTesting
-  List<PathFragment> getSystemIncludeDirs() throws CommandLineExpansionException {
+  List<PathFragment> getSystemIncludeDirs() {
     return getSystemIncludeDirs(getCompilerOptions());
   }
 
@@ -711,23 +700,11 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   @VisibleForTesting
-  public ImmutableMap<String, String> getIncompleteEnvironmentForTesting()
-      throws ActionExecutionException {
-    try {
-      return getEnvironment(ImmutableMap.of());
-    } catch (CommandLineExpansionException e) {
-      throw new ActionExecutionException(
-          "failed to generate compile environment variables for rule '"
-              + getOwner().getLabel()
-              + ": "
-              + e.getMessage(),
-          this,
-          /* catastrophe= */ false);
-    }
+  public ImmutableMap<String, String> getIncompleteEnvironmentForTesting() {
+    return getEnvironment(ImmutableMap.of());
   }
 
-  public ImmutableMap<String, String> getEnvironment(Map<String, String> clientEnv)
-      throws CommandLineExpansionException {
+  public ImmutableMap<String, String> getEnvironment(Map<String, String> clientEnv) {
     Map<String, String> environment = new LinkedHashMap<>(env.size());
     env.resolve(environment, clientEnv);
 
@@ -742,7 +719,7 @@ public class CppCompileAction extends AbstractAction
   }
 
   @Override
-  public List<String> getArguments() throws CommandLineExpansionException {
+  public List<String> getArguments() {
     return compileCommandLine.getArguments(paramFilePath, overwrittenVariables);
   }
 
@@ -751,8 +728,7 @@ public class CppCompileAction extends AbstractAction
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException {
+  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext) {
     CppCompileInfo.Builder info = CppCompileInfo.newBuilder();
     info.setTool(compileCommandLine.getToolPath());
 
@@ -779,8 +755,7 @@ public class CppCompileAction extends AbstractAction
           Artifact.toExecPaths(ccCompilationContext.getDeclaredIncludeSrcs()));
     }
     // TODO(ulfjack): Extra actions currently ignore the client environment.
-    for (Map.Entry<String, String> envVariable :
-        getEnvironment(/* clientEnv= */ ImmutableMap.of()).entrySet()) {
+    for (Map.Entry<String, String> envVariable : getIncompleteEnvironmentForTesting().entrySet()) {
       info.addVariable(
           EnvironmentVariable.newBuilder()
               .setName(envVariable.getKey())
@@ -796,9 +771,11 @@ public class CppCompileAction extends AbstractAction
     }
   }
 
-  /** Returns the compiler options. */
+  /**
+   * Returns the compiler options.
+   */
   @VisibleForTesting
-  public List<String> getCompilerOptions() throws CommandLineExpansionException {
+  public List<String> getCompilerOptions() {
     return compileCommandLine.getCompilerOptions(/* overwrittenVariables= */ null);
   }
 
@@ -1115,8 +1092,7 @@ public class CppCompileAction extends AbstractAction
 
   /** For actions that discover inputs, the key must include input names. */
   @Override
-  public void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
-      throws CommandLineExpansionException {
+  public void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     computeKey(
         actionKeyContext,
         fp,
@@ -1176,7 +1152,7 @@ public class CppCompileAction extends AbstractAction
     }
   }
 
-  private byte[] getCommandLineKey() throws CommandLineExpansionException {
+  private byte[] getCommandLineKey() {
     if (commandLineKey == null) {
       // For the argv part of the cache key, ignore all compiler flags that explicitly denote module
       // file (.pcm) inputs. Depending on input discovery, some of the unused ones are removed from
@@ -1201,22 +1177,12 @@ public class CppCompileAction extends AbstractAction
       throws ActionExecutionException, InterruptedException {
     setModuleFileFlags();
     if (featureConfiguration.isEnabled(CppRuleClasses.COMPIILER_PARAM_FILE)) {
-      try {
-        paramFileActionInput =
-            new ParamFileActionInput(
-                paramFilePath,
-                compileCommandLine.getCompilerOptions(overwrittenVariables),
-                ParameterFileType.SHELL_QUOTED,
-                StandardCharsets.ISO_8859_1);
-      } catch (CommandLineExpansionException e) {
-        throw new ActionExecutionException(
-            "failed to generate compile command for rule '"
-                + getOwner().getLabel()
-                + ": "
-                + e.getMessage(),
-            this,
-            /* catastrophe= */ false);
-      }
+      paramFileActionInput =
+          new ParamFileActionInput(
+              paramFilePath,
+              compileCommandLine.getCompilerOptions(overwrittenVariables),
+              ParameterFileType.SHELL_QUOTED,
+              StandardCharsets.ISO_8859_1);
     }
 
     if (!shouldScanDotdFiles()) {
@@ -1263,22 +1229,12 @@ public class CppCompileAction extends AbstractAction
       throws ActionExecutionException, InterruptedException {
     setModuleFileFlags();
     if (featureConfiguration.isEnabled(CppRuleClasses.COMPIILER_PARAM_FILE)) {
-      try {
-        paramFileActionInput =
-            new ParamFileActionInput(
-                paramFilePath,
-                compileCommandLine.getCompilerOptions(overwrittenVariables),
-                ParameterFileType.SHELL_QUOTED,
-                StandardCharsets.ISO_8859_1);
-      } catch (CommandLineExpansionException e) {
-        throw new ActionExecutionException(
-            "failed to generate compile command for rule '"
-                + getOwner().getLabel()
-                + ": "
-                + e.getMessage(),
-            this,
-            /* catastrophe= */ false);
-      }
+      paramFileActionInput =
+          new ParamFileActionInput(
+              paramFilePath,
+              compileCommandLine.getCompilerOptions(overwrittenVariables),
+              ParameterFileType.SHELL_QUOTED,
+              StandardCharsets.ISO_8859_1);
     }
 
     if (!shouldScanDotdFiles()) {
@@ -1415,7 +1371,7 @@ public class CppCompileAction extends AbstractAction
     return null;
   }
 
-  protected Spawn createSpawn(Map<String, String> clientEnv) throws ActionExecutionException {
+  protected Spawn createSpawn(Map<String, String> clientEnv) {
     // Intentionally not adding {@link CppCompileAction#inputsForInvalidation}, those are not needed
     // for execution.
     ImmutableList.Builder<ActionInput> inputsBuilder =
@@ -1449,24 +1405,14 @@ public class CppCompileAction extends AbstractAction
               .build();
     }
 
-    try {
-      return new SimpleSpawn(
-          this,
-          ImmutableList.copyOf(getArguments()),
-          getEnvironment(clientEnv),
-          executionInfo,
-          inputs,
-          outputs.build(),
-          estimateResourceConsumptionLocal());
-    } catch (CommandLineExpansionException e) {
-      throw new ActionExecutionException(
-          "failed to generate compile command for rule '"
-              + getOwner().getLabel()
-              + ": "
-              + e.getMessage(),
-          this,
-          /* catastrophe= */ false);
-    }
+    return new SimpleSpawn(
+        this,
+        ImmutableList.copyOf(getArguments()),
+        getEnvironment(clientEnv),
+        executionInfo,
+        inputs,
+        outputs.build(),
+        estimateResourceConsumptionLocal());
   }
 
   @VisibleForTesting
@@ -1580,26 +1526,15 @@ public class CppCompileAction extends AbstractAction
   public Iterable<Artifact> getInputFilesForExtraAction(
       ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    try {
-      Iterable<Artifact> discoveredInputs =
-          findUsedHeaders(
-              actionExecutionContext,
-              ccCompilationContext
-                  .createIncludeScanningHeaderData(usePic, useHeaderModules)
-                  .setSystemIncludeDirs(getSystemIncludeDirs())
-                  .setCmdlineIncludes(getCmdlineIncludes(getCompilerOptions()))
-                  .build());
-      return Sets.difference(
-          ImmutableSet.copyOf(discoveredInputs), ImmutableSet.copyOf(getInputs()));
-    } catch (CommandLineExpansionException e) {
-      throw new ActionExecutionException(
-          "failed to generate compile environment variables for rule '"
-              + getOwner().getLabel()
-              + ": "
-              + e.getMessage(),
-          this,
-          /* catastrophe= */ false);
-    }
+    Iterable<Artifact> discoveredInputs =
+        findUsedHeaders(
+            actionExecutionContext,
+            ccCompilationContext
+                .createIncludeScanningHeaderData(usePic, useHeaderModules)
+                .setSystemIncludeDirs(getSystemIncludeDirs())
+                .setCmdlineIncludes(getCmdlineIncludes(getCompilerOptions()))
+                .build());
+    return Sets.difference(ImmutableSet.copyOf(discoveredInputs), ImmutableSet.copyOf(getInputs()));
   }
 
   static String actionNameToMnemonic(String actionName) {
@@ -1636,17 +1571,11 @@ public class CppCompileAction extends AbstractAction
     // Outputting one argument per line makes it easier to diff the results.
     // The first element in getArguments() is actually the command to execute.
     String legend = "  Command: ";
-    try {
-      for (String argument : ShellEscaper.escapeAll(getArguments())) {
-        message.append(legend);
-        message.append(argument);
-        message.append('\n');
-        legend = "  Argument: ";
-      }
-    } catch (CommandLineExpansionException e) {
-      message.append("  Could not expand command line: ");
-      message.append(e);
+    for (String argument : ShellEscaper.escapeAll(getArguments())) {
+      message.append(legend);
+      message.append(argument);
       message.append('\n');
+      legend = "  Argument: ";
     }
 
     for (PathFragment path : ccCompilationContext.getDeclaredIncludeDirs()) {
