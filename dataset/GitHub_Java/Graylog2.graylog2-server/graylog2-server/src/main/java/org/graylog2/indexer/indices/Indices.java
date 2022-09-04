@@ -62,6 +62,7 @@ import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
@@ -69,7 +70,6 @@ import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.max.Max;
 import org.elasticsearch.search.aggregations.metrics.min.Min;
-import org.elasticsearch.search.sort.SortBuilders;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.IndexNotFoundException;
@@ -93,7 +93,10 @@ import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 
 @Singleton
 public class Indices {
+
     private static final Logger LOG = LoggerFactory.getLogger(Indices.class);
+
+    private static final String GRAYLOG_INTERNAL_TEMPLATE_NAME = "graylog-internal";
 
     private final Client c;
     private final ElasticsearchConfiguration configuration;
@@ -109,13 +112,13 @@ public class Indices {
     }
 
     public void move(String source, String target) {
+        QueryBuilder qb = matchAllQuery();
+
         SearchResponse scrollResp = c.prepareSearch(source)
-                .setScroll(TimeValue.timeValueSeconds(10L))
-                .setQuery(matchAllQuery())
-                .addSort(SortBuilders.fieldSort("_doc"))
-                .setSize(350)
-                .execute()
-                .actionGet();
+                .setSearchType(SearchType.SCAN)
+                .setScroll(new TimeValue(10000))
+                .setQuery(qb)
+                .setSize(350).execute().actionGet();
 
         while (true) {
             scrollResp = c.prepareSearchScroll(scrollResp.getScrollId()).setScroll(new TimeValue(60000)).execute().actionGet();
@@ -217,20 +220,20 @@ public class Indices {
         // done by users.
         try {
             final GetIndexTemplatesResponse getIndexTemplatesResponse = c.admin().indices()
-                    .prepareGetTemplates(configuration.getTemplateName())
+                    .prepareGetTemplates(GRAYLOG_INTERNAL_TEMPLATE_NAME)
                     .get();
 
             final List<IndexTemplateMetaData> existingTemplate = getIndexTemplatesResponse.getIndexTemplates();
 
             if (existingTemplate.size() > 0) {
-                LOG.debug("Index template \"{}\" exists, not installing it again.", configuration.getTemplateName());
+                LOG.debug("Index template \"{}\" exists, not installing it again.", GRAYLOG_INTERNAL_TEMPLATE_NAME);
                 return;
             }
         } catch (Exception e) {
-            LOG.error("Unable to get index template \"" + configuration.getTemplateName() + "\" from Elasticsearch.", e);
+            LOG.error("Unable to get index template \"" + GRAYLOG_INTERNAL_TEMPLATE_NAME + "\" from Elasticsearch.", e);
         }
 
-        final PutIndexTemplateRequest itr = c.admin().indices().preparePutTemplate(configuration.getTemplateName())
+        final PutIndexTemplateRequest itr = c.admin().indices().preparePutTemplate(GRAYLOG_INTERNAL_TEMPLATE_NAME)
                 .setOrder(Integer.MIN_VALUE) // Make sure templates with "order: 0" are applied after our template!
                 .setSource(template)
                 .request();
@@ -238,10 +241,10 @@ public class Indices {
         try {
             final boolean acknowledged = c.admin().indices().putTemplate(itr).actionGet().isAcknowledged();
             if (acknowledged) {
-                LOG.info("Created Graylog index template \"{}\" in Elasticsearch.", configuration.getTemplateName());
+                LOG.info("Created Graylog index template \"{}\" in Elasticsearch.", GRAYLOG_INTERNAL_TEMPLATE_NAME);
             }
         } catch (Exception e) {
-            LOG.error("Unable to create the Graylog index template: " + configuration.getTemplateName(), e);
+            LOG.error("Unable to create the Graylog index template: " + GRAYLOG_INTERNAL_TEMPLATE_NAME, e);
         }
     }
 
