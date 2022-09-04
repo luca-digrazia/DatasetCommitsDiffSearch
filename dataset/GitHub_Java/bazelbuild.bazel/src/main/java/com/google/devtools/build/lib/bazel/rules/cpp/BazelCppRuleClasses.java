@@ -57,7 +57,6 @@ import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
-import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses.LipoTransition;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -140,7 +139,6 @@ public class BazelCppRuleClasses {
               attr(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, LABEL)
                   .value(CppRuleClasses.ccToolchainAttribute(env)))
           .setPreferredDependencyPredicate(Predicates.<String>or(CPP_SOURCE, C_SOURCE, CPP_HEADER))
-          .addRequiredToolchains(CppHelper.getCcToolchainType(env.getToolsRepository()))
           .build();
     }
 
@@ -343,7 +341,7 @@ public class BazelCppRuleClasses {
           Subject to <a href="${link make-variables}">"Make" variable</a> substitution.
           The value of this attribute is interpreted as a regular expression.
           Any preexisting <code>COPTS</code> that match this regular expression
-          (including values explicitly specified in the rule's <a
+          (not including values explicitly specified in the rule's <a
           href="#cc_binary.copts">copts</a> attribute) will be removed from
           <code>COPTS</code> for purposes of compiling this rule.
           This attribute should rarely be needed.
@@ -530,7 +528,7 @@ public class BazelCppRuleClasses {
             <li><code>stamp = 0</code>: Always replace build information by constant
               values. This gives good build result caching.</li>
             <li><code>stamp = -1</code>: Embedding of build information is controlled
-              by the <a href="../user-manual.html#flag--stamp">--[no]stamp</a> flag.</li>
+              by the <a href="../blaze-user-manual.html#flag--stamp">--[no]stamp</a> flag.</li>
           </ul>
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("stamp", TRISTATE).value(TriState.AUTO))
