@@ -72,14 +72,12 @@ final class DirectoryTree {
     private final Path path;
     private final ByteString data;
     private final Digest digest;
-    private final boolean isExecutable;
 
-    FileNode(String pathSegment, Path path, Digest digest, boolean isExecutable) {
+    FileNode(String pathSegment, Path path, Digest digest) {
       super(pathSegment);
       this.path = Preconditions.checkNotNull(path, "path");
       this.data = null;
       this.digest = Preconditions.checkNotNull(digest, "digest");
-      this.isExecutable = isExecutable;
     }
 
     FileNode(String pathSegment, ByteString data, Digest digest) {
@@ -87,7 +85,6 @@ final class DirectoryTree {
       this.path = null;
       this.data = Preconditions.checkNotNull(data, "data");
       this.digest = Preconditions.checkNotNull(digest, "digest");
-      this.isExecutable = false;
     }
 
     Digest getDigest() {
@@ -102,13 +99,9 @@ final class DirectoryTree {
       return data;
     }
 
-    public boolean isExecutable() {
-      return isExecutable;
-    }
-
     @Override
     public int hashCode() {
-      return Objects.hash(super.hashCode(), path, data, digest, isExecutable);
+      return Objects.hash(super.hashCode(), path, data, digest);
     }
 
     @Override
@@ -118,8 +111,7 @@ final class DirectoryTree {
         return super.equals(other)
             && Objects.equals(path, other.path)
             && Objects.equals(data, other.data)
-            && Objects.equals(digest, other.digest)
-            && isExecutable == other.isExecutable;
+            && Objects.equals(digest, other.digest);
       }
       return false;
     }
@@ -173,8 +165,8 @@ final class DirectoryTree {
   }
 
   /**
-   * Traverses the {@link DirectoryTree} in a depth first search manner. The children are visited in
-   * lexographical order.
+   * Traverses the {@link ActionInputsTree} in a depth first search manner. The children are visited
+   * in lexographical order.
    */
   void visit(Visitor visitor) {
     Preconditions.checkNotNull(visitor, "visitor");
