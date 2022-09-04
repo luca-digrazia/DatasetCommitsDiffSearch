@@ -17,12 +17,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
+import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import java.util.ArrayList;
@@ -41,7 +41,7 @@ public class AndroidResourceValidatorActionBuilder {
   private final AndroidSdkProvider sdk;
 
   // Inputs
-  private CompiledMergableAndroidData primary;
+  private ResourceContainer primary;
   private Artifact mergedResources;
 
   // Outputs
@@ -70,7 +70,7 @@ public class AndroidResourceValidatorActionBuilder {
   }
 
   /** The primary resource container. We mostly propagate its values, but update the R.txt. */
-  private AndroidResourceValidatorActionBuilder withPrimary(CompiledMergableAndroidData primary) {
+  public AndroidResourceValidatorActionBuilder withPrimary(ResourceContainer primary) {
     this.primary = primary;
     return this;
   }
@@ -116,47 +116,15 @@ public class AndroidResourceValidatorActionBuilder {
     return this;
   }
 
-  private void build(ActionConstructionContext context) {
+  public ResourceContainer build(ActionConstructionContext context) {
+    ResourceContainer container = primary;
     if (rTxtOut != null) {
-      createValidateAction(context);
+      container = createValidateAction(container, context);
     }
-
     if (compiledSymbols != null) {
-      createLinkStaticLibraryAction(context);
+      container = createLinkStaticLibraryAction(container, context);
     }
-  }
-
-  public ResourceContainer build(
-      ActionConstructionContext context, ResourceContainer resourceContainer) {
-    withPrimary(resourceContainer).build(context);
-    ResourceContainer.Builder builder = resourceContainer.toBuilder();
-
-    if (rTxtOut != null) {
-      builder.setJavaSourceJar(sourceJarOut).setRTxt(rTxtOut);
-    }
-
-    if (compiledSymbols != null) {
-      builder
-          .setAapt2JavaSourceJar(aapt2SourceJarOut)
-          .setAapt2RTxt(aapt2RTxtOut)
-          .setStaticLibrary(staticLibraryOut);
-    }
-
-    return builder.build();
-  }
-
-  public ValidatedAndroidResources build(
-      ActionConstructionContext context, MergedAndroidResources merged) {
-    withPrimary(merged).build(context);
-
-    return ValidatedAndroidResources.of(
-        merged,
-        rTxtOut,
-        sourceJarOut,
-        apkOut,
-        aapt2RTxtOut,
-        aapt2SourceJarOut,
-        staticLibraryOut);
+    return container;
   }
 
   public AndroidResourceValidatorActionBuilder setCompiledSymbols(Artifact compiledSymbols) {
@@ -175,7 +143,8 @@ public class AndroidResourceValidatorActionBuilder {
    * <p>This allows the link action to replace the validate action for builds that use aapt2, as
    * opposed to executing both actions.
    */
-  private void createLinkStaticLibraryAction(ActionConstructionContext context) {
+  private ResourceContainer createLinkStaticLibraryAction(
+      ResourceContainer validated, ActionConstructionContext context) {
     Preconditions.checkNotNull(staticLibraryOut);
     Preconditions.checkNotNull(aapt2SourceJarOut);
     Preconditions.checkNotNull(aapt2RTxtOut);
@@ -197,7 +166,7 @@ public class AndroidResourceValidatorActionBuilder {
     inputs.add(compiledSymbols);
 
     builder.addExecPath("--manifest", primary.getManifest());
-    inputs.add(primary.getManifest());
+    inputs.add(validated.getManifest());
 
     if (!Strings.isNullOrEmpty(customJavaPackage)) {
       // Sets an alternative java package for the generated R.java
@@ -236,9 +205,17 @@ public class AndroidResourceValidatorActionBuilder {
                 "Linking static android resource library for %s", ruleContext.getLabel())
             .setMnemonic("AndroidResourceLink")
             .build(context));
+
+    return validated
+        .toBuilder()
+        .setAapt2JavaSourceJar(aapt2SourceJarOut)
+        .setAapt2RTxt(aapt2RTxtOut)
+        .setStaticLibrary(staticLibraryOut)
+        .build();
   }
 
-  private void createValidateAction(ActionConstructionContext context) {
+  private ResourceContainer createValidateAction(
+      ResourceContainer primary, ActionConstructionContext context) {
     CustomCommandLine.Builder builder = new CustomCommandLine.Builder();
 
     // Set the busybox tool.
@@ -300,5 +277,8 @@ public class AndroidResourceValidatorActionBuilder {
             .setProgressMessage("Validating Android resources for %s", ruleContext.getLabel())
             .setMnemonic("AndroidResourceValidator")
             .build(context));
+
+    // Return the full set of validated transitive dependencies.
+    return primary.toBuilder().setJavaSourceJar(sourceJarOut).setRTxt(rTxtOut).build();
   }
 }

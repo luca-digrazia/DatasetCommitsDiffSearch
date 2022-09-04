@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
@@ -33,7 +32,7 @@ import com.google.devtools.build.lib.syntax.Type;
 public class AndroidSdk implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     // If the user didn't specify --proguard_top, go with the proguard attribute in the android_sdk
     // rule. Otherwise, use what she told us to.
     FilesToRunProvider proguard =
@@ -68,8 +67,9 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
     }
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addNativeDeclaredProvider(
-            new AndroidSdkProvider(
+        .addProvider(
+            AndroidSdkProvider.class,
+            AndroidSdkProvider.create(
                 buildToolsVersion,
                 frameworkAidl,
                 aidlLib,

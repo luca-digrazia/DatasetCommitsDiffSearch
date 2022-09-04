@@ -27,8 +27,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.ToArg;
-import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.ToArg.Includes;
+import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.Builder.SeparatorType;
 import com.google.devtools.build.lib.util.OS;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,37 +38,37 @@ public class AndroidResourcesProcessorBuilder {
 
   private static final ResourceContainerConverter.ToArg AAPT2_RESOURCE_DEP_TO_ARG =
       ResourceContainerConverter.builder()
-          .include(Includes.ResourceRoots)
-          .include(Includes.Manifest)
-          .include(Includes.Aapt2RTxt)
-          .include(Includes.SymbolsBin)
-          .include(Includes.CompiledSymbols)
-          .withSeparator(ToArg.SeparatorType.COLON_COMMA)
+          .includeResourceRoots()
+          .includeManifest()
+          .includeAapt2RTxt()
+          .includeSymbolsBin()
+          .includeCompiledSymbols()
+          .withSeparator(SeparatorType.COLON_COMMA)
           .toArgConverter();
 
   private static final ResourceContainerConverter.ToArg AAPT2_RESOURCE_DEP_TO_ARG_NO_PARSE =
       ResourceContainerConverter.builder()
-          .include(Includes.ResourceRoots)
-          .include(Includes.Manifest)
-          .include(Includes.Aapt2RTxt)
-          .include(Includes.CompiledSymbols)
-          .withSeparator(ToArg.SeparatorType.COLON_COMMA)
+          .includeResourceRoots()
+          .includeManifest()
+          .includeAapt2RTxt()
+          .includeCompiledSymbols()
+          .withSeparator(SeparatorType.COLON_COMMA)
           .toArgConverter();
 
   private static final ResourceContainerConverter.ToArg RESOURCE_CONTAINER_TO_ARG =
       ResourceContainerConverter.builder()
-          .include(Includes.ResourceRoots)
-          .include(Includes.Manifest)
-          .withSeparator(ToArg.SeparatorType.COLON_COMMA)
+          .includeResourceRoots()
+          .includeManifest()
+          .withSeparator(SeparatorType.COLON_COMMA)
           .toArgConverter();
 
   private static final ResourceContainerConverter.ToArg RESOURCE_DEP_TO_ARG =
       ResourceContainerConverter.builder()
-          .include(Includes.ResourceRoots)
-          .include(Includes.Manifest)
-          .include(Includes.RTxt)
-          .include(Includes.SymbolsBin)
-          .withSeparator(ToArg.SeparatorType.COLON_COMMA)
+          .includeResourceRoots()
+          .includeManifest()
+          .includeRTxt()
+          .includeSymbolsBin()
+          .withSeparator(SeparatorType.COLON_COMMA)
           .toArgConverter();
 
   private ResourceContainer primary;
@@ -442,7 +441,7 @@ public class AndroidResourcesProcessorBuilder {
       List<Artifact> outs, NestedSetBuilder<Artifact> inputs, Builder builder) {
 
     // Add data
-    builder.add("--primaryData", RESOURCE_CONTAINER_TO_ARG.map(primary));
+    builder.add("--primaryData", RESOURCE_CONTAINER_TO_ARG.expandToCommandLine(primary));
     inputs.addAll(primary.getArtifacts());
     inputs.add(primary.getManifest());
 

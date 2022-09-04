@@ -1033,7 +1033,7 @@ public final class AndroidRuleClasses {
                   .exec()
                   .value(env.getToolsLabel("//tools/android:zip_filter")))
           .removeAttribute("data")
-          .advertiseSkylarkProvider(ApkInfo.PROVIDER.id())
+          .advertiseProvider(ApkProvider.class)
           .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
           .build();
     }
