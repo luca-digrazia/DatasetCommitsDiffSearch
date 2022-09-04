@@ -15,8 +15,8 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.enterprise.context.ApplicationScoped;
@@ -46,7 +46,6 @@ import org.jboss.logging.Logger;
 class ArcContainerImpl implements ArcContainer {
 
     private static final Logger LOGGER = Logger.getLogger(ArcContainerImpl.class.getPackage().getName());
-    private static final AtomicInteger ID_GENERATOR = new AtomicInteger();
 
     private final String id;
 
@@ -70,7 +69,7 @@ class ArcContainerImpl implements ArcContainer {
     private final List<ResourceReferenceProvider> resourceProviders;
 
     public ArcContainerImpl() {
-        id = "" + ID_GENERATOR.incrementAndGet();
+        id = UUID.randomUUID().toString();
         running = new AtomicBoolean(true);
         beans = new ArrayList<>();
         interceptors = new ArrayList<>();

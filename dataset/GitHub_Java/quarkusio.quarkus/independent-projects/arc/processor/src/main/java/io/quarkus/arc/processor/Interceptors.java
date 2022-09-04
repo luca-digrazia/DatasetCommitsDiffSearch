@@ -1,6 +1,5 @@
 package io.quarkus.arc.processor;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import javax.enterprise.inject.spi.DefinitionException;
@@ -47,9 +46,7 @@ final class Interceptors {
             LOGGER.info("An interceptor " + interceptorClass + " does not declare any @Priority. " +
                     "It will be assigned a default priority value of 0.");
         }
-        return new InterceptorInfo(interceptorClass, beanDeployment,
-                bindings.size() == 1 ? Collections.singleton(bindings.iterator().next())
-                        : Collections.unmodifiableSet(bindings),
+        return new InterceptorInfo(interceptorClass, beanDeployment, bindings,
                 Injection.forBean(interceptorClass, null, beanDeployment, transformer), priority);
     }
 
