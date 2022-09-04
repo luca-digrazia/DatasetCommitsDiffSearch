@@ -13,91 +13,219 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.configuredtargets.AbstractConfiguredTarget;
+import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.starlarkbuildapi.DefaultInfoApi;
+import javax.annotation.Nullable;
+import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Starlark;
+import net.starlark.java.eval.StarlarkThread;
+import net.starlark.java.syntax.Location;
 
 /** DefaultInfo is provided by all targets implicitly and contains all standard fields. */
 @Immutable
-public final class DefaultInfo extends Info {
+public abstract class DefaultInfo extends NativeInfo implements DefaultInfoApi {
 
-  // Accessors for Skylark
-  private static final String DATA_RUNFILES_FIELD = "data_runfiles";
-  private static final String DEFAULT_RUNFILES_FIELD = "default_runfiles";
-  private static final String FILES_FIELD = "files";
-  private static final ImmutableList<String> KEYS =
-      ImmutableList.of(
-          DATA_RUNFILES_FIELD,
-          DEFAULT_RUNFILES_FIELD,
-          FILES_FIELD,
-          FilesToRunProvider.SKYLARK_NAME);
-
-  private final RunfilesProvider runfilesProvider;
-  private final FileProvider fileProvider;
-  private final FilesToRunProvider filesToRunProvider;
-  private final AtomicReference<SkylarkNestedSet> files = new AtomicReference<>();
-
-  public static final String SKYLARK_NAME = "DefaultInfo";
-  public static final Provider PROVIDER =
-      new NativeProvider<Info>(Info.class, SKYLARK_NAME) {
-        @Override
-        protected Info createInstanceFromSkylark(Object[] args, Location loc) {
-          @SuppressWarnings("unchecked")
-          Map<String, Object> kwargs = (Map<String, Object>) args[0];
-          return new Info(this, kwargs, loc);
-        }
-      };
-
-  private DefaultInfo(
-      Provider constructor,
-      RunfilesProvider runfilesProvider,
-      FileProvider fileProvider,
-      FilesToRunProvider filesToRunProvider) {
-    // Fields map is not used here to prevent memory regression
-    super(constructor, ImmutableMap.<String, Object>of());
-    this.runfilesProvider = runfilesProvider;
-    this.fileProvider = fileProvider;
-    this.filesToRunProvider = filesToRunProvider;
-  }
-
-  public static DefaultInfo build(
-      RunfilesProvider runfilesProvider,
-      FileProvider fileProvider,
-      FilesToRunProvider filesToRunProvider) {
-    return new DefaultInfo(
-        PROVIDER, runfilesProvider, fileProvider, filesToRunProvider);
-  }
+  /**
+   * Singleton instance of the provider type for {@link DefaultInfo}.
+   */
+  public static final DefaultInfoProvider PROVIDER = new DefaultInfoProvider();
 
   @Override
-  public Object getValue(String name) {
-    switch (name) {
-      case DATA_RUNFILES_FIELD:
-        return (runfilesProvider == null) ? Runfiles.EMPTY : runfilesProvider.getDataRunfiles();
-      case DEFAULT_RUNFILES_FIELD:
-        return (runfilesProvider == null) ? Runfiles.EMPTY : runfilesProvider.getDefaultRunfiles();
-      case FILES_FIELD:
-        if (files.get() == null) {
-          files.compareAndSet(
-              null, SkylarkNestedSet.of(Artifact.class, fileProvider.getFilesToBuild()));
-        }
-        return files.get();
-      case FilesToRunProvider.SKYLARK_NAME:
-        return filesToRunProvider;
+  public DefaultInfoProvider getProvider() {
+    return PROVIDER;
+  }
+
+  private DefaultInfo() {}
+
+  private DefaultInfo(Location loc) {
+    super(loc);
+  }
+
+  /**
+   * Returns a set of runfiles acting as both the data runfiles and the default runfiles.
+   *
+   * <p>This is kept for legacy reasons.
+   */
+  public abstract Runfiles getStatelessRunfiles();
+
+  @Override
+  public abstract Runfiles getDataRunfiles();
+
+  @Override
+  public abstract Runfiles getDefaultRunfiles();
+
+  /**
+   * If the rule producing this info object is marked 'executable' or 'test', this is an artifact
+   * representing the file that should be executed to run the target. This is null otherwise.
+   */
+  public abstract Artifact getExecutable();
+
+  @Override
+  public abstract FilesToRunProvider getFilesToRun();
+
+  /** Constructs an optimised DefaultInfo for native targets. */
+  public static DefaultInfo build(AbstractConfiguredTarget target) {
+    return new DelegatingDefaultInfo(target);
+  }
+
+  /** Default implementation of DefaultInfo object for Starlark targets. */
+  private static class DefaultDefaultInfo extends DefaultInfo {
+    private final Depset files;
+    private final Runfiles runfiles;
+    private final Runfiles dataRunfiles;
+    private final Runfiles defaultRunfiles;
+    private final Artifact executable;
+    private final FilesToRunProvider filesToRunProvider;
+
+    private DefaultDefaultInfo(
+        Location loc,
+        Depset files,
+        Runfiles runfiles,
+        Runfiles dataRunfiles,
+        Runfiles defaultRunfiles,
+        Artifact executable,
+        @Nullable FilesToRunProvider filesToRunProvider) {
+      super(loc);
+      this.files = files;
+      this.runfiles = runfiles;
+      this.dataRunfiles = dataRunfiles;
+      this.defaultRunfiles = defaultRunfiles;
+      this.executable = executable;
+      this.filesToRunProvider = filesToRunProvider;
     }
-    return null;
+
+    @Override
+    public Depset getFiles() {
+      return files;
+    }
+
+    @Override
+    public FilesToRunProvider getFilesToRun() {
+      return filesToRunProvider;
+    }
+
+    @Override
+    public Runfiles getStatelessRunfiles() {
+      return runfiles;
+    }
+
+    @Override
+    public Runfiles getDataRunfiles() {
+      return dataRunfiles;
+    }
+
+    @Override
+    public Runfiles getDefaultRunfiles() {
+      if (dataRunfiles == null && defaultRunfiles == null) {
+        // This supports the legacy Starlark runfiles constructor -- if the 'runfiles' attribute
+        // is used, then default_runfiles will return all runfiles.
+        return runfiles;
+      } else {
+        return defaultRunfiles;
+      }
+    }
+
+    @Override
+    public Artifact getExecutable() {
+      return executable;
+    }
   }
 
-  @Override
-  public ImmutableCollection<String> getKeys() {
-    return KEYS;
+  /** Optimised implementation of DefaultInfo object for native targets. */
+  private static class DelegatingDefaultInfo extends DefaultInfo {
+    private final AbstractConfiguredTarget target;
+
+    DelegatingDefaultInfo(AbstractConfiguredTarget target) {
+      this.target = target;
+    }
+
+    @Nullable
+    @Override
+    public Depset getFiles() {
+      return Depset.of(Artifact.TYPE, target.getProvider(FileProvider.class).getFilesToBuild());
+    }
+
+    @Nullable
+    @Override
+    public FilesToRunProvider getFilesToRun() {
+      return target.getProvider(FilesToRunProvider.class);
+    }
+
+    @Nullable
+    @Override
+    public Runfiles getDataRunfiles() {
+      RunfilesProvider runfilesProvider = target.getProvider(RunfilesProvider.class);
+      return (runfilesProvider == null) ? Runfiles.EMPTY : runfilesProvider.getDataRunfiles();
+    }
+
+    @Nullable
+    @Override
+    public Runfiles getDefaultRunfiles() {
+      RunfilesProvider runfilesProvider = target.getProvider(RunfilesProvider.class);
+      return (runfilesProvider == null) ? Runfiles.EMPTY : runfilesProvider.getDefaultRunfiles();
+    }
+
+    @Override
+    public Runfiles getStatelessRunfiles() {
+      return Runfiles.EMPTY;
+    }
+
+    @Override
+    public Artifact getExecutable() {
+      return target.getProvider(FilesToRunProvider.class).getExecutable();
+    }
+  }
+
+  /**
+   * Provider implementation for {@link DefaultInfoApi}.
+   */
+  public static class DefaultInfoProvider extends BuiltinProvider<DefaultInfo>
+      implements DefaultInfoApi.DefaultInfoApiProvider<Runfiles, Artifact> {
+    private DefaultInfoProvider() {
+      super("DefaultInfo", DefaultInfo.class);
+    }
+
+    @Override
+    public DefaultInfoApi constructor(
+        Object files,
+        Object runfilesObj,
+        Object dataRunfilesObj,
+        Object defaultRunfilesObj,
+        Object executable,
+        StarlarkThread thread)
+        throws EvalException {
+
+      Runfiles statelessRunfiles = castNoneToNull(Runfiles.class, runfilesObj);
+      Runfiles dataRunfiles = castNoneToNull(Runfiles.class, dataRunfilesObj);
+      Runfiles defaultRunfiles = castNoneToNull(Runfiles.class, defaultRunfilesObj);
+
+      if ((statelessRunfiles != null) && (dataRunfiles != null || defaultRunfiles != null)) {
+        throw Starlark.errorf(
+            "Cannot specify the provider 'runfiles' together with 'data_runfiles' or"
+                + " 'default_runfiles'");
+      }
+
+      return new DefaultDefaultInfo(
+          thread.getCallerLocation(),
+          castNoneToNull(Depset.class, files),
+          statelessRunfiles,
+          dataRunfiles,
+          defaultRunfiles,
+          castNoneToNull(Artifact.class, executable),
+          null);
+    }
+  }
+
+  private static <T> T castNoneToNull(Class<T> clazz, Object value) {
+    if (value == Starlark.NONE) {
+      return null;
+    } else {
+      return clazz.cast(value);
+    }
   }
 }

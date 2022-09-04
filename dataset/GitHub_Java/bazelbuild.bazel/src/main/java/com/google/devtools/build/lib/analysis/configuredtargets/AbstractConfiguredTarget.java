@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupC
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.Dict;
@@ -50,6 +51,9 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
   private final BuildConfigurationValue.Key configurationKey;
 
   private final NestedSet<PackageGroupContents> visibility;
+
+  // Cached on-demand default provider
+  private final AtomicReference<DefaultInfo> defaultProvider = new AtomicReference<>();
 
   // Accessors for Starlark
   private static final String DATA_RUNFILES_FIELD = "data_runfiles";
@@ -209,7 +213,10 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
   protected void addExtraStarlarkKeys(Consumer<String> result) {}
 
   private DefaultInfo getDefaultProvider() {
-    return DefaultInfo.build(this);
+    if (defaultProvider.get() == null) {
+      defaultProvider.compareAndSet(null, DefaultInfo.build(this));
+    }
+    return defaultProvider.get();
   }
 
   /** Returns a declared provider provided by this target. Only meant to use from Starlark. */
