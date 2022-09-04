@@ -40,9 +40,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Strings.isNullOrEmpty;
-
 public class FieldValueAlertCondition extends AbstractAlertCondition {
     private static final Logger LOG = LoggerFactory.getLogger(FieldValueAlertCondition.class);
 
@@ -79,8 +76,6 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
         this.threshold = (Number) parameters.get("threshold");
         this.type = CheckType.valueOf(((String) parameters.get("type")).toUpperCase());
         this.field = (String) parameters.get("field");
-
-        checkArgument(!isNullOrEmpty(field), "\"field\" must not be empty.");
     }
 
     @Override
