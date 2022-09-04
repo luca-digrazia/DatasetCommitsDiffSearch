@@ -66,13 +66,13 @@ public class HostCounterCache {
     }
 
     /**
-     * Remove host from counter.
+     * Set counter cache to 0 for a host.
      *
      * @param hostname The host of which the counter to reset.
      */
     public void reset(String hostname) {
         if (this.cache.containsKey(hostname)) {
-            this.cache.remove(hostname);
+            this.cache.put(hostname, 0);
         }
     }
 

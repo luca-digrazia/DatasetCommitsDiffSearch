@@ -20,10 +20,9 @@
 
 package org.graylog2.streams;
 
-import java.util.List;
-
-import org.graylog2.GraylogServer;
 import org.graylog2.SimpleObjectCache;
+
+import java.util.List;
 
 /**
  * StreamCache.java: Mar 26, 2011 11:25:41 PM
@@ -35,29 +34,14 @@ import org.graylog2.SimpleObjectCache;
 public class StreamCache extends SimpleObjectCache<List<Stream>> {
 
     private static StreamCache instance;
-    private GraylogServer graylogServer;
 
     private StreamCache() { }
-
-    public static synchronized StreamCache initialize(GraylogServer server) {
-        StreamCache streamCache = getInstance();
-        streamCache.setGraylogServer(server);
-        return streamCache;
-    }
-
-    private void setGraylogServer(GraylogServer server) {
-        this.graylogServer = server;
-    }
-
-    public GraylogServer getGraylogServer() {
-        return graylogServer;
-    }
 
     public static synchronized StreamCache getInstance() {
         if (instance == null) {
             instance = new StreamCache();
         }
-
+        
         return instance;
     }
 }
