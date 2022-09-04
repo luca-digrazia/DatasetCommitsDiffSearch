@@ -4,14 +4,15 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.graphite.Graphite;
 import com.codahale.metrics.graphite.GraphiteReporter;
 import com.codahale.metrics.graphite.GraphiteUDP;
+
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.validation.BaseValidator;
-import org.junit.jupiter.api.Test;
+import org.apache.commons.lang3.reflect.FieldUtils;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.lang.reflect.Field;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,7 +23,7 @@ public class GraphiteReporterFactoryTest {
 
     private final GraphiteReporter.Builder builderSpy = mock(GraphiteReporter.Builder.class);
 
-    private final GraphiteReporterFactory graphiteReporterFactory = new GraphiteReporterFactory() {
+    private GraphiteReporterFactory graphiteReporterFactory = new GraphiteReporterFactory() {
         @Override
         protected GraphiteReporter.Builder builder(MetricRegistry registry) {
             return builderSpy;
@@ -30,13 +31,13 @@ public class GraphiteReporterFactoryTest {
     };
 
     @Test
-    void isDiscoverable() {
+    public void isDiscoverable() throws Exception {
         assertThat(new DiscoverableSubtypeResolver().getDiscoveredSubtypes())
             .contains(GraphiteReporterFactory.class);
     }
 
     @Test
-    void createDefaultFactory() throws Exception {
+    public void createDefaultFactory() throws Exception {
         final GraphiteReporterFactory factory = new YamlConfigurationFactory<>(GraphiteReporterFactory.class,
              BaseValidator.newValidator(), Jackson.newObjectMapper(), "dw")
             .build();
@@ -44,7 +45,7 @@ public class GraphiteReporterFactoryTest {
     }
 
     @Test
-    void testNoAddressResolutionForGraphite() throws Exception {
+    public void testNoAddressResolutionForGraphite() throws Exception {
         graphiteReporterFactory.build(new MetricRegistry());
 
         final ArgumentCaptor<Graphite> argument = ArgumentCaptor.forClass(Graphite.class);
@@ -57,7 +58,7 @@ public class GraphiteReporterFactoryTest {
     }
 
     @Test
-    void testCorrectTransportForGraphiteUDP() throws Exception {
+    public void testCorrectTransportForGraphiteUDP() throws Exception {
         graphiteReporterFactory.setTransport("udp");
         graphiteReporterFactory.build(new MetricRegistry());
 
@@ -70,25 +71,19 @@ public class GraphiteReporterFactoryTest {
         assertThat(getField(graphite, "address")).isNull();
     }
 
-    private static Object getField(GraphiteUDP graphite, String name) throws NoSuchFieldException {
+    private static Object getField(GraphiteUDP graphite, String name) {
         try {
-            return getInaccessibleField(GraphiteUDP.class, name).get(graphite);
+            return FieldUtils.getDeclaredField(GraphiteUDP.class, name, true).get(graphite);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private static Object getField(Graphite graphite, String name) throws NoSuchFieldException {
+    private static Object getField(Graphite graphite, String name) {
         try {
-            return getInaccessibleField(Graphite.class, name).get(graphite);
+            return FieldUtils.getDeclaredField(Graphite.class, name, true).get(graphite);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    private static Field getInaccessibleField(Class klass, String name) throws NoSuchFieldException {
-        Field field = klass.getDeclaredField(name);
-        field.setAccessible(true);
-        return field;
     }
 }
