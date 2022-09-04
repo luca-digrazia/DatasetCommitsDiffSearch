@@ -75,7 +75,7 @@ public class ModelValidator {
 				}
 
 				for (String warning : elementValidation.getWarnings()) {
-					LOGGER.warn(elementValidation.getElement(), annotationMirror, warning);
+					LOGGER.warn(warning, elementValidation.getElement(), annotationMirror);
 				}
 
 				if (elementValidation.isValid()) {

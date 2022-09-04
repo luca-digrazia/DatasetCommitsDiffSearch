@@ -49,7 +49,7 @@ public class Logger {
 		log(Level.WARN, message, element, null, null, args);
 	}
 
-	public void warn(Element element, AnnotationMirror annotationMirror, String message) {
+	public void warn(String message, Element element, AnnotationMirror annotationMirror) {
 		log(Level.WARN, message, element, annotationMirror, null);
 	}
 
