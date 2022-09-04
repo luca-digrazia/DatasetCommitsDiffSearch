@@ -23,7 +23,7 @@ import org.graylog2.bindings.providers.BundleImporterProvider;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.plugin.database.users.User;
+import org.graylog2.users.User;
 import org.mongojack.DBCursor;
 import org.mongojack.DBQuery;
 import org.mongojack.JacksonDBCollection;
@@ -120,9 +120,5 @@ public class BundleService {
     public ConfigurationBundle exportConfigurationBundle(final ExportBundle exportBundle) {
         final BundleExporter bundleExporter = bundleExporterProvider.get();
         return bundleExporter.export(exportBundle);
-    }
-
-    public long bundleCount() {
-        return dbCollection.count();
     }
 }
