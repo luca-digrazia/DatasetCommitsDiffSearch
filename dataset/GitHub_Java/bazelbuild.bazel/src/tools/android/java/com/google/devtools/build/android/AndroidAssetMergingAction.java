@@ -127,7 +127,7 @@ public class AndroidAssetMergingAction extends AbstractBusyBoxAction {
     Preconditions.checkNotNull(options.primary);
 
     MergedAndroidData mergedData =
-        AndroidResourceMerger.mergeDataAndWrite(
+        AndroidResourceMerger.mergeData(
             options.primary,
             /* primaryManifest = */ null,
             options.directData,

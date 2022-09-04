@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
@@ -40,11 +41,14 @@ public class ResourcesZip {
 
   private final Path resourcesRoot;
   private final Path assetsRoot;
-  @Nullable private final Path apkWithAssets;
-  @Nullable private final Path ids;
+  private final Optional<Path> apkWithAssets;
+  private final Optional<Path> ids;
 
   private ResourcesZip(
-      Path resourcesRoot, Path assetsRoot, @Nullable Path ids, @Nullable Path apkWithAssets) {
+      Path resourcesRoot,
+      Path assetsRoot,
+      Optional<Path> ids,
+      Optional<Path> apkWithAssets) {
     this.resourcesRoot = resourcesRoot;
     this.assetsRoot = assetsRoot;
     this.ids = ids;
@@ -56,7 +60,7 @@ public class ResourcesZip {
    * @param assetsRoot The root of the raw assets.
    */
   public static ResourcesZip from(Path resourcesRoot, Path assetsRoot) {
-    return new ResourcesZip(resourcesRoot, assetsRoot, null, null);
+    return new ResourcesZip(resourcesRoot, assetsRoot, Optional.empty(), Optional.empty());
   }
 
   /**
@@ -68,8 +72,8 @@ public class ResourcesZip {
     return new ResourcesZip(
         resourcesRoot,
         assetsRoot,
-        resourceIds != null && Files.exists(resourceIds) ? resourceIds : null,
-        null);
+        Optional.of(resourceIds).filter(Files::exists),
+        Optional.empty());
   }
 
   /**
@@ -77,13 +81,12 @@ public class ResourcesZip {
    * @param apkWithAssets The apk containing assets.
    * @param resourceIds Optional path to a file containing the resource ids.
    */
-  public static ResourcesZip fromApk(
-      Path resourcesRoot, Path apkWithAssets, @Nullable Path resourceIds) {
+  public static ResourcesZip fromApk(Path resourcesRoot, Path apkWithAssets, Path resourceIds) {
     return new ResourcesZip(
         resourcesRoot,
         /* assetsRoot= */ null,
-        resourceIds != null && Files.exists(resourceIds) ? resourceIds : null,
-        apkWithAssets);
+        Optional.of(resourceIds).filter(Files::exists),
+        Optional.of(apkWithAssets));
   }
 
   /** Creates a ResourcesZip from an archive by expanding into the workingDirectory. */
@@ -136,15 +139,17 @@ public class ResourcesZip {
         visitor.writeEntries();
       }
 
-      if (apkWithAssets != null) {
-        ZipFile apkZip = new ZipFile(apkWithAssets.toString());
+      if (apkWithAssets.isPresent()){
+        ZipFile apkZip = new ZipFile(apkWithAssets.get().toString());
         apkZip
             .stream()
             .filter(entry -> entry.getName().startsWith("assets/"))
             .forEach(
                 entry -> {
                   try {
-                    zip.addEntry(entry, ByteStreams.toByteArray(apkZip.getInputStream(entry)));
+                    zip.addEntry(
+                        entry,
+                        ByteStreams.toByteArray(apkZip.getInputStream(entry)));
                   } catch (IOException e) {
                     throw new RuntimeException(e);
                   }
@@ -158,13 +163,14 @@ public class ResourcesZip {
         visitor.writeEntries();
       }
 
-      if (ids != null) {
-        try {
-          zip.addEntry("ids.txt", Files.readAllBytes(ids), ZipEntry.STORED);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
+      ids.ifPresent(
+          p -> {
+            try {
+              zip.addEntry("ids.txt", Files.readAllBytes(p), ZipEntry.STORED);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          });
     }
   }
 
@@ -183,7 +189,7 @@ public class ResourcesZip {
             packages, rTxt, classJar, manifest, proguardMapping, resourcesRoot, logFile)
         .shrink(workingDirectory);
     return ShrunkResources.of(
-        new ResourcesZip(workingDirectory, assetsRoot, ids, null),
+        new ResourcesZip(workingDirectory, assetsRoot, ids, Optional.empty()),
         new UnvalidatedAndroidData(
             ImmutableList.of(workingDirectory), ImmutableList.of(assetsRoot), manifest));
   }

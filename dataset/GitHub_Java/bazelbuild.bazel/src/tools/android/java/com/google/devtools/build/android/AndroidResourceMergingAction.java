@@ -253,7 +253,7 @@ public class AndroidResourceMergingAction {
       resourceClassWriter.setIncludeJavaFile(false);
 
       final MergedAndroidData mergedData =
-          AndroidResourceMerger.mergeDataAndWrite(
+          AndroidResourceMerger.mergeData(
               options.primaryData,
               options.primaryManifest,
               options.directData,

@@ -197,15 +197,16 @@ public class ResourceShrinkerAction {
     public Path log;
 
     @Option(
-        name = "packageType",
-        defaultValue = "DEFAULT",
-        converter = VariantTypeConverter.class,
-        category = "config",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "Variant configuration type for packaging the resources."
-                + " Acceptable values DEFAULT, LIBRARY, ANDROID_TEST, UNIT_TEST")
+      name = "packageType",
+      defaultValue = "DEFAULT",
+      converter = VariantTypeConverter.class,
+      category = "config",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Variant configuration type for packaging the resources."
+              + " Acceptible values DEFAULT, LIBRARY, ANDROID_TEST, UNIT_TEST"
+    )
     public VariantType packageType;
   }
 
@@ -232,10 +233,9 @@ public class ResourceShrinkerAction {
     final Stopwatch timer = Stopwatch.createStarted();
     // Parse arguments.
     OptionsParser optionsParser =
-        OptionsParser.newOptionsParser(
-            new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()),
-            Options.class,
-            AaptConfigOptions.class);
+        OptionsParser.newOptionsParser(Options.class, AaptConfigOptions.class);
+    optionsParser.enableParamsFileSupport(
+        new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()));
     optionsParser.parseAndExitUponError(args);
     aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     options = optionsParser.getOptions(Options.class);

@@ -420,7 +420,7 @@ public class AndroidResourceProcessingAction {
               .asList();
 
       final MergedAndroidData mergedData =
-          AndroidResourceMerger.mergeDataAndWrite(
+          AndroidResourceMerger.mergeData(
               options.primaryData,
               ImmutableList.<SerializedAndroidData>builder()
                   .addAll(options.directData)

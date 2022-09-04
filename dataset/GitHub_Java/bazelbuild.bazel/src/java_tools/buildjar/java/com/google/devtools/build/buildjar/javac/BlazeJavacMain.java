@@ -17,7 +17,6 @@ package com.google.devtools.build.buildjar.javac;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Comparator.comparing;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -131,7 +130,7 @@ public class BlazeJavacMain {
     }
     errWriter.flush();
     return new BlazeJavacResult(
-        ok, filterDiagnostics(diagnostics.build()), errOutput.toString(), compiler);
+        ok, filterDiagnostics(ok, diagnostics.build()), errOutput.toString(), compiler);
   }
 
   private static final ImmutableSet<String> IGNORED_DIAGNOSTIC_CODES =
@@ -149,23 +148,19 @@ public class BlazeJavacMain {
           "compiler.warn.sun.proprietary");
 
   private static ImmutableList<FormattedDiagnostic> filterDiagnostics(
-      ImmutableList<FormattedDiagnostic> diagnostics) {
-    boolean werror =
-        diagnostics.stream().anyMatch(d -> d.getCode().equals("compiler.err.warnings.and.werror"));
+      boolean ok, ImmutableList<FormattedDiagnostic> diagnostics) {
     return diagnostics
         .stream()
-        .filter(d -> shouldReportDiagnostic(werror, d))
-        // Print errors last to make them more visible.
-        .sorted(comparing(FormattedDiagnostic::getKind).reversed())
+        .filter(d -> shouldReportDiagnostic(ok, d))
         .collect(toImmutableList());
   }
 
-  private static boolean shouldReportDiagnostic(boolean werror, FormattedDiagnostic diagnostic) {
+  private static boolean shouldReportDiagnostic(boolean ok, FormattedDiagnostic diagnostic) {
     if (!IGNORED_DIAGNOSTIC_CODES.contains(diagnostic.getCode())) {
       return true;
     }
-    // show compiler.warn.sun.proprietary if we're running with -Werror
-    if (werror && diagnostic.getKind() != Diagnostic.Kind.NOTE) {
+    if (!ok && diagnostic.getKind() != Diagnostic.Kind.NOTE) {
+      // show compiler.warn.sun.proprietary in case we're running with -Werror
       return true;
     }
     return false;

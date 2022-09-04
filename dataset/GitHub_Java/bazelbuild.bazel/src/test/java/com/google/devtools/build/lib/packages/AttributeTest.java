@@ -24,7 +24,6 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
@@ -150,7 +149,7 @@ public class AttributeTest {
     assertDefaultValue("foo",
                        attr("x", STRING).value("foo").build());
 
-    Label label = Label.parseAbsolute("//foo:bar", ImmutableMap.of());
+    Label label = Label.parseAbsolute("//foo:bar");
     assertDefaultValue(null,
                        attr("x", LABEL).legacyAllowAnyFileType().build());
     assertDefaultValue(label,
@@ -162,10 +161,8 @@ public class AttributeTest {
     assertDefaultValue(slist,
                        attr("x", STRING_LIST).value(slist).build());
 
-    List<Label> llist =
-        Arrays.asList(
-            Label.parseAbsolute("//foo:bar", ImmutableMap.of()),
-            Label.parseAbsolute("//foo:wiz", ImmutableMap.of()));
+    List<Label> llist = Arrays.asList(Label.parseAbsolute("//foo:bar"),
+                                      Label.parseAbsolute("//foo:wiz"));
     assertDefaultValue(Collections.emptyList(),
                        attr("x", LABEL_LIST).legacyAllowAnyFileType().build());
     assertDefaultValue(llist,
@@ -187,7 +184,7 @@ public class AttributeTest {
     assertType(STRING,
                attr("x", STRING).value("foo").build());
 
-    Label label = Label.parseAbsolute("//foo:bar", ImmutableMap.of());
+    Label label = Label.parseAbsolute("//foo:bar");
     assertType(LABEL,
                        attr("x", LABEL).legacyAllowAnyFileType().build());
     assertType(LABEL,
@@ -199,10 +196,8 @@ public class AttributeTest {
     assertType(STRING_LIST,
                attr("x", STRING_LIST).value(slist).build());
 
-    List<Label> llist =
-        Arrays.asList(
-            Label.parseAbsolute("//foo:bar", ImmutableMap.of()),
-            Label.parseAbsolute("//foo:wiz", ImmutableMap.of()));
+    List<Label> llist = Arrays.asList(Label.parseAbsolute("//foo:bar"),
+                                      Label.parseAbsolute("//foo:wiz"));
     assertType(LABEL_LIST,
                attr("x", LABEL_LIST).legacyAllowAnyFileType().build());
     assertType(LABEL_LIST,

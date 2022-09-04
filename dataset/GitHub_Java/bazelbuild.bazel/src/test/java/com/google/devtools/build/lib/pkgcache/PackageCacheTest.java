@@ -86,7 +86,6 @@ public class PackageCacheTest extends FoundationTestCase {
         new BlazeDirectories(
             new ServerDirectories(outputBase, outputBase, outputBase),
             rootDirectory,
-            /* defaultSystemJavabase= */ null,
             analysisMock.getProductName());
     PackageFactory.BuilderForTesting packageFactoryBuilder =
         analysisMock.getPackageFactoryBuilderForTesting(directories);
@@ -194,7 +193,7 @@ public class PackageCacheTest extends FoundationTestCase {
   }
 
   private Target getTarget(String label) throws Exception {
-    return getTarget(Label.parseAbsolute(label, ImmutableMap.of()));
+    return getTarget(Label.parseAbsolute(label));
   }
 
   private void createPkg1() throws IOException {
@@ -236,16 +235,16 @@ public class PackageCacheTest extends FoundationTestCase {
 
   @Test
   public void testGetPackageWithInvalidName() throws Exception {
-    scratch.file("invalidpackagename:42/BUILD", "cc_library(name = 'foo') # a BUILD file");
+    scratch.file("invalidpackagename&42/BUILD", "cc_library(name = 'foo') # a BUILD file");
     checkGetPackageFails(
-        "invalidpackagename:42",
-        "no such package 'invalidpackagename:42': Invalid package name 'invalidpackagename:42'");
+        "invalidpackagename&42",
+        "no such package 'invalidpackagename&42': Invalid package name 'invalidpackagename&42'");
   }
 
   @Test
   public void testGetTarget() throws Exception {
     createPkg1();
-    Label label = Label.parseAbsolute("//pkg1:foo", ImmutableMap.of());
+    Label label = Label.parseAbsolute("//pkg1:foo");
     Target target = getTarget(label);
     assertThat(target.getLabel()).isEqualTo(label);
   }
@@ -403,7 +402,7 @@ public class PackageCacheTest extends FoundationTestCase {
   }
 
   private void assertLabelValidity(boolean expected, String labelString) throws Exception {
-    Label label = Label.parseAbsolute(labelString, ImmutableMap.of());
+    Label label = Label.parseAbsolute(labelString);
 
     boolean actual = false;
     String error = null;
@@ -488,7 +487,8 @@ public class PackageCacheTest extends FoundationTestCase {
   @Test
   public void testAddedBuildFileCausesLabelToBecomeInvalid() throws Exception {
     reporter.removeHandler(failFastHandler);
-    scratch.file("pkg/BUILD", "cc_library(name = 'foo', srcs = ['x/y.cc'])");
+    scratch.file(
+        "pkg/BUILD", "           cc_library(name = 'foo', ", "           srcs = ['x/y.cc'])");
 
     assertLabelValidity(true, "//pkg:x/y.cc");
 

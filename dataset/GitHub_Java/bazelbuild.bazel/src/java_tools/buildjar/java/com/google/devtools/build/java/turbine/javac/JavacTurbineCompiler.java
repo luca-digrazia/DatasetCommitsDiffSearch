@@ -16,7 +16,6 @@ package com.google.devtools.build.java.turbine.javac;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.jimfs.Configuration;
@@ -106,9 +105,7 @@ public class JavacTurbineCompiler {
               @Override
               public FileVisitResult visitFile(Path path, BasicFileAttributes attrs)
                   throws IOException {
-                // use `/` as the directory separator for jar paths, even on Windows
-                String name = Joiner.on('/').join(classes.relativize(path));
-                files.put(name, Files.readAllBytes(path));
+                files.put(classes.relativize(path).toString(), Files.readAllBytes(path));
                 return FileVisitResult.CONTINUE;
               }
             });

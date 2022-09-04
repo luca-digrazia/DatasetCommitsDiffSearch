@@ -50,7 +50,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /** A customizable, serializable class for building memory efficient command lines. */
@@ -618,27 +617,16 @@ public final class CustomCommandLine extends CommandLine {
   }
 
   @AutoCodec
-  static final class ExpandedTreeArtifactArg extends TreeArtifactExpansionArgvFragment {
+  static final class ExpandedTreeArtifactExecPathsArg extends TreeArtifactExpansionArgvFragment {
     private final Artifact treeArtifact;
     private static final UUID TREE_UUID = UUID.fromString("13b7626b-c77d-4a30-ad56-ff08c06b1cee");
-    private final Function<Artifact, Iterable<String>> expandFunction;
 
     @AutoCodec.Instantiator
     @VisibleForSerialization
-    ExpandedTreeArtifactArg(Artifact treeArtifact) {
+    ExpandedTreeArtifactExecPathsArg(Artifact treeArtifact) {
       Preconditions.checkArgument(
           treeArtifact.isTreeArtifact(), "%s is not a TreeArtifact", treeArtifact);
       this.treeArtifact = treeArtifact;
-      this.expandFunction = artifact -> ImmutableList.of(artifact.getExecPathString());
-    }
-
-    @VisibleForSerialization
-    ExpandedTreeArtifactArg(
-        Artifact treeArtifact, Function<Artifact, Iterable<String>> expandFunction) {
-      Preconditions.checkArgument(
-          treeArtifact.isTreeArtifact(), "%s is not a TreeArtifact", treeArtifact);
-      this.treeArtifact = treeArtifact;
-      this.expandFunction = expandFunction;
     }
 
     @Override
@@ -647,16 +635,14 @@ public final class CustomCommandLine extends CommandLine {
       artifactExpander.expand(treeArtifact, expandedArtifacts);
 
       for (Artifact expandedArtifact : expandedArtifacts) {
-        for (String commandLine : expandFunction.apply(expandedArtifact)) {
-          builder.add(commandLine);
-        }
+        builder.add(expandedArtifact.getExecPathString());
       }
     }
 
     @Override
     public String describe() {
       return String.format(
-          "ExpandedTreeArtifactArg{ treeArtifact: %s}", treeArtifact.getExecPathString());
+          "ExpandedTreeArtifactExecPathsArg{ treeArtifact: %s}", treeArtifact.getExecPathString());
     }
 
     @Override
@@ -1054,31 +1040,7 @@ public final class CustomCommandLine extends CommandLine {
      */
     public Builder addExpandedTreeArtifactExecPaths(Artifact treeArtifact) {
       Preconditions.checkNotNull(treeArtifact);
-      arguments.add(new ExpandedTreeArtifactArg(treeArtifact));
-      return this;
-    }
-
-    public Builder addExpandedTreeArtifactExecPaths(String arg, Artifact treeArtifact) {
-      Preconditions.checkNotNull(arg);
-      Preconditions.checkNotNull(treeArtifact);
-      arguments.add(
-          new ExpandedTreeArtifactArg(
-              treeArtifact, artifact -> ImmutableList.of(arg, artifact.getExecPathString())));
-      return this;
-    }
-
-    /**
-     * Adds the arguments for all {@link TreeFileArtifact}s under
-     * {@code treeArtifact}, one argument per file. Using {@code expandingFunction} to expand each
-     * {@link TreeFileArtifact} to expected argument.
-     *
-     * @param treeArtifact the TreeArtifact containing the {@link TreeFileArtifact}s to add.
-     * @param expandFunction the function to generate the argument for each{@link TreeFileArtifact}.
-     */
-    public Builder addExpandedTreeArtifact(
-        Artifact treeArtifact, Function<Artifact, Iterable<String>> expandFunction) {
-      Preconditions.checkNotNull(treeArtifact);
-      arguments.add(new ExpandedTreeArtifactArg(treeArtifact, expandFunction));
+      arguments.add(new ExpandedTreeArtifactExecPathsArg(treeArtifact));
       return this;
     }
 

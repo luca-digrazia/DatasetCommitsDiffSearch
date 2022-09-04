@@ -45,13 +45,9 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> transitiveImports =
         ProtoCommon.collectTransitiveImports(ruleContext, protoSources);
-    NestedSet<Artifact> protosInDirectDeps = ProtoCommon.computeProtosInDirectDeps(ruleContext);
+    NestedSet<String> protoPathFlags = ProtoCommon.collectTransitiveProtoPathFlags(ruleContext);
 
-    String protoSourceRoot = ProtoCommon.getProtoSourceRoot(ruleContext);
-    NestedSet<String> directProtoSourceRoots =
-        ProtoCommon.getProtoSourceRootsOfDirectDependencies(ruleContext, protoSourceRoot);
-    NestedSet<String> protoPathFlags =
-        ProtoCommon.collectTransitiveProtoPathFlags(ruleContext, protoSourceRoot);
+    NestedSet<Artifact> protosInDirectDeps = ProtoCommon.computeProtosInDirectDeps(ruleContext);
 
     final SupportData supportData =
         SupportData.create(
@@ -60,8 +56,6 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
             protosInDirectDeps,
             transitiveImports,
             protoPathFlags,
-            protoSourceRoot,
-            directProtoSourceRoots,
             !protoSources.isEmpty());
 
     Artifact descriptorSetOutput =
@@ -81,8 +75,7 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
         descriptorSetOutput,
         /* allowServices= */ true,
         dependenciesDescriptorSets,
-        protoPathFlags,
-        directProtoSourceRoots);
+        protoPathFlags);
 
     Runfiles dataRunfiles =
         ProtoCommon.createDataRunfilesProvider(transitiveImports, ruleContext)
@@ -98,8 +91,7 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
             checkDepsProtoSources,
             descriptorSetOutput,
             transitiveDescriptorSetOutput,
-            protoPathFlags,
-            protoSourceRoot);
+            protoPathFlags);
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(NestedSetBuilder.create(STABLE_ORDER, descriptorSetOutput))

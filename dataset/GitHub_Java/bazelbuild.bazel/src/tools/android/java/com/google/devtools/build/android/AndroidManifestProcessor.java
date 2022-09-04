@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import javax.xml.stream.FactoryConfigurationError;
 import javax.xml.stream.XMLEventFactory;
 import javax.xml.stream.XMLEventReader;
@@ -144,7 +145,7 @@ public class AndroidManifestProcessor {
 
     // Add mergee manifests
     List<Pair<String, File>> libraryManifests = new ArrayList<>();
-    for (Map.Entry<Path, String> mergeeManifest : mergeeManifests.entrySet()) {
+    for (Entry<Path, String> mergeeManifest : mergeeManifests.entrySet()) {
       libraryManifests.add(Pair.of(mergeeManifest.getValue(), mergeeManifest.getKey().toFile()));
     }
     manifestMerger.addLibraryManifests(libraryManifests);

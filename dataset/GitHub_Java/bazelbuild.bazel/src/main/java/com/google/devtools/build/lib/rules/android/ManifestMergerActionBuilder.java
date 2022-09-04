@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.OS;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /** Builder for creating manifest merger actions. */
 public class ManifestMergerActionBuilder {
@@ -174,9 +175,9 @@ public class ManifestMergerActionBuilder {
     }
 
     StringBuilder sb = new StringBuilder();
-    Iterator<Map.Entry<K, V>> iter = map.entrySet().iterator();
+    Iterator<Entry<K, V>> iter = map.entrySet().iterator();
     while (iter.hasNext()) {
-      Map.Entry<K, V> entry = iter.next();
+      Entry<K, V> entry = iter.next();
       sb.append(Functions.compose(ESCAPER, keyConverter).apply(entry.getKey()));
       sb.append(':');
       sb.append(Functions.compose(ESCAPER, valueConverter).apply(entry.getValue()));

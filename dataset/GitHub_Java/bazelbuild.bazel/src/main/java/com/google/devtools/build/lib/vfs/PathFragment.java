@@ -16,18 +16,10 @@ package com.google.devtools.build.lib.vfs;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.CommandLineItem;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrintable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.util.FileType;
-import com.google.protobuf.CodedInputStream;
-import com.google.protobuf.CodedOutputStream;
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -52,6 +44,7 @@ import javax.annotation.Nullable;
  *
  * <p>Mac and Windows path fragments are case insensitive.
  */
+@AutoCodec
 public final class PathFragment
     implements Comparable<PathFragment>,
         Serializable,
@@ -241,9 +234,8 @@ public final class PathFragment
   /**
    * Returns the {@link PathFragment} relative to the base {@link PathFragment}.
    *
-   * <p>For example, <code>
-   * {@link PathFragment}.create("foo/bar/wiz").relativeTo({@link PathFragment}.create("foo"))
-   * </code> returns <code>"bar/wiz"</code>.
+   * <p>For example, <code>FilePath.create("foo/bar/wiz").relativeTo(FilePath.create("foo"))</code>
+   * returns <code>"bar/wiz"</code>.
    *
    * <p>If the {@link PathFragment} is not a child of the passed {@link PathFragment} an {@link
    * IllegalArgumentException} is thrown. In particular, this will happen whenever the two {@link
@@ -394,8 +386,7 @@ public final class PathFragment
   }
 
   /**
-   * Returns the specified segment of this path; index must be non-negative and less than {@code
-   * segmentCount()}.
+   * Returns the specified segment of this path; index must be positive and less than numSegments().
    *
    * <p>This operation is O(N) on the length of the string.
    */
@@ -752,27 +743,5 @@ public final class PathFragment
 
   private Object writeReplace() {
     return new PathFragmentSerializationProxy(normalizedPath);
-  }
-
-  private static class Codec implements ObjectCodec<PathFragment> {
-    private final ObjectCodec<String> stringCodec = StringCodecs.asciiOptimized();
-
-    @Override
-    public Class<? extends PathFragment> getEncodedClass() {
-      return PathFragment.class;
-    }
-
-    @Override
-    public void serialize(
-        SerializationContext context, PathFragment obj, CodedOutputStream codedOut)
-        throws SerializationException, IOException {
-      stringCodec.serialize(context, obj.normalizedPath, codedOut);
-    }
-
-    @Override
-    public PathFragment deserialize(DeserializationContext context, CodedInputStream codedIn)
-        throws SerializationException, IOException {
-      return PathFragment.createAlreadyNormalized(stringCodec.deserialize(context, codedIn));
-    }
   }
 }

@@ -33,6 +33,7 @@ import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Test;
@@ -264,9 +265,9 @@ public class ManifestMergerActionTest {
 
   private <K, V> String mapToDictionaryString(Map<K, V> map) {
     StringBuilder sb = new StringBuilder();
-    Iterator<Map.Entry<K, V>> iter = map.entrySet().iterator();
+    Iterator<Entry<K, V>> iter = map.entrySet().iterator();
     while (iter.hasNext()) {
-      Map.Entry<K, V> entry = iter.next();
+      Entry<K, V> entry = iter.next();
       sb.append(entry.getKey().toString().replace(":", "\\:").replace(",", "\\,"));
       sb.append(':');
       sb.append(entry.getValue().toString().replace(":", "\\:").replace(",", "\\,"));
