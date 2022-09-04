@@ -21,20 +21,16 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationException;
-import org.apache.shiro.authc.LockedAccountException;
 import org.apache.shiro.authc.UsernamePasswordToken;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.mgt.DefaultSecurityManager;
-import org.apache.shiro.session.Session;
 import org.apache.shiro.session.UnknownSessionException;
 import org.apache.shiro.subject.Subject;
 import org.apache.shiro.util.ThreadContext;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.rest.models.system.sessions.requests.SessionCreateRequest;
 import org.graylog2.rest.models.system.sessions.responses.SessionResponse;
-import org.graylog2.rest.models.system.sessions.responses.SessionValidationResponse;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.ShiroAuthenticationFilter;
 import org.graylog2.shared.security.ShiroSecurityContext;
 import org.graylog2.shared.users.UserService;
 import org.joda.time.DateTime;
@@ -52,12 +48,10 @@ import javax.ws.rs.NotAuthorizedException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
 
@@ -68,15 +62,12 @@ public class SessionsResource extends RestResource {
 
     private final UserService userService;
     private final DefaultSecurityManager securityManager;
-    private final ShiroAuthenticationFilter authenticationFilter;
 
     @Inject
     public SessionsResource(UserService userService,
-                            DefaultSecurityManager securityManager,
-                            ShiroAuthenticationFilter authenticationFilter) {
+                            DefaultSecurityManager securityManager) {
         this.userService = userService;
         this.securityManager = securityManager;
-        this.authenticationFilter = authenticationFilter;
     }
 
     @POST
@@ -115,12 +106,12 @@ public class SessionsResource extends RestResource {
             ((DefaultSecurityManager) SecurityUtils.getSecurityManager()).getSubjectDAO().save(subject);
 
         } catch (AuthenticationException e) {
-            LOG.info("Invalid username or password for user \"{}\"", createRequest.username());
+            LOG.warn("Unable to log in user " + createRequest.username(), e);
         } catch (UnknownSessionException e) {
             subject.logout();
         }
         if (subject.isAuthenticated()) {
-            final Session session = subject.getSession();
+            final org.apache.shiro.session.Session session = subject.getSession();
             id = session.getId();
             // TODO is the validUntil attribute even used by anyone yet?
             return SessionResponse.create(new DateTime(session.getLastAccessTime(), DateTimeZone.UTC).plus(session.getTimeout()).toDate(),
@@ -134,19 +125,9 @@ public class SessionsResource extends RestResource {
         notes = "Checks the session with the given ID: returns http status 204 (No Content) if session is valid.",
         code = 204
     )
-    @Produces(MediaType.APPLICATION_JSON)
-    public SessionValidationResponse validateSession(@Context ContainerRequestContext requestContext) {
-        try {
-            this.authenticationFilter.filter(requestContext);
-        } catch (NotAuthorizedException | LockedAccountException | IOException e) {
-            return SessionValidationResponse.invalid();
-        }
-        final Subject subject = getSubject();
-        if (!subject.isAuthenticated()) {
-            return SessionValidationResponse.invalid();
-        }
-
-        return SessionValidationResponse.valid();
+    @RequiresAuthentication
+    public Response validateSession() {
+        return Response.noContent().build();
     }
 
     @DELETE
