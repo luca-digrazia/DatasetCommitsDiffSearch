@@ -200,18 +200,6 @@ public class FunctionTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testFunctionParamCanShadowGlobalVarAfterGlobalVarIsRead() throws Exception {
-    eval("a = 1",
-        "def func2(a):",
-        "  return 0",
-        "def func1():",
-        "  dummy = a",
-        "  return func2(2)",
-        "b = func1()\n");
-    assertThat(lookup("b")).isEqualTo(0);
-  }
-
-  @Test
   public void testSingleLineFunction() throws Exception {
     eval("def func(): return 'a'",
         "s = func()\n");
@@ -311,12 +299,29 @@ public class FunctionTest extends EvaluationTestCase {
   }
 
   @Test
+  public void testKwargs() throws Exception {
+    eval("def foo(a, b = 'b', *, c, d = 'd'):",
+      "  return a + b + c + d",
+      "args = {'a': 'x', 'c': 'z'}",
+      "v1 = foo(**args)",
+      "v2 = foo('x', c = 'c', d = 'e', **{'b': 'y'})",
+      "v3 = foo(c = 'z', a = 'x', **{'b': 'y', 'd': 'f'})");
+    assertThat(lookup("v1")).isEqualTo("xbzd");
+    assertThat(lookup("v2")).isEqualTo("xyce");
+    assertThat(lookup("v3")).isEqualTo("xyzf");
+    UserDefinedFunction foo = (UserDefinedFunction) lookup("foo");
+    assertThat(foo.toString()).isEqualTo("foo(a, b = \"b\", *, c, d = \"d\")");
+  }
+
+  @Test
   public void testKeywordOnlyIsForbidden() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_disallow_keyword_only_args=true");
     checkEvalErrorContains("forbidden", "def foo(a, b, *, c): return a + b + c");
   }
 
   @Test
   public void testParamAfterStarArgs() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_disallow_keyword_only_args=true");
     checkEvalErrorContains("forbidden", "def foo(a, *b, c): return a");
   }
 
@@ -383,6 +388,25 @@ public class FunctionTest extends EvaluationTestCase {
 
   @Test
   public void testStarParam() throws Exception {
+    eval("def f(name, value = '1', *rest, mandatory, optional = '2'):",
+        "  r = name + value + mandatory + optional + '|'",
+        "  for x in rest: r += x",
+        "  return r",
+        "v1 = f('a', 'b', mandatory = 'z')",
+        "v2 = f('a', 'b', 'c', 'd', mandatory = 'z')",
+        "v3 = f('a', *['b', 'c', 'd'], mandatory = 'y', optional = 'z')",
+        "v4 = f(*['a'], **{'value': 'b', 'mandatory': 'c'})",
+        "v5 = f('a', 'b', 'c', *['d', 'e'], mandatory = 'f', **{'optional': 'g'})\n");
+    assertThat(lookup("v1")).isEqualTo("abz2|");
+    assertThat(lookup("v2")).isEqualTo("abz2|cd");
+    assertThat(lookup("v3")).isEqualTo("abyz|cd");
+    assertThat(lookup("v4")).isEqualTo("abc2|");
+    assertThat(lookup("v5")).isEqualTo("abfg|cde");
+  }
+
+  @Test
+  public void testIncompatibleStarParam() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_disallow_keyword_only_args=true");
     eval("def f(name, value = '1', optional = '2', *rest):",
         "  r = name + value + optional + '|'",
         "  for x in rest: r += x",
