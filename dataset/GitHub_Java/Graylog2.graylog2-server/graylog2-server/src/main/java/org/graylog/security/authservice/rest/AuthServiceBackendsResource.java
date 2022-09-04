@@ -21,12 +21,10 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog.security.SecurityAuditEventTypes;
 import org.graylog.security.authservice.AuthServiceBackendDTO;
 import org.graylog.security.authservice.AuthServiceBackendUsageCheck;
 import org.graylog.security.authservice.DBAuthServiceBackendService;
 import org.graylog.security.authservice.GlobalAuthServiceConfig;
-import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.database.PaginatedList;
 import org.graylog2.plugin.rest.ValidationFailureException;
 import org.graylog2.plugin.rest.ValidationResult;
@@ -102,7 +100,6 @@ public class AuthServiceBackendsResource extends RestResource {
     @POST
     @ApiOperation("Creates a new authentication service backend")
     @RequiresPermissions(RestPermissions.AUTH_SERVICE_BACKEND_CREATE)
-    @AuditEvent(type = SecurityAuditEventTypes.AUTH_SERVICE_BACKEND_CREATE)
     public Response create(@ApiParam(name = "JSON body", required = true) @NotNull AuthServiceBackendDTO newConfig) {
         validateConfig(newConfig);
 
@@ -111,8 +108,7 @@ public class AuthServiceBackendsResource extends RestResource {
 
     @PUT
     @Path("{backendId}")
-    @ApiOperation("Updates an existing authentication service backend")
-    @AuditEvent(type = SecurityAuditEventTypes.AUTH_SERVICE_BACKEND_UPDATE)
+    @ApiOperation("Creates a new authentication service backend")
     public Response update(@ApiParam(name = "backendId", required = true) @PathParam("backendId") @NotBlank String backendId,
                            @ApiParam(name = "JSON body", required = true) @NotNull AuthServiceBackendDTO updatedConfig) {
         checkPermission(RestPermissions.AUTH_SERVICE_BACKEND_EDIT, backendId);
@@ -126,7 +122,6 @@ public class AuthServiceBackendsResource extends RestResource {
     @DELETE
     @Path("{backendId}")
     @ApiOperation("Delete authentication service backend")
-    @AuditEvent(type = SecurityAuditEventTypes.AUTH_SERVICE_BACKEND_DELETE)
     public void delete(@ApiParam(name = "backendId", required = true) @PathParam("backendId") @NotBlank String backendId) {
         checkPermission(RestPermissions.AUTH_SERVICE_BACKEND_DELETE, backendId);
 

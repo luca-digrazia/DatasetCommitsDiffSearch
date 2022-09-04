@@ -35,10 +35,6 @@ public class DBAuthServiceBackendService extends PaginatedDbService<AuthServiceB
         super(mongoConnection, mapper, AuthServiceBackendDTO.class, "auth_service_backends");
     }
 
-    public long countBackends() {
-        return db.count();
-    }
-
     public PaginatedList<AuthServiceBackendDTO> findPaginated(PaginationParameters params,
                                                               Predicate<AuthServiceBackendDTO> filter) {
         final String sortBy = defaultIfBlank(params.getSortBy(), "title");
