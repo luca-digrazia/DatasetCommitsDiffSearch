@@ -124,9 +124,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     //lazy的setup
     protected boolean mSetUpLazy = false;
 
-    //seek touch
-    protected boolean mHadSeekTouch = false;
-
     //播放按键
     protected View mStartButton;
 
@@ -579,7 +576,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
     @Override
     public void onStartTrackingTouch(SeekBar seekBar) {
-        mHadSeekTouch = true;
     }
 
     /***
@@ -604,7 +600,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
                 Debuger.printfWarning(e.toString());
             }
         }
-        mHadSeekTouch = false;
     }
 
     @Override
@@ -925,9 +920,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
         if (mProgressBar == null || mTotalTimeTextView == null || mCurrentTimeTextView == null) {
             return;
         }
-        if(mHadSeekTouch) {
-            return;
-        }
+
         if (!mTouchingProgressBar) {
             if (progress != 0) mProgressBar.setProgress(progress);
         }
