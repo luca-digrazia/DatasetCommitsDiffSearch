@@ -199,7 +199,7 @@ public class NativeImageBuildStep {
                 nativeConfig.enableAllSecurityServices = true;
             }
 
-            nativeConfig.additionalBuildArgs.ifPresent(l -> l.stream().map(String::trim).forEach(command::add));
+            nativeConfig.additionalBuildArgs.ifPresent(command::addAll);
             command.add("--initialize-at-build-time=");
             command.add("-H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime"); //the default collection policy results in full GC's 50% of the time
             command.add("-jar");
@@ -322,9 +322,8 @@ public class NativeImageBuildStep {
 
     private void checkGraalVMVersion(String version) {
         log.info("Running Quarkus native-image plugin on " + version);
-        final List<String> obsoleteGraalVmVersions = Arrays.asList("1.0.0", "19.0.", "19.1.", "19.2.0");
-        final boolean vmVersionIsObsolete = version.contains(" 19.3.0 ")
-                || obsoleteGraalVmVersions.stream().anyMatch(v -> version.contains(" " + v));
+        final List<String> obsoleteGraalVmVersions = Arrays.asList("1.0.0", "19.0.", "19.1.", "19.2.0", "19.3.0");
+        final boolean vmVersionIsObsolete = obsoleteGraalVmVersions.stream().anyMatch(v -> version.contains(" " + v));
         if (vmVersionIsObsolete) {
             throw new IllegalStateException("Unsupported version of GraalVM detected: " + version + "."
                     + " Quarkus currently offers a stable support of GraalVM 19.2.1 and a preview support of GraalVM 19.3.1."
