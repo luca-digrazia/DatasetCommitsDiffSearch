@@ -364,14 +364,14 @@ public final class EvaluationTest {
     Object x = ev.eval("[1,2] + [3,4]");
     assertThat((Iterable<?>) x).containsExactly(1, 2, 3, 4).inOrder();
     assertThat(x).isInstanceOf(StarlarkList.class);
-    assertThat(Starlark.isImmutable(x)).isFalse();
+    assertThat(EvalUtils.isImmutable(x)).isFalse();
 
     // tuple
     x = ev.eval("(1,2) + (3,4)");
     assertThat((Iterable<?>) x).containsExactly(1, 2, 3, 4).inOrder();
     assertThat(x).isInstanceOf(Tuple.class);
     assertThat(x).isEqualTo(Tuple.of(1, 2, 3, 4));
-    assertThat(Starlark.isImmutable(x)).isTrue();
+    assertThat(EvalUtils.isImmutable(x)).isTrue();
 
     ev.checkEvalError("unsupported binary operation: tuple + list", "(1,2) + [3,4]");
   }
