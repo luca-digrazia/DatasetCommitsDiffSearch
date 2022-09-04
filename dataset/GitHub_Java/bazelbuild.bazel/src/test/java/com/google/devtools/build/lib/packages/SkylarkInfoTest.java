@@ -11,18 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.SkylarkInfo.CompactSkylarkInfo;
-import com.google.devtools.build.lib.packages.SkylarkInfo.MapBackedSkylarkInfo;
-import com.google.devtools.build.lib.syntax.Concatable;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
+import javax.annotation.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -32,93 +32,125 @@ import org.junit.runners.JUnit4;
 public class SkylarkInfoTest {
 
   @Test
-  public void sameProviderDifferentLayoutConcatenation() throws Exception {
-    SkylarkProvider provider =
-        new SkylarkProvider("provider", ImmutableList.of("f1", "f2"), Location.BUILTIN);
-    ImmutableMap<String, Integer> layout1 = ImmutableMap.of("f1", 0, "f2", 1);
-    ImmutableMap<String, Integer> layout2 = ImmutableMap.of("f1", 1, "f2", 0);
-    CompactSkylarkInfo info1 =
-        new CompactSkylarkInfo(provider, layout1, new Object[] {5, null}, Location.BUILTIN);
-    CompactSkylarkInfo info2 =
-        new CompactSkylarkInfo(provider, layout2, new Object[] {4, null}, Location.BUILTIN);
+  public void nullLocationDefaultsToBuiltin() throws Exception {
+    SkylarkInfo info = SkylarkInfo.create(makeProvider(), ImmutableMap.of(), null);
+    assertThat(info.getCreationLoc()).isEqualTo(Location.BUILTIN);
+  }
+
+  @Test
+  public void instancesOfUnexportedProvidersAreMutable() throws Exception {
+    SkylarkProvider provider = makeProvider();
+    SkylarkInfo info = makeInfoWithF1F2Values(provider, 5, null);
+    assertThat(info.isImmutable()).isFalse();
+  }
+
+  @Test
+  public void instancesOfExportedProvidersMayBeImmutable() throws Exception {
+    SkylarkProvider provider = makeExportedProvider();
+    SkylarkInfo info = makeInfoWithF1F2Values(provider, 5, null);
+    assertThat(info.isImmutable()).isTrue();
+  }
+
+  @Test
+  public void mutableIfContentsAreMutable() throws Exception {
+    SkylarkProvider provider = makeExportedProvider();
+    StarlarkValue v = new StarlarkValue() {};
+    SkylarkInfo info = makeInfoWithF1F2Values(provider, 5, v);
+    assertThat(info.isImmutable()).isFalse();
+  }
+
+  @Test
+  public void equivalence() throws Exception {
+    SkylarkProvider provider1 = makeProvider();
+    SkylarkProvider provider2 = makeProvider();
+    // equal providers and fields
+    assertThat(makeInfoWithF1F2Values(provider1, 4, 5))
+        .isEqualTo(makeInfoWithF1F2Values(provider1, 4, 5));
+    // different providers => unequal
+    assertThat(makeInfoWithF1F2Values(provider1, 4, 5))
+        .isNotEqualTo(makeInfoWithF1F2Values(provider2, 4, 5));
+    // different fields => unequal
+    assertThat(makeInfoWithF1F2Values(provider1, 4, 5))
+        .isNotEqualTo(makeInfoWithF1F2Values(provider1, 4, 6));
+    // different sets of fields => unequal
+    assertThat(makeInfoWithF1F2Values(provider1, 4, 5))
+        .isNotEqualTo(makeInfoWithF1F2Values(provider1, 4, null));
+  }
+
+  @Test
+  public void concatWithDifferentProvidersFails() throws Exception {
+    SkylarkProvider provider1 = makeProvider();
+    SkylarkProvider provider2 = makeProvider();
+    SkylarkInfo info1 = makeInfoWithF1F2Values(provider1, 4, 5);
+    SkylarkInfo info2 = makeInfoWithF1F2Values(provider2, 4, 5);
+    EvalException expected =
+        assertThrows(
+            EvalException.class, () -> info1.getConcatter().concat(info1, info2, Location.BUILTIN));
+    assertThat(expected).hasMessageThat()
+        .contains("Cannot use '+' operator on instances of different providers");
+  }
+
+  @Test
+  public void concatWithOverlappingFieldsFails() throws Exception {
+    SkylarkProvider provider1 = makeProvider();
+    SkylarkInfo info1 = makeInfoWithF1F2Values(provider1, 4, 5);
+    SkylarkInfo info2 = makeInfoWithF1F2Values(provider1, 4, null);
+    EvalException expected =
+        assertThrows(
+            EvalException.class, () -> info1.getConcatter().concat(info1, info2, Location.BUILTIN));
+    assertThat(expected)
+        .hasMessageThat()
+        .contains("cannot add struct instances with common field 'f1'");
+  }
+
+  @Test
+  public void concatWithSameFields() throws Exception {
+    SkylarkProvider provider = makeProvider();
+    SkylarkInfo info1 = makeInfoWithF1F2Values(provider, 4, null);
+    SkylarkInfo info2 = makeInfoWithF1F2Values(provider, null, 5);
     SkylarkInfo result = (SkylarkInfo) info1.getConcatter().concat(info1, info2, Location.BUILTIN);
-    assertThat(result).isInstanceOf(MapBackedSkylarkInfo.class);
-    assertThat(result.getValue("f1")).isEqualTo(5);
-    assertThat(result.getValue("f2")).isEqualTo(4);
+    assertThat(result.getFieldNames()).containsExactly("f1", "f2");
+    assertThat(result.getValue("f1")).isEqualTo(4);
+    assertThat(result.getValue("f2")).isEqualTo(5);
   }
 
   @Test
-  public void immutabilityPredicate() throws Exception {
-    SkylarkProvider provider =
-        new SkylarkProvider("provider", ImmutableList.of("f1", "f2"), Location.BUILTIN);
-    ImmutableMap<String, Integer> layout = ImmutableMap.of("f1", 0, "f2", 1);
-    SkylarkInfo compactInfo =
-        new CompactSkylarkInfo(provider, layout, new Object[] {5, null}, Location.BUILTIN);
-    assertThat(compactInfo.isImmutable()).isFalse();
-    SkylarkInfo mapInfo =
-        new MapBackedSkylarkInfo(provider, ImmutableMap.of("f1", 5), Location.BUILTIN);
-    assertThat(mapInfo.isImmutable()).isFalse();
-    provider.export(Label.create("package", "target"), "provider");
-    assertThat(compactInfo.isImmutable()).isTrue();
-    assertThat(mapInfo.isImmutable()).isTrue();
-    compactInfo =
-        new CompactSkylarkInfo(provider, layout, new Object[] {5, new Object()}, Location.BUILTIN);
-    assertThat(compactInfo.isImmutable()).isFalse();
-    mapInfo =
-        new MapBackedSkylarkInfo(
-            provider, ImmutableMap.of("f1", 5, "f2", new Object()), Location.BUILTIN);
-    assertThat(mapInfo.isImmutable()).isFalse();
+  public void concatWithDifferentFields() throws Exception {
+    SkylarkProvider provider = makeProvider();
+    SkylarkInfo info1 = makeInfoWithF1F2Values(provider, 4, null);
+    SkylarkInfo info2 = makeInfoWithF1F2Values(provider, null, 5);
+    SkylarkInfo result = (SkylarkInfo) info1.getConcatter().concat(info1, info2, Location.BUILTIN);
+    assertThat(result.getFieldNames()).containsExactly("f1", "f2");
+    assertThat(result.getValue("f1")).isEqualTo(4);
+    assertThat(result.getValue("f2")).isEqualTo(5);
   }
 
-  @Test
-  public void equality() throws Exception {
-    Provider provider1 =
-        new SkylarkProvider("provider1", ImmutableList.of("f1", "f2"), Location.BUILTIN);
-    Provider provider2 =
-        new SkylarkProvider("provider2", ImmutableList.of("f1", "f2"), Location.BUILTIN);
-    ImmutableMap<String, Integer> layout = ImmutableMap.of("f1", 0, "f2", 1);
-    new EqualsTester()
-        .addEqualityGroup(
-            new CompactSkylarkInfo(provider1, layout, new Object[] {4, null}, Location.BUILTIN),
-            new MapBackedSkylarkInfo(provider1, ImmutableMap.of("f1", 4), Location.BUILTIN))
-        .addEqualityGroup(
-            new CompactSkylarkInfo(provider2, layout, new Object[] {4, null}, Location.BUILTIN),
-            new MapBackedSkylarkInfo(provider2, ImmutableMap.of("f1", 4), Location.BUILTIN))
-        .addEqualityGroup(
-            new CompactSkylarkInfo(provider1, layout, new Object[] {4, 5}, Location.BUILTIN),
-            new MapBackedSkylarkInfo(
-                provider1, ImmutableMap.of("f1", 4, "f2", 5), Location.BUILTIN))
-        .testEquals();
+  /** Creates an unexported schemaless provider type with builtin location. */
+  private static SkylarkProvider makeProvider() {
+    return SkylarkProvider.createUnexportedSchemaless(Location.BUILTIN);
   }
 
-  @Test
-  public void heterogeneousConcatenation() throws Exception {
-    Provider provider =
-        new SkylarkProvider("provider", ImmutableList.of("f1", "f2"), Location.BUILTIN);
-    ImmutableMap<String, Integer> layout = ImmutableMap.of("f1", 0, "f2", 1);
-    SkylarkInfo p1 = new MapBackedSkylarkInfo(provider, ImmutableMap.of("f1", 4), Location.BUILTIN);
-    CompactSkylarkInfo p2 =
-        new CompactSkylarkInfo(provider, layout, new Object[] {null, 5}, Location.BUILTIN);
-    Concatable result = p1.getConcatter().concat(p1, p2, Location.BUILTIN);
-    assertThat(result).isInstanceOf(MapBackedSkylarkInfo.class);
-    assertThat(((SkylarkInfo) result).getKeys()).containsExactly("f1", "f2");
-    assertThat(((SkylarkInfo) result).getValue("f1")).isEqualTo(4);
-    assertThat(((SkylarkInfo) result).getValue("f2")).isEqualTo(5);
+  /** Creates an exported schemaless provider type with builtin location. */
+  private static SkylarkProvider makeExportedProvider() {
+    SkylarkProvider.SkylarkKey key = new SkylarkProvider.SkylarkKey(
+        Label.parseAbsoluteUnchecked("//package:target"), "provider");
+    return SkylarkProvider.createExportedSchemaless(key, Location.BUILTIN);
   }
 
-  @Test
-  public void compactConcatenationReturnsCompact() throws Exception {
-    Provider provider =
-        new SkylarkProvider("provider", ImmutableList.of("f1", "f2"), Location.BUILTIN);
-    ImmutableMap<String, Integer> layout = ImmutableMap.of("f1", 0, "f2", 1);
-    CompactSkylarkInfo p1 =
-        new CompactSkylarkInfo(provider, layout, new Object[] {4, null}, Location.BUILTIN);
-    CompactSkylarkInfo p2 =
-        new CompactSkylarkInfo(provider, layout, new Object[] {null, 5}, Location.BUILTIN);
-    Concatable result = p1.getConcatter().concat(p1, p2, Location.BUILTIN);
-    assertThat(result).isInstanceOf(CompactSkylarkInfo.class);
-    assertThat(((CompactSkylarkInfo) result).getKeys()).containsExactly("f1", "f2");
-    assertThat(((CompactSkylarkInfo) result).getValue("f1")).isEqualTo(4);
-    assertThat(((CompactSkylarkInfo) result).getValue("f2")).isEqualTo(5);
+  /**
+   * Creates an instance of a provider with the given values for fields f1 and f2. Either field
+   * value may be null, in which case it is omitted.
+   */
+  private static SkylarkInfo makeInfoWithF1F2Values(
+      SkylarkProvider provider, @Nullable Object v1, @Nullable Object v2) {
+    ImmutableMap.Builder<String, Object> values = ImmutableMap.builder();
+    if (v1 != null) {
+      values.put("f1", v1);
+    }
+    if (v2 != null) {
+      values.put("f2", v2);
+    }
+    return SkylarkInfo.create(provider, values.build(), Location.BUILTIN);
   }
+
 }

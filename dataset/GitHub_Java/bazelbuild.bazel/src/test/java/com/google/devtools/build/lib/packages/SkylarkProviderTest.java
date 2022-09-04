@@ -57,7 +57,7 @@ public final class SkylarkProviderTest {
     assertThat(provider.getName()).isEqualTo("prov");
     assertThat(provider.getPrintableName()).isEqualTo("prov");
     assertThat(provider.getErrorMessageFormatForUnknownField())
-        .isEqualTo("'prov' value has no field or method '%s'");
+        .isEqualTo("'prov' object has no attribute '%s'");
     assertThat(provider.isImmutable()).isTrue();
     assertThat(Starlark.repr(provider)).isEqualTo("<provider>");
     assertThat(provider.getKey()).isEqualTo(key);
@@ -137,12 +137,8 @@ public final class SkylarkProviderTest {
     StarlarkThread thread =
         StarlarkThread.builder(Mutability.create("test")).useDefaultSemantics().build();
     Object result =
-        Starlark.call(
-            thread,
-            provider,
-            /*call=*/ null,
-            /*args=*/ ImmutableList.of(),
-            /*kwargs=*/ ImmutableMap.of("a", 1, "b", 2, "c", 3));
+        provider.call(
+            ImmutableList.of(), ImmutableMap.of("a", 1, "b", 2, "c", 3), /*ast=*/ null, thread);
     assertThat(result).isInstanceOf(SkylarkInfo.class);
     return (SkylarkInfo) result;
   }

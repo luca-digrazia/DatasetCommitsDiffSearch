@@ -89,16 +89,15 @@ import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import javax.annotation.Nullable;
 
 /**
  * A helper class to provide an easier API for Skylark rule definitions.
@@ -298,9 +297,9 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException {
-    BazelStarlarkContext bazelContext = BazelStarlarkContext.from(thread);
-    bazelContext.checkLoadingOrWorkspacePhase("rule");
+    SkylarkUtils.checkLoadingOrWorkspacePhase(thread, "rule", ast.getLocation());
 
+    BazelStarlarkContext bazelContext = BazelStarlarkContext.from(thread);
     // analysis_test=true implies test=true.
     test |= Boolean.TRUE.equals(analysisTest);
 
@@ -642,17 +641,10 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     }
 
     @Override
-    public Object callImpl(
-        StarlarkThread thread,
-        @Nullable FuncallExpression call,
-        List<Object> args,
-        Map<String, Object> kwargs)
+    public Object call(Object[] args, FuncallExpression astForLocation, StarlarkThread thread)
         throws EvalException, InterruptedException, ConversionException {
-      Location loc = call != null ? call.getLocation() : Location.BUILTIN;
-      if (!args.isEmpty()) {
-        throw new EvalException(loc, "unexpected positional arguments");
-      }
-      BazelStarlarkContext.from(thread).checkLoadingPhase(getName());
+      Location loc = astForLocation.getLocation();
+      SkylarkUtils.checkLoadingPhase(thread, getName(), loc);
       if (ruleClass == null) {
         throw new EvalException(loc, "Invalid rule class hasn't been exported by a bzl file");
       }
@@ -674,8 +666,9 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         }
       }
 
+      @SuppressWarnings("unchecked")
       BuildLangTypedAttributeValuesMap attributeValues =
-          new BuildLangTypedAttributeValuesMap(kwargs);
+          new BuildLangTypedAttributeValuesMap((Map<String, Object>) args[0]);
       try {
         PackageContext pkgContext = thread.getThreadLocal(PackageContext.class);
         if (pkgContext == null) {

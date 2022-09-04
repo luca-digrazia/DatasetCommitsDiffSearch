@@ -131,12 +131,11 @@ public final class SkylarkRuleConfiguredTargetUtil {
       }
 
       Object target =
-          Starlark.call(
-              thread,
-              ruleImplementation,
-              /*call=*/ null,
+          ruleImplementation.call(
               /*args=*/ ImmutableList.of(skylarkRuleContext),
-              /*kwargs=*/ ImmutableMap.of());
+              /*kwargs*/ ImmutableMap.of(),
+              /*ast=*/ null,
+              thread);
 
       if (ruleContext.hasErrors()) {
         return null;

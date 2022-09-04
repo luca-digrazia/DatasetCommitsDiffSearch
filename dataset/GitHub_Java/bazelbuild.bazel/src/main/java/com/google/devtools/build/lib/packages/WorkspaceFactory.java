@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.packages;
 
+import static com.google.devtools.build.lib.syntax.Starlark.NONE;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -28,29 +30,27 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.ClassObject;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.SkylarkUtils;
+import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
-import com.google.devtools.build.lib.syntax.Tuple;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -169,6 +169,7 @@ public class WorkspaceFactory {
             .setEventHandler(localReporter)
             .setImportedExtensions(importMap)
             .build();
+    SkylarkUtils.setPhase(thread, Phase.WORKSPACE);
     thread.setThreadLocal(
         PackageFactory.PackageContext.class,
         new PackageFactory.PackageContext(builder, null, localReporter));
@@ -178,7 +179,6 @@ public class WorkspaceFactory {
     // repository mapping because calls to the Label constructor in the WORKSPACE file
     // are, by definition, not in an external repository and so they don't need the mapping
     new BazelStarlarkContext(
-            BazelStarlarkContext.Phase.WORKSPACE,
             /* toolsRepository= */ null,
             /* fragmentNameToClass= */ null,
             /* repoMapping= */ ImmutableMap.of(),
@@ -189,11 +189,9 @@ public class WorkspaceFactory {
     // Validate the file, apply BUILD dialect checks, then execute.
     ValidationEnvironment.validateFile(
         file, thread.getGlobals(), starlarkSemantics, /*isBuildFile=*/ true);
-    List<String> globs = new ArrayList<>(); // unused
     if (!file.ok()) {
       Event.replayEventsOn(localReporter, file.errors());
-    } else if (PackageFactory.checkBuildSyntax(
-        file, globs, globs, new HashMap<>(), localReporter)) {
+    } else if (PackageFactory.checkBuildSyntax(file, localReporter)) {
       try {
         EvalUtils.exec(file, thread);
       } catch (EvalException ex) {
@@ -261,33 +259,18 @@ public class WorkspaceFactory {
    * Returns a function-value implementing the build or workspace rule "ruleClass" (e.g. cc_library)
    * in the specified package context.
    */
-  private static BaseFunction newRuleFunction(
+  private static BuiltinFunction newRuleFunction(
       final RuleFactory ruleFactory, final String ruleClassName, final boolean allowOverride) {
-    return new BaseFunction() {
+    return new BuiltinFunction(FunctionSignature.KWARGS) {
       @Override
       public String getName() {
         return ruleClassName;
       }
 
-      @Override
-      public FunctionSignature getSignature() {
-        return FunctionSignature.KWARGS; // just for documentation
-      }
-
-      @Override
-      public Object call(
-          StarlarkThread thread,
-          @Nullable FuncallExpression call,
-          Tuple<Object> args,
-          Dict<String, Object> kwargs)
+      public Object invoke(Map<String, Object> kwargs, Location loc, StarlarkThread thread)
           throws EvalException, InterruptedException {
-        if (!args.isEmpty()) {
-          throw new EvalException(null, "unexpected positional arguments");
-        }
-        Location loc = call != null ? call.getLocation() : Location.BUILTIN;
         try {
           Package.Builder builder = PackageFactory.getContext(thread, loc).pkgBuilder;
-          // TODO(adonovan): this doesn't look safe!
           String externalRepoName = (String) kwargs.get("name");
           if (!allowOverride
               && externalRepoName != null
@@ -325,7 +308,7 @@ public class WorkspaceFactory {
             | LabelSyntaxException e) {
           throw new EvalException(loc, e.getMessage());
         }
-        return Starlark.NONE;
+        return NONE;
       }
     };
   }

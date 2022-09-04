@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Collection;
 import java.util.Map;
@@ -52,7 +51,6 @@ public final class SkylarkProvider extends BaseFunction implements SkylarkExport
   private static final String DEFAULT_ERROR_MESSAGE_FORMAT = "Object has no '%s' attribute.";
 
   private final Location location;
-  private final FunctionSignature signature;
 
   /** For schemaful providers, the sorted list of allowed field names. */
   // (The requirement for sortedness comes from SkylarkInfo.fromSortedFieldList,
@@ -129,18 +127,13 @@ public final class SkylarkProvider extends BaseFunction implements SkylarkExport
    */
   private SkylarkProvider(
       @Nullable SkylarkKey key, @Nullable ImmutableList<String> fields, Location location) {
-    this.signature = buildSignature(fields);
+    super(buildSignature(fields), /*defaultValues=*/ null);
     this.location = location;
     this.fields = fields;
     this.key = key;  // possibly null
     this.errorMessageFormatForUnknownField =
         key == null ? DEFAULT_ERROR_MESSAGE_FORMAT
             : makeErrorMessageFormatForUnknownField(key.getExportedName());
-  }
-
-  @Override
-  public FunctionSignature getSignature() {
-    return signature;
   }
 
   private static FunctionSignature buildSignature(@Nullable ImmutableList<String> fields) {
@@ -150,24 +143,18 @@ public final class SkylarkProvider extends BaseFunction implements SkylarkExport
   }
 
   @Override
-  public Object fastcall(
-      StarlarkThread thread, @Nullable FuncallExpression call, Object[] positional, Object[] named)
+  protected Object call(Object[] args, @Nullable FuncallExpression ast, StarlarkThread thread)
       throws EvalException, InterruptedException {
-    // TODO(adonovan): we can likely come up with a more efficient implementation
-    // ...then make matchSignature private again?
-    Object[] arguments =
-        Starlark.matchSignature(
-            signature, this, /*defaults=*/ null, thread.mutability(), positional, named);
-    Location loc = call != null ? call.getLocation() : Location.BUILTIN;
+    Location loc = ast != null ? ast.getLocation() : Location.BUILTIN;
     if (fields == null) {
       // provider(**kwargs)
       @SuppressWarnings("unchecked")
-      Map<String, Object> kwargs = (Map<String, Object>) arguments[0];
+      Map<String, Object> kwargs = (Map<String, Object>) args[0];
       return SkylarkInfo.create(this, kwargs, loc);
     } else {
       // provider(a=..., b=..., ...)
       // The order of args is determined by the signature: that is, fields, which is sorted.
-      return SkylarkInfo.fromSortedFieldList(this, fields, arguments, loc);
+      return SkylarkInfo.fromSortedFieldList(this, fields, args, loc);
     }
   }
 
@@ -216,7 +203,7 @@ public final class SkylarkProvider extends BaseFunction implements SkylarkExport
   }
 
   private static String makeErrorMessageFormatForUnknownField(String exportedName) {
-    return String.format("'%s' value has no field or method '%%s'", exportedName);
+    return String.format("'%s' object has no attribute '%%s'", exportedName);
   }
 
   @Override

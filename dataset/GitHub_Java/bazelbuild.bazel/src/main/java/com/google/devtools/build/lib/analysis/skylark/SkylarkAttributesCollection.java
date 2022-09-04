@@ -22,38 +22,32 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.packages.StructImpl;
+import com.google.devtools.build.lib.packages.StructProvider;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.packages.Type.LabelClass;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkAttributesCollectionApi;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.syntax.Type.LabelClass;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
-@SkylarkModule(
-  name = "rule_attributes",
-  category = SkylarkModuleCategory.NONE,
-  doc = "Information about attributes of a rule an aspect is applied to."
-)
-class SkylarkAttributesCollection implements SkylarkValue {
+/** Information about attributes of a rule an aspect is applied to. */
+class SkylarkAttributesCollection implements SkylarkAttributesCollectionApi {
   private final SkylarkRuleContext skylarkRuleContext;
-  private final Info attrObject;
-  private final Info executableObject;
-  private final Info fileObject;
-  private final Info filesObject;
+  private final StructImpl attrObject;
+  private final StructImpl executableObject;
+  private final StructImpl fileObject;
+  private final StructImpl filesObject;
   private final ImmutableMap<Artifact, FilesToRunProvider> executableRunfilesMap;
   private final String ruleClassName;
+
+  static final String ERROR_MESSAGE_FOR_NO_ATTR =
+      "No attribute '%s' in attr. Make sure you declared a rule attribute with this name.";
 
   private SkylarkAttributesCollection(
       SkylarkRuleContext skylarkRuleContext,
@@ -65,22 +59,19 @@ class SkylarkAttributesCollection implements SkylarkValue {
       ImmutableMap<Artifact, FilesToRunProvider> executableRunfilesMap) {
     this.skylarkRuleContext = skylarkRuleContext;
     this.ruleClassName = ruleClassName;
-    attrObject =
-        NativeProvider.STRUCT.create(
-            attrs,
-            "No attribute '%s' in attr. Make sure you declared a rule attribute with this name.");
+    attrObject = StructProvider.STRUCT.create(attrs, ERROR_MESSAGE_FOR_NO_ATTR);
     executableObject =
-        NativeProvider.STRUCT.create(
+        StructProvider.STRUCT.create(
             executables,
             "No attribute '%s' in executable. Make sure there is a label type attribute marked "
                 + "as 'executable' with this name");
     fileObject =
-        NativeProvider.STRUCT.create(
+        StructProvider.STRUCT.create(
             singleFiles,
             "No attribute '%s' in file. Make sure there is a label type attribute marked "
-                + "as 'single_file' with this name");
+                + "as 'allow_single_file' with this name");
     filesObject =
-        NativeProvider.STRUCT.create(
+        StructProvider.STRUCT.create(
             files,
             "No attribute '%s' in files. Make sure there is a label or label_list type attribute "
                 + "with this name");
@@ -91,35 +82,31 @@ class SkylarkAttributesCollection implements SkylarkValue {
     skylarkRuleContext.checkMutable("rule." + attrName);
   }
 
-  @SkylarkCallable(name = "attr", structField = true, doc = SkylarkRuleContext.ATTR_DOC)
-  public Info getAttr() throws EvalException {
+  @Override
+  public StructImpl getAttr() throws EvalException {
     checkMutable("attr");
     return attrObject;
   }
 
-  @SkylarkCallable(name = "executable", structField = true, doc = SkylarkRuleContext.EXECUTABLE_DOC)
-  public Info getExecutable() throws EvalException {
+  @Override
+  public StructImpl getExecutable() throws EvalException {
     checkMutable("executable");
     return executableObject;
   }
 
-  @SkylarkCallable(name = "file", structField = true, doc = SkylarkRuleContext.FILE_DOC)
-  public Info getFile() throws EvalException {
+  @Override
+  public StructImpl getFile() throws EvalException {
     checkMutable("file");
     return fileObject;
   }
 
-  @SkylarkCallable(name = "files", structField = true, doc = SkylarkRuleContext.FILES_DOC)
-  public Info getFiles() throws EvalException {
+  @Override
+  public StructImpl getFiles() throws EvalException {
     checkMutable("files");
     return filesObject;
   }
 
-  @SkylarkCallable(
-    name = "kind",
-    structField = true,
-    doc = "The kind of a rule, such as 'cc_library'"
-  )
+  @Override
   public String getRuleClassName() throws EvalException {
     checkMutable("kind");
     return ruleClassName;
@@ -135,7 +122,7 @@ class SkylarkAttributesCollection implements SkylarkValue {
   }
 
   @Override
-  public void repr(SkylarkPrinter printer) {
+  public void repr(Printer printer) {
     printer.append("<rule collection for " + skylarkRuleContext.getRuleLabelCanonicalName() + ">");
   }
 
@@ -157,6 +144,7 @@ class SkylarkAttributesCollection implements SkylarkValue {
       this.context = ruleContext;
     }
 
+    @SuppressWarnings("unchecked")
     public void addAttribute(Attribute a, Object val) {
       Type<?> type = a.getType();
       String skyname = a.getPublicName();
@@ -166,16 +154,18 @@ class SkylarkAttributesCollection implements SkylarkValue {
         return;
       }
 
-      // TODO(mstaib): Remove the LABEL_DICT_UNARY special case of this conditional
+      // Some legacy native attribute types do not have a valid Starlark type. Avoid exposing
+      // these to Starlark.
+      if (type == BuildType.DISTRIBUTIONS || type == BuildType.TRISTATE) {
+        return;
+      }
+
+      // TODO(b/140636597): Remove the LABEL_DICT_UNARY special case of this conditional
       // LABEL_DICT_UNARY was previously not treated as a dependency-bearing type, and was put into
       // Skylark as a Map<String, Label>; this special case preserves that behavior temporarily.
       if (type.getLabelClass() != LabelClass.DEPENDENCY || type == BuildType.LABEL_DICT_UNARY) {
-        attrBuilder.put(
-            skyname,
-            val == null
-                ? Runtime.NONE
-                // Attribute values should be type safe
-                : SkylarkType.convertToSkylark(val, null));
+        // Attribute values should be type safe
+        attrBuilder.put(skyname, Starlark.fromJava(val, null));
         return;
       }
       if (a.isExecutable()) {
@@ -196,7 +186,7 @@ class SkylarkAttributesCollection implements SkylarkValue {
             seenExecutables.add(executable);
           }
         } else {
-          executableBuilder.put(skyname, Runtime.NONE);
+          executableBuilder.put(skyname, Starlark.NONE);
         }
       }
       if (a.isSingleArtifact()) {
@@ -206,23 +196,28 @@ class SkylarkAttributesCollection implements SkylarkValue {
         if (artifact != null) {
           fileBuilder.put(skyname, artifact);
         } else {
-          fileBuilder.put(skyname, Runtime.NONE);
+          fileBuilder.put(skyname, Starlark.NONE);
         }
       }
       filesBuilder.put(
           skyname,
-          context.getRuleContext().getPrerequisiteArtifacts(a.getName(), Mode.DONT_CHECK).list());
+          StarlarkList.copyOf(
+              /*mutability=*/ null,
+              context
+                  .getRuleContext()
+                  .getPrerequisiteArtifacts(a.getName(), Mode.DONT_CHECK)
+                  .list()));
 
-      if (type == BuildType.LABEL && !a.hasSplitConfigurationTransition()) {
+      if (type == BuildType.LABEL && !a.getTransitionFactory().isSplit()) {
         Object prereq = context.getRuleContext().getPrerequisite(a.getName(), Mode.DONT_CHECK);
         if (prereq == null) {
-          prereq = Runtime.NONE;
+          prereq = Starlark.NONE;
         }
         attrBuilder.put(skyname, prereq);
       } else if (type == BuildType.LABEL_LIST
-          || (type == BuildType.LABEL && a.hasSplitConfigurationTransition())) {
+          || (type == BuildType.LABEL && a.getTransitionFactory().isSplit())) {
         List<?> allPrereq = context.getRuleContext().getPrerequisites(a.getName(), Mode.DONT_CHECK);
-        attrBuilder.put(skyname, SkylarkList.createImmutable(allPrereq));
+        attrBuilder.put(skyname, StarlarkList.immutableCopyOf(allPrereq));
       } else if (type == BuildType.LABEL_KEYED_STRING_DICT) {
         ImmutableMap.Builder<TransitiveInfoCollection, String> builder = ImmutableMap.builder();
         Map<Label, String> original = BuildType.LABEL_KEYED_STRING_DICT.cast(val);
@@ -231,7 +226,7 @@ class SkylarkAttributesCollection implements SkylarkValue {
         for (TransitiveInfoCollection prereq : allPrereq) {
           builder.put(prereq, original.get(AliasProvider.getDependencyLabel(prereq)));
         }
-        attrBuilder.put(skyname, SkylarkType.convertToSkylark(builder.build(), null));
+        attrBuilder.put(skyname, Starlark.fromJava(builder.build(), null));
       } else if (type == BuildType.LABEL_DICT_UNARY) {
         Map<Label, TransitiveInfoCollection> prereqsByLabel = new LinkedHashMap<>();
         for (TransitiveInfoCollection target :
@@ -239,7 +234,7 @@ class SkylarkAttributesCollection implements SkylarkValue {
           prereqsByLabel.put(target.getLabel(), target);
         }
         ImmutableMap.Builder<String, TransitiveInfoCollection> attrValue = ImmutableMap.builder();
-        for (Entry<String, Label> entry : ((Map<String, Label>) val).entrySet()) {
+        for (Map.Entry<String, Label> entry : ((Map<String, Label>) val).entrySet()) {
           attrValue.put(entry.getKey(), prereqsByLabel.get(entry.getValue()));
         }
         attrBuilder.put(skyname, attrValue.build());
@@ -249,7 +244,7 @@ class SkylarkAttributesCollection implements SkylarkValue {
                 + a.getName()
                 + " of type "
                 + type
-                + " to a Skylark object");
+                + " to a Starlark object");
       }
     }
 

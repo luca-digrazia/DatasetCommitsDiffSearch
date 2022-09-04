@@ -21,7 +21,6 @@ import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Location;
@@ -40,6 +39,7 @@ import com.google.devtools.build.lib.rules.apple.XcodeConfigInfo;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
 import com.google.devtools.build.lib.rules.objc.AppleBinary.AppleBinaryOutput;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SplitTransitionProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleCommonApi;
 import com.google.devtools.build.lib.syntax.Depset;
@@ -54,13 +54,7 @@ import javax.annotation.Nullable;
 
 /** A class that exposes apple rule implementation internals to skylark. */
 public class AppleSkylarkCommon
-    implements AppleCommonApi<
-        Artifact,
-        ConstraintValueInfo,
-        SkylarkRuleContext,
-        ObjcProvider,
-        XcodeConfigInfo,
-        ApplePlatform> {
+    implements AppleCommonApi<Artifact, ObjcProvider, XcodeConfigInfo, ApplePlatform> {
 
   @VisibleForTesting
   public static final String BAD_KEY_ERROR = "Argument %s not a recognized key, 'providers',"
@@ -78,10 +72,6 @@ public class AppleSkylarkCommon
   public static final String BAD_PROVIDERS_ELEM_ERROR =
       "Value for argument 'providers' must be a list of ObjcProvider instances, instead found "
           + "iterable with %s.";
-
-  @VisibleForTesting
-  public static final String BAD_DIRECT_DEPENDENCY_KEY_ERROR =
-      "Key %s not allowed to be in direct_dep_provider.";
 
   @VisibleForTesting
   public static final String NOT_SET_ERROR = "Value for key %s must be a set, instead found %s.";
@@ -225,11 +215,12 @@ public class AppleSkylarkCommon
 
   @Override
   public StructImpl linkMultiArchBinary(
-      SkylarkRuleContext skylarkRuleContext,
+      SkylarkRuleContextApi skylarkRuleContextApi,
       Sequence<?> extraLinkopts,
       Sequence<?> extraLinkInputs,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
+    SkylarkRuleContext skylarkRuleContext = (SkylarkRuleContext) skylarkRuleContextApi;
     try {
       RuleContext ruleContext = skylarkRuleContext.getRuleContext();
       AppleBinaryOutput appleBinaryOutput =
