@@ -63,16 +63,16 @@ public class BernoulliDistribution extends DiscreteDistribution {
      * @param data data[i] == 1 if the i-<i>th</i> trail is success. Otherwise 0.
      */
     public BernoulliDistribution(int[] data) {
-        int k = 0;
-        for (int i : data) {
-            if (i == 1) {
+        double k = 0.0;
+        for (int currentInteger : data) {
+            if (currentInteger == 1) {
                 k++;
-            } else if (i != 0) {
-                throw new IllegalArgumentException("Invalid value " + i);
+            } else if (currentInteger != 0) {
+                throw new IllegalArgumentException("Invalid value " + currentInteger);
             }
         }
 
-        p = (double) k / data.length;
+        p = k / data.length;
         q = 1 - p;
 
         entropy = -p * Math.log2(p) - q * Math.log2(q);
@@ -84,14 +84,14 @@ public class BernoulliDistribution extends DiscreteDistribution {
      * @param data the boolean array to indicate if the i-<i>th</i> trail success.
      */
     public BernoulliDistribution(boolean[] data) {
-        int k = 0;
+        double k = 0.0;
         for (boolean b : data) {
             if (b) {
                 k++;
             }
         }
 
-        p = (double) k / data.length;
+        p = k / data.length;
         q = 1 - p;
 
         entropy = -p * Math.log2(p) - q * Math.log2(q);
