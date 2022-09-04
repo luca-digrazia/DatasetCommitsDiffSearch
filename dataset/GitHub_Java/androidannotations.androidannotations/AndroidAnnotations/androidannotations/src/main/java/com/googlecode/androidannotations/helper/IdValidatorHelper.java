@@ -53,11 +53,7 @@ public class IdValidatorHelper extends ValidatorHelper {
 	public void idsExists(Element element, Res res, IsValid valid) {
 
 		int[] idsValues = annotationHelper.extractAnnotationValue(element);
-
-		if (idsValues == null) {
-			valid.invalidate();
-			annotationHelper.printAnnotationWarning(element, "The value of the %s annotation could not be determined at compile time, for unknown reasons. Please report this issue.");
-		} else if (idsValues[0] == Id.DEFAULT_VALUE) {
+		if (idsValues[0] == Id.DEFAULT_VALUE) {
 			idExists(element, res, true, true, valid, idsValues[0]);
 		} else {
 			for (int idValue : idsValues) {
@@ -127,7 +123,7 @@ public class IdValidatorHelper extends ValidatorHelper {
 
 	public void idListenerMethod(Element element, AnnotationElements validatedElements, IsValid valid) {
 
-		enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
+		enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
 
 		idsExists(element, Res.ID, valid);
 

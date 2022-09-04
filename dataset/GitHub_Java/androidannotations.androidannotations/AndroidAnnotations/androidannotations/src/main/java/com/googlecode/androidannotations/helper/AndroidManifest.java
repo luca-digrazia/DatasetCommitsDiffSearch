@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,18 +23,8 @@ public class AndroidManifest {
 	private final String applicationPackage;
 	private final List<String> componentQualifiedNames;
 	private final String applicationClassName;
-	private final boolean libraryProject;
 
-	public static AndroidManifest createManifest(String applicationPackage, String applicationClassName, List<String> componentQualifiedNames) {
-		return new AndroidManifest(false, applicationPackage, applicationClassName, componentQualifiedNames);
-	}
-
-	public static AndroidManifest createLibraryManifest(String applicationPackage) {
-		return new AndroidManifest(true, applicationPackage, "", Collections.<String> emptyList());
-	}
-
-	private AndroidManifest(boolean libraryProject, String applicationPackage, String applicationClassName, List<String> componentQualifiedNames) {
-		this.libraryProject = libraryProject;
+	public AndroidManifest(String applicationPackage, String applicationClassName, List<String> componentQualifiedNames) {
 		this.applicationPackage = applicationPackage;
 		this.applicationClassName = applicationClassName;
 		this.componentQualifiedNames = componentQualifiedNames;
@@ -50,10 +40,6 @@ public class AndroidManifest {
 
 	public String getApplicationClassName() {
 		return applicationClassName;
-	}
-
-	public boolean isLibraryProject() {
-		return libraryProject;
 	}
 
 }

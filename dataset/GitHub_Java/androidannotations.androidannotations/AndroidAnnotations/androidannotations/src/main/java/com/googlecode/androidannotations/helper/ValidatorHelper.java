@@ -15,8 +15,6 @@
  */
 package com.googlecode.androidannotations.helper;
 
-import static com.googlecode.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
-
 import java.lang.annotation.Annotation;
 import java.lang.annotation.IncompleteAnnotationException;
 import java.util.ArrayList;
@@ -42,11 +40,6 @@ import javax.lang.model.util.Elements;
 import android.util.Log;
 
 import com.googlecode.androidannotations.annotations.EActivity;
-import com.googlecode.androidannotations.annotations.EApplication;
-import com.googlecode.androidannotations.annotations.EProvider;
-import com.googlecode.androidannotations.annotations.EReceiver;
-import com.googlecode.androidannotations.annotations.EService;
-import com.googlecode.androidannotations.annotations.EView;
 import com.googlecode.androidannotations.annotations.EViewGroup;
 import com.googlecode.androidannotations.annotations.Enhanced;
 import com.googlecode.androidannotations.annotations.Extra;
@@ -88,6 +81,7 @@ public class ValidatorHelper {
 	private static final String ANDROID_SQLITE_DB_QUALIFIED_NAME = "android.database.sqlite.SQLiteDatabase";
 	private static final String GUICE_INJECTOR_QUALIFIED_NAME = "com.google.inject.Injector";
 	private static final String ROBOGUICE_INJECTOR_PROVIDER_QUALIFIED_NAME = "roboguice.inject.InjectorProvider";
+	
 
 	private static final List<String> VALID_PREF_RETURN_TYPES = Arrays.asList("int", "boolean", "float", "long", "java.lang.String");
 
@@ -96,10 +90,7 @@ public class ValidatorHelper {
 	private static final Collection<Integer> VALID_LOG_LEVELS = Arrays.asList(Log.VERBOSE, Log.DEBUG, Log.INFO, Log.WARN, Log.ERROR);
 
 	@SuppressWarnings("unchecked")
-	private static final List<Class<? extends Annotation>> VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS = Arrays.asList(EActivity.class, EViewGroup.class, EView.class, Enhanced.class);
-
-	@SuppressWarnings("unchecked")
-	private static final List<Class<? extends Annotation>> VALID_ENHANCED_COMPONENT_ANNOTATIONS = Arrays.asList(EApplication.class, EActivity.class, EViewGroup.class, EView.class, Enhanced.class, EService.class, EReceiver.class, EProvider.class);
+	private static final List<Class<? extends Annotation>> VALID_EBEAN_ANNOTATIONS = Arrays.asList(EActivity.class, EViewGroup.class, Enhanced.class);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -148,78 +139,81 @@ public class ValidatorHelper {
 			annotationHelper.printAnnotationError(element, "%s cannot be used on a private element");
 		}
 	}
-
-	public void enclosingElementHasEnhancedAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
+	
+	public void enclosingElementHasEnhanced(Element element, AnnotationElements validatedElements, IsValid valid) {
 		Element enclosingElement = element.getEnclosingElement();
-		hasClassAnnotation(element, enclosingElement, validatedElements, Enhanced.class, valid);
+		hasEnhanced(element, enclosingElement, validatedElements, valid);
 	}
+	
+	public void hasEnhanced(Element reportElement, Element element, AnnotationElements validatedElements, IsValid valid) {
+
+		Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(Enhanced.class);
+
+		if (!layoutAnnotatedElements.contains(element)) {
+			valid.invalidate();
+			if (element.getAnnotation(Enhanced.class) == null) {
+				annotationHelper.printAnnotationError(reportElement, "%s can only be used in a class annotated with " + TargetAnnotationHelper.annotationName(Enhanced.class));
+			}
+		}
+	}	
 
 	public void enclosingElementHasEActivity(Element element, AnnotationElements validatedElements, IsValid valid) {
 		Element enclosingElement = element.getEnclosingElement();
-		hasClassAnnotation(element, enclosingElement, validatedElements, EActivity.class, valid);
+		hasEActivity(element, enclosingElement, validatedElements, valid);
 	}
 
 	public void hasEActivity(Element element, AnnotationElements validatedElements, IsValid valid) {
-		hasClassAnnotation(element, element, validatedElements, EActivity.class, valid);
+		hasEActivity(element, element, validatedElements, valid);
 	}
 
-	public void enclosingElementHasEnhancedViewSupportAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		hasOneOfClassAnnotations(element, enclosingElement, validatedElements, VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS, valid);
-	}
+	public void hasEActivity(Element reportElement, Element element, AnnotationElements validatedElements, IsValid valid) {
 
-	public void enclosingElementHasEnhancedComponentAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		hasOneOfClassAnnotations(element, enclosingElement, validatedElements, VALID_ENHANCED_COMPONENT_ANNOTATIONS, valid);
-	}
+		Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(EActivity.class);
 
-	private void hasClassAnnotation(Element reportElement, Element element, AnnotationElements validatedElements, Class<? extends Annotation> validAnnotation, IsValid valid) {
-		ArrayList<Class<? extends Annotation>> validAnnotations = new ArrayList<Class<? extends Annotation>>();
-		validAnnotations.add(validAnnotation);
-		hasOneOfClassAnnotations(reportElement, element, validatedElements, validAnnotations, valid);
-	}
-
-	private void hasOneOfClassAnnotations(Element reportElement, Element element, AnnotationElements validatedElements, List<Class<? extends Annotation>> validAnnotations, IsValid valid) {
-
-		boolean foundAnnotation = false;
-		for (Class<? extends Annotation> validAnnotation : validAnnotations) {
-			if (element.getAnnotation(validAnnotation) != null) {
-
-				Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(validAnnotation);
-
-				/*
-				 * This is for the case where the element has the right
-				 * annotation, but that annotation was not validated. We do not
-				 * add any compile error (should already exist on the
-				 * annotation), but we still invalidate this element.
-				 */
-				if (!layoutAnnotatedElements.contains(element)) {
-					valid.invalidate();
-				}
-
-				foundAnnotation = true;
-				break;
-			}
-		}
-
-		if (!foundAnnotation) {
+		if (!layoutAnnotatedElements.contains(element)) {
 			valid.invalidate();
-			annotationHelper.printAnnotationError(reportElement, "%s can only be used in a class annotated with " + getFormattedValidEnhancedBeanAnnotationTypes(validAnnotations) + ".");
+			if (element.getAnnotation(EActivity.class) == null) {
+				annotationHelper.printAnnotationError(reportElement, "%s can only be used in a class annotated with " + TargetAnnotationHelper.annotationName(EActivity.class));
+			}
 		}
 	}
+	
+	public void enclosingElementHasEBeanAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
+		Element enclosingElement = element.getEnclosingElement();
+		hasEBeanAnnotation(element, enclosingElement, validatedElements, valid);
+	}
 
-	private String getFormattedValidEnhancedBeanAnnotationTypes(List<Class<? extends Annotation>> annotations) {
-		StringBuilder sb = new StringBuilder();
-		if (!annotations.isEmpty()) {
-			sb.append(TargetAnnotationHelper.annotationName(annotations.get(0)));
+	public void hasEBeanAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
+		hasEBeanAnnotation(element, element, validatedElements, valid);
+	}
 
-			for (int i = 1; i < annotations.size(); i++) {
-				sb.append(", ");
-				sb.append(TargetAnnotationHelper.annotationName(annotations.get(i)));
+	public void hasEBeanAnnotation(Element reportElement, Element element, AnnotationElements validatedElements, IsValid valid) {
+
+		boolean ok = false;
+		for (Class<? extends Annotation> a : VALID_EBEAN_ANNOTATIONS) {
+			if (element.getAnnotation(a) != null) {
+				ok = true;
 			}
 		}
 
-		return sb.toString();
+		if (!ok) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(reportElement, "%s can only be used in a class annotated with " + getFormattedValidEnhancedBeanAnnotationTypes() + ".");
+		}
+	}
+
+	private StringBuilder getFormattedValidEnhancedBeanAnnotationTypes() {
+		StringBuilder sb = new StringBuilder();
+		if (VALID_EBEAN_ANNOTATIONS.isEmpty())
+			return sb;
+
+		sb.append(TargetAnnotationHelper.annotationName(VALID_EBEAN_ANNOTATIONS.get(0)));
+
+		for (int i = 1; i < VALID_EBEAN_ANNOTATIONS.size(); i++) {
+			sb.append(TargetAnnotationHelper.annotationName(VALID_EBEAN_ANNOTATIONS.get(i)));
+		}
+
+		return sb;
 	}
 
 	public void hasExtraValue(Element element, IsValid valid) {
@@ -485,18 +479,18 @@ public class ValidatorHelper {
 	public void extendsActivity(Element element, IsValid valid) {
 		extendsType(element, ANDROID_ACTIVITY_QUALIFIED_NAME, valid);
 	}
-
+	
 	public void extendsService(Element element, IsValid valid) {
 		extendsType(element, ANDROID_SERVICE_QUALIFIED_NAME, valid);
-	}
-
+	}	
+	
 	public void extendsReceiver(Element element, IsValid valid) {
 		extendsType(element, ANDROID_RECEIVER_QUALIFIED_NAME, valid);
-	}
-
+	}		
+	
 	public void extendsProvider(Element element, IsValid valid) {
 		extendsType(element, ANDROID_PROVIDER_QUALIFIED_NAME, valid);
-	}
+	}			
 
 	public void extendsView(Element element, IsValid valid) {
 		extendsType(element, ANDROID_VIEW_QUALIFIED_NAME, valid);
@@ -513,17 +507,14 @@ public class ValidatorHelper {
 	public void extendsApplication(Element element, IsValid valid) {
 		extendsType(element, ANDROID_APPLICATION_QUALIFIED_NAME, valid);
 	}
-
+	
 	public void extendsContext(Element element, IsValid valid) {
 		extendsType(element, ANDROID_CONTEXT_QUALIFIED_NAME, valid);
 	}
 
-	public void upperclassOfRegisteredApplication(Element element, AndroidManifest manifest, IsValid valid) {
+	public void registeredInManifest(Element element, AndroidManifest manifest, IsValid valid) {
 		String applicationClassName = manifest.getApplicationClassName();
 		if (applicationClassName != null) {
-			if (applicationClassName.endsWith(GENERATION_SUFFIX)) {
-				applicationClassName = applicationClassName.substring(0, applicationClassName.length() - GENERATION_SUFFIX.length());
-			}
 			TypeMirror elementType = element.asType();
 			TypeMirror manifestType = annotationHelper.typeElementFromQualifiedName(applicationClassName).asType();
 			if (!annotationHelper.isSubtype(manifestType, elementType)) {
@@ -533,30 +524,6 @@ public class ValidatorHelper {
 		} else {
 			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "No application class is registered in the AndroidManifest.xml");
-		}
-	}
-
-	public void applicationRegistered(Element element, AndroidManifest manifest, IsValid valid) {
-
-		String applicationClassName = manifest.getApplicationClassName();
-		if (applicationClassName != null) {
-
-			TypeElement typeElement = (TypeElement) element;
-
-			String componentQualifiedName = typeElement.getQualifiedName().toString();
-			String generatedComponentQualifiedName = componentQualifiedName + ModelConstants.GENERATION_SUFFIX;
-
-			if (!applicationClassName.equals(generatedComponentQualifiedName)) {
-				if (applicationClassName.equals(componentQualifiedName)) {
-					valid.invalidate();
-					annotationHelper.printAnnotationError(element, "The AndroidManifest.xml file contains the original component, and not the AndroidAnnotations generated component. Please register " + generatedComponentQualifiedName + " instead of " + componentQualifiedName);
-				} else {
-					annotationHelper.printAnnotationWarning(element, "The component " + generatedComponentQualifiedName + " is not registered in the AndroidManifest.xml file.");
-				}
-			}
-		} else {
-			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "No application class registered in the AndroidManifest.xml");
 		}
 
 	}
@@ -572,8 +539,8 @@ public class ValidatorHelper {
 			String elementTypeName = type.toString();
 
 			boolean sharedPrefValidatedInRound = false;
-			if (elementTypeName.endsWith(GENERATION_SUFFIX)) {
-				String prefTypeName = elementTypeName.substring(0, elementTypeName.length() - GENERATION_SUFFIX.length());
+			if (elementTypeName.endsWith("_")) {
+				String prefTypeName = elementTypeName.substring(0, elementTypeName.length() - 1);
 
 				Set<? extends Element> sharedPrefElements = validatedElements.getAnnotatedElements(SharedPref.class);
 
@@ -869,9 +836,9 @@ public class ValidatorHelper {
 		List<ExecutableElement> constructors = ElementFilter.constructorsIn(element.getEnclosedElements());
 
 		if (constructors.size() == 1) {
-
+			
 			ExecutableElement constructor = constructors.get(0);
-
+			
 			if (!annotationHelper.isPrivate(constructor)) {
 				if (constructor.getParameters().size() != 0) {
 					annotationHelper.printError(element, "%s annotated element should have an empty constructor");
@@ -898,7 +865,7 @@ public class ValidatorHelper {
 		}
 
 	}
-
+	
 	public void componentRegistered(Element element, AndroidManifest androidManifest, IsValid valid) {
 		TypeElement typeElement = (TypeElement) element;
 
@@ -921,6 +888,6 @@ public class ValidatorHelper {
 			}
 		}
 
-	}
+	}	
 
 }

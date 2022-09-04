@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,10 +23,12 @@ import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.lang.annotation.Annotation;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.EProvider;
+import com.googlecode.androidannotations.helper.AnnotationHelper;
 import com.googlecode.androidannotations.helper.ModelConstants;
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
@@ -34,7 +36,11 @@ import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JMethod;
 
-public class EProviderProcessor implements ElementProcessor {
+public class EProviderProcessor extends AnnotationHelper implements ElementProcessor {
+
+	public EProviderProcessor(ProcessingEnvironment processingEnv) {
+		super(processingEnv);
+	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
@@ -44,7 +50,7 @@ public class EProviderProcessor implements ElementProcessor {
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
 
-		EBeanHolder holder = activitiesHolder.create(element, getTarget());
+		EBeanHolder holder = activitiesHolder.create(element);
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -73,7 +79,6 @@ public class EProviderProcessor implements ElementProcessor {
 		{
 			/*
 			 * Setting to null shouldn't be a problem as long as we don't allow
-			 * 
 			 * @App and @Extra on this component
 			 */
 			holder.initIfActivityBody = null;
@@ -81,5 +86,6 @@ public class EProviderProcessor implements ElementProcessor {
 		}
 
 	}
+
 
 }

@@ -425,13 +425,13 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 
 	private JCodeModel processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) throws Exception {
 		timeStats.start("Process Annotations");
-		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices, androidManifest, validatedModel);
+		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices, androidManifest);
 		JCodeModel codeModel = modelProcessor.process(validatedModel);
 		timeStats.stop("Process Annotations");
 		return codeModel;
 	}
 
-	private ModelProcessor buildModelProcessor(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest, AnnotationElements validatedModel) {
+	private ModelProcessor buildModelProcessor(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
 		ModelProcessor modelProcessor = new ModelProcessor();
 		modelProcessor.register(new EActivityProcessor(processingEnv, rClass));
 		modelProcessor.register(new EServiceProcessor(processingEnv));
@@ -440,7 +440,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new EViewGroupProcessor(processingEnv, rClass));
 		modelProcessor.register(new EnhancedProcessor(processingEnv));
 		modelProcessor.register(new SharedPrefProcessor(processingEnv));
-		modelProcessor.register(new PrefProcessor(validatedModel));
+		modelProcessor.register(new PrefProcessor());
 		modelProcessor.register(new RoboGuiceProcessor());
 		modelProcessor.register(new ViewByIdProcessor(rClass));
 		modelProcessor.register(new FromHtmlProcessor(rClass));

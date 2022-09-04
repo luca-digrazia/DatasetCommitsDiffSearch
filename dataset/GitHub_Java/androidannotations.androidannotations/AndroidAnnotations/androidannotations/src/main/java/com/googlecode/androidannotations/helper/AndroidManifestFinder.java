@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,11 +16,9 @@
 package com.googlecode.androidannotations.helper;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
@@ -59,27 +57,7 @@ public class AndroidManifestFinder {
 
 	private AndroidManifest extractAndroidManifestThrowing() throws Exception {
 		File androidManifestFile = findManifestFileThrowing();
-
-		String projectDirectory = androidManifestFile.getParent();
-
-		File projectProperties = new File(projectDirectory, "project.properties");
-
-		boolean libraryProject = false;
-		if (projectProperties.exists()) {
-			Properties properties = new Properties();
-			properties.load(new FileInputStream(projectProperties));
-
-			if (properties.containsKey("android.library")) {
-				String androidLibraryProperty = properties.getProperty("android.library");
-				libraryProject = androidLibraryProperty.equals("true");
-
-				Messager messager = processingEnv.getMessager();
-				messager.printMessage(Kind.NOTE, "Found android.library property in project.properties, value: " + libraryProject);
-			}
-
-		}
-
-		return parseThrowing(androidManifestFile, libraryProject);
+		return parseThrowing(androidManifestFile);
 	}
 
 	/**
@@ -137,7 +115,7 @@ public class AndroidManifestFinder {
 		return androidManifestFile;
 	}
 
-	private AndroidManifest parseThrowing(File androidManifestFile, boolean libraryProject) throws Exception {
+	private AndroidManifest parseThrowing(File androidManifestFile) throws Exception {
 
 		DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
 		DocumentBuilder docBuilder = docBuilderFactory.newDocumentBuilder();
@@ -147,10 +125,6 @@ public class AndroidManifestFinder {
 		documentElement.normalize();
 
 		String applicationPackage = documentElement.getAttribute("package");
-
-		if (libraryProject) {
-			return AndroidManifest.createLibraryManifest(applicationPackage);
-		}
 
 		NodeList applicationNodes = documentElement.getElementsByTagName("application");
 
@@ -174,23 +148,23 @@ public class AndroidManifestFinder {
 
 		NodeList activityNodes = documentElement.getElementsByTagName("activity");
 		List<String> activityQualifiedNames = extractComponentNames(applicationPackage, activityNodes);
-
+		
 		NodeList serviceNodes = documentElement.getElementsByTagName("service");
 		List<String> serviceQualifiedNames = extractComponentNames(applicationPackage, serviceNodes);
-
+		
 		NodeList receiverNodes = documentElement.getElementsByTagName("receiver");
 		List<String> receiverQualifiedNames = extractComponentNames(applicationPackage, receiverNodes);
-
+		
 		NodeList providerNodes = documentElement.getElementsByTagName("provider");
 		List<String> providerQualifiedNames = extractComponentNames(applicationPackage, providerNodes);
-
+		
 		List<String> componentQualifiedNames = new ArrayList<String>();
 		componentQualifiedNames.addAll(activityQualifiedNames);
 		componentQualifiedNames.addAll(serviceQualifiedNames);
 		componentQualifiedNames.addAll(receiverQualifiedNames);
 		componentQualifiedNames.addAll(providerQualifiedNames);
 
-		return AndroidManifest.createManifest(applicationPackage, applicationQualifiedName, componentQualifiedNames);
+		return new AndroidManifest(applicationPackage, applicationQualifiedName, componentQualifiedNames);
 	}
 
 	private List<String> extractComponentNames(String applicationPackage, NodeList componentNodes) {
