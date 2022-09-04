@@ -104,12 +104,8 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
                 targetWindows));
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addProvider(compilationInfo.getCppDebugFileProvider())
-        .addNativeDeclaredProvider(
-            CcInfo.builder()
-                .setCcCompilationContext(compilationInfo.getCcCompilationContext())
-                .setCcLinkingInfo(ccLinkingInfo)
-                .build())
+        .addProviders(compilationInfo.getProviders())
+        .addNativeDeclaredProvider(ccLinkingInfo)
         .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .addOutputGroups(compilationInfo.getOutputGroups())
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY))
@@ -166,8 +162,7 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
     } else {
       Artifact dynamicLibrarySymlink =
           SolibSymlinkAction.getDynamicLibrarySymlink(
-              /* actionRegistry= */ ruleContext,
-              /* actionConstructionContext= */ ruleContext,
+              ruleContext,
               ccToolchain.getSolibDirectory(),
               sharedLibraryArtifact,
               /* preserveName= */ true,
@@ -193,8 +188,7 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
     } else {
       Artifact dynamicLibrarySymlink =
           SolibSymlinkAction.getDynamicLibrarySymlink(
-              /* actionRegistry= */ ruleContext,
-              /* actionConstructionContext= */ ruleContext,
+              ruleContext,
               ccToolchain.getSolibDirectory(),
               interfaceLibraryArtifact,
               /* preserveName= */ true,
