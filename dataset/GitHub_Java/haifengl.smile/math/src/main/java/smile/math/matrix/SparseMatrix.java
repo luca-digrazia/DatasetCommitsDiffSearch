@@ -41,39 +41,6 @@ import smile.math.Math;
  * of pointers are indexes where each column starts. This format is efficient
  * for arithmetic operations, column slicing, and matrix-vector products.
  * One typically uses SparseDataset for construction of SparseMatrix.
- * <p>
- * For iteration through the elements of a matrix, this class provides
- * a functional API to iterate through the non-zero elements. This iteration
- * can be done by passing a lambda to be called on each non-zero element or
- * by processing a stream of objects representing each non-zero element.
- * The direct functional API is faster (and is about as fast as writing the
- * low-level loops against the internals of the matrix itself) while the
- * streaming interface is more flexible. Here are some benchmarks that were
- * produced using jmh (and allowing access to internal data structures):
- * <verbatim>
- * Benchmark                                       Mode  Cnt        Score       Error   Units
- * IteratorSpeed.timeDirect                        avgt    5   429888.246 ±  3819.232   ns/op
- * IteratorSpeed.timeDirect:·gc.alloc.rate         avgt    5       ≈ 10⁻⁴              MB/sec
- * IteratorSpeed.timeDirect:·gc.alloc.rate.norm    avgt    5        0.088 ±     0.001    B/op
- * IteratorSpeed.timeDirect:·gc.count              avgt    5          ≈ 0              counts
- * IteratorSpeed.timeDirect:·stack                 avgt               NaN                 ---
- * IteratorSpeed.timeIterator                      avgt    5   430718.537 ±  7831.509   ns/op
- * IteratorSpeed.timeIterator:·gc.alloc.rate       avgt    5        0.028 ±     0.001  MB/sec
- * IteratorSpeed.timeIterator:·gc.alloc.rate.norm  avgt    5       16.089 ±     0.011    B/op
- * IteratorSpeed.timeIterator:·gc.count            avgt    5          ≈ 0              counts
- * IteratorSpeed.timeIterator:·stack               avgt               NaN                 ---
- * IteratorSpeed.timeStream                        avgt    5  1032370.658 ± 55295.704   ns/op
- * IteratorSpeed.timeStream:·gc.alloc.rate         avgt    5        0.077 ±     0.004  MB/sec
- * IteratorSpeed.timeStream:·gc.alloc.rate.norm    avgt    5      104.210 ±     0.011    B/op
- * IteratorSpeed.timeStream:·gc.count              avgt    5          ≈ 0              counts
- * IteratorSpeed.timeStream:·stack                 avgt               NaN                 ---
- * </verbatim>
- * The three cases are timeDirect for a direct loop over internal data structures,
- * timeIterator for #foreachNonZero and timeStream for the streaming equivalent form. The
- * timeIterator case is at most a few percent slower than the direct loops while the stream
- * is about 2-3 times slower. Note that the JVM is clever enough to optimize away the
- * creation of temporary objects in the streaming idiom.
- * </p>
  *
  * @author Haifeng Li
  */
@@ -207,6 +174,29 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
     }
 
     /**
+     * Returns all nonzero values.
+     * @return all nonzero values
+     */
+    public double[] values() {
+        return x;
+    }
+
+    /**
+     * Returns the row index
+     */
+    public int[] getRowIndex() {
+        return rowIndex;
+    }
+
+    /**
+     * Returns the column index
+     */
+    @SuppressWarnings("WeakerAccess")
+    public int[] getColIndex() {
+        return colIndex;
+    }
+
+    /**
      * Calls a lambda with each non-zero value. This will be a bit faster than using a stream
      * because we can avoid boxing up the coordinates of the element being processed, but it
      * will be considerably less general.
@@ -222,7 +212,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
         for (int j = 0; j < ncols; j++) {
             for (int k = colIndex[j]; k < colIndex[j + 1]; k++) {
                 int i = rowIndex[k];
-                action.accept(i, j, x[k]);
+                action.eval(i, j, x[k]);
             }
         }
     }
@@ -239,10 +229,10 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      *
      * @param startColumn The first column to scan.
      * @param endColumn   One past the last column to scan.
-     * @param consumer      Action to perform on each non-zero, typically this is a lambda.
+     * @param action      Action to perform on each non-zero, typically this is a lambda.
      */
     @SuppressWarnings("WeakerAccess")
-    public void foreachNonzero(int startColumn, int endColumn, MatrixElementConsumer consumer) {
+    public void foreachNonzero(int startColumn, int endColumn, MatrixElementConsumer action) {
         if (startColumn < 0 || startColumn >= ncols) {
             throw new IllegalArgumentException("Start column must be in range [0,ncols)");
         }
@@ -253,7 +243,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
         for (int j = startColumn; j < endColumn; j++) {
             for (int k = colIndex[j]; k < colIndex[j + 1]; k++) {
                 int i = rowIndex[k];
-                consumer.accept(i, j, x[k]);
+                action.eval(i, j, x[k]);
             }
         }
     }
@@ -262,7 +252,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * Provides a stream over all of the non-zero elements of a sparse matrix.
      */
     @SuppressWarnings("WeakerAccess")
-    public Stream<Entry> nonzeros() {
+    public Stream<SparseMatrixEntry> nonzeros() {
         return StreamSupport.stream(new SparseMatrixSpliterator(this, 0, ncols), false);
     }
 
@@ -273,7 +263,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * @param endColumn   The first column after the ones that we should scan.
      */
     @SuppressWarnings("WeakerAccess")
-    public Stream<Entry> nonzeros(int startColumn, int endColumn) {
+    public Stream<SparseMatrixEntry> nonzeros(int startColumn, int endColumn) {
         return StreamSupport.stream(new SparseMatrixSpliterator(this, startColumn, endColumn), false);
     }
 
@@ -282,7 +272,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * <p>
      * This is exposed to facilitate lower level access to the stream API for a matrix.
      */
-    public static class SparseMatrixSpliterator implements Spliterator<Entry> {
+    public static class SparseMatrixSpliterator implements Spliterator<SparseMatrixEntry> {
         private final SparseMatrix m;
         private int col;      // current colum, advanced on split or traversal
         private int index;    // current element within column
@@ -295,21 +285,21 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
             this.fence = fence;
         }
 
-        public void forEachRemaining(Consumer<? super Entry> action) {
+        public void forEachRemaining(Consumer<? super SparseMatrixEntry> action) {
             for (; col < fence; col++) {
                 for (; index < m.colIndex[col + 1]; index++) {
-                    action.accept(new Entry(m.rowIndex[index], col, m.x[index], index, m.x));
+                    action.accept(new SparseMatrixEntry(m.rowIndex[index], col, m.x[index], index, m.x));
                 }
             }
         }
 
-        public boolean tryAdvance(Consumer<? super Entry> action) {
+        public boolean tryAdvance(Consumer<? super SparseMatrixEntry> action) {
             if (col < fence) {
                 while (col < fence && index >= m.colIndex[col + 1]) {
                     col++;
                 }
                 if (col < fence) {
-                    action.accept(new Entry(m.rowIndex[index], col, m.x[index], index, m.x));
+                    action.accept(new SparseMatrixEntry(m.rowIndex[index], col, m.x[index], index, m.x));
                     index++;
                     return true;
                 } else {
@@ -321,7 +311,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
             }
         }
 
-        public Spliterator<Entry> trySplit() {
+        public Spliterator<SparseMatrixEntry> trySplit() {
             int lo = col; // divide range in half, assuming roughly constant size of all columns
             int mid = ((lo + fence) >>> 1) & ~1; // force midpoint to be even
             if (lo < mid) { // split out left half
@@ -347,7 +337,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * in streaming, including a string that leads back to the original cell
      * so that in-place updates are possible.
      */
-    public static class Entry {
+    public static class SparseMatrixEntry {
         // these fields are exposed for direct access to simplify in-lining by the JVM
         public final int row;
         public final int col;
@@ -358,7 +348,8 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
         private double[] values;
 
 
-        public Entry(int row, int col, double x, int index, double[] values) {
+        @SuppressWarnings("WeakerAccess")
+        public SparseMatrixEntry(int row, int col, double x, int index, double[] values) {
             this.row = row;
             this.col = col;
             this.x = x;
@@ -370,6 +361,17 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
             this.x = value;
             values[index] = value;
         }
+
+        public SparseMatrixEntry clone(double value) {
+            return new SparseMatrixEntry(row, col, value, index, values);
+        }
+    }
+
+    /**
+     * Functional interface for lambda iteration through a sparse matrix.
+     */
+    public interface MatrixElementConsumer {
+        void eval(int row, int column, double value);
     }
 
     @Override
