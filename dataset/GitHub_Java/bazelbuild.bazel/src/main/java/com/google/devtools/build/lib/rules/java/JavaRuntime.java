@@ -131,17 +131,18 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
   }
 
   static PathFragment defaultJavaHome(Label javabase, boolean siblingRepositoryLayout) {
-    if (javabase.getRepository().isDefault()) {
+    if (javabase.getPackageIdentifier().getRepository().isDefault()) {
       return javabase.getPackageFragment();
     }
     return javabase.getPackageIdentifier().getExecPath(siblingRepositoryLayout);
   }
 
   private static PathFragment getRunfilesJavaExecutable(PathFragment javaHome, Label javabase) {
-    if (javaHome.isAbsolute() || javabase.getRepository().isMain()) {
+    if (javaHome.isAbsolute() || javabase.getPackageIdentifier().getRepository().isMain()) {
       return javaHome.getRelative(BIN_JAVA);
     } else {
       return javabase
+          .getPackageIdentifier()
           .getRepository()
           .getRunfilesPath()
           .getRelative(BIN_JAVA);

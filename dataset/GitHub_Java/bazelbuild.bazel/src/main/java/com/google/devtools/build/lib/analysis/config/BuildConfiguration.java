@@ -377,7 +377,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
 
   /** Returns the output directory for this build configuration. */
   public ArtifactRoot getOutputDirectory(RepositoryName repositoryName) {
-    return outputDirectories.getOutputDirectory(repositoryName);
+    return outputDirectories.getOutputDirectory();
   }
 
   /** @deprecated Use {@link #getBinDirectory} instead. */

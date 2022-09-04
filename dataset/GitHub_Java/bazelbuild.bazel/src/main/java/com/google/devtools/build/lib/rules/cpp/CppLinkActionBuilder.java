@@ -183,7 +183,7 @@ public class CppLinkActionBuilder {
 
     this.ruleErrorConsumer = ruleErrorConsumer;
     this.actionConstructionContext = actionConstructionContext;
-    repositoryName = label.getRepository();
+    repositoryName = label.getPackageIdentifier().getRepository();
   }
 
   /** Returns the action name for purposes of querying the crosstool. */
@@ -742,8 +742,7 @@ public class CppLinkActionBuilder {
 
     @Nullable Artifact thinltoParamFile = null;
     @Nullable Artifact thinltoMergedObjectFile = null;
-    PathFragment outputRootPath =
-        output.getOutputDirRelativePath(configuration.isSiblingRepositoryLayout());
+    PathFragment outputRootPath = output.getRootRelativePath();
     if (allowLtoIndexing && allLtoArtifacts != null) {
       // Create artifact for the file that the LTO indexing step will emit
       // object file names into for any that were included in the link as
@@ -1168,8 +1167,7 @@ public class CppLinkActionBuilder {
       LinkArtifactFactory linkArtifactFactory) {
     ImmutableMap.Builder<Linkstamp, Artifact> mapBuilder = ImmutableMap.builder();
 
-    PathFragment outputBinaryPath =
-        outputBinary.getOutputDirRelativePath(configuration.isSiblingRepositoryLayout());
+    PathFragment outputBinaryPath = outputBinary.getRootRelativePath();
     PathFragment stampOutputDirectory =
         outputBinaryPath
             .getParentDirectory()

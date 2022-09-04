@@ -33,14 +33,11 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionExce
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.LtoBackendArtifactsApi;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Objects;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.StarlarkThread;
 
 /**
  * LtoBackendArtifacts represents a set of artifacts for a single ThinLTO backend compile.
@@ -63,7 +60,7 @@ import net.starlark.java.eval.StarlarkThread;
  *   <li>4. Backend link (once). This is the traditional link, and produces the final executable.
  * </ul>
  */
-public final class LtoBackendArtifacts implements LtoBackendArtifactsApi<Artifact> {
+public final class LtoBackendArtifacts {
 
   // A file containing mapping of symbol => bitcode file containing the symbol.
   // It will be null when this is a shared non-lto backend.
@@ -183,12 +180,6 @@ public final class LtoBackendArtifacts implements LtoBackendArtifactsApi<Artifac
   }
 
   public Artifact getObjectFile() {
-    return objectFile;
-  }
-
-  @Override
-  public Artifact getObjectFileForStarlark(StarlarkThread thread) throws EvalException {
-    CcModule.checkPrivateStarlarkificationAllowlist(thread);
     return objectFile;
   }
 

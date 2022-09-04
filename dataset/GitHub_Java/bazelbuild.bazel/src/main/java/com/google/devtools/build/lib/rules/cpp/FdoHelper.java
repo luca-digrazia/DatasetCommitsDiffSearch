@@ -57,23 +57,7 @@ public class FdoHelper {
         FdoPrefetchHintsProvider provider = attributes.getFdoPrefetch();
         prefetchHints = provider.getInputFile();
       }
-
-      if (cppConfiguration.getPropellerOptimizeAbsoluteCCProfile() != null
-          || cppConfiguration.getPropellerOptimizeAbsoluteLdProfile() != null) {
-        Artifact ccArtifact = null;
-        if (cppConfiguration.getPropellerOptimizeAbsoluteCCProfile() != null) {
-          ccArtifact =
-              PropellerOptimizeInputFile.createAbsoluteArtifact(
-                  ruleContext, cppConfiguration.getPropellerOptimizeAbsoluteCCProfile());
-        }
-        Artifact ldArtifact = null;
-        if (cppConfiguration.getPropellerOptimizeAbsoluteLdProfile() != null) {
-          ldArtifact =
-              PropellerOptimizeInputFile.createAbsoluteArtifact(
-                  ruleContext, cppConfiguration.getPropellerOptimizeAbsoluteLdProfile());
-        }
-        propellerOptimizeInputFile = new PropellerOptimizeInputFile(ccArtifact, ldArtifact);
-      } else if (cppConfiguration
+      if (cppConfiguration
               .getPropellerOptimizeLabelUnsafeSinceItCanReturnValueFromWrongConfiguration()
           != null) {
         PropellerOptimizeProvider provider = attributes.getPropellerOptimize();

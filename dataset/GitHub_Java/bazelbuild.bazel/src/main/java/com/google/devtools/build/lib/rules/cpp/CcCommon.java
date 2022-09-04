@@ -584,7 +584,7 @@ public final class CcCommon {
     List<PathFragment> result = new ArrayList<>();
     PackageIdentifier packageIdentifier = ruleContext.getLabel().getPackageIdentifier();
     PathFragment packageExecPath = packageIdentifier.getExecPath(siblingRepositoryLayout);
-    PathFragment packageSourceRoot = packageIdentifier.getPackagePath(siblingRepositoryLayout);
+    PathFragment packageSourceRoot = packageIdentifier.getPackagePath();
     for (String includesAttr : ruleContext.getExpander().list("includes")) {
       if (includesAttr.startsWith("/")) {
         ruleContext.attributeWarning("includes",
@@ -717,15 +717,13 @@ public final class CcCommon {
     return getInstrumentedFilesProvider(
         files,
         withBaselineCoverage,
-        /* virtualToOriginalHeaders= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-        /* additionalMetadata= */ null);
+        /* virtualToOriginalHeaders= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER));
   }
 
   public InstrumentedFilesInfo getInstrumentedFilesProvider(
       Iterable<Artifact> files,
       boolean withBaselineCoverage,
-      NestedSet<Pair<String, String>> virtualToOriginalHeaders,
-      @Nullable Iterable<Artifact> additionalMetadata)
+      NestedSet<Pair<String, String>> virtualToOriginalHeaders)
       throws RuleErrorException {
     return InstrumentedFilesCollector.collect(
         ruleContext,
@@ -735,8 +733,7 @@ public final class CcCommon {
         CppHelper.getGcovFilesIfNeeded(ruleContext, ccToolchain),
         CppHelper.getCoverageEnvironmentIfNeeded(ruleContext, cppConfiguration, ccToolchain),
         withBaselineCoverage,
-        virtualToOriginalHeaders,
-        additionalMetadata);
+        virtualToOriginalHeaders);
   }
 
   public String getPurpose(CppSemantics semantics) {

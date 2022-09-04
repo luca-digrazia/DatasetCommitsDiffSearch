@@ -40,10 +40,13 @@ import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateExpander;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.LazyString;
+import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -245,7 +248,7 @@ public class ProtoCompileActionBuilder {
   CustomCommandLine.Builder createProtoCompilerCommandLine() {
     CustomCommandLine.Builder result = CustomCommandLine.builder();
 
-    if (langPlugin != null && langPlugin.getExecutable() != null) {
+    if (langPlugin != null) {
       // We pass a separate langPlugin as there are plugins that cannot be overridden
       // and thus we have to deal with "$xx_plugin" and "xx_plugin".
       result.addFormatted(
@@ -260,11 +263,16 @@ public class ProtoCompileActionBuilder {
 
     boolean areDepsStrict = areDepsStrict(ruleContext);
 
+    boolean siblingRepositoryLayout = ruleContext.getConfiguration().isSiblingRepositoryLayout();
+
     // Add include maps
     addIncludeMapArguments(
+        getOutputDirectory(ruleContext),
         result,
-        areDepsStrict ? protoInfo.getStrictImportableSources() : null,
-        protoInfo.getTransitiveSources());
+        areDepsStrict ? protoInfo.getStrictImportableProtoSourcesImportPaths() : null,
+        protoInfo.getStrictImportableProtoSourceRoots(),
+        protoInfo.getTransitiveProtoSources(),
+        siblingRepositoryLayout);
 
     if (areDepsStrict) {
       // Note: the %s in the line below is used by proto-compiler. That is, the string we create
@@ -280,14 +288,21 @@ public class ProtoCompileActionBuilder {
       result.add("--disallow_services");
     }
     if (checkStrictImportPublic) {
-      NestedSet<ProtoSource> publicImportSources = protoInfo.getPublicImportSources();
-      if (publicImportSources.isEmpty()) {
+      NestedSet<Pair<Artifact, String>> protosInExports =
+          protoInfo.getExportedProtoSourcesImportPaths();
+      if (protosInExports.isEmpty()) {
         // This line is necessary to trigger the check.
         result.add("--allowed_public_imports=");
       } else {
         result.addAll(
             "--allowed_public_imports",
-            VectorArg.join(":").each(publicImportSources).mapped(EXPAND_TO_IMPORT_PATHS));
+            VectorArg.join(":")
+                .each(protosInExports)
+                .mapped(
+                    new ExpandToPathFnWithImports(
+                        getOutputDirectory(ruleContext),
+                        protoInfo.getTransitiveProtoSourceRoots(),
+                        siblingRepositoryLayout)));
       }
     }
 
@@ -543,24 +558,31 @@ public class ProtoCompileActionBuilder {
 
     // Add include maps
     addIncludeMapArguments(
+        outputDirectory,
         cmdLine,
-        strictDeps == Deps.STRICT ? protoInfo.getStrictImportableSources() : null,
-        protoInfo.getTransitiveSources());
+        strictDeps == Deps.STRICT ? protoInfo.getStrictImportableProtoSourcesImportPaths() : null,
+        protoInfo.getStrictImportableProtoSourceRoots(),
+        protoInfo.getTransitiveProtoSources(),
+        siblingRepositoryLayout);
 
     if (strictDeps == Deps.STRICT) {
       cmdLine.addFormatted(STRICT_DEPS_FLAG_TEMPLATE, ruleLabel);
     }
 
     if (useExports == Exports.USE) {
-      if (protoInfo.getPublicImportSources().isEmpty()) {
+      if (protoInfo.getExportedProtoSourcesImportPaths().isEmpty()) {
         // This line is necessary to trigger the check.
         cmdLine.add("--allowed_public_imports=");
       } else {
         cmdLine.addAll(
             "--allowed_public_imports",
             VectorArg.join(":")
-                .each(protoInfo.getPublicImportSources())
-                .mapped(EXPAND_TO_IMPORT_PATHS));
+                .each(protoInfo.getExportedProtoSourcesImportPaths())
+                .mapped(
+                    new ExpandToPathFnWithImports(
+                        outputDirectory,
+                        protoInfo.getExportedProtoSourceRoots(),
+                        siblingRepositoryLayout)));
       }
     }
 
@@ -577,18 +599,29 @@ public class ProtoCompileActionBuilder {
 
   @VisibleForTesting
   static void addIncludeMapArguments(
+      String outputDirectory,
       CustomCommandLine.Builder commandLine,
-      @Nullable NestedSet<ProtoSource> strictImportableProtoSources,
-      NestedSet<ProtoSource> transitiveSources) {
+      @Nullable NestedSet<Pair<Artifact, String>> protosInDirectDependencies,
+      NestedSet<String> directProtoSourceRoots,
+      NestedSet<Artifact> transitiveImports,
+      boolean siblingRepositoryLayout) {
     // For each import, include both the import as well as the import relativized against its
     // protoSourceRoot. This ensures that protos can reference either the full path or the short
     // path when including other protos.
-    commandLine.addAll(VectorArg.of(transitiveSources).mapped(new ExpandImportArgsFn()));
-    if (strictImportableProtoSources != null) {
-      if (!strictImportableProtoSources.isEmpty()) {
+    commandLine.addAll(
+        VectorArg.of(transitiveImports)
+            .mapped(
+                new ExpandImportArgsFn(
+                    outputDirectory, directProtoSourceRoots, siblingRepositoryLayout)));
+    if (protosInDirectDependencies != null) {
+      if (!protosInDirectDependencies.isEmpty()) {
         commandLine.addAll(
             "--direct_dependencies",
-            VectorArg.join(":").each(strictImportableProtoSources).mapped(EXPAND_TO_IMPORT_PATHS));
+            VectorArg.join(":")
+                .each(protosInDirectDependencies)
+                .mapped(
+                    new ExpandToPathFnWithImports(
+                        outputDirectory, directProtoSourceRoots, siblingRepositoryLayout)));
 
       } else {
         // The proto compiler requires an empty list to turn on strict deps checking
@@ -597,9 +630,38 @@ public class ProtoCompileActionBuilder {
     }
   }
 
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final CommandLineItem.MapFn<ProtoSource> EXPAND_TO_IMPORT_PATHS =
-      (src, args) -> args.accept(src.getImportPath().getSafePathString());
+  private static String guessProtoPathUnderRoot(
+      String outputDirectory,
+      PathFragment sourceRootPath,
+      Artifact proto,
+      boolean siblingRepositoryLayout) {
+    // TODO(lberki): Instead of guesswork like this, we should track which proto belongs to
+    // which source root. Unfortunately, that's a non-trivial migration since
+    // ProtoInfo is on the Starlark API. Therefore, we hack:
+    // - If the source root is under the output directory (itself determined in a hacky way and
+    // relying on the fact that the output roots of all repositories are under the same directory
+    // under the exec root), we check whether the .proto file is under it. If so, we have a match.
+    // - Otherwise, we check whether the .proto file is either under that source directory or under
+    // bin or genfiles by prefix-matching its root-relative path.
+    if (sourceRootPath.segmentCount() > 0 && sourceRootPath.getSegment(0).equals(outputDirectory)) {
+      if (proto.getExecPath().startsWith(sourceRootPath)) {
+        return proto.getExecPath().relativeTo(sourceRootPath).getPathString();
+      }
+    } else {
+      PathFragment prefix =
+          siblingRepositoryLayout
+              ? LabelConstants.EXPERIMENTAL_EXTERNAL_PATH_PREFIX
+              : LabelConstants.EXTERNAL_PATH_PREFIX;
+      if (proto.getRootRelativePath().startsWith(sourceRootPath)) {
+        return proto.getRootRelativePath().relativeTo(sourceRootPath).getPathString();
+      } else if (proto.getExecPath().startsWith(prefix)
+          && proto.getExecPath().startsWith(sourceRootPath)) {
+        return proto.getExecPath().relativeTo(sourceRootPath).getPathString();
+      }
+    }
+
+    return null;
+  }
 
   @AutoCodec @AutoCodec.VisibleForSerialization
   static final CommandLineItem.MapFn<String> EXPAND_TRANSITIVE_PROTO_PATH_FLAGS =
@@ -609,18 +671,73 @@ public class ProtoCompileActionBuilder {
         }
       };
 
+
   @AutoCodec
   @AutoCodec.VisibleForSerialization
-  static final class ExpandImportArgsFn implements CapturingMapFn<ProtoSource> {
+  static final class ExpandImportArgsFn implements CapturingMapFn<Artifact> {
+    private final String outputDirectory;
+    private final NestedSet<String> directProtoSourceRoots;
+    private final boolean siblingRepositoryLayout;
+
+    public ExpandImportArgsFn(
+        String outputDirectory,
+        NestedSet<String> directProtoSourceRoots,
+        boolean siblingRepositoryLayout) {
+      this.outputDirectory = outputDirectory;
+      this.directProtoSourceRoots = directProtoSourceRoots;
+      this.siblingRepositoryLayout = siblingRepositoryLayout;
+    }
+
     /**
      * Generates up to two import flags for each artifact: one for full path (only relative to the
      * repository root) and one for the path relative to the proto source root (if one exists
      * corresponding to the artifact).
      */
     @Override
-    public void expandToCommandLine(ProtoSource proto, Consumer<String> args) {
-      String importPath = proto.getImportPath().getSafePathString();
-      args.accept("-I" + importPath + "=" + proto.getSourceFile().getExecPathString());
+    public void expandToCommandLine(Artifact proto, Consumer<String> args) {
+      for (String directProtoSourceRoot : directProtoSourceRoots.toList()) {
+        PathFragment sourceRootPath = PathFragment.create(directProtoSourceRoot);
+        String arg =
+            guessProtoPathUnderRoot(
+                outputDirectory, sourceRootPath, proto, siblingRepositoryLayout);
+        if (arg != null) {
+          args.accept("-I" + arg + "=" + proto.getExecPathString());
+        }
+      }
+    }
+  }
+
+  @AutoCodec
+  @AutoCodec.VisibleForSerialization
+  static final class ExpandToPathFnWithImports implements CapturingMapFn<Pair<Artifact, String>> {
+    private final String outputDirectory;
+    private final NestedSet<String> directProtoSourceRoots;
+    private final boolean siblingRepositoryLayout;
+
+    public ExpandToPathFnWithImports(
+        String outputDirectory,
+        NestedSet<String> directProtoSourceRoots,
+        boolean siblingRepositoryLayout) {
+      this.outputDirectory = outputDirectory;
+      this.directProtoSourceRoots = directProtoSourceRoots;
+      this.siblingRepositoryLayout = siblingRepositoryLayout;
+    }
+
+    @Override
+    public void expandToCommandLine(Pair<Artifact, String> proto, Consumer<String> args) {
+      if (proto.second != null) {
+        args.accept(proto.second);
+      } else {
+        for (String directProtoSourceRoot : directProtoSourceRoots.toList()) {
+          PathFragment sourceRootPath = PathFragment.create(directProtoSourceRoot);
+          String arg =
+              guessProtoPathUnderRoot(
+                  outputDirectory, sourceRootPath, proto.first, siblingRepositoryLayout);
+          if (arg != null) {
+            args.accept(arg);
+          }
+        }
+      }
     }
   }
 
