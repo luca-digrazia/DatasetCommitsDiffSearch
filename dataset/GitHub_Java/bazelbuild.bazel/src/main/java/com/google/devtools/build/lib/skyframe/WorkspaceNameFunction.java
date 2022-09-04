@@ -13,9 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -27,14 +26,14 @@ import javax.annotation.Nullable;
  * {@link SkyFunction} for {@link WorkspaceNameValue}s.
  *
  * <p>All errors (e.g. parsing errors or a symlink cycle encountered when consuming the WORKSPACE
- * file) result in a {@link NoSuchPackageException}.
+ * file) result in a {@link com.google.devtools.build.lib.packages.NoSuchPackageException}.
  */
 public class WorkspaceNameFunction implements SkyFunction {
   @Override
   @Nullable
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws InterruptedException, WorkspaceNameFunctionException {
-    SkyKey externalPackageKey = PackageValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER);
+    SkyKey externalPackageKey = PackageValue.key(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER);
     PackageValue externalPackageValue = (PackageValue) env.getValue(externalPackageKey);
     if (externalPackageValue == null) {
       return null;
@@ -52,9 +51,10 @@ public class WorkspaceNameFunction implements SkyFunction {
     return null;
   }
 
-  private class WorkspaceNameFunctionException extends SkyFunctionException {
+  private static class WorkspaceNameFunctionException extends SkyFunctionException {
     WorkspaceNameFunctionException() {
-      super(new BuildFileContainsErrorsException(Label.EXTERNAL_PACKAGE_IDENTIFIER),
+      super(
+          new BuildFileContainsErrorsException(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER),
           Transience.PERSISTENT);
     }
   }

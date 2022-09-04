@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.Pair;
@@ -129,7 +130,7 @@ public class RepositoryResolvedEvent implements ResolvedEvent {
                   + rule.getName()
                   + "' indicated that a canonical reproducible form can be obtained by"
                   + " dropping arguments "
-                  + Starlark.repr(diff.getSecond());
+                  + Printer.getPrinter().repr(diff.getSecond());
         } else if (diff.getSecond().isEmpty()) {
           this.message =
               "Rule '"
@@ -145,7 +146,7 @@ public class RepositoryResolvedEvent implements ResolvedEvent {
                   + " modifying arguments "
                   + representModifications(diff.getFirst())
                   + " and dropping "
-                  + Starlark.repr(diff.getSecond());
+                  + Printer.getPrinter().repr(diff.getSecond());
         }
       }
     } else {
@@ -304,7 +305,10 @@ public class RepositoryResolvedEvent implements ResolvedEvent {
       if (!isFirst) {
         representation.append(", ");
       }
-      representation.append(entry.getKey()).append(" = ").append(Starlark.repr(entry.getValue()));
+      representation
+          .append(entry.getKey())
+          .append(" = ")
+          .append(Printer.getPrinter().repr(entry.getValue()));
       isFirst = false;
     }
     return representation.toString();

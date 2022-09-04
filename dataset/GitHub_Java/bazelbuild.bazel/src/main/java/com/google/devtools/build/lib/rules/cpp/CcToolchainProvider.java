@@ -35,7 +35,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchain.AdditionalBuildVariab
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcToolchainProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -103,8 +103,7 @@ public final class CcToolchainProvider extends ToolchainInfo
           /* targetSystemName= */ "",
           /* additionalMakeVariables= */ ImmutableMap.of(),
           /* legacyCcFlagsMakeVariable= */ "",
-          /* allowlistForLayeringCheck= */ null,
-          /* allowListForLooseHeaderCheck= */ null);
+          /* allowlistForLayeringCheck= */ null);
 
   @Nullable private final CppConfiguration cppConfiguration;
   private final PathFragment crosstoolTopPathFragment;
@@ -167,7 +166,6 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   private final LicensesProvider licensesProvider;
   private final PackageSpecificationProvider allowlistForLayeringCheck;
-  private final PackageSpecificationProvider allowListForLooseHeaderCheck;
 
   public CcToolchainProvider(
       ImmutableMap<String, Object> values,
@@ -223,8 +221,7 @@ public final class CcToolchainProvider extends ToolchainInfo
       String targetSystemName,
       ImmutableMap<String, String> additionalMakeVariables,
       String legacyCcFlagsMakeVariable,
-      PackageSpecificationProvider allowlistForLayeringCheck,
-      PackageSpecificationProvider allowListForLooseHeaderCheck) {
+      PackageSpecificationProvider allowlistForLayeringCheck) {
     super(values, Location.BUILTIN);
     this.cppConfiguration = cppConfiguration;
     this.crosstoolTopPathFragment = crosstoolTopPathFragment;
@@ -282,7 +279,6 @@ public final class CcToolchainProvider extends ToolchainInfo
     this.additionalMakeVariables = additionalMakeVariables;
     this.legacyCcFlagsMakeVariable = legacyCcFlagsMakeVariable;
     this.allowlistForLayeringCheck = allowlistForLayeringCheck;
-    this.allowListForLooseHeaderCheck = allowListForLooseHeaderCheck;
   }
 
   /**
@@ -556,6 +552,7 @@ public final class CcToolchainProvider extends ToolchainInfo
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
       if (staticRuntimeLinkInputs == null) {
         throw new EvalException(
+            Location.BUILTIN,
             "Toolchain supports embedded runtimes, but didn't "
                 + "provide static_runtime_lib attribute.");
       }
@@ -588,6 +585,7 @@ public final class CcToolchainProvider extends ToolchainInfo
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
       if (dynamicRuntimeLinkInputs == null) {
         throw new EvalException(
+            Location.BUILTIN,
             "Toolchain supports embedded runtimes, but didn't "
                 + "provide dynamic_runtime_lib attribute.");
       }
@@ -915,10 +913,6 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   public PackageSpecificationProvider getAllowlistForLayeringCheck() {
     return allowlistForLayeringCheck;
-  }
-
-  public PackageSpecificationProvider getAllowlistForLooseHeaderCheck() {
-    return allowListForLooseHeaderCheck;
   }
 }
 

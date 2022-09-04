@@ -52,7 +52,8 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
-import com.google.devtools.build.lib.starlarkbuildapi.core.Bootstrap;
+import com.google.devtools.build.lib.skylarkbuildapi.core.Bootstrap;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionsProvider;
@@ -68,9 +69,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import javax.annotation.Nullable;
-import net.starlark.java.annot.StarlarkAnnotations;
 import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.eval.StarlarkThread;
+import net.starlark.java.annot.StarlarkInterfaceUtils;
 
 /**
  * Knows about every rule Blaze supports and the associated configuration options.
@@ -743,7 +743,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
       ImmutableMap<String, Object> nativeRuleSpecificBindings) {
     ImmutableMap.Builder<String, Object> envBuilder = ImmutableMap.builder();
     // Add predeclared symbols of the Bazel build language.
-    StarlarkModules.addPredeclared(envBuilder);
+    StarlarkModules.addStarlarkGlobalsToBuilder(envBuilder);
     // Add all the extensions registered with the rule class provider.
     envBuilder.putAll(nativeRuleSpecificBindings);
     return envBuilder.build();
@@ -754,7 +754,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     ImmutableMap.Builder<String, Class<?>> mapBuilder = ImmutableMap.builder();
     for (ConfigurationFragmentFactory fragmentFactory : configurationFragmentFactories) {
       Class<? extends Fragment> fragmentClass = fragmentFactory.creates();
-      StarlarkBuiltin fragmentModule = StarlarkAnnotations.getStarlarkBuiltin(fragmentClass);
+      StarlarkBuiltin fragmentModule = StarlarkInterfaceUtils.getStarlarkBuiltin(fragmentClass);
       if (fragmentModule != null) {
         mapBuilder.put(fragmentModule.name(), fragmentClass);
       }
@@ -766,8 +766,8 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
   public ImmutableMap<String, Object> getNativeRuleSpecificBindings() {
     // Include rule-related stuff like CcInfo, but not core stuff like rule(). Essentially, this
     // is intended to include things that could in principle be migrated to Starlark (and hence
-    // should be overridable by @_builtins); in practice it means anything specifically
-    // registered with the RuleClassProvider.
+    // should be overridable by @builtins); in practice it means anything specifically registered
+    // with the RuleClassProvider.
     return nativeRuleSpecificBindings;
   }
 

@@ -14,23 +14,26 @@
 
 package com.google.devtools.build.lib.rules.java;
 
+import static com.google.devtools.build.lib.rules.java.JavaRuleClasses.HOST_JAVA_RUNTIME_ATTRIBUTE_NAME;
 import static com.google.devtools.build.lib.rules.java.JavaRuleClasses.JAVA_RUNTIME_ATTRIBUTE_NAME;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.starlarkbuildapi.java.JavaRuntimeInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaRuntimeInfoApi;
+import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
-import net.starlark.java.syntax.Location;
 
 /** Information about the Java runtime used by the <code>java_*</code> rules. */
 @Immutable
@@ -38,7 +41,6 @@ import net.starlark.java.syntax.Location;
 public final class JavaRuntimeInfo extends ToolchainInfo implements JavaRuntimeInfoApi {
 
   public static JavaRuntimeInfo create(
-      String version,
       NestedSet<Artifact> javaBaseInputs,
       NestedSet<Artifact> javaBaseInputsMiddleman,
       PathFragment javaHome,
@@ -46,7 +48,6 @@ public final class JavaRuntimeInfo extends ToolchainInfo implements JavaRuntimeI
       PathFragment javaHomeRunfilesPath,
       PathFragment javaBinaryRunfilesPath) {
     return new JavaRuntimeInfo(
-        version,
         javaBaseInputs,
         javaBaseInputsMiddleman,
         javaHome,
@@ -63,27 +64,35 @@ public final class JavaRuntimeInfo extends ToolchainInfo implements JavaRuntimeI
   // Helper methods to access an instance of JavaRuntimeInfo.
 
   public static JavaRuntimeInfo forHost(RuleContext ruleContext) {
-    return JavaToolchainProvider.from(ruleContext).getJavaRuntime();
+    return from(ruleContext, HOST_JAVA_RUNTIME_ATTRIBUTE_NAME, TransitionMode.HOST);
   }
 
   public static JavaRuntimeInfo from(RuleContext ruleContext) {
-    return from(ruleContext, JAVA_RUNTIME_ATTRIBUTE_NAME);
+    return from(ruleContext, JAVA_RUNTIME_ATTRIBUTE_NAME, TransitionMode.TARGET);
   }
 
   @Nullable
-  private static JavaRuntimeInfo from(RuleContext ruleContext, String attributeName) {
+  private static JavaRuntimeInfo from(
+      RuleContext ruleContext, String attributeName, TransitionMode mode) {
     if (!ruleContext.attributes().has(attributeName, BuildType.LABEL)) {
       return null;
     }
-    TransitiveInfoCollection prerequisite = ruleContext.getPrerequisite(attributeName);
+    TransitiveInfoCollection prerequisite = ruleContext.getPrerequisite(attributeName, mode);
     if (prerequisite == null) {
       return null;
     }
 
-    return (JavaRuntimeInfo) prerequisite.get(ToolchainInfo.PROVIDER);
+    return from(prerequisite, ruleContext);
   }
 
-  private final String version;
+  // TODO(katre): When all external callers are converted to use toolchain resolution, make this
+  // method private.
+  @Nullable
+  static JavaRuntimeInfo from(
+      TransitiveInfoCollection collection, RuleErrorConsumer errorConsumer) {
+    return (JavaRuntimeInfo) collection.get(ToolchainInfo.PROVIDER);
+  }
+
   private final NestedSet<Artifact> javaBaseInputs;
   private final NestedSet<Artifact> javaBaseInputsMiddleman;
   private final PathFragment javaHome;
@@ -94,7 +103,6 @@ public final class JavaRuntimeInfo extends ToolchainInfo implements JavaRuntimeI
   @AutoCodec.Instantiator
   @VisibleForSerialization
   JavaRuntimeInfo(
-      String version,
       NestedSet<Artifact> javaBaseInputs,
       NestedSet<Artifact> javaBaseInputsMiddleman,
       PathFragment javaHome,
@@ -102,18 +110,12 @@ public final class JavaRuntimeInfo extends ToolchainInfo implements JavaRuntimeI
       PathFragment javaHomeRunfilesPath,
       PathFragment javaBinaryRunfilesPath) {
     super(ImmutableMap.of(), Location.BUILTIN);
-    this.version = version;
     this.javaBaseInputs = javaBaseInputs;
     this.javaBaseInputsMiddleman = javaBaseInputsMiddleman;
     this.javaHome = javaHome;
     this.javaBinaryExecPath = javaBinaryExecPath;
     this.javaHomeRunfilesPath = javaHomeRunfilesPath;
     this.javaBinaryRunfilesPath = javaBinaryRunfilesPath;
-  }
-
-  /** Release version of the Java runtiem. */
-  public String version() {
-    return version;
   }
 
   /** All input artifacts in the javabase. */

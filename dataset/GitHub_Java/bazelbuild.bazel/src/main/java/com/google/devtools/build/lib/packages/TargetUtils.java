@@ -24,6 +24,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,9 +34,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.syntax.Location;
 
 /**
  * Utility functions over Targets that don't really belong in the base {@link
@@ -135,6 +135,14 @@ public final class TargetUtils {
   }
 
   /**
+   * Returns true if the rule is a test or test suite and is local or exclusive.
+   * Wraps the above calls into one generic check safely applicable to any rule.
+   */
+  public static boolean isTestRuleAndRunsLocally(Rule rule) {
+    return isTestOrTestSuiteRule(rule) && (isLocalTestRule(rule) || isExclusiveTestRule(rule));
+  }
+
+  /**
    * Returns true if test marked as "external" by the appropriate keyword
    * in the tags attribute.
    *
@@ -144,16 +152,6 @@ public final class TargetUtils {
    */
   public static boolean isExternalTestRule(Rule rule) {
     return hasConstraint(rule, "external");
-  }
-
-  /**
-   * Returns true if test marked as "no-testloasd" by the appropriate keyword in the tags attribute.
-   *
-   * <p>Method assumes that passed target is a test rule, so usually it should be used only after
-   * isTestRule() or isTestOrTestSuiteRule(). Behavior is undefined otherwise.
-   */
-  public static boolean isNoTestloasdTestRule(Rule rule) {
-    return hasConstraint(rule, "no-testloasd");
   }
 
   public static List<String> getStringListAttr(Target target, String attrName) {
@@ -254,7 +252,7 @@ public final class TargetUtils {
    * @param rule a rule instance to get tags from
    * @param allowTagsPropagation if set to true, tags will be propagated from a target to the
    *     actions' execution requirements, for more details {@see
-   *     BuildLanguageOptions#experimentalAllowTagsPropagation}
+   *     StarlarkSemanticsOptions#experimentalAllowTagsPropagation}
    */
   public static ImmutableMap<String, String> getExecutionInfo(
       Rule rule, boolean allowTagsPropagation) {
@@ -271,7 +269,8 @@ public final class TargetUtils {
    * #legalExecInfoKeys}.
    *
    * @param executionRequirementsUnchecked execution_requirements of a rule, expected to be of a
-   *     {@code Dict<String, String>} type, null or Starlark None.
+   *     {@code Dict<String, String>} type, null or {@link
+   *     com.google.devtools.build.lib.syntax.Runtime#NONE}
    * @param rule a rule instance to get tags from
    * @param allowTagsPropagation if set to true, tags will be propagated from a target to the
    *     actions' execution requirements, for more details {@see
@@ -290,8 +289,9 @@ public final class TargetUtils {
                     String.class,
                     "execution_requirements"));
 
+    Map<String, String> executionInfoBuilder = new HashMap<>();
     // adding filtered execution requirements to the execution info map
-    Map<String, String> executionInfoBuilder = new HashMap<>(checkedExecutionRequirements);
+    executionInfoBuilder.putAll(checkedExecutionRequirements);
 
     if (allowTagsPropagation) {
       Map<String, String> checkedTags = getExecutionInfo(rule);
@@ -306,7 +306,7 @@ public final class TargetUtils {
    * Returns the execution info. These include execution requirement tags ('block-*', 'requires-*',
    * 'no-*', 'supports-*', 'disable-*', 'local', and 'cpu:*') as keys with empty values.
    */
-  private static Map<String, String> filter(Map<String, String> executionInfo) {
+  public static Map<String, String> filter(Map<String, String> executionInfo) {
     return Maps.filterKeys(executionInfo, TargetUtils::legalExecInfoKeys);
   }
 

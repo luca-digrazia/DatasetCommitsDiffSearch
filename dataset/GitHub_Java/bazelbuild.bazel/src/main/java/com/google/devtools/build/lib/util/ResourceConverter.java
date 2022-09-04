@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.OptionsParsingException;
+import java.util.Map;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -47,7 +48,7 @@ public class ResourceConverter extends Converters.IntegerConverter {
           .build();
 
   /** Description of the accepted inputs to the converter. */
-  private static final String FLAG_SYNTAX =
+  public static final String FLAG_SYNTAX =
       "an integer, or a keyword (\"auto\", \"HOST_CPUS\", \"HOST_RAM\"), optionally followed by "
           + "an operation ([-|*]<float>) eg. \"auto\", \"HOST_CPUS*.5\"";
 
@@ -55,82 +56,55 @@ public class ResourceConverter extends Converters.IntegerConverter {
 
   private final Pattern validInputPattern;
 
-  private final int minValue;
+  protected final int minValue;
 
-  private final int maxValue;
+  protected final int maxValue;
 
   /**
-   * Creates a builder for the ResourceConverter class. Requires {@code auto(Supplier<Integer>) }
-   * defining the behavior of the {@code auto} keyword. Optional minValue() and maxValue().
+   * Constructs a ResourceConverter for options that take {@value FLAG_SYNTAX}
+   *
+   * @param autoSupplier a supplier for the value of the auto keyword
+   * @param minValue the minimum allowed value
+   * @param maxValue the maximum allowed value
    */
-  public static ResourceConverterBuilder builder() {
-    return new ResourceConverterBuilder();
+  public ResourceConverter(Supplier<Integer> autoSupplier, int minValue, int maxValue) {
+    this(
+        ImmutableMap.<String, Supplier<Integer>>builder()
+            .put("auto", autoSupplier)
+            .put(
+                "HOST_CPUS",
+                () -> (int) Math.ceil(LocalHostCapacity.getLocalHostCapacity().getCpuUsage()))
+            .put(
+                "HOST_RAM",
+                () -> (int) Math.ceil(LocalHostCapacity.getLocalHostCapacity().getMemoryMb()))
+            .build(),
+        minValue,
+        maxValue);
   }
 
-  /** Creates a converter for options that accept {@value #FLAG_SYNTAX} */
-  public static final class ResourceConverterBuilder {
-
-    private int minValue = 1;
-    private int maxValue = Integer.MAX_VALUE;
-    private ImmutableMap<String, Supplier<Integer>> keywords;
-    private Pattern validInputPattern;
-
-    private ResourceConverterBuilder() {};
-
-    /** Defines the behavior of the {@code auto} keyword. */
-    // A supplier is used so that the converter responds correctly if host resources are configured
-    // after it is constructed.
-    public ResourceConverterBuilder auto(Supplier<Integer> autoSupplier) {
-      this.keywords =
-          ImmutableMap.<String, Supplier<Integer>>builder()
-              .put("auto", autoSupplier)
-              .put(
-                  "HOST_CPUS",
-                  () -> (int) Math.ceil(LocalHostCapacity.getLocalHostCapacity().getCpuUsage()))
-              .put(
-                  "HOST_RAM",
-                  () -> (int) Math.ceil(LocalHostCapacity.getLocalHostCapacity().getMemoryMb()))
-              .build();
-
-      this.validInputPattern =
-          Pattern.compile(
-              String.format(
-                  "(?<keyword>%s)(?<expression>[%s][0-9]?(?:.[0-9]+)?)?",
-                  String.join("|", this.keywords.keySet()), String.join("", OPERATORS.keySet())));
-      return this;
-    }
-
-    /** Sets the minimum allowed value. Defaults to 1. */
-    public ResourceConverterBuilder minValue(int minValue) {
-      this.minValue = minValue;
-      return this;
-    }
-
-    /**
-     * Sets the maximum allowed value. Defaults to {@code Integer.MAX_VALUE}, effectively no upper
-     * bound.
-     */
-    public ResourceConverterBuilder maxValue(int maxValue) {
-      this.maxValue = maxValue;
-      return this;
-    }
-
-    public ResourceConverter build() throws OptionsParsingException {
-      if (keywords == null || validInputPattern == null) {
-        throw new OptionsParsingException(
-            "ResourceConverterBuilder must call auto() before build().");
-      }
-      return new ResourceConverter(keywords, validInputPattern, minValue, maxValue);
-    }
+  /**
+   * Constructs a ResourceConverter for options that take {@value FLAG_SYNTAX} and accept any value
+   * greater than 1.
+   *
+   * @param autoSupplier a supplier for the value of the auto keyword
+   */
+  public ResourceConverter(Supplier<Integer> autoSupplier) {
+    this(autoSupplier, 1, Integer.MAX_VALUE);
   }
 
-  private ResourceConverter(
-      ImmutableMap<String, Supplier<Integer>> keywords,
-      Pattern validInputPattern,
-      int minValue,
-      int maxValue) {
+  /**
+   * Constructs a ResourceConverter for options that take keywords other than the default set.
+   *
+   * @param keywords a map of keyword to the suppliers of their values
+   */
+  public ResourceConverter(
+      ImmutableMap<String, Supplier<Integer>> keywords, int minValue, int maxValue) {
     this.keywords = keywords;
-    this.validInputPattern = validInputPattern;
+    this.validInputPattern =
+        Pattern.compile(
+            String.format(
+                "(?<keyword>%s)(?<expression>[%s][0-9]?(?:.[0-9]+)?)?",
+                String.join("|", this.keywords.keySet()), String.join("", OPERATORS.keySet())));
     this.minValue = minValue;
     this.maxValue = maxValue;
   }
@@ -140,22 +114,20 @@ public class ResourceConverter extends Converters.IntegerConverter {
     int value;
     if (NumberUtils.isNumber(input)) {
       value = super.convert(input);
-      checkValidity(value);
-      return value;
+      return checkAndLimit(value);
     }
     Matcher matcher = validInputPattern.matcher(input);
     if (matcher.matches()) {
       Supplier<Integer> resourceSupplier = keywords.get(matcher.group("keyword"));
       if (resourceSupplier != null) {
         value = applyOperator(matcher.group("expression"), resourceSupplier);
-        checkValidity(value);
-        return value;
+        return checkAndLimit(value);
       }
     }
     throw new OptionsParsingException(
         String.format(
             "Parameter '%s' does not follow correct syntax. This flag takes %s.",
-            input, FLAG_SYNTAX));
+            input, getTypeDescription()));
   }
 
   /** Applies function designated in {@code expression} ([-|*]<float>) to value. */
@@ -164,7 +136,7 @@ public class ResourceConverter extends Converters.IntegerConverter {
     if (expression == null) {
       return firstOperandSupplier.get();
     }
-    for (ImmutableMap.Entry<String, DoubleBinaryOperator> operator : OPERATORS.entrySet()) {
+    for (Map.Entry<String, DoubleBinaryOperator> operator : OPERATORS.entrySet()) {
       if (expression.startsWith(operator.getKey())) {
         float secondOperand;
         try {
@@ -187,10 +159,10 @@ public class ResourceConverter extends Converters.IntegerConverter {
   }
 
   /**
-   * Checks validity of all values, both calculated and explicitly defined, based on test condition
-   * or host capacity.
+   * Checks validity of a resource value against min/max constraints. Implementations may choose to
+   * either raise an exception on out-of-bounds values, or adjust them to within the constraints.
    */
-  private void checkValidity(int value) throws OptionsParsingException {
+  public int checkAndLimit(int value) throws OptionsParsingException {
     if (value < minValue) {
       throw new OptionsParsingException(
           String.format("Value '(%d)' must be at least %d.", value, minValue));
@@ -199,6 +171,7 @@ public class ResourceConverter extends Converters.IntegerConverter {
       throw new OptionsParsingException(
           String.format("Value '(%d)' cannot be greater than %d.", value, maxValue));
     }
+    return value;
   }
 
   @Override

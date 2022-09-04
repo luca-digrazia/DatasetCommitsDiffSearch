@@ -20,43 +20,33 @@ import java.util.LinkedList;
 
 /** EvalException with a stack trace. */
 // TODO(adonovan): get rid of this. Every EvalException should record the stack.
-// This requires several steps:
-// - break dependency on syntax. Use only call frames (function names and locations).
-//   That means to print the source we must reopen the file, which may require
-//   heuristics as it may reside in a fake file system.
-// - eliminate or at least de-emphasize EvalException constructors that accept
-//   a Location. Most exceptions should be created with no location; the function
-//   call machinery fills in the details the first time exception bubbles up out of
-//   a call. The only exceptions (ha!) are (a) exceptions thrown by the interpreter at a
-//   particular statement/operator location, and (b) when client code wants to add
-//   a fake alternative (or additional?) location, such as the place a data structure
-//   was created.
-// - get rid of the "phantom node" machinery. In the rare cases where it is needed,
-//   it is trivial to call a built-in wrapper function that presents the desired
-//   name and location and simply calls the desired function. There is no need to
-//   complicate the API.
-// - clarify the various string methods (toString, getMessage, getOriginalMessage, print),
-//   and don't let this subclass totally redefine them.
-//   Printing the stack should be an explicit operation, as in Java.
-// - make this class private; the parent should define the complete API.
-//   (For internal catch statements, it may be helpful to keep the two classes.)
 public class EvalExceptionWithStackTrace extends EvalException {
 
   private StackFrame mostRecentElement;
 
-  // Called only from Eval.maybeTransformException.
-  EvalExceptionWithStackTrace(EvalException original, Node culprit) {
-    // The 'message' here must be non-empty in case getCause() is null,
-    // as the super(-fragile) constructor crashes if both are empty.
-    super(nodeLocation(culprit), getNonEmptyMessage(original), original.getCause());
+  public EvalExceptionWithStackTrace(Exception original, Node culprit) {
+    super(extractLocation(original, culprit), getNonEmptyMessage(original), getCause(original));
     registerNode(culprit);
   }
 
   @Override
-  protected boolean canBeAddedToStackTrace() {
+  public boolean canBeAddedToStackTrace() {
     // Doesn't make any sense to add this exception to another instance of
     // EvalExceptionWithStackTrace.
     return false;
+  }
+
+  /**
+   * Returns the appropriate location for this exception.
+   *
+   * <p>If the {@code Node} is non-null, its location is used. Otherwise, we try to get the location
+   * of the exception.
+   */
+  private static Location extractLocation(Exception original, Node culprit) {
+    if (culprit != null) {
+      return nodeLocation(culprit);
+    }
+    return original instanceof EvalException ? ((EvalException) original).getLocation() : null;
   }
 
   private static Location nodeLocation(Node node) {
@@ -65,9 +55,19 @@ public class EvalExceptionWithStackTrace extends EvalException {
         : node.getStartLocation();
   }
 
+  /**
+   * Returns the "real" cause of this exception.
+   *
+   * <p>If the original exception is an EvalException, its cause is returned.
+   * Otherwise, the original exception itself is seen as the cause for this exception.
+   */
+  private static Throwable getCause(Exception ex) {
+    return (ex instanceof EvalException) ? ex.getCause() : ex;
+  }
+
   /** Adds an entry for the given {@code Node} to the stack trace. */
   void registerNode(Node node) {
-    addStackFrame(node.toString().trim(), nodeLocation(node), /*canPrint=*/ true);
+    addStackFrame(node.toString().trim(), nodeLocation(node));
   }
 
   /**
@@ -107,12 +107,12 @@ public class EvalExceptionWithStackTrace extends EvalException {
      *     ...
      *
      * */
-    addStackFrame(function.getName(), function.getLocation(), /*canPrint=*/ true);
-    addStackFrame(callDescription, location, /*canPrint=*/ false);
+    addStackFrame(function.getName(), function.getLocation());
+    addStackFrame(callDescription, location, false);
   }
 
   /** Adds a line for the given frame. */
-  private void addStackFrame(String text, Location location, boolean canPrint) {
+  private void addStackFrame(String label, Location location, boolean canPrint) {
     // TODO(bazel-team): This check was originally created to weed out duplicates in case the same
     // node is added twice, but it's not clear if that is still a possibility.
     //
@@ -130,11 +130,15 @@ public class EvalExceptionWithStackTrace extends EvalException {
     // The check is problematic because it suppresses tracebacks in the REPL,
     // where line numbers can be reset within a single session.
     if (mostRecentElement != null
-        && location.file().equals(mostRecentElement.location.file())
-        && location.line() == mostRecentElement.location.line()) {
+        && location.file().equals(mostRecentElement.getLocation().file())
+        && location.line() == mostRecentElement.getLocation().line()) {
       return;
     }
-    mostRecentElement = new StackFrame(text, location, mostRecentElement, canPrint);
+    mostRecentElement = new StackFrame(label, location, mostRecentElement, canPrint);
+  }
+
+  private void addStackFrame(String label, Location location)   {
+    addStackFrame(label, location, true);
   }
 
   /**
@@ -146,18 +150,21 @@ public class EvalExceptionWithStackTrace extends EvalException {
 
   @Override
   public String getMessage() {
-    // TODO(adonovan): don't change the meaning of getMessage (and toString) in the subclass.
-    // Printing the stack should be an explicit operation.
     return print();
   }
 
   @Override
   public String print() {
     // Currently, we do not limit the text length per line.
+    return print(StackTracePrinter.INSTANCE);
+  }
 
-    // Prints the stack trace iff it contains more than just one built-in function.
+  /**
+   *  Prints the stack trace iff it contains more than just one built-in function.
+   */
+  public String print(StackTracePrinter printer) {
     return canPrintStackTrace()
-        ? StackTracePrinter.print(getOriginalMessage(), mostRecentElement)
+        ? printer.print(getOriginalMessage(), mostRecentElement)
         : getOriginalMessage();
   }
 
@@ -165,56 +172,73 @@ public class EvalExceptionWithStackTrace extends EvalException {
    * Returns true when there is at least one non-built-in element.
    */
   protected boolean canPrintStackTrace() {
-    return mostRecentElement != null && mostRecentElement.cause != null;
+    return mostRecentElement != null && mostRecentElement.getCause() != null;
   }
 
   /**
    * An element in the stack trace which contains the name of the offending function / rule /
    * statement and its location.
    */
-  private static final class StackFrame {
-    final String text;
-    final Location location;
-    final StackFrame cause; // tail of linked list
-    final boolean canPrint;
+  protected static final class StackFrame {
+    private final String label;
+    private final Location location;
+    private final StackFrame cause;
+    private final boolean canPrint;
 
-    StackFrame(String text, Location location, StackFrame cause, boolean canPrint) {
-      this.text = text;
+    StackFrame(String label, Location location, StackFrame cause, boolean canPrint) {
+      this.label = label;
       this.location = location;
       this.cause = cause;
       this.canPrint = canPrint;
     }
 
+    String getLabel() {
+      return label;
+    }
+
+    Location getLocation() {
+      return location;
+    }
+
+    StackFrame getCause() {
+      return cause;
+    }
+
+    boolean canPrint() {
+      return canPrint;
+    }
+
     @Override
     public String toString() {
-      return String.format("%s @ %s -> %s", text, location, String.valueOf(cause));
+      return String.format("%s @ %s -> %s", label, location, String.valueOf(cause));
     }
   }
 
-  /** A collection of stateless of functions to print stack traces similar to Python. */
-  private static final class StackTracePrinter {
+  /**
+   * Singleton class that prints stack traces similar to Python.
+   */
+  public enum StackTracePrinter {
+    INSTANCE;
 
-    /** Turns the given message and StackTraceElements into a string. */
-    static String print(String message, StackFrame mostRecentElement) {
+    /**
+     * Turns the given message and StackTraceElements into a string.
+     */
+    public final String print(String message, StackFrame mostRecentElement) {
       Deque<String> output = new LinkedList<>();
 
       // Adds dummy element for the rule call that uses the location of the top-most function.
-      mostRecentElement =
-          new StackFrame(
-              "",
-              mostRecentElement.location,
-              mostRecentElement.cause == null ? null : mostRecentElement,
-              true);
+      mostRecentElement = new StackFrame("", mostRecentElement.getLocation(),
+          (mostRecentElement.getCause() == null) ? null : mostRecentElement, true);
 
       while (mostRecentElement != null) {
-        if (mostRecentElement.canPrint) {
-          String entry = printElement(mostRecentElement);
+        if (mostRecentElement.canPrint()) {
+          String entry = print(mostRecentElement);
           if (entry != null && entry.length() > 0) {
             addEntry(output, entry);
           }
         }
 
-        mostRecentElement = mostRecentElement.cause;
+        mostRecentElement = mostRecentElement.getCause();
       }
 
       addMessage(output, message);
@@ -222,26 +246,29 @@ public class EvalExceptionWithStackTrace extends EvalException {
     }
 
     /** Returns the string representation of the given element. */
-    static String printElement(StackFrame element) {
+    String print(StackFrame element) {
       // Similar to Python, the first (most-recent) entry in the stack frame is printed only once.
       // Consequently, we skip it here.
-      if (element.cause == null) {
+      if (element.getCause() == null) {
         return "";
       }
 
       // Prints a two-line string, similar to Python.
-      Location location = getLocation(element.cause);
+      Location location = getLocation(element.getCause());
       return String.format(
           "\tFile \"%s\", line %d%s%n\t\t%s",
-          printPath(location), getLine(location), printFunction(element.text), element.cause.text);
+          printPath(location),
+          getLine(location),
+          printFunction(element.getLabel()),
+          element.getCause().getLabel());
     }
 
     /** Returns the location of the given element or Location.BUILTIN if the element is null. */
-    static Location getLocation(StackFrame element) {
-      return element == null ? Location.BUILTIN : element.location;
+    private Location getLocation(StackFrame element) {
+      return (element == null) ? Location.BUILTIN : element.getLocation();
     }
 
-    static String printFunction(String func) {
+    private String printFunction(String func) {
       if (func.isEmpty()) {
         return "";
       }
@@ -250,16 +277,16 @@ public class EvalExceptionWithStackTrace extends EvalException {
       return String.format(", in %s", (pos < 0) ? func : func.substring(0, pos));
     }
 
-    static String printPath(Location loc) {
+    private String printPath(Location loc) {
       return loc == null ? "<unknown>" : loc.file();
     }
 
-    static int getLine(Location loc) {
+    private int getLine(Location loc) {
       return loc == null ? 0 : loc.line();
     }
 
     /** Adds the given string to the specified Deque. */
-    static void addEntry(Deque<String> output, String toAdd) {
+    void addEntry(Deque<String> output, String toAdd) {
       output.addLast(toAdd);
     }
 
@@ -267,7 +294,7 @@ public class EvalExceptionWithStackTrace extends EvalException {
      * Adds the given message to the given output dequeue after all stack trace elements have been
      * added.
      */
-    static void addMessage(Deque<String> output, String message) {
+    void addMessage(Deque<String> output, String message) {
       output.addFirst("Traceback (most recent call last):");
       output.addLast(message);
     }
@@ -276,12 +303,12 @@ public class EvalExceptionWithStackTrace extends EvalException {
   /**
    * Returns a non-empty message for the given exception.
    *
-   * <p>If the exception itself does not have a message, a new message is constructed from the
-   * exception's class name. For example, an IllegalArgumentException will lead to "Illegal
-   * Argument". Additionally, the location in the Java code will be added, if applicable,
+   * <p> If the exception itself does not have a message, a new message is constructed from the
+   * exception's class name.
+   * For example, an IllegalArgumentException will lead to "Illegal Argument".
+   * Additionally, the location in the Java code will be added, if applicable,
    */
-  // TODO(adonovan): eliminate this function. We have no business interpreting Java exceptions.
-  private static String getNonEmptyMessage(EvalException original) {
+  private static String getNonEmptyMessage(Exception original) {
     Preconditions.checkNotNull(original);
     String msg = original.getMessage();
     if (msg != null && !msg.isEmpty()) {
