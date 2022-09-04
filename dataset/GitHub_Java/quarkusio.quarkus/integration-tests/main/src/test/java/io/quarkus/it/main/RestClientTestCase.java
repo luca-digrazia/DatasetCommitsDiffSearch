@@ -1,6 +1,10 @@
 package io.quarkus.it.main;
 
-import static org.hamcrest.Matchers.*;
+import static io.quarkus.test.junit.DisableIfBuiltWithGraalVMOlderThan.GraalVMVersion.GRAALVM_21_0;
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 
 import java.util.List;
 import java.util.Map;
@@ -8,7 +12,10 @@ import java.util.Map;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
+import io.quarkus.test.junit.DisableIfBuiltWithGraalVMOlderThan;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
 import io.restassured.path.json.JsonPath;
@@ -40,6 +47,14 @@ public class RestClientTestCase {
     public void testMicroprofileClientCDIIntegration() {
         RestAssured.when().get("/client/cdi").then()
                 .body(is("TEST"));
+    }
+
+    @DisabledOnOs(OS.WINDOWS)
+    @Test
+    public void testEmojis() {
+        RestAssured.when().get("/client/encoding")
+                .then().body(is(
+                        "\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00"));
     }
 
     @Test
@@ -118,16 +133,53 @@ public class RestClientTestCase {
         Assertions.assertEquals("javax.enterprise.context.Dependent", responseWithDefaultScope);
     }
 
-    /**
-     * Disabled by default as it establishes external connections.
-     * <p>
-     * Uncomment when you want to test SSL support.
-     */
     @Test
-    @Disabled
+    void testJaxrsClientWithFilters() {
+        given()
+                .when().get("/client/jaxrs-client")
+                .then()
+                .statusCode(200)
+                .body(containsString("hello"))
+                .body(containsString("2020-02-13"));
+    }
+
+    @Test
+    @Disabled("Disabled by default as it establishes external connections, uncomment when you want to test SSL support")
     public void testDegradedSslSupport() {
         RestAssured.when().get("/ssl").then()
                 .statusCode(500)
                 .body(containsString("SSL support"), containsString("disabled"));
+    }
+
+    @Test
+    public void testIssue8795() {
+        RestAssured.when().get("/client/publisher-client").then()
+                .body(is("\n\ndata: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"
+                        + "data: 75056-2\n\n"));
+    }
+
+    @Test
+    @DisableIfBuiltWithGraalVMOlderThan(GRAALVM_21_0)
+    public void testFaultTolerance() {
+        RestAssured.when().get("/client/fault-tolerance").then()
+                .body(is("Hello fallback!"));
     }
 }
