@@ -1,24 +1,23 @@
 /**
- * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+ * Copyright (c) 2012 Lennart Koopmann <lennart@torch.sh>
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is furnished to do
+ * so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package org.graylog2.plugin;
 
@@ -38,7 +37,7 @@ import static com.google.common.base.Charsets.UTF_8;
  * http://semver.org/
  */
 public class Version {
-    private static final Logger LOG = LoggerFactory.getLogger(Version.class);
+    private static final Logger log = LoggerFactory.getLogger(Version.class);
 
     public final int major;
     public final int minor;
@@ -71,13 +70,13 @@ public class Version {
                 git.load(new StringReader(gitProperties));
                 commitSha = git.getProperty("git.commit.id.abbrev");
             } catch (Exception e) {
-                LOG.debug("Git commit details are not available, skipping.", e);
+                log.debug("Git commit details are not available, skipping.", e);
             }
 
             tmpVersion = new Version(major, minor, incremental, qualifier, commitSha);
         } catch (Exception e) {
             tmpVersion = new Version(0, 0, 0, "unknown");
-            LOG.error("Unable to read version.properties file, this build has no version number. If you get this message during development, you need to run 'Generate Sources' in IDEA or run 'mvn process-resources'.", e);
+            log.error("Unable to read version.properties file, this build has no version number. If you get this message during development, you need to run 'Generate Sources' in IDEA or run 'mvn process-resources'.", e);
         }
         CURRENT_CLASSPATH = tmpVersion;
     }
