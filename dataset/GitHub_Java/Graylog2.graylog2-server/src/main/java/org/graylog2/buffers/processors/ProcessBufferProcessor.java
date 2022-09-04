@@ -21,7 +21,6 @@
 package org.graylog2.buffers.processors;
 
 import com.lmax.disruptor.EventHandler;
-import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.TimerContext;
 import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
@@ -47,9 +46,8 @@ public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
 
     @Override
     public void onEvent(LogMessageEvent event, long sequence, boolean endOfBatch) throws Exception {
-        Metrics.newMeter(ProcessBufferProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS).mark();
-        Metrics.newMeter(ProcessBufferProcessor.class, "IncomingMessagesMinutely", "messages", TimeUnit.MINUTES).mark();
-        TimerContext tcx = Metrics.newTimer(ProcessBufferProcessor.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
+        server.getMeter(ProcessBufferProcessor.class, "IncomingMessages", "messages").mark();
+        TimerContext tcx = server.getTimer(ProcessBufferProcessor.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
 
         LogMessage msg = event.getMessage();
 
@@ -65,7 +63,7 @@ public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
 
                 if (filter.filter(msg, server)) {
                     LOG.debug("Filter [" + name + "] marked message <" + msg.getId() + "> to be discarded. Dropping message.");
-                    Metrics.newMeter(ProcessBufferProcessor.class, "FilteredOutMessages", "messages", TimeUnit.SECONDS).mark();
+                    server.getMeter(ProcessBufferProcessor.class, "FilteredOutMessages", "messages").mark();
                     return;
                 }
             } catch (Exception e) {
@@ -74,7 +72,7 @@ public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
         }
 
         LOG.debug("Finished processing message. Writing to output buffer.");
-        Metrics.newMeter(ProcessBufferProcessor.class, "OutgoingMessages", "messages", TimeUnit.SECONDS).mark();
+        server.getMeter(ProcessBufferProcessor.class, "OutgoingMessages", "messages").mark();
         server.getOutputBuffer().insert(msg);
         tcx.stop();
     }
