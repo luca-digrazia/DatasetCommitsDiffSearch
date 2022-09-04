@@ -399,8 +399,8 @@ final class Target_io_netty_buffer_EmptyByteBuf {
     private static ByteBuffer EMPTY_BYTE_BUFFER;
 
     @Alias
-    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)
-    private static long EMPTY_BYTE_BUFFER_ADDRESS;
+    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FromAlias)
+    private static long EMPTY_BYTE_BUFFER_ADDRESS = 0;
 
     @Substitute
     public ByteBuffer nioBuffer() {
@@ -415,20 +415,6 @@ final class Target_io_netty_buffer_EmptyByteBuf {
     @Substitute
     public ByteBuffer internalNioBuffer(int index, int length) {
         return EmptyByteBufStub.emptyByteBuffer();
-    }
-
-    @Substitute
-    public boolean hasMemoryAddress() {
-        return EmptyByteBufStub.emptyByteBufferAddress() != 0;
-    }
-
-    @Substitute
-    public long memoryAddress() {
-        if (hasMemoryAddress()) {
-            return EmptyByteBufStub.emptyByteBufferAddress();
-        } else {
-            throw new UnsupportedOperationException();
-        }
     }
 
 }
