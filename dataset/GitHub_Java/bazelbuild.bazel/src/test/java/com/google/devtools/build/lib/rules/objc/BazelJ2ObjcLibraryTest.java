@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
@@ -803,8 +802,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
             /*topLevelFilesets=*/ ImmutableMap.of(),
             DUMMY_ARTIFACT_EXPANDER,
             /*actionFileSystem=*/ null,
-            /*skyframeDepsResult=*/ null,
-            NestedSetExpander.DEFAULT);
+            /*skyframeDepsResult=*/ null);
     ByteArrayOutputStream moduleMapStream = new ByteArrayOutputStream();
     ByteArrayOutputStream umbrellaHeaderStream = new ByteArrayOutputStream();
     moduleMapAction.newDeterministicWriter(dummyActionExecutionContext)
@@ -857,8 +855,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
             /*topLevelFilesets=*/ ImmutableMap.of(),
             DUMMY_ARTIFACT_EXPANDER,
             /*actionFileSystem=*/ null,
-            /*skyframeDepsResult=*/ null,
-            NestedSetExpander.DEFAULT);
+            /*skyframeDepsResult=*/ null);
 
     ByteArrayOutputStream moduleMapStream = new ByteArrayOutputStream();
     ByteArrayOutputStream umbrellaHeaderStream = new ByteArrayOutputStream();
