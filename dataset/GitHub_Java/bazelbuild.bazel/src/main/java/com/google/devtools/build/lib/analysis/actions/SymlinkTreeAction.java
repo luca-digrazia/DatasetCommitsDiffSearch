@@ -25,12 +25,11 @@ import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
 
@@ -107,7 +106,9 @@ public final class SymlinkTreeAction extends AbstractAction {
       boolean skipRunfilesManifests) {
     super(
         owner,
-        computeInputs(enableRunfiles, skipRunfilesManifests, runfiles, inputManifest),
+        skipRunfilesManifests && enableRunfiles && (filesetRoot == null)
+            ? NestedSetBuilder.emptySet(Order.STABLE_ORDER)
+            : NestedSetBuilder.create(Order.STABLE_ORDER, inputManifest),
         ImmutableSet.of(outputManifest),
         env);
     Preconditions.checkArgument(outputManifest.getPath().getBaseName().equals("MANIFEST"));
@@ -121,24 +122,6 @@ public final class SymlinkTreeAction extends AbstractAction {
     this.inprocessSymlinkCreation = inprocessSymlinkCreation;
     this.skipRunfilesManifests = skipRunfilesManifests && enableRunfiles && (filesetRoot == null);
     this.inputManifest = this.skipRunfilesManifests ? null : inputManifest;
-  }
-
-  private static NestedSet<Artifact> computeInputs(
-      boolean enableRunfiles,
-      boolean skipRunfilesManifests,
-      Runfiles runfiles,
-      Artifact inputManifest) {
-    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.<Artifact>stableOrder();
-    if (!skipRunfilesManifests || !enableRunfiles || runfiles == null) {
-      inputs.add(inputManifest);
-    }
-    // All current strategies (in-process and build-runfiles-windows) for
-    // making symlink trees on Windows depend on the target files
-    // existing, so directory or file links can be made as appropriate.
-    if (enableRunfiles && runfiles != null && OS.getCurrent() == OS.WINDOWS) {
-      inputs.addTransitive(runfiles.getAllArtifacts());
-    }
-    return inputs.build();
   }
 
   public Artifact getInputManifest() {
@@ -182,10 +165,7 @@ public final class SymlinkTreeAction extends AbstractAction {
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(GUID);
     fp.addNullableString(filesetRoot);
     fp.addBoolean(enableRunfiles);
