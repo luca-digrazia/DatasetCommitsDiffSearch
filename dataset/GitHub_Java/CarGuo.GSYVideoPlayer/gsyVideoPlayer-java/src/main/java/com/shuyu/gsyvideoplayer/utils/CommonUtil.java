@@ -51,10 +51,10 @@ public class CommonUtil {
     public static boolean isWifiConnected(Context context) {
         ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo wifiNetworkInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
-        if (wifiNetworkInfo == null) {
-            return false;
+        if (wifiNetworkInfo.isConnected()) {
+            return true;
         }
-        return wifiNetworkInfo.isConnected();
+        return false;
     }
 
     /**
