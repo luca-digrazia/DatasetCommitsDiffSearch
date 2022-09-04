@@ -23,7 +23,6 @@ import com.android.utils.StdLogger;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.android.AndroidDataMerger.MergeConflictException;
-import com.google.devtools.build.android.AndroidManifestProcessor.MergeErrorException;
 import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.AndroidResourceProcessor.AaptConfigOptions;
 import com.google.devtools.build.android.AndroidResourceProcessor.FlagAaptOptions;
@@ -36,10 +35,10 @@ import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.TriState;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -452,8 +451,6 @@ public class AndroidResourceProcessingAction {
         | UnrecognizedSplitsException e) {
       logger.log(java.util.logging.Level.SEVERE, "Error during processing resources", e);
       throw e;
-    } catch (MergeErrorException e) {
-      System.exit(1);
     } catch (Exception e) {
       logger.log(java.util.logging.Level.SEVERE, "Unexpected", e);
       throw e;

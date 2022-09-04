@@ -13,13 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.devtools.build.lib.syntax.Type.STRING;
-
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.EmptyToNullLabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
@@ -32,7 +29,6 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.DynamicModeConverter;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.LibcTopLabelConverter;
@@ -41,12 +37,11 @@ import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsParsingException;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
+import com.google.devtools.common.options.proto.OptionFilters.OptionMetadataTag;
 import java.util.List;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Configuration fragment for Android rules.
@@ -223,37 +218,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       for (AndroidAaptVersion version : AndroidAaptVersion.values()) {
         if (version.name().equalsIgnoreCase(value)) {
           return version;
-        }
-      }
-      return null;
-    }
-
-    // TODO(corysmith): Move to ApplicationManifest when no longer needed as a public function.
-    @Nullable
-    public static AndroidAaptVersion chooseTargetAaptVersion(RuleContext ruleContext)
-        throws RuleErrorException {
-      if (ruleContext.isLegalFragment(AndroidConfiguration.class)) {
-        boolean hasAapt2 = AndroidSdkProvider.fromRuleContext(ruleContext).getAapt2() != null;
-        AndroidAaptVersion flag =
-            ruleContext.getFragment(AndroidConfiguration.class).getAndroidAaptVersion();
-
-        if (ruleContext.getRule().isAttrDefined("aapt_version", STRING)) {
-          // On rules that can choose a version, test attribute then flag choose the aapt version
-          // target.
-          AndroidAaptVersion version =
-              fromString(ruleContext.attributes().get("aapt_version", STRING));
-          // version is null if the value is "auto"
-          version = version == AndroidAaptVersion.AUTO ? flag : version;
-
-          if (version == AAPT2 && !hasAapt2) {
-            ruleContext.throwWithRuleError(
-                "aapt2 processing requested but not available on the android_sdk");
-            return null;
-          }
-          return version == AndroidAaptVersion.AUTO ? AAPT : version;
-        } else {
-          // On rules can't choose, assume aapt2 if aapt2 is present in the sdk.
-          return hasAapt2 ? AAPT2 : AAPT;
         }
       }
       return null;
@@ -673,7 +637,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public boolean exportsManifestDefault;
 
-
     @Option(
       name = "experimental_android_generate_robolectric_r_class",
       defaultValue = "false",
@@ -773,7 +736,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean generateRobolectricRClass;
   private final boolean throwOnResourceConflict;
   private final boolean useParallelDex2Oat;
-
 
   AndroidConfiguration(Options options) throws InvalidConfigurationException {
     this.sdk = options.sdk;
@@ -949,18 +911,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   @Override
   public String getOutputDirectoryName() {
-    // We expect this value to be null most of the time - it will only become non-null when a
-    // dynamically configured transition changes the configuration's resource filter object.
-    String resourceFilterSuffix = resourceFilter.getOutputDirectorySuffix();
-
-    if (configurationDistinguisher.suffix == null) {
-      return resourceFilterSuffix;
-    }
-
-    if (resourceFilterSuffix == null) {
-      return configurationDistinguisher.suffix;
-    }
-
-    return configurationDistinguisher.suffix + "_" + resourceFilterSuffix;
+    return configurationDistinguisher.suffix;
   }
 }

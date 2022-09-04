@@ -26,14 +26,12 @@ import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.UnvalidatedAndroidDataConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,7 +51,6 @@ import java.util.zip.ZipOutputStream;
  * Action to generate an AAR archive for an Android library.
  *
  * <p>
- *
  * <pre>
  * Example Usage:
  *   java/com/google/build/android/AarGeneratorAction\
@@ -70,7 +67,7 @@ public class AarGeneratorAction {
   private static final Logger logger = Logger.getLogger(AarGeneratorAction.class.getName());
 
   /** Flag specifications for this action. */
-  public static final class AarGeneratorOptions extends OptionsBase {
+  public static final class Options extends OptionsBase {
     @Option(
       name = "mainData",
       defaultValue = "null",
@@ -129,24 +126,20 @@ public class AarGeneratorAction {
     )
     public Path aarOutput;
 
-    @Option(
-      name = "throwOnResourceConflict",
-      defaultValue = "false",
-      category = "config",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "If passed, resource merge conflicts will be treated as errors instead of warnings"
-    )
+    @Option(name = "throwOnResourceConflict",
+        defaultValue = "false",
+        category = "config",
+        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+        effectTags = {OptionEffectTag.UNKNOWN},
+        help = "If passed, resource merge conflicts will be treated as errors instead of warnings")
     public boolean throwOnResourceConflict;
   }
 
   public static void main(String[] args) {
     Stopwatch timer = Stopwatch.createStarted();
-    OptionsParser optionsParser = OptionsParser.newOptionsParser(AarGeneratorOptions.class);
-    optionsParser.enableParamsFileSupport(
-        new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()));
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(Options.class);
     optionsParser.parseAndExitUponError(args);
-    AarGeneratorOptions options = optionsParser.getOptions(AarGeneratorOptions.class);
+    Options options = optionsParser.getOptions(Options.class);
 
     checkFlags(options);
 
@@ -170,7 +163,8 @@ public class AarGeneratorAction {
               VariantType.LIBRARY,
               null,
               /* filteredResources= */ ImmutableList.<String>of(),
-              options.throwOnResourceConflict);
+              options.throwOnResourceConflict
+          );
       logger.fine(String.format("Merging finished at %dms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       writeAar(options.aarOutput, mergedData, options.manifest, options.rtxt, options.classes);
@@ -187,7 +181,7 @@ public class AarGeneratorAction {
   }
 
   @VisibleForTesting
-  static void checkFlags(AarGeneratorOptions options) {
+  static void checkFlags(Options options) throws IllegalArgumentException {
     List<String> nullFlags = new LinkedList<>();
     if (options.manifest == null) {
       nullFlags.add("manifest");
@@ -202,7 +196,8 @@ public class AarGeneratorAction {
       throw new IllegalArgumentException(
           String.format(
               "%s must be specified. Building an .aar without %s is unsupported.",
-              Joiner.on(", ").join(nullFlags), Joiner.on(", ").join(nullFlags)));
+              Joiner.on(", ").join(nullFlags),
+              Joiner.on(", ").join(nullFlags)));
     }
   }
 
@@ -210,8 +205,8 @@ public class AarGeneratorAction {
   static void writeAar(
       Path aar, final MergedAndroidData data, Path manifest, Path rtxt, Path classes)
       throws IOException {
-    try (final ZipOutputStream zipOut =
-        new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(aar)))) {
+    try (final ZipOutputStream zipOut = new ZipOutputStream(
+        new BufferedOutputStream(Files.newOutputStream(aar)))) {
       ZipEntry manifestEntry = new ZipEntry("AndroidManifest.xml");
       manifestEntry.setTime(EPOCH);
       zipOut.putNextEntry(manifestEntry);
