@@ -37,7 +37,7 @@ public class PipelineProcessorModule extends PluginModule {
 
     @Override
     public Set<? extends PluginConfigBean> getConfigBeans() {
-        return Collections.singleton(new PipelineConfig());
+        return Collections.emptySet();
     }
 
     @Override
@@ -60,7 +60,5 @@ public class PipelineProcessorModule extends PluginModule {
         install(new FactoryModuleBuilder().build(PipelineInterpreter.State.Factory.class));
 
         addAuditEventTypes(PipelineProcessorAuditEventTypes.class);
-
-        addConfigBeans();
     }
 }
