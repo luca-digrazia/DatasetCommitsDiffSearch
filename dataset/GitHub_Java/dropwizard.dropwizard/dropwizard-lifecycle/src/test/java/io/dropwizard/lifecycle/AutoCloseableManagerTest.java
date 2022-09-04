@@ -3,7 +3,7 @@ package io.dropwizard.lifecycle;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 public class AutoCloseableManagerTest {
 
@@ -11,7 +11,7 @@ public class AutoCloseableManagerTest {
     private final AutoCloseableManager closeableManager = new AutoCloseableManager(this.managed);
 
     @Test
-    void startsAndStops() throws Exception {
+    public void startsAndStops() throws Exception {
         this.closeableManager.start();
         this.closeableManager.stop();
 
