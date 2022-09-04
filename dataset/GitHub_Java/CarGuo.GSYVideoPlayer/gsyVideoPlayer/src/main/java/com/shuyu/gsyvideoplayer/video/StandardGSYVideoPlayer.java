@@ -285,7 +285,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
                 return;
             }
             if (mCurrentState == CURRENT_STATE_NORMAL) {
-                if (!mUrl.startsWith("file") && !CommonUtil.isWifiConnected(getContext()) && mNeedShowWifiTip) {
+                if (!mUrl.startsWith("file") && !CommonUtil.isWifiConnected(getContext()) && !WIFI_TIP_DIALOG_SHOWED) {
                     showWifiDialog();
                     return;
                 }
@@ -321,6 +321,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             public void onClick(DialogInterface dialog, int which) {
                 dialog.dismiss();
                 startPlayLogic();
+                WIFI_TIP_DIALOG_SHOWED = true;
             }
         });
         builder.setNegativeButton(getResources().getString(R.string.tips_not_wifi_cancel), new DialogInterface.OnClickListener() {
