@@ -56,7 +56,6 @@ public class WorkspaceFactoryHelper {
       Label nameLabel = Label.parseAbsolute("//external:" + entry.getKey(), ImmutableMap.of());
       addBindRule(pkg, bindRuleClass, nameLabel, entry.getValue(), semantics, callstack);
     }
-    pkg.addRegisteredToolchains(ruleClass.getToolchainsToRegisterFunction().apply(rule));
     return rule;
   }
 

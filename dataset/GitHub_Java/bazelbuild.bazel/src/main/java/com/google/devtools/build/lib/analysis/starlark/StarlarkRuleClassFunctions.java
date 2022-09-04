@@ -348,7 +348,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
     builder.setConfiguredTargetFunction(implementation);
     // Information about the .bzl module containing the call that created the rule class.
     BazelModuleContext bzlModule =
-        BazelModuleContext.of(Module.ofInnermostEnclosingStarlarkFunction(thread));
+        (BazelModuleContext) Module.ofInnermostEnclosingStarlarkFunction(thread).getClientData();
     builder.setRuleDefinitionEnvironmentLabelAndDigest(
         bzlModule.label(), bzlModule.bzlTransitiveDigest());
 
@@ -872,7 +872,8 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
     } else {
       // This is the label of the innermost BUILD/.bzl file on the current call stack.
       parentLabel =
-          BazelModuleContext.of(Module.ofInnermostEnclosingStarlarkFunction(thread)).label();
+          ((BazelModuleContext) Module.ofInnermostEnclosingStarlarkFunction(thread).getClientData())
+              .label();
     }
 
     try {
