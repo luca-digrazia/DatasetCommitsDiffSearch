@@ -11,22 +11,22 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 import org.apache.maven.model.Model;
 
+import io.quarkus.QuarkusTemplate;
+import io.quarkus.SourceType;
 import io.quarkus.maven.utilities.MojoUtils;
-import io.quarkus.templates.QuarkusTemplate;
-import io.quarkus.templates.SourceType;
 
 public class BasicRest implements QuarkusTemplate {
 
     public static final String TEMPLATE_NAME = "basic-rest";
 
     private Map<String, Object> context;
+    private String className;
     private String path = "/hello";
     private File projectRoot;
     private File srcMain;
@@ -44,14 +44,15 @@ public class BasicRest implements QuarkusTemplate {
     @Override
     public void generate(final File projectRoot, Map<String, Object> parameters) throws IOException {
         this.projectRoot = projectRoot;
-        this.context = parameters == null ? Collections.emptyMap() : parameters;
+        this.context = parameters;
         this.type = (SourceType) context.get(SOURCE_TYPE);
 
         initProject();
         setupContext();
 
-        createClasses();
-
+        if (className != null) {
+            createClasses();
+        }
         createIndexPage();
         createDockerFiles();
         createDockerIgnore();
@@ -59,8 +60,18 @@ public class BasicRest implements QuarkusTemplate {
     }
 
     private void setupContext() {
-        if (context.get(CLASS_NAME) != null) {
+        MojoUtils.getAllProperties().forEach((k, v) -> context.put(k.replace("-", "_"), v));
+
+        if (className != null) {
             String packageName = (String) context.get(PACKAGE_NAME);
+
+            className = type.stripExtensionFrom(className);
+
+            if (className.contains(".")) {
+                int idx = className.lastIndexOf('.');
+                packageName = className.substring(0, idx);
+                className = className.substring(idx + 1);
+            }
 
             if (packageName != null) {
                 File packageDir = new File(srcMain, packageName.replace('.', '/'));
@@ -68,22 +79,25 @@ public class BasicRest implements QuarkusTemplate {
                 srcMain = mkdirs(packageDir);
                 testMain = mkdirs(testPackageDir);
             }
+
+            context.put(CLASS_NAME, className);
+            context.put(RESOURCE_PATH, path);
+
+            if (packageName != null) {
+                context.put(PACKAGE_NAME, packageName);
+            }
         }
     }
 
     private void createClasses() throws IOException {
-        final Object className = context.get(CLASS_NAME);
-        // If className is null we disable the generation of the Jax-RS resource.
-        if (className != null) {
-            final String extension = type.getExtension();
-            File classFile = new File(srcMain, className + extension);
-            File testClassFile = new File(testMain, className + "Test" + extension);
-            File itTestClassFile = new File(testMain, "Native" + className + "IT" + extension);
-            final String name = getName();
-            generate(type.getSrcResourceTemplate(name), context, classFile, "resource code");
-            generate(type.getTestResourceTemplate(name), context, testClassFile, "test code");
-            generate(type.getNativeTestResourceTemplate(name), context, itTestClassFile, "IT code");
-        }
+        final String extension = type.getExtension();
+        File classFile = new File(srcMain, className + extension);
+        File testClassFile = new File(testMain, className + "Test" + extension);
+        File itTestClassFile = new File(testMain, "Native" + className + "IT" + extension);
+        final String name = getName();
+        generate(type.getSrcResourceTemplate(name), context, classFile, "resource code");
+        generate(type.getTestResourceTemplate(name), context, testClassFile, "test code");
+        generate(type.getNativeTestResourceTemplate(name), context, itTestClassFile, "IT code");
     }
 
     @SuppressWarnings("unchecked")
@@ -102,6 +116,8 @@ public class BasicRest implements QuarkusTemplate {
             context.put(PROJECT_ARTIFACT_ID, model.getArtifactId());
         }
 
+        // If className is null we disable the generation of the Jax-RS resource.
+        className = get("className", null);
         path = get(RESOURCE_PATH, path);
 
         srcMain = mkdirs(new File(projectRoot, type.getSrcDir()));

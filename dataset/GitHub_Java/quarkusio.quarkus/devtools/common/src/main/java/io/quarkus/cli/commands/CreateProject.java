@@ -1,5 +1,10 @@
 package io.quarkus.cli.commands;
 
+import static io.quarkus.QuarkusTemplate.PROJECT_ARTIFACT_ID;
+import static io.quarkus.QuarkusTemplate.PROJECT_GROUP_ID;
+import static io.quarkus.QuarkusTemplate.PROJECT_VERSION;
+import static io.quarkus.QuarkusTemplate.QUARKUS_VERSION;
+import static io.quarkus.QuarkusTemplate.SOURCE_TYPE;
 import static io.quarkus.maven.utilities.MojoUtils.Element;
 import static io.quarkus.maven.utilities.MojoUtils.QUARKUS_VERSION_PROPERTY;
 import static io.quarkus.maven.utilities.MojoUtils.configuration;
@@ -8,13 +13,6 @@ import static io.quarkus.maven.utilities.MojoUtils.getPluginArtifactId;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginGroupId;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
 import static io.quarkus.maven.utilities.MojoUtils.plugin;
-import static io.quarkus.templates.QuarkusTemplate.CLASS_NAME;
-import static io.quarkus.templates.QuarkusTemplate.PACKAGE_NAME;
-import static io.quarkus.templates.QuarkusTemplate.PROJECT_ARTIFACT_ID;
-import static io.quarkus.templates.QuarkusTemplate.PROJECT_GROUP_ID;
-import static io.quarkus.templates.QuarkusTemplate.PROJECT_VERSION;
-import static io.quarkus.templates.QuarkusTemplate.QUARKUS_VERSION;
-import static io.quarkus.templates.QuarkusTemplate.SOURCE_TYPE;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,8 +33,8 @@ import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.PluginManagement;
 import org.apache.maven.model.Profile;
 
+import io.quarkus.SourceType;
 import io.quarkus.maven.utilities.MojoUtils;
-import io.quarkus.templates.SourceType;
 import io.quarkus.templates.TemplateRegistry;
 import io.quarkus.templates.rest.BasicRest;
 
@@ -50,7 +48,6 @@ public class CreateProject {
     private String artifactId;
     private String version = getPluginVersion();
     private SourceType sourceType = SourceType.JAVA;
-    private String className;
 
     private Model model;
 
@@ -75,11 +72,6 @@ public class CreateProject {
 
     public CreateProject sourceType(SourceType sourceType) {
         this.sourceType = sourceType;
-        return this;
-    }
-
-    public CreateProject className(String className) {
-        this.className = className;
         return this;
     }
 
@@ -108,17 +100,6 @@ public class CreateProject {
         context.put(PROJECT_VERSION, version);
         context.put(QUARKUS_VERSION, getPluginVersion());
         context.put(SOURCE_TYPE, sourceType);
-
-        if (className != null) {
-            className = sourceType.stripExtensionFrom(className);
-            int idx = className.lastIndexOf('.');
-            if (idx >= 0) {
-                final String packageName = className.substring(0, idx);
-                className = className.substring(idx + 1);
-                context.put(PACKAGE_NAME, packageName);
-            }
-            context.put(CLASS_NAME, className);
-        }
 
         TemplateRegistry.createTemplateWith(BasicRest.TEMPLATE_NAME).generate(root, context);
 
