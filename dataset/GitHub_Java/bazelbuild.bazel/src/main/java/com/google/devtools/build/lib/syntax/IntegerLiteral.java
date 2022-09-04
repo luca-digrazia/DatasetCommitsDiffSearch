@@ -43,4 +43,8 @@ public final class IntegerLiteral extends Expression {
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+  }
 }

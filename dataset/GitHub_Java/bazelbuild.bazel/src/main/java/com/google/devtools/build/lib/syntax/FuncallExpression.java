@@ -761,6 +761,14 @@ public final class FuncallExpression extends Expression {
   }
 
   @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    function.validate(env);
+    for (Argument.Passed arg : arguments) {
+      arg.getValue().validate(env);
+    }
+  }
+
+  @Override
   protected boolean isNewScope() {
     return true;
   }
