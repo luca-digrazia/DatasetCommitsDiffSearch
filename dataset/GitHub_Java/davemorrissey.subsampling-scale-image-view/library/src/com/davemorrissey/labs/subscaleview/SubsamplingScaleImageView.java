@@ -880,7 +880,7 @@ public class SubsamplingScaleImageView extends View {
         if (tileMap != null && isBaseLayerReady()) {
 
             // Optimum sample size for current scale
-            int sampleSize = Math.min(fullImageSampleSize, calculateInSampleSize(scale));
+            int sampleSize = Math.min(fullImageSampleSize, calculateInSampleSize());
 
             // First check for missing tiles - if there are any we need the base layer underneath to avoid gaps
             boolean hasMissingTiles = false;
@@ -1075,12 +1075,11 @@ public class SubsamplingScaleImageView extends View {
      */
     private synchronized void initialiseBaseLayer(Point maxTileDimensions) {
 
-        satTemp = new ScaleAndTranslate(0f, new PointF(0, 0));
-        fitToBounds(true, satTemp);
+        fitToBounds(true);
 
         // Load double resolution - next level will be split into four tiles and at the center all four are required,
         // so don't bother with tiling until the next level 16 tiles are needed.
-        fullImageSampleSize = calculateInSampleSize(satTemp.scale);
+        fullImageSampleSize = calculateInSampleSize();
         if (fullImageSampleSize > 1) {
             fullImageSampleSize /= 2;
         }
@@ -1092,7 +1091,6 @@ public class SubsamplingScaleImageView extends View {
             TileLoadTask task = new TileLoadTask(this, decoder, baseTile);
             task.execute();
         }
-        refreshRequiredTiles(true);
 
     }
 
@@ -1104,7 +1102,7 @@ public class SubsamplingScaleImageView extends View {
     private void refreshRequiredTiles(boolean load) {
         if (decoder == null || tileMap == null) { return; }
 
-        int sampleSize = Math.min(fullImageSampleSize, calculateInSampleSize(scale));
+        int sampleSize = Math.min(fullImageSampleSize, calculateInSampleSize());
 
         // Load tiles of the correct sample size that are on screen. Discard tiles off screen, and those that are higher
         // resolution than required, or lower res than required but not the base layer, so the base layer is always present.
@@ -1161,9 +1159,6 @@ public class SubsamplingScaleImageView extends View {
         // If waiting to translate to new center position, set translate now
         if (sPendingCenter != null && pendingScale != null) {
             scale = pendingScale;
-            if (vTranslate == null) {
-                vTranslate = new PointF();
-            }
             vTranslate.x = (getWidth()/2) - (scale * sPendingCenter.x);
             vTranslate.y = (getHeight()/2) - (scale * sPendingCenter.y);
             sPendingCenter = null;
@@ -1179,15 +1174,16 @@ public class SubsamplingScaleImageView extends View {
     /**
      * Calculates sample size to fit the source image in given bounds.
      */
-    private int calculateInSampleSize(float scale) {
+    private int calculateInSampleSize() {
+        float adjustedScale = scale;
         if (minimumTileDpi > 0) {
             DisplayMetrics metrics = getResources().getDisplayMetrics();
             float averageDpi = (metrics.xdpi + metrics.ydpi)/2;
-            scale = (minimumTileDpi/averageDpi) * scale;
+            adjustedScale = (minimumTileDpi/averageDpi) * scale;
         }
 
-        int reqWidth = (int)(sWidth() * scale);
-        int reqHeight = (int)(sHeight() * scale);
+        int reqWidth = (int)(sWidth() * adjustedScale);
+        int reqHeight = (int)(sHeight() * adjustedScale);
 
         // Raw height and width of image
         int inSampleSize = 1;
