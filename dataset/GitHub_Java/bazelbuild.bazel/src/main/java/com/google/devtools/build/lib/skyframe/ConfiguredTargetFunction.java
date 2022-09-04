@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget.DuplicateException;
-import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -175,7 +174,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       target = pkg.getTarget(label.getName());
     } catch (NoSuchTargetException e) {
       throw new ConfiguredTargetFunctionException(
-          new ConfiguredValueCreationException(e.getMessage(), label, configuration));
+          new ConfiguredValueCreationException(e.getMessage(), label));
     }
     if (pkg.containsErrors()) {
       transitiveLoadingRootCauses.add(label);
@@ -246,11 +245,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               rule.getRuleClassObject().getRequiredToolchains();
           toolchainContext =
               ToolchainUtil.createToolchainContext(
-                  env,
-                  rule.toString(),
-                  requiredToolchains,
-                  configuration,
-                  configuredTargetKey.getConfigurationKey());
+                  env, rule.toString(), requiredToolchains, configuration);
           if (env.valuesMissing()) {
             return null;
           }
@@ -318,18 +313,16 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       } else if (e.getCause() instanceof InconsistentAspectOrderException) {
         InconsistentAspectOrderException cause = (InconsistentAspectOrderException) e.getCause();
         throw new ConfiguredTargetFunctionException(
-            new ConfiguredValueCreationException(
-                cause.getMessage(), target.getLabel(), configuration));
+            new ConfiguredValueCreationException(cause.getMessage(), target.getLabel()));
       } else if (e.getCause() instanceof InvalidConfigurationException) {
         InvalidConfigurationException cause = (InvalidConfigurationException) e.getCause();
         env.getListener().handle(Event.error(cause.getMessage()));
         throw new ConfiguredTargetFunctionException(
-            new ConfiguredValueCreationException(
-                cause.getMessage(), target.getLabel(), configuration));
+            new ConfiguredValueCreationException(cause.getMessage(), target.getLabel()));
       } else {
         // Unknown exception type.
         throw new ConfiguredTargetFunctionException(
-            new ConfiguredValueCreationException(e.getMessage(), target.getLabel(), configuration));
+            new ConfiguredValueCreationException(e.getMessage(), target.getLabel()));
       }
     } catch (AspectCreationException e) {
       // getAnalysisRootCause may be null if the analysis of the aspect itself failed.
@@ -338,16 +331,14 @@ public final class ConfiguredTargetFunction implements SkyFunction {
         analysisRootCause = e.getAnalysisRootCause();
       }
       throw new ConfiguredTargetFunctionException(
-          new ConfiguredValueCreationException(e.getMessage(), analysisRootCause, configuration));
+          new ConfiguredValueCreationException(e.getMessage(), analysisRootCause));
     } catch (ToolchainContextException e) {
       // We need to throw a ConfiguredValueCreationException, so either find one or make one.
       ConfiguredValueCreationException cvce;
       if (e.getCause() instanceof ConfiguredValueCreationException) {
         cvce = (ConfiguredValueCreationException) e.getCause();
       } else {
-        cvce =
-            new ConfiguredValueCreationException(
-                e.getCause().getMessage(), target.getLabel(), configuration);
+        cvce = new ConfiguredValueCreationException(e.getCause().getMessage(), target.getLabel());
       }
 
       env.getListener()
@@ -711,11 +702,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     events.replayOn(env.getListener());
     if (events.hasErrors()) {
       analysisEnvironment.disable(target);
-      throw new ConfiguredTargetFunctionException(
-          new ConfiguredValueCreationException(
-              "Analysis of target '" + target.getLabel() + "' failed; build aborted",
-              target.getLabel(),
-              configuration));
+      throw new ConfiguredTargetFunctionException(new ConfiguredValueCreationException(
+          "Analysis of target '" + target.getLabel() + "' failed; build aborted",
+          target.getLabel()));
     }
     Preconditions.checkState(!analysisEnvironment.hasErrors(),
         "Analysis environment hasError() but no errors reported");
@@ -754,29 +743,17 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     private final NestedSet<Label> loadingRootCauses;
     // TODO(ulfjack): Collect all analysis root causes, not just the first one.
     @Nullable private final Label analysisRootCause;
-    @Nullable private final BuildEventId configuration;
 
-    public ConfiguredValueCreationException(
-        String message, Label currentTarget, BuildConfiguration configuration) {
+    public ConfiguredValueCreationException(String message, Label currentTarget) {
       super(message);
       this.loadingRootCauses = NestedSetBuilder.<Label>emptySet(Order.STABLE_ORDER);
       this.analysisRootCause = Preconditions.checkNotNull(currentTarget);
-      if (configuration != null) {
-        this.configuration = configuration.getEventId();
-      } else {
-        this.configuration = null;
-      }
-    }
-
-    public ConfiguredValueCreationException(String message, Label currentTarget) {
-      this(message, currentTarget, null);
     }
 
     public ConfiguredValueCreationException(String message, NestedSet<Label> rootCauses) {
       super(message);
       this.loadingRootCauses = rootCauses;
       this.analysisRootCause = null;
-      this.configuration = null;
     }
 
     public ConfiguredValueCreationException(NestedSet<Label> rootCauses) {
@@ -793,10 +770,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     public Label getAnalysisRootCause() {
       return analysisRootCause;
-    }
-
-    public BuildEventId getConfiguration() {
-      return configuration;
     }
   }
 

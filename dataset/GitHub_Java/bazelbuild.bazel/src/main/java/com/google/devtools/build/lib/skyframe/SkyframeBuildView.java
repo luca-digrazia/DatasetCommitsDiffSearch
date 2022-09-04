@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
@@ -113,8 +112,8 @@ public final class SkyframeBuildView {
   private BuildConfiguration topLevelHostConfiguration;
   // Fragment-limited versions of the host configuration. It's faster to create/cache these here
   // than to store them in Skyframe.
-  private Map<FragmentClassSet, BuildConfiguration> hostConfigurationCache =
-      Maps.newConcurrentMap();
+  private Map<Set<Class<? extends BuildConfiguration.Fragment>>, BuildConfiguration>
+      hostConfigurationCache = Maps.newConcurrentMap();
 
   private BuildConfigurationCollection configurations;
 
@@ -546,10 +545,10 @@ public final class SkyframeBuildView {
     // trims a host configuration to the same scope as a target configuration. Since their options
     // are different, the host instance may actually be able to produce the fragment. So it's
     // wrong and potentially dangerous to unilaterally exclude it.
-    FragmentClassSet fragmentClasses =
+    Set<Class<? extends BuildConfiguration.Fragment>> fragmentClasses =
         config.trimConfigurations()
             ? config.fragmentClasses()
-            : FragmentClassSet.of(ruleClassProvider.getAllFragments());
+            : ruleClassProvider.getAllFragments();
     BuildConfiguration hostConfig = hostConfigurationCache.get(fragmentClasses);
     if (hostConfig != null) {
       return hostConfig;

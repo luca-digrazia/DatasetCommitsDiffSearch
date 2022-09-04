@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
-import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.Transition;
@@ -417,8 +416,8 @@ public final class RuleContext extends TargetContext
 
   @Nullable
   public <T extends Fragment> T getFragment(Class<T> fragment) {
-    // No transition means target configuration.
-    return getFragment(fragment, NoTransition.INSTANCE);
+    // NONE means target configuration.
+    return getFragment(fragment, ConfigurationTransitionProxy.NONE);
   }
 
   @Nullable
@@ -448,8 +447,8 @@ public final class RuleContext extends TargetContext
   }
 
   public <T extends Fragment> boolean isLegalFragment(Class<T> fragment) {
-    // No transition means target configuration.
-    return isLegalFragment(fragment, NoTransition.INSTANCE);
+    // NONE means target configuration.
+    return isLegalFragment(fragment, ConfigurationTransitionProxy.NONE);
   }
 
   protected BuildConfiguration getConfiguration(Transition transition) {
@@ -1073,7 +1072,8 @@ public final class RuleContext extends TargetContext
             + " is not configured for the host configuration");
       }
     } else if (mode == Mode.TARGET) {
-      if (!(transition instanceof PatchTransition) && transition != NoTransition.INSTANCE) {
+      if (!(transition instanceof PatchTransition)
+          && transition != ConfigurationTransitionProxy.NONE) {
         throw new IllegalStateException(getRule().getLocation() + ": "
             + getRuleClassNameForLogging() + " attribute " + attributeName
             + " is not configured for the target configuration");
@@ -1092,6 +1092,35 @@ public final class RuleContext extends TargetContext
             + " is not configured for a split transition");
       }
     }
+  }
+
+  /**
+   * Returns the Mode for which the attribute is configured.
+   * This is intended for Skylark, where the Mode is implicitly chosen.
+   */
+  public Mode getAttributeMode(String attributeName) {
+    Attribute attributeDefinition = attributes().getAttributeDefinition(attributeName);
+    if (attributeDefinition == null) {
+      throw new IllegalStateException(getRule().getLocation() + ": " + getRuleClassNameForLogging()
+        + " attribute " + attributeName + " is not defined");
+    }
+    if (attributeDefinition.getType().getLabelClass() != LabelClass.DEPENDENCY) {
+      throw new IllegalStateException(getRuleClassNameForLogging() + " attribute " + attributeName
+        + " is not a label type attribute");
+    }
+    if (attributeDefinition.getConfigurationTransition().isHostTransition()) {
+      return Mode.HOST;
+    } else if (attributeDefinition.getConfigurationTransition()
+        == ConfigurationTransitionProxy.NONE) {
+      return Mode.TARGET;
+    } else if (attributeDefinition.getConfigurationTransition()
+        == ConfigurationTransitionProxy.DATA) {
+      return Mode.DATA;
+    } else if (attributeDefinition.hasSplitConfigurationTransition()) {
+      return Mode.SPLIT;
+    }
+    throw new IllegalStateException(getRule().getLocation() + ": "
+        + getRuleClassNameForLogging() + " attribute " + attributeName + " is not configured");
   }
 
   /**

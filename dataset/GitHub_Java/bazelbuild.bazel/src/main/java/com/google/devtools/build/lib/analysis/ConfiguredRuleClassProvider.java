@@ -25,7 +25,7 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.Node;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
-import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Rule;
@@ -70,6 +69,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
 
@@ -200,7 +200,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * A coherent set of options, fragments, aspects and rules; each of these may declare a dependency
    * on other such sets.
    */
-  public interface RuleSet {
+  public static interface RuleSet {
     /** Add stuff to the configured rule class provider builder. */
     void init(ConfiguredRuleClassProvider.Builder builder);
 
@@ -235,7 +235,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
         ImmutableMap.builder();
     private ImmutableList.Builder<Class<?>> skylarkModules =
         ImmutableList.<Class<?>>builder().addAll(SkylarkModules.MODULES);
-    private ImmutableList.Builder<NativeProvider> nativeProviders = ImmutableList.builder();
     private ImmutableBiMap.Builder<String, Class<? extends TransitiveInfoProvider>>
         registeredSkylarkProviders = ImmutableBiMap.builder();
     private Map<String, String> platformRegexps = new TreeMap<>();
@@ -366,11 +365,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    public Builder addNativeProvider(NativeProvider provider) {
-      this.nativeProviders.add(provider);
-      return this;
-    }
-
     /**
      * Do not use - this only exists for backwards compatibility! Platform regexps are part of a
      * legacy mechanism - {@code vardef} - that is not exposed in Bazel.
@@ -468,8 +462,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           universalFragment,
           prerequisiteValidator,
           skylarkAccessibleTopLevels.build(),
-          skylarkModules.build(),
-          nativeProviders.build());
+          skylarkModules.build());
     }
 
     @Override
@@ -583,8 +576,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
   private final Environment.Frame globals;
 
-  private final ImmutableList<NativeProvider> nativeProviders;
-
   private final ImmutableMap<String, Class<?>> configurationFragmentMap;
 
   private ConfiguredRuleClassProvider(
@@ -603,8 +594,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       Class<? extends BuildConfiguration.Fragment> universalFragment,
       PrerequisiteValidator prerequisiteValidator,
       ImmutableMap<String, Object> skylarkAccessibleJavaClasses,
-      ImmutableList<Class<?>> skylarkModules,
-      ImmutableList<NativeProvider> nativeProviders) {
+      ImmutableList<Class<?>> skylarkModules) {
     this.preludeLabel = preludeLabel;
     this.runfilesPrefix = runfilesPrefix;
     this.toolsRepository = toolsRepository;
@@ -620,7 +610,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.universalFragment = universalFragment;
     this.prerequisiteValidator = prerequisiteValidator;
     this.globals = createGlobals(skylarkAccessibleJavaClasses, skylarkModules);
-    this.nativeProviders = nativeProviders;
     this.configurationFragmentMap = createFragmentMap(configurationFragmentFactories);
   }
 
@@ -807,22 +796,16 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     return configurationFragmentMap;
   }
 
-  /** Returns all registered {@link BuildConfiguration.Fragment} classes. */
-  public ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> getAllFragments() {
-    ImmutableSortedSet.Builder<Class<? extends BuildConfiguration.Fragment>> fragmentsBuilder =
-        ImmutableSortedSet.orderedBy(BuildConfiguration.lexicalFragmentSorter);
+  /**
+   * Returns all registered {@link BuildConfiguration.Fragment} classes.
+   */
+  public Set<Class<? extends BuildConfiguration.Fragment>> getAllFragments() {
+    ImmutableSet.Builder<Class<? extends BuildConfiguration.Fragment>> fragmentsBuilder =
+        ImmutableSet.builder();
     for (ConfigurationFragmentFactory factory : getConfigurationFragments()) {
       fragmentsBuilder.add(factory.creates());
     }
     fragmentsBuilder.add(getUniversalFragment());
     return fragmentsBuilder.build();
-  }
-
-  /**
-   * Returns all registered {@link NativeProvider} instances, i.e. all built-in provider types that
-   * are based on {@link Provider} rather than {@link TransitiveInfoProvider}.
-   */
-  public ImmutableList<NativeProvider> getNativeProviders() {
-    return nativeProviders;
   }
 }

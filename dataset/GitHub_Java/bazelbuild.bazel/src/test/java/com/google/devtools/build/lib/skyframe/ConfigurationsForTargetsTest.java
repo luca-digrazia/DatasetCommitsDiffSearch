@@ -138,8 +138,6 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
                 NestedSetBuilder.<Package>stableOrder(),
                 NestedSetBuilder.<Label>stableOrder());
         return env.valuesMissing() ? null : new Value(depMap);
-      } catch (RuntimeException e) {
-        throw e;
       } catch (Exception e) {
         throw new EvalException(e);
       }
