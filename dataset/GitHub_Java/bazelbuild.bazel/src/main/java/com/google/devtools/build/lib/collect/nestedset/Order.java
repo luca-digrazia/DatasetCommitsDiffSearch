@@ -140,39 +140,21 @@ public enum Order {
   }
 
   /**
-   * Parses the given string as a nested set order
+   * Parses the given string as a set order
    *
-   * @param name unique name of the order
-   * @param forbidDeprecatedOrderNames if true, old style ordering names will be rejected
-   * @return the appropriate order instance
-   * @throws IllegalArgumentException if the name is not valid
+   * @param name Unique name of the order
+   * @return Order The appropriate order instance
+   * @throws IllegalArgumentException If the name is not valid
    */
-  public static Order parse(String name, boolean forbidDeprecatedOrderNames) {
+  public static Order parse(String name) {
     if (VALUES.containsKey(name)) {
       return VALUES.get(name);
     } else if (DEPRECATED_VALUES.containsKey(name)) {
-      if (forbidDeprecatedOrderNames) {
-        throw new IllegalArgumentException(String.format(
-            "Order name '%s' is deprecated, use '%s' instead",
-            name,
-            DEPRECATED_VALUES.get(name).getSkylarkName()
-        ));
-      }
+      // TODO(bazel-team): Give a deprecation warning or error.
       return DEPRECATED_VALUES.get(name);
     } else {
       throw new IllegalArgumentException("Invalid order: " + name);
     }
-  }
-
-  /**
-   * Parses the given string as a nested set order
-   *
-   * @param name unique name of the order
-   * @return the appropriate order instance
-   * @throws IllegalArgumentException if the name is not valid
-   */
-  public static Order parse(String name) {
-    return parse(name, false);
   }
 
   /**
