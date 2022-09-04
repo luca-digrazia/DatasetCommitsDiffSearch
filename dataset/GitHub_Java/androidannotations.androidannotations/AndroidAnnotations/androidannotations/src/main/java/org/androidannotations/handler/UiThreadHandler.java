@@ -38,13 +38,14 @@ import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JOp;
+import com.sun.codemodel.JVar;
 
 public class UiThreadHandler extends AbstractRunnableHandler {
 
 	private static final String METHOD_CUR_THREAD = "currentThread";
 	private static final String METHOD_MAIN_LOOPER = "getMainLooper";
 	private static final String METHOD_GET_THREAD = "getThread";
-	private static final String METHOD_RUN_TASK = "runTask";
+	private static final String METHOD_ADD_TASK = "addTask";
 	private static final String METHOD_DONE = "done";
 
 	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
@@ -76,18 +77,20 @@ public class UiThreadHandler extends AbstractRunnableHandler {
 		if ("".equals(id)) {
 			runnable = _new(anonymousRunnableClass);
 		} else {
-			runnable = delegatingMethod.body().decl(refClass(Runnable.class), "runnable", _new(anonymousRunnableClass));
-			previousBody.add(refClass(UiThreadExecutor.class).staticInvoke(METHOD_DONE).arg(id).arg(_this()));
+			runnable = createAndStoreRunnable(delegatingMethod.body(), id, anonymousRunnableClass, holder);
+			callCancelOnFinish(previousBody, id);
 		}
 
-		if (delay == 0 && propagation == UiThread.Propagation.REUSE) {
-			// Put in the check for the UI thread.
-			addUIThreadCheck(delegatingMethod, previousBody, holder);
+		if (delay == 0) {
+			if (propagation == UiThread.Propagation.REUSE) {
+				// Put in the check for the UI thread.
+				addUIThreadCheck(delegatingMethod, previousBody, holder);
+			}
+
+			delegatingMethod.body().invoke(holder.getHandler(), "post").arg(runnable);
+		} else {
+			delegatingMethod.body().invoke(holder.getHandler(), "postDelayed").arg(runnable).arg(lit(delay));
 		}
-		delegatingMethod.body().add(refClass(UiThreadExecutor.class).staticInvoke(METHOD_RUN_TASK) //
-				.arg(id) //
-				.arg(runnable) //
-				.arg(lit(delay)));
 	}
 
 	/**
@@ -112,4 +115,15 @@ public class UiThreadHandler extends AbstractRunnableHandler {
 		thenBlock._return();
 	}
 
+	private JExpression createAndStoreRunnable(JBlock body, String id, JDefinedClass anonymousRunnableClass, EComponentHolder holder) {
+
+		JVar runnableVar = body.decl(refClass(Runnable.class), "runnable", _new(anonymousRunnableClass));
+		body.add(refClass(UiThreadExecutor.class).staticInvoke(METHOD_ADD_TASK).arg(id).arg(runnableVar).arg(holder.getHandler()));
+
+		return runnableVar;
+	}
+
+	private void callCancelOnFinish(JBlock body, String id) {
+		body.add(refClass(UiThreadExecutor.class).staticInvoke(METHOD_DONE).arg(id).arg(_this()));
+	}
 }
