@@ -23,12 +23,11 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet.NestedSetDepthException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import java.util.ArrayList;
@@ -91,11 +90,11 @@ public abstract class Type<T> {
   }
 
   /**
-   * Like {@link #convert(Object, Object, Object)}, but converts Starlark {@code None} to given
-   * {@code defaultValue}.
+   * Like {@link #convert(Object, Object, Object)}, but converts skylark {@code None}
+   * to given {@code defaultValue}.
    */
-  @Nullable
-  public final T convertOptional(Object x, String what, @Nullable Object context, T defaultValue)
+  @Nullable public final T convertOptional(Object x,
+      String what, @Nullable Object context, T defaultValue)
       throws ConversionException {
     if (EvalUtils.isNullOrNone(x)) {
       return defaultValue;
@@ -104,20 +103,18 @@ public abstract class Type<T> {
   }
 
   /**
-   * Like {@link #convert(Object, Object, Object)}, but converts Starlark {@code None} to java
-   * {@code null}.
+   * Like {@link #convert(Object, Object, Object)}, but converts skylark {@code None}
+   * to java {@code null}.
    */
-  @Nullable
-  public final T convertOptional(Object x, String what, @Nullable Object context)
+  @Nullable public final T convertOptional(Object x, String what, @Nullable Object context)
       throws ConversionException {
     return convertOptional(x, what, context, null);
   }
 
   /**
-   * Like {@link #convert(Object, Object)}, but converts Starlark {@code NONE} to java {@code null}.
+   * Like {@link #convert(Object, Object)}, but converts skylark {@code NONE} to java {@code null}.
    */
-  @Nullable
-  public final T convertOptional(Object x, String what) throws ConversionException {
+  @Nullable public final T convertOptional(Object x, String what) throws ConversionException {
     return convertOptional(x, what, null);
   }
 
@@ -249,7 +246,7 @@ public abstract class Type<T> {
       }
       printer.append(", but got ");
       printer.repr(value);
-      printer.append(" (").append(Starlark.type(value)).append(")");
+      printer.append(" (").append(EvalUtils.getDataTypeName(value)).append(")");
       return printer.toString();
     }
 
@@ -588,9 +585,9 @@ public abstract class Type<T> {
 
       if (x instanceof Iterable) {
         iterable = (Iterable<?>) x;
-      } else if (x instanceof Depset) {
+      } else if (x instanceof SkylarkNestedSet) {
         try {
-          iterable = ((Depset) x).toCollection();
+          iterable = ((SkylarkNestedSet) x).toCollection();
         } catch (NestedSetDepthException exception) {
           throw new ConversionException(
               "depset exceeded maximum depth "
