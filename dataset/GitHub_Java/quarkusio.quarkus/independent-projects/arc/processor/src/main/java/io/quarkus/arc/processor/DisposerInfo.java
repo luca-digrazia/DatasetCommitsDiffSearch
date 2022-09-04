@@ -1,36 +1,22 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package org.jboss.quarkus.arc.processor;
+package io.quarkus.arc.processor;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
-
+import java.util.Set;
 import javax.enterprise.inject.spi.DefinitionException;
-
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.MethodParameterInfo;
+import org.jboss.jandex.Type;
 
 /**
  *
  * @author Martin Kouba
  */
-public class DisposerInfo {
+public class DisposerInfo implements InjectionTargetInfo {
 
     private final BeanInfo declaringBean;
 
@@ -45,6 +31,16 @@ public class DisposerInfo {
         this.disposerMethod = disposerMethod;
         this.injection = injection;
         this.disposedParameter = initDisposedParam(disposerMethod);
+    }
+
+    @Override
+    public TargetKind kind() {
+        return TargetKind.DISPOSER;
+    }
+
+    @Override
+    public DisposerInfo asDisposer() {
+        return this;
     }
 
     public BeanInfo getDeclaringBean() {
@@ -71,14 +67,26 @@ public class DisposerInfo {
 
     void init(List<Throwable> errors) {
         for (InjectionPointInfo injectionPoint : injection.injectionPoints) {
-            Beans.resolveInjectionPoint(declaringBean.getDeployment(), null, injectionPoint, errors);
+            Beans.resolveInjectionPoint(declaringBean.getDeployment(), this, injectionPoint, errors);
         }
+    }
+
+    Collection<AnnotationInstance> getDisposedParameterQualifiers() {
+        Set<AnnotationInstance> resultingQualifiers = new HashSet<>();
+        Annotations.getParameterAnnotations(declaringBean.getDeployment(), disposerMethod, disposedParameter.position())
+                .stream().forEach(a -> declaringBean.getDeployment().extractQualifiers(a)
+                        .forEach(resultingQualifiers::add));
+        return resultingQualifiers;
+    }
+
+    Type getDisposedParameterType() {
+        return disposerMethod.parameters().get(disposedParameter.position());
     }
 
     MethodParameterInfo initDisposedParam(MethodInfo disposerMethod) {
         List<MethodParameterInfo> disposedParams = new ArrayList<>();
         for (AnnotationInstance annotation : disposerMethod.annotations()) {
-            if (Kind.METHOD_PARAMETER.equals(annotation.target().kind()) && annotation.name().equals(DotNames.DISPOSES)) {
+            if (Kind.METHOD_PARAMETER == annotation.target().kind() && annotation.name().equals(DotNames.DISPOSES)) {
                 disposedParams.add(annotation.target().asMethodParameter());
             }
         }
