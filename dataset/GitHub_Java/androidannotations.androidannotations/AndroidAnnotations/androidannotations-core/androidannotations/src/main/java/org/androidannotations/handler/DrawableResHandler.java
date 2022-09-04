@@ -47,7 +47,7 @@ public class DrawableResHandler extends AbstractResHandler {
 	protected void makeCall(String fieldName, EComponentHolder holder, JBlock methodBody, JFieldRef idRef) {
 		JFieldRef ref = ref(fieldName);
 		if (hasContextCompatInClasspath()) {
-			methodBody.assign(ref, classes().CONTEXT_COMPAT.staticInvoke("getDrawable").arg(holder.getContextRef()).arg(idRef));
+			methodBody.assign(ref, getClasses().CONTEXT_COMPAT.staticInvoke("getDrawable").arg(holder.getContextRef()).arg(idRef));
 		} else if (shouldUseContextGetDrawableMethod() && !hasContextCompatInClasspath()) {
 			methodBody.assign(ref, holder.getContextRef().invoke("getDrawable").arg(idRef));
 		} else if (!shouldUseContextGetDrawableMethod() && hasGetDrawableInContext() && !hasContextCompatInClasspath()) {
@@ -58,7 +58,7 @@ public class DrawableResHandler extends AbstractResHandler {
 	}
 
 	private boolean hasContextCompatInClasspath() {
-		return processingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.CONTEXT_COMPAT) != null;
+		return getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.CONTEXT_COMPAT) != null;
 	}
 
 	private boolean shouldUseContextGetDrawableMethod() {
@@ -66,14 +66,14 @@ public class DrawableResHandler extends AbstractResHandler {
 	}
 
 	private boolean hasGetDrawableInContext() {
-		TypeElement context = processingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.CONTEXT);
+		TypeElement context = getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.CONTEXT);
 
 		return hasGetDrawable(context);
 	}
 
 	private void createCallWithIfGuard(EComponentHolder holder, JFieldRef ref, JBlock methodBody, JFieldRef idRef) {
 		JVar resourcesRef = holder.getResourcesRef();
-		JConditional guardIf = methodBody._if(holder.classes().BUILD_VERSION.staticRef("SDK_INT").gte(holder.classes().BUILD_VERSION_CODES.staticRef("LOLLIPOP")));
+		JConditional guardIf = methodBody._if(getClasses().BUILD_VERSION.staticRef("SDK_INT").gte(getClasses().BUILD_VERSION_CODES.staticRef("LOLLIPOP")));
 		JBlock ifBlock = guardIf._then();
 		ifBlock.assign(ref, holder.getContextRef().invoke("getDrawable").arg(idRef));
 
@@ -86,7 +86,7 @@ public class DrawableResHandler extends AbstractResHandler {
 			return false;
 		}
 
-		List<? extends Element> allMembers = processingEnvironment().getElementUtils().getAllMembers(type);
+		List<? extends Element> allMembers = getProcessingEnvironment().getElementUtils().getAllMembers(type);
 		for (ExecutableElement element : ElementFilter.methodsIn(allMembers)) {
 			if (element.getSimpleName().contentEquals("getDrawable")) {
 				return true;
