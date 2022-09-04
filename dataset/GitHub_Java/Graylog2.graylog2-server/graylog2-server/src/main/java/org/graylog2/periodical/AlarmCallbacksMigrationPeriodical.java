@@ -17,8 +17,13 @@
 
 package org.graylog2.periodical;
 
-import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
-import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationServiceMJImpl;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
+import com.mongodb.QueryBuilder;
+import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationAVImpl;
+import org.graylog2.database.CollectionName;
+import org.graylog2.database.MongoConnection;
 import org.graylog2.plugin.periodical.Periodical;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,17 +41,22 @@ import javax.inject.Inject;
 public class AlarmCallbacksMigrationPeriodical extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(AlarmCallbacksMigrationPeriodical.class);
 
-    private final AlarmCallbackConfigurationService alarmCallbackConfigurationService;
+    private final DBCollection dbCollection;
 
     @Inject
-    public AlarmCallbacksMigrationPeriodical(AlarmCallbackConfigurationService alarmCallbackConfigurationService) {
-        this.alarmCallbackConfigurationService = alarmCallbackConfigurationService;
+    public AlarmCallbacksMigrationPeriodical(MongoConnection mongoConnection) {
+        final String collectionName = AlarmCallbackConfigurationAVImpl.class.getAnnotation(CollectionName.class).value();
+        this.dbCollection = mongoConnection.getDatabase().getCollection(collectionName);
     }
 
     @Override
     public void doRun() {
         LOG.debug("Starting alarm callbacks migration");
-        ((AlarmCallbackConfigurationServiceMJImpl)this.alarmCallbackConfigurationService).migrate();
+
+        final DBObject selection = QueryBuilder.start("id").exists(true).get();
+        final DBObject modifications = new BasicDBObject("$unset", new BasicDBObject("id", ""));
+        this.dbCollection.updateMulti(selection, modifications);
+
         LOG.debug("Done with alarm callbacks migration");
     }
 
