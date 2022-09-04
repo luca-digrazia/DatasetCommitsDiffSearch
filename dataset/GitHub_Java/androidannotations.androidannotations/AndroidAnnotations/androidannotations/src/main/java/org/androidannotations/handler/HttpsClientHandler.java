@@ -1,58 +1,96 @@
+/**
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package org.androidannotations.handler;
 
-import com.sun.codemodel.*;
-import org.androidannotations.annotations.HttpsClient;
-import org.androidannotations.annotations.ResId;
-import org.androidannotations.holder.EComponentHolder;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.ProcessHolder;
-import org.androidannotations.rclass.IRClass;
-import org.androidannotations.rclass.IRInnerClass;
-import org.androidannotations.validation.IsValid;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr._super;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JExpr.lit;
+import static com.sun.codemodel.JExpr.ref;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 
-import static com.sun.codemodel.JExpr.*;
+import org.androidannotations.annotations.HttpsClient;
+import org.androidannotations.helper.AndroidManifest;
+import org.androidannotations.helper.IdAnnotationHelper;
+import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.model.AndroidSystemServices;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.IsValid;
+import org.androidannotations.process.ProcessHolder;
+import org.androidannotations.rclass.IRClass;
+import org.androidannotations.rclass.IRInnerClass;
+
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCatchBlock;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JTryBlock;
+import com.sun.codemodel.JVar;
 
 public class HttpsClientHandler extends BaseAnnotationHandler<EComponentHolder> {
+
+	private IdAnnotationHelper annotationHelper;
 
 	public HttpsClientHandler(ProcessingEnvironment processingEnvironment) {
 		super(HttpsClient.class, processingEnvironment);
 	}
 
 	@Override
-	public boolean validate(Element element, AnnotationElements validatedElements) {
-		IsValid valid = new IsValid();
-
+	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
 		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(element, validatedElements, valid);
 
 		validatorHelper.annotationParameterIsOptionalValidResId(element, IRClass.Res.RAW, "keyStore", valid);
 		validatorHelper.annotationParameterIsOptionalValidResId(element, IRClass.Res.RAW, "trustStore", valid);
 
 		validatorHelper.isNotPrivate(element, valid);
+	}
 
-		return valid.isValid();
+	@Override
+	public void setAndroidEnvironment(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
+		super.setAndroidEnvironment(rClass, androidSystemServices, androidManifest);
+		annotationHelper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
 	}
 
 	@Override
 	public void process(Element element, EComponentHolder holder) throws Exception {
+		IRInnerClass rInnerClass = rClass.get(IRClass.Res.RAW);
 		HttpsClient annotation = element.getAnnotation(HttpsClient.class);
-		int trustStoreRawId = annotation.trustStore();
+		JFieldRef trustStoreRawIdRef = annotationHelper.extractOneAnnotationFieldRef(processHolder, element, getTarget(), rInnerClass, false, "trustStore", "trustStoreResName");
+		JFieldRef keyStoreRawIdRef = annotationHelper.extractOneAnnotationFieldRef(processHolder, element, getTarget(), rInnerClass, false, "keyStore", "keyStoreResName");
 		String trustStorePwd = annotation.trustStorePwd();
-		int keyStoreRawId = annotation.keyStore();
 		String keyStorePwd = annotation.keyStorePwd();
 
 		boolean allowAllHostnames = annotation.allowAllHostnames();
-		boolean useCustomTrustStore = ResId.DEFAULT_VALUE != trustStoreRawId;
-		boolean useCustomKeyStore = ResId.DEFAULT_VALUE != keyStoreRawId;
+		boolean useCustomTrustStore = trustStoreRawIdRef != null;
+		boolean useCustomKeyStore = keyStoreRawIdRef != null;
 
 		String fieldName = element.getSimpleName().toString();
-		JBlock methodBody = holder.getInit().body();
+		JBlock methodBody = holder.getInitBody();
 
-		ProcessHolder.Classes classes = holder.classes();
+		ProcessHolder.Classes classes = classes();
 
-		JDefinedClass jAnonClass = holder.codeModel().anonymousClass(classes.DEFAULT_HTTP_CLIENT);
+		JDefinedClass jAnonClass = codeModel().anonymousClass(classes.DEFAULT_HTTP_CLIENT);
 
 		JMethod method = jAnonClass.method(JMod.PROTECTED, classes.CLIENT_CONNECTION_MANAGER, "createClientConnectionManager");
 		method.annotate(Override.class);
@@ -83,16 +121,13 @@ public class HttpsClientHandler extends BaseAnnotationHandler<EComponentHolder> 
 			jVarRes = jTryBlock.body().decl(classes.RESOURCES, "res", invoke("getResources"));
 		}
 
-		IRInnerClass rInnerClass = rClass.get(IRClass.Res.RAW);
 		if (useCustomKeyStore) {
-			JFieldRef rawIdRef = rInnerClass.getIdStaticRef(keyStoreRawId, holder);
-			JInvocation jInvRawKey = jVarRes.invoke("openRawResource").arg(rawIdRef);
+			JInvocation jInvRawKey = jVarRes.invoke("openRawResource").arg(keyStoreRawIdRef);
 			jVarKeyFile = jTryBlock.body().decl(classes.INPUT_STREAM, "inKeystore", jInvRawKey);
 		}
 
 		if (useCustomTrustStore) {
-			JFieldRef rawIdRef = rInnerClass.getIdStaticRef(trustStoreRawId, holder);
-			JInvocation jInvRawTrust = jVarRes.invoke("openRawResource").arg(rawIdRef);
+			JInvocation jInvRawTrust = jVarRes.invoke("openRawResource").arg(trustStoreRawIdRef);
 			jVarTrstFile = jTryBlock.body().decl(classes.INPUT_STREAM, "inTrustStore", jInvRawTrust);
 
 		} else if (useCustomKeyStore) {
@@ -140,6 +175,7 @@ public class HttpsClientHandler extends BaseAnnotationHandler<EComponentHolder> 
 			JVar jVarSchemeReg = jTryBlock.body().decl(classes.SCHEME_REGISTRY, "registry");
 			jVarSchemeReg.init(_new(classes.SCHEME_REGISTRY));
 			jTryBlock.body().add(invoke(jVarSchemeReg, "register").arg(_new(classes.SCHEME).arg("https").arg(jVarSslFact).arg(lit(443))));
+			jTryBlock.body().add(invoke(jVarSchemeReg, "register").arg(_new(classes.SCHEME).arg("http").arg(classes.PLAIN_SOCKET_FACTORY.staticInvoke("getSocketFactory")).arg(lit(80))));
 
 			JVar jVarCcm = jTryBlock.body().decl(classes.CLIENT_CONNECTION_MANAGER, "ccm");
 			jVarCcm.init(_new(classes.SINGLE_CLIENT_CONN_MANAGER).arg(invoke("getParams")).arg(jVarSchemeReg));
