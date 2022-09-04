@@ -14,13 +14,14 @@
 package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskFuture;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ThreadSafeMutableSet;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A "deps" query expression, which computes the dependencies of the argument. An optional
@@ -63,9 +64,8 @@ final class DepsFunction implements QueryFunction {
     return env.eval(args.get(0).getExpression(), context, new Callback<T>() {
       @Override
       public void process(Iterable<T> partialResult) throws QueryException, InterruptedException {
-        ThreadSafeMutableSet<T> current = env.createThreadSafeMutableSet();
-        Iterables.addAll(current, partialResult);
-        env.buildTransitiveClosure(expression, current, depthBound);
+        Collection<T> current = Sets.newHashSet(partialResult);
+        env.buildTransitiveClosure(expression, (Set<T>) current, depthBound);
 
         // We need to iterate depthBound + 1 times.
         for (int i = 0; i <= depthBound; i++) {
@@ -75,8 +75,7 @@ final class DepsFunction implements QueryFunction {
           ImmutableList<T> toProcess =
               minDepthUniquifier.uniqueAtDepthLessThanOrEqualTo(current, i);
           callback.process(toProcess);
-          current = env.createThreadSafeMutableSet();
-          Iterables.addAll(current, env.getFwdDeps(toProcess));
+          current = ImmutableList.copyOf(env.getFwdDeps(toProcess));
           if (current.isEmpty()) {
             // Exit when there are no more nodes to visit.
             break;

@@ -22,18 +22,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A label(attr_name, argument) expression, which computes the set of targets whose labels appear in
- * the specified attribute of some rule in 'argument'.
+ * A label(attr_name, argument) expression, which computes the set of targets
+ * whose labels appear in the specified attribute of some rule in 'argument'.
  *
  * <pre>expr ::= LABELS '(' WORD ',' expr ')'</pre>
  *
  * Example:
- *
  * <pre>
  *  labels(srcs, //foo)      The 'srcs' source files to the //foo rule.
  * </pre>
  */
-public class LabelsFunction implements QueryFunction {
+class LabelsFunction implements QueryFunction {
   LabelsFunction() {
   }
 

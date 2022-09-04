@@ -95,10 +95,8 @@ public class AllRdepsFunction implements QueryFunction {
                 // Filter already visited nodes: if we see a node in a later round, then we don't
                 // need to visit it again, because the depth at which we see it must be greater
                 // than or equal to the last visit.
-                Iterables.addAll(
-                    next,
-                    env.getReverseDeps(
-                        minDepthUniquifier.uniqueAtDepthLessThanOrEqualTo(currentInUniverse, i)));
+                next.addAll(env.getReverseDeps(
+                    minDepthUniquifier.uniqueAtDepthLessThanOrEqualTo(currentInUniverse, i)));
                 callback.process(currentInUniverse);
                 if (next.isEmpty()) {
                   // Exit when there are no more nodes to visit.

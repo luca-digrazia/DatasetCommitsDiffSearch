@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.commands.QueryCommand;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.common.options.OptionsParser;
@@ -43,7 +42,6 @@ import java.io.IOException;
 @Command(name = FetchCommand.NAME,
     options = {
         PackageCacheOptions.class,
-        SkylarkSemanticsOptions.class,
         FetchOptions.class,
     },
     help = "resource:fetch.txt",
@@ -58,7 +56,7 @@ public final class FetchCommand implements BlazeCommand {
   public static final String NAME = "fetch";
 
   @Override
-  public void editOptions(OptionsParser optionsParser) { }
+  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) { }
 
   @Override
   public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
