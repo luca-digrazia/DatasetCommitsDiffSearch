@@ -34,9 +34,9 @@ import io.quarkus.deployment.devmode.HotReplacementContext;
 @ServerEndpoint(value = HotReplacementWebsocketEndpoint.QUARKUS_HOT_RELOAD, configurator = HotReplacementWebsocketEndpoint.ServerConfigurator.class)
 public class HotReplacementWebsocketEndpoint {
 
-    static final String QUARKUS_HOT_RELOAD = "/quarkus/live-reload";
+    static final String QUARKUS_HOT_RELOAD = "/quarkus/hot-reload";
     static final String QUARKUS_SECURITY_KEY = "quarkus-security-key";
-    static final String QUARKUS_HOT_RELOAD_PASSWORD = "quarkus.live-reload.password";
+    static final String QUARKUS_HOT_RELOAD_PASSWORD = "quarkus.hot-reload.password";
     private static Logger logger = Logger.getLogger(HotReplacementWebsocketEndpoint.class);
 
     private static final long MAX_WAIT_TIME = 15000;
@@ -115,21 +115,17 @@ public class HotReplacementWebsocketEndpoint {
                         !m.resources.isEmpty()) {
                     if (hrc.getSourcesDir() != null) {
                         for (Map.Entry<String, byte[]> i : m.srcFiles.entrySet()) {
-                            for (Path sourcesDir : hrc.getSourcesDir()) {
-                                Path path = sourcesDir.resolve(i.getKey());
-                                Files.createDirectories(path.getParent());
-                                try (FileOutputStream out = new FileOutputStream(
-                                        path.toFile())) {
-                                    out.write(i.getValue());
-                                }
+                            Path path = hrc.getSourcesDir().resolve(i.getKey());
+                            Files.createDirectories(path.getParent());
+                            try (FileOutputStream out = new FileOutputStream(
+                                    path.toFile())) {
+                                out.write(i.getValue());
                             }
                         }
                     }
-                    //TODO: fixme
-                    List<Path> resourcesDir = hrc.getResourcesDir();
-                    if (resourcesDir != null && !resourcesDir.isEmpty()) {
+                    if (hrc.getResourcesDir() != null) {
                         for (Map.Entry<String, byte[]> i : m.resources.entrySet()) {
-                            Path path = resourcesDir.get(0).resolve(i.getKey());
+                            Path path = hrc.getResourcesDir().resolve(i.getKey());
                             Files.createDirectories(path.getParent());
                             try (FileOutputStream out = new FileOutputStream(
                                     path.toFile())) {
