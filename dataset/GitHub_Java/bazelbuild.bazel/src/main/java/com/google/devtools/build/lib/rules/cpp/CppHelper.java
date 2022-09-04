@@ -243,9 +243,9 @@ public class CppHelper {
    * non-default feature configuration, or risk a mismatch.
    */
   public static NestedSet<Artifact> getDefaultCcToolchainDynamicRuntimeInputs(
-      RuleContext ruleContext, CppSemantics semantics) throws RuleErrorException {
+      RuleContext ruleContext) throws RuleErrorException {
     try {
-      return getDefaultCcToolchainDynamicRuntimeInputsFromStarlark(ruleContext, semantics);
+      return getDefaultCcToolchainDynamicRuntimeInputsFromStarlark(ruleContext);
     } catch (EvalException e) {
       throw ruleContext.throwWithRuleError(e);
     }
@@ -259,14 +259,14 @@ public class CppHelper {
    * non-default feature configuration, or risk a mismatch.
    */
   public static NestedSet<Artifact> getDefaultCcToolchainDynamicRuntimeInputsFromStarlark(
-      RuleContext ruleContext, CppSemantics semantics) throws EvalException {
+      RuleContext ruleContext) throws EvalException {
     CcToolchainProvider defaultToolchain =
         getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     if (defaultToolchain == null) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
     FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeaturesOrReportRuleError(ruleContext, defaultToolchain, semantics);
+        CcCommon.configureFeaturesOrReportRuleError(ruleContext, defaultToolchain);
 
     return defaultToolchain.getDynamicRuntimeLinkInputs(featureConfiguration);
   }
@@ -276,14 +276,14 @@ public class CppHelper {
    * for non C++ rules that link against the C++ runtime.
    */
   public static NestedSet<Artifact> getDefaultCcToolchainStaticRuntimeInputs(
-      RuleContext ruleContext, CppSemantics semantics) throws RuleErrorException {
+      RuleContext ruleContext) throws RuleErrorException {
     CcToolchainProvider defaultToolchain =
         getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     if (defaultToolchain == null) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
     FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeaturesOrReportRuleError(ruleContext, defaultToolchain, semantics);
+        CcCommon.configureFeaturesOrReportRuleError(ruleContext, defaultToolchain);
     try {
       return defaultToolchain.getStaticRuntimeLinkInputs(featureConfiguration);
     } catch (EvalException e) {

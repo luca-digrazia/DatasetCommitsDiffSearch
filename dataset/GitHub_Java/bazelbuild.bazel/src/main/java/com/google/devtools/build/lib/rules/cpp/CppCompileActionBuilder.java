@@ -356,7 +356,7 @@ public class CppCompileActionBuilder {
     if (useHeaderModules() && !shouldPruneModules()) {
       realMandatoryInputsBuilder.addTransitive(ccCompilationContext.getTransitiveModules(usePic));
     }
-    ccCompilationContext.addAdditionalInputs(realMandatoryInputsBuilder);
+    realMandatoryInputsBuilder.addTransitive(ccCompilationContext.getAdditionalInputs());
     realMandatoryInputsBuilder.add(Preconditions.checkNotNull(sourceFile));
     if (grepIncludes != null) {
       realMandatoryInputsBuilder.add(grepIncludes);
@@ -633,10 +633,5 @@ public class CppCompileActionBuilder {
   public boolean shouldCompileHeaders() {
     Preconditions.checkNotNull(featureConfiguration);
     return ccToolchain.shouldProcessHeaders(featureConfiguration, cppConfiguration);
-  }
-
-  @Nullable
-  public Artifact getGrepIncludes() {
-    return grepIncludes;
   }
 }

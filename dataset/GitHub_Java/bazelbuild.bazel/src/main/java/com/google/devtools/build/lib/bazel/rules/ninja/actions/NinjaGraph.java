@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.bazel.rules.ninja.actions;
 
-import static com.google.common.collect.ImmutableSortedSet.toImmutableSortedSet;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -51,7 +50,6 @@ import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
@@ -83,8 +81,6 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
         PathFragment.create(ruleContext.attributes().get("working_directory", Type.STRING));
     List<String> outputRootInputs =
         ruleContext.attributes().get("output_root_inputs", Type.STRING_LIST);
-    List<String> outputRootSymlinks =
-        ruleContext.attributes().get("output_root_symlinks", Type.STRING_LIST);
 
     Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
     establishDependencyOnNinjaFiles(env, mainArtifact, ninjaSrcs);
@@ -102,8 +98,7 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
             workingDirectory,
             ImmutableSortedMap.of(),
             ImmutableSortedMap.of(),
-            ImmutableSortedMap.of(),
-            ImmutableSortedSet.of());
+            ImmutableSortedMap.of());
     if (ruleContext.hasErrors()) {
       return null;
     }
@@ -131,11 +126,7 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
               outputRoot,
               workingDirectory,
               targetsPreparer.getUsualTargets(),
-              targetsPreparer.getPhonyTargetsMap(),
-              outputRootSymlinks.stream()
-                  .map(PathFragment::create)
-                  .collect(
-                      toImmutableSortedSet(Comparator.comparing(PathFragment::getPathString))));
+              targetsPreparer.getPhonyTargetsMap());
 
       NestedSet<Artifact> filesToBuild =
           createSymlinkActions(
@@ -249,10 +240,6 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
     Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
     ImmutableSortedSet<String> notSymlinkedDirs =
         ExternalPackageUtil.getNotSymlinkedInExecrootDirectories(env);
-    if (env.valuesMissing()) {
-      return;
-    }
-
     // We can compare strings because notSymlinkedDirs contains normalized directory names
     if (!notSymlinkedDirs.contains(outputRoot.getPathString())) {
       ruleContext.attributeError(
